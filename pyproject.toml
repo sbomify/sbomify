@@ -222,6 +222,15 @@ extend-select = ["TID251"]
 "sbomify/apps/core/authz.py" = ["TID251"]
 "sbomify/apps/core/services/access_control.py" = ["TID251"]
 "sbomify/apps/compliance/permissions.py" = ["TID251"]
+# The screencast narration tooling is a pair of developer command-line
+# programs, not application code — printing to the terminal is their output.
+"screencasts/narrator.py" = ["T201"]
+"screencasts/mux_narration.py" = ["T201"]
+"screencasts/audit_timing.py" = ["T201"]
+"screencasts/score.py" = ["T201"]
+"screencasts/transcode.py" = ["T201"]
+"screencasts/wayland_capture.py" = ["T201"]
+"screencasts/backfill_timings.py" = ["T201"]
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.

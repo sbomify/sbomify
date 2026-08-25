@@ -16,15 +16,33 @@ from conftest import (
     MINIMAL_PDF,
     dismiss_toasts,
     hover_and_click,
+    install_dict_backed_s3,
+    narrate,
     navigate_to_components,
     navigate_to_trust_center_tab,
+    open_new_from_navbar,
     pace,
     rewrite_localhost_urls,
+    settle,
     start_on_dashboard,
     type_text,
 )
 
 COMPONENT_NAME = "Compression Core Library"
+NDA_FILENAME = "Pied_Piper_Mutual_NDA_2025.pdf"
+
+
+@pytest.fixture
+def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Back S3 with a dict so the company NDA upload can succeed end-to-end.
+
+    The screencast compose stack runs no object store, so the upload failed
+    with "Could not connect to the endpoint URL" against ``test-s3.localhost``,
+    the view logged an error, and ``dismiss_toasts`` swallowed the toast that
+    said so — leaving the recording to film an NDA that was never attached
+    while the narration said one had been.
+    """
+    install_dict_backed_s3(monkeypatch)
 
 
 # ---------------------------------------------------------------------------
@@ -33,15 +51,18 @@ COMPONENT_NAME = "Compression Core Library"
 
 
 @pytest.mark.django_db(transaction=True)
-def trust_center_setup(recording_page: Page) -> None:
+def trust_center_setup(recording_page: Page, s3_short_circuit: None) -> None:
     page = recording_page
 
-    start_on_dashboard(page)
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
 
     # ── 1. Navigate to Settings → Trust Center tab ────────────────────────
+    narrate(page, "what_it_is")
     navigate_to_trust_center_tab(page)
 
     # ── 2. Enable Trust Center ────────────────────────────────────────────
+    narrate(page, "enable")
     toggle = page.locator("#workspace-visibility-toggle")
     toggle.wait_for(state="visible", timeout=10_000)
     pace(page, 600)
@@ -53,6 +74,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 2000)
 
     # ── 3. Enable security.txt (RFC 9116) ─────────────────────────────────
+    narrate(page, "security_txt")
     security_toggle = page.locator("#security-txt-toggle")
     security_toggle.wait_for(state="visible", timeout=10_000)
     security_toggle.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
@@ -71,11 +93,12 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 1500)
 
     # ── 4. Upload Company NDA ─────────────────────────────────────────────
+    narrate(page, "nda")
     nda_label = page.locator("label[for='company_nda_file']")
     nda_label.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 800)
 
-    pdf_path = Path(tempfile.gettempdir()) / "Pied_Piper_Mutual_NDA_2025.pdf"
+    pdf_path = Path(tempfile.gettempdir()) / NDA_FILENAME
     pdf_path.write_bytes(MINIMAL_PDF)
 
     file_input = page.locator("#company_nda_file")
@@ -90,11 +113,17 @@ def trust_center_setup(recording_page: Page) -> None:
     page.wait_for_load_state("networkidle")
     dismiss_toasts(page)
     rewrite_localhost_urls(page)
+
+    # Assert the NDA is actually attached. dismiss_toasts() eats the error
+    # toast, so a failed upload otherwise leaves no trace on camera and the
+    # recording passes having filmed nothing happening.
+    page.locator(f"text={NDA_FILENAME}").first.wait_for(state="visible", timeout=15_000)
     pace(page, 2000)
 
     pdf_path.unlink(missing_ok=True)
 
     # ── 5. Configure custom domain ────────────────────────────────────────
+    narrate(page, "domain")
     # The custom domain section loads via HTMX after the page reload
     domain_input = page.locator("#custom-domain-input")
     domain_input.wait_for(state="visible", timeout=15_000)
@@ -107,6 +136,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 800)
 
     # ── 6. Save domain ────────────────────────────────────────────────────
+    narrate(page, "domain_save")
     save_btn = page.locator("button:has-text('Save Domain')")
     save_btn.wait_for(state="visible", timeout=5_000)
     hover_and_click(page, save_btn)
@@ -117,32 +147,22 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 2000)
 
     # ── 7. Create a component to demonstrate visibility ───────────────────
+    narrate(page, "component")
     navigate_to_components(page)
 
-    page.evaluate("window.dispatchEvent(new CustomEvent('open-add-component-modal'))")
-    pace(page, 600)
+    # Creation is a page now rather than a modal, and submitting lands on the
+    # new component's own page — so there is no row to click into afterwards.
+    open_new_from_navbar(page, "Component")
 
-    modal_form = page.locator("#addComponentForm")
-    modal_form.wait_for(state="visible", timeout=5_000)
-    pace(page, 500)
-
-    name_input = page.locator("#componentName")
+    name_input = page.locator("input#name")
+    name_input.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, name_input)
     pace(page, 300)
     type_text(name_input, COMPONENT_NAME)
     pace(page, 600)
 
-    submit_btn = modal_form.locator("button[type='submit']")
-    hover_and_click(page, submit_btn)
+    hover_and_click(page, page.get_by_role("button", name="Create component"))
 
-    page.wait_for_load_state("networkidle")
-    pace(page, 1000)
-
-    # Click into the component
-    row = page.locator("tr", has=page.locator(f"span:text-is('{COMPONENT_NAME}')"))
-    row.first.wait_for(state="visible", timeout=10_000)
-    pace(page, 600)
-    hover_and_click(page, row.first)
     page.wait_for_load_state("networkidle")
     pace(page, 1500)
 
@@ -156,6 +176,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 1000)
 
     # Set to Public
+    narrate(page, "visibility_public")
     hover_and_click(page, visibility_select)
     pace(page, 400)
     visibility_select.select_option("public")
@@ -165,6 +186,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 800)
 
     # Set to Gated
+    narrate(page, "visibility_gated")
     hover_and_click(page, visibility_select)
     pace(page, 400)
     visibility_select.select_option("gated")
@@ -174,10 +196,12 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 800)
 
     # Set back to Private
+    narrate(page, "visibility_private")
     hover_and_click(page, visibility_select)
     pace(page, 400)
     visibility_select.select_option("private")
     page.wait_for_load_state("networkidle")
     pace(page, 1000)
     dismiss_toasts(page)
-    pace(page, 2000)
+    narrate(page, "outro")
+    settle(page)

@@ -1,0 +1,52 @@
+# Narration for screencasts/document_signatures.py
+#
+# Thesis: a signature answers "did this really come from you, and has anyone
+# touched it since". The badges and the verification result are the visible
+# form of that answer.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      An SBOM is a claim about your software. A signature is what makes that
+      claim checkable by somebody who has no reason to trust you yet.
+
+  components:
+    text: >-
+      Signatures attach to the artifact itself, so you find them where the
+      artifact lives.
+
+  open_sbom:
+    text: >-
+      The badges sit on the SBOM's own page rather than the component summary,
+      because they describe this exact file and this exact version of it.
+
+  signed_badge:
+    text: >-
+      Signed means a detached signature is stored alongside the SBOM, and that
+      sbomify recomputed the digest and it still matches. [pause] If a single
+      byte had changed, this badge would not be here.
+
+  provenance_badge:
+    text: >-
+      Provenance goes further. It ties the file back to the build that produced
+      it, which is what tells a consumer it came out of your pipeline and not
+      somebody's laptop.
+
+  verification:
+    text: >-
+      Underneath, the verification plugin reports the individual checks rather
+      than a single opaque verdict.
+
+  all_passed:
+    text: >-
+      Digest integrity, signature present, signature valid, provenance present,
+      and the digest in the attestation matching the file. [pause] All passed.
+
+  outro:
+    text: >-
+      That's the difference between sending someone a file and giving them
+      something they can verify. [pause] And because the compliance plugins
+      consume the same result, it's what satisfies the attestation requirement
+      in the BSI and FDA checks too.

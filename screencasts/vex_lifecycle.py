@@ -39,13 +39,15 @@ from playwright.sync_api import Page
 from conftest import (
     click_into_row,
     hover_and_click,
+    install_dict_backed_s3,
+    narrate,
     navigate_to_components,
     pace,
+    settle,
     smooth_scroll,
     start_on_dashboard,
 )
 from sbomify.apps.core.models import Release, ReleaseArtifact
-from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM, Component, Product
 from sbomify.apps.teams.models import Team
@@ -191,16 +193,7 @@ def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
     funnels through ``get_file_data``, so patching that one method alongside the
     put covers SBOMs, VEX and documents.
     """
-    store: dict[tuple[str, str], bytes] = {}
-
-    def _put(self: S3Client, bucket_name: str, object_name: str, data: bytes) -> None:
-        store[(bucket_name, object_name)] = data
-
-    def _get(self: S3Client, bucket_name: str, file_path: str) -> bytes | None:
-        return store.get((bucket_name, file_path))
-
-    monkeypatch.setattr(S3Client, "upload_data_as_file", _put)
-    monkeypatch.setattr(S3Client, "get_file_data", _get)
+    install_dict_backed_s3(monkeypatch)
 
 
 def _apply_vex(component: Component, release: Release, run: AssessmentRun, document: dict) -> None:
@@ -289,7 +282,7 @@ def _upload_vex(page: Page, document: dict) -> None:
     dry-run preview before anything is stored, and applying it is what
     persists — both worth having on camera.
     """
-    more_actions = page.get_by_role("button", name="More actions")
+    more_actions = page.get_by_role("button", name="Component actions")
     more_actions.wait_for(state="visible", timeout=15_000)
     hover_and_click(page, more_actions)
     pace(page, 600)
@@ -306,7 +299,7 @@ def _upload_vex(page: Page, document: dict) -> None:
         file_input.set_input_files(
             files=[{"name": VEX_FILENAME, "mimeType": "application/json", "buffer": _vex_bytes(document)}]
         )
-    page.locator("text=Preview — nothing stored yet").first.wait_for(state="visible", timeout=10_000)
+    page.locator("text=nothing stored yet").first.wait_for(state="visible", timeout=10_000)
     pace(page, 2500)
 
     apply_btn = page.locator("button:has-text('Apply this VEX')")
@@ -326,8 +319,22 @@ def _show_component_posture(page: Page, component_url: str, struck_cves: list[st
     """
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
+
+    # Suppressed rows must be on screen for the struck-through state to film.
+    # Do not assume which way the toggle starts: it defaulted to hidden, and
+    # upstream has since flipped it back to shown, because hiding them made an
+    # applied VEX look like it had done nothing. Read it and only click if it
+    # is not already showing them.
+    show_suppressed = page.locator("label:has-text('Show suppressed') input[type='checkbox']").first
+    show_suppressed.wait_for(state="visible", timeout=30_000)
+    show_suppressed.scroll_into_view_if_needed()
+    pace(page, 600)
+    if not show_suppressed.is_checked():
+        hover_and_click(page, show_suppressed)
+        pace(page, 800)
+
     anchor = page.locator(f"tr:has-text('{CRITICAL_CVE}')").first
-    anchor.wait_for(state="visible", timeout=15_000)
+    anchor.wait_for(state="visible", timeout=30_000)
     pace(page, 1500)
     smooth_scroll(page, anchor, 1500)
     for cve in struck_cves:
@@ -341,7 +348,9 @@ def _show_trust_center(page: Page, public_url: str, show_download: bool) -> None
     page.goto(public_url)
     page.wait_for_load_state("networkidle")
 
-    posture_heading = page.locator("h4:has-text('Vulnerability Posture')")
+    # Matched by role rather than tag: this panel's heading has already moved
+    # from h4 to h2 once.
+    posture_heading = page.get_by_role("heading", name="Vulnerability posture")
     posture_heading.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, posture_heading, 2000)
 
@@ -371,36 +380,54 @@ def vex_lifecycle(recording_page: Page, vex_release: dict, s3_short_circuit: Non
         kwargs={"product_id": product.id, "release_id": release.id},
     )
 
-    start_on_dashboard(page)
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
 
     # ── 1. The vulnerability — the component's scan flagged a critical ───
+    narrate(page, "the_findings")
     navigate_to_components(page)
     click_into_row(page, COMPONENT_NAME)
     critical_row = page.locator(f"tr:has-text('{CRITICAL_CVE}')").first
     critical_row.wait_for(state="visible", timeout=15_000)
     pace(page, 1500)
+    narrate(page, "triage")
     smooth_scroll(page, critical_row, 4000)
+    settle(page)
 
     # ── 2. VEX v1 — show the file, upload it, watch the critical clear ───
+    narrate(page, "vex_v1_file")
     _show_vex_file(page, VEX_V1, "CycloneDX VEX · version 1 — clears the critical", 5500)
+    narrate(page, "vex_v1_detail")
+    settle(page)
 
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
     pace(page, 800)
+    narrate(page, "upload_v1")
     _upload_vex(page, VEX_V1)
 
     _apply_vex(component, release, run, VEX_V1)
+    narrate(page, "posture_v1")
     _show_component_posture(page, component_url, [CRITICAL_CVE])  # critical struck through
+    narrate(page, "trust_center_v1")
     _show_trust_center(page, public_url, show_download=False)  # 1 finding suppressed
 
     # ── 3. VEX v2 — re-issue a newer version that also clears the high ───
+    narrate(page, "vex_v2_file")
     _show_vex_file(page, VEX_V2, "CycloneDX VEX · version 2 — re-issued, also clears the high", 5500)
+    narrate(page, "vex_v2_detail")
+    settle(page)
 
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
     pace(page, 800)
+    narrate(page, "upload_v2")
     _upload_vex(page, VEX_V2)
+    narrate(page, "supersede")
 
     _apply_vex(component, release, run, VEX_V2)
+    narrate(page, "posture_v2")
     _show_component_posture(page, component_url, [CRITICAL_CVE, HIGH_CVE])  # both struck through
+    narrate(page, "outro")
     _show_trust_center(page, public_url, show_download=True)  # 2 findings suppressed
+    settle(page)

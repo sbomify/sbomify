@@ -20,6 +20,10 @@ jobs:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
       DJANGO_TEST: 'true'
+      # Narration synthesis. Only used for lines absent from the committed
+      # cache in screencasts/narration/audio/ — an unchanged run makes no
+      # API calls, so this being empty is not fatal.
+      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,6 +94,13 @@ jobs:
           docker compose -f docker-compose.tests.yml exec -T tests \
             uv run playwright install ffmpeg
 
+      # This runner has no GPU, so Chromium rasterises in software and the CDP
+      # screencast tops out around 12-16 unique frames a second. The recording
+      # is correct but the motion stutters. For anything being published,
+      # record on a machine with a real GPU instead — see
+      # .claude/skills/narrated-screencast/SKILL.md ("Smoothness: record where
+      # there is a GPU"), which is why SCREENCAST_LOCAL_BROWSER exists.
+
       - name: Record screencasts
         run: |
           INPUT="${{ github.event.inputs.screencast }}"
@@ -149,6 +160,14 @@ jobs:
             fi
           done
 
+      - name: Mux narration and build subtitles
+        if: always()
+        run: |
+          docker compose -f docker-compose.tests.yml exec -T tests \
+            uv run python screencasts/mux_narration.py
+          # The container writes as root; the upload steps run as the runner user.
+          sudo chown -R $USER:$USER screencasts/output/ 2>/dev/null || true
+
       - name: Upload to Cloudflare R2
         if: ${{ always() && env.R2_BUCKET != '' }}
         env:
@@ -166,6 +185,15 @@ jobs:
             --exclude "*" --include "*.webm" \
             --no-progress
 
+          # Subtitles ride alongside the video. A narrated recording shows no
+          # on-screen captions, so these carry it for muted and deaf viewers.
+          aws s3 sync screencasts/output/ "s3://${R2_BUCKET}/screencasts/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type text/vtt \
+            --cache-control "public, max-age=300" \
+            --exclude "*" --include "*.vtt" \
+            --no-progress
+
           if [ -d screencasts/output/screenshots ]; then
             aws s3 sync screencasts/output/screenshots/ "s3://${R2_BUCKET}/screenshots/" \
               --endpoint-url "$R2_ENDPOINT" \
@@ -180,7 +208,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: screencasts
-          path: screencasts/output/*.webm
+          path: |
+            screencasts/output/*.webm
+            screencasts/output/*.vtt
           if-no-files-found: warn
 
       - name: Upload screencast screenshots

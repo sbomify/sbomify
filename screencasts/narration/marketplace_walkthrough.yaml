@@ -1,0 +1,114 @@
+# Narration for the long cut of the marketplace walkthrough.
+#
+# The chapter copy is NOT restated here — it is included from the four chapter
+# scripts, for the same reason marketplace_walkthrough.py imports the chapter
+# step functions rather than copying them: the long cut and the short cuts must
+# not drift apart. Edit chapter copy in its own file.
+#
+# Only the framing beats that belong to the long cut live here: the opening
+# title card and the closing call to action.
+# Carina, measured at 6.14 semitones of pitch variation against ara's 3.36 —
+# nearly double. Ara is one of the flattest voices xAI offers, and a flat
+# delivery is the part no words-per-minute figure captures.
+voice: carina
+# Delivery speed. This family used to run at 0.85, on guidance for dense
+# technical *teaching* (110-130 wpm), where comprehension is the goal. This is
+# a persuasive video shown to somebody who has not agreed to anything yet, and
+# that is a different problem:
+#
+#   - screencast narration lands at 130-150 wpm, 140 measuring most credible
+#   - Miller et al. (1976): 195 wpm persuaded better than 102
+#   - Smith & Shaffer (1991): speed helps most when the audience does not
+#     already agree, which is exactly a cold marketplace viewer
+#
+# At 0.85 the opening line measured 103 wpm — Miller's least-persuasive
+# condition almost exactly, on the first thing anyone hears. 1.0 puts it at
+# 139 wpm, and the corpus near 155.
+#
+# This value MUST match across the long cut and the four chapter scripts.
+# `include` merges beats only — voice and speed come from the *including*
+# file — so a mismatch synthesizes the same beat twice at two speeds and the
+# long cut drifts from the short cuts.
+speed: 1.0
+
+include:
+  - walkthrough_chapters_supply_chain
+  - walkthrough_chapters_inventory
+  - walkthrough_chapters_vulnerabilities
+  - walkthrough_chapters_trust_center
+  - walkthrough_chapters_advisories
+
+beats:
+  # The tour answers one question, asked by one person, at one moment. Before
+  # this it was an architecture tour — five chapters mapped to the app's own
+  # information architecture, with the opening pain stated once and then
+  # dropped. Naming the question up front gives every chapter a reason to
+  # exist beyond being next, and gives the close something to land on.
+  #
+  # The vulnerability is the one the tour actually clears with a VEX in
+  # chapter 3 (walkthrough_chapters.VEX_TARGET_CVE), so the story and the
+  # seeded data are the same story.
+  tour_intro:
+    text: >-
+      It's Friday afternoon, and a customer wants to know whether you're
+      affected by a vulnerability in libwebp.  Answering that
+      usually costs a spreadsheet, a deadline, and somebody's weekend.
+      [long-pause] It doesn't have to.
+
+  # One bridge per chapter, spoken *over* the chapter's title card and into the
+  # first surface behind it. These exist because the card used to play in
+  # silence: the chapter's own first line sits inside its step function, which
+  # runs after the card, so every chapter boundary opened a hole — nine seconds
+  # of it after the opening line. Same reasoning as putting the first narrate()
+  # before start_on_dashboard so the splash is not silent.
+  #
+  # Long-cut only. The standalone chapter clips play no card and open cold, so
+  # a line that says "then" would have nothing to follow.
+  # Each bridge raises the stakes rather than announcing the next section. The
+  # first draft opened four of five with "So" / "Then" / "And then" / "And
+  # last", which signposts sequence — read end to end it was a list of rooms
+  # being visited rather than a story getting harder.
+  chapter_supply_chain:
+    text: >-
+      Answering starts with knowing exactly what you ship. Most teams cannot
+      say, precisely.
+
+  chapter_inventory:
+    text: >-
+      And the answer is only as good as the evidence behind it.
+
+  chapter_vulnerabilities:
+    text: >-
+      Now the actual question. Is that library in here, and does it matter?
+
+  chapter_trust_center:
+    text: >-
+      An answer nobody outside the company can see is not an answer.
+
+  chapter_advisories:
+    text: >-
+      And the hardest version of it. When the vulnerability is yours to
+      disclose.
+
+  # Write the domain out as words. A replace key may not contain punctuation
+  # (the API rejects it), and "sbomify.com" left bare is read as a URL —
+  # "s-bomba.fi slash dot-com" — rather than spoken.
+  # The recap runs shortest-to-longest and the payoff gets its own sentence.
+  # It used to be a four-item list with "hand your customers a link instead of
+  # an apology" buried third — the best line in the script, landing in the
+  # middle of an inventory of features at the exact moment the close needs to
+  # carry weight.
+  # Closes the loop the first line opened, rather than reciting the features
+  # again. The recap this replaced ended on a four-item list with the best
+  # line buried third.
+  tour_outro:
+    text: >-
+      So — the question was whether you're affected. [long-pause] The answer is
+      no, here's why, and here's the evidence. On a page that was already
+      current before the email arrived.  No spreadsheet. Nobody's
+      weekend. [long-pause] Start free, at sbomify dot com.
+    caption: >-
+      So — the question was whether you're affected. The answer is no, here's
+      why, and here's the evidence. On a page that was already current before
+      the email arrived. No spreadsheet. Nobody's weekend.
+      Start free at sbomify.com.

@@ -1,0 +1,66 @@
+# Narration for screencasts/oidc_trusted_publishing.py
+#
+# Thesis: long-lived API tokens in CI are the thing that leaks. Trusted
+# publishing removes the secret entirely — the pipeline proves who it is with a
+# short-lived identity token GitHub already issues.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      The usual way to upload an SBOM from CI is to mint an API token and paste
+      it into your repository secrets. It works, and it's also the thing that
+      leaks.
+
+  why:
+    text: >-
+      Trusted publishing removes the secret altogether. Your pipeline proves
+      who it is using an identity token GitHub already issues, and sbomify
+      trades that for credentials good for a few minutes.
+
+  component:
+    text: >-
+      The trust is bound to a single component, so a compromised workflow can
+      only ever write to the one thing it was authorised for.
+
+  open_publishers:
+    text: >-
+      Trusted publishers live behind the component's menu.
+
+  repository:
+    text: >-
+      You name the repository allowed to publish here. That's the entire
+      configuration. [pause] No token is created, because there's nothing to
+      create.
+
+  binding:
+    text: >-
+      From now on, only a workflow running in that repository can upload to
+      this component.
+
+  workflow:
+    text: >-
+      And here's the other half of the contract, the workflow snippet. Note it
+      asks GitHub for an id-token and never references a secret.
+
+  simulate:
+    text: >-
+      So let's play the part of the runner. [pause] First it asks GitHub for an
+      OIDC token that says which repository, branch and workflow it is.
+
+  exchange:
+    text: >-
+      That token goes to sbomify, which checks the claims against the binding
+      you just made and hands back a short-lived credential.
+
+  upload:
+    text: >-
+      Then the SBOM uploads with that credential, exactly as a real pipeline
+      would.
+
+  outro:
+    text: >-
+      And it lands on the component. [pause] No secret was stored, nothing to
+      rotate, and nothing left behind that would still work tomorrow if it
+      leaked today.

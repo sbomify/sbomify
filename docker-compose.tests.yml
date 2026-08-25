@@ -60,6 +60,9 @@ services:
       PLAYWRIGHT_CDP_ENDPOINT: http://172.25.0.11:9222
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       REDIS_URL: redis://redis:6379
+      # Screencast narration synthesis (xAI TTS). Only read on a narration
+      # cache miss, so the normal test suite never needs it set.
+      XAI_API_KEY: ${XAI_API_KEY:-}
     volumes:
       - ./sbomify:/code/sbomify:ro
       - ./sbomify/apps/core/tests/e2e/__diffs__:/code/sbomify/apps/core/tests/e2e/__diffs__
