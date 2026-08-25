@@ -1,12 +1,33 @@
 # Narration for chapter 4 of the marketplace walkthrough — "Share it with
 # customers". Also included by marketplace_walkthrough.yaml.
-voice: ara
+# Carina, measured at 6.14 semitones of pitch variation against ara's 3.36 —
+# nearly double. Ara is one of the flattest voices xAI offers, and a flat
+# delivery is the part no words-per-minute figure captures.
+voice: carina
+# Delivery speed. This family used to run at 0.85, on guidance for dense
+# technical *teaching* (110-130 wpm), where comprehension is the goal. This is
+# a persuasive video shown to somebody who has not agreed to anything yet, and
+# that is a different problem:
+#
+#   - screencast narration lands at 130-150 wpm, 140 measuring most credible
+#   - Miller et al. (1976): 195 wpm persuaded better than 102
+#   - Smith & Shaffer (1991): speed helps most when the audience does not
+#     already agree, which is exactly a cold marketplace viewer
+#
+# At 0.85 the opening line measured 103 wpm — Miller's least-persuasive
+# condition almost exactly, on the first thing anyone hears. 1.0 puts it at
+# 139 wpm, and the corpus near 155.
+#
+# This value MUST match across the long cut and the four chapter scripts.
+# `include` merges beats only — voice and speed come from the *including*
+# file — so a mismatch synthesizes the same beat twice at two speeds and the
+# long cut drifts from the short cuts.
 speed: 1.0
 
 beats:
   tc_enable:
     text: >-
-      Then you turn on a public trust center. [pause] There's no separate site
+      Then you turn on a public trust center.  There's no separate site
       to build and nothing to keep in sync, because it's backed by the same
       artifacts already sitting in the workspace — the ones your pipeline has
       been feeding all along.
@@ -19,12 +40,12 @@ beats:
 
   tc_visibility:
     text: >-
-      And you decide what goes public. Per product, per component. [pause]
+      And you decide what goes public. Per product, per component. 
       Public, private, or gated behind an NDA a visitor signs before the detail
       opens up.
 
   tc_customer_view:
     text: >-
       This is what your customers see. Always current, because it's the same
-      data your pipeline has been feeding all along. [pause] No email thread,
+      data your pipeline has been feeding all along.  No email thread,
       no spreadsheet, and no scramble the week a questionnaire lands.

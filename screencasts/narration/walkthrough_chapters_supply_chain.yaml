@@ -6,7 +6,28 @@
 # This tour plays cold beside a marketplace listing, so the register is a
 # little more like a pitch than the FAQ recordings — still explaining, never
 # selling at the viewer.
-voice: ara
+# Carina, measured at 6.14 semitones of pitch variation against ara's 3.36 —
+# nearly double. Ara is one of the flattest voices xAI offers, and a flat
+# delivery is the part no words-per-minute figure captures.
+voice: carina
+# Delivery speed. This family used to run at 0.85, on guidance for dense
+# technical *teaching* (110-130 wpm), where comprehension is the goal. This is
+# a persuasive video shown to somebody who has not agreed to anything yet, and
+# that is a different problem:
+#
+#   - screencast narration lands at 130-150 wpm, 140 measuring most credible
+#   - Miller et al. (1976): 195 wpm persuaded better than 102
+#   - Smith & Shaffer (1991): speed helps most when the audience does not
+#     already agree, which is exactly a cold marketplace viewer
+#
+# At 0.85 the opening line measured 103 wpm — Miller's least-persuasive
+# condition almost exactly, on the first thing anyone hears. 1.0 puts it at
+# 139 wpm, and the corpus near 155.
+#
+# This value MUST match across the long cut and the four chapter scripts.
+# `include` merges beats only — voice and speed come from the *including*
+# file — so a mismatch synthesizes the same beat twice at two speeds and the
+# long cut drifts from the short cuts.
 speed: 1.0
 
 beats:
@@ -24,7 +45,7 @@ beats:
   sc_product_detail:
     text: >-
       This is Pied Piper's compression engine. Four components under one
-      product. [pause] When somebody asks whether you're affected by something,
+      product.  When somebody asks whether you're affected by something,
       this structure is what makes the answer take seconds rather than a week.
       You aren't searching build logs or asking around the team — you're
       reading a list you already maintain, that already knows which repository

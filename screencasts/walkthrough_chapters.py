@@ -33,19 +33,23 @@ from typing import Any, Callable
 
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page
 
 from conftest import (
+    CUSTOM_TRUST_DOMAIN,
     PIED_PIPER_PRODUCT_NAME,
     auto_dismiss_toasts,
     caption,
     clear_caption,
     click_into_row,
+    configure_custom_domain,
     dismiss_toasts,
-    enable_and_configure_trust_center,
+    enable_trust_center,
     hover_and_click,
     install_dict_backed_s3,
     narrate,
+    navigate_to_advisories,
     navigate_to_components,
     navigate_to_products,
     navigate_to_trust_center_tab,
@@ -55,10 +59,16 @@ from conftest import (
     smooth_scroll,
     start_on_dashboard,
 )
+from sbomify.apps.core.models import Release, ReleaseArtifact
 from sbomify.apps.plugins.models import AssessmentRun, TeamPluginSettings
 from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.sboms.models import Component, ProductIdentifier, ProductLink
-from sbomify.apps.security_advisories.models import AdvisoryEvent, SecurityAdvisory
+from sbomify.apps.security_advisories.models import (
+    AdvisoryEvent,
+    AdvisoryProduct,
+    AdvisoryVulnerability,
+    SecurityAdvisory,
+)
 
 # ---------------------------------------------------------------------------
 # Seed data — Silicon Valley's Pied Piper, with a believable dependency tree
@@ -79,6 +89,10 @@ CORE_COMPONENT = "Compression Core Library"
 DASHBOARD_COMPONENT = "Web Dashboard"
 API_COMPONENT = "REST API Service"
 WORKER_COMPONENT = "Data Pipeline Worker"
+
+# The version the tour presents as shipped. Used for the tagged release and
+# echoed by the product identifiers below, so the frame agrees with itself.
+PRODUCT_VERSION = "2.4.0"
 
 PRODUCT_IDENTIFIERS = [
     ("cpe", "cpe:2.3:a:piedpiper:compression_engine:2.4.0:*:*:*:*:*:*:*"),
@@ -152,6 +166,9 @@ SCAN_HISTORY_PROFILE: list[float] = [
     0.60, 0.60, 0.55, 0.70, 0.70, 0.70, 0.65, 0.75, 0.75, 0.80,
     0.80, 0.75, 0.85, 0.90, 0.90, 0.85, 0.90, 1.00, 1.00, 1.00,
 ]  # fmt: skip
+
+# The advisory the tour publishes and then shows on the public trust centre.
+ADVISORY_TITLE = "Path traversal in archive extraction"
 
 VEX_JUSTIFICATION_DETAIL = (
     "Pied Piper links libwebp for thumbnail preview only. The middle-out "
@@ -285,7 +302,7 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
     return install_dict_backed_s3(monkeypatch)
 
 
-def _seed_published_advisory(team: Any) -> None:
+def _seed_published_advisory(team: Any, product: Any) -> None:
     """Publish one resolved security advisory for the workspace.
 
     The trust center now leads with a Security Advisories section, and with
@@ -301,7 +318,7 @@ def _seed_published_advisory(team: Any) -> None:
     now = datetime.now(tz=timezone.utc)
     advisory = SecurityAdvisory.objects.create(
         team=team,
-        title="Path traversal in archive extraction",
+        title=ADVISORY_TITLE,
         severity="medium",
         description=(
             "Archive entries with parent-directory segments could be written outside the "
@@ -314,6 +331,37 @@ def _seed_published_advisory(team: Any) -> None:
         made_public_at=now,
         tracking_id=SecurityAdvisory.allocate_tracking_id(team),
     )
+    # Name the product it affects. Without this the detail page carries an
+    # amber "No products recorded yet — publishing a product advisory requires
+    # at least one", which is a warning about the demo data sitting in frame
+    # for the whole chapter. An advisory that names nothing is also not the
+    # thing being sold: the point is that a customer can see whether *their*
+    # product is affected.
+    AdvisoryProduct.objects.create(
+        advisory=advisory,
+        product=product,
+        product_name=product.name,
+    )
+
+    # The vulnerability behind it, with a CVE and a CVSS vector. CVSS hangs off
+    # the vulnerability rather than the advisory — an advisory carries zero or
+    # more of these — and the detail page renders "CVSS: Not set" without one,
+    # which reads as a product that cannot record it rather than demo data that
+    # did not.
+    AdvisoryVulnerability.objects.create(
+        advisory=advisory,
+        cve_id="CVE-2026-31337",
+        title=ADVISORY_TITLE,
+        cwe_ids=["CWE-22"],
+        cvss_scores=[
+            {
+                "version": "3.1",
+                "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:N",
+                "base_score": 6.5,
+            }
+        ],
+    )
+
     AdvisoryEvent.objects.create(
         advisory=advisory,
         event_type=AdvisoryEvent.EventType.PUBLISHED,
@@ -350,7 +398,27 @@ def pied_piper_scanned(
     """
     team = pied_piper_with_sboms["product"].team
     team.name = WORKSPACE_NAME
-    team.save(update_fields=["name"])
+    # Brand the trust centre in the workspace's own colours.
+    #
+    # Chapter 4 configures trust.piedpiper.com on camera and says the link
+    # "carries your name rather than ours", and the page it then showed was in
+    # platform colours throughout. Setting the accent is what the branded
+    # component library reads (see the branded-components notes in AGENTS.md),
+    # so the nav marker, headings and status chips all pick it up.
+    #
+    # The wordmark at the top of that page is a separate problem and is NOT
+    # fixed here: `BrandingInfo.logo` resolves against
+    # AWS_MEDIA_STORAGE_BUCKET_URL, and this recording installs a dict-backed
+    # fake S3 that no browser can fetch from, so pointing at one would render a
+    # broken image rather than Pied Piper's mark. Showing the platform logo is
+    # the lesser wrong until the seed can serve a real asset.
+    team.branding_info = {
+        **(team.branding_info or {}),
+        "branding_enabled": True,
+        "brand_color": "#0F2A1D",
+        "accent_color": "#1F7A4D",
+    }
+    team.save(update_fields=["name", "branding_info"])
 
     sample_user.first_name = USER_FIRST_NAME
     sample_user.last_name = USER_LAST_NAME
@@ -394,7 +462,7 @@ def pied_piper_scanned(
         visibility=Component.Visibility.PUBLIC,
     )
 
-    _seed_published_advisory(team)
+    _seed_published_advisory(team, product)
 
     now = datetime.now(tz=timezone.utc)
     last_day = len(SCAN_HISTORY_PROFILE) - 1
@@ -427,6 +495,63 @@ def pied_piper_scanned(
                 result_schema_version="1.0",
             )
             AssessmentRun.objects.filter(pk=run.pk).update(created_at=scanned_at)
+
+    # Scan the superseded versions too, once each, at the moment they were
+    # uploaded.
+    #
+    # The loop above only touches the newest SBOM per component, so the
+    # artifact list showed one scanned row above three reading "Not scanned" —
+    # on a page the narration introduces as a version history, in a chapter
+    # about keeping every artifact. It read as a product that only looks at the
+    # latest, which is the opposite of the claim.
+    #
+    # An older version legitimately carries *more* findings than its successor:
+    # that is what shipping fixes looks like. The count steps down as the
+    # series advances, ending one short of the newest, whose full set the loop
+    # above already established.
+    #
+    # These land on their upload dates (194, 96 and 38 days back), well outside
+    # the dashboard's 30-day window, so the trends chart is untouched.
+    for offset, (component_name, versions) in enumerate(pied_piper_with_sboms["sbom_history"].items()):
+        total = len(FINDINGS_BY_COMPONENT[component_name])
+        superseded = versions[:-1]
+        for index, old_sbom in enumerate(superseded):
+            # Oldest carries the most; each release clears one.
+            finding_count = max(1, min(total, total + len(superseded) - index - 1))
+            scanned_at = old_sbom.created_at + timedelta(hours=2 + offset)
+            run = AssessmentRun.objects.create(
+                id=uuid.uuid4(),
+                sbom=old_sbom,
+                plugin_name="osv",
+                plugin_version="1.0.0",
+                plugin_config_hash="0" * 64,
+                category="security",
+                run_reason=RunReason.ON_UPLOAD.value,
+                status="completed",
+                started_at=scanned_at,
+                completed_at=scanned_at,
+                input_content_digest="0" * 64,
+                result=_security_result(component_name, scanned_at, finding_count),
+                result_schema_version="1.0",
+            )
+            AssessmentRun.objects.filter(pk=run.pk).update(created_at=scanned_at)
+
+    # A real, tagged release with every artifact pinned to it.
+    #
+    # The SBOM signal auto-creates a rolling "latest" release, and that used to
+    # be the only one here — so chapter 2 opened "latest" while the narration
+    # said "not the latest of everything, but precisely what went out of the
+    # door in that build". The recording argued against its own script. A
+    # tagged release is also the honest artifact for the claim: "latest" is
+    # exactly the thing that does not still resolve years later.
+    tagged = Release.objects.create(
+        product=product,
+        name=f"v{PRODUCT_VERSION}",
+        version=PRODUCT_VERSION,
+    )
+    for sbom in pied_piper_with_sboms["sboms"].values():
+        ReleaseArtifact.objects.create(release=tagged, sbom=sbom)
+    pied_piper_with_sboms["tagged_release"] = tagged
 
     return pied_piper_with_sboms
 
@@ -473,21 +598,35 @@ def chapter_supply_chain(page: Page) -> None:
     pace(page, 2200)
 
     clear_caption(page)
-    navigate_to_products(page)
+    # Narrate *then* navigate, not the other way round. `narrate` waits for the
+    # previous line before it starts, so calling it first ends that line on the
+    # page it was describing and lets this one play as the next page paints.
+    # With the navigation first, the previous line simply carried over: an
+    # audit found twelve beats doing that, the worst by ten seconds.
     narrate(page, "sc_products")
+    navigate_to_products(page)
     caption(page, "Products group the components that make up a shippable thing.")
     shot(page, "02-products-list")
-    pace(page, 2400)
+    # The line runs 11s over a table with one row in it. Walk the component
+    # chips it names — they are the "components that make it real" the sentence
+    # is about — so the viewer has something to follow.
+    for chip in page.locator("table tbody tr td span, table tbody tr td a").all()[:5]:
+        try:
+            chip.hover(timeout=2000)
+        except PlaywrightError:
+            continue
+        pace(page, 800)
+    pace(page, 1600)
 
     clear_caption(page)
     product_link = page.locator(f"span.text-text:text-is('{PIED_PIPER_PRODUCT_NAME}')")
     product_link.wait_for(state="visible", timeout=15_000)
     pace(page, 500)
+    narrate(page, "sc_product_detail")
     hover_and_click(page, product_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1600)
 
-    narrate(page, "sc_product_detail")
     caption(page, "Pied Piper's compression engine — four components under one product.")
     shot(page, "03-product-overview")
     pace(page, 2600)
@@ -529,22 +668,51 @@ def chapter_inventory(page: Page) -> None:
     organises them by release, so "what was in build 2.4.0" has an answer
     years later.
     """
-    navigate_to_components(page)
     narrate(page, "inv_component")
+    navigate_to_components(page)
     caption(page, "Every component tracks its own SBOMs, VEX, and documents.")
     shot(page, "06-component-inventory")
     pace(page, 2600)
 
     clear_caption(page)
-    click_into_row(page, CORE_COMPONENT)
-
     narrate(page, "inv_immutable")
-    caption(page, "Artifacts are stored exactly as received — never rewritten.")
+    click_into_row(page, CORE_COMPONENT)
     shot(page, "07-component-artifacts")
-    pace(page, 2800)
+    pace(page, 1400)
+
+    # Straight through to the full artifact list, *under* the immutability
+    # line rather than after it.
+    #
+    # The component page leads with a card called "Latest artifacts &
+    # security" which shows exactly one row, and the four seeded versions this
+    # chapter exists to demonstrate live behind its "View all N". Reaching them
+    # only when `inv_versions` began left the one-row card on screen for the
+    # whole 12.6s of `inv_immutable` — so a chapter titled "every artifact,
+    # versioned" spent its first eleven seconds showing a list of one, which is
+    # exactly the objection it was meant to answer.
+    view_all = page.locator("a:has-text('View all')").first
+    view_all.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, view_all)
+    page.wait_for_load_state("networkidle")
+    caption(page, "Artifacts are stored exactly as received, never rewritten.")
+    pace(page, 2400)
+    clear_caption(page)
+
+    narrate(page, "inv_versions")
+    caption(page, "Every version kept, with the spec it was written against.")
+    shot(page, "07b-component-versions")
+    # Walk down the four rows while the line counts them. The list was static
+    # for the whole 12.5s beat; hovering each version in turn lets the viewer
+    # follow the sentence across the table rather than hunt for what is meant.
+    rows = page.locator("table tbody tr")
+    for index in range(min(rows.count(), 4)):
+        rows.nth(index).hover()
+        pace(page, 900)
+    pace(page, 1200)
     clear_caption(page)
 
     # The releases list lives on the product, so hop back for the release story.
+    narrate(page, "inv_releases")
     navigate_to_products(page)
     product_link = page.locator(f"span.text-text:text-is('{PIED_PIPER_PRODUCT_NAME}')")
     product_link.wait_for(state="visible", timeout=15_000)
@@ -559,26 +727,29 @@ def chapter_inventory(page: Page) -> None:
     releases_card = page.locator("h4:has-text('Latest releases')")
     releases_card.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, releases_card, 1200)
-
-    narrate(page, "inv_releases")
     caption(page, "Releases pin an exact set of artifacts to a version you shipped.")
     shot(page, "08-releases")
     pace(page, 2800)
     clear_caption(page)
 
-    # Open the release itself so the artifacts pinned to it are on screen —
+    # Open the *tagged* release so the artifacts pinned to it are on screen —
     # the "what exactly was in that build" answer this chapter is about.
+    #
+    # Named explicitly rather than taking the first release link. The SBOM
+    # signal auto-creates a rolling "latest" release, so `.first` opened that
+    # one — while the narration was saying "not the latest of everything, but
+    # precisely what went out of the door". The recording contradicted itself.
+    #
     # Matched on the href rather than the anchor's classes: the product page
     # also carries hidden download anchors that share font-semibold/text-text,
     # and `.first` on the class selector picks one of those instead.
-    release_link = page.locator("a[href*='/release/']").first
+    release_link = page.locator(f"a[href*='/release/']:has-text('v{PRODUCT_VERSION}')").first
     release_link.wait_for(state="visible", timeout=15_000)
     pace(page, 500)
+    narrate(page, "inv_frozen")
     hover_and_click(page, release_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1800)
-
-    narrate(page, "inv_frozen")
     caption(page, "Every artifact in that build, frozen — years later it still resolves.")
     shot(page, "09-release-artifacts")
     pace(page, 3000)
@@ -600,30 +771,48 @@ def chapter_vulnerabilities(page: Page) -> None:
     start_on_dashboard(page)
     narrate(page, "vuln_dashboard")
     caption(page, "The dashboard leads with what actually needs attention.")
+    # The line reads out the counts, so put them under the cursor as it does.
+    # Ten findings and two critical were being spoken over an unmoving page.
+    for chip in ("CRITICAL", "HIGH", "MEDIUM"):
+        found = page.locator(f"text={chip}").first
+        if found.count():
+            found.hover()
+            pace(page, 700)
     pace(page, 2600)
     shot(page, "10-vulnerability-posture")
 
-    # The trends widget loads via HTMX after the digest; give it a beat and
-    # capture the whole page so the chart lands in the still.
+    # The trends widget loads via HTMX after the digest, so wait for the chart
+    # itself rather than scrolling blind by a pixel count.
     clear_caption(page)
-    page.mouse.wheel(0, 700)
-    pace(page, 2000)
+    # The heading element, not `div:has-text(...)`. `has-text` matches every
+    # *ancestor* containing the string, so `.first` resolved to a page-level
+    # wrapper taller than the viewport, which can never be scrolled fully into
+    # frame — and the recording failed outright once smooth_scroll started
+    # asserting instead of failing quietly.
+    trends = page.locator("h4:has-text('Vulnerability Trends')").first
+    trends.wait_for(state="visible", timeout=15_000)
     narrate(page, "vuln_trends")
+    smooth_scroll(page, trends, 1000)
     caption(page, "Severity trends across every product, over time.")
     pace(page, 2400)
     shot(page, "11-vulnerability-trends")
     clear_caption(page)
-    page.mouse.wheel(0, -1400)
+    # No scroll back up here.
+    #
+    # There used to be a `page.mouse.wheel(0, -1400)`, which fired while
+    # vuln_trends was still speaking and yanked the chart out of frame in the
+    # middle of the line describing it. It was also an instant jump rather than
+    # a pan. It bought nothing either way: the next step navigates to a new
+    # page, which starts at the top regardless.
     pace(page, 800)
 
+    narrate(page, "vuln_drill")
     navigate_to_components(page)
     click_into_row(page, CORE_COMPONENT)
 
     vulns_card = page.locator("text=Vulnerabilities").first
     vulns_card.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, vulns_card, 1400)
-
-    narrate(page, "vuln_drill")
     caption(page, "Drill into a component: advisory, package, fix version, status.")
     shot(page, "12-vulnerability-drilldown")
     pace(page, 3000)
@@ -637,8 +826,44 @@ def chapter_vulnerabilities(page: Page) -> None:
     # preview reports is the matcher's own answer.
     narrate(page, "vuln_not_exploitable")
     caption(page, "Not every finding is exploitable. VEX says so, in a standard format.")
-    pace(page, 2600)
+    # Point at the row the line is about. It names the critical finding in the
+    # compression core, and the table was simply sitting there while it did —
+    # 9.4s of speech over a still frame. Panning to the libwebp row makes the
+    # words and the picture the same statement.
+    # Walk the table, then land on the one the line is about. This beat is 17s
+    # and the modal used to fill its tail; now that the upload has moved under
+    # its own line, the picture here has to be the findings themselves.
+    rows = page.locator("table tbody tr")
+    for index in range(min(rows.count(), 4)):
+        rows.nth(index).hover()
+        pace(page, 900)
+    target_row = page.locator(f"tr:has-text('{VEX_TARGET_CVE}')").first
+    target_row.wait_for(state="visible", timeout=10_000)
+    smooth_scroll(page, target_row, 1100)
+    target_row.hover()
+    pace(page, 1400)
+    # Then read across the row itself: the package, the version that fixes it,
+    # and the state it is in. The line spends its second half explaining why
+    # this particular finding is not reachable, and the table was motionless
+    # for ten seconds of that.
+    for cell in target_row.locator("td").all()[1:5]:
+        try:
+            cell.hover(timeout=2000)
+        except PlaywrightError:
+            continue
+        pace(page, 900)
+    pace(page, 1400)
     clear_caption(page)
+
+    # Everything from here to the dropzone happens under `vuln_upload`, the
+    # line that is actually about uploading.
+    #
+    # It used to run under `vuln_not_exploitable` instead, filling that beat's
+    # leftover twelve seconds — so the upload modal slid over the vulnerability
+    # table while the voice was still describing the libwebp row underneath it,
+    # advertising "Drop your SBOM file here" a good ten seconds before the line
+    # first says the word VEX.
+    narrate(page, "vuln_upload")
 
     # Role-based lookups, matching the convention the other recordings settled
     # on. The meatball is one c-actions-menu now and its label names the thing
@@ -668,9 +893,18 @@ def chapter_vulnerabilities(page: Page) -> None:
     bom_type.select_option("vex")
     pace(page, 1200)
 
-    narrate(page, "vuln_upload")
-    caption(page, "Drop in a CycloneDX VEX — sbomify shows what it would change first.")
-    pace(page, 1800)
+    caption(page, "Drop in a CycloneDX VEX, and sbomify shows what it would change first.")
+    # The line spends eleven seconds on formats and open standards while the
+    # modal holds still. The dropzone spells out every accepted format, so pan
+    # to it and let the viewer read along instead of being talked at.
+    # Hover only, no pan. `smooth_scroll` falls back to a whole-page scroll
+    # when the target has no scrollable ancestor, and the dropzone lives inside
+    # a fixed modal — so panning to it slid the page *behind* the dialog while
+    # the dialog itself stayed put. The modal is fully in frame already.
+    dropzone = page.locator("#upload-sbom .border-dashed, #upload-sbom [class*='dashed']").first
+    if dropzone.count():
+        dropzone.hover()
+    pace(page, 2600)
     clear_caption(page)
 
     # The dropzone proxies to a hidden <input type="file"> via $refs; setting
@@ -700,6 +934,13 @@ def chapter_vulnerabilities(page: Page) -> None:
     pace(page, 3000)
     shot(page, "13-vex-preview")
     clear_caption(page)
+
+    # The claim "nothing has been written yet" has to finish while that is still
+    # true. This used to be one 22.6s beat and the click landed ~4s into it, so
+    # the sentence was spoken about eight seconds after the write. `narrate`
+    # waits for the previous line to finish, so starting the rationale here is
+    # what holds the click until the preview copy has landed.
+    narrate(page, "vuln_dry_run_why")
 
     with page.expect_response(
         lambda r: "/api/v1/sboms/upload-file/" in r.url and r.status == 201,
@@ -735,8 +976,20 @@ def chapter_vulnerabilities(page: Page) -> None:
     pace(page, 1400)
 
     narrate(page, "vuln_nothing_deleted")
-    caption(page, "Nothing is deleted — the finding is still there, with the reason attached.")
-    pace(page, 3200)
+    caption(page, "Nothing is deleted, the finding is still there with the reason attached.")
+    # The claim is that the cleared finding sits *next to* the others, so show
+    # that rather than describing it: hover the not-affected row, then pan back
+    # across the untouched ones.
+    cleared = page.locator("tr:has-text('Not affected')").first
+    if cleared.count():
+        cleared.hover()
+        pace(page, 1400)
+    others = page.locator("tr:has-text('Affected')").first
+    if others.count():
+        smooth_scroll(page, others, 900)
+        others.hover()
+        pace(page, 1400)
+    pace(page, 2400)
     shot(page, "15-vex-suppression")
     clear_caption(page)
 
@@ -753,26 +1006,32 @@ def chapter_trust_center(page: Page) -> None:
     the posture are only worth maintaining if you can hand them to a customer
     without a spreadsheet and an NDA thread.
     """
+    narrate(page, "tc_enable")
     navigate_to_trust_center_tab(page)
     pace(page, 600)
-
-    narrate(page, "tc_enable")
     caption(page, "Turn on a public trust center — no separate site to build.")
     pace(page, 2400)
     clear_caption(page)
 
-    enable_and_configure_trust_center(page)
-    rewrite_localhost_urls(page)
+    enable_trust_center(page)
 
+    # The domain is typed and saved *under* the line about domains, not before
+    # it. Running both halves up front meant the viewer watched the hostname
+    # being entered while hearing about switching the trust centre on, and then
+    # heard "serve it from your own domain" over a form that had been filled in
+    # and saved several seconds earlier.
     narrate(page, "tc_domain")
+    configure_custom_domain(page)
+    rewrite_localhost_urls(page)
     caption(page, "Serve it from your own domain: trust.piedpiper.com.")
     shot(page, "16-trust-center-config")
-    pace(page, 2800)
+    pace(page, 2000)
     clear_caption(page)
 
     # Publish the product. Nothing reaches the trust center until you say so —
     # showing the switch being thrown makes that explicit, and it is what fills
     # the public page the chapter closes on.
+    narrate(page, "tc_visibility")
     navigate_to_products(page)
     product_link = page.locator(f"span.text-text:text-is('{PIED_PIPER_PRODUCT_NAME}')")
     product_link.wait_for(state="visible", timeout=15_000)
@@ -780,8 +1039,6 @@ def chapter_trust_center(page: Page) -> None:
     hover_and_click(page, product_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1400)
-
-    narrate(page, "tc_visibility")
     caption(page, "You decide what goes public — per product, per component.")
     pace(page, 2200)
     clear_caption(page)
@@ -798,15 +1055,136 @@ def chapter_trust_center(page: Page) -> None:
 
     # The public page is what a customer or auditor actually lands on, so the
     # tour ends there rather than on an admin screen.
+    narrate(page, "tc_customer_view")
     page.goto("/public/workspace/")
     page.wait_for_load_state("networkidle")
-    rewrite_localhost_urls(page)
+    # The workspace's own hostname, not ours: chapter 4 configures
+    # trust.piedpiper.com on camera, so showing this page on app.sbomify.com
+    # contradicted the line about the link carrying your name.
+    rewrite_localhost_urls(page, CUSTOM_TRUST_DOMAIN)
     pace(page, 2000)
-
-    narrate(page, "tc_customer_view")
     caption(page, "This is what your customers see — always current, no email thread.")
     shot(page, "17-trust-center-public")
     pace(page, 3200)
+    clear_caption(page)
+    pace(page, 1200)
+
+
+# ---------------------------------------------------------------------------
+# Chapter 5 — security advisories, in the app and on the trust centre
+# ---------------------------------------------------------------------------
+
+
+def chapter_advisories(page: Page) -> None:
+    """The advisory a customer receives, from the workspace to the public page.
+
+    Runs last because the second half needs the trust centre public, which
+    chapter 4 turns on. The first four chapters cover what you ship and what is
+    wrong with it; this is the disclosure that reaches the customer, which is
+    the part teams currently do over email.
+
+    Both halves are shown deliberately: the workspace view is where the
+    advisory is written and its state tracked, and the public view is the only
+    half a customer ever sees. Showing one without the other was the gap.
+    """
+    # adv_why gets the walk back into the app as its picture. It used to be
+    # followed immediately by adv_list, with no visual work at all between the
+    # two calls, so it played for seven seconds against a frozen frame — the
+    # worst single case the slack report found.
+    narrate(page, "adv_why")
+    # Open on the public advisories section, which is what chapter 4 left on
+    # screen and exactly what this line is about. Best-effort on purpose: the
+    # long cut arrives here from /public/workspace where the section exists,
+    # while the standalone clip opens on the dashboard where it does not, and
+    # neither is a failure. Everything this beat *needs* is the navigation
+    # below; this only stops it opening on a frozen frame.
+    public_advisories = page.locator("h2:has-text('Security advisories')").first
+    if public_advisories.count():
+        try:
+            smooth_scroll(page, public_advisories, 900)
+            pace(page, 1200)
+        except (PlaywrightError, AssertionError):
+            pass
+    # Back into the app first. In the long cut chapter 4 signs off on
+    # ``/public/workspace/``, which carries its own "Security Advisories"
+    # section heading — so the sidebar lookup below matched *that* link, never
+    # left the public page, and the workspace table's title span never
+    # appeared. The standalone clip opens on the dashboard and so never hit it.
+    start_on_dashboard(page, pause_ms=1200)
+    navigate_to_advisories(page)
+    pace(page, 1600)
+
+    narrate(page, "adv_list")
+    caption(page, "Sooner or later you are the one disclosing.")
+    pace(page, 1600)
+    clear_caption(page)
+
+    advisories_table = page.locator(f"span:text-is('{ADVISORY_TITLE}')").first
+    advisories_table.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, advisories_table, 900)
+    shot(page, "18-advisories-list")
+    # One row, seventeen seconds. Read across it — severity, then the CVE, then
+    # the product it affects, then its state — which is the order the line
+    # describes them in.
+    for cell in ("text=MEDIUM", f"text={ADVISORY_TITLE}", "text=Pied Piper Compression Engine", "text=Resolved"):
+        found = page.locator(cell).first
+        if found.count():
+            try:
+                found.hover(timeout=2000)
+            except PlaywrightError:
+                continue
+            pace(page, 900)
+    pace(page, 1200)
+
+    # Aim at the title cell rather than the row: the row's own @click is
+    # swallowed by the actions cell, and the advisories table grew a row menu.
+    narrate(page, "adv_detail")
+    hover_and_click(page, advisories_table)
+    page.wait_for_url("**/security-advisories/**", timeout=15_000)
+    page.wait_for_load_state("networkidle")
+    pace(page, 1600)
+
+    caption(page, "Severity, affected products, and a timeline an auditor can read.")
+    timeline = page.locator("text=Timeline").first
+    timeline.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, timeline, 1000)
+    shot(page, "19-advisory-detail")
+    # Walk the details panel the line lists: status, severity, the score, the
+    # identifier, then the product it affects. Fifteen seconds of this page
+    # used to pass with nothing moving.
+    for field in ("text=Resolved", "text=CVSS", "text=CVE-2026-31337", "text=Pied Piper Compression Engine"):
+        found = page.locator(field).first
+        if found.count():
+            try:
+                found.hover(timeout=2000)
+            except PlaywrightError:
+                continue
+            pace(page, 900)
+    pace(page, 1400)
+    clear_caption(page)
+
+    narrate(page, "adv_publish")
+    caption(page, "Nothing reaches a customer until you publish it.")
+    pace(page, 2600)
+    clear_caption(page)
+
+    # The public half. Same page the tour closed chapter 4 on, now read for the
+    # advisory rather than the SBOMs.
+    narrate(page, "adv_public")
+    page.goto("/public/workspace/")
+    page.wait_for_load_state("networkidle")
+    # The workspace's own hostname, not ours: chapter 4 configures
+    # trust.piedpiper.com on camera, so showing this page on app.sbomify.com
+    # contradicted the line about the link carrying your name.
+    rewrite_localhost_urls(page, CUSTOM_TRUST_DOMAIN)
+    pace(page, 1400)
+
+    public_advisory = page.locator(f"text={ADVISORY_TITLE}").first
+    public_advisory.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, public_advisory, 1000)
+    caption(page, "Published, on the page your customers already have a link to.")
+    shot(page, "20-advisory-public")
+    pace(page, 3400)
     clear_caption(page)
     pace(page, 1200)
 
@@ -822,15 +1200,16 @@ CHAPTERS: list[tuple[str, str, str, Callable[[Page], None]]] = [
     ("inventory", "Chapter 2", "Every artifact, versioned", chapter_inventory),
     ("vulnerabilities", "Chapter 3", "Know what's exploitable", chapter_vulnerabilities),
     ("trust_center", "Chapter 4", "Share it with customers", chapter_trust_center),
+    ("advisories", "Chapter 5", "Tell them what you found", chapter_advisories),
 ]
 
 _CHAPTERS_BY_SLUG = {slug: (eyebrow, title, fn) for slug, eyebrow, title, fn in CHAPTERS}
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("pied_piper_scanned", "fake_s3")
+@pytest.mark.usefixtures("fake_s3")
 @pytest.mark.parametrize("chapter_slug", list(_CHAPTERS_BY_SLUG))
-def walkthrough_chapters(recording_page: Page, chapter_slug: str) -> None:
+def walkthrough_chapters(recording_page: Page, chapter_slug: str, pied_piper_scanned: dict) -> None:
     """Record one chapter as a standalone clip.
 
     Produces ``walkthrough_chapters_<slug>.webm`` plus that chapter's hero
@@ -839,6 +1218,21 @@ def walkthrough_chapters(recording_page: Page, chapter_slug: str) -> None:
     """
     page = recording_page
     _, _, step = _CHAPTERS_BY_SLUG[chapter_slug]
+
+    # In the long cut, chapter 4 turns the trust centre on before chapter 5
+    # reads the public page. On its own, chapter 5 would land on a workspace
+    # that was never made public and find no advisory there. Set it off camera
+    # rather than performing it, so the clip does not re-stage chapter 4's
+    # story before telling its own.
+    if step is chapter_advisories:
+        product = pied_piper_scanned["product"]
+        team = product.team
+        team.is_public = True
+        team.save(update_fields=["is_public"])
+        # The product too, or the public page carries a "No public products"
+        # empty state under the advisory for the whole closing shot.
+        product.is_public = True
+        product.save(update_fields=["is_public"])
 
     auto_dismiss_toasts(page)
 

@@ -31,7 +31,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from narrator import caption_from
+from narrator import INDEX_PATH, caption_from
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 AUDIO_DIR = Path(__file__).parent / "narration" / "audio"
@@ -69,6 +69,10 @@ class Beat:
     duration: float
     sha: str
     caption: str
+    # ``(char, start_s, end_s)`` for every character of the *spoken* text, tags
+    # included, straight from the API.  None for a beat recorded before the
+    # cache stored it, which falls the VTT back to a proportional split.
+    char_times: list[tuple[str, float, float]] | None = None
 
 
 def _log(message: str) -> None:
@@ -111,8 +115,27 @@ def decode_pcm(path: Path) -> array.array:
     return samples
 
 
+def _cached_timings() -> dict[str, list[tuple[str, float, float]]]:
+    """Per-character timings from the audio cache, keyed by clip sha.
+
+    A manifest written before the recorder stored timings has ``char_times``
+    of None on every beat, and re-recording purely to obtain them would be
+    absurd — the audio is identical, only the metadata is missing.  The cache
+    is keyed by the same sha the manifest carries, so the two join.
+    """
+    if not INDEX_PATH.exists():
+        return {}
+    index = json.loads(INDEX_PATH.read_text())
+    return {
+        sha: [(c, float(a), float(b)) for c, a, b in entry["char_times"]]
+        for sha, entry in index.items()
+        if entry.get("char_times")
+    }
+
+
 def load_manifest(path: Path) -> tuple[str, float, list[Beat]]:
     data = json.loads(path.read_text())
+    from_cache = _cached_timings()
     beats = [
         Beat(
             key=beat["key"],
@@ -122,6 +145,11 @@ def load_manifest(path: Path) -> tuple[str, float, list[Beat]]:
             # Sanitized again here so a manifest written before speech tags
             # were stripped still produces clean captions.
             caption=caption_from(beat.get("caption", "")),
+            char_times=(
+                [(c, float(a), float(b)) for c, a, b in beat["char_times"]]
+                if beat.get("char_times")
+                else from_cache.get(beat["sha"])
+            ),
         )
         for beat in data["beats"]
     ]
@@ -218,13 +246,56 @@ def _wrap(text: str) -> str:
     return "\n".join([" ".join(words[:midpoint]), " ".join(words[midpoint:])])
 
 
+def _caption_char_times(char_times: list[tuple[str, float, float]]) -> list[float]:
+    """Start time for each character of the *caption*, from the raw timings.
+
+    The API times the string it was given, tags and all; the caption is that
+    string with tags stripped and whitespace collapsed.  Walking the raw
+    characters and keeping only the ones that survive into the caption lines
+    the two up exactly, which is what lets a cue boundary be placed at the
+    moment the word is actually spoken.
+    """
+    out: list[float] = []
+    depth_sq = depth_lt = 0
+    last_was_space = True
+    for char, start, _ in char_times:
+        if char == "[":
+            depth_sq += 1
+            continue
+        if char == "]":
+            depth_sq = max(0, depth_sq - 1)
+            continue
+        if char == "<":
+            depth_lt += 1
+            continue
+        if char == ">":
+            depth_lt = max(0, depth_lt - 1)
+            continue
+        if depth_sq or depth_lt:
+            continue
+        if char.isspace():
+            # Collapsed runs, and no leading space, to match caption_from.
+            if last_was_space:
+                continue
+            last_was_space = True
+            out.append(start)
+            continue
+        last_was_space = False
+        out.append(start)
+    return out
+
+
 def write_vtt(destination: Path, beats: list[Beat], scale: float) -> None:
     """Cut WebVTT subtitles from the narration timeline.
 
     Cue times come from the same offsets and durations that placed the audio,
-    so the words cannot drift from the voice.  Within a beat, time is shared
-    out between cues in proportion to their length, which tracks speech closely
-    enough to read naturally.
+    so the words cannot drift from the voice.  *Within* a beat, cue boundaries
+    come from the API's own per-character timings.
+
+    They used to be a proportional split of the beat duration by cue length,
+    which is wrong wherever speech is not uniform, and this script is full of
+    places where it is not: a ``[long-pause]`` contributes 1.6 seconds of audio
+    and no characters at all, so every cue after one ran ahead of the voice.
     """
     lines = ["WEBVTT", ""]
     index = 0
@@ -235,17 +306,34 @@ def write_vtt(destination: Path, beats: list[Beat], scale: float) -> None:
             continue
 
         start = beat.offset_ms * scale / 1000
-        total_chars = sum(len(cue) for cue in cues)
-        elapsed = 0.0
+        caption = beat.caption or beat.key
+        stamps = _caption_char_times(beat.char_times) if beat.char_times else []
+        # Only trust the timings if they line up with the caption we are about
+        # to cut; a mismatch means the two came from different text.
+        usable = len(stamps) >= len(caption)
 
-        for cue in cues:
-            share = beat.duration * (len(cue) / total_chars) if total_chars else beat.duration
-            cue_start = start + elapsed
-            elapsed += share
+        cursor = 0
+        elapsed = 0.0
+        total_chars = sum(len(cue) for cue in cues)
+
+        for position, cue in enumerate(cues):
+            if usable:
+                cue_start = start + stamps[min(cursor, len(stamps) - 1)]
+                # +1 for the space the split consumed between cues.
+                cursor += len(cue) + 1
+                if position == len(cues) - 1:
+                    cue_end = start + beat.duration
+                else:
+                    cue_end = start + stamps[min(cursor, len(stamps) - 1)]
+            else:
+                share = beat.duration * (len(cue) / total_chars) if total_chars else beat.duration
+                cue_start = start + elapsed
+                elapsed += share
+                cue_end = start + elapsed
             index += 1
             lines += [
                 str(index),
-                f"{_timestamp(cue_start)} --> {_timestamp(start + elapsed)}",
+                f"{_timestamp(cue_start)} --> {_timestamp(cue_end)}",
                 _wrap(cue),
                 "",
             ]

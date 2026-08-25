@@ -70,6 +70,12 @@ class Clip:
     caption: str
     duration: float
     path: Path
+    # Per-character speech timing from the API, ``(char, start_s, end_s)``, or
+    # None for a clip synthesized before this was cached.  Subtitle cues are
+    # cut from this rather than from a proportional split of the duration:
+    # a ``[long-pause]`` contributes 1.6s of audio and zero characters, so
+    # splitting by character count pushes every later cue ahead of the voice.
+    char_times: list[tuple[str, float, float]] | None = None
 
 
 def _log(message: str) -> None:
@@ -153,8 +159,11 @@ def synthesize(
     voice: str = DEFAULT_VOICE,
     speed: float = DEFAULT_SPEED,
     replace: dict[str, str] | None = None,
-) -> tuple[bytes, float]:
-    """Speak ``text`` and return ``(wav_bytes, duration_seconds)``.
+) -> tuple[bytes, float, list[tuple[str, float, float]]]:
+    """Speak ``text`` and return ``(wav_bytes, duration_seconds, char_times)``.
+
+    ``char_times`` pairs every character of ``text`` — tags included, since the
+    API times the raw string — with the interval it occupies in the audio.
 
     Uncached — the caching layer lives in :class:`Narrator`, so probes and
     auditions can call this without polluting the committed audio cache.
@@ -187,7 +196,12 @@ def synthesize(
                 duration = float(body["duration"])
                 if duration <= 0:
                     raise NarrationError(f"API returned a zero-length clip for: {text!r}")
-                return base64.b64decode(body["audio"]), duration
+                stamps = body.get("audio_timestamps") or {}
+                char_times = [
+                    (char, float(span[0]), float(span[1]))
+                    for char, span in zip(stamps.get("graph_chars", []), stamps.get("graph_times", []))
+                ]
+                return base64.b64decode(body["audio"]), duration, char_times
             if response.status_code not in RETRY_STATUS:
                 raise NarrationError(f"TTS request failed ({response.status_code}): {response.text[:300]}")
             last_error = NarrationError(f"TTS request failed ({response.status_code})")
@@ -361,20 +375,38 @@ class Narrator:
                 caption=beat["caption"],
                 duration=float(cached["duration"]),
                 path=AUDIO_DIR / cached["file"],
+                char_times=[(c, float(a), float(b)) for c, a, b in cached["char_times"]]
+                if cached.get("char_times")
+                else None,
             )
 
-        wav, duration = self._request(text)
+        wav, duration, char_times = self._request(text)
         AUDIO_DIR.mkdir(parents=True, exist_ok=True)
         path = AUDIO_DIR / f"{sha}.opus"
         _to_opus(wav, path)
         self._index.put(
             sha,
-            {"file": path.name, "duration": duration, "voice": self._voice, "speed": self._speed, "text": text},
+            {
+                "file": path.name,
+                "duration": duration,
+                "voice": self._voice,
+                "speed": self._speed,
+                "text": text,
+                "char_times": [[c, a, b] for c, a, b in char_times],
+            },
         )
         _log(f"synthesized '{key}' ({duration:.2f}s) -> {path.name}")
-        return Clip(key=key, sha=sha, text=text, caption=beat["caption"], duration=duration, path=path)
+        return Clip(
+            key=key,
+            sha=sha,
+            text=text,
+            caption=beat["caption"],
+            duration=duration,
+            path=path,
+            char_times=char_times,
+        )
 
-    def _request(self, text: str) -> tuple[bytes, float]:
+    def _request(self, text: str) -> tuple[bytes, float, list[tuple[str, float, float]]]:
         if not os.environ.get(API_KEY_ENV):
             raise NarrationError(
                 f"{API_KEY_ENV} is not set and this line is not in the narration cache. "
@@ -385,7 +417,7 @@ class Narrator:
 
 def _to_opus(wav: bytes, destination: Path) -> None:
     """Transcode WAV bytes to a mono Opus file for the committed cache."""
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B607 - ffmpeg/ffprobe by name from PATH, fixed argv, shell=False
         [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-f", "wav", "-i", "pipe:0",

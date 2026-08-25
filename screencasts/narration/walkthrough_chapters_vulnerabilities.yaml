@@ -3,20 +3,57 @@
 #
 # This chapter performs a real VEX upload through the UI, so the copy has room
 # to breathe around the dry-run preview.
-voice: ara
+# Carina, measured at 6.14 semitones of pitch variation against ara's 3.36 —
+# nearly double. Ara is one of the flattest voices xAI offers, and a flat
+# delivery is the part no words-per-minute figure captures.
+voice: carina
+# Delivery speed. This family used to run at 0.85, on guidance for dense
+# technical *teaching* (110-130 wpm), where comprehension is the goal. This is
+# a persuasive video shown to somebody who has not agreed to anything yet, and
+# that is a different problem:
+#
+#   - screencast narration lands at 130-150 wpm, 140 measuring most credible
+#   - Miller et al. (1976): 195 wpm persuaded better than 102
+#   - Smith & Shaffer (1991): speed helps most when the audience does not
+#     already agree, which is exactly a cold marketplace viewer
+#
+# At 0.85 the opening line measured 103 wpm — Miller's least-persuasive
+# condition almost exactly, on the first thing anyone hears. 1.0 puts it at
+# 139 wpm, and the corpus near 155.
+#
+# This value MUST match across the long cut and the four chapter scripts.
+# `include` merges beats only — voice and speed come from the *including*
+# file — so a mismatch synthesizes the same beat twice at two speeds and the
+# long cut drifts from the short cuts.
 speed: 1.0
 
 beats:
+  # Say the numbers that are on screen. The dashboard is showing 10/2/4/4 while
+  # the line talks about "what needs attention" in the abstract — the visual is
+  # handing over specifics for free and the copy was refusing them.
+  # These track the seed in walkthrough_chapters.FINDINGS_BY_COMPONENT: ten
+  # findings across the four components, two of them critical.
+  #
+  # The "three" is not a seed figure, it is `_DIGEST_LIMIT` in
+  # core/services/dashboard_page.py — "Needs attention" is a hard top-3. The
+  # line used to say ten and two while the biggest number on screen was a 3
+  # nothing accounted for, so the arithmetic looked wrong even though it was
+  # not. Naming all three figures is what makes the panel legible.
   vuln_dashboard:
     text: >-
-      The dashboard leads with what actually needs attention, rather than a
-      count of everything that has ever been found.
+      Ten findings across four components, two of them critical. The dashboard
+      puts the three worst in front of you, rather than a count of everything
+      ever found.
 
+  # Not "the question a board actually asks": boards ask about risk in the
+  # abstract, rarely about a 30-day vulnerability trend. The person who wants
+  # this exact chart is the CISO, and naming them is both truer and more
+  # specific. (The em dash also had to go; see the copy rules in AGENTS.md.)
   vuln_trends:
     text: >-
-      Severity trends across every product, over time. This is the view that
-      tells you whether you're getting better or just busier — and it's the one
-      slide that answers the question a board actually asks.
+      Thirty days of it, per product. This is the view that tells you whether
+      you're getting better or just busier, which is the first thing a CISO
+      asks when they inherit a codebase.
 
   vuln_drill:
     text: >-
@@ -24,25 +61,64 @@ beats:
       package that introduced it, the version that fixes it, and where it
       stands right now.
 
+  # The pivot the whole tour turns on. This used to state a general truth about
+  # VEX; it now answers the question the long cut's opening line asked, by
+  # name. The standalone clip opens cold, where it reads as a worked example
+  # rather than a callback — which is still the right shape for that cut.
   vuln_not_exploitable:
     text: >-
-      But not every finding is exploitable. Most aren't. [pause] The vulnerable
-      code often isn't reachable in the way you actually use the dependency,
-      and VEX is how you say that in a form a machine can read.
+      There it is. Critical, in the compression core. [long-pause] But it isn't
+      reachable the way Pied Piper actually uses libwebp — the decode path
+      never runs in a shipped build. [long-pause] That's a real answer, and VEX
+      is how you say it in a form a machine can read.
 
+  # Name the format the file on screen actually is, but do not imply it is the
+  # only one: sbomify reads CycloneDX, OpenVEX and CSAF 2.0 (see
+  # vulnerability_scanning/vex_formats.py). Saying "a CycloneDX VEX document"
+  # bare read as CycloneDX-only.
   vuln_upload:
     text: >-
-      So drop in a CycloneDX VEX document. It's a standard format, which means
-      the statement you're about to make travels to anyone downstream without
-      them having to trust a bespoke report.
+      So drop in a VEX document. This one is CycloneDX, though OpenVEX and CSAF
+      work just as well. They're open standards, which means the statement
+      you're about to make travels to anyone downstream without them having to
+      trust a bespoke report.
 
+  # Split in two, because this was one 22.6s line and the script clicked Apply
+  # about four seconds into it — so "nothing has been written yet" was spoken
+  # roughly eight seconds *after* the write. The claim about the preview has to
+  # land while the preview is still on screen and untouched.
+  #
+  # Only this first half is timing-critical. `narrate` waits for the previous
+  # line before starting, so putting the rationale in its own beat is what
+  # holds the click back.
+  #
+  # Getting the arithmetic of this card right took three attempts, so:
+  #
+  # The VEX holds exactly ONE statement — CVE-2023-4863 / libwebp@1.2.4 ->
+  # not_affected — and the card shows it on the line beneath the figures. The
+  # "4 would suppress" is not four problems: it is that one finding matched on
+  # each of the component's four scanned versions. "16 findings checked" is
+  # four findings across those four versions.
+  #
+  # So "one finding would be suppressed" contradicted the 4 on screen, and
+  # "four of them cleared by a single statement" was worse, because it read as
+  # four separate problems solved. The honest sentence names one statement and
+  # four versions.
+  #
+  # Re-check whenever the seed's version count or finding list changes.
   vuln_dry_run:
     text: >-
       And before anything is stored, sbomify shows you what it would change.
-      [pause] One finding would be suppressed. Nothing has been written yet.
-      That matters, because a VEX applied by mistake quietly hides something
-      real, and you want to see the effect before you commit to it rather than
-      discover it in an audit.
+      One statement, clearing the same finding on all four versions that carry
+      it. Nothing has been written yet.
+
+  # Plays over the Apply click and the reload, where it belongs: by then the
+  # viewer has seen the preview and the reason for it is the payoff.
+  vuln_dry_run_why:
+    text: >-
+      That matters. A VEX applied by mistake quietly hides something real, so
+      you want to see the effect before you commit to it, rather than discover
+      it in an audit.
 
   vuln_applied:
     text: >-
@@ -51,6 +127,6 @@ beats:
 
   vuln_nothing_deleted:
     text: >-
-      Nothing was deleted, and nothing is hidden away. [pause] The finding sits
+      Nothing was deleted, and nothing is hidden away.  The finding sits
       right next to your answer to it, which is exactly what an auditor wants
       to see — not a shorter list, but a justified one.
