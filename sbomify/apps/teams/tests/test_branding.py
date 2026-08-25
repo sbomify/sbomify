@@ -297,7 +297,7 @@ class TestBrandingOffNotice:
     caught it because nothing rendered the template.
     """
 
-    NOTICE = "Custom branding is off"
+    NOTICE = "customers still see the default sbomify look"
 
     def _render(self, client, team):
         return client.get(reverse("teams:team_branding", kwargs={"team_key": team.key}))
