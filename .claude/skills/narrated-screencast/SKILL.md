@@ -400,13 +400,20 @@ not drift apart. Edit chapter copy in the chapter's own file.
 `warm-all` before a batch is worth it: a cold line blocks the recording while
 it synthesizes, and a blocked beat is reported at the end of the run.
 
-`prune` matters because the cache is **committed**. Every edit to a line — or
-to the pronunciation map — re-keys that clip, so superseded audio piles up.
-Prune before opening a pull request; `--dry-run` first if you want to look.
+`prune` clears superseded audio: every edit to a line — or to the pronunciation
+map — re-keys that clip, and nothing reads the old one again. `--dry-run` first
+if you want to look.
 
 Synthesis needs `XAI_API_KEY` **only** for lines not already in
-`screencasts/narration/audio/`, which is committed. An unchanged re-record makes
-zero API calls and works offline.
+`screencasts/narration/audio/`. An unchanged re-record makes zero API calls.
+
+**The cache is generated, and git-ignored.** Clips are not source; the scripts
+are, and `warm-all` rebuilds the audio from them. Two things follow. A fresh
+checkout needs the key once. And the cache is *only* on the machine that
+synthesized it, so it will not survive a `git clean -x`, and a `git reset
+--hard` that reverts a tracked `index.json` would orphan every clip the index
+pointed at — which is why the index is ignored too. Copy the directory if you
+want to move a warm cache between machines.
 
 The full pipeline, in order — **transcode before mux**, always:
 

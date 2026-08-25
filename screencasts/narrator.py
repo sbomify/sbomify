@@ -7,9 +7,9 @@ later lays the clips back down at the offsets the recording captured.
 
 Synthesis is content-addressed.  The cache key covers the spoken text, the
 voice, the speed and the pronunciation map, so editing one line re-renders one
-line and a re-record with unchanged copy makes no API calls at all.  Cached
-audio is committed to the repository, which keeps recordings reproducible and
-lets them run with no network and no API key.
+line and a re-record with unchanged copy makes no API calls at all.  The cache
+is local and generated, not source: the scripts are the source, and
+``warm-all`` rebuilds it from them, so a fresh checkout needs a key once.
 
 Requests are issued on a background worker so the recording can synthesize the
 *next* beat while the current one is playing; the API returns audio faster than
@@ -46,7 +46,7 @@ DEFAULT_VOICE = "ara"
 DEFAULT_SPEED = 1.0
 
 # The API is asked for lossless WAV so the samples are exact, then transcoded
-# to Opus for the committed cache — ~32 kbps mono is transparent for speech and
+# to Opus for the cache — ~32 kbps mono is transparent for speech and
 # keeps the repository from carrying tens of megabytes of audio.
 SYNTHESIS_SAMPLE_RATE = 24000
 CACHE_BITRATE = "32k"
@@ -166,7 +166,7 @@ def synthesize(
     API times the raw string — with the interval it occupies in the audio.
 
     Uncached — the caching layer lives in :class:`Narrator`, so probes and
-    auditions can call this without polluting the committed audio cache.
+    auditions can call this without polluting the audio cache.
     """
     payload: dict[str, Any] = {
         "text": text,
@@ -416,7 +416,7 @@ class Narrator:
 
 
 def _to_opus(wav: bytes, destination: Path) -> None:
-    """Transcode WAV bytes to a mono Opus file for the committed cache."""
+    """Transcode WAV bytes to a mono Opus file for the local cache."""
     result = subprocess.run(  # nosec B607 - ffmpeg/ffprobe by name from PATH, fixed argv, shell=False
         [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
@@ -633,8 +633,8 @@ def prune(dry_run: bool = False) -> int:
     """Delete cached audio no current narration script refers to.
 
     Every edit to a line — or to the pronunciation map — re-keys that clip, so
-    the cache accumulates the audio of superseded copy. Since it is committed,
-    prune before opening a pull request. Returns the number of files removed.
+    the cache accumulates the audio of superseded copy indefinitely. Nothing
+    ever reads it again. Returns the number of files removed.
     """
     live: set[str] = set()
     for path in sorted(NARRATION_DIR.glob("*.yaml")):
