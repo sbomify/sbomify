@@ -20,9 +20,10 @@ Every narrated recording produces:
 
 | File | What it is |
 | --- | --- |
-| `<name>.webm` | video + muxed Opus narration |
+| `<name>.webm` | video + narration + music bed — **the file to ship** |
 | `<name>.vtt` | **WebVTT subtitles cut from the same offsets** |
 | `<name>.narration.json` | the timing manifest the other two are built from |
+| `<name>.dry.webm` | the mux before the bed, kept only so scoring can rerun |
 
 **Subtitles are required, not a nicety.** A narrated recording suppresses the
 on-screen lower-third — `caption()` returns early when a narration script
@@ -81,12 +82,17 @@ uv run python screencasts/audit_timing.py marketplace_walkthrough
 It joins the two timelines in `<name>.narration.json` — `beats` (when each line
 was spoken) and `scenes` (every surface the recording landed on) — and reports:
 
-- **SPILL** — the line outlasts the surface it opened on. The worst instance
-  found this way was a 22.6s VEX line where the script clicked Apply about four
-  seconds in, so "nothing has been written yet" was spoken **eight seconds
-  after the write**. Fix by splitting the beat at the action, not by padding.
-- **FROZEN** — the picture holds still while audio runs on, because the beat's
-  visual work finished early and `narrate` is waiting out the clip.
+- **STRADDLE** — a navigation splits the line down the middle, so the viewer
+  hears one sentence across two screens. The worst instance was a 22.6s VEX
+  line where the script clicked Apply about four seconds in, so "nothing has
+  been written yet" was spoken **eight seconds after the write**. Fix by
+  splitting the beat at the action, not by padding.
+- **SLACK** — the line and the picture under it are different lengths. Reported
+  as words to cut at 157 wpm, so the fix is a number rather than a judgement.
+- **FROZEN** — the picture holds still for a long stretch inside one line,
+  because the beat's visual work finished early and `narrate` is waiting out
+  the clip. Measured from the video with `tblend=all_mode=difference`, not
+  guessed from the manifest.
 - **SILENT SCENE** — a surface nobody narrates.
 
 The recording writes the scene log automatically; a manifest without one
@@ -232,26 +238,60 @@ three-sentence opener made 12% of it silence and dragged it to 103 wpm.
 
 ## Smoothness: record where there is a GPU
 
-**Record on macOS, with a locally launched browser.** Set
-`SCREENCAST_LOCAL_BROWSER=1` and Playwright launches Chromium on the host
-instead of attaching to the Docker container's CDP endpoint. On a Mac that
-browser composites through Metal, and the recording is captured at the frame
-rate Playwright asks for.
+**Record on a machine with a real GPU, with a locally launched browser.** Set
+`SCREENCAST_LOCAL_BROWSER=1` and Playwright launches Chrome on the host instead
+of attaching to the Docker container's CDP endpoint. macOS composites through
+Metal and needs nothing further; on Linux the GPU is not enough on its own, see
+the flags below.
 
-In Docker on Linux it is not. That container has no GPU — `/dev/dri` is not
-exposed, it runs in a VM, and Chromium starts with `--disable-gpu` — so
-rasterisation is software and the CDP screencast yields **12-16 unique frames a
-second** whatever you do. Measured across pages of wildly different weight and
-unchanged by halving the rendered pixel count (`device_scale_factor` 2→1 moved
-77 unique frames to 71), so it is a capture ceiling rather than drawing cost.
-At that rate a page pan lands in five to eight distinct frames and stutters.
+Without one, capture yields **12-16 unique frames a second** whatever you do,
+and a page pan lands in five to eight distinct frames and stutters.
+
+**That ceiling is software rasterisation, not a capture limit** — a correction
+worth stating plainly, because the opposite was written here with confidence
+and acted on. The reasoning was that halving the rendered pixel count
+(`device_scale_factor` 2→1) moved 77 unique frames to only 71, so drawing cost
+could not be what bound it, so it had to be CDP delivery. An A/B on identical
+content on a GPU box settled it the other way: **Playwright's CDP screencast
+managed 25.0 distinct fps against GNOME's own D-Bus recorder at 18.4.** CDP was
+never the bottleneck. Two lessons: an inference from one varied parameter is
+not a measurement, and the fix for a slow picture is a faster renderer.
+
+**Headless Chrome uses SwiftShader even on a GPU box unless you ask it not
+to.** It reports a working GL context either way, so nothing announces the
+fallback. The flags that matter are `--use-gl=angle --use-angle=gl-egl`, with
+`--enable-gpu --enable-gpu-rasterization --ignore-gpu-blocklist` alongside;
+`conftest` supplies them as `GPU_FLAGS`. Confirm rather than assume, via
+`chrome://gpu` or by measuring distinct frames.
+
+**Install the app's fonts on the recording machine.** The pages load Figtree
+from Google Fonts with `display=swap`, so text renders in a fallback until the
+webfont arrives, and a fresh box has barely a fallback to render in. The
+recording then has the wrong typography and nothing reports it. `fc-list | grep
+-c Figtree` before a run; `screencasts/README.md` has the install.
+
+### A second capture path, and when to want it
+
+`wayland_capture.py` drives GNOME's `org.gnome.Shell.Screencast` over D-Bus,
+recording the compositor's own output rather than asking the browser for
+frames. Set `SCREENCAST_WAYLAND_CAPTURE=1`; the browser then runs headed.
+
+It measured *slower* than CDP on the same content, so **CDP remains the
+default**. Keep this path for what it captures that CDP cannot: anything
+outside the page's own compositor, and any case where you need to see what the
+screen really showed. Two things to know if you use it. The recording is bound
+to the D-Bus *connection*, so a `busctl call` that exits takes the recording
+with it — it produced exactly one frame that way; the helper runs as a
+subprocess that holds the connection open. And PyGObject is not in the venv, so
+the helper prefers `/usr/bin/python3`.
 
 ### What used to be here, and why it is gone
 
 A `SCREENCAST_SLOWDOWN=N` mechanism recorded N times slower and a `retime.py`
 divided the timestamps afterwards, which did lift the sampled rate (11.6 →
-24.3 distinct fps at N=3). It is removed, because it was the source of a whole
-class of bugs that cost far more than the smoothness was worth:
+24.3 distinct fps at N=3). It is removed, because a GPU makes it
+unnecessary and it was the source of a whole class of bugs that cost far more
+than the smoothness was worth:
 
 - **Pans silently stopped arriving.** The eased scroll in `smooth_scroll.js`
   was measured moving one pixel in eighteen seconds at N=3, while a direct
@@ -421,11 +461,33 @@ The full pipeline, in order — **transcode before mux**, always:
 SCREENCAST_LOCAL_BROWSER=1 <record>                  # host browser, on a GPU
 uv run python screencasts/transcode.py <name>        # VP8 -> VP9 quality pass
 uv run python screencasts/mux_narration.py <name>    # audio + .vtt
+uv run python screencasts/score.py <name> <track> --loop   # music bed
 ```
 
 `transcode.py` is idempotent by marker file, so a re-run after a partial failure
 will not re-encode something already converted. Delete `<name>.transcoded.json`
 to force it.
+
+### Record where the GPU is, post-process where the CPU is
+
+They do not have to be the same machine, and usually should not be. Capture
+needs a GPU so the browser renders at 25 fps. Transcode, mux and score are
+libvpx and ffmpeg filtergraphs that never touch it — the recording box here is
+a 15 W mobile i5 with 6 GB of RAM, and moving post onto a desktop Ryzen with 15
+GB cut it by more than half. Copying 597 MB of captures over the LAN took six
+seconds, so the split costs nothing.
+
+**Transcode several at a time.** libvpx-vp9 stops scaling well before it
+saturates a modern desktop: one encode held load at 3.4 across 12 threads.
+`transcode.py` runs a pool of `cpu_count // 4` encodes at 4 threads each, with
+`-threads` pinned rather than left to libvpx, which sizes its pool from the
+whole machine and would have every concurrent encode contending for it.
+`SCREENCAST_TRANSCODE_JOBS=1` restores serial encoding.
+
+Note that `bin/record_screencasts.sh` still drives everything through
+`docker compose exec tests` and knows nothing about the local-browser path or
+the music pass. It is the Docker route, kept for CI; a GPU-box run calls the
+scripts directly.
 
 Expect to iterate: record → `audit_timing.py` → adjust copy or staging →
 re-record. Two or three passes is normal.
@@ -520,18 +582,18 @@ copy did not change, so nothing sounds wrong — the video just got slower
 underneath it. Re-measure after any flow change, and remember that closing those
 gaps means new copy, which means synthesis, which means the API key.
 
-## Music: only where it is not teaching
+## Music
 
-**Default to no music.** Mayer's *coherence principle* — learners do better
-when extraneous material is left out — was tested against background music
-directly by Moreno and Mayer (2000), who found it depressed both retention and
-transfer; Mayer reports 11 of 11 tests favouring the concise version on each.
-So the FAQ recordings, which answer a question the viewer already has, stay
-dry. Music is for the marketplace walkthrough, shown to a cold audience that
-has to be persuaded to care. `screencasts/score.py` exists for that one video
-and is deliberately not wired into `bin/record_screencasts.sh`.
+**Every recording carries a bed**, scored by `screencasts/score.py`. That is a
+product decision, and it is worth knowing what it is traded against: Mayer's
+*coherence principle* — learners do better when extraneous material is left out
+— was tested against background music directly by Moreno and Mayer (2000), who
+found it depressed both retention and transfer, with 11 of 11 tests favouring
+the concise version. That result is about *teaching*, and these are mostly
+short task clips rather than lectures. If a clip ever feels cluttered, the bed
+is the first thing to pull, and it can be pulled per clip.
 
-When you do score something:
+When you score:
 
 - **Measure both tracks, do not eyeball.** Narration runs −16.3 to −16.7 LUFS
   integrated with a −1.1 dBFS true peak. Put the bed **8–12 LU under** it with
@@ -545,17 +607,31 @@ When you do score something:
   says nothing about what a listener actually hears.
 - **Carve 1–4 kHz.** A gentle −3 dB bell at 2 kHz buys intelligibility far more
   cheaply than pulling the whole bed down. That band is where speech lives.
-- **Profile the track before assuming it loops.** Band energy over time tells
-  you whether it *builds*: ours went from −40 dB to −24 dB in the vocal band
-  across its length, so a crossfaded internal repeat would splice two visibly
-  different textures and you would hear the seam.
-- **End-align instead of looping.** Start the music late enough that its own
-  composed fade-out lands on the final frame, snap the entry to a chapter
-  boundary so it arrives on a scene change rather than mid-sentence, and let the
-  sparse head absorb the trim. No splices, no loops, and the build runs under
-  the back half where the story pays off.
+- **End-align when the track is long enough.** Start the music late enough that
+  its own composed fade-out lands on the final frame, snap the entry to a
+  chapter boundary so it arrives on a scene change rather than mid-sentence,
+  and let the sparse head absorb the trim.
+- **Loop by texture, not from the top, when it is not.** `--loop` covers a cut
+  longer than the track and is a no-op when the track already reaches, so a
+  batch of mixed lengths can pass it uniformly. Restarting from the top splices
+  a composed build onto its own sparse opening — ours travels −40 dB to −24 dB
+  in the vocal band across its length — and you hear the seam. `choose_loop`
+  instead fixes the repeat *length* (it is forced by the arithmetic) and
+  searches only for *where* it sits, scoring candidates by band energy across
+  both crossfade windows. On the walkthrough that picked a 118s repeat with a
+  mean mismatch of 2.8 dB against 5.4 dB for a loop back to the top. The tail
+  is never looped: its composed fade-out is what lands on the final frame.
+  Compare the window *after* the entry point, not before it — getting that
+  backwards scores a passage the splice never plays.
 - **Copy the video stream** (`-c:v copy`). Re-encoding here throws away
   everything `transcode.py` bought.
+- **The scored mix takes the plain name.** Scoring cannot read its own output,
+  or a rerun stacks a second bed, so the mux it consumed is kept beside it as
+  `<name>.dry.webm` and the finished mix becomes `<name>.webm`. Do not invert
+  this to keep the pipeline tidy: a mix missing its bed plays perfectly, so
+  shipping the dry one fails silently, and it has. `mux_narration` deletes the
+  sidecar whenever it rewrites a recording, so a sidecar on disk always matches
+  the recording beside it.
 
 Commissioning generated music: state a LUFS target, ask for the 1–4 kHz band
 kept sparse, and require mono-compatibility (embeds play mono on laptop
