@@ -10,6 +10,7 @@ if typing.TYPE_CHECKING:
     from sbomify.apps.core.models import User
 
 from allauth.socialaccount.models import SocialAccount
+from django.contrib import messages
 from django.contrib.auth.signals import user_logged_in
 from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
@@ -71,8 +72,26 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
             is_default_team=not has_default,
         )
         has_default = has_default or membership.is_default_team
+        # Accepting deletes the invitation, so the pending-invitation
+        # notification has nothing left to show and the user is put in a
+        # workspace without being told. The accept-invite view announces it
+        # only for someone who arrives through the emailed link.
+        #
+        # Whether it lands is recorded rather than assumed: a login can reach
+        # here with no message storage, and the accept-invite view reads this
+        # flag to decide whether it still has to say so itself.
+        announced = False
+        if request is not None and hasattr(request, "_messages"):
+            messages.info(request, f"You have joined {invitation.team.name} as {invitation.role}")
+            announced = True
+
         accepted.append(
-            {"team_key": invitation.team.key, "invitation_id": invitation.id, "invitation_token": str(invitation.token)}
+            {
+                "team_key": invitation.team.key,
+                "invitation_id": invitation.id,
+                "invitation_token": str(invitation.token),
+                "announced": announced,
+            }
         )
 
         if request is not None:
