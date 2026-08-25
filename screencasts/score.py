@@ -219,7 +219,20 @@ def choose_loop(video_s: float, music_s: float, profile: list[tuple[float, float
 
 
 def build(name: str, music: Path, under_lu: float, start_override: float | None, loop: bool) -> Path:
-    video = OUTPUT_DIR / f"{name}.webm"
+    # The mux is kept as a sidecar and the scored mix takes the plain name.
+    #
+    # Scoring has to read a dry mux — running it over its own output would
+    # stack a second bed — but the file anyone plays or ships must be the
+    # finished one. A mix missing its bed still plays perfectly, so getting
+    # this the other way round fails silently, and it has.
+    #
+    # mux_narration deletes the sidecar whenever it rewrites a recording, so a
+    # sidecar existing means it matches the current mux rather than an older
+    # one.
+    video = OUTPUT_DIR / f"{name}.dry.webm"
+    scored = OUTPUT_DIR / f"{name}.webm"
+    if not video.exists():
+        video = scored
     if not video.exists():
         raise SystemExit(f"no recording at {video}")
 
@@ -231,7 +244,10 @@ def build(name: str, music: Path, under_lu: float, start_override: float | None,
     gain_db = (narration_lufs - under_lu) - music_lufs
     loop_note = ""
 
-    if loop:
+    # A track longer than the cut needs no repeat, and asking for one would ask
+    # choose_loop for a negative-length passage. Callers can pass --loop for a
+    # whole batch of mixed lengths and let each one decide.
+    if loop and music_s < video_s:
         loop_out, loop_in = choose_loop(video_s, music_s, band_energy(music))
         start, head_trim, delay_ms = 0.0, 0.0, 0
         # Two copies of the track, the first cut at the loop-out point and the
@@ -265,7 +281,7 @@ def build(name: str, music: Path, under_lu: float, start_override: float | None,
         f"[narr][ducked]amix=inputs=2:duration=first:normalize=0[out]"
     )
 
-    out = OUTPUT_DIR / f"{name}.scored.webm"
+    out = OUTPUT_DIR / f"{name}.scoring.webm"
     subprocess.run(  # nosec B607 - ffmpeg/ffprobe by name from PATH, fixed argv, shell=False
         [
             "ffmpeg",
@@ -296,6 +312,15 @@ def build(name: str, music: Path, under_lu: float, start_override: float | None,
     bed_lufs = measure_bed(video, out)
     nominal = narration_lufs - under_lu
 
+    # Swap into place only now, so a failed encode above leaves the previous
+    # pair untouched rather than half-renamed.
+    if video != scored:
+        scored.unlink(missing_ok=True)
+    else:
+        video.rename(OUTPUT_DIR / f"{name}.dry.webm")
+    out.rename(scored)
+    out = scored
+
     print(f"[score] {name}: video {video_s:.1f}s, music {music_s:.1f}s")
     print(f"[score]   narration {narration_lufs:.1f} LUFS, music {music_lufs:.1f} LUFS -> bed {gain_db:+.1f} dB")
     if loop_note:
@@ -312,7 +337,7 @@ def build(name: str, music: Path, under_lu: float, start_override: float | None,
     # Spelled out because the two files sit side by side in the same directory
     # and the dry one has the more obvious name. Shipping the mux by mistake is
     # a silent failure: it plays fine, it is just missing the bed.
-    print(f"[score]   wrote {out.name} <- this is the cut to ship, not {video.name}")
+    print(f"[score]   wrote {out.name} (mux kept as {name}.dry.webm)")
     return out
 
 

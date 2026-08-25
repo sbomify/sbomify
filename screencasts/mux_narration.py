@@ -386,6 +386,12 @@ def mux(video: Path, manifest_path: Path) -> None:
     narrated.replace(video)
     track.unlink(missing_ok=True)
 
+    # score.py keeps the mux it scored as `<name>.dry.webm` and reuses it as
+    # input so a rerun cannot stack a second bed. That is only safe while the
+    # sidecar matches the recording beside it, and this line has just replaced
+    # the recording, so the sidecar is now the previous take.
+    video.with_suffix(".dry.webm").unlink(missing_ok=True)
+
     subtitles = video.with_suffix(".vtt")
     write_vtt(subtitles, beats, scale)
 
