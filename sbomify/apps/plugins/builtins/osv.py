@@ -221,7 +221,7 @@ class OSVPlugin(AssessmentPlugin):
                     f"[OSV] SBOM {sbom_id} uses a spec version this osv-scanner does not accept: "
                     f"{_collapse_for_log(stderr)}"
                 )
-                return self._create_unsupported_spec_version_result(stderr)
+                return self._create_unsupported_spec_version_result()
 
             # A scanner that aborted produces no findings for the same reason a
             # clean SBOM does — an empty result set — so the two are
@@ -374,35 +374,30 @@ class OSVPlugin(AssessmentPlugin):
         return False
 
     def _create_unsupported_format_result(self) -> AssessmentResult:
-        """Create a result indicating SPDX 3.0 is not yet supported by osv-scanner."""
-        finding = Finding(
-            id="osv:unsupported-format",
+        """SPDX 3.0, which osv-scanner cannot read at all, reported as skipped.
+
+        This returns before the scanner is invoked, so it is the earliest of the
+        plugin's "nothing was examined" paths and was the last one still missing
+        the marker that says so. Without ``skipped`` the run read as a clean
+        scan: ``_is_run_passing`` put a green "no known vulnerabilities" badge on
+        an artifact nothing opened, and ``lifecycle.run_scanned`` took the empty
+        findings array as evidence and resolved everything a previous, real scan
+        had found. ``unsupported_format`` was in the metadata but nothing reads
+        it, and the sibling skips had moved on without this one.
+
+        Carries ``unsupported_input`` for the same reason the spec-version skip
+        does: re-running buys nothing until osv-scanner learns the format.
+        """
+        return self.create_skipped_result(
+            finding_id="osv:unsupported-format",
             title="SPDX 3.0 Not Supported",
             description=(
-                "osv-scanner does not yet support SPDX 3.0 format. "
-                "Vulnerability scanning requires SPDX 2.x or CycloneDX format. "
-                "See https://github.com/google/osv-scanner for format support updates."
+                "osv-scanner does not read SPDX 3.0 yet, so this SBOM was not scanned "
+                "for vulnerabilities. Upload it as SPDX 2.x or CycloneDX to have it "
+                "scanned now."
             ),
-            status="warning",
-            severity="info",
-        )
-
-        summary = AssessmentSummary(
-            total_findings=1,
-            pass_count=0,
-            fail_count=0,
-            error_count=0,
-            warning_count=1,
-        )
-
-        return AssessmentResult(
-            plugin_name="osv",
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.SECURITY.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=summary,
-            findings=[finding],
-            metadata={
+            unsupported_input=True,
+            extra_metadata={
                 "scanner": "osv-scanner",
                 "sbom_format": "spdx3",
                 "unsupported_format": True,
@@ -733,7 +728,7 @@ class OSVPlugin(AssessmentPlugin):
             metadata={"scanner": "osv-scanner", "skipped": True, "no_packages": True},
         )
 
-    def _create_unsupported_spec_version_result(self, stderr: str) -> AssessmentResult:
+    def _create_unsupported_spec_version_result(self) -> AssessmentResult:
         """A document the bundled scanner is too old to read, reported as skipped.
 
         ``unsupported_input`` is the marker the scheduled sweep's backoff reads:
@@ -742,14 +737,19 @@ class OSVPlugin(AssessmentPlugin):
         a week, which is longer than the backoff, so it changes nothing today —
         it is set because the marker means "the scanner cannot read this input"
         and this is that, and a shorter cadence must not have to remember.
+
+        The scanner's own words stay in the log line, not in the description.
+        They name the orchestrator's temp path, run to whatever length the
+        scanner felt like, and say nothing the reader can act on: the SBOM is
+        fine and the fix is a scanner upgrade they do not perform.
         """
         return self.create_skipped_result(
             finding_id="osv:unsupported-spec-version",
             title="Spec Version Not Supported",
             description=(
                 "osv-scanner does not read this SBOM's spec version yet, so it was not "
-                "scanned for vulnerabilities. The SBOM itself is fine, and it will be "
-                f"scanned once the scanner supports the version. Scanner output: {_collapse_for_log(stderr)}"
+                "scanned for vulnerabilities. Nothing is wrong with the SBOM. It will be "
+                "scanned once the scanner supports the version."
             ),
             unsupported_input=True,
             extra_metadata={"scanner": "osv-scanner", "unsupported_spec_version": True},

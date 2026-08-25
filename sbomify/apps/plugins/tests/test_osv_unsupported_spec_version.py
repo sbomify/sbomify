@@ -95,7 +95,7 @@ class TestRecognisingTheRejection:
 class TestTheResultItProduces:
     @pytest.fixture
     def result(self, plugin: OSVPlugin) -> dict[str, Any]:
-        return _as_dict(plugin._create_unsupported_spec_version_result(REAL_REJECTION))
+        return _as_dict(plugin._create_unsupported_spec_version_result())
 
     def test_it_is_skipped_not_errored(self, result: dict[str, Any]) -> None:
         assert result["metadata"]["skipped"] is True
@@ -126,12 +126,22 @@ class TestTheResultItProduces:
         assert result["plugin_name"] == "osv"
 
     def test_it_says_why(self, result: dict[str, Any]) -> None:
-        """An operator seeing this has to know the SBOM is fine and that the
+        """A reader seeing this has to know the SBOM is fine and that the
         scanner will catch up."""
         description = result["findings"][0]["description"]
 
         assert "spec version" in description
-        assert "invalid specification version" in description
+        assert "Nothing is wrong with the SBOM" in description
+
+    def test_it_does_not_quote_the_scanner_at_the_reader(self, plugin: OSVPlugin, sbom_file) -> None:
+        """Raw stderr names the orchestrator's temp path and runs to whatever
+        length the scanner felt like. It belongs in the log line, which already
+        has it, not in copy."""
+        with patch("subprocess.run", return_value=_scanner_exiting(127, stderr=REAL_REJECTION)):
+            described = _as_dict(plugin.assess("test-sbom", sbom_file))["findings"][0]["description"]
+
+        assert "/tmp/" not in described
+        assert "extraction failed" not in described
 
 
 class TestTheWiringInAssess:
@@ -213,6 +223,58 @@ class TestWhatTheRunMeansDownstream:
         from sbomify.apps.plugins.lifecycle import run_scanned
 
         assert run_scanned(self._run(result)) is False
+
+
+@pytest.mark.django_db
+class TestEveryNonScanPathSaysSo:
+    """The invariant behind the whole change, asserted across all of them.
+
+    OSV has three ways to return without osv-scanner having examined anything,
+    and they were added one at a time, each learning the lesson separately. The
+    SPDX 3.0 path never did: it carried ``unsupported_format`` in its metadata,
+    which nothing reads, and omitted ``skipped``, which everything reads. So an
+    SPDX 3.0 upload earned a green "no known vulnerabilities" badge and, worse,
+    ``lifecycle.run_scanned`` took its empty findings array as evidence and
+    resolved everything a previous real scan had found.
+
+    Parametrised rather than written out three times, so a fourth non-scan path
+    added later is one line away from being covered and cannot quietly ship
+    without the marker.
+    """
+
+    NON_SCAN_PATHS = ("_create_no_packages_result", "_create_unsupported_format_result")
+
+    def _run(self, result: dict[str, Any]):
+        from sbomify.apps.plugins.models import AssessmentRun, RunStatus
+
+        return AssessmentRun(
+            plugin_name="osv",
+            category="security",
+            status=RunStatus.COMPLETED.value,
+            result=result,
+        )
+
+    def _results(self, plugin: OSVPlugin) -> list[dict[str, Any]]:
+        built = [_as_dict(getattr(plugin, name)()) for name in self.NON_SCAN_PATHS]
+        return [*built, _as_dict(plugin._create_unsupported_spec_version_result())]
+
+    def test_they_are_all_marked_skipped(self, plugin: OSVPlugin) -> None:
+        assert [r["metadata"].get("skipped") for r in self._results(plugin)] == [True, True, True]
+
+    def test_none_of_them_earns_a_public_badge(self, plugin: OSVPlugin) -> None:
+        from sbomify.apps.plugins.public_assessment_utils import _is_run_passing
+
+        assert [_is_run_passing(self._run(r)) for r in self._results(plugin)] == [False, False, False]
+
+    def test_none_of_them_resolves_anything(self, plugin: OSVPlugin) -> None:
+        from sbomify.apps.plugins.lifecycle import run_scanned
+
+        assert [run_scanned(self._run(r)) for r in self._results(plugin)] == [False, False, False]
+
+    def test_none_of_them_counts_towards_a_severity_total(self, plugin: OSVPlugin) -> None:
+        from sbomify.apps.vulnerability_scanning.utils import extract_severity_counts
+
+        assert [extract_severity_counts(r)["total"] for r in self._results(plugin)] == [0, 0, 0]
 
 
 class TestTheSkipDoesNotPageAnyone:
