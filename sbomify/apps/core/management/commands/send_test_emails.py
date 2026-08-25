@@ -173,7 +173,7 @@ class Command(BaseCommand):
             },
             # Document access emails
             {
-                "subject": "New Access Request",
+                "subject": "New access request for Acme Corp",
                 "template_html": "documents/emails/access_request_notification.html.j2",
                 "template_txt": "documents/emails/access_request_notification.txt",
                 "context": {
@@ -189,7 +189,7 @@ class Command(BaseCommand):
                 },
             },
             {
-                "subject": "Your Access Request Has Been Approved",
+                "subject": "Access approved for Acme Corp",
                 "template_html": "documents/emails/access_approved.html.j2",
                 "template_txt": "documents/emails/access_approved.txt",
                 "context": {
@@ -200,7 +200,7 @@ class Command(BaseCommand):
                 },
             },
             {
-                "subject": "Your Access Request Has Been Rejected",
+                "subject": "Access request update for Acme Corp",
                 "template_html": "documents/emails/access_rejected.html.j2",
                 "template_txt": "documents/emails/access_rejected.txt",
                 "context": {
@@ -210,7 +210,7 @@ class Command(BaseCommand):
                 },
             },
             {
-                "subject": "Your Access Has Been Revoked",
+                "subject": "Access update for Acme Corp",
                 "template_html": "documents/emails/access_revoked.html.j2",
                 "template_txt": "documents/emails/access_revoked.txt",
                 "context": {
@@ -221,7 +221,7 @@ class Command(BaseCommand):
             },
             # Team emails
             {
-                "subject": "You have been invited to join a workspace on sbomify",
+                "subject": "You're invited to join Acme Corp on sbomify",
                 "template_html": "teams/emails/team_invite_email.html.j2",
                 "template_txt": "teams/emails/team_invite_email.txt",
                 "context": {
@@ -232,7 +232,7 @@ class Command(BaseCommand):
                 },
             },
             {
-                "subject": "You have been invited to view Trust Center on sbomify",
+                "subject": "You're invited to the Acme Corp Trust Center",
                 "template_html": "teams/emails/trust_center_invite_email.html.j2",
                 "template_txt": "teams/emails/trust_center_invite_email.txt",
                 "context": {
@@ -245,8 +245,10 @@ class Command(BaseCommand):
             # Onboarding emails
             {
                 "subject": "Welcome to sbomify - Let's Get Started!",
+                # No template_txt: the onboarding sender derives the plain-text
+                # body from the HTML, so naming one here would preview a body
+                # nobody ever receives.
                 "template_html": "onboarding/emails/welcome.html.j2",
-                "template_txt": "onboarding/emails/welcome.txt",
                 "context": {
                     **base_context,
                     "user": mock_user,

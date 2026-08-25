@@ -75,7 +75,10 @@ def ensure_user_has_team(user):
                 },
             }
             email = EmailMultiAlternatives(
-                subject="Welcome to sbomify",
+                # Not a second "Welcome to sbomify": the onboarding welcome already
+                # greets the user minutes earlier. This one exists to state the
+                # trial and its end date.
+                subject="Your Business trial has started",
                 body=render_to_string("teams/emails/new_user_email.txt", context),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[user.email],

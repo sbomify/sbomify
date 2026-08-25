@@ -1,5 +1,7 @@
 {% extends "core/emails/base.html.j2" %}
-{% block title %}Access token expiring{% endblock %}
+{% block title %}
+    Access token "{{ token.description }}" expires in {{ days_left }} day{{ days_left|pluralize }}
+{% endblock %}
 {% block content %}
     <h1>Access token expiring</h1>
     <p>
@@ -16,7 +18,7 @@
         .
     </p>
     <p>
-        Anything authenticating with it — CI pipelines included — will start failing with 401s at that point. Create a replacement token and rotate it in before then.
+        Anything authenticating with it, CI pipelines included, will start failing with 401s at that point. Create a replacement token and rotate it in before then.
     </p>
     {% if team %}
         <p>
