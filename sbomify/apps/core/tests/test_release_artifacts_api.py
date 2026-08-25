@@ -55,6 +55,37 @@ class TestReleaseArtifactsAPI(TestCase):
         # Add SBOM to release as artifact
         self.release_artifact = ReleaseArtifact.objects.create(release=self.release, sbom=self.sbom)
 
+    def test_page_size_minus_one_returns_every_artifact_in_both_modes(self):
+        """The table paginates client-side, so a clamped -1 would hide rows.
+
+        The available branch does its own clamping rather than going through
+        _paginate_queryset, so the two modes have to be checked separately.
+        """
+        # Available artifacts are drawn from the product's components, so the
+        # component has to be attached or that list stays empty.
+        self.product.components.add(self.component)
+        extras = [
+            SBOM.objects.create(
+                name=f"extra-sbom-{index}",
+                version=f"1.0.{index}",
+                format="cyclonedx",
+                format_version="1.6",
+                component=self.component,
+            )
+            for index in range(4)
+        ]
+        # Two pinned, two not, so neither mode is trivially satisfied.
+        for sbom in extras[:2]:
+            ReleaseArtifact.objects.get_or_create(release=self.release, sbom=sbom)
+
+        for mode in ("existing", "available"):
+            response = Client().get(f"/api/v1/releases/{self.release.id}/artifacts?mode={mode}&page_size=-1")
+            assert response.status_code == 200, mode
+            payload = json.loads(response.content)
+            assert payload["pagination"]["total"] > 1, f"{mode} fixture proves nothing"
+            assert payload["pagination"]["page_size"] >= payload["pagination"]["total"], mode
+            assert len(payload["items"]) == payload["pagination"]["total"], mode
+
     def test_bom_type_survives_response_serialisation(self):
         """bom_type must reach the client through the response schema.
 

@@ -3849,11 +3849,17 @@ def list_release_artifacts(
         page_size_num = page_size if isinstance(page_size, int) else int(request.GET.get("page_size", 15))
 
         page_num = max(1, page_num)  # Ensure page is at least 1
-        page_size_num = min(max(1, page_size_num), 100)  # Ensure page_size is between 1 and 100
-
-        start_index = (page_num - 1) * page_size_num
-        end_index = start_index + page_size_num
-        paginated_artifacts = available_artifacts[start_index:end_index]
+        if page_size_num == -1:
+            # Same contract as _paginate_queryset, which the existing-mode branch
+            # uses: -1 means every row. Clamping it to 1 here would hand the
+            # caller a single artifact and call it the whole list.
+            page_size_num = max(1, total_items)
+            paginated_artifacts = available_artifacts
+        else:
+            page_size_num = min(max(1, page_size_num), 100)  # Ensure page_size is between 1 and 100
+            start_index = (page_num - 1) * page_size_num
+            end_index = start_index + page_size_num
+            paginated_artifacts = available_artifacts[start_index:end_index]
 
         # Create pagination metadata
         from sbomify.apps.core.schemas import PaginationMeta
