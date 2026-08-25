@@ -115,6 +115,23 @@ def schedule_broadcast(workspace_key: str, message_type: str, data: dict[str, An
     )
 
 
+def _broadcast_release_updated(release: Release) -> None:
+    """Tell the workspace a release moved: its fields or its artifact set.
+
+    Sends the ``release_updated`` message the release tables already listen
+    for, so an edit, a pin or an unpin repaints every open view instead of
+    waiting for someone to reload.
+    """
+    workspace_key = release.product.team.key
+    if not workspace_key:
+        return
+    schedule_broadcast(
+        workspace_key,
+        "release_updated",
+        {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
+    )
+
+
 @dataclass(frozen=True)
 class ProductLookupResult:
     """Container for a product API payload plus the ORM instance."""
@@ -3244,11 +3261,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if release.product.team.key:
-            schedule_broadcast(
-                release.product.team.key,
-                "release_updated",
-                {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
-            )
+            _broadcast_release_updated(release)
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
@@ -3326,11 +3339,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
 
         # Broadcast to workspace for real-time UI updates (only if something changed, after transaction commits)
         if changed and release.product.team.key:
-            schedule_broadcast(
-                release.product.team.key,
-                "release_updated",
-                {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
-            )
+            _broadcast_release_updated(release)
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
@@ -3699,7 +3708,11 @@ def list_release_artifacts(
     if mode == "existing":
         # Return artifacts that are already in this release
         existing_artifacts_queryset = (
-            ReleaseArtifact.objects.filter(release=release).select_related("sbom", "document").order_by("-created_at")
+            # component is read for every row below, so it belongs in the join:
+            # page_size=-1 turns a missing one into a query per artifact.
+            ReleaseArtifact.objects.filter(release=release)
+            .select_related("sbom__component", "document__component")
+            .order_by("-created_at")
         )
 
         # Extract pagination parameters properly
@@ -3832,16 +3845,26 @@ def list_release_artifacts(
         page_size_num = page_size if isinstance(page_size, int) else int(request.GET.get("page_size", 15))
 
         page_num = max(1, page_num)  # Ensure page is at least 1
-        page_size_num = min(max(1, page_size_num), 100)  # Ensure page_size is between 1 and 100
-
-        start_index = (page_num - 1) * page_size_num
-        end_index = start_index + page_size_num
-        paginated_artifacts = available_artifacts[start_index:end_index]
+        if page_size_num == -1:
+            # Same contract as _paginate_queryset, which the existing-mode branch
+            # uses: -1 means every row, on page 1, in one page. Clamping it to 1
+            # here would hand the caller a single artifact and call it the whole
+            # list, and leaving page_num alone would report page 2 of 1.
+            page_num = 1
+            page_size_num = total_items
+            paginated_artifacts = available_artifacts
+        else:
+            page_size_num = min(max(1, page_size_num), 100)  # Ensure page_size is between 1 and 100
+            start_index = (page_num - 1) * page_size_num
+            end_index = start_index + page_size_num
+            paginated_artifacts = available_artifacts[start_index:end_index]
 
         # Create pagination metadata
         from sbomify.apps.core.schemas import PaginationMeta
 
-        total_pages = (total_items + page_size_num - 1) // page_size_num  # Ceiling division
+        # page_size_num is 0 only when -1 met an empty list, and _paginate_queryset
+        # calls that one page, not zero.
+        total_pages = (total_items + page_size_num - 1) // page_size_num if page_size_num else 1
 
         pagination_meta = PaginationMeta(
             total=total_items,
@@ -3914,8 +3937,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                     }
                 return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
             artifact = result["artifact"]
-
-            return 201, {
+            created = {
                 "id": str(artifact.id),
                 "artifact_type": "sbom",
                 "artifact_name": artifact.sbom.name,
@@ -3932,6 +3954,12 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
         except Exception as e:
             log.error(f"Error processing SBOM: {e}")
             return 400, {"detail": "Error processing SBOM", "error_code": ErrorCode.INTERNAL_ERROR}
+
+        # Outside the try on purpose: the row is committed by here, and letting a
+        # broadcast failure fall into the handler above would report a successful
+        # pin as a 400.
+        _broadcast_release_updated(release)
+        return 201, created
 
     # Handle Document
     if payload.document_id:
@@ -3957,8 +3985,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                     }
                 return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
             artifact = result["artifact"]
-
-            return 201, {
+            created = {
                 "id": str(artifact.id),
                 "artifact_type": "document",
                 "artifact_name": artifact.document.name,
@@ -3974,6 +4001,12 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
         except Exception as e:
             log.error(f"Error processing document: {e}")
             return 400, {"detail": "Error processing document", "error_code": ErrorCode.INTERNAL_ERROR}
+
+        # Outside the try on purpose: the row is committed by here, and letting a
+        # broadcast failure fall into the handler above would report a successful
+        # pin as a 400.
+        _broadcast_release_updated(release)
+        return 201, created
 
     return 400, {"detail": "Either sbom_id or document_id must be provided", "error_code": ErrorCode.BAD_REQUEST}
 
@@ -4011,6 +4044,7 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
         }
 
     artifact.delete()
+    _broadcast_release_updated(release)
     return 204, None
 
 
