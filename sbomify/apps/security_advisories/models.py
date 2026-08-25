@@ -554,6 +554,64 @@ class AdvisoryProduct(models.Model):
         super().save(*args, **kwargs)
 
 
+class AdvisoryComponent(models.Model):
+    """A component this advisory covers, when the product is not the subject.
+
+    A product advisory says "Lithium 1.x is affected". This says "the auth
+    library we ship at 1.2.3 is affected", which is the statement a workspace
+    needs when the same component sits inside several products, and the one
+    :class:`AdvisoryProduct` cannot make.
+
+    Mirrors AdvisoryProduct down to the null behaviour: ``component`` goes NULL
+    when the component is deleted and ``component_name`` keeps the published
+    advisory readable, because retiring a component must not rewrite security
+    history or be blocked by an advisory.
+    """
+
+    class Meta:
+        db_table = "security_advisories_components"
+        ordering = ["component_name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["advisory", "component"],
+                condition=Q(component__isnull=False),
+                name="security_advisory_unique_component_per_advisory",
+            ),
+        ]
+        indexes = [models.Index(fields=["advisory"], name="sec_adv_comp_advisory_idx")]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    advisory = models.ForeignKey(SecurityAdvisory, on_delete=models.CASCADE, related_name="components")
+    component = models.ForeignKey(
+        "core.Component", on_delete=models.SET_NULL, null=True, blank=True, related_name="security_advisories"
+    )
+    component_name = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return self.component_name or self.id
+
+    def clean(self) -> None:
+        super().clean()
+        component = self.component
+        if component is not None and self.advisory_id and component.team_id != self.advisory.team_id:
+            raise ValidationError({"component": "Cross-tenant advisory component rejected."})
+        if self.advisory_id and self.advisory.advisory_type == SecurityAdvisory.AdvisoryType.WORKSPACE_NOTICE:
+            raise ValidationError({"advisory": "A workspace notice names no components."})
+        # Without either, the row names nothing a reader can identify.
+        if component is None and not self.component_name.strip():
+            raise ValidationError({"component_name": "A component row needs a component or a name."})
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        self.component_name = self.component_name.strip()
+        component = self.component
+        if component is not None and not self.component_name:
+            self.component_name = component.name
+        self.full_clean(validate_unique=False, validate_constraints=False)
+        super().save(*args, **kwargs)
+
+
 class AdvisoryProductStatus(models.Model):
     """What one vulnerability means for one product. The VEX statement of the model.
 
@@ -616,9 +674,23 @@ class AdvisoryProductStatus(models.Model):
                 name="security_advisory_unique_status_per_product",
             ),
             models.UniqueConstraint(
+                fields=["vulnerability", "advisory_component"],
+                condition=Q(advisory_component__isnull=False),
+                name="security_advisory_unique_status_per_component",
+            ),
+            # Portfolio-wide means naming no subject at all. Before components
+            # existed, "no product" was enough to say that; now a status with no
+            # product may still name a component, and that is not portfolio-wide.
+            models.UniqueConstraint(
                 fields=["vulnerability"],
-                condition=Q(advisory_product__isnull=True),
+                condition=Q(advisory_product__isnull=True) & Q(advisory_component__isnull=True),
                 name="security_advisory_unique_portfolio_status",
+            ),
+            # One subject or the other, never both: the statement would be
+            # ambiguous about what it is asserting.
+            models.CheckConstraint(
+                condition=~(Q(advisory_product__isnull=False) & Q(advisory_component__isnull=False)),
+                name="security_advisory_status_one_subject",
             ),
         ]
         indexes = [models.Index(fields=["vulnerability"], name="sec_adv_status_vuln_idx")]
@@ -628,6 +700,9 @@ class AdvisoryProductStatus(models.Model):
     vulnerability = models.ForeignKey(AdvisoryVulnerability, on_delete=models.CASCADE, related_name="product_statuses")
     advisory_product = models.ForeignKey(
         AdvisoryProduct, on_delete=models.CASCADE, null=True, blank=True, related_name="statuses"
+    )
+    advisory_component = models.ForeignKey(
+        AdvisoryComponent, on_delete=models.CASCADE, null=True, blank=True, related_name="statuses"
     )
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.IN_TRIAGE)
@@ -664,6 +739,9 @@ class AdvisoryProductStatus(models.Model):
     def clean(self) -> None:
         super().clean()
         errors: dict[str, str] = {}
+
+        if self.advisory_product_id and self.advisory_component_id:
+            errors["advisory_component"] = "A status names a product or a component, not both."
 
         if self.justification and self.status != self.Status.NOT_AFFECTED:
             errors["justification"] = "A justification only applies to a not_affected status."
@@ -708,7 +786,11 @@ class AdvisoryProductStatus(models.Model):
                 if self.advisory_product_id
                 else None
             )
-            if not self.advisory_product_id:
+            if self.advisory_component_id:
+                # A product Release is not this status's subject. The component's
+                # own release would be, and that is a different field.
+                errors["recommended_release"] = "A component status cannot recommend a product release."
+            elif not self.advisory_product_id:
                 errors["recommended_release"] = "A portfolio-wide status cannot recommend a release."
             elif not product_id:
                 errors["recommended_release"] = "A product with no sbomify record has no releases to recommend."

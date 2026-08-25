@@ -29,7 +29,7 @@ from packaging.version import InvalidVersion, Version
 from sbomify.apps.security_advisories.models import AdvisoryVersionRange, SecurityAdvisory
 
 if TYPE_CHECKING:  # pragma: no cover
-    from sbomify.apps.core.models import Release
+    from sbomify.apps.core.models import ComponentRelease, Release
 
 PINNED = "pinned"
 VERSION = "version"
@@ -130,6 +130,51 @@ def advisories_affecting_release(release: Release, *, published_only: bool = Tru
 
     # An advisory already matched outright is not made uncertain by a second
     # range nobody could parse.
+    for advisory_id, (advisory, seen) in unparsed.items():
+        matched.setdefault(
+            advisory_id,
+            ReleaseImpact(advisory=advisory, matched_by=UNDETERMINED, undetermined=tuple(seen)),
+        )
+
+    return list(matched.values())
+
+
+def advisories_affecting_component_release(
+    component_release: ComponentRelease, *, published_only: bool = True
+) -> list[ReleaseImpact]:
+    """The component-side mirror: advisories bearing on one version of a component.
+
+    Same resolution as the product side, for the same reason. A ComponentRelease
+    is identified by ``(component, version, qualifiers)``, so its version string
+    is what the ranges are compared against.
+
+    The pins are product Releases, which cannot name a ComponentRelease, so this
+    side resolves by version alone. That is the honest limit of the current
+    schema rather than a shortcut: a pin field pointing at ComponentRelease would
+    be the thing to add if anyone needs to override the comparison.
+    """
+    ranges = (
+        AdvisoryVersionRange.objects.filter(
+            product_status__advisory_component__component_id=component_release.component_id,
+        )
+        .select_related("product_status__vulnerability__advisory")
+        .order_by("created_at")
+    )
+    if published_only:
+        ranges = ranges.filter(product_status__vulnerability__advisory__status=SecurityAdvisory.Status.PUBLISHED)
+
+    matched: dict[str, ReleaseImpact] = {}
+    unparsed: dict[str, tuple[SecurityAdvisory, list[str]]] = {}
+
+    for advisory_range in ranges:
+        advisory = advisory_range.product_status.vulnerability.advisory
+        verdict = version_in_range(component_release.version, advisory_range)
+        if verdict is None:
+            _, seen = unparsed.setdefault(advisory.pk, (advisory, []))
+            seen.append(str(advisory_range))
+        elif verdict:
+            matched.setdefault(advisory.pk, ReleaseImpact(advisory=advisory, matched_by=VERSION))
+
     for advisory_id, (advisory, seen) in unparsed.items():
         matched.setdefault(
             advisory_id,
