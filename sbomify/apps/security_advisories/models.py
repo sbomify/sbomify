@@ -637,8 +637,15 @@ class AdvisoryProductStatus(models.Model):
     action_statement = models.TextField(blank=True, default="")
 
     recommended_version = models.CharField(max_length=100, blank=True, default="")
+    # Named, not "+": a release has to be able to answer which advisories point
+    # at it. The pins were write-only, so "what does this release fix" needed a
+    # scan of every range in the workspace.
     recommended_release = models.ForeignKey(
-        "core.Release", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+        "core.Release",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="advisory_statuses_recommending",
     )
 
     source = models.CharField(max_length=20, choices=Source.choices, default=Source.MANUAL)
@@ -754,13 +761,25 @@ class AdvisoryVersionRange(models.Model):
     last_affected = models.CharField(max_length=100, blank=True, default="")
 
     introduced_release = models.ForeignKey(
-        "core.Release", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+        "core.Release",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="advisory_ranges_introduced_here",
     )
     fixed_release = models.ForeignKey(
-        "core.Release", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+        "core.Release",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="advisory_ranges_fixed_here",
     )
     last_affected_release = models.ForeignKey(
-        "core.Release", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+        "core.Release",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="advisory_ranges_last_affected_here",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
