@@ -60,7 +60,21 @@ uv run python screencasts/mux_narration.py marketplace_walkthrough
 ```
 
 The services still run in Docker; only the browser and the test process move to
-the host. `SCREENCAST_LOCAL_BROWSER=1` launches Chromium **headed** on purpose:
+the host.
+
+**Install the app's font on that machine first.** The pages load Figtree from
+Google Fonts with `display=swap`, which means text renders in a fallback until
+the webfont arrives — and on a fresh install there is barely a fallback to
+render in. The recording then has the wrong typography and nothing reports it:
+
+```bash
+sudo apt-get install -y fonts-liberation fonts-dejavu-core fonts-noto-core
+mkdir -p ~/.local/share/fonts
+curl -sSL -o ~/.local/share/fonts/Figtree-variable.ttf \
+    "https://github.com/google/fonts/raw/main/ofl/figtree/Figtree%5Bwght%5D.ttf"
+fc-cache -f
+fc-list | grep -c Figtree      # expect 8
+``` `SCREENCAST_LOCAL_BROWSER=1` launches Chromium **headed** on purpose:
 headless still composites through SwiftShader on several platforms, which is
 the thing being avoided.
 
