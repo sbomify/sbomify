@@ -8,12 +8,21 @@
         vulnerabilities faster.
     </p>
     <p>
-        You can assign roles (owner, admin, or guest) to control who can do what.
+        You can assign roles (owner, admin, or member) to control who can do what.
         And with your <strong>Trust Center</strong>, you can share your compliance
         status with customers and partners too.
     </p>
+    {% comment %}
+    Straight to the members tab when we know the workspace. The bare
+    /workspaces/settings/ redirect this used to point at reads
+    request.session["current_team"], which an email click cannot rely on.
+    {% endcomment %}
     <p style="text-align: center; margin: 32px 0;">
-        <a href="{{ app_base_url }}/workspaces/settings/" class="button">Invite Team Members</a>
+        {% if workspace_key %}
+            <a href="{{ base_url }}{% url 'teams:team_settings_tab' team_key=workspace_key tab='members' %}" class="button">Invite Members</a>
+        {% else %}
+            <a href="{{ base_url }}{% url 'teams:teams_dashboard' %}" class="button">Invite Members</a>
+        {% endif %}
     </p>
     <p>Got questions? Just reply to this email.</p>
 {% endblock %}

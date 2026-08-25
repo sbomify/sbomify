@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
     <head>
@@ -201,7 +202,13 @@
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" bgcolor="#ffffff" class="email-container">
 <tr>
 <td align="center" bgcolor="#25293f" style="background-color: #25293f; padding: 24px; color: #ffffff" class="logo-cell">
-<img src="{{ base_url }}/static/img/sbomify-white.svg" alt="sbomify" height="40" width="214" border="0" style="color: #ffffff; font-weight: 600; font-size: 20px">
+{% comment %}
+PNG, not the SVG this used to reference: Gmail, Outlook and Yahoo do not
+render SVG in mail, so the mark was alt text for most recipients. The file
+is rendered at 2x and flattened onto the same navy as this cell, since
+alpha compositing is the other thing Outlook gets wrong.
+{% endcomment %}
+<img src="{{ base_url }}{% static 'img/sbomify-white-email.png' %}" alt="sbomify" height="40" width="214" border="0" style="color: #ffffff; font-weight: 600; font-size: 20px">
 </td>
 </tr>
 <tr>
@@ -228,6 +235,15 @@ Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in 
 </p>
 {% now "Y" as this_year %}
 <p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
+{% if unsubscribe_url %}
+    {% comment %}
+    Only the onboarding sequence sets this. Account mail (billing, access
+    decisions, token expiry) has nothing to opt out of, so it must not offer.
+    {% endcomment %}
+    <p style="font-size: 12px; color: #94a3b8">
+        Don't want setup tips? <a href="{{ unsubscribe_url }}" style="color: #94a3b8">Unsubscribe</a>
+    </p>
+{% endif %}
 </td>
 </tr>
 </table>

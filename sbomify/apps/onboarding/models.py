@@ -57,6 +57,15 @@ class OnboardingStatus(models.Model):
         help_text="When the onboarding drip campaign clock started for this user",
     )
 
+    # Set when the user opts out of the drip sequence. The welcome email is not
+    # covered: it confirms an account they just created, so it stays
+    # transactional. Everything driven by the scheduler checks this first.
+    drip_unsubscribed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the user unsubscribed from onboarding emails",
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -139,6 +148,17 @@ class OnboardingStatus(models.Model):
         anchor = self.drip_started_at or self.created_at
         return (timezone.now() - anchor).days
 
+    @property
+    def drip_unsubscribed(self) -> bool:
+        """Whether the user has opted out of the onboarding sequence."""
+        return self.drip_unsubscribed_at is not None
+
+    def unsubscribe_from_drip(self) -> None:
+        """Opt the user out. Idempotent: a second click is not an error."""
+        if self.drip_unsubscribed_at is None:
+            self.drip_unsubscribed_at = timezone.now()
+            self.save(update_fields=["drip_unsubscribed_at"])
+
     def should_receive_component_reminder(self, days_threshold: int = 3) -> bool:
         """
         Check if user should receive BOM component creation reminder.
@@ -148,6 +168,9 @@ class OnboardingStatus(models.Model):
         - Are X+ days past the drip-campaign anchor
         - Haven't created any BOM components in their workspace
         """
+        if self.drip_unsubscribed:
+            return False
+
         if not self.welcome_email_sent:
             return False
 
@@ -179,6 +202,9 @@ class OnboardingStatus(models.Model):
         - Have had welcome email sent
         - Are at least 1 day past the drip-campaign anchor
         """
+        if self.drip_unsubscribed:
+            return False
+
         if not self.welcome_email_sent:
             return False
 
@@ -196,6 +222,9 @@ class OnboardingStatus(models.Model):
         - Are 10+ days past the drip-campaign anchor
         - Are still the only member in their workspace (no invites sent)
         """
+        if self.drip_unsubscribed:
+            return False
+
         if not self.welcome_email_sent:
             return False
 
@@ -223,6 +252,9 @@ class OnboardingStatus(models.Model):
         - Created components X+ days ago
         - Haven't uploaded any SBOMs to their workspace
         """
+        if self.drip_unsubscribed:
+            return False
+
         if not self.has_created_component:
             return False
 

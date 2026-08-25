@@ -75,11 +75,6 @@ SIGNED_URL_SALT = os.environ.get("SIGNED_URL_SALT", "django-insecure-signed-url-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 
-if DEBUG:
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-else:
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-
 # Local development mode (separate from DEBUG for security)
 LOCAL_DEV = os.environ.get("LOCAL_DEV", "False").lower() == "true"
 
@@ -840,9 +835,15 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "False").lower() == "true"
 EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() == "true"
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@sbomify.com")
-SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)  # For system-generated emails
-EMAIL_SUBJECT_PREFIX = "[sbomify] "
+# Every sender in the app resolves to this, so the fallback is what goes out
+# whenever a process starts without the variable set. It has to be an address
+# people can reply to, not a black hole, because every template invites a reply.
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "hello@sbomify.com")
+# Django uses this only for the error mail it sends to ADMINS/MANAGERS, which
+# are unset, so nothing reads it today. It stays because Sentry, not email, is
+# the error channel, and a future ADMINS entry should not fall back to the
+# Django default of "root@localhost".
+SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 
 logger = logging.getLogger(__name__)

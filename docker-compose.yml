@@ -23,6 +23,19 @@ x-common-env: &common-env
   DATABASE_SSLROOTCERT: ${DATABASE_SSLROOTCERT:-}
   DATABASE_USER: ${DATABASE_USER:-sbomify}
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
+  # Mail has to be here rather than on one service: the backend only queues
+  # onboarding and notification mail, the worker is what actually sends it, so
+  # a value set on a single service silently produces a different From header
+  # depending on which process happened to send the message.
+  # Defaults mirror sbomify/settings.py; docker-compose.dev.yml points the host
+  # at mailpit.
+  DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-hello@sbomify.com}
+  EMAIL_HOST: ${EMAIL_HOST:-localhost}
+  EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+  EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+  EMAIL_PORT: ${EMAIL_PORT:-25}
+  EMAIL_USE_SSL: ${EMAIL_USE_SSL:-False}
+  EMAIL_USE_TLS: ${EMAIL_USE_TLS:-False}
   REDIS_CA_CERTS: ${REDIS_CA_CERTS:-}
   REDIS_URL: ${REDIS_URL:-redis://sbomify-redis:6379}
   SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}
