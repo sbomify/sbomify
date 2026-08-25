@@ -1,66 +1,102 @@
 """The subject line and the rendered <title> have to say the same thing.
 
-They drifted apart across fifteen templates because nothing tied them
+They drifted apart across twenty templates because nothing tied them
 together: the subject lives in the sender, the title in the template, and
-neither one fails when the other changes. ``send_test_emails`` already
-knows every email and a context that renders it, so this walks the same
-list rather than keeping a second one that would drift in its turn.
+neither one fails when the other changes.
+
+Two limits worth knowing before trusting a green run. The subject compared
+here is ``send_test_emails``'s own literal, not the sender's, so a sender
+that changes its subject alone still passes. And only templates the command
+lists are exercised at all, which is what ``test_every_email_template_is_previewable``
+is for.
 """
 
 from __future__ import annotations
 
+import html
 import re
+from pathlib import Path
+from typing import Any
 
 import pytest
-from django.core import mail
+from django.core.mail import EmailMessage
 from django.core.management import call_command
-from django.test import override_settings
 
 TITLE_RE = re.compile(r"<title>(.*?)</title>", re.DOTALL)
+STYLE_RE = re.compile(r"<style[^>]*>.*?</style>|<!--.*?-->", re.DOTALL | re.IGNORECASE)
+DASHES = ("—", "–")
+
+APPS_DIR = Path(__file__).resolve().parents[2]
+# base is the layout every email extends; test_template belongs to a billing unit test.
+NOT_AN_EMAIL = {"base.html.j2", "test_template.html.j2"}
 
 
-def _rendered_title(message: mail.EmailMultiAlternatives) -> str | None:
-    """Return the collapsed <title> text of the HTML alternative, if there is one."""
-    for body, content_type in getattr(message, "alternatives", []) or []:
-        if content_type != "text/html":
-            continue
-        match = TITLE_RE.search(body)
-        if match is None:
-            return None
-        return re.sub(r"\s+", " ", match.group(1)).strip()
-    return None
+def _rendered_title(message: EmailMessage) -> str | None:
+    """The <title> text, unescaped so it can be compared to a raw subject."""
+    html_body = next((body for body, mimetype in message.alternatives if mimetype == "text/html"), None)
+    if html_body is None:
+        return None
+    match = TITLE_RE.search(html_body)
+    if match is None:
+        return None
+    return html.unescape(" ".join(match.group(1).split()))
 
 
-@pytest.fixture
-def sent_test_emails() -> list[mail.EmailMultiAlternatives]:
+def _reader_visible_text(message: EmailMessage) -> str:
+    """Everything a recipient reads: subject, plain body, and HTML minus its CSS."""
+    parts = [message.subject, message.body]
+    parts += [STYLE_RE.sub("", body) for body, mimetype in message.alternatives if mimetype == "text/html"]
+    return "\n".join(parts)
+
+
+@pytest.fixture(scope="module")
+def sent_test_emails() -> list[EmailMessage]:
+    # force: the command refuses to run outside DEBUG, and tests run with DEBUG
+    # off. test_settings pins the locmem backend, so nothing leaves the process.
+    from django.core import mail
+
     mail.outbox = []
-    with override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
-        # force: the command refuses to run outside DEBUG, and tests run with
-        # DEBUG off. The locmem backend above keeps it from leaving the process.
-        call_command("send_test_emails", recipient="qa@example.com", force=True)
+    call_command("send_test_emails", recipient="qa@example.com", force=True)
     return list(mail.outbox)
 
 
-@pytest.mark.django_db
-def test_every_email_title_matches_its_subject(sent_test_emails) -> None:
+def test_every_email_title_matches_its_subject(sent_test_emails: list[EmailMessage]) -> None:
     mismatches = [
-        (message.subject, _rendered_title(message))
+        (message.subject, title)
         for message in sent_test_emails
-        if _rendered_title(message) != message.subject
+        if (title := _rendered_title(message)) != message.subject
     ]
     assert not mismatches, "subject and <title> disagree: " + "; ".join(
         f"{subject!r} vs {title!r}" for subject, title in mismatches
     )
 
 
-@pytest.mark.django_db
-def test_the_command_covers_the_emails_it_claims_to(sent_test_emails) -> None:
-    """A drop to zero would make the check above pass while testing nothing."""
-    assert len(sent_test_emails) >= 18
+def test_every_email_template_is_previewable(sent_test_emails: list[EmailMessage]) -> None:
+    """A template the command does not list is a template no test can reach."""
+    on_disk = {path.name for path in APPS_DIR.glob("*/templates/*/emails/*.html.j2") if path.name not in NOT_AN_EMAIL}
+    source = (APPS_DIR / "core/management/commands/send_test_emails.py").read_text()
+    unlisted = sorted(name for name in on_disk if name not in source)
+    assert not unlisted, f"email templates send_test_emails never renders: {unlisted}"
 
 
-@pytest.mark.django_db
-def test_no_email_copy_uses_a_dash_as_punctuation(sent_test_emails) -> None:
-    """Em and en dashes are a review blocker in user-facing copy."""
-    offenders = [message.subject for message in sent_test_emails if set("—–") & set(message.body)]
+def test_no_email_copy_uses_a_dash_as_punctuation(sent_test_emails: list[EmailMessage]) -> None:
+    """Em and en dashes are a review blocker in user-facing copy.
+
+    Subject and both bodies, because a dash in the HTML half is just as
+    visible as one in the text half. CSS and comments are stripped first:
+    the shared layout uses a dash inside a stylesheet comment.
+    """
+    offenders = [
+        message.subject for message in sent_test_emails if any(dash in _reader_visible_text(message) for dash in DASHES)
+    ]
     assert not offenders, f"dash used as punctuation in: {offenders}"
+
+
+def test_the_mock_workspace_name_still_exercises_escaping(sent_test_emails: list[EmailMessage]) -> None:
+    """Without an escapable character the title check passes on data it cannot fail on."""
+    from django.core.management import load_command_class
+
+    command: Any = load_command_class("sbomify.apps.core", "send_test_emails")
+    assert command is not None
+    subjects = " ".join(message.subject for message in sent_test_emails)
+    assert "&" in subjects and "'" in subjects, "mock data no longer contains an escapable character"

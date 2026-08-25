@@ -1,5 +1,5 @@
 {% extends "core/emails/base.html.j2" %}
-{% block title %}Welcome to sbomify - Let's Get Started!{% endblock %}
+{% block title %}Welcome to sbomify{% endblock %}
 {% block content %}
     <h1>Welcome to sbomify, {{ user.first_name|default:user.username }}!</h1>
     <p>
@@ -8,7 +8,7 @@
     </p>
     <p>To get started, head to your dashboard and create your first product.</p>
     <p style="text-align: center; margin: 32px 0;">
-        <a href="{{ app_base_url }}/dashboard" class="button">Go to Dashboard</a>
+        <a href="{{ app_base_url }}/dashboard" class="button">Go to dashboard</a>
     </p>
     <p>
         We'd love to hear what brought you to sbomify. Whether it's compliance,

@@ -1,5 +1,5 @@
 {% extends "core/emails/base.html.j2" %}
-{% block title %}Your sbomify trial ends in {{ days_remaining }} days{% endblock %}
+{% block title %}Your sbomify trial ends in {{ days_remaining }} day{{ days_remaining|pluralize }}{% endblock %}
 {% block content %}
     <h1>Your trial ends soon</h1>
     <p>Hi {{ user_name }},</p>
@@ -8,6 +8,6 @@
         Upgrade to a paid plan to keep access to all features.
     </p>
     <p style="text-align: center; margin: 32px 0;">
-        <a href="{{ upgrade_url }}" class="button">Upgrade Now</a>
+        <a href="{{ upgrade_url }}" class="button">Upgrade now</a>
     </p>
 {% endblock %}

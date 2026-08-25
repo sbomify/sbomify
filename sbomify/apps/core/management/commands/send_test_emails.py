@@ -50,7 +50,10 @@ class Command(BaseCommand):
         recipient = options["recipient"]
 
         # Mock data for templates
-        mock_team = type("Team", (), {"name": "Acme Corp", "key": "acme-corp"})()
+        # The name carries an ampersand and an apostrophe on purpose: titles
+        # interpolate it through autoescaping while subjects do not, and a
+        # plain alphanumeric name hides that divergence.
+        mock_team = type("Team", (), {"name": "Ben & Jerry's", "key": "acme-corp"})()
         mock_user = type(
             "User",
             (),
@@ -70,7 +73,12 @@ class Command(BaseCommand):
         mock_invitation = type(
             "Invitation",
             (),
-            {"token": "abc123", "expires_at": timezone.now() + timedelta(days=30), "role": "guest"},  # nosec B105
+            {"token": "abc123", "expires_at": timezone.now() + timedelta(days=30), "role": "member"},  # nosec B105
+        )()
+        mock_token = type(
+            "Token",
+            (),
+            {"description": "CI & deploy", "expires_at": timezone.now() + timedelta(days=3)},
         )()
 
         emails_sent = 0
@@ -86,38 +94,38 @@ class Command(BaseCommand):
         test_emails = [
             # Billing emails
             {
-                "subject": "Payment failed for Acme Corp",
+                "subject": f"Payment failed for {mock_team.name}",
                 "template_html": "billing/emails/payment_failed.html.j2",
                 "template_txt": "billing/emails/payment_failed.txt",
                 "context": {
                     **base_context,
                     "user_name": "John Doe",
-                    "team_name": "Acme Corp",
+                    "team_name": mock_team.name,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                     "invoice_id": "inv_123456",
                 },
             },
             {
-                "subject": "Payment past due for Acme Corp",
+                "subject": f"Payment past due for {mock_team.name}",
                 "template_html": "billing/emails/payment_past_due.html.j2",
                 "template_txt": "billing/emails/payment_past_due.txt",
                 "context": {
                     **base_context,
                     "user_name": "John Doe",
-                    "team_name": "Acme Corp",
+                    "team_name": mock_team.name,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
             },
             {
-                "subject": "Payment received for Acme Corp",
+                "subject": f"Payment received for {mock_team.name}",
                 "template_html": "billing/emails/payment_succeeded.html.j2",
                 "template_txt": "billing/emails/payment_succeeded.txt",
                 "context": {
                     **base_context,
                     "user_name": "John Doe",
-                    "team_name": "Acme Corp",
+                    "team_name": mock_team.name,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -129,7 +137,7 @@ class Command(BaseCommand):
                 "context": {
                     **base_context,
                     "user_name": "John Doe",
-                    "team_name": "Acme Corp",
+                    "team_name": mock_team.name,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -141,7 +149,7 @@ class Command(BaseCommand):
                 "context": {
                     **base_context,
                     "user_name": "John Doe",
-                    "team_name": "Acme Corp",
+                    "team_name": mock_team.name,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -153,7 +161,7 @@ class Command(BaseCommand):
                 "context": {
                     **base_context,
                     "user_name": "John Doe",
-                    "team_name": "Acme Corp",
+                    "team_name": mock_team.name,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                     "days_remaining": 3,
@@ -166,14 +174,14 @@ class Command(BaseCommand):
                 "context": {
                     **base_context,
                     "user_name": "John Doe",
-                    "team_name": "Acme Corp",
+                    "team_name": mock_team.name,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
             },
             # Document access emails
             {
-                "subject": "New access request for Acme Corp",
+                "subject": f"New access request for {mock_team.name}",
                 "template_html": "documents/emails/access_request_notification.html.j2",
                 "template_txt": "documents/emails/access_request_notification.txt",
                 "context": {
@@ -189,7 +197,7 @@ class Command(BaseCommand):
                 },
             },
             {
-                "subject": "Access approved for Acme Corp",
+                "subject": f"Access approved for {mock_team.name}",
                 "template_html": "documents/emails/access_approved.html.j2",
                 "template_txt": "documents/emails/access_approved.txt",
                 "context": {
@@ -200,7 +208,7 @@ class Command(BaseCommand):
                 },
             },
             {
-                "subject": "Access request update for Acme Corp",
+                "subject": f"Access request update for {mock_team.name}",
                 "template_html": "documents/emails/access_rejected.html.j2",
                 "template_txt": "documents/emails/access_rejected.txt",
                 "context": {
@@ -210,7 +218,7 @@ class Command(BaseCommand):
                 },
             },
             {
-                "subject": "Access update for Acme Corp",
+                "subject": f"Access update for {mock_team.name}",
                 "template_html": "documents/emails/access_revoked.html.j2",
                 "template_txt": "documents/emails/access_revoked.txt",
                 "context": {
@@ -221,7 +229,7 @@ class Command(BaseCommand):
             },
             # Team emails
             {
-                "subject": "You're invited to join Acme Corp on sbomify",
+                "subject": f"You're invited to join {mock_team.name} on sbomify",
                 "template_html": "teams/emails/team_invite_email.html.j2",
                 "template_txt": "teams/emails/team_invite_email.txt",
                 "context": {
@@ -232,7 +240,7 @@ class Command(BaseCommand):
                 },
             },
             {
-                "subject": "You're invited to the Acme Corp Trust Center",
+                "subject": f"You're invited to the {mock_team.name} Trust Center",
                 "template_html": "teams/emails/trust_center_invite_email.html.j2",
                 "template_txt": "teams/emails/trust_center_invite_email.txt",
                 "context": {
@@ -242,9 +250,44 @@ class Command(BaseCommand):
                     "invitation": mock_invitation,
                 },
             },
+            {
+                "subject": f'Access token "{mock_token.description}" expires in 3 days',
+                "template_html": "access_tokens/emails/token_expiry_email.html.j2",
+                "template_txt": "access_tokens/emails/token_expiry_email.txt",
+                "context": {
+                    **base_context,
+                    "token": mock_token,
+                    "team": mock_team,
+                    "days_left": 3,
+                    "expires_on": mock_token.expires_at,
+                },
+            },
+            {
+                "subject": f"An owner-level invitation was created for {mock_team.name}",
+                "template_html": "teams/emails/owner_invitation_notice.html.j2",
+                "template_txt": "teams/emails/owner_invitation_notice.txt",
+                "context": {
+                    **base_context,
+                    "team": mock_team,
+                    "actor": mock_user,
+                    "invited_email": "new.owner@example.com",
+                },
+            },
+            {
+                "subject": "Welcome to sbomify",
+                "template_html": "teams/emails/new_user_email.html.j2",
+                "template_txt": "teams/emails/new_user_email.txt",
+                "context": {
+                    **base_context,
+                    "user": mock_user,
+                    "team": mock_team,
+                    "TRIAL_PERIOD_DAYS": 14,
+                    "trial_end_date": timezone.now() + timedelta(days=14),
+                },
+            },
             # Onboarding emails
             {
-                "subject": "Welcome to sbomify - Let's Get Started!",
+                "subject": "Welcome to sbomify",
                 # No template_txt: the onboarding sender derives the plain-text
                 # body from the HTML, so naming one here would preview a body
                 # nobody ever receives.

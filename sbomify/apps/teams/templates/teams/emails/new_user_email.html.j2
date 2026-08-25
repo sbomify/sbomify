@@ -1,7 +1,7 @@
 {% extends "core/emails/base.html.j2" %}
-{% block title %}Your Business trial has started{% endblock %}
+{% block title %}Welcome to sbomify{% endblock %}
 {% block content %}
-    <h1>Your Business trial has started</h1>
+    <h1>Welcome to sbomify</h1>
     <p>
         {# djlint:off #}
         Hi {% if user.first_name %}{{ user.first_name }}{% else %}{{ user.email }}{% endif %},

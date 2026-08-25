@@ -73,7 +73,7 @@ class OnboardingEmailService:
             email_record = OnboardingEmail.create_email(
                 user=user,
                 email_type=OnboardingEmail.EmailType.WELCOME,
-                subject="Welcome to sbomify - Let's Get Started!",
+                subject="Welcome to sbomify",
             )
         except IntegrityError:
             concurrent = OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.WELCOME).first()

@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.core.mail import EmailMultiAlternatives
+from django.template.defaultfilters import pluralize
 from django.template.loader import render_to_string
 from django.urls import reverse
 
@@ -126,7 +127,7 @@ def notify_payment_succeeded(team: Team, member: Member) -> None:
 
 def notify_trial_ending(team: Team, member: Member, days_remaining: int) -> None:
     """Notify team owner that trial period is ending soon."""
-    subject = f"Your sbomify trial ends in {days_remaining} days"
+    subject = f"Your sbomify trial ends in {days_remaining} day{pluralize(days_remaining)}"
     send_billing_email(team, member, subject, "trial_ending", {"days_remaining": days_remaining})
 
 

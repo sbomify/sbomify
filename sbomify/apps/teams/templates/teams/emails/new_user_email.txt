@@ -1,6 +1,6 @@
 Hi {% if user.first_name %}{{ user.first_name }}{% else %}{{ user.email }}{% endif %},
 
-Your Business trial has started.
+Welcome to sbomify!
 
 We've set up a workspace for you with a {{ TRIAL_PERIOD_DAYS }}-day free trial of our Business plan. That means full access to all features. We'll let you know before it ends on {{ trial_end_date }}.
 

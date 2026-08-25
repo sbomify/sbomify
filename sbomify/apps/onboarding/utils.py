@@ -46,8 +46,19 @@ def html_to_plain_text(html_content: str) -> str:
     Returns:
         Plain text version of the content
     """
+    # Drop the head outright. Stripping only script and style left the <title>
+    # behind, so every derived body opened with a verbatim repeat of its own
+    # subject line.
+    html_content = re.sub(r"<head\b.*?</head>", "", html_content, flags=re.DOTALL | re.IGNORECASE)
+
     # Remove script and style elements completely
     html_content = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html_content, flags=re.DOTALL | re.IGNORECASE)
+
+    # Decorative marks are flagged aria-hidden precisely so a non-visual reader
+    # does not get them, and a plain-text body is exactly that reader.
+    html_content = re.sub(
+        r"<(\w+)[^>]*aria-hidden=[\"']true[\"'][^>]*>.*?</\1>", "", html_content, flags=re.DOTALL | re.IGNORECASE
+    )
 
     # Convert common HTML elements to plain text equivalents
 
@@ -69,7 +80,14 @@ def html_to_plain_text(html_content: str) -> str:
     )
 
     # Convert list items
-    html_content = re.sub(r"<li[^>]*>(.*?)</li>", r"• \1\n", html_content, flags=re.DOTALL | re.IGNORECASE)
+    # Collapse the item's own newlines first, or a multi-line <li> becomes a
+    # bullet on one line and its text orphaned on the next.
+    html_content = re.sub(
+        r"<li[^>]*>(.*?)</li>",
+        lambda m: "\u2022 " + " ".join(m.group(1).split()) + "\n",
+        html_content,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
 
     # Convert paragraphs to double newlines
     html_content = re.sub(r"<p[^>]*>(.*?)</p>", r"\1\n\n", html_content, flags=re.DOTALL | re.IGNORECASE)
