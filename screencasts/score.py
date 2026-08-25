@@ -309,7 +309,10 @@ def build(name: str, music: Path, under_lu: float, start_override: float | None,
         f"under narration (target {under_lu:.0f}, ducking accounts for "
         f"{nominal - bed_lufs:+.1f})"
     )
-    print(f"[score]   wrote {out.name}")
+    # Spelled out because the two files sit side by side in the same directory
+    # and the dry one has the more obvious name. Shipping the mux by mistake is
+    # a silent failure: it plays fine, it is just missing the bed.
+    print(f"[score]   wrote {out.name} <- this is the cut to ship, not {video.name}")
     return out
 
 
