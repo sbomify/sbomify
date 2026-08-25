@@ -98,6 +98,35 @@ alongside them are incidental — a frame every 3s, wherever the cadence lands.
 Captions are burned into the video but hidden for the stills, on the assumption
 that the video plays muted and the listing writes its own captions.
 
+### The music pass, and which file to ship
+
+The long cut carries a bed; the FAQ clips do not. That split is deliberate:
+Moreno and Mayer (2000) tested background music against instructional material
+directly and found it depressed both retention and transfer, so music only goes
+on the piece that is persuading a cold audience rather than teaching a warm one.
+
+```bash
+uv run python screencasts/score.py marketplace_walkthrough ~/ledger_trace.m4a --loop
+```
+
+`--loop` is needed whenever the track is shorter than the cut. It does not
+restart from the top, which lands a cold open in the middle of a paragraph; it
+searches for a passage whose texture matches the outgoing bar and crossfades
+back to that instead.
+
+**The scored mix is written alongside the mux, not over it**, because score
+reads the mux as its input and running it twice in place would stack a second
+bed. So the directory ends up holding both:
+
+| File | What it is |
+| --- | --- |
+| `marketplace_walkthrough.webm` | narration only, the input to the music pass |
+| `marketplace_walkthrough.scored.webm` | **the finished cut** |
+
+The dry one has the more obvious name, and a mix missing its bed still plays
+perfectly, so shipping the wrong file fails silently. Check what you are about
+to hand over.
+
 ### Adding a chapter
 
 Write a `chapter_*(page)` function and add it to `CHAPTERS`. It gets picked up
