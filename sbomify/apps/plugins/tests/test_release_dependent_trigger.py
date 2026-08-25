@@ -136,7 +136,7 @@ class TestDependencyTrackSkippedFinding:
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 
         plugin = DependencyTrackPlugin()
-        result = plugin._create_skipped_result(  # noqa: SLF001 — direct helper contract test
+        result = plugin.create_skipped_result(
             finding_id="dependency-track:no-release",
             title="Skipped",
             description="No release",
