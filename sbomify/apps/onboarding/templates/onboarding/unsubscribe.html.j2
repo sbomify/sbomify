@@ -1,0 +1,32 @@
+{% extends "core/auth_base.html.j2" %}
+{% block title %}Email preferences - sbomify{% endblock %}
+{% block login_content %}
+    {% if invalid %}
+        <h1 class="text-lg font-semibold text-text mb-2">This link isn't valid</h1>
+        <p class="text-sm text-text-muted mb-5">
+            It may have been altered on its way to you. Open the most recent sbomify email and
+            use the link at the bottom, or reply to any of our emails and we'll sort it out.
+        </p>
+    {% elif done %}
+        <h1 class="text-lg font-semibold text-text mb-2">You're unsubscribed</h1>
+        <c-feedback.alert variant="success" class="mb-5">
+        We've stopped the onboarding emails to {{ email }}.
+        </c-feedback.alert>
+        <p class="text-sm text-text-muted">
+            You'll still get emails about your account, like billing notices and access requests.
+        </p>
+    {% elif already %}
+        <h1 class="text-lg font-semibold text-text mb-2">Already unsubscribed</h1>
+        <p class="text-sm text-text-muted">{{ email }} is not receiving onboarding emails. Nothing more to do.</p>
+    {% else %}
+        <h1 class="text-lg font-semibold text-text mb-2">Unsubscribe from onboarding emails</h1>
+        <p class="text-sm text-text-muted mb-5">
+            We'll stop sending setup tips to {{ email }}. You'll still get emails about your
+            account, like billing notices and access requests.
+        </p>
+        <form method="post">
+            {% csrf_token %}
+            <c-buttons.primary type="submit" class="w-full">Unsubscribe</c-buttons.primary>
+        </form>
+    {% endif %}
+{% endblock %}

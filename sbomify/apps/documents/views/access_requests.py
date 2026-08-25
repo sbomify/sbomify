@@ -29,6 +29,12 @@ from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
+from sbomify.apps.documents.services.access_emails import (
+    notify_access_approved,
+    notify_access_rejected,
+    notify_access_revoked,
+    notify_admins_of_access_request,
+)
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
@@ -173,62 +179,6 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
         dismissed_ids.add(notification_id)
         request.session["dismissed_notifications"] = list(dismissed_ids)
         request.session.save()
-
-
-def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, requires_nda: bool = False) -> None:
-    """Send email notification to all owners and admins about a new access request."""
-    try:
-        # Get all owners and admins of the team
-        admin_members = Member.objects.filter(team=team, role__in=ADMINISTER).select_related("user")
-
-        if not admin_members.exists():
-            logger.warning(f"No admins found for team {team.key} to notify about access request {access_request.id}")
-            return
-
-        # Build email context
-        requester_name = (
-            f"{access_request.user.first_name} {access_request.user.last_name}".strip() or access_request.user.username
-        )
-        requester_email = access_request.user.email
-        review_url = reverse("documents:access_request_queue", kwargs={"team_key": team.key})
-        review_link = f"{get_base_url()}{review_url}"
-
-        # Check if NDA has actually been signed
-        nda_signed = NDASignature.objects.live().filter(access_request=access_request).exists()
-
-        # Send email to each admin/owner
-        for admin_member in admin_members:
-            try:
-                email_context = {
-                    "admin_user": admin_member.user,
-                    "team": team,
-                    "requester_name": requester_name,
-                    "requester_email": requester_email,
-                    "requested_at": access_request.requested_at.strftime("%B %d, %Y at %I:%M %p"),
-                    "requires_nda": requires_nda,
-                    "nda_signed": nda_signed,
-                    "review_link": review_link,
-                    "base_url": get_base_url(),
-                }
-
-                email = EmailMultiAlternatives(
-                    subject=f"New access request for {team.name}",
-                    body=render_to_string("documents/emails/access_request_notification.txt", email_context),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[admin_member.user.email],
-                    # Reply-to the requester so an admin's reply reaches them, not our own inbox.
-                    reply_to=[requester_email or "hello@sbomify.com"],
-                )
-                email.attach_alternative(
-                    render_to_string("documents/emails/access_request_notification.html.j2", email_context),
-                    "text/html",
-                )
-                email.send()
-            except Exception as e:
-                logger.error(f"Failed to send access request notification to {admin_member.user.email}: {e}")
-
-    except Exception as e:
-        logger.error(f"Error notifying admins of access request {access_request.id}: {e}")
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -460,7 +410,7 @@ class AccessRequestView(View):
         # Only send notification if NDA is not required (request is complete)
         # If NDA is required, notification will be sent after NDA is signed
         if not requires_nda:
-            _notify_admins_of_access_request(access_request, team, requires_nda=False)
+            notify_admins_of_access_request(access_request, team, requires_nda=False)
             messages.success(request, "Access request submitted. You will be notified when it's approved.")
             return redirect("core:workspace_public", workspace_key=team_key)
 
@@ -748,7 +698,7 @@ class NDASigningView(View):
             # Now that NDA is signed, send notification to admins (request is now complete)
             # Invalidate cache after transaction commits
             transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
-            transaction.on_commit(lambda: _notify_admins_of_access_request(access_request, team, requires_nda=True))
+            transaction.on_commit(lambda: notify_admins_of_access_request(access_request, team, requires_nda=True))
 
             messages.success(
                 request, "NDA signed successfully. Your access request has been submitted and is pending approval."
@@ -1303,44 +1253,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # view ever runs under ``ATOMIC_REQUESTS`` it stays correct.
             transaction.on_commit(lambda: capture_for_request(request, "document:access_approved", team_key=team_key))
 
-            # Send email notification to user
-            try:
-                login_url = reverse("core:keycloak_login")
-                redirect_url = reverse("core:workspace_public", kwargs={"workspace_key": team.key})
-                login_link = f"{get_base_url()}{login_url}?next={quote(redirect_url)}"
-
-                email_context = {
-                    "user": access_request.user,
-                    "team": team,
-                    "base_url": get_base_url(),
-                    "login_link": login_link,
-                }
-
-                # Render templates first to catch template errors
-                try:
-                    plain_message = render_to_string("documents/emails/access_approved.txt", email_context)
-                    html_message = render_to_string("documents/emails/access_approved.html.j2", email_context)
-                except Exception as template_error:
-                    logger.error(
-                        f"Failed to render access approval email templates for "
-                        f"{access_request.user.email}: {template_error}",
-                        exc_info=True,
-                    )
-                    raise
-
-                # Send email
-                approval_email = EmailMultiAlternatives(
-                    subject=f"Access approved for {team.name}",
-                    body=plain_message,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[access_request.user.email],
-                    reply_to=["hello@sbomify.com"],
-                )
-                approval_email.attach_alternative(html_message, "text/html")
-                result = approval_email.send(fail_silently=False)
-                logger.info(f"Access approval email sent to {access_request.user.email}, result: {result}")
-            except Exception as e:
-                logger.error(f"Failed to send access approval email to {access_request.user.email}: {e}", exc_info=True)
+            notify_access_approved(access_request)
 
             messages.success(
                 request,
@@ -1353,27 +1266,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # event only ships if the reject transaction committed.
             transaction.on_commit(lambda: capture_for_request(request, "document:access_denied", team_key=team_key))
 
-            # Send email notification to user
-            try:
-                email_context = {
-                    "user": access_request.user,
-                    "team": team,
-                    "base_url": get_base_url(),
-                }
-
-                rejection_email = EmailMultiAlternatives(
-                    subject=f"Access request update for {team.name}",
-                    body=render_to_string("documents/emails/access_rejected.txt", email_context),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[access_request.user.email],
-                    reply_to=["hello@sbomify.com"],
-                )
-                rejection_email.attach_alternative(
-                    render_to_string("documents/emails/access_rejected.html.j2", email_context), "text/html"
-                )
-                rejection_email.send()
-            except Exception as e:
-                logger.error(f"Failed to send access rejection email to {access_request.user.email}: {e}")
+            notify_access_rejected(access_request)
 
             messages.success(request, "Access request rejected.")
 
@@ -1382,27 +1275,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             cache_key = f"user_teams_invalidate:{access_request.user.id}"
             cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
-            # Send email notification to user
-            try:
-                email_context = {
-                    "user": access_request.user,
-                    "team": team,
-                    "base_url": get_base_url(),
-                }
-
-                revocation_email = EmailMultiAlternatives(
-                    subject=f"Access update for {team.name}",
-                    body=render_to_string("documents/emails/access_revoked.txt", email_context),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[access_request.user.email],
-                    reply_to=["hello@sbomify.com"],
-                )
-                revocation_email.attach_alternative(
-                    render_to_string("documents/emails/access_revoked.html.j2", email_context), "text/html"
-                )
-                revocation_email.send()
-            except Exception as e:
-                logger.error(f"Failed to send access revocation email to {access_request.user.email}: {e}")
+            notify_access_revoked(access_request)
 
             messages.success(request, f"Access revoked for {access_request.user.email}.")
 

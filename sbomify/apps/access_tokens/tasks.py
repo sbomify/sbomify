@@ -104,20 +104,35 @@ def warn_expiring_tokens() -> int:
             # in an email, where there is no page for it to be relative to.
             "base_url": get_base_url(),
         }
-        email = EmailMultiAlternatives(
-            subject=f'Access token "{token.description}" expires in {days_left} day{"" if days_left == 1 else "s"}',
-            body=render_to_string("access_tokens/emails/token_expiry_email.txt", context),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=recipients,
-        )
-        email.attach_alternative(
-            render_to_string("access_tokens/emails/token_expiry_email.html.j2", context), "text/html"
-        )
-        try:
-            email.send()
-            sent += 1
-        except Exception:
-            logger.exception(f"Could not send expiry warning for token {token.id}")
+        subject = f'Access token "{token.description}" expires in {days_left} day{"" if days_left == 1 else "s"}'
+        body = render_to_string("access_tokens/emails/token_expiry_email.txt", context)
+        html = render_to_string("access_tokens/emails/token_expiry_email.html.j2", context)
+
+        # One message per recipient, matching how member notices are sent. A
+        # bot token resolves to every owner in the workspace, and a single
+        # message addressed to all of them would put the owner roster in the
+        # To: header of each copy.
+        delivered = 0
+        for recipient in recipients:
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[recipient],
+            )
+            email.attach_alternative(html, "text/html")
+            try:
+                email.send()
+                delivered += 1
+            except Exception:
+                logger.exception(f"Could not send expiry warning for token {token.id}")
+        sent += delivered
+        if delivered < len(recipients):
+            # Same reasoning as the no-recipient case, and the same all-or-nothing
+            # behaviour the single multi-recipient message used to have: leave the
+            # thresholds unmarked so the next sweep retries. Whoever did receive it
+            # sees it twice, which is noise. Whoever did not would otherwise reach
+            # expiry in silence, which breaks their pipeline.
             continue
 
         # Mark every due threshold, not only the tightest: once the 7-day
