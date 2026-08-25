@@ -222,7 +222,12 @@ VEX_DOCUMENT_BYTES = json.dumps(
 ).encode("utf-8")
 
 
-def _security_result(component_name: str, scanned_at: datetime, finding_count: int | None = None) -> dict[str, Any]:
+def _security_result(
+    component_name: str,
+    scanned_at: datetime,
+    finding_count: int | None = None,
+    exclude_cve: str | None = None,
+) -> dict[str, Any]:
     """Build one provider's ``AssessmentRun.result`` for a component's findings.
 
     Mirrors the schema the OSV plugin emits (``sbomify/apps/plugins/sdk/results.py``):
@@ -236,6 +241,10 @@ def _security_result(component_name: str, scanned_at: datetime, finding_count: i
     same SBOM legitimately knew about fewer of them.
     """
     rows = FINDINGS_BY_COMPONENT[component_name]
+    # Dropped before truncation, not after: the VEX target sits second in the
+    # core library's list, so truncating alone would keep it.
+    if exclude_cve is not None:
+        rows = [row for row in rows if row[0] != exclude_cve]
     if finding_count is not None:
         rows = rows[:finding_count]
     findings = [
@@ -513,8 +522,18 @@ def pied_piper_scanned(
     # These land on their upload dates (194, 96 and 38 days back), well outside
     # the dashboard's 30-day window, so the trends chart is untouched.
     for offset, (component_name, versions) in enumerate(pied_piper_with_sboms["sbom_history"].items()):
-        total = len(FINDINGS_BY_COMPONENT[component_name])
+        findings = FINDINGS_BY_COMPONENT[component_name]
         superseded = versions[:-1]
+        # The VEX target must exist on the newest version only.
+        #
+        # A VEX statement matches by purl, so if every version carries
+        # libwebp@1.2.4 then one statement clears four scan records and the
+        # dry-run preview reads "4 would suppress" — against a file that makes
+        # a single claim. The honest fix is the data, not the narration: the
+        # dependency that introduced it was picked up in the latest release, so
+        # the earlier scans legitimately never saw it.
+        vex_index = next((i for i, f in enumerate(findings) if f[0] == VEX_TARGET_CVE), None)
+        total = len(findings) - (1 if vex_index is not None else 0)
         for index, old_sbom in enumerate(superseded):
             # Oldest carries the most; each release clears one.
             finding_count = max(1, min(total, total + len(superseded) - index - 1))
@@ -531,7 +550,9 @@ def pied_piper_scanned(
                 started_at=scanned_at,
                 completed_at=scanned_at,
                 input_content_digest="0" * 64,
-                result=_security_result(component_name, scanned_at, finding_count),
+                result=_security_result(
+                    component_name, scanned_at, finding_count, exclude_cve=VEX_TARGET_CVE
+                ),
                 result_schema_version="1.0",
             )
             AssessmentRun.objects.filter(pk=run.pk).update(created_at=scanned_at)

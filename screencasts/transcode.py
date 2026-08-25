@@ -21,11 +21,15 @@ lays the audio on afterwards.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 OUTPUT_DIR = Path(__file__).parent / "output"
+
+# Playwright names a recording in progress with a 32-char hex string.
+_PLAYWRIGHT_TEMP = re.compile(r"[0-9a-f]{32}")
 
 CRF = 24
 # Idempotence marker, so a re-run after a partial failure does not re-encode
@@ -78,7 +82,15 @@ def transcode(name: str) -> None:
 
 
 def main() -> None:
-    names = sys.argv[1:] or sorted(p.stem for p in OUTPUT_DIR.glob("*.webm") if "." not in p.stem)
+    # Playwright writes its in-progress recordings as 32-character hex names
+    # and only renames them at save time. Those leftovers have no dot in their
+    # stem either, so the previous filter took them too — a full run spent its
+    # first minutes re-encoding files nothing would ever play.
+    names = sys.argv[1:] or sorted(
+        p.stem
+        for p in OUTPUT_DIR.glob("*.webm")
+        if "." not in p.stem and not _PLAYWRIGHT_TEMP.fullmatch(p.stem)
+    )
     for name in names:
         transcode(name)
 
