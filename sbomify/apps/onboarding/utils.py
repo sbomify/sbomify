@@ -57,7 +57,12 @@ def html_to_plain_text(html_content: str) -> str:
     # Decorative marks are flagged aria-hidden precisely so a non-visual reader
     # does not get them, and a plain-text body is exactly that reader.
     html_content = re.sub(
-        r"<(\w+)[^>]*aria-hidden=[\"']true[\"'][^>]*>.*?</\1>", "", html_content, flags=re.DOTALL | re.IGNORECASE
+        # [^<]* rather than .*?: the body cannot reach past the element's own
+        # closing tag, so a same-name tag nested inside cannot be spanned.
+        r"<(\w+)[^>]*aria-hidden=[\"']true[\"'][^>]*>[^<]*</\1>",
+        "",
+        html_content,
+        flags=re.IGNORECASE,
     )
 
     # Convert common HTML elements to plain text equivalents

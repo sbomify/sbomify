@@ -43,10 +43,14 @@ def _rendered_title(message: EmailMessage) -> str | None:
 
 
 def _reader_visible_text(message: EmailMessage) -> str:
-    """Everything a recipient reads: subject, plain body, and HTML minus its CSS."""
+    """Everything a recipient reads: subject, plain body, and HTML minus its CSS.
+
+    Unescaped at the end, so a dash written as ``&mdash;`` counts the same as
+    one written literally.
+    """
     parts = [message.subject, message.body]
     parts += [STYLE_RE.sub("", body) for body, mimetype in message.alternatives if mimetype == "text/html"]
-    return "\n".join(parts)
+    return html.unescape("\n".join(parts))
 
 
 @pytest.fixture(scope="module")
