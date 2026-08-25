@@ -92,25 +92,23 @@ beats:
   # line before starting, so putting the rationale in its own beat is what
   # holds the click back.
   #
-  # Getting the arithmetic of this card right took three attempts, so:
+  # The card reads "1 would suppress", and the fix for that was the seed rather
+  # than this line.
   #
-  # The VEX holds exactly ONE statement — CVE-2023-4863 / libwebp@1.2.4 ->
-  # not_affected — and the card shows it on the line beneath the figures. The
-  # "4 would suppress" is not four problems: it is that one finding matched on
-  # each of the component's four scanned versions. "16 findings checked" is
-  # four findings across those four versions.
+  # The VEX holds exactly one statement (CVE-2023-4863 / libwebp@1.2.4 ->
+  # not_affected). When the superseded SBOM versions started being scanned they
+  # each carried that finding too, so one statement matched four records and
+  # the card read "4 would suppress" — against a file making a single claim.
+  # Rewriting the line to explain the 4 only made it read as four separate
+  # problems solved. The seed now keeps the VEX target on the newest version
+  # only, which is also the honest story: that dependency arrived in the latest
+  # release.
   #
-  # So "one finding would be suppressed" contradicted the 4 on screen, and
-  # "four of them cleared by a single statement" was worse, because it read as
-  # four separate problems solved. The honest sentence names one statement and
-  # four versions.
-  #
-  # Re-check whenever the seed's version count or finding list changes.
+  # Re-check this figure whenever the seed's findings change.
   vuln_dry_run:
     text: >-
       And before anything is stored, sbomify shows you what it would change.
-      One statement, clearing the same finding on all four versions that carry
-      it. Nothing has been written yet.
+      [long-pause] One finding would be suppressed. Nothing has been written yet.
 
   # Plays over the Apply click and the reload, where it belongs: by then the
   # viewer has seen the preview and the reason for it is the payoff.
