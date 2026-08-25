@@ -81,6 +81,26 @@ _last_reported: dict[str, float] = {}
 _last_reported_lock = threading.Lock()
 
 
+def _fault_name(record: logging.LogRecord) -> str:
+    """What actually went wrong, as far as the record says.
+
+    django-redis logs the same fixed line — "Exception ignored" — for every
+    failure it swallows, so the message alone cannot tell a refused connection
+    from a read-only replica after a failover or an "OOM command not allowed".
+    Without this, all of them share one throttling window and a genuinely new
+    fault arriving during an ongoing outage is dropped rather than reported.
+
+    It raises ``ConnectionInterrupted``, whose ``__cause__`` is the redis error
+    and whose ``__str__`` is "Redis {cause type}: {cause message}" — so the
+    cause is the informative half and the wrapper is the same every time.
+    """
+    exc_info = record.exc_info
+    if not exc_info or exc_info[1] is None:
+        return ""
+    exc = exc_info[1]
+    return type(exc.__cause__ or exc).__name__
+
+
 def _self_healing_notice_key(record: logging.LogRecord) -> str | None:
     """The throttling key for a repeating self-healing notice, else ``None``."""
     for logger_prefix, needle in _SELF_HEALING_NOTICES:
@@ -88,7 +108,11 @@ def _self_healing_notice_key(record: logging.LogRecord) -> str | None:
             # Keyed on the notice, not on the logger: dramatiq names one logger
             # per queue, so keying on the name would let a six-queue worker
             # through six times per window for the one outage they all share.
-            return f"{logger_prefix}:{needle}"
+            #
+            # The fault is in the key so that one *kind* of failure is throttled
+            # rather than the log line, which is what makes this a volume
+            # reduction instead of a filter.
+            return f"{logger_prefix}:{needle}:{_fault_name(record)}"
     return None
 
 

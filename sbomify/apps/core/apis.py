@@ -3031,17 +3031,29 @@ def _is_release_version_conflict(exc: IntegrityError) -> bool:
     driver-dependent, and getting this wrong would silently turn a real version
     conflict into an idempotent 200.
 
-    Falling through to the message needs both forms, because the drivers do not
-    agree on what a uniqueness violation mentions. Postgres names the
+    Falling through to the message needs both drivers' forms, because they do
+    not agree on what a uniqueness violation mentions. Postgres names the
     constraint; SQLite names the columns —
 
         UNIQUE constraint failed: core_releases.product_id, core_releases.version
 
     — so matching the constraint name alone missed it there, and a duplicate
-    version was reported to the caller as "Internal server error". The column
-    pair is what ``_is_release_name_conflict`` already matches on for the same
-    reason, and the two cannot be confused: one message says ``version`` and the
-    other says ``name``.
+    version was reported to the caller as "Internal server error".
+
+    Both fallbacks match the column pair *structurally*, and that is the whole
+    care of this function. Postgres puts the offending **values** in the message
+    too:
+
+        DETAIL:  Key (product_id, name)=(abc123def456, Version 1.0) already exists.
+
+    so a bare ``"version" in message`` reads a release *named* "Version 1.0" as a
+    version collision. That is an ordinary thing to call a release, this branch
+    runs before the name check, and the caller would get "A release with this
+    version already exists" — naming the wrong field, and losing the idempotent
+    200 that keeps two CI jobs tagging the same release from failing each
+    other's build. The value can never contain ``core_releases.product_id`` and
+    ``core_releases.version`` (SQLite writes no values at all) nor the
+    ``Key (product_id, version)=`` that precedes the values on Postgres.
     """
     cause = exc.__cause__
     if cause is not None:
@@ -3052,8 +3064,15 @@ def _is_release_version_conflict(exc: IntegrityError) -> bool:
     msg = str(exc).lower()
     if _RELEASE_VERSION_CONSTRAINT in msg:
         return True
+
     is_unique = "unique" in msg or getattr(cause, "pgcode", None) == "23505"
-    return is_unique and "product_id" in msg and "version" in msg
+    if not is_unique:
+        return False
+
+    table = Release._meta.db_table.lower()
+    names_the_columns = f"{table}.product_id" in msg and f"{table}.version" in msg
+    details_the_columns = "key (product_id, version)=" in msg
+    return names_the_columns or details_the_columns
 
 
 @router.post(

@@ -125,16 +125,49 @@ def test_db_resilience_does_not_overwrite_what_the_environment_set() -> None:
     The TLS options are set on the same dict a few lines earlier, so blindly
     assigning would have been a way to drop ``sslmode`` on the floor.
     """
-    config = apply_db_resilience({"OPTIONS": {"sslmode": "verify-full", "connect_timeout": 3}})
+    config = apply_db_resilience(
+        {
+            "ENGINE": "django.db.backends.postgresql",
+            "OPTIONS": {"sslmode": "verify-full", "connect_timeout": 3},
+        }
+    )
     assert config["OPTIONS"]["sslmode"] == "verify-full"
     assert config["OPTIONS"]["connect_timeout"] == 3
 
 
-class _Record(logging.LogRecord):
-    """A log record with a name and message, which is all the hook reads."""
+@pytest.mark.parametrize(
+    "engine",
+    ["django.db.backends.sqlite3", "django.db.backends.mysql", "django.db.backends.oracle"],
+)
+def test_libpq_options_are_not_forced_on_other_backends(engine: str) -> None:
+    """These options are libpq keywords, passed to the driver verbatim.
 
-    def __init__(self, name: str, message: str) -> None:
-        super().__init__(name, logging.CRITICAL, __file__, 1, message, None, None)
+    ``DATABASE_URL`` is parsed by dj_database_url, which resolves ``sqlite://``
+    and ``mysql://`` as happily as ``postgres://``, so the engine cannot be
+    assumed. sqlite3 answers ``connect_timeout`` with ``TypeError: invalid
+    keyword argument`` — and on the first query rather than at startup, so it
+    would look like a runtime fault rather than a misconfiguration.
+
+    The two Django-level settings still apply: they are backend-agnostic.
+    """
+    config = apply_db_resilience({"ENGINE": engine})
+
+    assert config.get("OPTIONS", {}) == {}
+    assert config["CONN_HEALTH_CHECKS"] is True
+    assert "CONN_MAX_AGE" in config
+
+
+class _Record(logging.LogRecord):
+    """A log record with a name, a message and optionally the exception.
+
+    ``exc_info`` matters for the django-redis case: that logger writes one fixed
+    line for every failure it swallows, so the exception is the only thing that
+    says which failure it was.
+    """
+
+    def __init__(self, name: str, message: str, exc: BaseException | None = None) -> None:
+        exc_info = (type(exc), exc, None) if exc is not None else None
+        super().__init__(name, logging.CRITICAL, __file__, 1, message, None, exc_info)
 
 
 # The line dramatiq's reconnect loop emits, and the two queues a worker runs it
@@ -185,6 +218,33 @@ def test_the_cache_reports_a_swallowed_outage_once_not_once_per_request() -> Non
 
     assert throttle_self_healing_notices({"event": 1}, {"log_record": swallowed}) is not None
     assert throttle_self_healing_notices({"event": 2}, {"log_record": swallowed}) is None
+
+
+def test_a_different_redis_fault_is_reported_even_mid_outage() -> None:
+    """Throttling one failure must not hide a second, different one.
+
+    django-redis logs the same fixed line whatever went wrong, so keying on the
+    message alone puts a refused connection, a read-only replica after a
+    failover and an "OOM command not allowed" into one five-minute bucket. The
+    second and third would then be dropped for as long as the first kept
+    happening — which is exactly when a new fault most needs reporting.
+    """
+    from redis.exceptions import ConnectionError as RedisConnError
+    from redis.exceptions import ResponseError
+
+    def swallowed(cause: BaseException) -> _Record:
+        # django-redis raises ConnectionInterrupted *from* the redis error, so
+        # the cause is the informative half; the wrapper is identical every time.
+        wrapper = Exception("ConnectionInterrupted")
+        wrapper.__cause__ = cause
+        return _Record("sbomify.cache", "Exception ignored", wrapper)
+
+    refused = swallowed(RedisConnError("Error 111 connecting to redis"))
+    assert throttle_self_healing_notices({"event": 1}, {"log_record": refused}) is not None
+    assert throttle_self_healing_notices({"event": 2}, {"log_record": refused}) is None
+
+    oom = swallowed(ResponseError("OOM command not allowed when used memory > 'maxmemory'"))
+    assert throttle_self_healing_notices({"event": 3}, {"log_record": oom}) is not None
 
 
 def test_the_throttle_alias_failing_is_never_throttled() -> None:

@@ -453,6 +453,18 @@ def apply_db_resilience(config: dict[str, Any]) -> dict[str, Any]:
     # view a socket that died during a restart or a failover.
     config["CONN_HEALTH_CHECKS"] = True
 
+    # Everything below is libpq, and reaches psycopg as connection keywords
+    # verbatim — sqlite3 answers one with
+    # ``TypeError: 'connect_timeout' is an invalid keyword argument``, on the
+    # first query rather than at startup. ``DATABASE_URL`` is parsed by
+    # dj_database_url, which resolves sqlite:// and mysql:// just as happily as
+    # postgres://, so the engine has to be checked rather than assumed.
+    #
+    # The two settings above are Django's own and apply to any backend, so they
+    # stay outside this gate.
+    if not str(config.get("ENGINE", "")).endswith(("postgresql", "postgresql_psycopg2", "postgis")):
+        return config
+
     # TCP keepalives, so a connection killed on the far side (a restart, a
     # failover, an idle connection dropped by something in between) is detected
     # within a minute — 30s idle, then three probes 10s apart — rather than
