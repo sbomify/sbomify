@@ -33,6 +33,7 @@ from typing import Any, Callable
 
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.db.models import QuerySet
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page
 
@@ -371,11 +372,58 @@ def _seed_published_advisory(team: Any, product: Any) -> None:
         ],
     )
 
-    AdvisoryEvent.objects.create(
-        advisory=advisory,
-        event_type=AdvisoryEvent.EventType.PUBLISHED,
-        payload={"tracking_id": advisory.tracking_id},
-    )
+    # A disclosure has a history, and the chapter's line calls the timeline
+    # "the part auditors care about — who knew what, and when". One PUBLISHED
+    # row is not that: it renders as a single event under a heading promising a
+    # sequence. These are the beats a real advisory goes through, spread over
+    # the fortnight before publication so the dates read as a story rather than
+    # a batch insert.
+    #
+    # `created_at` is auto_now_add, so each row is stamped afterwards; the model
+    # orders by it, and without that they would all land on today.
+    timeline = [
+        (
+            13,
+            AdvisoryEvent.EventType.COMMENT,
+            "Reported by a customer during a penetration test. Reproduced against 2.4.0.",
+        ),
+        (
+            11,
+            AdvisoryEvent.EventType.STATUS_CHANGE,
+            "Confirmed. Archive entries with parent-directory segments escape the extraction root.",
+        ),
+        (
+            8,
+            AdvisoryEvent.EventType.UPDATE,
+            "Fix in review: entry paths are normalised and validated before any write.",
+        ),
+        (
+            4,
+            AdvisoryEvent.EventType.UPDATE,
+            "Fix shipped in 2.4.0. Verified against the original reproduction.",
+        ),
+        (
+            1,
+            AdvisoryEvent.EventType.PUBLISHED,
+            "Published to the trust centre.",
+        ),
+    ]
+    for days_ago, event_type, body in timeline:
+        published = event_type == AdvisoryEvent.EventType.PUBLISHED
+        event = AdvisoryEvent.objects.create(
+            advisory=advisory,
+            event_type=event_type,
+            body=body,
+            payload={"tracking_id": advisory.tracking_id} if published else {},
+        )
+        # Stamped through a plain queryset, not the model's manager.
+        #
+        # AdvisoryEvent uses AppendOnlyQuerySet, which refuses `update()` —
+        # correctly, because an audit trail nobody can edit is the entire point
+        # of the model. A seed seeding *history* is the one legitimate
+        # exception, so the guard is stepped around here explicitly rather than
+        # relaxed on the model where production writes would lose it too.
+        QuerySet(model=AdvisoryEvent).filter(pk=event.pk).update(created_at=now - timedelta(days=days_ago))
 
 
 @pytest.fixture
@@ -550,9 +598,7 @@ def pied_piper_scanned(
                 started_at=scanned_at,
                 completed_at=scanned_at,
                 input_content_digest="0" * 64,
-                result=_security_result(
-                    component_name, scanned_at, finding_count, exclude_cve=VEX_TARGET_CVE
-                ),
+                result=_security_result(component_name, scanned_at, finding_count, exclude_cve=VEX_TARGET_CVE),
                 result_schema_version="1.0",
             )
             AssessmentRun.objects.filter(pk=run.pk).update(created_at=scanned_at)

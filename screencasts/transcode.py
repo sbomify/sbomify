@@ -87,9 +87,7 @@ def main() -> None:
     # stem either, so the previous filter took them too — a full run spent its
     # first minutes re-encoding files nothing would ever play.
     names = sys.argv[1:] or sorted(
-        p.stem
-        for p in OUTPUT_DIR.glob("*.webm")
-        if "." not in p.stem and not _PLAYWRIGHT_TEMP.fullmatch(p.stem)
+        p.stem for p in OUTPUT_DIR.glob("*.webm") if "." not in p.stem and not _PLAYWRIGHT_TEMP.fullmatch(p.stem)
     )
     for name in names:
         transcode(name)
