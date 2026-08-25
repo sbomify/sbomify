@@ -49,9 +49,9 @@ def should_warn_missing_dsn(dsn: str | None, *, debug: bool) -> bool:
 
 # How long one repeating outage notice stands for. A broker that is down keeps
 # producing the same line every second from every consumer thread, so the first
-# one is the alert and the rest are the same alert again — 21,512 of them in a
-# single production window. Five minutes is short enough that a fresh outage
-# after a recovery is still reported promptly.
+# one is the alert and the rest are the same alert again, in the tens of
+# thousands over a long enough outage. Five minutes is short enough that a
+# fresh outage after a recovery is still reported promptly.
 _OUTAGE_REPORT_INTERVAL_SECONDS = 300
 
 # Logs that a healthy system produces while it recovers on its own. Each entry

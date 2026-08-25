@@ -10,9 +10,9 @@ which the endpoint's ``except Exception`` turned into a 400 reading "Internal
 server error". Two separate wrongs in one call: the comparison should not have
 raised, and a date the caller got wrong should say so rather than pointing at us.
 
-Both were seen in production within a minute of each other, from what looks like
-someone importing historical releases: eighteen rejections whose message never
-reached them, then the crash when they tried dropping the timezone.
+The two arrive together: a caller backdating releases gets rejections whose
+reason never reaches them, and gets the crash the moment they try it without a
+timezone.
 """
 
 from __future__ import annotations
@@ -126,9 +126,9 @@ def test_a_rejected_date_says_what_is_wrong_with_it(
 ):
     """The other half. "Internal server error" is not a thing to act on.
 
-    This is the case with 18 occurrences in one minute: a caller backdating a
-    release past its default creation time, retrying, and being told nothing
-    each time. It also stops a plain 400 from being filed as a fault.
+    This is the repeating case: a caller backdating a release past its default
+    creation time, retrying, and being told nothing each time. It also stops a
+    plain 400 from being filed as a fault.
     """
     response = _post_release(
         api_client,

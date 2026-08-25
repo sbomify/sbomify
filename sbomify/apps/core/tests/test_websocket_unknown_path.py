@@ -3,8 +3,9 @@
 Channels raises ``ValueError: No route found for path 'wsproxy'`` when nothing
 in ``websocket_urlpatterns`` matches, and that exception escapes the whole ASGI
 application: uvicorn logs "Exception in ASGI application" with a stack, and the
-error tracker files it as a fault of ours. Internet scanners probing paths like
-``/wsproxy`` were enough to produce it in production.
+error tracker files it as a fault of ours. Automated scanners probe paths like
+``/wsproxy`` against anything reachable, so nothing more than that is needed to
+raise it.
 
 Driven through the real ``sbomify.asgi`` application rather than the router in
 isolation, because the routing table and the consumer only add up to a fix when
@@ -56,9 +57,9 @@ async def _connect(path: str) -> list[dict]:
 async def test_an_unrouted_websocket_path_is_refused_rather_than_raising(path) -> None:
     """The defect: this used to raise ``ValueError`` out of the application.
 
-    ``/wsproxy`` is the one seen in production; the rest are near misses of the
-    single real route, which is where a routing change is most likely to open
-    the hole again.
+    ``/wsproxy`` is a path automated scanners commonly probe; the rest are near
+    misses of the single real route, which is where a routing change is most
+    likely to open the hole again.
     """
     from sbomify.apps.core.consumers import WS_CLOSE_POLICY_VIOLATION
 

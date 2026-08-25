@@ -23,7 +23,7 @@ from sbomify.apps.plugins.orchestrator import PluginOrchestrator, PluginOrchestr
 # to each one directly instead.
 _LOGGERS = ("sbomify.apps.plugins.tasks", "sbomify.task_utils")
 
-MISSING_SBOM_ID = "K2pSueXrDCzd"
+MISSING_SBOM_ID = "TESTsbom0001"
 
 
 class _Collector(logging.Handler):

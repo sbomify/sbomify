@@ -12,7 +12,8 @@ on.
 * A WebSocket to a path this app does not serve raised out of the ASGI
   application, so scanners produced tracebacks that read as our fault.
 * Dramatiq's consumer reconnects once a second while the broker is down, and
-  logs at CRITICAL each time. One outage arrived as 21,512 alerts.
+  logs at CRITICAL each time, so a single outage arrives as tens of thousands
+  of alerts.
 
 Each is pinned here because none of them is visible from ordinary use: they only
 show up when Redis is already having a bad day, which is exactly when nobody
@@ -186,7 +187,7 @@ def _forget_throttled_notices():
 
 
 def test_one_outage_reports_once_however_many_queues_notice_it() -> None:
-    """The symptom: 21,512 events for a single Redis window.
+    """The symptom: tens of thousands of events for one Redis outage.
 
     Dramatiq restarts its consumer once a second for as long as the broker is
     unreachable, and logs at CRITICAL each time — one logger per queue, so a

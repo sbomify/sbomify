@@ -239,8 +239,9 @@ class UnknownPathConsumer(AsyncWebsocketConsumer):
     Without a catch-all route, Channels raises ``ValueError: No route found for
     path`` and the exception escapes the ASGI application: uvicorn logs a stack
     and the error tracker records a fault, for what is only ever a client
-    asking for something that does not exist. Scanners probing paths such as
-    ``/wsproxy`` produced it in production.
+    asking for something that does not exist. Automated scanners probe paths
+    such as ``/wsproxy`` on anything reachable, so it fires without anyone
+    having done something wrong.
 
     Closes before accepting, unlike ``WorkspaceConsumer._reject``. There the
     handshake is accepted first so the close code can reach the client's
