@@ -10,6 +10,7 @@ if typing.TYPE_CHECKING:
     from sbomify.apps.core.models import User
 
 from allauth.socialaccount.models import SocialAccount
+from django.contrib import messages
 from django.contrib.auth.signals import user_logged_in
 from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
@@ -74,6 +75,16 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
         accepted.append(
             {"team_key": invitation.team.key, "invitation_id": invitation.id, "invitation_token": str(invitation.token)}
         )
+
+        if request is not None:
+            # Accepting deletes the invitation, so the pending-invitation
+            # notification has nothing left to show and the user is put in a
+            # workspace without being told. The only other place that says so
+            # is the accept-invite view, which a user who signed up directly
+            # never reaches.
+            # fail_silently: a login that reaches here without the message
+            # middleware (a programmatic force_login, say) must still complete.
+            messages.info(request, f"You have joined {invitation.team.name} as {invitation.role}.", fail_silently=True)
 
         if request is not None:
             # Capture into locals BEFORE invitation.delete() below; the
