@@ -4,7 +4,6 @@ import uuid
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinLengthValidator, RegexValidator
@@ -160,7 +159,7 @@ class Team(models.Model):
         ENTERPRISE = "enterprise", "Enterprise"
 
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_teams"
+        db_table = "workspaces_workspaces"
         indexes = [
             models.Index(fields=["key"]),
             models.Index(fields=["slug"]),
@@ -502,7 +501,7 @@ class Team(models.Model):
 
 class Member(models.Model):
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_members"
+        db_table = "workspaces_members"
         unique_together = ("user", "team")
         indexes = [
             models.Index(fields=["team", "role"], name="teams_member_team_role_idx"),
@@ -521,9 +520,9 @@ class Member(models.Model):
         ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
     role = models.CharField(max_length=255, choices=settings.TEAMS_SUPPORTED_ROLES)
-    is_default_team = models.BooleanField(default=False)
+    is_default_team = models.BooleanField(default=False, db_column="is_default_workspace")
     joined_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
@@ -536,7 +535,7 @@ def calculate_invitation_expiry() -> Any:
 
 class Invitation(models.Model):
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_invitations"
+        db_table = "workspaces_invitations"
         unique_together = ("team", "email")
         indexes = [
             models.Index(fields=["email"]),
@@ -557,7 +556,7 @@ class Invitation(models.Model):
             ),
         ]
 
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
     token = models.UUIDField(default=uuid.uuid4, unique=True)
     email = models.EmailField()
     # Invitable roles only — ``bot`` is reserved for synthetic OIDC
@@ -615,7 +614,7 @@ class ContactProfile(models.Model):
     """
 
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_contact_profiles"
+        db_table = "workspaces_contact_profiles"
         ordering = ["name"]
         constraints = [
             models.UniqueConstraint(
@@ -632,7 +631,7 @@ class ContactProfile(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="contact_profiles")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="contact_profiles", db_column="workspace_id")
     name = models.CharField(max_length=255)
     is_default = models.BooleanField(default=False)
     is_component_private = models.BooleanField(
@@ -674,7 +673,7 @@ class ContactEntity(models.Model):
     """
 
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_contact_entities"
+        db_table = "workspaces_contact_entities"
         unique_together = ("profile", "name")
         ordering = ["name"]
 
@@ -768,7 +767,7 @@ class ContactProfileContact(models.Model):
     """
 
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_contact_profile_contacts"
+        db_table = "workspaces_contact_profile_contacts"
         unique_together = ("entity", "name", "email")
         ordering = ["order", "name"]
         indexes = [
@@ -860,7 +859,7 @@ class Supplier(models.Model):
     """
 
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_suppliers"
+        db_table = "workspaces_suppliers"
         ordering = ["name"]
         constraints = [
             # On Lower(name), not the raw column. clean() rejects a case variant
@@ -875,7 +874,7 @@ class Supplier(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="suppliers")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="suppliers", db_column="workspace_id")
     name = models.CharField(max_length=255, help_text="The vendor organization's name")
     contact_name = models.CharField(
         max_length=255,

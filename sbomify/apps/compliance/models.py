@@ -116,7 +116,9 @@ class OSCALAssessmentResult(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
     catalog = models.ForeignKey(OSCALCatalog, on_delete=models.PROTECT, related_name="assessment_results")
-    team = models.ForeignKey("teams.Team", on_delete=models.CASCADE, related_name="oscal_assessment_results")
+    team = models.ForeignKey(
+        "teams.Team", on_delete=models.CASCADE, related_name="oscal_assessment_results", db_column="workspace_id"
+    )
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
     assessor = models.CharField(max_length=255, blank=True, default="")
@@ -238,7 +240,9 @@ class CRAAssessment(models.Model):
         db_table = "compliance_cra_assessments"
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
-    team = models.ForeignKey("teams.Team", on_delete=models.CASCADE, related_name="cra_assessments")
+    team = models.ForeignKey(
+        "teams.Team", on_delete=models.CASCADE, related_name="cra_assessments", db_column="workspace_id"
+    )
     product = models.OneToOneField("core.Product", on_delete=models.CASCADE, related_name="cra_assessment")
     oscal_assessment_result = models.OneToOneField(
         OSCALAssessmentResult, on_delete=models.CASCADE, related_name="cra_assessment"
@@ -593,7 +597,9 @@ class CRAScopeScreening(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
     product = models.OneToOneField("core.Product", on_delete=models.CASCADE, related_name="cra_scope_screening")
-    team = models.ForeignKey("teams.Team", on_delete=models.CASCADE, related_name="cra_scope_screenings")
+    team = models.ForeignKey(
+        "teams.Team", on_delete=models.CASCADE, related_name="cra_scope_screenings", db_column="workspace_id"
+    )
 
     # FAQ 1.1/1.3 — CRA Art 3(1-2): data connection capability
     has_data_connection = models.BooleanField(
