@@ -17,6 +17,21 @@
         </c-slot>
     {% endif %}
     {# Download Buttons - Desktop; the mobile card below repeats them #}
+    {% if sibling_releases %}
+        <div class="flex items-center gap-2"
+             title="Compare this release with another">
+            <i class="fas fa-code-compare text-text-muted text-sm"
+               aria-hidden="true"></i>
+            <select class="tw-form-select text-sm"
+                    aria-label="Compare this release with another release"
+                    onchange="if (this.value) window.location.href = this.value">
+                <option value="">Compare with…</option>
+                {% for sibling in sibling_releases %}
+                    <option value="{% url 'core:release_diff' release.product.id release.id sibling.id %}">{{ sibling.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    {% endif %}
     {% if release.has_sboms or release.has_vex or release.has_cbom %}
         <div class="hidden lg:flex gap-2">
             {% if release.has_sboms %}

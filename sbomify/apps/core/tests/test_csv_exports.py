@@ -276,3 +276,110 @@ class TestEndpoints:
             assert "frontend" not in body
         else:
             assert response.status_code in (401, 403)
+
+
+@pytest.mark.django_db
+class TestNoticeReport:
+    def test_text_notice_groups_and_flags_unknown(self, inventory, stub_sbom_bytes):
+        team, product, docs = inventory
+        result = csv_exports.export_notice_text(team, product=product)
+        assert result.ok
+        body = result.value
+        assert "Third-Party Notices" in body
+        assert "requests 2.32.3" in body
+        assert "Apache-2.0" in body
+        # the =cmd|calc package has a licence (MIT); nothing lands in unknown here
+        assert "left-pad 1.3.0" in body
+
+    def test_packages_without_licence_land_in_unknown_section(self, inventory, monkeypatch):
+        team, _, docs = inventory
+        bare = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "components": [{"type": "library", "name": "mystery", "version": "0.1"}],
+        }
+
+        def fake(sbom_id):
+            return SBOM.objects.get(id=sbom_id), json.dumps(bare).encode()
+
+        monkeypatch.setattr(csv_exports, "get_sbom_data_bytes", fake)
+        result = csv_exports.export_notice_text(team)
+        assert "Components without license data" in result.value
+        assert "mystery 0.1" in result.value
+
+    def test_html_notice_escapes_supplier_controlled_strings(self, inventory, monkeypatch):
+        team, _, docs = inventory
+        hostile = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "components": [
+                {
+                    "type": "library",
+                    "name": "<script>alert(1)</script>",
+                    "version": "1.0",
+                    "licenses": [{"expression": "MIT"}],
+                    "copyright": "(c) <b>Evil</b>",
+                }
+            ],
+        }
+
+        def fake(sbom_id):
+            return SBOM.objects.get(id=sbom_id), json.dumps(hostile).encode()
+
+        monkeypatch.setattr(csv_exports, "get_sbom_data_bytes", fake)
+        result = csv_exports.export_notice_html(team)
+        assert result.ok
+        assert "<script>alert(1)</script>" not in result.value
+        assert "&lt;script&gt;" in result.value
+
+    def test_release_aggregate_covers_pinned_sboms(self, inventory, stub_sbom_bytes):
+        team, product, docs = inventory
+        from sbomify.apps.core.models import ReleaseArtifact
+
+        release = Release.objects.create(product=product, name="v1")
+        for sbom in SBOM.objects.filter(component__team=team):
+            ReleaseArtifact.objects.create(release=release, sbom=sbom)
+        result = csv_exports.export_notice_text(team, release=release)
+        assert "requests 2.32.3" in result.value
+        assert "left-pad 1.3.0" in result.value
+
+    def test_notice_endpoint_serves_both_formats(self, authenticated_api_client, inventory, stub_sbom_bytes):
+        client, token = authenticated_api_client
+        from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+
+        text = client.get("/api/v1/exports/notice?format=text", **get_api_headers(token))
+        assert text.status_code == 200
+        assert text["Content-Type"].startswith("text/plain")
+        html = client.get("/api/v1/exports/notice?format=html", **get_api_headers(token))
+        assert html.status_code == 200
+        assert html["Content-Type"].startswith("text/html")
+
+
+@pytest.mark.django_db
+class TestUnreadableSurfacing:
+    def test_licenses_csv_counts_unreadable_artifacts(self, inventory, monkeypatch):
+        team, _, _ = inventory
+
+        def broken(sbom_id):
+            raise csv_exports.SBOMDataError("gone")
+
+        monkeypatch.setattr(csv_exports, "get_sbom_data_bytes", broken)
+        result = csv_exports.export_licenses_csv(team)
+        assert "(unreadable artifact)" in result.value
+
+    def test_notice_lists_unreadable_artifacts(self, inventory, monkeypatch):
+        team, _, _ = inventory
+
+        def broken(sbom_id):
+            raise csv_exports.SBOMDataError("gone")
+
+        monkeypatch.setattr(csv_exports, "get_sbom_data_bytes", broken)
+        result = csv_exports.export_notice_text(team)
+        assert "Artifacts that could not be read" in result.value
+
+    def test_unknown_notice_format_is_rejected(self, authenticated_api_client, inventory, stub_sbom_bytes):
+        client, token = authenticated_api_client
+        from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+
+        response = client.get("/api/v1/exports/notice?format=pdf", **get_api_headers(token))
+        assert response.status_code == 400
