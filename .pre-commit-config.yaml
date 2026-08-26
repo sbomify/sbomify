@@ -41,6 +41,13 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: workspace-glossary
+        name: New code uses the workspace glossary
+        entry: uv run python bin/check_workspace_glossary.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: markdownlint
         name: markdownlint
         entry: bun x markdownlint --fix

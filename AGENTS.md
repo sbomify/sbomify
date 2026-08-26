@@ -443,6 +443,61 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 - "sbomify" is always lowercase
 - "Workspace" in UI maps to "Team" in models (legacy naming)
 
+### Glossary: one name per concept
+
+Where a concept has two names, this table says which one to reach for. It is
+the target, not a description of the tree: `team` still appears in the models
+and the database, and retiring it is a separate, staged job. What the table
+does settle is which word new code and new copy use.
+
+| Concept | Use | Notes |
+|---|---|---|
+| Tenant | workspace | `team` survives in models and storage, not in new code |
+| Tenant PK token | `workspace_key` | |
+| Person in a workspace | member | |
+| Roles | owner, admin, member, guest, bot | see the authz section |
+| Mixed BOM or document unit | **artifact** in UI, SBOM row + `bom_type` in code | the `/api/v1/sboms` prefix is frozen |
+| One specific BOM kind | SBOM, CBOM, HBOM, AI BOM, VEX | only when the type is the point |
+| The advisory itself, and security counts | **vulnerability** | the user-facing word |
+| One plugin-run result row | **finding** | the SDK and storage word, not user copy |
+| A compliance check that did not pass | **issue** | |
+| Any plugin run | **assessment** | the umbrella, per ADR-003 |
+| A security assessment, as a verb | **scan** | "scanned 5 minutes ago" |
+| The public branded surface | Trust Center in UI, public workspace in code | a deliberate pair |
+| A release's artifact set at a version | collection version | the sanctioned TEA term inside core |
+| Party roles on a component | supplier, manufacturer | distinct CycloneDX roles, never merged |
+| Auth verbs | Sign in, Sign out | sentence case, including the Keycloak theme |
+
+Three of these are worth saying twice, because they collide on single screens
+today: an assessment accordion renders "70 Vulnerabilities 70 findings", and a
+compliance run renders "4 Issues 7 findings". **vulnerability** is what a user
+reads, **finding** is what the SDK stores, and **issue** is a check that failed.
+
+### TEA vocabulary is the spec's, not ours
+
+The `tea` app implements the CycloneDX Transparency Exchange API, so its nouns
+are fixed by the spec. They translate at the mapper and must not spread into
+core or into UI copy.
+
+| TEA noun | sbomify |
+|---|---|
+| product | `Product` |
+| component | `Component` |
+| productRelease | `core.Release`, which belongs to a Product |
+| componentRelease | `core.ComponentRelease`, unique on component + version + qualifiers |
+| collection | the artifact set at a version, served for both release kinds |
+| artifact | one SBOM-table row, or a Document |
+| TEI | a URN, resolved by `tea_tei_mapper` |
+
+One sanctioned exception: `collection_version`, `collection_updated_at`,
+`CollectionUpdateReason` and `bump_collection_version` live on both
+`core.Release` and `core.ComponentRelease`. Consumers read that number, so
+renaming it internally would only re-introduce a translation.
+
+`Release` and `ComponentRelease` are two different models, not one mapped two
+ways. There is no stored edge between them: the join runs through SBOM, and
+`Release.component_releases()` names it.
+
 ### Copy (anything a user reads)
 
 Covers UI strings, labels, hints, placeholders, empty states, toasts, error
