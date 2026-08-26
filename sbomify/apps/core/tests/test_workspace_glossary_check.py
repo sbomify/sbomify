@@ -61,3 +61,17 @@ class TestAddedOffences:
         )
 
         assert {o[1] for o in glossary.added_offences(diff)} == {"team_key", "user_teams"}
+
+    def test_a_line_whose_content_starts_with_plus_plus_is_still_scanned(self):
+        """Only "+++ " with the space is a diff header. C and JS lines are not."""
+        diff = _diff("sbomify/apps/core/x.c", "++team_key;")
+
+        assert [o[1] for o in glossary.added_offences(diff)] == ["team_key"]
+
+    def test_the_wrapper_script_is_not_exempt(self):
+        """It names no retired word, so exempting it would only blind the gate."""
+        assert not glossary.is_exempt("bin/check_workspace_glossary.py")
+
+    def test_the_module_that_defines_them_is_exempt(self):
+        """Otherwise the dictionary keys would flag themselves."""
+        assert glossary.is_exempt("sbomify/apps/core/glossary.py")

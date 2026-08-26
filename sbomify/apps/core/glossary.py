@@ -30,7 +30,10 @@ RETIRED: dict[str, str] = {
 #: The teams app owns the model and may say team as much as it likes.
 EXEMPT_PREFIXES = ("sbomify/apps/teams/",)
 #: Migrations are frozen history. Tests follow whatever they are testing.
-EXEMPT_PARTS = ("/migrations/", "/tests/", "check_workspace_glossary.py", "core/glossary.py")
+#: core/glossary.py is exempt because it *defines* the retired words; the bin/
+#: wrapper is not, since it names none of them and exempting it would only
+#: blind the gate to its own file.
+EXEMPT_PARTS = ("/migrations/", "/tests/", "core/glossary.py")
 
 _DIFF_HEADER = re.compile(r"^\+\+\+ b/(.+)$")
 
@@ -52,7 +55,10 @@ def added_offences(diff: str) -> list[tuple[str, str, str]]:
         if header:
             path = header.group(1)
             continue
-        if not line.startswith("+") or line.startswith("+++") or not path or is_exempt(path):
+        # "+++ " with the space is the diff header; a C or JS line whose own
+        # content begins with ++ has none, and skipping those let retired words
+        # through.
+        if not line.startswith("+") or line.startswith("+++ ") or not path or is_exempt(path):
             continue
         for word in RETIRED:
             # Word boundaries, so workspace_key does not trip on the team_key
