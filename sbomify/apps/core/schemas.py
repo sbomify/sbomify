@@ -15,6 +15,9 @@ class ErrorCode(str, Enum):
     # Authentication errors
     UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
+    # Frozen. The human ``detail`` beside these says workspace now, but the
+    # code is a contract string a client may branch on, so renaming it is a
+    # shape break and waits for a v2. Same for TEAM_NOT_FOUND and TEAM_MISMATCH.
     NO_CURRENT_TEAM = "NO_CURRENT_TEAM"
 
     # Validation errors

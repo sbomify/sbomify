@@ -227,7 +227,7 @@ class TestSkippedSecurityRunBadge:
 
         header = _header(run)
 
-        assert "117 Vulnerabilities" in header
+        assert "117 vulnerabilities" in header
         assert "Skipped" not in header
 
     def test_a_clean_scan_is_untouched(self):
@@ -244,7 +244,7 @@ class TestSkippedSecurityRunBadge:
 
         header = _header(run)
 
-        assert "No Vulnerabilities" in header
+        assert "No vulnerabilities" in header
         assert "Skipped" not in header
 
 

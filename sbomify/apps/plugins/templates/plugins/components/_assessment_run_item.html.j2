@@ -36,11 +36,11 @@
                             </c-badges.secondary>
                         {% elif security_total %}
                             <c-badges.secondary>
-                            <i class="fas fa-shield-alt mr-1"></i>{{ security_total }} Vulnerabilit{{ security_total|pluralize:"y,ies" }}
+                            <i class="fas fa-shield-alt mr-1"></i>{{ security_total }} vulnerabilit{{ security_total|pluralize:"y,ies" }}
                             </c-badges.secondary>
                         {% else %}
                             <c-badges.secondary>
-                            <i class="fas fa-check-circle mr-1"></i>No Vulnerabilities
+                            <i class="fas fa-check-circle mr-1"></i>No vulnerabilities
                             </c-badges.secondary>
                         {% endif %}
                     {% elif run.status == 'failed' %}
@@ -61,7 +61,7 @@
                     {% if skipped %}
                         <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
                     {% elif run.result.summary %}
-                        <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
+                        <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} check{{ run.result.summary.total_findings|default:0|pluralize }}</span>
                     {% endif %}
                 </div>
                 </c-cards.collapsible-trigger>
@@ -333,7 +333,7 @@
                 {% if skipped %}
                     <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
                 {% elif run.result.summary %}
-                    <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
+                    <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} check{{ run.result.summary.total_findings|default:0|pluralize }}</span>
                 {% endif %}
             </div>
             </c-cards.collapsible-trigger>

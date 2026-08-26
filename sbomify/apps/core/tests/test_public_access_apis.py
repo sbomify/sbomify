@@ -65,7 +65,7 @@ class TestPublicReleaseAccess:
 
         assert response.status_code == 403
         data = response.json()
-        assert "No current team selected" in data["detail"]
+        assert "No current workspace selected" in data["detail"]
 
     def test_list_releases_private_product_with_auth(self, sample_product, authenticated_api_client):  # noqa: F811
         """Test that releases can be listed for private products with proper authentication."""
