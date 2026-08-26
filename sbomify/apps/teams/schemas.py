@@ -51,7 +51,12 @@ class MemberSchema(BaseModel):
     id: int
     user: UserSchema
     role: str
+    #: Both names carry the same value while clients migrate. The old one is
+    #: deprecated, not gone: the sbomify action reads it to pick a workspace,
+    #: and a missing field there fails silently rather than loudly, so it stays
+    #: until the action ships a release that prefers the new one.
     is_default_team: bool
+    is_default_workspace: bool
     is_me: bool = False
 
 

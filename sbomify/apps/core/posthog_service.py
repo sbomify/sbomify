@@ -15,6 +15,13 @@ _client: Any = None
 _initialized = False
 
 
+#: The tenant word in event names. ``team:*`` is emitted beside ``workspace:*``
+#: until the PostHog dashboards are cut over, then the pair below collapses to
+#: one and the dual-emit in capture_for_request goes with it.
+EVENT_PREFIX = "workspace"
+RETIRED_EVENT_PREFIX = "team"
+
+
 def _get_client() -> Any:
     """Lazy-initialize the PostHog client. Returns None when disabled."""
     global _client, _initialized
@@ -192,6 +199,13 @@ def capture_for_request(
     if not distinct_id or distinct_id == "anonymous":
         return
     capture(distinct_id, event, properties or {}, groups=groups, request=request)
+
+    # Dual-emit while the dashboards migrate. Here rather than at the 49 call
+    # sites, so the cutover is deleting these three lines rather than another
+    # 49-file sweep.
+    if event.startswith(f"{RETIRED_EVENT_PREFIX}:"):
+        renamed = event.replace(f"{RETIRED_EVENT_PREFIX}:", f"{EVENT_PREFIX}:", 1)
+        capture(distinct_id, renamed, properties or {}, groups=groups, request=request)
 
 
 def capture(

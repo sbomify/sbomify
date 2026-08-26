@@ -19,7 +19,7 @@ Expects `hidden_count`, `viewer_is_authenticated`, `viewer_has_gated_grant`.
     {% endif %}
     {% if not viewer_is_authenticated %}
         <c-slot name="action">
-        <c-buttons.secondary size="sm" href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}">Log in</c-buttons.secondary>
+        <c-buttons.secondary size="sm" href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}">Sign in</c-buttons.secondary>
         </c-slot>
     {% endif %}
     </c-branded.notice>

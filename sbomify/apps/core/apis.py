@@ -641,7 +641,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
 
     team_id = _get_user_team_id(request)
     if not team_id:
-        return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+        return 403, {"detail": "No current workspace selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
     # Check billing limits
     can_create, error_msg, error_code = _check_billing_limits(team_id, "product")
@@ -692,7 +692,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
 
     except IntegrityError:
         return 400, {
-            "detail": "A product with this name already exists in this team",
+            "detail": "A product with this name already exists in this workspace",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Team.DoesNotExist:
@@ -717,7 +717,7 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
 
         team_id = _get_user_team_id(request)
         if not team_id:
-            return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+            return 403, {"detail": "No current workspace selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
         # Route this internal read through can() so a narrow-scoped API token
         # (e.g. a publish-only CI token) honours its scope: listing products
@@ -880,7 +880,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
 
     except IntegrityError:
         return 400, {
-            "detail": "A product with this name already exists in this team",
+            "detail": "A product with this name already exists in this workspace",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:
@@ -963,7 +963,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
     except IntegrityError:
         return 400, {
-            "detail": "A product with this name already exists in this team",
+            "detail": "A product with this name already exists in this workspace",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:
@@ -1064,7 +1064,7 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
         return 400, {
             "detail": (
                 f"An identifier of type {payload.identifier_type} "
-                f"with value '{payload.value}' already exists in this team"
+                f"with value '{payload.value}' already exists in this workspace"
             ),
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
@@ -1184,7 +1184,7 @@ def update_product_identifier(
         return 400, {
             "detail": (
                 f"An identifier of type {payload.identifier_type} "
-                f"with value '{payload.value}' already exists in this team"
+                f"with value '{payload.value}' already exists in this workspace"
             )
         }
     except DjangoValidationError as e:
@@ -1306,7 +1306,7 @@ def bulk_update_product_identifiers(
 
     except IntegrityError:
         return 400, {
-            "detail": "One or more identifiers already exist in this team",
+            "detail": "One or more identifiers already exist in this workspace",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:
@@ -1598,7 +1598,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
 
     team_id = _get_user_team_id(request)
     if not team_id:
-        return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+        return 403, {"detail": "No current workspace selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
     # Check billing limits
     can_create, error_msg, error_code = _check_billing_limits(team_id, "component")
@@ -1678,7 +1678,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
 
     except IntegrityError:
         return 400, {
-            "detail": "A component with this name already exists in this team",
+            "detail": "A component with this name already exists in this workspace",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Team.DoesNotExist:
@@ -1709,7 +1709,7 @@ def list_components(
 
         team_id = _get_user_team_id(request)
         if not team_id:
-            return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+            return 403, {"detail": "No current workspace selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
         # Route this internal read through can() so a narrow-scoped API token
         # (e.g. a publish-only CI token) honours its scope: listing components
@@ -1885,7 +1885,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
     except IntegrityError:
         return 400, {
-            "detail": "A component with this name already exists in this team",
+            "detail": "A component with this name already exists in this workspace",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:
@@ -1984,7 +1984,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                         nda_document = Document.objects.filter(id=nda_document_id).select_related("component").first()
                         if not nda_document or nda_document.component.team_id != component.team_id:
                             return 400, {
-                                "detail": "NDA document not found or belongs to different team",
+                                "detail": "NDA document not found or belongs to a different workspace",
                                 "error_code": ErrorCode.NOT_FOUND,
                             }
                         component.nda_document = nda_document
@@ -2027,7 +2027,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
 
     except IntegrityError:
         return 400, {
-            "detail": "A component with this name already exists in this team",
+            "detail": "A component with this name already exists in this workspace",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:
@@ -2777,7 +2777,7 @@ def list_all_releases(
                     # For private products, require team access
                     team_id = _get_user_team_id(request)
                     if not team_id:
-                        return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+                        return 403, {"detail": "No current workspace selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
                     if _is_guest_member(request, team_id):
                         return 403, {
                             "detail": "Guest members can only access public pages",
@@ -2808,7 +2808,7 @@ def list_all_releases(
             # When no product_id is provided, we need team context
             team_id = _get_user_team_id(request)
             if not team_id:
-                return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+                return 403, {"detail": "No current workspace selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
             if _is_guest_member(request, team_id):
                 return 403, {
                     "detail": "Guest members can only access public pages",
