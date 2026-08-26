@@ -4,12 +4,16 @@ from enum import Enum
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
+from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpRequest
+from django.utils.module_loading import import_string
 from ninja import NinjaAPI
 from ninja.errors import Throttled
 from ninja.renderers import JSONRenderer
 
+from sbomify.api_schema_variants import SchemaVariants
+from sbomify.api_versioning import clone_router
 from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle, AnonymousIPRateThrottle
 from sbomify.apps.core.schemas import DEFAULT_ERROR_CODE_BY_STATUS
 
@@ -188,18 +192,116 @@ def _on_throttled(request: Any, exc: Throttled) -> Any:
     return response
 
 
-api.add_router("/sboms", "sbomify.apps.sboms.apis.router")
-api.add_router("/documents", "sbomify.apps.documents.apis.router")
-api.add_router("/", "sbomify.apps.documents.access_apis.router")
-api.add_router("/workspaces", "sbomify.apps.teams.apis.router")
-api.add_router("/", "sbomify.apps.core.apis.router")
-api.add_router("/", "sbomify.apps.core.cle_apis.router")
-api.add_router("/billing", "sbomify.apps.billing.apis.router")
-api.add_router("/notifications", "sbomify.apps.notifications.apis.router")
-api.add_router("/vulnerability-scanning", "sbomify.apps.vulnerability_scanning.apis.router")
-api.add_router("/licensing", "sbomify.apps.licensing.api.router")
-api.add_router("/plugins", "sbomify.apps.plugins.apis.router")
-api.add_router("/compliance", "sbomify.apps.compliance.apis.router")
-api.add_router("/controls", "sbomify.apps.controls.apis.router")
-api.add_router("/internal", "sbomify.apps.teams.apis.internal_router")
-api.add_router("/auth/oidc", "sbomify.apps.oidc.apis.router")
+# Every router is mounted once per API version. v1 is the surface we shipped;
+# v2 serves the same views under the vocabulary the product actually uses.
+MOUNTS: tuple[tuple[str, str], ...] = (
+    ("/sboms", "sbomify.apps.sboms.apis.router"),
+    ("/documents", "sbomify.apps.documents.apis.router"),
+    ("/", "sbomify.apps.documents.access_apis.router"),
+    ("/workspaces", "sbomify.apps.teams.apis.router"),
+    ("/", "sbomify.apps.core.apis.router"),
+    ("/", "sbomify.apps.core.cle_apis.router"),
+    ("/billing", "sbomify.apps.billing.apis.router"),
+    ("/notifications", "sbomify.apps.notifications.apis.router"),
+    ("/vulnerability-scanning", "sbomify.apps.vulnerability_scanning.apis.router"),
+    ("/licensing", "sbomify.apps.licensing.api.router"),
+    ("/plugins", "sbomify.apps.plugins.apis.router"),
+    ("/compliance", "sbomify.apps.compliance.apis.router"),
+    ("/controls", "sbomify.apps.controls.apis.router"),
+    ("/internal", "sbomify.apps.teams.apis.internal_router"),
+    ("/auth/oidc", "sbomify.apps.oidc.apis.router"),
+)
+
+for _prefix, _dotted in MOUNTS:
+    api.add_router(_prefix, _dotted)
+
+
+# ---------------------------------------------------------------------------
+# v2
+#
+# Same views, same handlers, one vocabulary. The v1 surface grew a prefix named
+# for SBOMs that now holds eight artifact types, a path parameter still called
+# team_key under a prefix already renamed to /workspaces/, and a resource that
+# answers on both /sboms/{id} and /sboms/sbom/{id}. None of that can be fixed
+# in place without breaking callers, which is what a second version is for.
+# ---------------------------------------------------------------------------
+
+# Prefixes that differ from v1. Anything absent keeps its v1 prefix.
+V2_PREFIXES: dict[str, str] = {
+    "sbomify.apps.sboms.apis.router": "/artifacts",
+}
+
+# Path parameters renamed across every router. The view keeps its own argument
+# name; ``clone_router`` wraps it so ninja sees the new one.
+V2_PARAM_RENAMES: dict[str, str] = {
+    "team_key": "workspace_key",
+    "sbom_id": "artifact_id",
+}
+
+# Literal segments rewritten inside a router's own paths, applied longest
+# first so /artifact/vex is not shortened before /artifact is considered.
+V2_SEGMENTS: dict[str, dict[str, str]] = {
+    # The prefix already says artifacts, so the segment repeating it goes, and
+    # /sbom/{id} collapses onto /{id} where the other verbs already live.
+    "sbomify.apps.sboms.apis.router": {"/artifact/": "/", "/sbom/": "/"},
+    # Access requests are the last routes still under the old noun.
+    "sbomify.apps.documents.access_apis.router": {"/teams/": "/workspaces/"},
+}
+
+
+def _v2_path_rewriter(dotted: str) -> Any:
+    segments = V2_SEGMENTS.get(dotted)
+    if not segments:
+        return None
+
+    def rewrite(path: str) -> str:
+        for old, new in sorted(segments.items(), key=lambda kv: -len(kv[0])):
+            if path.startswith(old):
+                return new + path[len(old) :]
+        return path
+
+    return rewrite
+
+
+api_v2 = NinjaAPI(
+    version="2.0.0",
+    urls_namespace="api-2",
+    csrf=True,
+    throttle=[AccessTokenRateThrottle(), AnonymousIPRateThrottle()],
+    renderer=UTCZRenderer(),
+    title="sbomify API",
+    description=(
+        "Version 2 of the sbomify API. Same resources as v1, named the way the "
+        "product names them: artifacts rather than sboms, workspaces rather "
+        "than teams.\n\n"
+        "See /api/v1/docs for the version this replaces."
+    ),
+)
+
+# One instance for the whole version, because it caches: the OpenAPI document
+# keys components by model name, so a schema converted twice would render as
+# two components that only differ by identity.
+_v2_schemas = SchemaVariants()
+
+for _prefix, _dotted in MOUNTS:
+    api_v2.add_router(
+        V2_PREFIXES.get(_dotted, _prefix),
+        clone_router(
+            import_string(_dotted),
+            rewrite_path=_v2_path_rewriter(_dotted),
+            param_renames=V2_PARAM_RENAMES,
+            rewrite_response=lambda _path, _status, schema: _v2_schemas.response(schema),
+            convert_request=_v2_schemas.request,
+        ),
+    )
+
+
+# Struck through in /api/v1/docs and flagged in generated clients. This runs
+# after the v2 block on purpose: clone_router builds new Operation objects, so
+# marking the originals now touches v1 alone. Doing it before the clone would
+# have marked v2 deprecated on the day it shipped.
+if getattr(settings, "API_V1_SUNSET", None) is not None:
+    for _prefix, _router in api._routers:
+        for _path_view in _router.path_operations.values():
+            for _operation in _path_view.operations:
+                _operation.deprecated = True

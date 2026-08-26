@@ -1,4 +1,6 @@
 # Configure Dramatiq to use StubBroker for tests
+from datetime import UTC, datetime
+
 import dramatiq
 from dramatiq.brokers.stub import StubBroker
 from dramatiq.results import Results
@@ -156,12 +158,21 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "sbomify.apps.core.middleware.BearerAuthCsrfExemptMiddleware",
+    "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
 ]
+
+# This module builds its own MIDDLEWARE rather than importing the real one, so
+# anything added there has to be added here too or it goes untested. The v1
+# sunset dates are fixed rather than copied from settings for the same reason a
+# test never reads the clock: the assertion should not change meaning on the
+# day the real sunset is moved.
+API_V1_DEPRECATED_ON = datetime(2026, 8, 26, tzinfo=UTC)
+API_V1_SUNSET = datetime(2027, 8, 26, tzinfo=UTC)
 
 # Configure ALLOWED_HOSTS for tests
 # Use wildcard - DynamicHostValidationMiddleware handles validation
