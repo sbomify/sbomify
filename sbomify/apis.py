@@ -5,11 +5,13 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 from django.core.serializers.json import DjangoJSONEncoder
+from django.http import HttpRequest
 from ninja import NinjaAPI
 from ninja.errors import Throttled
 from ninja.renderers import JSONRenderer
 
 from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle, AnonymousIPRateThrottle
+from sbomify.apps.core.schemas import DEFAULT_ERROR_CODE_BY_STATUS
 
 try:
     __version__ = version("sbomify")
@@ -30,6 +32,21 @@ class _UTCZEncoder(DjangoJSONEncoder):
 
 class UTCZRenderer(JSONRenderer):
     encoder_class = _UTCZEncoder
+
+    def render(self, request: HttpRequest, data: Any, *, response_status: int) -> Any:
+        """Fill in ``error_code`` when the view left it out.
+
+        Around two hundred error returns ship a bare ``detail``, so a client
+        branching on the code reads null and has to fall back to matching the
+        prose, which is not a contract. Deriving it from the status here covers
+        every route at once, including ninja's own 422 and the throttle
+        handler below, and means a new error cannot ship uncoded. A view that
+        names its own code always wins.
+        """
+        if response_status >= 400 and isinstance(data, dict) and "detail" in data and data.get("error_code") is None:
+            if default := DEFAULT_ERROR_CODE_BY_STATUS.get(response_status):
+                data = {**data, "error_code": default.value}
+        return super().render(request, data, response_status=response_status)
 
 
 api = NinjaAPI(

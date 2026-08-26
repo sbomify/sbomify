@@ -46,10 +46,29 @@ class ErrorCode(str, Enum):
     # Conflict errors
     CONFLICT = "CONFLICT"
 
+    # Rate limiting
+    TOO_MANY_REQUESTS = "TOO_MANY_REQUESTS"
+
     # General errors
     INTERNAL_ERROR = "INTERNAL_ERROR"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     UNKNOWN_ERROR = "UNKNOWN_ERROR"
+
+
+# The code a client reads when a view returns an error without naming one.
+# Keyed on status because that is the one thing every error response carries,
+# and applied by ``UTCZRenderer`` so a view that names its own code still wins.
+DEFAULT_ERROR_CODE_BY_STATUS: dict[int, ErrorCode] = {
+    400: ErrorCode.BAD_REQUEST,
+    401: ErrorCode.UNAUTHORIZED,
+    403: ErrorCode.FORBIDDEN,
+    404: ErrorCode.NOT_FOUND,
+    409: ErrorCode.CONFLICT,
+    422: ErrorCode.VALIDATION_ERROR,
+    429: ErrorCode.TOO_MANY_REQUESTS,
+    500: ErrorCode.INTERNAL_ERROR,
+    503: ErrorCode.SERVICE_UNAVAILABLE,
+}
 
 
 class ErrorResponse(BaseModel):
