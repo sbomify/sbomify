@@ -451,7 +451,7 @@ and the database, and retiring it is a separate, staged job. What the table
 does settle is which word new code and new copy use.
 
 | Concept | Use | Notes |
-|---|---|---|
+| --- | --- | --- |
 | Tenant | workspace | `team` survives in models and storage, not in new code |
 | Tenant PK token | `workspace_key` | |
 | Person in a workspace | member | |
@@ -480,7 +480,7 @@ are fixed by the spec. They translate at the mapper and must not spread into
 core or into UI copy.
 
 | TEA noun | sbomify |
-|---|---|
+| --- | --- |
 | product | `Product` |
 | component | `Component` |
 | productRelease | `core.Release`, which belongs to a Product |
