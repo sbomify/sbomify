@@ -19,11 +19,12 @@ nulls, or a request body the view cannot read.
 
 from __future__ import annotations
 
+import copy
 from enum import Enum
 from typing import Annotated, Any, get_args, get_origin
 
 from ninja import Schema
-from pydantic import BaseModel, BeforeValidator, Field, create_model
+from pydantic import BaseModel, BeforeValidator, create_model
 
 from sbomify.apps.core.schemas import ErrorCode
 
@@ -209,30 +210,24 @@ class SchemaVariants:
                 annotation = V2ErrorCodeField
                 changed = True
 
+            # Copy the original FieldInfo and override only the names. Building
+            # a fresh one and re-listing its attributes silently drops whatever
+            # was not re-listed: max_length and pattern on ChangePlanRequest,
+            # min_length on the two name fields, and any default_factory. On a
+            # request schema that means v2 accepting input v1 rejects.
+            new_field = copy.copy(field)
+            new_field.annotation = annotation
+            new_field.serialization_alias = renamed
             if outgoing:
                 # The view still produces the old attribute; the wire gets the
                 # new name.
-                fields[renamed] = (
-                    annotation,
-                    Field(
-                        default=field.default,
-                        validation_alias=name,
-                        serialization_alias=renamed,
-                        description=field.description,
-                    ),
-                )
+                new_field.validation_alias = name
+                fields[renamed] = (annotation, new_field)
             else:
                 # The wire carries the new name; the view still reads the old
                 # attribute off the parsed payload.
-                fields[name] = (
-                    annotation,
-                    Field(
-                        default=field.default,
-                        validation_alias=renamed,
-                        serialization_alias=renamed,
-                        description=field.description,
-                    ),
-                )
+                new_field.validation_alias = renamed
+                fields[name] = (annotation, new_field)
 
         if not changed:
             # Nothing in this schema or anything below it moved. Returning the

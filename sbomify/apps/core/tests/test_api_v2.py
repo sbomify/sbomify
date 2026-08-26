@@ -14,6 +14,7 @@ import re
 import pytest
 from django.test import Client
 from django.urls import reverse
+from ninja import Schema
 
 from sbomify.api_schema_variants import ERROR_CODE_RENAMES, VENDORED_MARKER, SchemaVariants
 from sbomify.apis import api, api_v2
@@ -167,6 +168,48 @@ class TestTheTwoDirections:
         properties = variant.model_json_schema(mode="validation")["properties"]
         assert "workspace_key" in properties
         assert "team_key" not in properties
+
+
+class TestNothingIsLostInTranslation:
+    """A variant is built from the original field, not from a list of its parts.
+
+    Rebuilding a FieldInfo and re-listing what to copy drops whatever was not
+    listed. On a request schema that means v2 accepting input v1 rejects, and
+    nothing about it looks wrong: the endpoint works, the document validates,
+    and the constraint is simply gone.
+    """
+
+    @pytest.mark.parametrize(
+        ("module", "name"),
+        [
+            ("sbomify.apps.billing.schemas", "ChangePlanRequest"),
+            ("sbomify.apps.teams.schemas", "TeamPatchSchema"),
+            ("sbomify.apps.teams.schemas", "TeamUpdateSchema"),
+            ("sbomify.apps.teams.schemas", "TeamDomainSchema"),
+        ],
+    )
+    def test_validation_constraints_survive(self, module, name):
+        import importlib
+
+        model = getattr(importlib.import_module(module), name)
+        variant = SchemaVariants().request(model)
+        for field_name, field in model.model_fields.items():
+            if not field.metadata:
+                continue
+            converted = variant.model_fields.get(field_name)
+            assert converted is not None, f"{name}.{field_name} vanished"
+            assert converted.metadata == field.metadata, f"{name}.{field_name} lost {field.metadata}"
+
+    def test_a_default_factory_survives(self):
+        """No converted schema uses one today, so this guards the next one."""
+        from pydantic import Field as PydanticField
+
+        class WithFactory(Schema):
+            team_id: str
+            tags: list[str] = PydanticField(default_factory=list)
+
+        variant = SchemaVariants().response(WithFactory)
+        assert variant.model_fields["tags"].default_factory is list
 
 
 @pytest.mark.django_db
