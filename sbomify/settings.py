@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 import warnings
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse, urlunparse
@@ -213,6 +214,16 @@ INSTALLED_APPS = [
 ]
 
 
+# /api/v1/ deprecation, announced per RFC 9745 and RFC 8594 by
+# ApiVersionDeprecationMiddleware. v2 renames the SBOM-era prefixes and the
+# team vocabulary; v1 keeps serving until the sunset below.
+#
+# Twelve months, because the sbomify action runs in other people's CI and some
+# of them pin a version and forget it. Set API_V1_SUNSET to None to stop
+# announcing a retirement, which is what a self-hosted deployment wants.
+API_V1_DEPRECATED_ON = datetime(2026, 8, 26, tzinfo=UTC)
+API_V1_SUNSET = datetime(2027, 8, 26, tzinfo=UTC)
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     # Outer enough to see the final API response; copies the per-token throttle budget
@@ -229,6 +240,7 @@ MIDDLEWARE = [
     # Must precede CsrfViewMiddleware so the bearer exemption flag is set before any
     # CSRF enforcement can run (Ninja's check_csrf and CsrfViewMiddleware both honour it).
     "sbomify.apps.core.middleware.BearerAuthCsrfExemptMiddleware",
+    "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
