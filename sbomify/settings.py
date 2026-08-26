@@ -24,6 +24,7 @@ import dj_database_url
 import redis
 import sentry_sdk
 from django.contrib import messages
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import find_dotenv, load_dotenv
 from redis.asyncio.retry import Retry as AsyncRedisRetry
 from redis.backoff import ExponentialBackoff
@@ -219,10 +220,26 @@ INSTALLED_APPS = [
 # team vocabulary; v1 keeps serving until the sunset below.
 #
 # Twelve months, because the sbomify action runs in other people's CI and some
-# of them pin a version and forget it. Set API_V1_SUNSET to None to stop
-# announcing a retirement, which is what a self-hosted deployment wants.
-API_V1_DEPRECATED_ON = datetime(2026, 8, 26, tzinfo=UTC)
-API_V1_SUNSET = datetime(2027, 8, 26, tzinfo=UTC)
+# of them pin a version and forget it.
+#
+# Both read from the environment as YYYY-MM-DD so a deployment can move the
+# date, or set API_V1_SUNSET to "none" to stop announcing a retirement at all.
+# A self-hosted install that never intends to retire v1 wants the latter, and
+# should not have to edit this file to get it.
+
+
+def _sunset_date(name: str, default: str) -> datetime | None:
+    raw = os.environ.get(name, default).strip()
+    if raw.lower() in ("", "none", "never"):
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"{name} must be YYYY-MM-DD or 'none', got {raw!r}") from exc
+
+
+API_V1_DEPRECATED_ON = _sunset_date("API_V1_DEPRECATED_ON", "2026-08-26")
+API_V1_SUNSET = _sunset_date("API_V1_SUNSET", "2027-08-26")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
