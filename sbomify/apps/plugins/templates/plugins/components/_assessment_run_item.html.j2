@@ -9,7 +9,7 @@
     {% with has_issues=fail_count|add:error_count is_security=run.category|is_security_category skipped=result.metadata.skipped %}
         {# Compute security total from by_severity #}
         {% if is_security and run.result.summary.by_severity %}
-            {% with sev=run.result.summary.by_severity security_total=run.result.summary.total_findings|default:0 %}
+            {% with sev=run.result.summary.by_severity security_total=run.result.summary|vulnerability_total %}
                 {% comment %}A skipped run keeps the neutral base border: it produced no verdict, so it is neither a warning nor a clean scan.{% endcomment %}
                 {# The level must render as one bare word, so its branch stays on one line. #}
                 {# djlint:off #}
