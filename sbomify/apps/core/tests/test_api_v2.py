@@ -49,6 +49,33 @@ class TestBothVersionsMount:
         assert reverse("api-1:openapi-json")
         assert reverse("api-2:openapi-json")
 
+    def test_both_apis_are_bound_before_either_is_mounted(self):
+        """Ordering in sbomify/apis.py, load-bearing and easy to undo.
+
+        add_router attaches its routers immediately, so mounting mutates
+        module-level Router objects. If anything imported during a mount
+        reaches sbomify.urls, its ``from sbomify.apis import api, api_v2`` runs
+        against a half-executed module. With api_v2 defined below the mount
+        that is an ImportError; python then drops sbomify.apis from
+        sys.modules and the retry finds the routers already attached, failing
+        with a ConfigError that names /sboms and points at the wrong line.
+
+        Binding both names first makes the partial module importable, so a
+        cycle surfaces as itself instead of as that cascade.
+        """
+        import inspect
+
+        import sbomify.apis as module
+
+        source = inspect.getsource(module).splitlines()
+        line_of = lambda pattern: next(  # noqa: E731
+            i for i, line in enumerate(source) if line.startswith(pattern)
+        )
+        first_mount = next(i for i, line in enumerate(source) if line.startswith("for _prefix, _dotted in MOUNTS:"))
+
+        assert line_of("api = NinjaAPI(") < first_mount
+        assert line_of("api_v2 = NinjaAPI(") < first_mount
+
     def test_no_operation_was_lost(self, v1_schema, v2_schema):
         assert len(_operations(v1_schema)) == len(_operations(v2_schema))
 

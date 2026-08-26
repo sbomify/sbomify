@@ -212,6 +212,31 @@ MOUNTS: tuple[tuple[str, str], ...] = (
     ("/auth/oidc", "sbomify.apps.oidc.apis.router"),
 )
 
+# Both API objects are bound before either is mounted, and that ordering is
+# load-bearing rather than tidy. add_router resolves and attaches its routers
+# straight away, so the mount below mutates module-level Router objects. If
+# anything imported during that mount reaches sbomify.urls, its
+# ``from sbomify.apis import api, api_v2`` runs against a half-executed module:
+# with api_v2 defined further down, that is an ImportError, python drops
+# sbomify.apis from sys.modules, and the retry finds the routers already
+# attached and dies with a ConfigError naming /sboms. The real fault is then
+# invisible, buried under a cascade blaming the wrong line.
+
+api_v2 = NinjaAPI(
+    version="2.0.0",
+    urls_namespace="api-2",
+    csrf=True,
+    throttle=[AccessTokenRateThrottle(), AnonymousIPRateThrottle()],
+    renderer=UTCZRenderer(),
+    title="sbomify API",
+    description=(
+        "Version 2 of the sbomify API. Same resources as v1, named the way the "
+        "product names them: artifacts rather than sboms, workspaces rather "
+        "than teams.\n\n"
+        "See /api/v1/docs for the version this replaces."
+    ),
+)
+
 for _prefix, _dotted in MOUNTS:
     api.add_router(_prefix, _dotted)
 
@@ -262,21 +287,6 @@ def _v2_path_rewriter(dotted: str) -> Any:
 
     return rewrite
 
-
-api_v2 = NinjaAPI(
-    version="2.0.0",
-    urls_namespace="api-2",
-    csrf=True,
-    throttle=[AccessTokenRateThrottle(), AnonymousIPRateThrottle()],
-    renderer=UTCZRenderer(),
-    title="sbomify API",
-    description=(
-        "Version 2 of the sbomify API. Same resources as v1, named the way the "
-        "product names them: artifacts rather than sboms, workspaces rather "
-        "than teams.\n\n"
-        "See /api/v1/docs for the version this replaces."
-    ),
-)
 
 # One instance for the whole version, because it caches: the OpenAPI document
 # keys components by model name, so a schema converted twice would render as
