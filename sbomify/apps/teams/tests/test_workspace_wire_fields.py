@@ -34,6 +34,22 @@ class TestMemberSchemaDuringTheRename:
             assert "is_default_team" in member, "the action still reads this one"
             assert "is_default_workspace" in member
 
+    def test_the_old_name_is_marked_deprecated_in_the_schema(self):
+        """Field-level, not resource-level.
+
+        RFC 9745 Deprecation and RFC 8594 Sunset describe a whole resource, so
+        putting them on this endpoint would announce that the endpoint is going
+        away. Only the field is. OpenAPI's own flag is what reaches
+        /api/v1/docs and generated clients.
+        """
+        from sbomify.apps.teams.schemas import MemberSchema
+
+        properties = MemberSchema.model_json_schema()["properties"]
+
+        assert properties["is_default_team"]["deprecated"] is True
+        assert "is_default_workspace" in properties["is_default_team"]["description"]
+        assert "deprecated" not in properties["is_default_workspace"]
+
     def test_they_never_disagree(self, authenticated_api_client, sample_team_with_owner_member):
         """One value, two names. A client migrating must not see a behaviour change."""
         client, token = authenticated_api_client
