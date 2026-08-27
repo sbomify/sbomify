@@ -87,7 +87,7 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
     response={200: ChangePlanResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse},
 )
 def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any]:
-    """Change the current workspace's billing plan."""
+    """Change the current team's billing plan."""
     if check_rate_limit(f"change_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
         return 429, {"detail": "Too many requests. Please try again later."}
 
