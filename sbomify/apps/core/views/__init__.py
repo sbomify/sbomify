@@ -33,7 +33,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.core.authz import can
+from sbomify.apps.core.authz import ADMINISTER, can
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
@@ -41,6 +41,7 @@ from sbomify.apps.core.views.component_details_public import ComponentDetailsPub
 from sbomify.apps.core.views.component_item import ComponentItemPublicView as ComponentItemPublicView
 from sbomify.apps.core.views.component_item import ComponentItemView as ComponentItemView
 from sbomify.apps.core.views.component_scope import ComponentScopeView as ComponentScopeView
+from sbomify.apps.core.views.components_dashboard import ComponentCreateView as ComponentCreateView
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView as ComponentsDashboardView
 from sbomify.apps.core.views.components_dashboard import ComponentsTableView as ComponentsTableView
 from sbomify.apps.core.views.dashboard import DashboardView as DashboardView
@@ -53,6 +54,7 @@ from sbomify.apps.core.views.product_links import ProductLinkRedirectView as Pro
 from sbomify.apps.core.views.product_links import ProductLinksView as ProductLinksView
 from sbomify.apps.core.views.product_releases_private import ProductReleasesPrivateView as ProductReleasesPrivateView
 from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView as ProductReleasesPublicView
+from sbomify.apps.core.views.products_dashboard import ProductCreateView as ProductCreateView
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
 from sbomify.apps.core.views.products_dashboard import ProductsTableView as ProductsTableView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
@@ -547,9 +549,14 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     if not can(request, "component:administer", component):
         return error_response(request, HttpResponseForbidden("Only allowed for owners of the component"))
 
-    target_team = request.session.get("user_teams", {}).get(team_key, {})
-    if target_team.get("role", "") not in ("owner", "admin"):
+    # Read the target workspace's role from the live Member row, not the session
+    # cache: that copy has a 300s TTL, so a demotion in the target workspace left
+    # a window in which a component could still be transferred into it.
+    from sbomify.apps.teams.models import Member, Team
+
+    if not Member.objects.filter(user=cast(User, request.user), team__key=team_key, role__in=ADMINISTER).exists():
         return error_response(request, HttpResponseForbidden("Only allowed for admins or owners of the target team"))
+    target_team = Team.objects.filter(key=team_key).first()
 
     with transaction.atomic():
         # SEMANTICALLY REQUIRED clear (NOT the belt-and-suspenders pattern).
@@ -566,7 +573,7 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     messages.add_message(
         request,
         messages.INFO,
-        f"Component {component.name} transferred to team {target_team.get('name')}",
+        f"Component {component.name} transferred to team {target_team.name if target_team else team_key}",
     )
 
     return redirect("core:components_dashboard")

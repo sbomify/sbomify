@@ -1,26 +1,21 @@
 import hashlib
 import logging
 from typing import Any
-from urllib.parse import quote
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
-from django.template.loader import render_to_string
-from django.urls import reverse
 from django.utils import timezone
 from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
-from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import broadcast_to_workspace, get_client_ip
 from sbomify.apps.teams.models import Member, Team
 
@@ -33,6 +28,16 @@ from .access_schemas import (
     NDASignRequest,
 )
 from .content_safety import apply_safe_download_headers
+from .services.access_emails import (
+    notify_access_approved,
+    notify_access_rejected,
+    notify_access_revoked,
+    notify_admins_of_access_request,
+)
+
+# Anyone already in the workspace, internal or external — they do not need to
+# ask for access they already have.
+ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 
 User = get_user_model()
 log = logging.getLogger(__name__)
@@ -56,7 +61,7 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
     requires_nda = company_nda is not None
 
     if requires_nda:
-        signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
         pending_count = AccessRequest.objects.filter(
             team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
         ).count()
@@ -70,62 +75,6 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
         dismissed_ids.add(notification_id)
         request.session["dismissed_notifications"] = list(dismissed_ids)
         request.session.save()
-
-
-def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, requires_nda: bool = False) -> None:
-    """Send email notification to all owners and admins about a new access request."""
-    try:
-        # Get all owners and admins of the team
-        admin_members = Member.objects.filter(team=team, role__in=("owner", "admin")).select_related("user")
-
-        if not admin_members.exists():
-            log.warning(f"No admins found for team {team.key} to notify about access request {access_request.id}")
-            return
-
-        # Build email context
-        requester_name = (
-            f"{access_request.user.first_name} {access_request.user.last_name}".strip() or access_request.user.username
-        )
-        requester_email = access_request.user.email
-        review_url = reverse("documents:access_request_queue", kwargs={"team_key": team.key})
-        review_link = f"{get_base_url()}{review_url}"
-
-        # Check if NDA has actually been signed
-        nda_signed = NDASignature.objects.filter(access_request=access_request).exists()
-
-        # Send email to each admin/owner
-        for admin_member in admin_members:
-            try:
-                email_context = {
-                    "admin_user": admin_member.user,
-                    "team": team,
-                    "requester_name": requester_name,
-                    "requester_email": requester_email,
-                    "requested_at": access_request.requested_at.strftime("%B %d, %Y at %I:%M %p"),
-                    "requires_nda": requires_nda,
-                    "nda_signed": nda_signed,
-                    "review_link": review_link,
-                    "base_url": get_base_url(),
-                }
-
-                email = EmailMultiAlternatives(
-                    subject=f"New access request for {team.name}",
-                    body=render_to_string("documents/emails/access_request_notification.txt", email_context),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[admin_member.user.email],
-                    # Reply-to the requester so an admin's reply reaches them, not our own inbox.
-                    reply_to=[requester_email or "hello@sbomify.com"],
-                )
-                email.attach_alternative(
-                    render_to_string("documents/emails/access_request_notification.html.j2", email_context),
-                    "text/html",
-                )
-                email.send()
-            except Exception as e:
-                log.error(f"Failed to send access request notification to {admin_member.user.email}: {e}")
-
-    except Exception as e:
-        log.error(f"Error notifying admins of access request {access_request.id}: {e}")
 
 
 @router.post(
@@ -180,7 +129,7 @@ def create_access_request(
         # Check if user already has access
         try:
             member = Member.objects.get(team=team, user=user)
-            if member.role in ("owner", "admin", "guest"):
+            if member.role in ANY_MEMBER_ROLES:
                 return 200, {
                     "detail": "Already has access",
                     "access_request": None,
@@ -207,7 +156,7 @@ def create_access_request(
         if pending_request:
             # Check if NDA is required and not signed yet
             if requires_nda:
-                has_signed = NDASignature.objects.filter(access_request=pending_request).exists()
+                has_signed = NDASignature.objects.live().filter(access_request=pending_request).exists()
                 if not has_signed:
                     # Request exists but NDA not signed - return info that NDA signing is needed
                     return 200, {
@@ -297,7 +246,7 @@ def create_access_request(
             # Only send notification if NDA is not required (request is complete)
             # If NDA is required, notification will be sent after NDA is signed
             if not requires_nda:
-                _notify_admins_of_access_request(access_request, team, requires_nda=False)
+                notify_admins_of_access_request(access_request, team, requires_nda=False)
 
             # If NDA is required, return info that NDA signing is needed
             if requires_nda:
@@ -357,7 +306,7 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
                 # Check if user is admin/owner
                 try:
                     member = Member.objects.get(team=team, user=request.user)
-                    if member.role not in ("owner", "admin"):
+                    if member.role not in ADMINISTER:
                         return 403, {"detail": "Forbidden"}
                 except Member.DoesNotExist:
                     return 403, {"detail": "Forbidden"}
@@ -469,13 +418,13 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
             )
 
             # Reload access request with NDA signature relationship
-            access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
+            access_request = AccessRequest.objects.prefetch_related("nda_signatures").get(pk=access_request.id)
 
             # Now that NDA is signed, send notification to admins (request is now complete)
             # Invalidate cache after transaction commits
             transaction.on_commit(lambda: _invalidate_access_requests_cache(access_request.team))
             transaction.on_commit(
-                lambda: _notify_admins_of_access_request(access_request, access_request.team, requires_nda=True)
+                lambda: notify_admins_of_access_request(access_request, access_request.team, requires_nda=True)
             )
 
             # Broadcast to workspace for real-time UI updates (admins see new pending request)
@@ -547,7 +496,7 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
     if teams_requiring_nda:
         # Requests from teams requiring NDA must have NDA signature
         # Requests from teams not requiring NDA don't need signature
-        signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
         nda_required_filter = Q(team_id__in=teams_requiring_nda, id__in=signed_request_ids)
         teams_not_requiring_nda = set(member_teams) - set(teams_requiring_nda)
         nda_not_required_filter = Q(team_id__in=teams_not_requiring_nda)
@@ -556,7 +505,7 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
     pending_requests = (
         AccessRequest.objects.filter(base_query)
         .select_related("team", "user", "decided_by")
-        .prefetch_related("nda_signature__nda_document")
+        .prefetch_related("nda_signatures__nda_document")
         .order_by("-requested_at")
     )
 
@@ -605,7 +554,7 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
         # Verify user is owner or admin of the team
         try:
             member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ("owner", "admin"):
+            if member.role not in ADMINISTER:
                 return 403, {"detail": "Access denied"}
         except Member.DoesNotExist:
             return 403, {"detail": "Access denied"}
@@ -635,43 +584,7 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
     cache_key = f"user_teams_invalidate:{access_request.user.id}"
     cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
-    # Send email notification to user (outside transaction)
-    try:
-        login_url = reverse("core:keycloak_login")
-        redirect_url = reverse("core:workspace_public", kwargs={"workspace_key": access_request.team.key})
-        login_link = f"{get_base_url()}{login_url}?next={quote(redirect_url)}"
-
-        email_context = {
-            "user": access_request.user,
-            "team": access_request.team,
-            "base_url": get_base_url(),
-            "login_link": login_link,
-        }
-
-        # Render templates first to catch template errors
-        try:
-            plain_message = render_to_string("documents/emails/access_approved.txt", email_context)
-            html_message = render_to_string("documents/emails/access_approved.html.j2", email_context)
-        except Exception as template_error:
-            log.error(
-                f"Failed to render access approval email templates for {access_request.user.email}: {template_error}",
-                exc_info=True,
-            )
-            raise
-
-        # Send email
-        email = EmailMultiAlternatives(
-            subject=f"Access approved for {access_request.team.name}",
-            body=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[access_request.user.email],
-            reply_to=["hello@sbomify.com"],
-        )
-        email.attach_alternative(html_message, "text/html")
-        result = email.send(fail_silently=False)
-        log.info(f"Access approval email sent to {access_request.user.email}, result: {result}")
-    except Exception as e:
-        log.error(f"Failed to send access approval email to {access_request.user.email}: {e}", exc_info=True)
+    notify_access_approved(access_request)
 
     # Dismiss notification if no more pending requests
     _dismiss_access_request_notification_if_no_pending(request, access_request.team)
@@ -724,7 +637,7 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
         # Verify user is owner or admin of the team
         try:
             member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ("owner", "admin"):
+            if member.role not in ADMINISTER:
                 return 403, {"detail": "Access denied"}
         except Member.DoesNotExist:
             return 403, {"detail": "Access denied"}
@@ -733,9 +646,10 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
         if access_request.status != AccessRequest.Status.PENDING:
             return 400, {"detail": "Access request is not pending"}
 
-        # Delete NDA signature so user must sign again when requesting access
-        if hasattr(access_request, "nda_signature"):
-            access_request.nda_signature.delete()
+        # Supersede the live signature so a re-request must sign again. The row
+        # stays: it is the legal record of what was accepted, and rejection
+        # does not un-happen that.
+        access_request.nda_signatures.live().update(superseded_at=timezone.now())
 
         access_request.status = AccessRequest.Status.REJECTED
         access_request.decided_by = request.user
@@ -745,27 +659,7 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
     # Invalidate cache after transaction commits
     transaction.on_commit(lambda: _invalidate_access_requests_cache(access_request.team))
 
-    # Send email notification to user
-    try:
-        email_context = {
-            "user": access_request.user,
-            "team": access_request.team,
-            "base_url": get_base_url(),
-        }
-
-        email = EmailMultiAlternatives(
-            subject=f"Access request update for {access_request.team.name}",
-            body=render_to_string("documents/emails/access_rejected.txt", email_context),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[access_request.user.email],
-            reply_to=["hello@sbomify.com"],
-        )
-        email.attach_alternative(
-            render_to_string("documents/emails/access_rejected.html.j2", email_context), "text/html"
-        )
-        email.send()
-    except Exception as e:
-        log.error(f"Failed to send access rejection email to {access_request.user.email}: {e}")
+    notify_access_rejected(access_request)
 
     # Dismiss notification if no more pending requests
     _dismiss_access_request_notification_if_no_pending(request, access_request.team)
@@ -815,7 +709,7 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
         # Verify user is owner or admin of the team
         try:
             member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ("owner", "admin"):
+            if member.role not in ADMINISTER:
                 return 403, {"detail": "Access denied"}
         except Member.DoesNotExist:
             return 403, {"detail": "Access denied"}
@@ -824,9 +718,9 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
         if access_request.status != AccessRequest.Status.APPROVED:
             return 400, {"detail": "Access request is not approved"}
 
-        # Delete NDA signature so user must sign again when requesting access
-        if hasattr(access_request, "nda_signature"):
-            access_request.nda_signature.delete()
+        # Supersede the live signature so a re-request must sign again; the row
+        # itself is history and survives the revocation.
+        access_request.nda_signatures.live().update(superseded_at=timezone.now())
 
         # Update access request
         access_request.status = AccessRequest.Status.REVOKED
@@ -850,27 +744,7 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
     cache_key = f"user_teams_invalidate:{access_request.user.id}"
     cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
-    # Send email notification to user
-    try:
-        email_context = {
-            "user": access_request.user,
-            "team": access_request.team,
-            "base_url": get_base_url(),
-        }
-
-        email = EmailMultiAlternatives(
-            subject=f"Access update for {access_request.team.name}",
-            body=render_to_string("documents/emails/access_revoked.txt", email_context),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[access_request.user.email],
-            reply_to=["hello@sbomify.com"],
-        )
-        email.attach_alternative(
-            render_to_string("documents/emails/access_revoked.html.j2", email_context), "text/html"
-        )
-        email.send()
-    except Exception as e:
-        log.error(f"Failed to send access revocation email to {access_request.user.email}: {e}")
+    notify_access_revoked(access_request)
 
     # Broadcast to workspace for real-time UI updates
     broadcast_to_workspace(

@@ -168,11 +168,6 @@
     }
 }
 
-*:focus {
-    outline: 2px solid var(--accent-color);
-    outline-offset: 2px;
-}
-
 @media (prefers-contrast: high) {
     :root {
         --border-color: #000000;

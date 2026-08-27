@@ -21,7 +21,8 @@
         </li>
     </ul>
     <p style="text-align: center; margin: 32px 0;">
-        <a href="{{ app_base_url }}/components/" class="button">Upload Your First SBOM</a>
+        <a href="{{ base_url }}{% url 'core:components_dashboard' %}"
+           class="button">Upload Your First SBOM</a>
     </p>
     <p>Got questions? Just reply to this email.</p>
 {% endblock %}

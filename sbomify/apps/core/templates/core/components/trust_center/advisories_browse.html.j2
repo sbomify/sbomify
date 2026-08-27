@@ -102,19 +102,35 @@ submit button applies the same filters, and the URL is the same either way.
             {% endif %}
             <div class="tc-filter-group">
                 <h3 class="tc-filter-heading">Published</h3>
-                <div class="tc-filter-date">
-                    <label for="publishedFrom">From</label>
-                    <input id="publishedFrom"
-                           type="date"
-                           name="from"
-                           value="{{ query.published_from|date:'Y-m-d' }}">
-                </div>
-                <div class="tc-filter-date">
-                    <label for="publishedTo">To</label>
-                    <input id="publishedTo"
-                           type="date"
-                           name="to"
-                           value="{{ query.published_to|date:'Y-m-d' }}">
+                {% comment %}
+                    A date range is a plain control, not something the
+                    workspace's colour has any say over, so it uses the app's
+                    own picker rather than a branded one. See the note in
+                    AGENTS.md on which library a trust centre control belongs to.
+
+                    The picker is reached with {% include %} because it is the
+                    one component still written as a .html.j2 partial rather
+                    than a cotton tag; <c-date-picker> resolves to
+                    components/date_picker.html and does not exist.
+
+                    value_binding names an Alpine property the picker reads and
+                    writes, so the wrapper below owns that scope. The picker
+                    carries no name of its own, so the hidden inputs are what
+                    the form actually sends, and their names are the contract
+                    the view reads.
+
+                    Setting an input's value from Alpine does not emit a change
+                    event, and the form filters on hx-trigger="change", so a
+                    watcher dispatches one. $watch rather than x-effect, which
+                    also runs on init and would fire a request on every load.
+                {% endcomment %}
+                <div class="flex flex-col gap-3"
+                     x-data="{ from: '{{ query.published_from|date:'Y-m-d' }}', to: '{{ query.published_to|date:'Y-m-d' }}' }"
+                     x-init="$watch('from', () => $refs.fromField.dispatchEvent(new Event('change', { bubbles: true }))); $watch('to', () => $refs.toField.dispatchEvent(new Event('change', { bubbles: true })))">
+                    {% include 'components/date_picker.html.j2' with value_binding='from' label='From' placeholder='Any date' compact='true' %}
+                    <input type="hidden" name="from" x-ref="fromField" :value="from">
+                    {% include 'components/date_picker.html.j2' with value_binding='to' label='To' placeholder='Any date' compact='true' %}
+                    <input type="hidden" name="to" x-ref="toField" :value="to">
                 </div>
             </div>
         </div>
@@ -227,7 +243,22 @@ submit button applies the same filters, and the URL is the same either way.
                                                     </span>
                                                 {% endif %}
                                                 {% if advisory.is_withdrawn %}<span class="tw-badge tw-badge-warning">Withdrawn</span>{% endif %}
-                                                {% if advisory.status_label %}
+                                                {% comment %}
+                                                Resolved is the one status worth
+                                                seeing without reading, so it is
+                                                a badge and the rest stay muted
+                                                text. The CVSS chip beside it
+                                                still says how bad the issue
+                                                was, which is a different
+                                                question from whether it is
+                                                still open, so the two do not
+                                                compete.
+                                                {% endcomment %}
+                                                {% if advisory.status == 'resolved' %}
+                                                    <c-branded.badge tone="success">
+                                                    <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+                                                    </c-branded.badge>
+                                                {% elif advisory.status_label %}
                                                     <span class="tc-adv-status">
                                                         <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
                                                     </span>
@@ -270,6 +301,19 @@ submit button applies the same filters, and the URL is the same either way.
                                                 <span class="tc-lock-chip">
                                                     <i class="fas fa-lock" aria-hidden="true"></i>Restricted
                                                 </span>
+                                            {% endif %}
+                                            {% comment %}
+                                            A notice naming no products carries
+                                            no status line, so resolved would be
+                                            the one state with nothing at all to
+                                            show it. The badge is added here for
+                                            that alone; the open states read the
+                                            same as before.
+                                            {% endcomment %}
+                                            {% if advisory.status == 'resolved' %}
+                                                <c-branded.badge tone="success">
+                                                <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+                                                </c-branded.badge>
                                             {% endif %}
                                         </div>
                                     </td>

@@ -18,7 +18,9 @@
     {# Visibility Toggle + meatball menu. The menu renders for every member (metadata is a read surface); write actions inside stay CRUD-gated. #}
     {% if component.has_crud_permissions or component.component_type == 'bom' %}
         <div class="flex items-stretch gap-2">
-            {% if component.has_crud_permissions %}
+            {% comment %}ADMINISTER, not MANAGE: a member maintains a component but does
+            not decide the world can see it, so do not offer the control.{% endcomment %}
+            {% if can_administer %}
                 {% url 'core:component_details_public' component.id as component_public_url %}
                 {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
             {% endif %}
@@ -39,7 +41,11 @@
                 {% if component.component_type == 'bom' %}
                     <c-dropdowns.item icon="fas fa-gears" @click="$dispatch('open-cicd')">CI/CD integration…</c-dropdowns.item>
                 {% endif %}
-                <c-dropdowns.item icon="fas fa-shield-halved" @click="$dispatch('open-trusted-publishers')">Trusted publishers…</c-dropdowns.item>
+                {% comment %}ADMINISTER: a trusted-publisher binding is a standing publish
+                grant to an external repo, so members must not be offered it.{% endcomment %}
+                {% if can_administer %}
+                    <c-dropdowns.item icon="fas fa-shield-halved" @click="$dispatch('open-trusted-publishers')">Trusted publishers…</c-dropdowns.item>
+                {% endif %}
                 {# Public-only actions; visibility is reactive so these appear/disappear the moment it changes, no reload. #}
                 <c-dropdowns.item icon="fas fa-link" x-show="visibility === 'public' || visibility === 'gated'" @click="$dispatch('copy-url')">Copy public URL</c-dropdowns.item>
                 <c-dropdowns.item icon="fas fa-certificate" x-show="visibility === 'public' || visibility === 'gated'" @click="$dispatch('copy-badge')">Copy badge</c-dropdowns.item>

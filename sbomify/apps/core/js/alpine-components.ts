@@ -16,7 +16,6 @@ import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerDeleteModal } from './components/delete-modal';
 import { registerReleaseList } from './components/release-list';
-import { registerStandardCard } from './components/standard-card';
 import { registerCopyToken } from './components/copy-token';
 import { registerSiteNotifications } from './components/site-notifications';
 import { registerPlanCard } from './components/plan-card';
@@ -220,7 +219,6 @@ export function registerAllComponents(): void {
     registerAccessTokensList();
     registerDeleteModal();
     // confirmModal is registered in alpine-init.ts (base template dependency)
-    registerStandardCard();
     registerCopyToken();
     registerSiteNotifications();
     registerPlanCard();
@@ -274,7 +272,6 @@ export function registerHtmxBundleComponents(): void {
     registerAccessTokensList();
     registerDeleteModal();
     // confirmModal is registered in alpine-init.ts (base template dependency)
-    registerStandardCard();
     registerCopyToken();
     registerSiteNotifications();
     registerPlanCard();

@@ -1,6 +1,7 @@
 {# Upload artifact — a modal opened from the component header ⋮ menu (open-upload window event), not a body card. #}
 <div x-data="{ uploadOpen: false }"
      @open-upload.window="uploadOpen = true"
+     @close-upload.window="uploadOpen = false"
      @keydown.escape.window="if (uploadOpen) uploadOpen = false">
     <c-modal id="upload-sbom" show="uploadOpen" title="Upload Artifact" icon="fas fa-upload" x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0)">
     <!-- Info Notice -->
@@ -16,6 +17,7 @@
                class="text-text text-sm font-medium whitespace-nowrap">Artifact type</label>
         <c-forms.select id="upload-bom-type" size="sm" x-model="bomType" ::disabled="isUploading || isPreviewing || !!preview">
         <option value="sbom">SBOM</option>
+        <option value="cbom">CBOM</option>
         <option value="vex">VEX</option>
         </c-forms.select>
     </div>
@@ -46,12 +48,12 @@
                 {# The control is hidden and clicked by the drop zone, so it carries no field styling. #}
                 <input type="file"
                        x-ref="fileInput"
-                       :accept="bomType === 'vex' ? '.json,.cdx,.xml' : '.json,.spdx,.cdx'"
+                       :accept="bomType === 'vex' ? '.json,.cdx,.xml' : bomType === 'cbom' ? '.json,.cdx' : '.json,.spdx,.cdx'"
                        class="hidden"
                        @change="handleFileSelect($event)"
                        @click.stop>
                 <p class="text-text-muted text-sm m-0">
-                    SBOMs: CycloneDX (.json, .cdx) or SPDX (.json, .spdx). VEX: CycloneDX (JSON or XML), OpenVEX, or CSAF.
+                    SBOMs: CycloneDX (.json, .cdx) or SPDX (.json, .spdx). CBOMs: CycloneDX (.json, .cdx). VEX: CycloneDX (JSON or XML), OpenVEX, or CSAF.
                 </p>
             </div>
         </template>

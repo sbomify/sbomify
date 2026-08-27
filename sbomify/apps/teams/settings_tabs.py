@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL
+from sbomify.apps.core.authz import ADMINISTER, MANAGE, READ_INTERNAL
 
 # Roles that may see a tab, taken from the capability tiers rather than spelled
 # out here: a tab and the actions behind it should never disagree about who may
@@ -26,9 +26,10 @@ from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL
 # owner can open and an admin cannot. (Workspace deletion lives inside the
 # General tab and is gated separately, on ``is_owner``.)
 # There is deliberately no "any role" alias here. One existed, written as
-# ADMINISTER + guest; it would silently stop meaning "anyone" the moment another
-# internal role arrived. Tabs name the tier they mean, so widening a tier widens
-# the tab with it and an alias cannot fall out of step with the roles again.
+# ADMINISTER + guest back when those two covered every role; it silently stopped
+# meaning "anyone" the moment `member` arrived, and cost members the Account tab.
+# Tabs name the tier they mean, so widening a tier widens the tab with it and an
+# alias cannot fall out of step with the roles again.
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,10 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         label="API tokens",
         icon="fa-key",
         template="tokens",
+        # MANAGE, not ADMINISTER: tokens are personal and this page only ever
+        # lists, creates and revokes the caller's own. A member needs one to
+        # upload from CI, and a token can never exceed its holder's role.
+        roles=MANAGE,
         description="Personal access tokens for the API and CI.",
     ),
     SettingsTab(

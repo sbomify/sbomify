@@ -87,7 +87,14 @@ class TeamRoleRequiredMixin(AccessMixin):
 
         current_team: dict[str, Any] = request.session.get("current_team", {})
 
-        team_key = current_team.get("key", None)
+        # Authorize the workspace the URL names, not the one in the session.
+        # These are not the same thing: the handlers below act on the URL's
+        # workspace, so checking the session's granted whatever role the user
+        # happened to hold *somewhere else*. Being an owner of A is not a claim
+        # about B. Guests were turned away by other gates, so until `member`
+        # existed there was no role below ADMINISTER left to fall through this.
+        url_team_key = kwargs.get("team_key")
+        team_key = url_team_key or current_team.get("key", None)
         if team_key is None:
             return error_response(request, HttpResponseForbidden("You are not a member of any team"))
 
@@ -102,6 +109,13 @@ class TeamRoleRequiredMixin(AccessMixin):
                 return error_response(
                     request, HttpResponseForbidden("You don't have sufficient permissions to access this page")
                 )
+
+            if url_team_key:
+                # Asked for a workspace they do not belong to. Not the same as
+                # the case below: their session is fine, so recovering it would
+                # silently move them to another workspace instead of answering
+                # the question they asked.
+                return error_response(request, HttpResponseForbidden("You are not a member of this workspace"))
 
             # User is not a member of this workspace at all - they may have been removed
             # Try to switch to another workspace they are a member of

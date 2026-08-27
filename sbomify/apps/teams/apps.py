@@ -15,6 +15,10 @@ class WorkspacesConfig(AppConfig):
         would accumulate undelivered.
         """
         import sbomify.apps.teams.cron  # noqa: F401
-        import sbomify.apps.teams.signals  # noqa: F401 - Import signals to register them
+
+        # handlers, not the package: importing sbomify.apps.teams.signals only
+        # runs an empty __init__ and registers nothing. A signals.py used to sit
+        # alongside this package, shadowed by it, and every receiver in it was
+        # dead for as long as both existed.
         import sbomify.apps.teams.signals.handlers  # noqa: F401
         import sbomify.apps.teams.tasks  # noqa: F401

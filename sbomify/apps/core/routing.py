@@ -21,4 +21,14 @@ websocket_urlpatterns: list[Any] = [
     # Workspace-scoped WebSocket for real-time updates
     # URL: ws://host/ws/workspace/<workspace_key>/
     re_path(r"ws/workspace/(?P<workspace_key>[\w-]+)/$", consumers.WorkspaceConsumer.as_asgi()),  # type: ignore[arg-type]
+    # Anything else. Channels raises ValueError when no pattern matches, which
+    # escapes as an unhandled ASGI exception and reaches the error tracker as a
+    # fault of ours, though it only ever means a client asked for something we
+    # do not have — automated scanners probe paths like /wsproxy constantly.
+    # A path we do not serve is a verdict about the client, so it is refused the
+    # same way an unauthorised workspace socket is.
+    #
+    # Last in the list, and the only pattern without an anchor, so it is reached
+    # only after every real route has failed to match.
+    re_path(r"", consumers.UnknownPathConsumer.as_asgi()),  # type: ignore[arg-type]
 ]

@@ -56,34 +56,53 @@ def _resource_for(res_key, team, component):
 _MATRIX = {
     # Admins are near-owners: workspace governance, member management, billing
     # and deletion of domain resources are all theirs.
-    "workspace:administer": ("team", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "billing:manage": ("team", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "member:manage": ("team", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "component:manage": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "component:delete": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "product:delete": ("product", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "release:delete": ("product", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "sbom:delete": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "document:delete": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
+    "workspace:administer": ("team", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
+    "billing:manage": ("team", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
+    "member:manage": ("team", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
+    "component:manage": ("component", {"owner": True, "member": True, "admin": True, "guest": False, "bot": False}),
+    "component:delete": ("component", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
+    "product:delete": ("product", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
+    "release:delete": ("product", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
+    "sbom:delete": ("component", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
+    "document:delete": ("component", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
     # ...except the two OWNER_ONLY carve-outs. Deleting the workspace is the only
     # capability an admin lacks; "an admin may not remove an owner" is relational
     # and lives in the member-removal guards, not here.
-    "workspace:delete": ("team", {"owner": True, "admin": False, "guest": False, "bot": False}),
+    "workspace:delete": ("team", {"owner": True, "member": False, "admin": False, "guest": False, "bot": False}),
     # Guests hold NO capability — they are external trust-center visitors and
     # reach restricted content only through the ABAC component:access path.
     # Every guest column below being False is the point of this table.
-    "artifact:publish": ("component", {"owner": True, "admin": True, "guest": False, "bot": True}),
-    "workspace:read": ("team", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "component:administer": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "product:read": ("product", {"owner": True, "admin": True, "guest": False, "bot": False}),
+    "artifact:publish": ("component", {"owner": True, "member": True, "admin": True, "guest": False, "bot": True}),
+    "workspace:read": ("team", {"owner": True, "member": True, "admin": True, "guest": False, "bot": False}),
+    "component:administer": (
+        "component",
+        {"owner": True, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    # The carve-outs: a member maintains a component but does not decide the
+    # world can see it, nor hand an external repo a standing publish grant.
+    "product:set_visibility": (
+        "product",
+        {"owner": True, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "component:set_visibility": (
+        "component",
+        {"owner": True, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "component:manage_publishers": (
+        "component",
+        {"owner": True, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "product:read": ("product", {"owner": True, "member": True, "admin": True, "guest": False, "bot": False}),
     # CI/OIDC publish workflow: a release-cutting bot reads (to check existence),
     # creates, and tags releases — but cannot rename or delete them.
-    "release:read": ("product", {"owner": True, "admin": True, "guest": False, "bot": True}),
-    "release:create": ("product", {"owner": True, "admin": True, "guest": False, "bot": True}),
-    "release:tag": ("product", {"owner": True, "admin": True, "guest": False, "bot": True}),
-    "release:manage": ("product", {"owner": True, "admin": True, "guest": False, "bot": False}),
+    "release:read": ("product", {"owner": True, "member": True, "admin": True, "guest": False, "bot": True}),
+    "release:create": ("product", {"owner": True, "member": True, "admin": True, "guest": False, "bot": True}),
+    "release:tag": ("product", {"owner": True, "member": True, "admin": True, "guest": False, "bot": True}),
+    "release:manage": ("product", {"owner": True, "member": True, "admin": True, "guest": False, "bot": False}),
 }
-_CASES = [(a, role, exp[role]) for a, (_res, exp) in _MATRIX.items() for role in ("owner", "admin", "guest", "bot")]
+_CASES = [
+    (a, role, exp[role]) for a, (_res, exp) in _MATRIX.items() for role in ("owner", "admin", "member", "guest", "bot")
+]
 
 
 @pytest.mark.django_db
@@ -106,7 +125,7 @@ def test_role_capability_matrix(workspace, action, role, expected):
 # absent: it is a synthetic OIDC publishing identity that sits outside the
 # ladder (it can publish releases but cannot read most internal data), so
 # including it would make the invariant below meaningless.
-_ROLE_LADDER = (authz.ROLE_GUEST, authz.ROLE_ADMIN, authz.ROLE_OWNER)
+_ROLE_LADDER = (authz.ROLE_GUEST, authz.ROLE_MEMBER, authz.ROLE_ADMIN, authz.ROLE_OWNER)
 
 
 @pytest.mark.parametrize("action", sorted(authz._ROLE_ACTIONS))
@@ -133,7 +152,7 @@ def test_role_descriptions_cover_every_human_role():
     """The members page explains roles from ROLE_DESCRIPTIONS; a role missing
     there is invisible to users even though it is assignable."""
     described = {role for role, _label, _desc in authz.ROLE_DESCRIPTIONS}
-    human_roles = {authz.ROLE_OWNER, authz.ROLE_ADMIN, authz.ROLE_GUEST}
+    human_roles = {authz.ROLE_OWNER, authz.ROLE_ADMIN, authz.ROLE_MEMBER, authz.ROLE_GUEST}
     assert described == human_roles
     assert authz.ROLE_BOT not in described  # synthetic identity, never shown
     for _role, label, description in authz.ROLE_DESCRIPTIONS:
@@ -152,7 +171,7 @@ def test_non_member_is_always_denied(workspace, action):
 def test_can_decision_equals_verify_item_access(workspace):
     """The faithfulness guarantee: can() == verify_item_access for every role."""
     team, component = workspace
-    for role in ("owner", "admin", "guest", "bot"):
+    for role in ("owner", "admin", "member", "guest", "bot"):
         user = _user(f"equiv-{role}")
         _member(team, user, role)
         req = HttpRequest()
@@ -394,3 +413,52 @@ def test_read_only_preset_includes_abac_access():
     just the role-based read actions, or read-only tokens couldn't read gated
     components (can() checks scope before ABAC)."""
     assert "component:access" in authz.SCOPE_PRESETS["read_only"]
+
+
+def test_no_view_gates_on_the_cached_session_role():
+    """Authorization and UI gating must read the Member row, not the session cache.
+
+    ``session["current_team"]["role"]`` has a 300s TTL, so a demoted user keeps
+    being offered controls they can no longer use and a promoted one keeps
+    missing controls they can. Every gate built on it in this codebase has been a
+    bug, and the class kept reappearing one file at a time across four review
+    rounds — hence a test rather than another comment.
+
+    ``teams.utils`` is exempt: it *writes* that cache, so reading the old value
+    to carry it forward is the one legitimate use.
+    """
+    import pathlib
+    import re
+
+    apps_root = pathlib.Path(__file__).resolve().parents[2]
+    # Python subscript/.get() access, and the dotted access templates use. The
+    # first version of this test scanned only *.py with only the Python pattern,
+    # and a template gate — ``current_team.role == 'owner'`` in
+    # teams/team_settings.html.j2 — sat behind both holes until an audit found
+    # it. A guardrail that covers one of the two dialects is not a guardrail.
+    pattern = re.compile(
+        r"""current_team(?:\.get\(["']role["']\)|\[["']role["']\]|\.role\b)"""
+    )
+    exempt = {"teams/utils.py"}
+
+    # Prose *about* the rule is not a violation of it. Docstrings here quote the
+    # forbidden expression in backticks to explain why it is forbidden, so strip
+    # inline-code spans before matching rather than exempting whole files.
+    code_span = re.compile(r"``[^`]*``|`[^`]*`")
+
+    offenders = []
+    for suffix in ("*.py", "*.j2"):
+        for path in apps_root.rglob(suffix):
+            rel = path.relative_to(apps_root).as_posix()
+            if "tests" in path.parts or rel in exempt:
+                continue
+            for number, line in enumerate(path.read_text().splitlines(), 1):
+                if pattern.search(code_span.sub("", line)):
+                    offenders.append(f"{rel}:{number}")
+
+    assert not offenders, (
+        "These read the cached session role. In Python use "
+        "teams.queries.get_member_role_by_key; in templates use the capability flags from "
+        "core.context_processors.team_context (is_owner / can_administer / can_manage / "
+        f"can_delete) so the UI agrees with what the handler enforces: {offenders}"
+    )

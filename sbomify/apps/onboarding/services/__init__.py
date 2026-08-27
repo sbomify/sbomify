@@ -35,6 +35,22 @@ def _is_mailable(user: Any) -> bool:
     return True
 
 
+def _unsubscribe_headers(unsubscribe_url: str | None) -> dict[str, str]:
+    """List-Unsubscribe headers for a drip message.
+
+    Gmail and Yahoo require these on bulk mail, and they are what puts the
+    native "Unsubscribe" control next to the sender name. The One-Click header
+    tells the client to POST rather than follow the link, which is also why the
+    view treats GET as an offer and POST as the action.
+    """
+    if not unsubscribe_url:
+        return {}
+    return {
+        "List-Unsubscribe": f"<{unsubscribe_url}>, <mailto:hello@sbomify.com?subject=unsubscribe>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    }
+
+
 class OnboardingEmailService:
     """Service for sending onboarding emails."""
 
@@ -89,6 +105,11 @@ class OnboardingEmailService:
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[user.email],
                 reply_to=["hello@sbomify.com"],
+                # Welcome opens the sequence, so it carries the opt-out too. It
+                # is not suppressed by one (nobody can unsubscribe before their
+                # first email), but bulk-sender rules look at the header, not at
+                # our reasoning about which message is transactional.
+                headers=_unsubscribe_headers(context.get("unsubscribe_url")),
             )
             email.attach_alternative(html_content, "text/html")
             email.send(fail_silently=False)
@@ -111,6 +132,14 @@ class OnboardingEmailService:
         Checks deduplication, eligibility, and handles record creation/failure tracking.
         """
         if not _is_mailable(user):
+            return False
+
+        # The opt-out is checked here as well as in the eligibility helpers, so
+        # a backfill or an admin action cannot route around it the way the bot
+        # guard above cannot be routed around either.
+        status_for_optout = OnboardingStatus.objects.filter(user=user).first()
+        if status_for_optout is not None and status_for_optout.drip_unsubscribed:
+            logger.info("%s email suppressed: user %s unsubscribed", email_type, user.id)
             return False
 
         # Dedup check — only skip if successfully sent
@@ -156,6 +185,7 @@ class OnboardingEmailService:
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[user.email],
                 reply_to=["hello@sbomify.com"],
+                headers=_unsubscribe_headers(context.get("unsubscribe_url")),
             )
             email.attach_alternative(html_content, "text/html")
             email.send(fail_silently=False)
@@ -284,8 +314,13 @@ class OnboardingEmailService:
                 if created:
                     joined = getattr(member.user, "date_joined", None)
                     if joined:
-                        OnboardingStatus.objects.filter(pk=status.pk).update(created_at=joined)
-                        status.refresh_from_db(fields=["created_at"])
+                        # Assigned and saved rather than update()+refresh: that
+                        # was two round trips per backfilled row for a value
+                        # already in hand. auto_now_add only fills the field on
+                        # insert, so an explicit save on an existing row keeps
+                        # what is assigned here.
+                        status.created_at = joined
+                        status.save(update_fields=["created_at"])
                     backfilled_status += 1
 
                 user_id = member.user.id

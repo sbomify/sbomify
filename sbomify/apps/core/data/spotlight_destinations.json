@@ -131,20 +131,18 @@
 
     {
       "title": "New product",
-      "url_name": "core:products_dashboard",
+      "url_name": "core:product_new",
       "section": "create",
       "icon": "fa-plus",
       "keywords": ["create product", "add product"],
-      "query": {"new": "1"},
       "roles": ["owner", "admin"]
     },
     {
       "title": "New component",
-      "url_name": "core:components_dashboard",
+      "url_name": "core:component_new",
       "section": "create",
       "icon": "fa-plus",
       "keywords": ["create component", "add component"],
-      "query": {"new": "1"},
       "roles": ["owner", "admin"]
     },
     {
