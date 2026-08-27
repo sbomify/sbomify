@@ -1080,7 +1080,7 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
         return 200, _build_team_response(request, team)
 
     except IntegrityError:
-        return 400, {"detail": "A workspace with this name already exists"}
+        return 400, {"detail": "A team with this name already exists"}
     except ValueError as exc:
         logger.warning(f"Invalid billing plan for team {team_key}: {exc}")
         return 400, {"detail": str(exc)}
@@ -1128,7 +1128,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
         return 200, _build_team_response(request, team)
 
     except IntegrityError:
-        return 400, {"detail": "A workspace with this name already exists"}
+        return 400, {"detail": "A team with this name already exists"}
     except ValueError as exc:
         logger.warning(f"Invalid billing plan for team {team_key}: {exc}")
         return 400, {"detail": str(exc)}

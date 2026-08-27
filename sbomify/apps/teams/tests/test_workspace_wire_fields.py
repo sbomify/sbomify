@@ -59,7 +59,7 @@ class TestMemberSchemaDuringTheRename:
 
 
 class TestFrozenErrorCodes:
-    """The prose beside these now says workspace; the codes must not follow.
+    """Neither the prose nor the code beside it may move inside v1.
 
     They are contract strings a client may branch on, so renaming one is a
     shape break that waits for a v2.
@@ -78,12 +78,9 @@ class TestFrozenErrorCodes:
 
 
 @pytest.mark.django_db
-class TestErrorProseSaysWorkspace:
-    def test_the_no_current_workspace_error_says_workspace(self, authenticated_api_client):
-        """A token with no workspace context hits the reworded 403.
-
-        The prose changes; the error_code beside it does not.
-        """
+class TestErrorProseIsFrozenWithTheCode:
+    def test_the_no_current_workspace_error_keeps_its_v1_prose(self, authenticated_api_client):
+        """A token with no workspace context hits the same 403 it always did."""
         client, token = authenticated_api_client
 
         response = client.post(
@@ -95,5 +92,8 @@ class TestErrorProseSaysWorkspace:
 
         assert response.status_code == 403
         body = json.loads(response.content)
-        assert body["detail"] == "No current workspace selected"
+        # The prose stays on the v1 wording. Review call: a v1 response is a
+        # contract down to its strings, since a client may match on the text.
+        # The workspace wording is v2's, not a drop-in edit here.
+        assert body["detail"] == "No current team selected"
         assert body["error_code"] == ErrorCode.NO_CURRENT_TEAM.value
