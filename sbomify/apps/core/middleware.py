@@ -731,9 +731,10 @@ class ApiVersionDeprecationMiddleware:
     endpoints v2 renamed. A client that never reads our docs still sees the
     date and the replacement in the headers of every call it already makes.
 
-    The dates live in settings so ops can move the sunset without a code
-    change. Setting ``API_V1_SUNSET`` to None turns the headers off, which is
-    what a self-hosted deployment that never intends to retire v1 wants.
+    The dates live in settings so ops can move them without a code change.
+    ``API_V1_DEPRECATED_ON`` unset turns the headers off entirely;
+    ``API_V1_SUNSET`` stays unset until a retirement date is actually
+    committed to, because Sunset is a promise and Deprecation is not.
     """
 
     #: rel values per RFC 8288. "successor-version" is the replacement, and
@@ -748,16 +749,20 @@ class ApiVersionDeprecationMiddleware:
         if not request.path.startswith("/api/v1/"):
             return response
 
-        sunset = getattr(settings, "API_V1_SUNSET", None)
-        if sunset is None:
+        deprecation = getattr(settings, "API_V1_DEPRECATED_ON", None)
+        if deprecation is None:
             return response
 
-        deprecation = getattr(settings, "API_V1_DEPRECATED_ON", None)
-        if deprecation is not None:
-            # RFC 9745 carries a Structured Fields Date, which is "@" and a
-            # unix timestamp. Not an HTTP-date; that is Sunset's format.
-            response["Deprecation"] = f"@{int(deprecation.timestamp())}"
-        response["Sunset"] = http_date(sunset.timestamp())
+        # RFC 9745 carries a Structured Fields Date, which is "@" and a unix
+        # timestamp. Not an HTTP-date; that is Sunset's format.
+        response["Deprecation"] = f"@{int(deprecation.timestamp())}"
+
+        # Deprecation and Sunset are separate statements on purpose: v1 is
+        # deprecated, and v1 is not going away for a long time. A Sunset
+        # header is a promise of a date, so none is sent until one is set.
+        sunset = getattr(settings, "API_V1_SUNSET", None)
+        if sunset is not None:
+            response["Sunset"] = http_date(sunset.timestamp())
 
         base = f"{'https' if request.is_secure() else 'http'}://{request.get_host()}"
         response["Link"] = self._LINK.format(base=base)

@@ -315,7 +315,10 @@ for _prefix, _dotted in MOUNTS:
 # after the v2 block on purpose: clone_router builds new Operation objects, so
 # marking the originals now touches v1 alone. Doing it before the clone would
 # have marked v2 deprecated on the day it shipped.
-if getattr(settings, "API_V1_SUNSET", None) is not None:
+#
+# Keyed on the deprecation, not the sunset: v1 is deprecated the day v2 ships,
+# while a retirement date may never be set at all.
+if getattr(settings, "API_V1_DEPRECATED_ON", None) is not None:
     for _prefix, _router in api._routers:
         for _path_view in _router.path_operations.values():
             for _operation in _path_view.operations:
