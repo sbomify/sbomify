@@ -10,6 +10,7 @@ the two documents rather than that either one merely builds.
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 
 import pytest
 from django.test import Client
@@ -276,11 +277,21 @@ class TestDeprecationHeaders:
     on every call it already makes.
     """
 
-    def test_v1_announces_its_sunset(self, client: Client):
+    def test_v1_announces_deprecation_but_promises_no_date(self, client: Client):
+        """Deprecation and Sunset are separate statements, split on review.
+
+        v1 is deprecated, and v1 is not going away for a long time. A Sunset
+        header is a promise of a date, so by default none is sent.
+        """
         response = client.get("/api/v1/products")
-        assert response.headers["Sunset"]
         assert response.headers["Deprecation"].startswith("@")
         assert 'rel="successor-version"' in response.headers["Link"]
+        assert "Sunset" not in response.headers
+
+    def test_a_committed_sunset_date_is_announced(self, client: Client, settings):
+        settings.API_V1_SUNSET = datetime(2030, 1, 1, tzinfo=UTC)
+        response = client.get("/api/v1/products")
+        assert response.headers["Sunset"] == "Tue, 01 Jan 2030 00:00:00 GMT"
 
     def test_v2_announces_nothing(self, client: Client):
         response = client.get("/api/v2/products")

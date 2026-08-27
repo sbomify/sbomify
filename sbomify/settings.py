@@ -219,13 +219,14 @@ INSTALLED_APPS = [
 # ApiVersionDeprecationMiddleware. v2 renames the SBOM-era prefixes and the
 # team vocabulary; v1 keeps serving until the sunset below.
 #
-# Twelve months, because the sbomify action runs in other people's CI and some
-# of them pin a version and forget it.
+# Deprecation is announced; a retirement date is not. v1 stays up for a long
+# time, and a Sunset header is a promise of a date, so none is sent until one
+# is deliberately set here or in the environment.
 #
-# Both read from the environment as YYYY-MM-DD so a deployment can move the
-# date, or set API_V1_SUNSET to "none" to stop announcing a retirement at all.
-# A self-hosted install that never intends to retire v1 wants the latter, and
-# should not have to edit this file to get it.
+# Both read from the environment as YYYY-MM-DD, with "none" meaning unset.
+# When a sunset is eventually committed to, give the action's users a long
+# runway: it runs in other people's CI and some of them pin a version and
+# forget it.
 
 
 def _sunset_date(name: str, default: str) -> datetime | None:
@@ -239,7 +240,7 @@ def _sunset_date(name: str, default: str) -> datetime | None:
 
 
 API_V1_DEPRECATED_ON = _sunset_date("API_V1_DEPRECATED_ON", "2026-08-26")
-API_V1_SUNSET = _sunset_date("API_V1_SUNSET", "2027-08-26")
+API_V1_SUNSET = _sunset_date("API_V1_SUNSET", "none")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

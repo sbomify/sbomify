@@ -172,7 +172,7 @@ MIDDLEWARE = [
 # test never reads the clock: the assertion should not change meaning on the
 # day the real sunset is moved.
 API_V1_DEPRECATED_ON = datetime(2026, 8, 26, tzinfo=UTC)
-API_V1_SUNSET = datetime(2027, 8, 26, tzinfo=UTC)
+API_V1_SUNSET = None
 
 # Configure ALLOWED_HOSTS for tests
 # Use wildcard - DynamicHostValidationMiddleware handles validation
