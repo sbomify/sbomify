@@ -697,8 +697,8 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
         }
     except Team.DoesNotExist:
         return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
-    except Exception as e:
-        log.error(f"Error creating product: {e}")
+    except Exception:
+        log.exception("Error creating product")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -746,8 +746,8 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         ]
 
         return 200, PaginatedProductsResponse(items=items, pagination=pagination_meta)
-    except Exception as e:
-        log.error(f"Error listing products: {e}")
+    except Exception:
+        log.exception("Error listing products")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -889,8 +889,8 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             "detail": "A product with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error updating product {product_id}: {e}")
+    except Exception:
+        log.exception(f"Error updating product {product_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -978,8 +978,8 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
             "detail": "A product with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error patching product {product_id}: {e}")
+    except Exception:
+        log.exception(f"Error patching product {product_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1013,8 +1013,8 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
             schedule_broadcast(workspace_key, "product_deleted", {"product_id": product_id, "name": product_name})
 
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting product {product_id}: {e}")
+    except Exception:
+        log.exception(f"Error deleting product {product_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1088,8 +1088,8 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
         }
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
-    except Exception as e:
-        log.error(f"Error creating product identifier: {e}")
+    except Exception:
+        log.exception("Error creating product identifier")
         return 500, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1139,8 +1139,8 @@ def list_product_identifiers(
         ]
 
         return 200, {"items": items, "pagination": pagination_meta}
-    except Exception as e:
-        log.error(f"Error listing product identifiers: {e}")
+    except Exception:
+        log.exception("Error listing product identifiers")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1213,8 +1213,8 @@ def update_product_identifier(
         }
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
-    except Exception as e:
-        log.error(f"Error updating product identifier {identifier_id}: {e}")
+    except Exception:
+        log.exception(f"Error updating product identifier {identifier_id}")
         return 500, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1260,8 +1260,8 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
     try:
         identifier.delete()
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting product identifier {identifier_id}: {e}")
+    except Exception:
+        log.exception(f"Error deleting product identifier {identifier_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1339,8 +1339,8 @@ def bulk_update_product_identifiers(
             "detail": "One or more identifiers already exist in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error bulk updating product identifiers: {e}")
+    except Exception:
+        log.exception("Error bulk updating product identifiers")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1392,14 +1392,14 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
             "created_at": link.created_at.isoformat(),
         }
 
-    except IntegrityError as e:
-        log.error(f"IntegrityError creating product link: {e}")
+    except IntegrityError:
+        log.exception("IntegrityError creating product link")
         return 500, {
             "detail": "Failed to create link due to data integrity issue",
             "error_code": ErrorCode.INTERNAL_ERROR,
         }
-    except Exception as e:
-        log.error(f"Error creating product link: {e}")
+    except Exception:
+        log.exception("Error creating product link")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1446,8 +1446,8 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
         ]
 
         return 200, {"items": items, "pagination": pagination_meta}
-    except Exception as e:
-        log.error(f"Error listing product links: {e}")
+    except Exception:
+        log.exception("Error listing product links")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1497,14 +1497,14 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
             "created_at": link.created_at.isoformat(),
         }
 
-    except IntegrityError as e:
-        log.error(f"IntegrityError updating product link {link_id}: {e}")
+    except IntegrityError:
+        log.exception(f"IntegrityError updating product link {link_id}")
         return 500, {
             "detail": "Failed to update link due to data integrity issue",
             "error_code": ErrorCode.INTERNAL_ERROR,
         }
-    except Exception as e:
-        log.error(f"Error updating product link {link_id}: {e}")
+    except Exception:
+        log.exception(f"Error updating product link {link_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1540,8 +1540,8 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> 
     try:
         link.delete()
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting product link {link_id}: {e}")
+    except Exception:
+        log.exception(f"Error deleting product link {link_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1609,8 +1609,8 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
             "detail": "One or more links already exist for this product",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error bulk updating product links: {e}")
+    except Exception:
+        log.exception("Error bulk updating product links")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1719,8 +1719,8 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
         }
     except Team.DoesNotExist:
         return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
-    except Exception as e:
-        log.error(f"Error creating component: {e}")
+    except Exception:
+        log.exception("Error creating component")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1780,8 +1780,8 @@ def list_components(
         ]
 
         return 200, PaginatedComponentsResponse(items=items, pagination=pagination_meta)
-    except Exception as e:
-        log.error(f"Error listing components: {e}")
+    except Exception:
+        log.exception("Error listing components")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -1930,8 +1930,8 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             "detail": "A component with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error updating component {component_id}: {e}")
+    except Exception:
+        log.exception(f"Error updating component {component_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -2078,8 +2078,8 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             "detail": "A component with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error patching component {component_id}: {e}")
+    except Exception:
+        log.exception(f"Error patching component {component_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -2130,8 +2130,8 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
             )
 
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting component {component_id}: {e}")
+    except Exception:
+        log.exception(f"Error deleting component {component_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -2426,8 +2426,8 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
         log.error(f"Pydantic validation error for component {component_id}: {ve.errors()}")
         log.error(f"Failed validation data: {metadata.model_dump()}")
         return 422, {"detail": str(ve.errors())}
-    except Exception as e:
-        log.error(f"Error updating component metadata for {component_id}: {e}", exc_info=True)
+    except Exception:
+        log.exception(f"Error updating component metadata for {component_id}", exc_info=True)
         return 500, {"detail": "Failed to update component metadata", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -2542,8 +2542,8 @@ def list_component_releases(
 
         return 200, {"items": response_data, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing releases for component {component_id}: {e}")
+    except Exception:
+        log.exception(f"Error listing releases for component {component_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -2740,8 +2740,8 @@ def download_product_sbom(
     except ValueError as e:
         # Format/version validation errors
         return 400, {"detail": str(e), "error_code": ErrorCode.BAD_REQUEST}
-    except Exception as e:
-        log.error(f"Error generating product SBOM {product_id}: {e}")
+    except Exception:
+        log.exception(f"Error generating product SBOM {product_id}")
         return 500, {"detail": "Error generating product SBOM"}
 
 
@@ -2934,8 +2934,8 @@ def list_all_releases(
 
         return 200, {"items": response_data, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing all releases: {e}")
+    except Exception:
+        log.exception("Error listing all releases")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -3270,8 +3270,8 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
         # fault: reporting it as "Internal server error" told them nothing to
         # act on, and put a plain 400 in the error tracker on every attempt.
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
-    except Exception as e:
-        log.error(f"Error creating release: {e}")
+    except Exception:
+        log.exception("Error creating release")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -3372,8 +3372,8 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
         return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
-    except Exception as e:
-        log.error(f"Error updating release {release_id}: {e}")
+    except Exception:
+        log.exception(f"Error updating release {release_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -3458,8 +3458,8 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
         return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
-    except Exception as e:
-        log.error(f"Error patching release {release_id}: {e}")
+    except Exception:
+        log.exception(f"Error patching release {release_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -3508,8 +3508,8 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
             )
 
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting release {release_id}: {e}")
+    except Exception:
+        log.exception(f"Error deleting release {release_id}")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -4058,8 +4058,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_version": None,
                 "component_slug": artifact.sbom.component.slug,
             }
-        except Exception as e:
-            log.error(f"Error processing SBOM: {e}")
+        except Exception:
+            log.exception("Error processing SBOM")
             return 500, {"detail": "Error processing SBOM", "error_code": ErrorCode.INTERNAL_ERROR}
 
         # Outside the try on purpose: the row is committed by here, and letting a
@@ -4105,8 +4105,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_version": artifact.document.version or "",
                 "component_slug": artifact.document.component.slug,
             }
-        except Exception as e:
-            log.error(f"Error processing document: {e}")
+        except Exception:
+            log.exception("Error processing document")
             return 500, {"detail": "Error processing document", "error_code": ErrorCode.INTERNAL_ERROR}
 
         # Outside the try on purpose: the row is committed by here, and letting a
@@ -4899,8 +4899,8 @@ def list_component_sboms(
 
         return 200, {"items": items, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing component SBOMs: {e}")
+    except Exception:
+        log.exception("Error listing component SBOMs")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
@@ -5002,8 +5002,8 @@ def list_component_documents(
 
         return 200, {"items": items, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing component documents: {e}")
+    except Exception:
+        log.exception("Error listing component documents")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 

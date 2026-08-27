@@ -16,8 +16,10 @@ import ast
 import collections
 import json
 import pathlib
+from functools import lru_cache
 
 import pytest
+from django.http import HttpRequest
 
 from sbomify.apis import UTCZRenderer
 from sbomify.apps.core.schemas import DEFAULT_ERROR_CODE_BY_STATUS, ErrorCode
@@ -83,11 +85,16 @@ TOLERATED: dict[tuple[int, str], int] = {
 }
 
 
+@lru_cache(maxsize=1)
 def _literal_status_code_pairs() -> dict[tuple[int, str], list[str]]:
     """Every ``return <status>, {..., "error_code": ErrorCode.X}`` in the API layer.
 
     Codes built at runtime are skipped: ``_check_billing_limits`` hands back a
     code its caller cannot see, and both of its call sites are 403.
+
+    Cached: three tests ask for this, and each call walks the AST of every
+    api.py in the project. Callers must treat the result as read-only, since
+    they all share it.
     """
     found: dict[tuple[int, str], list[str]] = collections.defaultdict(list)
     for path in sorted(APPS_DIR.rglob("api*.py")):
@@ -154,7 +161,9 @@ class TestRendererFillsTheGap:
 
     @staticmethod
     def _render(status: int, payload: dict) -> dict:
-        return json.loads(UTCZRenderer().render(None, payload, response_status=status))
+        # A real request, because ninja's own signature says HttpRequest and
+        # the renderer should not have to widen its type to suit the test.
+        return json.loads(UTCZRenderer().render(HttpRequest(), payload, response_status=status))
 
     @pytest.mark.parametrize(
         ("status", "expected"),
