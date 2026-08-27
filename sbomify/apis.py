@@ -271,6 +271,11 @@ V2_SEGMENTS: dict[str, dict[str, str]] = {
     "sbomify.apps.sboms.apis.router": {"/artifact/": "/", "/sbom/": "/"},
     # Access requests are the last routes still under the old noun.
     "sbomify.apps.documents.access_apis.router": {"/teams/": "/workspaces/"},
+    # An artifact's releases are declared in the core router, which mounts at
+    # the root, so the /artifacts prefix above never reaches them. Renaming the
+    # mount is not enough: a literal path inside another router keeps whatever
+    # noun it was written with.
+    "sbomify.apps.core.apis.router": {"/sboms/": "/artifacts/"},
 }
 
 

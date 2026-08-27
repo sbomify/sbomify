@@ -22,6 +22,20 @@ from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 
 TEAM_FIELDS = ("team_id", "team_key", "team_name", "is_default_team")
 
+# Two v2 paths keep the word, deliberately.
+#
+#   /components/{id}/sboms  sits beside /components/{id}/documents and returns
+#       only the SBOM-model rows. Calling it /artifacts would promise the
+#       document side too, so the rename here is a design question rather than
+#       a mechanical one.
+#   sbom-status             is the CRA regulation's own vocabulary, not ours.
+SBOM_PATHS_KEPT_ON_PURPOSE = frozenset(
+    {
+        "/api/v2/components/{component_id}/sboms",
+        "/api/v2/compliance/cra/{assessment_id}/sbom-status",
+    }
+)
+
 
 @pytest.fixture(scope="module")
 def v1_schema() -> dict:
@@ -116,6 +130,21 @@ class TestV2SaysWorkspace:
     def test_the_renamed_schemas_are_present(self, v2_schema):
         names = set(_ours(v2_schema["components"]["schemas"]))
         assert {"WorkspaceSchema", "WorkspacePatchSchema", "WorkspaceUpdateSchema"} <= names
+
+    def test_no_path_says_sboms_except_where_it_should(self, v2_schema):
+        """The prefix rename is per-router, so a literal path elsewhere is missed.
+
+        An artifact's releases are declared inside the core router, which mounts
+        at the root. Remapping the sboms router's prefix never touched them, so
+        they sat at /api/v2/sboms/{artifact_id}/releases: renamed parameter,
+        unrenamed noun. Only checking for "team" let that through.
+        """
+        offenders = [
+            path
+            for path in v2_schema["paths"]
+            if re.search("sbom", path, re.I) and path not in SBOM_PATHS_KEPT_ON_PURPOSE
+        ]
+        assert offenders == [], f"v2 paths still saying sbom: {offenders}"
 
 
 class TestVendoredSchemasAreLeftAlone:
