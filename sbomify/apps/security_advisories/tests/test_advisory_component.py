@@ -212,3 +212,34 @@ class TestAdvisoriesAffectingComponentRelease:
         AdvisoryVersionRange.objects.create(product_status=status, introduced="1.0.0", fixed="2.0.0")
 
         assert advisories_affecting_component_release(self._release(component, "1.2.3")) == []
+
+
+@pytest.mark.django_db
+def test_a_component_status_does_not_read_as_portfolio_wide(vulnerability, advisory, component) -> None:
+    """``__str__`` predates advisory_component and fell through to "All products".
+
+    Three subjects now, not two. An operator reading a log line or an admin row
+    would see a status scoped to one component presented as covering the whole
+    portfolio, which is the one direction that must not be wrong.
+    """
+    subject = AdvisoryComponent.objects.create(advisory=advisory, component=component)
+    scoped = AdvisoryProductStatus.objects.create(vulnerability=vulnerability, advisory_component=subject)
+    portfolio = AdvisoryProductStatus.objects.create(vulnerability=vulnerability)
+
+    assert component.name in str(scoped)
+    assert "All products" not in str(scoped)
+    assert "All products" in str(portfolio)
+
+
+@pytest.mark.django_db
+def test_status_spanning_two_advisories_rejected_for_a_component(vulnerability, team, component) -> None:
+    """The component half of a rule the product half already had.
+
+    Validating only advisory_product let a component belonging to another
+    advisory through, which is the same mix-up the product check exists to
+    stop.
+    """
+    other = SecurityAdvisory.objects.create(team=team, title="Other")
+    other_component = AdvisoryComponent.objects.create(advisory=other, component=component)
+    with pytest.raises(ValidationError, match="different advisories"):
+        AdvisoryProductStatus.objects.create(vulnerability=vulnerability, advisory_component=other_component)

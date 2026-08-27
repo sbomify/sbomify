@@ -729,7 +729,16 @@ class AdvisoryProductStatus(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
-        scope = self.advisory_product.product_name if self.advisory_product else "All products"
+        # Three subjects, not two. Falling through to "All products" whenever
+        # advisory_product is unset predates advisory_component and would now
+        # print a component-scoped status as portfolio-wide, which is the one
+        # reading an operator must not get wrong.
+        if self.advisory_product:
+            scope = self.advisory_product.product_name
+        elif self.advisory_component:
+            scope = self.advisory_component.component_name
+        else:
+            scope = "All products"
         return f"{self.vulnerability}: {self.status} ({scope})"
 
     @property
@@ -746,11 +755,24 @@ class AdvisoryProductStatus(models.Model):
         if self.justification and self.status != self.Status.NOT_AFFECTED:
             errors["justification"] = "A justification only applies to a not_affected status."
 
-        if self.vulnerability_id and self.advisory_product_id:
+        # Both subjects get the same check. Guarding only the product half let a
+        # component from another advisory through, which is the same defect the
+        # product check exists to stop.
+        if self.vulnerability_id and (self.advisory_product_id or self.advisory_component_id):
             vuln_advisory = AdvisoryVulnerability.objects.filter(pk=self.vulnerability_id).values("advisory_id").first()
-            product_advisory = AdvisoryProduct.objects.filter(pk=self.advisory_product_id).values("advisory_id").first()
-            if vuln_advisory and product_advisory and vuln_advisory["advisory_id"] != product_advisory["advisory_id"]:
-                errors["advisory_product"] = "The vulnerability and the product belong to different advisories."
+            subject_field, subject_advisory = "advisory_product", None
+            if self.advisory_product_id:
+                subject_advisory = (
+                    AdvisoryProduct.objects.filter(pk=self.advisory_product_id).values("advisory_id").first()
+                )
+            else:
+                subject_field = "advisory_component"
+                subject_advisory = (
+                    AdvisoryComponent.objects.filter(pk=self.advisory_component_id).values("advisory_id").first()
+                )
+            if vuln_advisory and subject_advisory and vuln_advisory["advisory_id"] != subject_advisory["advisory_id"]:
+                subject_noun = "product" if subject_field == "advisory_product" else "component"
+                errors[subject_field] = f"The vulnerability and the {subject_noun} belong to different advisories."
 
         if self.source_vex_id:
             # Imported here: sboms imports core, and core is imported above.
