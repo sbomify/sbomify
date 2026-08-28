@@ -3578,9 +3578,10 @@ def download_release(
     )
 
     if not sbom_artifacts.exists():
-        return HttpResponse(
-            status=500, content='{"detail": "Error generating release SBOM"}', content_type="application/json"
-        )
+        # An empty release is the caller's situation, not a server fault. This
+        # answered a hand-rolled 500 with no error_code, built outside ninja's
+        # pipeline, for what is simply "nothing here to download".
+        return 404, {"detail": "This release has no SBOMs to download", "error_code": ErrorCode.NOT_FOUND}
 
     # Normalize format early
     format_lower = output_format.lower()
