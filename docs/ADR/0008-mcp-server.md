@@ -26,7 +26,7 @@ vocabulary, and `AccessToken` already carries a workspace pin (`team`), action
 scopes (`scopes`), and an expiry. Critically, `can()` evaluates the token's
 scope *before* the role check, so scope can only ever narrow access. An MCP
 server that authenticates with a personal access token therefore inherits
-least-privilege enforcement without inventing a second permission model — the
+least-privilege enforcement without inventing a second permission model: the
 riskiest part of the work was already done and battle-tested.
 
 ## Decision
@@ -38,7 +38,7 @@ exposed as a streamable-HTTP ASGI app and dispatched from `sbomify/asgi.py`. It
 runs in the existing container, in the existing deploy, sharing models,
 services, and `can()` in-process.
 
-The alternative — a standalone server calling the public REST API — was
+The alternative, a standalone server calling the public REST API, was
 rejected because it would duplicate authentication plumbing over HTTP, drift
 from the API it wraps, and need its own release train. ADR-001's monolith
 argument applies unchanged.
@@ -62,7 +62,7 @@ understand and can audit via `last_used_at`.
 Each tool declares the `can()` action it requires
 (`sbomify/apps/mcp/registry.py`). `tools/list` is filtered to the actions the
 caller's token permits, so an agent holding a `read_only` token never sees
-`upload_sbom`. This is an ergonomics decision, not a security boundary — every
+`upload_sbom`. This is an ergonomics decision, not a security boundary: every
 invocation is still authorized by `can()` against the concrete resource, and a
 client calling a tool it was never shown is refused exactly as the REST API
 would refuse it. Hiding impossible tools stops agents burning turns on calls
@@ -96,7 +96,7 @@ byte-for-byte as supplied, and the tools deliberately do not re-encode JSON.
 This is the material way MCP differs from the REST API: the caller is a language
 model, and much of what it reads is attacker-influenced. Package names inside a
 transitive dependency's SBOM, or the text of an uploaded document, reach the
-model verbatim — and the model is authenticated as a real user with real
+model verbatim, and the model is authenticated as a real user with real
 permissions.
 
 Scopes are the boundary, but a boundary alone assumes the token is correctly
@@ -111,13 +111,13 @@ scoped. The additional layers, in `sbomify/apps/mcp/limits.py` and the registry:
 * **A separate write throttle** (`AccessTokenHeavyRateThrottle`), matching what
   the REST API applies to uploads.
 * **A per-call audit trail** (`mcp_tool_call`), carrying outcome, tool, token,
-  user, and workspace — never arguments or artifact content, which would put the
+  user, and workspace, never arguments or artifact content, which would put the
   SBOM in the log.
 * **Provenance marking**: artifact-derived text is truncated per field, and the
   server instructions tell the model to treat it as data rather than
   instructions.
 * **Nothing is advertised to an unauthenticated caller.** `tools/list` without a
-  valid token returns an empty list — every tool would refuse anyway, and an
+  valid token returns an empty list: every tool would refuse anyway, and an
   empty list tells a misconfigured client exactly what is wrong.
 
 The honest limit: none of this prevents an injection from making an agent
@@ -133,13 +133,13 @@ is the first place to extend when a tool is added.
 ### Operational constraints this imposes
 
 * **Stateless HTTP is mandatory.** Production runs two gunicorn workers across
-  two replicas — four processes with no session affinity — so a stateful MCP
+  two replicas, four processes with no session affinity, so a stateful MCP
   session would break on its second request. The server sets
   `stateless_http=True, json_response=True`.
 * **The session manager must be started during ASGI lifespan.** Its anyio task
   group is entered in `LifespanApp` in `sbomify/asgi.py`; without it every
   request fails with "Task group is not initialized". `LifespanApp` is the sole
-  owner — the MCP Starlette app declares its own lifespan, which we
+  owner: the MCP Starlette app declares its own lifespan, which we
   deliberately never drive.
 * **Every tool must be `async`.** In mcp 1.28 a synchronous tool function is
   called directly on the event loop with no thread offload, where Django ORM
@@ -160,7 +160,7 @@ is the first place to extend when a tool is added.
 
 ### Deliberately out of scope
 
-* **Cross-workspace dependency search** ("which components ship log4j?") — the
+* **Cross-workspace dependency search** ("which components ship log4j?"): the
   obvious high-value tool, but `SBOM` stores metadata only; the `licenses` and
   `packages_licenses` fields were removed, so package data lives solely in the
   S3 artifact. Answering this per query would mean fetching and parsing every
@@ -170,13 +170,13 @@ is the first place to extend when a tool is added.
   administration.** The initial surface is reads, artifact publishing, and
   contact-profile management.
 * **Deletion of anything.** Structurally excluded, per the injection discussion
-  above — not merely unimplemented.
+  above, not merely unimplemented.
 * **MCP resources and prompts.** Tools only, for now.
 
 ### Costs
 
 The tool set is hand-maintained, so a new capability needs a deliberate decision
-about whether an agent should have it — a cost, but also the point. Tools that
+about whether an agent should have it. A cost, but also the point. Tools that
 wrap REST views inherit their response shapes, so a breaking change there
 surfaces in MCP; the scope-enforcement test matrix in
 `sbomify/apps/mcp/tests/` is what catches it.

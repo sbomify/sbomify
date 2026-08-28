@@ -60,7 +60,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 ### MCP server (AI agents)
 
 - Query your workspace from AI agents over the [Model Context Protocol](https://modelcontextprotocol.io), served at `/mcp`
-- Authenticated with scoped personal access tokens — the tools an agent is offered follow its token's scopes
+- Authenticated with scoped personal access tokens: the tools an agent is offered follow its token's scopes
 - See the [MCP guide](https://sbomify.com/guides/mcp/) for setup; [docs/mcp.md](docs/mcp.md) covers operations
 
 ## Architecture Decision Records (ADRs)

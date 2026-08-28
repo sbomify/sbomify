@@ -1,9 +1,9 @@
-# MCP server — operations
+# MCP server operations
 
 sbomify serves a [Model Context Protocol](https://modelcontextprotocol.io) endpoint at `/mcp` so AI
 agents can query a workspace and publish artifacts using scoped personal access tokens.
 
-**Setting it up as a user?** See the [MCP guide](https://sbomify.com/guides/mcp/) — token scoping,
+**Setting it up as a user?** See the [MCP guide](https://sbomify.com/guides/mcp/) for token scoping,
 client configuration, the tool reference, and the security model.
 
 **Why it is built this way?** See [ADR-0008](ADR/0008-mcp-server.md).
@@ -30,15 +30,15 @@ share one budget, so give agents their own.
 
 Two structured audit streams cover MCP traffic:
 
-- `sbomify.audit.mcp` — one `mcp_tool_call` event per invocation, carrying outcome, tool, token,
+- `sbomify.audit.mcp`: one `mcp_tool_call` event per invocation, carrying outcome, tool, token,
   user and workspace. Deliberately never arguments or artifact content; logging those would put
   whole SBOMs in the log.
-- `sbomify.audit.token_auth` — the existing token-authentication events. MCP calls appear with an
+- `sbomify.audit.token_auth`: the existing token-authentication events. MCP calls appear with an
   `attempted_action` of `mcp <tool_name>`.
 
 ## Troubleshooting
 
-**421 Misdirected Request** — the `Host` header is not in the allow-list. The MCP SDK enables
+**421 Misdirected Request**: the `Host` header is not in the allow-list. The MCP SDK enables
 DNS-rebinding protection with a localhost-only default, which rejects every request behind a real
 hostname; the allow-list is derived from `APP_BASE_URL`. Set `MCP_ALLOWED_HOSTS` for any additional
 hostname that should serve MCP.
@@ -46,17 +46,17 @@ hostname that should serve MCP.
 Note this check is load-bearing here in a way it is not elsewhere: the MCP app is dispatched before
 Django's middleware stack, so `DynamicHostValidationMiddleware` does not cover `/mcp`.
 
-**"Task group is not initialized"** — the ASGI server is not delivering lifespan events. The MCP
+**"Task group is not initialized"**: the ASGI server is not delivering lifespan events. The MCP
 session manager's task group is started in `LifespanApp` (`sbomify/asgi.py`), which owns it
 exclusively. Gunicorn with `uvicorn_worker.UvicornWorker` drives this correctly; a WSGI server will
 not.
 
-**Stale database connections after a Postgres restart** — should not occur. `/mcp` bypasses Django's
+**Stale database connections after a Postgres restart**: should not occur. `/mcp` bypasses Django's
 handler and therefore its `request_finished` signal, so tools reach the ORM through channels'
 `database_sync_to_async`, which calls `close_old_connections` around each call. If you see
 `InterfaceError` persisting on `/mcp` while REST requests recover, that wiring is the place to look.
 
-**Empty `tools/list`** — the caller presented no token or an invalid one. Unauthenticated callers are
+**Empty `tools/list`**: the caller presented no token or an invalid one. Unauthenticated callers are
 deliberately offered nothing, since every tool would refuse them anyway.
 
 ## Deployment notes
