@@ -900,6 +900,7 @@ def get_cyclonedx_component_metadata(
     response={200: SBOMResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public SBOMs
 )
+@decorate_view(optional_auth)
 def get_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
     """Get a specific SBOM by ID."""
     result = get_sbom_detail(request, sbom_id)
@@ -995,6 +996,7 @@ def download_cipher_suite_inventory_csv(request: HttpRequest, sbom_id: str) -> A
     response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public SBOMs
 )
+@decorate_view(optional_auth)
 def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
     """Download an SBOM file.
 
