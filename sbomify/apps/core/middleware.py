@@ -738,8 +738,10 @@ class ApiVersionDeprecationMiddleware:
     """
 
     #: rel values per RFC 8288. "successor-version" is the replacement, and
-    #: "deprecation" points at the human explanation.
-    _LINK = '<{base}/api/v2/docs>; rel="successor-version", <{base}/api/v1/docs>; rel="deprecation"'
+    #: "deprecation" points at the human explanation. Relative references,
+    #: which the RFC permits: an absolute form would need the scheme and host
+    #: reconstructed from the request, and both lie behind a proxy.
+    _LINK = '</api/v2/docs>; rel="successor-version", </api/v1/docs>; rel="deprecation"'
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
         self.get_response = get_response
@@ -764,6 +766,5 @@ class ApiVersionDeprecationMiddleware:
         if sunset is not None:
             response["Sunset"] = http_date(sunset.timestamp())
 
-        base = f"{'https' if request.is_secure() else 'http'}://{request.get_host()}"
-        response["Link"] = self._LINK.format(base=base)
+        response["Link"] = self._LINK
         return response
