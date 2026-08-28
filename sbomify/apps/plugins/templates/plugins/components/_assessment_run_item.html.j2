@@ -60,6 +60,9 @@
                     {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
                     {% if skipped %}
                         <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
+                    {% elif security_total %}
+                        {% comment %}A scanner reports vulnerabilities; it does not run checks. Same noun and same number as the badge beside it, from by_severity rather than total_findings, since the two can disagree.{% endcomment %}
+                        <span class="text-text-muted text-sm hidden md:inline">{{ security_total }} vulnerabilit{{ security_total|pluralize:"y,ies" }}</span>
                     {% elif run.result.summary %}
                         <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} check{{ run.result.summary.total_findings|default:0|pluralize }}</span>
                     {% endif %}
