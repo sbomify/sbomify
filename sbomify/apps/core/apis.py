@@ -2027,17 +2027,16 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
 
                 nda_document_id = update_data.pop("nda_document_id")
                 if nda_document_id:
-                    try:
-                        # NDA document must belong to a component in the same team
-                        nda_document = Document.objects.filter(id=nda_document_id).select_related("component").first()
-                        if not nda_document or nda_document.component.team_id != component.team_id:
-                            return 400, {
-                                "detail": "NDA document not found or belongs to different team",
-                                "error_code": ErrorCode.VALIDATION_ERROR,
-                            }
-                        component.nda_document = nda_document
-                    except Document.DoesNotExist:
-                        return 400, {"detail": "NDA document not found", "error_code": ErrorCode.VALIDATION_ERROR}
+                    # NDA document must belong to a component in the same team.
+                    # filter().first() returns None rather than raising, so the
+                    # missing-document case is the branch below, not an except.
+                    nda_document = Document.objects.filter(id=nda_document_id).select_related("component").first()
+                    if not nda_document or nda_document.component.team_id != component.team_id:
+                        return 400, {
+                            "detail": "NDA document not found or belongs to different team",
+                            "error_code": ErrorCode.VALIDATION_ERROR,
+                        }
+                    component.nda_document = nda_document
                 else:
                     component.nda_document = None
 
