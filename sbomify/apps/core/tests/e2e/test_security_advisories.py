@@ -41,10 +41,11 @@ def advisories(team_with_business_plan):  # noqa: F811
     # twelve-way tie postgres breaks arbitrarily. The snapshot then only
     # matches its baseline when the arbitrary order happens to repeat.
     # Distinct timestamps make the render deterministic: Advisory 11 first.
+    # Set on the instances and bulk-updated, so a test reading created_at off
+    # the fixture sees the same value the database holds.
     for i, advisory in enumerate(created):
-        SecurityAdvisory.objects.filter(pk=advisory.pk).update(
-            created_at=published_at - timezone.timedelta(minutes=len(created) - i)
-        )
+        advisory.created_at = published_at - timezone.timedelta(minutes=len(created) - i)
+    SecurityAdvisory.objects.bulk_update(created, ["created_at"])
     yield created
 
 
