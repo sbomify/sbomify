@@ -181,15 +181,26 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
 )
 
 
-@api.exception_handler(Throttled)
-def _on_throttled(request: Any, exc: Throttled) -> Any:
-    """429 with a Retry-After header (#1060); ninja's default HttpError handler drops exc.wait."""
-    response = api.create_response(request, {"detail": "Too many requests."}, status=429)
-    if exc.wait is not None:
-        # Round up (never below 1s) so a fractional wait doesn't truncate to 0 and
-        # invite clients to retry too early into the throttle.
-        response["Retry-After"] = str(max(1, math.ceil(exc.wait)))
-    return response
+def _register_throttle_handler(api_object: NinjaAPI) -> None:
+    """429 with a Retry-After header (#1060); ninja's default HttpError handler drops exc.wait.
+
+    Registered per API object, because an exception handler belongs to the
+    instance it is registered on: v2 declares the same global throttles, and
+    without its own handler a throttled /api/v2/ call answered a bare 429
+    with no backoff hint, the regression #1060 fixed once already.
+    """
+
+    @api_object.exception_handler(Throttled)
+    def _on_throttled(request: Any, exc: Throttled) -> Any:
+        response = api_object.create_response(request, {"detail": "Too many requests."}, status=429)
+        if exc.wait is not None:
+            # Round up (never below 1s) so a fractional wait doesn't truncate to 0
+            # and invite clients to retry too early into the throttle.
+            response["Retry-After"] = str(max(1, math.ceil(exc.wait)))
+        return response
+
+
+_register_throttle_handler(api)
 
 
 # Every router is mounted once per API version. v1 is the surface we shipped;
@@ -296,9 +307,19 @@ def _v2_path_rewriter(dotted: str) -> Any:
 # One instance for the whole version, because it caches: the OpenAPI document
 # keys components by model name, so a schema converted twice would render as
 # two components that only differ by identity.
+_register_throttle_handler(api_v2)
+
 _v2_schemas = SchemaVariants()
 
+# Replayed for v2 with one exception. The internal router is auth=None on
+# purpose, secured by proxy rules pinned to /api/v1/internal/* with a client
+# allowlist; replaying it would publish those endpoints, unauthenticated, at
+# /api/v2/internal/* where no rule matches. Operators call v1 directly.
+V2_EXCLUDED: frozenset[str] = frozenset({"sbomify.apps.teams.apis.internal_router"})
+
 for _prefix, _dotted in MOUNTS:
+    if _dotted in V2_EXCLUDED:
+        continue
     api_v2.add_router(
         V2_PREFIXES.get(_dotted, _prefix),
         clone_router(

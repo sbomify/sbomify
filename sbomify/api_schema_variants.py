@@ -23,7 +23,6 @@ import copy
 from enum import Enum
 from typing import Annotated, Any, get_args, get_origin
 
-from ninja import Schema
 from pydantic import BaseModel, BeforeValidator, create_model
 
 from sbomify.apps.core.schemas import ErrorCode
@@ -97,14 +96,16 @@ def _is_schema(annotation: Any) -> bool:
 
 
 def _base_of(model: type[BaseModel]) -> type[BaseModel]:
-    """Keep the variant on the same base, so ninja treats it the same way.
+    """The variant subclasses its source, not a generic base.
 
-    ``ninja.Schema`` carries ``from_attributes`` and the resolver machinery a
-    response model needs to read an ORM row; a plain ``BaseModel`` does not,
-    and swapping one for the other changes how the view's return value is
-    interpreted.
+    Subclassing the source keeps everything create_model cannot re-list:
+    model_config (TeamUpdateSchema's str_strip_whitespace, which a generic
+    base silently dropped, letting v2 accept the whitespace-only names v1
+    rejects), validators, and for ninja Schemas the resolver machinery.
+    Every field is redefined below, so requiredness and aliases still come
+    from this module.
     """
-    return Schema if issubclass(model, Schema) else BaseModel
+    return model
 
 
 class SchemaVariants:
@@ -196,6 +197,7 @@ class SchemaVariants:
         self._cache[key] = model
 
         fields: dict[str, Any] = {}
+        dropped: list[str] = []
         # A schema can need rebuilding for its own name alone, with every field
         # left untouched: TeamPatchSchema has no team_* field but still must not
         # be called Team in v2.
@@ -203,8 +205,25 @@ class SchemaVariants:
         for name, field in model.model_fields.items():
             annotation = self._convert(field.annotation, outgoing=outgoing)
             renamed = FIELD_RENAMES.get(name, name)
+            if renamed != name and renamed in model.model_fields:
+                # The source already carries both names (the v1 dual-field
+                # during a migration). Renaming the old one would write the
+                # same key twice and silently discard whichever came second,
+                # so v2 drops the deprecated duplicate. Skipping is not
+                # enough now that the variant subclasses its source; the
+                # field would ride in by inheritance, so it is removed after
+                # the build below.
+                changed = True
+                dropped.append(name)
+                continue
             if renamed != name or annotation is not field.annotation:
                 changed = True
+            if renamed != name and outgoing:
+                # The variant subclasses its source, so the old name would
+                # survive by inheritance next to the renamed field. Outgoing
+                # only: a request variant redefines the old name itself, since
+                # that is the attribute the view reads off the payload.
+                dropped.append(name)
 
             if name == "error_code":
                 annotation = V2ErrorCodeField
@@ -247,5 +266,9 @@ class SchemaVariants:
             **fields,
         )
         variant.__doc__ = model.__doc__
+        for name in dropped:
+            variant.__pydantic_fields__.pop(name, None)
+        if dropped:
+            variant.model_rebuild(force=True)
         self._cache[key] = variant
         return variant

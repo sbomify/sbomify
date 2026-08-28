@@ -91,12 +91,30 @@ class TestBothVersionsMount:
         assert line_of("api = NinjaAPI(") < first_mount
         assert line_of("api_v2 = NinjaAPI(") < first_mount
 
-    def test_no_operation_was_lost(self, v1_schema, v2_schema):
-        assert len(_operations(v1_schema)) == len(_operations(v2_schema))
+    def test_no_operation_was_lost_except_the_internal_router(self, v1_schema, v2_schema):
+        """Every v1 operation exists in v2, minus /internal, which is excluded.
 
-    def test_v2_drops_exactly_the_duplicated_artifact_path(self, v1_schema, v2_schema):
+        The internal router is auth=None by design, secured at the proxy by
+        rules pinned to /api/v1/internal/*. Replaying it would publish those
+        endpoints unauthenticated at a path no proxy rule matches.
+        """
+        internal_ops = [
+            (verb, path)
+            for path, item in v1_schema["paths"].items()
+            if path.startswith("/api/v1/internal/")
+            for verb, op in item.items()
+            if isinstance(op, dict) and "responses" in op
+        ]
+        assert internal_ops, "the exclusion exists for these; if they moved, move the guard"
+        assert len(_operations(v1_schema)) - len(internal_ops) == len(_operations(v2_schema))
+
+    def test_v2_serves_nothing_under_internal(self, v2_schema):
+        assert [p for p in v2_schema["paths"] if p.startswith("/api/v2/internal")] == []
+
+    def test_v2_drops_the_duplicated_artifact_path_and_internal(self, v1_schema, v2_schema):
         """/sboms/{id} and /sboms/sbom/{id} were two shapes for one resource."""
-        assert len(v2_schema["paths"]) == len(v1_schema["paths"]) - 1
+        internal_paths = [p for p in v1_schema["paths"] if p.startswith("/api/v1/internal/")]
+        assert len(v2_schema["paths"]) == len(v1_schema["paths"]) - 1 - len(internal_paths)
 
 
 class TestV2SaysWorkspace:
@@ -184,11 +202,11 @@ class TestErrorCodes:
     @pytest.mark.parametrize(("v1_code", "v2_code"), sorted(ERROR_CODE_RENAMES.items()))
     def test_a_renamed_code_maps(self, v2_error, v1_code, v2_code):
         body = v2_error.model_validate({"detail": "x", "error_code": v1_code}).model_dump(by_alias=True)
-        assert body["error_code"].value == v2_code
+        assert body["error_code"] == v2_code
 
     def test_an_unrelated_code_is_untouched(self, v2_error):
         body = v2_error.model_validate({"detail": "x", "error_code": ErrorCode.NOT_FOUND}).model_dump(by_alias=True)
-        assert body["error_code"].value == "NOT_FOUND"
+        assert body["error_code"] == "NOT_FOUND"
 
     def test_v1_codes_are_frozen(self):
         for old in ERROR_CODE_RENAMES:
@@ -225,6 +243,122 @@ class TestTheTwoDirections:
         properties = variant.model_json_schema(mode="validation")["properties"]
         assert "workspace_key" in properties
         assert "team_key" not in properties
+
+
+class TestV2ServesWhatTheViewsReturn:
+    """The shared views return v1 class instances; v2 must accept them.
+
+    The clone's response model is a different class, and pydantic refuses to
+    revalidate a foreign model instance, so before the result-dumping wrapper
+    every converted v2 endpoint answered 500 on every request while its v1
+    twin worked. Reproduced, then pinned here at the operation level so the
+    test needs no database.
+    """
+
+    @staticmethod
+    def _operation(api_object, view_name):
+        for _prefix, router in api_object._routers:
+            for _path, path_view in router.path_operations.items():
+                for operation in path_view.operations:
+                    if operation.view_func.__name__ == view_name:
+                        return operation
+        raise AssertionError(f"no operation wraps {view_name}")
+
+    def test_a_v1_instance_survives_v2_response_validation(self):
+        from sbomify.apps.core.schemas import PaginatedProductsResponse
+
+        instance = PaginatedProductsResponse(
+            items=[],
+            pagination={
+                "total": 0,
+                "page": 1,
+                "page_size": 15,
+                "total_pages": 0,
+                "has_previous": False,
+                "has_next": False,
+            },
+        )
+        operation = self._operation(api_v2, "list_products")
+        dumped = instance.model_dump()
+        operation.response_models[200].model_validate({"response": dumped})
+
+    def test_the_clone_wrapper_dumps_model_results(self):
+        from sbomify.api_versioning import _dump_models
+        from sbomify.apps.core.schemas import ProductResponseSchema
+
+        instance = ProductResponseSchema(
+            id="x", name="n", description="", team_id="t", created_at="2026-01-01T00:00:00Z", is_public=False
+        )
+        status, payload = _dump_models((200, instance))
+        assert status == 200
+        assert isinstance(payload, dict)
+        assert payload["team_id"] == "t"
+
+    def test_no_v2_operation_lost_its_response_declaration(self):
+        """{200: None} is ninja for "discard the body": the licensing list
+        returned 200 with zero bytes while v1 returned the data. A None a
+        view declared itself ({204: None} on the deletes) is legitimate, so
+        the check is against v1, not against None.
+        """
+
+        def none_statuses(api_object):
+            found = {}
+            for _prefix, router in api_object._routers:
+                for _path, path_view in router.path_operations.items():
+                    for operation in path_view.operations:
+                        key = (operation.view_func.__name__, tuple(sorted(operation.methods)))
+                        found[key] = {s for s, m in operation.response_models.items() if m is None}
+            return found
+
+        v1_nones, v2_nones = none_statuses(api), none_statuses(api_v2)
+        for key, statuses in v2_nones.items():
+            if key in v1_nones:
+                assert statuses == v1_nones[key], f"{key}: v1 {v1_nones[key]} vs v2 {statuses}"
+
+    def test_v2_keeps_the_exclude_flags(self):
+        """sboms metadata endpoints declare exclude_none/exclude_unset; dropped
+        flags made v2 emit the vendored CycloneDX model with every unset
+        optional as null, which schema-validating consumers reject."""
+        v1_op = self._operation(api, "patch_component_metadata")
+        v2_op = self._operation(api_v2, "patch_component_metadata")
+        assert (v2_op.exclude_none, v2_op.exclude_unset, v2_op.exclude_defaults) == (
+            v1_op.exclude_none,
+            v1_op.exclude_unset,
+            v1_op.exclude_defaults,
+        )
+        assert v2_op.operation_id == v1_op.operation_id
+
+    def test_v2_answers_throttles_with_retry_after(self):
+        from ninja.errors import Throttled
+
+        assert Throttled in api_v2._exception_handlers
+
+    def test_a_source_carrying_both_names_keeps_one_field(self):
+        """The v1 dual-field during the migration: renaming the old name onto
+        the new one wrote the same key twice and kept whichever came second."""
+        from ninja import Schema
+
+        class Carrier(Schema):
+            is_default_team: bool
+            is_default_workspace: bool
+
+        variant = SchemaVariants().response(Carrier)
+        assert list(variant.model_fields) == ["is_default_workspace"]
+        body = variant.model_validate({"is_default_workspace": True}).model_dump(by_alias=True)
+        assert body == {"is_default_workspace": True}
+
+    def test_request_variants_keep_the_source_model_config(self):
+        """str_strip_whitespace lived in model_config, which create_model with
+        a generic base dropped: v2 accepted the whitespace-only workspace
+        names v1 rejects."""
+        import pydantic
+
+        from sbomify.apps.teams.schemas import TeamUpdateSchema
+
+        variant = SchemaVariants().request(TeamUpdateSchema)
+        assert variant.model_config.get("str_strip_whitespace") is True
+        with pytest.raises(pydantic.ValidationError):
+            variant.model_validate({"name": "   "})
 
 
 class TestNothingIsLostInTranslation:
