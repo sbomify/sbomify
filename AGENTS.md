@@ -456,7 +456,7 @@ does settle is which word new code and new copy use.
 | Tenant PK token | `workspace_key` | |
 | Person in a workspace | member | |
 | Roles | owner, admin, member, guest, bot | see the authz section |
-| Mixed BOM or document unit | **artifact** in UI, SBOM row + `bom_type` in code | the `/api/v1/sboms` prefix is frozen |
+| Mixed BOM or document unit | **artifact** in UI; in code an SBOM row (typed by `bom_type`) or a Document row | the `/api/v1/sboms` prefix is frozen |
 | One specific BOM kind | SBOM, CBOM, HBOM, AI BOM, VEX | only when the type is the point |
 | The advisory itself, and security counts | **vulnerability** | the user-facing word |
 | One plugin-run result row | **finding** | the SDK and storage word, not user copy |
@@ -495,8 +495,9 @@ One sanctioned exception: `collection_version`, `collection_updated_at`,
 renaming it internally would only re-introduce a translation.
 
 `Release` and `ComponentRelease` are two different models, not one mapped two
-ways. There is no stored edge between them: the join runs through SBOM, and
-`Release.component_releases()` names it.
+ways. There is no stored edge between them: the join runs through the SBOM
+both sides attach, `ReleaseArtifact.sbom` on one and
+`ComponentReleaseArtifact.sbom` on the other.
 
 ### Copy (anything a user reads)
 
