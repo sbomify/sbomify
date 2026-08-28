@@ -83,7 +83,7 @@ def component(obj: Component, *, detail: bool = False) -> dict[str, Any]:
     }
     if detail:
         data |= {
-            "is_workspace_scoped": obj.is_global,
+            "is_global": obj.is_global,
             "supplier_name": obj.supplier_name,
             "lifecycle_phase": obj.lifecycle_phase,
             "release_date": _stamp(obj.release_date),
