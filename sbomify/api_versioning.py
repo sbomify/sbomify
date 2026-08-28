@@ -22,6 +22,7 @@ from typing import Any, Callable
 
 from ninja import Router
 from ninja.constants import NOT_SET
+from pydantic import BaseModel
 
 PathRewriter = Callable[[str], str]
 ResponseRewriter = Callable[[str, int, Any], Any]
@@ -53,28 +54,23 @@ def rename_path_params(
     except (NameError, TypeError):
         signature = inspect.signature(view)
     parameters, back = [], {}
-    swapped = False
     for name, parameter in signature.parameters.items():
         if convert_request is not None and parameter.annotation is not inspect.Parameter.empty:
             converted = convert_request(parameter.annotation)
             if converted is not parameter.annotation:
                 parameter = parameter.replace(annotation=converted)
-                swapped = True
         if name in renames:
             back[renames[name]] = name
             parameters.append(parameter.replace(name=renames[name]))
         else:
             parameters.append(parameter)
 
-    if not back and not swapped:
-        return view
-
     @functools.wraps(view)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         for new_name, old_name in back.items():
             if new_name in kwargs:
                 kwargs[old_name] = kwargs.pop(new_name)
-        return view(*args, **kwargs)
+        return _dump_models(view(*args, **kwargs))
 
     wrapper.__signature__ = signature.replace(parameters=parameters)  # type: ignore[attr-defined]
     # Built from the final parameter list, not the original signature: the loop
@@ -93,6 +89,24 @@ def rename_path_params(
     return wrapper
 
 
+def _dump_models(result: Any) -> Any:
+    """Turn a returned pydantic instance into a dict the clone can validate.
+
+    The shared views return instances of the v1 classes; the clone's response
+    model is a different class built by create_model, and pydantic refuses to
+    revalidate a foreign model instance. Dumped to a dict, the v1 field names
+    line up with the variant's validation aliases and everything revalidates.
+    Python mode, so datetimes stay datetimes for the second validation.
+    """
+    if isinstance(result, tuple) and len(result) == 2:
+        return (result[0], _dump_models(result[1]))
+    if isinstance(result, BaseModel):
+        return result.model_dump()
+    if isinstance(result, list):
+        return [_dump_models(item) for item in result]
+    return result
+
+
 def rewrite_params_in_path(path: str, renames: dict[str, str]) -> str:
     """Rename ``{old}`` to ``{new}`` in a path, leaving literal segments alone."""
     return re.sub(r"\{([^}:]+)([^}]*)\}", lambda m: "{" + renames.get(m.group(1), m.group(1)) + m.group(2) + "}", path)
@@ -104,7 +118,11 @@ def _declared_response(operation: Any) -> Any:
     ninja wraps each status in a generated model with a single ``response``
     field, so the annotation on that field is the schema the view declared.
     """
-    if not operation.response_models:
+    if not operation.response_models or all(model is NOT_SET for model in operation.response_models.values()):
+        # An operation declared with no response= holds {200: NOT_SET}. Mapping
+        # that sentinel into a dict turned it into {200: None}, which ninja
+        # reads as "empty response": the view ran, the body was discarded, and
+        # every such v2 endpoint answered 200 with zero bytes.
         return NOT_SET
 
     recovered: dict[int | str, Any] = {}
@@ -154,15 +172,19 @@ def clone_router(
                 auth=operation.auth_param,
                 throttle=operation.throttle_param,
                 response=response,
-                # Left to ninja to regenerate. Reusing the v1 id would collide
-                # inside the v2 document, since the id is derived from the view
-                # and both versions share every view.
-                operation_id=None,
+                # The explicit id, where one was set. The two versions are two
+                # OpenAPI documents, so the same id in both cannot collide; what
+                # does collide is ninja regenerating ids for the operations
+                # whose authors set one precisely because the auto id repeats.
+                operation_id=operation.operation_id,
                 summary=operation.summary,
                 description=operation.description,
                 tags=operation.tags,
                 deprecated=operation.deprecated,
                 by_alias=operation.by_alias,
+                exclude_unset=operation.exclude_unset,
+                exclude_defaults=operation.exclude_defaults,
+                exclude_none=operation.exclude_none,
                 include_in_schema=operation.include_in_schema,
                 openapi_extra=operation.openapi_extra,
                 url_name=path_view.url_name,

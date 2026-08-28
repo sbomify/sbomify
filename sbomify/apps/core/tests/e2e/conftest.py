@@ -10,19 +10,42 @@ from django.test import Client
 from freezegun import freeze_time
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
+from sbomify.apps.core.tests.e2e.utils import (
+    BROWSER_HEIGHT,
+    BROWSER_WIDTH,
+    SNAPSHOT_DIFF_THRESHOLD,
+)
+from sbomify.apps.core.tests.e2e.utils import (
+    assert_screenshot as _assert_screenshot,
+)
+from sbomify.apps.core.tests.e2e.utils import (
+    get_or_create_baseline_screenshot as _get_or_create_baseline_screenshot,
+)
+from sbomify.apps.core.tests.e2e.utils import (
+    take_screenshot as _take_screenshot,
+)
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
     team_with_business_plan,  # noqa: F401
 )
-from sbomify.apps.core.tests.e2e.utils import (
-    assert_screenshot as _assert_screenshot,
-    get_or_create_baseline_screenshot as _get_or_create_baseline_screenshot,
-    take_screenshot as _take_screenshot,
-    BROWSER_WIDTH,
-    BROWSER_HEIGHT,
-    SNAPSHOT_DIFF_THRESHOLD,
-)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def warm_url_resolver() -> None:
+    """Build both API surfaces before any test freezes the clock.
+
+    Django imports ROOT_URLCONF lazily, and deriving the v2 schemas under
+    freezegun fails: it swaps datetime.datetime for FakeDatetime and pydantic
+    dispatches on type identity. Session-scoped, so it runs once, before the
+    function-scoped freeze below ever applies. Warming here rather than in
+    AppConfig.ready keeps the cost out of workers, management commands and
+    every other process that never serves a request (measured at about a
+    second and 60 MB per process when it lived there).
+    """
+    from django.urls import get_resolver
+
+    get_resolver().url_patterns  # noqa: B018
 
 
 @pytest.fixture(autouse=True)
