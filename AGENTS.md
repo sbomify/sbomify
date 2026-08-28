@@ -453,7 +453,7 @@ does settle is which word new code and new copy use.
 | Concept | Use | Notes |
 | --- | --- | --- |
 | Tenant | workspace | `team` survives in models and storage, not in new code |
-| Tenant PK token | `workspace_key` | |
+| Tenant key, the external identifier | `workspace_key` | not the PK; Team's PK is an integer, `key` is derived from it |
 | Person in a workspace | member | |
 | Roles | owner, admin, member, guest, bot | see the authz section |
 | Mixed BOM or document unit | **artifact** in UI; in code an SBOM row (typed by `bom_type`) or a Document row | the `/api/v1/sboms` prefix is frozen |
