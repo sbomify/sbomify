@@ -225,7 +225,12 @@ class SchemaVariants:
                 # that is the attribute the view reads off the payload.
                 dropped.append(name)
 
-            if name == "error_code":
+            if name == "error_code" and ErrorCode in (field.annotation, *get_args(field.annotation)):
+                # Only when the field is typed as the core enum. The compliance
+                # app carries its own ErrorResponse whose error_code is a plain
+                # str in the DomainError vocabulary (lowercase "not_found");
+                # forcing the uppercase enum onto it made every compliance
+                # error 500 on v2 while v1 served it fine.
                 annotation = V2ErrorCodeField
                 changed = True
 
