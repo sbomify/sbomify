@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from math import ceil
@@ -24,6 +25,8 @@ _THROTTLE_BACKEND_ERRORS = (ConnectionInterrupted, RedisConnectionError, RedisTi
 #: a blip usually is: the same figure the redis clients use as their retry
 #: backoff ceiling.
 _BACKEND_OUTAGE_RETRY_SECONDS = 5
+
+logger = logging.getLogger(__name__)
 
 
 class AccessTokenRateThrottle(SimpleRateThrottle):
@@ -75,6 +78,10 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
     def allow_request(self, request: HttpRequest) -> bool:
         try:
             allowed = super().allow_request(request)
+            # Backend reachable again: from here on, any refusal is a genuine
+            # rate limit, so wait() must report the real window, not the
+            # outage hint left over from before recovery.
+            self._backend_refusal_until = 0.0
         except _THROTTLE_BACKEND_ERRORS:
             # The throttle alias raises on a Redis failure by design: a
             # swallowed failure reads as an empty window and hands every
@@ -89,6 +96,15 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
             # here bypasses every exception handler and lands as a raw 500.
             # ninja then calls wait() and routes a Throttled through the 429
             # handler itself, Retry-After included. Fail closed, politely.
+            #
+            # The refusal must still be heard: the old 500 was the alert, so
+            # going quiet would hide the outage. One log per refusal window
+            # keeps the signal without a log storm.
+            if time.monotonic() >= getattr(self, "_backend_refusal_until", 0.0):
+                logger.exception(
+                    "Throttle backend unreachable; refusing throttled requests with Retry-After %ss until it recovers",
+                    _BACKEND_OUTAGE_RETRY_SECONDS,
+                )
             self._backend_refusal_until = time.monotonic() + _BACKEND_OUTAGE_RETRY_SECONDS
             return False
         # Ninja reuses one throttle instance across requests, so its per-request scratch
