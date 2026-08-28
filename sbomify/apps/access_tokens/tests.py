@@ -602,7 +602,9 @@ def test_optional_token_auth_invalid_bearer_returns_401():
 
     assert isinstance(response, JsonResponse)
     assert response.status_code == 401
-    assert json.loads(response.content) == {"detail": "Unauthorized"}
+    # error_code included: this JsonResponse never passes through the ninja
+    # renderer that fills codes in, so it has to carry its own.
+    assert json.loads(response.content) == {"detail": "Unauthorized", "error_code": "UNAUTHORIZED"}
     assert calls == []  # handler must not run
 
 

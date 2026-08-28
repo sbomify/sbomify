@@ -78,10 +78,14 @@ ALLOWED: dict[int, set[str]] = {
 #                          the status admits the row exists. Hiding existence
 #                          means 404; being honest means FORBIDDEN. The pair
 #                          does neither.
+#   400 + NOT_FOUND        the NDA-document branches. VALIDATION_ERROR reads
+#                          better, but a v1 response is a contract down to its
+#                          strings and codes, so the recode waits for v2.
 TOLERATED: dict[tuple[int, str], int] = {
     (403, "UNAUTHORIZED"): 19,
     (403, "TEAM_NOT_FOUND"): 2,
     (403, "PRODUCT_NOT_FOUND"): 1,
+    (400, "NOT_FOUND"): 2,
 }
 
 
@@ -154,6 +158,55 @@ class TestStatusMatchesCode:
         for status, codes in ALLOWED.items():
             unknown = codes - known
             assert not unknown, f"ALLOWED[{status}] names codes that are not in ErrorCode: {unknown}"
+
+
+@lru_cache(maxsize=1)
+def _undeclared_returned_statuses() -> list[str]:
+    """Literal ``return <status>, {...}`` whose decorator does not declare it.
+
+    ninja raises ``ConfigError: Schema for status N is not set in response``
+    for an undeclared status, which reaches the caller as an unstructured 500.
+    The status/code gate above cannot see this, because it reads the returns
+    and never the decorator. Three views shipped that way.
+    """
+    offenders: list[str] = []
+    for path in sorted(APPS_DIR.rglob("api*.py")):
+        if path.name not in ("apis.py", "api.py"):
+            continue
+        tree = ast.parse(path.read_text())
+        for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
+            declared: set[int] | None = None
+            for deco in fn.decorator_list:
+                if isinstance(deco, ast.Call):
+                    for kw in deco.keywords:
+                        if kw.arg == "response" and isinstance(kw.value, ast.Dict):
+                            declared = {
+                                k.value
+                                for k in kw.value.keys
+                                if isinstance(k, ast.Constant) and isinstance(k.value, int)
+                            }
+            if declared is None:
+                continue
+            for node in ast.walk(fn):
+                if (
+                    isinstance(node, ast.Return)
+                    and isinstance(node.value, ast.Tuple)
+                    and len(node.value.elts) == 2
+                    and isinstance(node.value.elts[0], ast.Constant)
+                    and isinstance(node.value.elts[0].value, int)
+                    and node.value.elts[0].value not in declared
+                ):
+                    offenders.append(
+                        f"{path.relative_to(APPS_DIR)}:{node.lineno} returns "
+                        f"{node.value.elts[0].value}, declared {sorted(declared)}"
+                    )
+    return offenders
+
+
+class TestEveryReturnedStatusIsDeclared:
+    def test_no_view_returns_a_status_its_decorator_does_not_declare(self):
+        offenders = _undeclared_returned_statuses()
+        assert not offenders, "undeclared statuses (ninja turns these into bare 500s):\n  " + "\n  ".join(offenders)
 
 
 class TestRendererFillsTheGap:

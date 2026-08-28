@@ -1893,7 +1893,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
                     nda_document = Document.objects.get(id=payload.nda_document_id, component__team=component.team)
                     component.nda_document = nda_document
                 except Document.DoesNotExist:
-                    return 400, {"detail": "NDA document not found", "error_code": ErrorCode.VALIDATION_ERROR}
+                    return 400, {"detail": "NDA document not found", "error_code": ErrorCode.NOT_FOUND}
             elif payload.nda_document_id is None and payload.gating_mode != Component.GatingMode.APPROVAL_PLUS_NDA:  # type: ignore[comparison-overlap]
                 # Clear NDA if switching away from approval_plus_nda
                 component.nda_document = None
@@ -2034,7 +2034,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                     if not nda_document or nda_document.component.team_id != component.team_id:
                         return 400, {
                             "detail": "NDA document not found or belongs to different team",
-                            "error_code": ErrorCode.VALIDATION_ERROR,
+                            "error_code": ErrorCode.NOT_FOUND,
                         }
                     component.nda_document = nda_document
                 else:
@@ -2272,6 +2272,7 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        422: ErrorResponse,
         500: ErrorResponse,
     },
     tags=["Components"],
@@ -2553,7 +2554,7 @@ def list_component_releases(
 
 @router.get(
     "/dashboard/summary",
-    response={200: DashboardStatsResponse, 403: ErrorResponse},
+    response={200: DashboardStatsResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
     tags=["Components"],
 )
@@ -2797,7 +2798,7 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
 
 @router.get(
     "/releases",
-    response={200: PaginatedReleasesResponse, 403: ErrorResponse, 500: ErrorResponse},
+    response={200: PaginatedReleasesResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
