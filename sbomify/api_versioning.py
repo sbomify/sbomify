@@ -77,16 +77,18 @@ def rename_path_params(
         return view(*args, **kwargs)
 
     wrapper.__signature__ = signature.replace(parameters=parameters)  # type: ignore[attr-defined]
+    # Built from the final parameter list, not the original signature: the loop
+    # above may have renamed a parameter AND swapped its annotation through
+    # convert_request, and both facts must agree everywhere they are readable.
+    # ninja itself parses __signature__, so a stale __annotations__ would not
+    # break routing, only lie to anything else that introspects the view.
     annotations = {
-        name: parameter.annotation
-        for name, parameter in signature.parameters.items()
+        parameter.name: parameter.annotation
+        for parameter in parameters
         if parameter.annotation is not inspect.Parameter.empty
     }
     if signature.return_annotation is not inspect.Signature.empty:
         annotations["return"] = signature.return_annotation
-    for old_name, new_name in renames.items():
-        if old_name in annotations:
-            annotations[new_name] = annotations.pop(old_name)
     wrapper.__annotations__ = annotations
     return wrapper
 
