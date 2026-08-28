@@ -5135,7 +5135,8 @@ def _csv_response(csv_text: str, filename: str) -> HttpResponse:
 
 @router.get(
     "/exports/inventory.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     summary="Export the package inventory as CSV",
     tags=["Exports"],
 )
@@ -5164,7 +5165,8 @@ def export_inventory(request: HttpRequest, product_id: str | None = None) -> Htt
 
 @router.get(
     "/exports/licenses.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     summary="Export the license list as CSV",
     tags=["Exports"],
 )
@@ -5198,7 +5200,8 @@ def export_licenses(
 
 @router.get(
     "/exports/findings.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     summary="Export assessment findings as CSV",
     tags=["Exports"],
 )
@@ -5223,7 +5226,8 @@ def export_findings(request: HttpRequest, sbom_id: str) -> HttpResponse | tuple[
 
 @router.get(
     "/exports/vulnerabilities.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     summary="Export vulnerability findings as CSV",
     tags=["Exports"],
 )

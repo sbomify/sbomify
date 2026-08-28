@@ -177,17 +177,28 @@ def _undeclared_returned_statuses() -> list[str]:
         for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
             declared: set[int] | None = None
             for deco in fn.decorator_list:
-                if isinstance(deco, ast.Call):
-                    for kw in deco.keywords:
-                        if kw.arg == "response" and isinstance(kw.value, ast.Dict):
-                            declared = {
-                                k.value
-                                for k in kw.value.keys
-                                if isinstance(k, ast.Constant) and isinstance(k.value, int)
-                            }
+                if not (isinstance(deco, ast.Call) and isinstance(deco.func, ast.Attribute)):
+                    continue
+                if deco.func.attr not in ("get", "post", "put", "patch", "delete"):
+                    continue
+                # A routed view with no response= declares nothing, and ninja
+                # answers any status-tuple it returns with a ConfigError. The
+                # controls CSV exports shipped that way, so "no declaration"
+                # counts as the empty set rather than being skipped.
+                declared = set()
+                for kw in deco.keywords:
+                    if kw.arg == "response" and isinstance(kw.value, ast.Dict):
+                        declared = {
+                            k.value for k in kw.value.keys if isinstance(k, ast.Constant) and isinstance(k.value, int)
+                        }
             if declared is None:
                 continue
             for node in ast.walk(fn):
+                # Any literal status in tuple position, whatever the body
+                # expression is. The first cut required a dict literal and
+                # missed `return 404, ErrorResponse(...)`, which is how the
+                # controls CSV exports kept answering a missing catalog with
+                # a raw ConfigError 500.
                 if (
                     isinstance(node, ast.Return)
                     and isinstance(node.value, ast.Tuple)
