@@ -81,7 +81,7 @@ def validate_role_in_current_team(allowed_roles: list[str]) -> Callable[..., Any
             user_teams = request.session.get("user_teams", {})
 
             if team_key not in user_teams:
-                return error_response(request, HttpResponseForbidden("Unknown team"))
+                return error_response(request, HttpResponseForbidden("Unknown workspace"))
 
             # Check if user has the required role
             user_role = user_teams[team_key].get("role", "")
