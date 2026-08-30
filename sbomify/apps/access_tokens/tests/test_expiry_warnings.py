@@ -208,6 +208,45 @@ class TestShortLivedTokensAreNotNagged:
         assert warn_expiring_tokens.fn() == 0
         assert mail.outbox == []
 
+    def test_an_oidc_publish_token_never_reaches_the_bell(
+        self, rf: Any, sample_team_with_owner_member: Any, guest_user: Any
+    ) -> None:
+        """From staging: the OIDC exchange mints a 15-minute token per CI
+        publish, and each one sat on the owner's bell as "expires tomorrow"
+        for its whole life, one badge per publish. A token born inside its
+        final day has no final-day news to break.
+        """
+        member = sample_team_with_owner_member
+        _bot_member(guest_user, member.team)
+        for i in range(3):
+            AccessToken.objects.create(
+                user=guest_user,
+                team=member.team,
+                description="oidc:github:bind1234abcd",
+                encoded_token=f"tok-oidc-{i}",
+                expires_at=timezone.now() + timedelta(minutes=15),
+            )
+
+        assert get_notifications(self._request(rf, member.user, member.team)) == []
+
+    def test_the_sweep_never_mails_about_a_publish_token(
+        self, sample_team_with_owner_member: Any, guest_user: Any
+    ) -> None:
+        """The email side already agrees through its threshold arithmetic; pin
+        the agreement so the two paths cannot drift apart at this boundary."""
+        member = sample_team_with_owner_member
+        _bot_member(guest_user, member.team)
+        AccessToken.objects.create(
+            user=guest_user,
+            team=member.team,
+            description="oidc:github:bind1234abcd",
+            encoded_token="tok-oidc-sweep",
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        assert warn_expiring_tokens.fn() == 0
+        assert mail.outbox == []
+
     def test_the_tighter_thresholds_fire_once_it_has_aged(self, sample_team_with_owner_member: Any) -> None:
         """The same 14-day token a week on, expressed as a second fixture
         rather than by moving ``expires_at``: shifting it also moves the
