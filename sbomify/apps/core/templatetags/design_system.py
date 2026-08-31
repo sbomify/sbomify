@@ -5,13 +5,12 @@ stays the only place a component's markup lives; these tags just make it callabl
 and composable. The Frontend (UI) section of AGENTS.md is the contract; ``/design-system/`` is
 the live gallery.
 
-Containers are block tags, so a card genuinely contains library components::
+Containers are block tags, so a container genuinely contains library components::
 
     {% load design_system %}
-    {% card title="Releases" variant="dashboard" %}
-        {% badge text="3 overdue" variant="danger" %}
+    {% page_header title="Releases" %}
         {% button text="New release" variant="primary" hx_get=new_release_url %}
-    {% endcard %}
+    {% endpage_header %}
 
 Leaves are inline tags::
 
@@ -73,9 +72,10 @@ _LEAF_COMPONENTS = (
 )
 
 # Container components: wrap content, called as ``{% x %}…{% endx %}``.
+# ``card`` is gone: the legacy tw card had no template callers left, so the
+# cotton library's c-cards.* is the only card there is.
 _BLOCK_COMPONENTS = (
     "actions_menu",
-    "card",
     "modal",
     "page_header",
 )

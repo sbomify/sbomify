@@ -1,0 +1,48 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}sbomify New Component{% endblock %}
+{% comment %}
+    The New Component form. It was a modal; it is a page now so the three create
+    flows (product, component, advisory) share one shape. The type is choice
+    tiles rather than a select, and the workspace-wide step only exists while
+    Document is picked, because it only applies to documents.
+{% endcomment %}
+{% block dashboard_content %}
+    {% url 'core:components_dashboard' as components_url %}
+    <div class="max-w-5xl">
+        <c-layout.page-header title="New component" subtitle="A container for the SBOMs and documents you track." icon="fas fa-puzzle-piece">
+        <c-buttons.ghost href="{{ components_url }}" size="sm">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i><span>Back to components</span>
+        </c-buttons.ghost>
+        </c-layout.page-header>
+        <form method="post"
+              action="{% url 'core:component_new' %}"
+              x-data="{ componentType: 'bom' }">
+            {% csrf_token %}
+            <c-layout.form-section step="1" title="What it is" description="A name and a type are all a component needs.">
+            <div class="space-y-5">
+                <c-forms.field label="Name" for="name" required>
+                <c-forms.input name="name" required placeholder="e.g. acme-router-firmware" />
+                </c-forms.field>
+                <c-layout.choice-group name="component_type" label="Type" :options="type_options" selected="bom" required hint="A BOM holds SBOMs. A document holds files such as certifications and attestations." @change="componentType = $event.target.value" />
+            </div>
+            </c-layout.form-section>
+            <c-layout.form-section step="2" accent="neutral" title="Where it lives" description="Optional. A component normally attaches to products." x-show="componentType === 'document'" x-cloak>
+            <div class="space-y-5">
+                <div>
+                    {# Disabled while the type is BOM, so a tick left behind cannot submit with a type it is invalid for. #}
+                    <c-forms.checkbox id="is_global" name="is_global" ::disabled="componentType !== 'document'">Workspace-wide component</c-forms.checkbox>
+                    <c-forms.hint class="mt-2 ml-8">
+                    Lives at the workspace level and is not attached to any product. Use for documents and attestations.
+                    </c-forms.hint>
+                </div>
+            </div>
+            </c-layout.form-section>
+            <div class="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-6">
+                <c-buttons.ghost href="{{ components_url }}"><span>Cancel</span></c-buttons.ghost>
+                <c-buttons.primary type="submit">
+                <i class="fas fa-plus" aria-hidden="true"></i><span>Create component</span>
+                </c-buttons.primary>
+            </div>
+        </form>
+    </div>
+{% endblock %}

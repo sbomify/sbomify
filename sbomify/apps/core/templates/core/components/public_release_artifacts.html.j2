@@ -22,7 +22,7 @@
             <c-tables.table>
             <c-tables.head>
             <c-tables.header-cell sort="type" class="w-10">Type</c-tables.header-cell>
-            <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+            <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
             <c-tables.header-cell sort="component" class="hidden md:table-cell">Component</c-tables.header-cell>
             <c-tables.header-cell sort="format" class="hidden md:table-cell">Format</c-tables.header-cell>
             <c-tables.header-cell sort="version" class="hidden lg:table-cell">Version</c-tables.header-cell>
@@ -31,13 +31,13 @@
             <tbody>
                 <template x-for="artifact in filteredArtifacts" :key="artifact.id">
                     <c-tables.row>
-                    <c-tables.cell>
+                    <c-tables.cell nowrap>
                     <span class="w-8 h-8 rounded flex items-center justify-center"
                           :class="effType(artifact) === 'sbom' ? 'bg-primary/10 text-primary' : effType(artifact) === 'vex' ? 'bg-info/10 text-info' : effType(artifact) === 'cbom' || effType(artifact) === 'hbom' ? 'bg-success/10 text-success' : effType(artifact) === 'document' ? 'bg-warning/10 text-warning' : 'bg-border/30 text-text-muted'">
                         <i :class="effType(artifact) === 'sbom' ? 'fas fa-file-code' : effType(artifact) === 'vex' ? 'fas fa-file-contract' : effType(artifact) === 'cbom' ? 'fas fa-key' : effType(artifact) === 'hbom' ? 'fas fa-microchip' : effType(artifact) === 'document' ? 'fas fa-file-alt' : 'fas fa-file'"></i>
                     </span>
                     </c-tables.cell>
-                    <c-tables.cell>
+                    <c-tables.cell nowrap>
                     <span class="font-medium text-text"
                           x-text="artifact.artifact_name || 'Unnamed artifact'"></span>
                     <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide"

@@ -33,7 +33,7 @@ workflow's OIDC identity and are valid for 15 minutes.
 <c-tables.table>
 <c-tables.head>
 <c-tables.header-cell>Provider</c-tables.header-cell>
-<c-tables.header-cell>Repository</c-tables.header-cell>
+<c-tables.header-cell nowrap>Repository</c-tables.header-cell>
 <c-tables.header-cell>Added by</c-tables.header-cell>
 <c-tables.header-cell date>Last used</c-tables.header-cell>
 <c-tables.actions-cell as="th" />
@@ -41,12 +41,12 @@ workflow's OIDC identity and are valid for 15 minutes.
 <tbody>
 {% for binding in bindings %}
 <c-tables.row>
-<c-tables.cell>
+<c-tables.cell nowrap>
 <c-badges.secondary>
 <i class="fab fa-github mr-1"></i>{{ binding.get_provider_display }}
 </c-badges.secondary>
 </c-tables.cell>
-<c-tables.cell>
+<c-tables.cell nowrap>
 <div class="flex items-center gap-2">
 <code class="text-sm font-medium">{{ binding.repository }}</code>
 <a href="https://github.com/{{ binding.repository }}" target="_blank" rel="noopener noreferrer" class="text-text-muted hover:text-primary transition-colors" title="Open on GitHub">

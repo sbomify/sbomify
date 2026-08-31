@@ -2,7 +2,7 @@ Access token expiring
 
 The access token "{{ token.description }}"{% if team %} in workspace {{ team.name }}{% endif %} expires on {{ expires_on|date:"F d, Y" }}{% if days_left == 0 %} (today){% elif days_left == 1 %} (tomorrow){% else %} ({{ days_left }} days from now){% endif %}.
 
-Anything authenticating with it — CI pipelines included — will start failing with 401s at that point. Create a replacement token and rotate it in before then.
+Anything authenticating with it, CI pipelines included, will start failing with 401s at that point. Create a replacement token and rotate it in before then.
 
 {% if team %}Manage tokens: {{ base_url }}{% url 'teams:team_settings' team.key %}#tokens{% endif %}
 

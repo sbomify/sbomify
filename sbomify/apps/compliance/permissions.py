@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.core.authz import ADMINISTER
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -81,7 +82,7 @@ def require_assessment_access(
     request: HttpRequest,
     assessment_id: str,
     *,
-    allowed_roles: tuple[str, ...] = ("owner", "admin"),
+    allowed_roles: tuple[str, ...] = ADMINISTER,
 ) -> CRAAssessment | AccessCheckFailure:
     """Centralised access check for all CRAAssessment-bound endpoints.
 
@@ -138,7 +139,7 @@ def require_product_cra_access(
     request: HttpRequest,
     product_id: str,
     *,
-    allowed_roles: tuple[str, ...] = ("owner", "admin"),
+    allowed_roles: tuple[str, ...] = ADMINISTER,
 ) -> Product | AccessCheckFailure:
     """Centralised access check for Product-bound CRA endpoints.
 

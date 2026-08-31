@@ -1,6 +1,7 @@
 {% load static %}
+{# The @ws:message handler repaints when someone pins or unpins in another tab or session. #}
 <div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], totalCount: 0, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }} })"
-     x-init="loadArtifacts()">
+     @ws:message.window="if ($event.detail.type === 'release_updated' && $event.detail.release_id === '{{ release_id }}') { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => loadArtifacts(), 500); }">
     {# The shell draws the frame itself, so the table needs no card around it. #}
     <c-tables.shell>
     <c-tables.toolbar>
@@ -70,7 +71,7 @@
         <c-tables.table>
         <c-tables.head>
         <c-tables.header-cell sort="type" class="w-10">Type</c-tables.header-cell>
-        <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+        <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
         <c-tables.header-cell sort="component">Component</c-tables.header-cell>
         <c-tables.header-cell sort="format">Format</c-tables.header-cell>
         <c-tables.header-cell sort="version">Version</c-tables.header-cell>
@@ -80,13 +81,13 @@
         <tbody>
             <template x-for="artifact in paginatedArtifacts" :key="artifact.id">
                 <c-tables.row>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <div class="w-8 h-8 rounded-lg flex items-center justify-center"
                      :class="getArtifactIconClass(artifact)">
                     <i :class="getTypeIcon(getArtifactType(artifact))" class="text-sm"></i>
                 </div>
                 </c-tables.cell>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <div class="flex items-center gap-2">
                     <a :href="getArtifactUrl(artifact)"
                        class="text-primary font-medium hover:underline"
@@ -221,7 +222,7 @@
                 <c-forms.checkbox aria-label="Select all artifacts" ::checked="allFilteredSelected" @change="toggleAllFiltered($event)" />
                 </c-tables.header-cell>
                 <c-tables.header-cell sort="type" class="w-16">Type</c-tables.header-cell>
-                <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+                <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
                 <c-tables.header-cell sort="component">Component</c-tables.header-cell>
                 <c-tables.header-cell sort="format">Format</c-tables.header-cell>
                 <c-tables.header-cell sort="version">Version</c-tables.header-cell>
@@ -230,7 +231,7 @@
                 <tbody>
                     <template x-for="artifact in filteredAvailableArtifacts" :key="artifact.id">
                         <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" ::class="isSelected(artifact.id) ? 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent'" tabindex="0" @click="toggleArtifactSelection(artifact.id)" @keydown.enter.prevent="toggleArtifactSelection(artifact.id)" @keydown.space.prevent="toggleArtifactSelection(artifact.id)">
-                        <c-tables.cell>
+                        <c-tables.cell nowrap>
                         <c-forms.checkbox ::checked="isSelected(artifact.id)" @click.stop="toggleArtifactSelection(artifact.id)" ::aria-label="'Select ' + artifact.name" />
                         </c-tables.cell>
                         <c-tables.cell>
@@ -239,7 +240,7 @@
                             <i :class="getAvailableTypeIcon(artifact)" class="text-sm"></i>
                         </div>
                         </c-tables.cell>
-                        <c-tables.cell>
+                        <c-tables.cell nowrap>
                         <a :href="getAvailableArtifactUrl(artifact)"
                            class="font-semibold text-primary hover:underline"
                            @click.stop

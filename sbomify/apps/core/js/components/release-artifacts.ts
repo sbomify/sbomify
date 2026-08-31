@@ -189,8 +189,11 @@ export function registerReleaseArtifacts() {
             async loadArtifacts() {
                 this.isLoading = true;
                 try {
+                    // page_size=-1 returns every row. The table filters, sorts
+                    // and paginates client-side, so a server page would silently
+                    // hide artifacts and make the pager report wrong totals.
                     const response = await $axios.get(
-                        `/api/v1/releases/${this.releaseId}/artifacts?mode=existing`
+                        `/api/v1/releases/${this.releaseId}/artifacts?mode=existing&page_size=-1`
                     );
                     const artifactsData = Array.isArray(response.data) ? response.data : response.data.items || [];
                     this.artifacts = artifactsData;
@@ -205,7 +208,7 @@ export function registerReleaseArtifacts() {
             async loadAvailableArtifacts() {
                 this.isLoadingAvailable = true;
                 try {
-                    const response = await $axios.get(`/api/v1/releases/${this.releaseId}/artifacts?mode=available`);
+                    const response = await $axios.get(`/api/v1/releases/${this.releaseId}/artifacts?mode=available&page_size=-1`);
                     const data = Array.isArray(response.data) ? response.data : response.data.items || [];
                     this.availableArtifacts = data;
                 } catch (error) {

@@ -1,0 +1,41 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}sbomify New Product{% endblock %}
+{% comment %}
+    The New Product form. It was a modal; it is a page now so the three create
+    flows (product, component, advisory) share one shape: c-layout.form-section
+    steps, what the step is on the left, its fields on the right, a hairline
+    between, actions under a rule at the end.
+{% endcomment %}
+{% block dashboard_content %}
+    {% url 'core:products_dashboard' as products_url %}
+    <div class="max-w-5xl">
+        <c-layout.page-header title="New product" subtitle="A deliverable you ship to customers, such as an application or service." icon="fas fa-cube">
+        <c-buttons.ghost href="{{ products_url }}" size="sm">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i><span>Back to products</span>
+        </c-buttons.ghost>
+        </c-layout.page-header>
+        <form method="post" action="{% url 'core:product_new' %}">
+            {% csrf_token %}
+            <c-layout.form-section step="1" title="What it is" description="A name is all a product needs.">
+            <div class="space-y-5">
+                <c-forms.field label="Name" for="name" required>
+                <c-forms.input name="name" required placeholder="e.g. Acme Router" />
+                </c-forms.field>
+            </div>
+            </c-layout.form-section>
+            <c-layout.form-section step="2" accent="neutral" title="What else is known" description="Optional. You can add this later.">
+            <div class="space-y-5">
+                <c-forms.field label="Description" for="description">
+                <c-forms.textarea name="description" rows="4" placeholder="What is this product, and who is it for?" />
+                </c-forms.field>
+            </div>
+            </c-layout.form-section>
+            <div class="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-6">
+                <c-buttons.ghost href="{{ products_url }}"><span>Cancel</span></c-buttons.ghost>
+                <c-buttons.primary type="submit">
+                <i class="fas fa-plus" aria-hidden="true"></i><span>Create product</span>
+                </c-buttons.primary>
+            </div>
+        </form>
+    </div>
+{% endblock %}
