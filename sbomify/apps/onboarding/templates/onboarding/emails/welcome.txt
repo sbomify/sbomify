@@ -6,7 +6,7 @@ Thanks for signing up. sbomify gets you from zero to SBOM hero. Manage your secu
 You have a {{ TRIAL_PERIOD_DAYS }}-day free trial of our Business plan with full access to all features. We'll notify you before it ends.
 {% endif %}
 To get started, head to your dashboard and create your first product:
-{{ app_base_url }}/dashboard
+{{ base_url }}{% url 'core:dashboard' %}
 
 New to SBOMs? Check out our FAQ for answers to common questions:
 https://sbomify.com/faq

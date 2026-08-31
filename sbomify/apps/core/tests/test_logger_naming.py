@@ -37,7 +37,7 @@ class TestTheNameIsNotDoubled:
         assert getLogger("sbomify").name == "sbomify"
 
     @pytest.mark.parametrize(
-        "module",
+        "module_path",
         [
             "sbomify.apps.core.consumers",
             "sbomify.apps.billing.stripe_client",
@@ -45,10 +45,21 @@ class TestTheNameIsNotDoubled:
             "sbomify.apps.teams.apis",
         ],
     )
-    def test_real_modules_keep_their_import_path(self, module: str) -> None:
+    def test_real_modules_keep_their_import_path(self, module_path: str) -> None:
         """A logger name that matches the module path is the whole point: it is
-        what makes a log line greppable back to the file that wrote it."""
-        assert getLogger(module).name == module
+        what makes a log line greppable back to the file that wrote it.
+
+        Imports the module and reads the logger it actually built, rather than
+        passing the path back into the helper. The string form asserted only
+        that the helper is a near-identity on names shaped like a module path —
+        it would have passed unchanged if every one of these call sites had
+        switched to a hand-written name.
+        """
+        import importlib
+
+        module = importlib.import_module(module_path)
+
+        assert module.logger.name == module_path
 
 
 class TestTheNamespacingStillWorks:

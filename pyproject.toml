@@ -1,12 +1,12 @@
 [project]
 name = "sbomify"
-version = "26.7.1"
+version = "26.8.0"
 description = "sbomify - the security artifact hub"
 authors = [{ name = "sbomify", email = "hello@sbomify.com" }]
 requires-python = ">=3.13,<4"
 readme = "README.md"
 dependencies = [
-    "django>=5.2.14,<7",
+    "django>=5.2.16,<6",
     "python-dotenv>=1.2.2,<2",
     "urllib3>=2.7.0,<3",
     "psycopg2-binary>=2.9.9,<3",
@@ -43,7 +43,7 @@ dependencies = [
     "channels>=4.0.0,<5",
     "channels-redis>=4.2.0,<5",
     "libtea==0.5.1",
-    "compliance-trestle>=4.0.1,<5",
+    "compliance-trestle>=4.1.0,<5",
     "posthog>=3.20.0,<8",
     "tzdata>=2025.2",
     # Used by the pre-existing ``sbomify.apps.plugins.builtins.verification``
@@ -64,7 +64,7 @@ dependencies = [
     # so we avoid maintaining a second renderer. System deps for
     # WeasyPrint (libpango, libjpeg, libopenjp2, libffi) are added in
     # the Dockerfile's python-common-code stage.
-    "weasyprint>=68.0,<70",
+    "weasyprint>=69.0,<70",
     "defusedxml>=0.7.1",
     "defusedcsv>=3.0.0",
     "jsonschema>=4.26,<5",
@@ -115,7 +115,7 @@ default-groups = [
 ]
 
 override-dependencies = [
-    "cryptography>=49.0.0",
+    "cryptography>=50.0.0",
     "pillow>=12.3.0",
     "pygments>=2.20.0",
     "rfc3161-client>=1.0.6",

@@ -3,6 +3,11 @@ A header cell: the sticky, upper-case band over a column. end and date behave
 exactly as they do on a body cell, and variant_class replaces the gutter recipe
 the same way.
 
+nowrap holds the label on one line, over the name column whose cells take the
+same prop. A label is written once and is short, so it needs no cap and no
+ellipsis: the two props write white-space and share one conditional segment,
+which is what keeps a column from taking two rules for it.
+
 sort turns the label into a sort control. It keeps the Alpine state a table
 already has, sortColumn, sortDirection and sort(column), so a page passes the
 column key and nothing else. The button marks itself data-sort and the caret
@@ -12,8 +17,8 @@ mutually exclusive and can never both apply.
 The size is the bare font-size, as on a body cell: `.tw-table th` set one and
 inherited its line-height, which is 1.5 in the app and 1.6 on a public page.
 {% endcomment %}
-<c-vars sort end date variant_class class />
-<th class="px-5 py-4 text-[0.75rem] font-semibold uppercase tracking-[0.05em] text-text-muted bg-background border-b border-solid border-border sticky top-0 z-[1] first:rounded-tl-lg last:rounded-tr-lg {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %} {% if end %}text-right{% else %}text-left{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
+<c-vars sort end date nowrap variant_class class />
+<th class="px-5 py-4 text-[0.75rem] font-semibold uppercase tracking-[0.05em] text-text-muted bg-background border-b border-solid border-border sticky top-0 z-[1] first:rounded-tl-lg last:rounded-tr-lg {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %} {% if end %}text-right{% else %}text-left{% endif %}{% if date or nowrap %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
     {% if end %}data-cell-end{% endif %}
     {% if sort %}:aria-sort="sortColumn === '{{ sort }}' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"{% endif %}
     {{ attrs }}>

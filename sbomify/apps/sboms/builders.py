@@ -83,6 +83,51 @@ def _is_spdx3(sbom_data: dict[str, Any]) -> bool:
     return is_spdx3(sbom_data)
 
 
+def _spdx3_component_info(sbom_data: dict[str, Any]) -> tuple[str, str | None, str | None] | None:
+    """(name, version, supplier) of an SPDX 3 document's primary package.
+
+    Shared by both release builders, which carried this block in duplicate —
+    and both picked ``packages[0]`` before looking at ``rootElement``, so the
+    aggregate could name the component after whichever package happened to
+    serialise first. Order: the SpdxDocument's rootElement (how SPDX 3
+    declares the BOM subject), then a ``describes`` relationship, then the
+    first package.
+    """
+    elements = sbom_data.get("@graph", sbom_data.get("elements", []))
+    if not isinstance(elements, list):
+        return None
+    packages = [e for e in elements if isinstance(e, dict) and e.get("type") == "software_Package"]
+    if not packages:
+        return None
+
+    from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
+
+    pkg = None
+    _, root_element_ids = spdx3_document_subjects({"@graph": elements})
+    for p in packages:
+        if p.get("spdxId") in root_element_ids:
+            pkg = p
+            break
+
+    if pkg is None:
+        for rel in elements:
+            if isinstance(rel, dict) and rel.get("type") == "Relationship":
+                if rel.get("relationshipType") == "describes":
+                    target_ids = rel.get("to", [])
+                    # JSON-LD compact form: a one-element set may serialise as
+                    # a bare string; indexing it would yield one character.
+                    if isinstance(target_ids, str):
+                        target_ids = [target_ids]
+                    if isinstance(target_ids, list) and target_ids:
+                        pkg = next((p for p in packages if p.get("spdxId") == target_ids[0]), None)
+                        if pkg:
+                            break
+
+    if pkg is None:
+        pkg = packages[0]
+    return pkg.get("name", "Unknown"), pkg.get("software_packageVersion"), None
+
+
 class SBOMBuilderProtocol(Protocol):
     """Protocol defining the interface for SBOM builders."""
 
@@ -99,16 +144,20 @@ class BaseSBOMBuilder(ABC):
     in different formats (CycloneDX, SPDX) and versions.
     """
 
-    def __init__(self, entity: Any = None, user: Any = None):
+    def __init__(self, entity: Any = None, user: Any = None, include_non_public: bool = False):
         """
         Initialize the builder.
 
         Args:
             entity: The entity (product or release) to build SBOM for
             user: User for signed URL generation
+            include_non_public: Include gated/private members in the aggregate.
+                Only set for a requester the view layer has already authorized;
+                such a build must never land in the public aggregate cache.
         """
         self.entity = entity
         self.user = user
+        self.include_non_public = include_non_public
         self.temp_files: list[Path] = []
         self.target_folder: Optional[Path] = None
         # Set when a member SBOM fetch fails (non-fatal — the member is skipped).
@@ -238,7 +287,8 @@ class BaseSBOMBuilder(ABC):
         members = [
             artifact
             for artifact in sbom_artifacts
-            if not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
+            if self.include_non_public
+            or not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
         ]
         fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
         return members, fetched
@@ -719,23 +769,9 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
 
         # Try SPDX 3.0 format (spec-compliant @graph or legacy elements)
         elif _is_spdx3(sbom_data):
-            elements = sbom_data.get("@graph", sbom_data.get("elements", []))
-            packages = [e for e in elements if e.get("type") == "software_Package"]
-            if packages:
-                pkg = packages[0]
-                relationships = [e for e in elements if e.get("type") == "Relationship"]
-                for rel in relationships:
-                    if rel.get("relationshipType") == "describes":
-                        target_ids = rel.get("to", [])
-                        if target_ids:
-                            for p in packages:
-                                if p.get("spdxId") == target_ids[0]:
-                                    pkg = p
-                                    break
-                name = pkg.get("name", "Unknown")
-                version = pkg.get("software_packageVersion")
-                supplier = None
-                return name, version, supplier
+            info = _spdx3_component_info(sbom_data)
+            if info:
+                return info
 
         # Try SPDX 2.x format
         elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
@@ -1052,24 +1088,9 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
 
         # SPDX 3.0 format (spec-compliant @graph or legacy elements)
         elif _is_spdx3(sbom_data):
-            elements = sbom_data.get("@graph", sbom_data.get("elements", []))
-            packages = [e for e in elements if e.get("type") == "software_Package"]
-            if packages:
-                pkg = packages[0]
-                # Try to find the described package via relationships
-                relationships = [e for e in elements if e.get("type") == "Relationship"]
-                for rel in relationships:
-                    if rel.get("relationshipType") == "describes":
-                        target_ids = rel.get("to", [])
-                        if target_ids:
-                            for p in packages:
-                                if p.get("spdxId") == target_ids[0]:
-                                    pkg = p
-                                    break
-                name = pkg.get("name", "Unknown")
-                version = pkg.get("software_packageVersion")
-                supplier = None
-                return name, version, supplier
+            info = _spdx3_component_info(sbom_data)
+            if info:
+                return info
 
         # SPDX 2.x format
         elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
@@ -1120,6 +1141,7 @@ def get_sbom_builder(
     version: SBOMVersion | str | None = None,
     entity: Any = None,
     user: Any = None,
+    include_non_public: bool = False,
 ) -> BaseSBOMBuilder:
     """
     Factory function to get the appropriate SBOM builder.
@@ -1165,7 +1187,7 @@ def get_sbom_builder(
             f"version={version.value}. Supported: {supported}"
         )
 
-    return builder_class(entity=entity, user=user)
+    return builder_class(entity=entity, user=user, include_non_public=include_non_public)
 
 
 def get_supported_output_formats() -> dict[str, list[str]]:

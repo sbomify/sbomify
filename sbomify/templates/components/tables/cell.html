@@ -26,9 +26,30 @@ context rather than the row's subject: the email beside a name, who decided a
 request, when it happened. It is one conditional segment with the resting ink,
 because both write the same property and a caller class would be settled by
 stylesheet order rather than by the page.
+
+nowrap is for the column carrying the row's subject: a product, a component, a
+release, a token. A name broken mid word across two lines reads as two names,
+and the break lands in a different place on every row, so the column has no
+edge to scan down. It keeps the cell on one line and ends what does not fit in
+an ellipsis.
+
+It is a wrapper rather than a class on the cell because a cell is a table cell:
+max-width on a td is ignored under table-layout auto, which most of these tables
+use, so a name with no break opportunity would widen the column until the table
+scrolled. A block inside the cell is capped normally, and its cap is what the
+column asks for. 24rem is past the length of any name worth reading in a row,
+so the cap only ever catches the pathological one; below that the ellipsis
+lands at the column edge, wherever the layout puts it.
+
+white-space inherits, so a second line inside the cell, a description or a
+mobile fallback, stays on one line too and ellipses the same way. That is the
+intent: the column is one line per row.
 {% endcomment %}
-<c-vars end date muted variant_class class />
+<c-vars end date nowrap muted variant_class class />
+{# djlint:off #}
+{# The branch opens the cell's content, so the formatter must not indent it in. #}
 <td class="px-5 py-5 text-[0.875rem] {% if muted %}text-text-muted{% else %}text-text{% endif %} border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] transition-[background-color] duration-150 {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %}{% if end %} text-right{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
     {% if end %}data-cell-end{% endif %}
-    {{ attrs }}>{{ slot }}
+    {{ attrs }}>{% if nowrap %}<div class="truncate max-w-[24rem]">{{ slot }}</div>{% else %}{{ slot }}{% endif %}
 </td>
+{# djlint:on #}

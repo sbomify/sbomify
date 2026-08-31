@@ -1,0 +1,20 @@
+{% comment %}
+The heading above a group of records: "Security advisories" and the line that
+says what they are, with the link to the full list on the right.
+
+Separate from c-branded.page-header on purpose. See that component's note: a
+size prop that turned one into the other would let either appear in the other's
+place.
+
+The action slot sits on the right on a wide screen and wraps underneath on a
+narrow one, so the heading never collides with the link.
+{% endcomment %}
+<c-vars title subtitle class />
+<div class="flex items-end justify-between gap-4 [flex-wrap:wrap]{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <div class="min-w-0 flex flex-col gap-1">
+        <h2 class="text-lg font-semibold text-text my-0">{{ title }}</h2>
+        {% if subtitle %}<p class="text-sm text-text-muted my-0">{{ subtitle }}</p>{% endif %}
+    </div>
+    {% if action %}<div class="shrink-0">{{ action }}</div>{% endif %}
+</div>

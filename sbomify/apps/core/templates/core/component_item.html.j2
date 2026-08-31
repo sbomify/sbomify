@@ -200,7 +200,7 @@
                         </c-tables.toolbar>
                         <c-tables.table fixed x-cloak>
                         <c-tables.head>
-                        <c-tables.header-cell class="w-1/4">Advisory</c-tables.header-cell>
+                        <c-tables.header-cell nowrap class="w-1/4">Advisory</c-tables.header-cell>
                         <c-tables.header-cell class="w-1/4">Package</c-tables.header-cell>
                         <c-tables.header-cell class="w-1/4">Status</c-tables.header-cell>
                         <c-tables.header-cell class="w-1/4">Justification</c-tables.header-cell>
@@ -208,7 +208,7 @@
                         <tbody>
                             {% for s in vex_suppressions %}
                                 <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
-                                <c-tables.cell>
+                                <c-tables.cell nowrap>
                                 {% with suppression_url=s.id|advisory_url %}
                                     {% if suppression_url %}
                                         <a href="{{ suppression_url }}"
