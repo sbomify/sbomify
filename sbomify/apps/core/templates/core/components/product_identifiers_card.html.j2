@@ -37,7 +37,7 @@
     <tbody>
         {% for identifier in identifiers %}
             <c-tables.row>
-            <c-tables.cell>
+            <c-tables.cell nowrap>
             <c-badges.secondary>
             {{ identifier_types|get_item:identifier.identifier_type|default:identifier.identifier_type }}
             </c-badges.secondary>

@@ -6,7 +6,7 @@
     {{ latest_vuln_states|json_script:"latest-vuln-states" }}
     {{ latest_vuln_suppressed|json_script:"latest-vuln-suppressed" }}
     {{ latest_vuln_kev|json_script:"latest-vuln-kev" }}
-    <c-cards.collapsible x-data="{ open: true, search: '', sevFilter: 'all', stateFilter: 'all', kevOnly: false, showSuppressed: false, currentPage: 1, perPage: 5, terms: (window.parseJsonScript('latest-vuln-terms') || []), severities: (window.parseJsonScript('latest-vuln-severities') || []), states: (window.parseJsonScript('latest-vuln-states') || []), suppressedArr: (window.parseJsonScript('latest-vuln-suppressed') || []), kevArr: (window.parseJsonScript('latest-vuln-kev') || []), get sevOptions() { const order = ['critical', 'high', 'medium', 'low', 'info']; const present = new Set(this.severities); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, get stateOptions() { const order = ['open', 'in_triage', 'exploitable', 'resolved', 'not_affected', 'false_positive']; const present = new Set(this.states); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, stateLabel(v) { return ({ open: 'No decision', in_triage: 'Under investigation', exploitable: 'Affected', resolved: 'Fixed', not_affected: 'Not affected', false_positive: 'False positive' })[v] || v; }, get suppressedShown() { return this.showSuppressed || ['not_affected', 'false_positive'].includes(this.stateFilter); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.sevFilter === 'all' || this.severities[i] === this.sevFilter) && (this.stateFilter === 'all' || this.states[i] === this.stateFilter) && (!this.kevOnly || this.kevArr[i]) && (this.suppressedShown || !this.suppressedArr[i])); }, get suppressedTotal() { return this.suppressedArr.filter(Boolean).length; }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); }, }" x-effect="search; sevFilter; stateFilter; kevOnly; showSuppressed; currentPage = 1" x-init="$watch('search', () => { currentPage = 1 }); $watch('sevFilter', () => { currentPage = 1 })">
+    <c-cards.collapsible x-data="{ open: true, search: '', sevFilter: 'all', stateFilter: 'all', kevOnly: false, showSuppressed: true, currentPage: 1, perPage: 5, terms: (window.parseJsonScript('latest-vuln-terms') || []), severities: (window.parseJsonScript('latest-vuln-severities') || []), states: (window.parseJsonScript('latest-vuln-states') || []), suppressedArr: (window.parseJsonScript('latest-vuln-suppressed') || []), kevArr: (window.parseJsonScript('latest-vuln-kev') || []), get sevOptions() { const order = ['critical', 'high', 'medium', 'low', 'info']; const present = new Set(this.severities); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, get stateOptions() { const order = ['open', 'in_triage', 'exploitable', 'resolved', 'not_affected', 'false_positive']; const present = new Set(this.states); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, stateLabel(v) { return ({ open: 'No decision', in_triage: 'Under investigation', exploitable: 'Affected', resolved: 'Fixed', not_affected: 'Not affected', false_positive: 'False positive' })[v] || v; }, get suppressedShown() { return this.showSuppressed || ['not_affected', 'false_positive'].includes(this.stateFilter); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.sevFilter === 'all' || this.severities[i] === this.sevFilter) && (this.stateFilter === 'all' || this.states[i] === this.stateFilter) && (!this.kevOnly || this.kevArr[i]) && (this.suppressedShown || !this.suppressedArr[i])); }, get suppressedTotal() { return this.suppressedArr.filter(Boolean).length; }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); }, }" x-effect="search; sevFilter; stateFilter; kevOnly; showSuppressed; currentPage = 1" x-init="$watch('search', () => { currentPage = 1 }); $watch('sevFilter', () => { currentPage = 1 })">
     {% comment %}
         The panel is a full-bleed table, so it takes the clipped wrapper the
         card's body would have given it and none of the padding.
@@ -45,7 +45,7 @@
         <c-tables.table x-cloak>
         <c-tables.head>
         <c-tables.header-cell>Severity</c-tables.header-cell>
-        <c-tables.header-cell>Advisory</c-tables.header-cell>
+        <c-tables.header-cell nowrap>Advisory</c-tables.header-cell>
         <c-tables.header-cell>Package</c-tables.header-cell>
         <c-tables.header-cell>Fixed in</c-tables.header-cell>
         <c-tables.header-cell>Status</c-tables.header-cell>
@@ -53,7 +53,7 @@
         <tbody>
             {% for vuln in latest_vulns %}
                 <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 {% if vuln.severity == 'critical' or vuln.severity == 'high' or vuln.severity == 'medium' or vuln.severity == 'low' %}
                     <c-badges.severity level="{{ vuln.severity|lower }}" class="
                     {% if vuln.vex_suppressed %}line-through{% endif %}
@@ -68,7 +68,7 @@
                     </c-badges.severity>
                 {% endif %}
                 </c-tables.cell>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 {% with vuln_url=vuln.id|advisory_url %}
                     {% if vuln_url %}
                         <a href="{{ vuln_url }}"
@@ -114,7 +114,9 @@
                             VEX
                         {% endif %}
                     </span>
-                    {% if vuln.vex_justification %}<div class="text-xs text-text-muted mt-1">{{ vuln.vex_justification }}</div>{% endif %}
+                    {% if vuln.vex_justification %}
+                        <div class="text-xs text-text-muted mt-1">{{ vuln.vex_justification_label }}</div>
+                    {% endif %}
                 {% elif vuln.vex_state == 'in_triage' %}
                     <span class="text-warning">Under investigation</span>
                 {% elif vuln.vex_state == 'resolved' %}

@@ -1617,6 +1617,9 @@ input[type="color"]::-moz-color-swatch {
 .tw-badge-solid-danger {
   display: inline-flex;
   align-items: center;
+  /* A badge is one line. Wrapped, it becomes a tall blob in a table cell and
+     stops reading as a pill, which is what it is for. */
+  white-space: nowrap;
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 600;

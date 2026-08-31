@@ -61,7 +61,7 @@ def update_document_metadata(
         return ServiceResult.failure("Document not found", status_code=404)
 
     if not can(request, "document:manage", document.component):
-        return ServiceResult.failure("Only owners and admins can update documents", status_code=403)
+        return ServiceResult.failure("You don't have permission to update this document", status_code=403)
 
     update_fields = []
     if payload.name is not None:

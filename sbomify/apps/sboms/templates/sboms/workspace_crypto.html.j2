@@ -79,7 +79,7 @@
         </div>
         <c-tables.table>
         <c-tables.head>
-        <c-tables.header-cell>Component</c-tables.header-cell>
+        <c-tables.header-cell nowrap>Component</c-tables.header-cell>
         <c-tables.header-cell>Readiness</c-tables.header-cell>
         <c-tables.header-cell>Vulnerable</c-tables.header-cell>
         <c-tables.header-cell>Review</c-tables.header-cell>
@@ -89,7 +89,7 @@
         <tbody>
             {% for row in rollup.rows %}
                 <c-tables.row>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 {% if row.sbom_id %}
                     <a href="{% url 'core:component_item' row.id 'sboms' row.sbom_id %}"
                        class="font-medium text-primary hover:underline no-underline">{{ row.name }}</a>

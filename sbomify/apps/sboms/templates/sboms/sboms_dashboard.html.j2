@@ -51,7 +51,7 @@
             </div>
             <c-tables.table>
             <c-tables.head>
-            <c-tables.header-cell>Name</c-tables.header-cell>
+            <c-tables.header-cell nowrap>Name</c-tables.header-cell>
             <c-tables.header-cell>Version</c-tables.header-cell>
             <c-tables.header-cell>Visibility</c-tables.header-cell>
             <c-tables.actions-cell as="th" />
@@ -59,7 +59,7 @@
             <tbody>
                 {% for sbom in sboms %}
                     <c-tables.row>
-                    <c-tables.cell>
+                    <c-tables.cell nowrap>
                     <a href="{% url 'core:component_item' component_id=sbom.component_id item_type='sboms' item_id=sbom.id %}"
                        class="text-primary font-medium hover:underline">{{ sbom.name }}</a>
                     </c-tables.cell>

@@ -62,9 +62,9 @@ def signed_access_request(team_with_business_plan, guest_user, nda_document, sam
 
 @pytest.mark.django_db
 class TestAccessRevocationSignature:
-    """Test NDA signature lifecycle during revocation and rejection."""
+    """Revocation and rejection supersede the NDA signature — the record survives, the flow re-signs."""
 
-    def test_revoke_via_queue_deletes_signature(
+    def test_revoke_via_queue_supersedes_signature(
         self, authenticated_web_client, team_with_business_plan, signed_access_request, sample_user
     ):
         """Test that revoking an access request deletes the associated NDA signature."""
@@ -91,10 +91,12 @@ class TestAccessRevocationSignature:
         signed_access_request.refresh_from_db()
         assert signed_access_request.status == AccessRequest.Status.REVOKED
         
-        # Verify signature is deleted
-        assert not NDASignature.objects.filter(id=signature_id).exists()
+        # Verify signature is superseded (preserved as history)
+        signature = NDASignature.objects.get(id=signature_id)
+        assert signature.superseded_at is not None
+        assert not NDASignature.objects.live().filter(id=signature_id).exists()
 
-    def test_reject_via_queue_deletes_signature(
+    def test_reject_via_queue_supersedes_signature(
         self, authenticated_web_client, team_with_business_plan, guest_user, nda_document, sample_user
     ):
         """Test that rejecting an access request (which might have a signature) deletes it."""
@@ -128,10 +130,12 @@ class TestAccessRevocationSignature:
         request.refresh_from_db()
         assert request.status == AccessRequest.Status.REJECTED
         
-        # Verify signature is deleted
-        assert not NDASignature.objects.filter(id=signature.id).exists()
+        # Verify signature is superseded (preserved as history)
+        signature.refresh_from_db()
+        assert signature.superseded_at is not None
+        assert not NDASignature.objects.live().filter(id=signature.id).exists()
 
-    def test_rerequest_after_revocation_deletes_residual_signature(
+    def test_rerequest_after_revocation_supersedes_residual_signature(
         self, authenticated_web_client, team_with_business_plan, guest_user, nda_document
     ):
         """Test that re-requesting after revocation cleans up any residual signature."""
@@ -159,9 +163,11 @@ class TestAccessRevocationSignature:
         assert request.status == AccessRequest.Status.PENDING
         
         # Verify residual signature was deleted
-        assert not NDASignature.objects.filter(id=signature.id).exists()
+        signature.refresh_from_db()
+        assert signature.superseded_at is not None
+        assert not NDASignature.objects.live().filter(id=signature.id).exists()
 
-    def test_rerequest_after_rejection_deletes_residual_signature(
+    def test_rerequest_after_rejection_supersedes_residual_signature(
         self, authenticated_web_client, team_with_business_plan, guest_user, nda_document
     ):
         """Test that re-requesting after rejection cleans up any residual signature."""
@@ -184,4 +190,6 @@ class TestAccessRevocationSignature:
         request.refresh_from_db()
         assert request.status == AccessRequest.Status.PENDING
         
-        assert not NDASignature.objects.filter(id=signature.id).exists()
+        signature.refresh_from_db()
+        assert signature.superseded_at is not None
+        assert not NDASignature.objects.live().filter(id=signature.id).exists()

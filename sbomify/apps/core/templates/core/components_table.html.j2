@@ -37,7 +37,7 @@
         </c-tables.toolbar>
         <c-tables.table fixed>
         <c-tables.head>
-        <c-tables.header-cell sort="name">Component</c-tables.header-cell>
+        <c-tables.header-cell sort="name" nowrap>Component</c-tables.header-cell>
         <c-tables.header-cell sort="component_type" class="hidden md:table-cell">Type</c-tables.header-cell>
         <c-tables.header-cell sort="is_global" class="hidden lg:table-cell">Scope</c-tables.header-cell>
         <c-tables.header-cell sort="sbom_count" class="hidden lg:table-cell">Content</c-tables.header-cell>
@@ -46,7 +46,7 @@
         <tbody>
             <template x-for="component in paginatedData" :key="component.id">
                 <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" tabindex="0" @click="window.location.href = '{% url 'core:component_details' 0 %}'.replace('0', component.id)" @keydown.enter.prevent="window.location.href = '{% url 'core:component_details' 0 %}'.replace('0', component.id)">
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <div class="min-w-0">
                     <span class="text-text font-medium block truncate" x-text="component.name"></span>
                     {% comment %}
@@ -126,7 +126,7 @@
         <c-cards.card>
         <c-feedback.empty-state icon="fas fa-puzzle-piece" title="No components yet" message="Components are containers for your SBOMs and documents. Create one to start uploading content.">
         {% if has_crud_permissions %}
-            <c-buttons.primary @click="$dispatch('open-add-component-modal')">
+            <c-buttons.primary href="{% url 'core:component_new' %}">
             <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Your First Component
             </c-buttons.primary>
         {% endif %}

@@ -7,38 +7,6 @@
     <div class="space-y-6">
         {# Products table #}
         {% include 'core/products_table.html.j2' %}
-        {# New product dialog #}
-        {% if has_crud_permissions %}
-            <div x-data="{ open: false }" @open-add-product-modal.window="open = true">
-                <c-modal id="addProductModal" title="New product" icon="fas fa-cube">
-                <form id="addProductForm"
-                      method="post"
-                      action="{% url 'core:products_dashboard' %}">
-                    {% csrf_token %}
-                    <p class="text-sm text-text-muted mb-4">
-                        A product represents a deliverable you ship to customers, such as an application or service.
-                    </p>
-                    <div class="space-y-4">
-                        <div>
-                            <c-forms.label for="productName" required>Name</c-forms.label>
-                            <c-forms.input id="productName" name="name" placeholder="Enter product name" required />
-                        </div>
-                        <div>
-                            <c-forms.label for="productDescription">Description</c-forms.label>
-                            <c-forms.textarea id="productDescription" name="description" rows="3" placeholder="Describe your product..." />
-                            <c-forms.hint>Optional. A brief description of your product.</c-forms.hint>
-                        </div>
-                    </div>
-                </form>
-                <c-slot name="footer">
-                <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
-                <c-buttons.primary type="submit" form="addProductForm">
-                <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create product
-                </c-buttons.primary>
-                </c-slot>
-                </c-modal>
-            </div>
-        {% endif %}
     </div>
 {% endblock %}
 {% block scripts %}{% endblock %}
