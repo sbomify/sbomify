@@ -19,6 +19,7 @@ from sbomify.apps.security_advisories.models import (
 )
 from sbomify.apps.security_advisories.services.advisories import (
     advisory_counts,
+    delete_advisory,
     get_advisory,
     list_advisories,
     publish_advisory,
@@ -378,6 +379,174 @@ class TestUpdateAdvisory:
         assert advisory.title == "Not yours"
 
 
+VECTOR = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+
+
+class TestUpdateAdvisoryCvss:
+    """CVSS lives on the vulnerability, so the edit path crosses one model over."""
+
+    def test_setting_cvss_writes_the_entry_and_the_timeline(self, sample_team, sample_user):
+        advisory = _advisory(sample_team)
+        vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-0001")
+
+        result = update_advisory(
+            sample_team, sample_user, advisory.id, title=advisory.title, cvss_score="9.8", cvss_vector=VECTOR
+        )
+
+        assert result.ok, result.error
+        vulnerability.refresh_from_db()
+        assert vulnerability.cvss_scores == [{"version": "3.1", "vector": VECTOR, "base_score": 9.8}]
+        event = AdvisoryEvent.objects.get(advisory=advisory, payload__field="cvss")
+        assert event.payload == {"field": "cvss", "old": "", "new": f"9.8 ({VECTOR})"}
+        assert event.body == f"CVSS set to “9.8 ({VECTOR})”."
+
+    def test_a_bare_score_stores_no_version(self, sample_team, sample_user):
+        advisory = _advisory(sample_team)
+        vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-0001")
+
+        update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, cvss_score="7.5")
+
+        vulnerability.refresh_from_db()
+        assert vulnerability.cvss_scores == [{"version": "", "vector": "", "base_score": 7.5}]
+
+    def test_a_blank_score_clears_it(self, sample_team, sample_user):
+        advisory = _advisory(sample_team)
+        vulnerability = AdvisoryVulnerability.objects.create(
+            advisory=advisory, cve_id="CVE-2026-0001", cvss_scores=[{"version": "", "vector": "", "base_score": 9.8}]
+        )
+
+        update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, cvss_score="")
+
+        vulnerability.refresh_from_db()
+        assert vulnerability.cvss_scores == []
+        assert AdvisoryEvent.objects.get(advisory=advisory, payload__field="cvss").body == "CVSS cleared."
+
+    def test_an_omitted_cvss_is_left_alone(self, sample_team, sample_user):
+        advisory = _advisory(sample_team)
+        vulnerability = AdvisoryVulnerability.objects.create(
+            advisory=advisory, cve_id="CVE-2026-0001", cvss_scores=[{"version": "", "vector": "", "base_score": 9.8}]
+        )
+
+        update_advisory(sample_team, sample_user, advisory.id, title="Retitled")
+
+        vulnerability.refresh_from_db()
+        assert vulnerability.cvss_scores == [{"version": "", "vector": "", "base_score": 9.8}]
+
+    def test_an_unchanged_cvss_records_nothing_and_keeps_other_entries(self, sample_team, sample_user):
+        """Prefill shows the worst entry, so resubmitting it untouched must not
+        clobber a hand-entered list down to one row."""
+        advisory = _advisory(sample_team)
+        entries = [
+            {"version": "2.0", "vector": "", "base_score": 6.0},
+            {"version": "3.1", "vector": VECTOR, "base_score": 9.8},
+        ]
+        vulnerability = AdvisoryVulnerability.objects.create(
+            advisory=advisory, cve_id="CVE-2026-0001", cvss_scores=entries
+        )
+
+        result = update_advisory(
+            sample_team, sample_user, advisory.id, title=advisory.title, cvss_score="9.8", cvss_vector=VECTOR
+        )
+
+        assert result.ok
+        vulnerability.refresh_from_db()
+        assert vulnerability.cvss_scores == entries
+        assert not AdvisoryEvent.objects.filter(advisory=advisory, payload__field="cvss").exists()
+
+    def test_the_write_goes_to_the_vulnerability_holding_the_displayed_entry(self, sample_team, sample_user):
+        advisory = _advisory(sample_team)
+        mild = AdvisoryVulnerability.objects.create(
+            advisory=advisory, cve_id="CVE-2026-0001", cvss_scores=[{"version": "", "vector": "", "base_score": 3.0}]
+        )
+        worst = AdvisoryVulnerability.objects.create(
+            advisory=advisory, cve_id="CVE-2026-0002", cvss_scores=[{"version": "", "vector": "", "base_score": 9.0}]
+        )
+
+        update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, cvss_score="9.5")
+
+        mild.refresh_from_db()
+        worst.refresh_from_db()
+        assert mild.cvss_scores == [{"version": "", "vector": "", "base_score": 3.0}]
+        assert worst.cvss_scores == [{"version": "", "vector": "", "base_score": 9.5}]
+
+    def test_an_advisory_with_no_vulnerability_grows_one(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, title="Shell-made")
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, cvss_score="5")
+
+        assert result.ok, result.error
+        vulnerability = advisory.vulnerabilities.get()
+        assert vulnerability.title == "Shell-made"
+        assert vulnerability.cvss_scores == [{"version": "", "vector": "", "base_score": 5.0}]
+
+    def test_a_non_numeric_score_is_refused(self, sample_team, sample_user):
+        advisory = _advisory(sample_team)
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, cvss_score="spicy")
+
+        assert not result.ok
+        assert result.status_code == 400
+        assert result.error == "CVSS score must be a number from 0 to 10."
+
+    def test_an_out_of_range_score_is_refused(self, sample_team, sample_user):
+        advisory = _advisory(sample_team)
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, cvss_score="10.1")
+
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_a_vector_without_a_score_is_refused(self, sample_team, sample_user):
+        advisory = _advisory(sample_team)
+
+        result = update_advisory(
+            sample_team, sample_user, advisory.id, title=advisory.title, cvss_score="", cvss_vector=VECTOR
+        )
+
+        assert not result.ok
+        assert result.status_code == 400
+        assert result.error == "Enter the CVSS score for the vector."
+
+
+class TestCvssProjection:
+    def test_the_projection_carries_the_worst_entry_and_its_vector(self, sample_team):
+        advisory = _advisory(sample_team)
+        AdvisoryVulnerability.objects.create(
+            advisory=advisory, cve_id="CVE-2026-0001", cvss_scores=[{"version": "", "vector": "", "base_score": 5.0}]
+        )
+        AdvisoryVulnerability.objects.create(
+            advisory=advisory,
+            cve_id="CVE-2026-0002",
+            cvss_scores=[{"version": "3.1", "vector": VECTOR, "base_score": 9.8}],
+        )
+
+        projection = get_advisory(sample_team, advisory.id).value
+
+        assert projection["cvss_score"] == 9.8
+        assert projection["cvss_vector"] == VECTOR
+
+    def test_an_unscored_advisory_projects_none(self, sample_team):
+        advisory = _advisory(sample_team)
+        AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-0001")
+
+        projection = get_advisory(sample_team, advisory.id).value
+
+        assert projection["cvss_score"] is None
+        assert projection["cvss_vector"] == ""
+
+    def test_a_malformed_entry_is_skipped(self, sample_team):
+        advisory = _advisory(sample_team)
+        AdvisoryVulnerability.objects.create(
+            advisory=advisory,
+            cve_id="CVE-2026-0001",
+            cvss_scores=["garbage", {"vector": "no score"}, {"version": "", "vector": "", "base_score": "4.2"}],
+        )
+
+        projection = get_advisory(sample_team, advisory.id).value
+
+        assert projection["cvss_score"] == 4.2
+
+
 class TestPublishAdvisory:
     """Publishing is what puts an advisory on the Trust Center: until it runs the
     advisory is a draft with private visibility, and that page filters out both."""
@@ -494,3 +663,37 @@ class TestPublishAdvisory:
         assert result.status_code == 404
         advisory.refresh_from_db()
         assert advisory.status == SecurityAdvisory.Status.DRAFT
+
+
+class TestDelete:
+    def test_the_whole_graph_goes_with_it(self, sample_team):
+        advisory = _advisory(sample_team)
+        vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, title="Auth bypass")
+        AdvisoryProduct.objects.create(advisory=advisory, product_name="Ghost product")
+        AdvisoryEvent.objects.create(advisory=advisory, event_type="update", body="First update")
+
+        result = delete_advisory(sample_team, advisory.id)
+
+        assert result.ok
+        assert not SecurityAdvisory.objects.filter(id=advisory.id).exists()
+        assert not AdvisoryVulnerability.objects.filter(id=vulnerability.id).exists()
+
+    def test_it_resolves_by_tracking_id_too(self, sample_team):
+        advisory = _advisory(sample_team, status="published", tracking_id="OSPN-2026-0001", published_at=timezone.now())
+
+        result = delete_advisory(sample_team, "OSPN-2026-0001")
+
+        assert result.ok
+        assert not SecurityAdvisory.objects.filter(id=advisory.id).exists()
+
+    def test_another_workspaces_advisory_is_not_found(self, sample_team):
+        from sbomify.apps.teams.models import Team
+
+        other = Team.objects.create(name="Someone else")
+        advisory = _advisory(other)
+
+        result = delete_advisory(sample_team, advisory.id)
+
+        assert not result.ok
+        assert result.status_code == 404
+        assert SecurityAdvisory.objects.filter(id=advisory.id).exists()

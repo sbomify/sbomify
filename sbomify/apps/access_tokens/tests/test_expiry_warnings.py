@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from django.core import mail
+from django.core.mail import EmailMultiAlternatives
 from django.utils import timezone
 
 from sbomify.apps.access_tokens.models import AccessToken, TokenExpiryWarning
@@ -105,7 +106,30 @@ class TestBellProvider:
         _bot_member(guest_user, member.team)
         _token(guest_user, member.team, days=3)
 
+        # Demote the Member row, not just the session copy of it. The provider
+        # reads the live row, so a session claiming "guest" over an owner row
+        # would prove only that the cache can lie.
+        member.role = "guest"
+        member.save(update_fields=["role"])
+
         assert get_notifications(self._request(rf, member.user, member.team, role="guest")) == []
+
+    def test_a_stale_session_role_does_not_unlock_bot_tokens(
+        self, rf: Any, sample_team_with_owner_member: Any, guest_user: Any
+    ) -> None:
+        """The session role is a 300s cache and must not be the deciding source.
+
+        A demoted admin keeps a session saying "owner" until it turns over; that
+        window must not keep handing them the workspace's bot tokens.
+        """
+        member = sample_team_with_owner_member
+        _bot_member(guest_user, member.team)
+        _token(guest_user, member.team, days=3)
+
+        member.role = "member"
+        member.save(update_fields=["role"])
+
+        assert get_notifications(self._request(rf, member.user, member.team, role="owner")) == []
 
 
 class TestShortLivedTokensAreNotNagged:
@@ -180,6 +204,45 @@ class TestShortLivedTokensAreNotNagged:
         """
         member = sample_team_with_owner_member
         _token(member.user, member.team, days=14, lifetime=14)
+
+        assert warn_expiring_tokens.fn() == 0
+        assert mail.outbox == []
+
+    def test_an_oidc_publish_token_never_reaches_the_bell(
+        self, rf: Any, sample_team_with_owner_member: Any, guest_user: Any
+    ) -> None:
+        """From staging: the OIDC exchange mints a 15-minute token per CI
+        publish, and each one sat on the owner's bell as "expires tomorrow"
+        for its whole life, one badge per publish. A token born inside its
+        final day has no final-day news to break.
+        """
+        member = sample_team_with_owner_member
+        _bot_member(guest_user, member.team)
+        for i in range(3):
+            AccessToken.objects.create(
+                user=guest_user,
+                team=member.team,
+                description="oidc:github:bind1234abcd",
+                encoded_token=f"tok-oidc-{i}",
+                expires_at=timezone.now() + timedelta(minutes=15),
+            )
+
+        assert get_notifications(self._request(rf, member.user, member.team)) == []
+
+    def test_the_sweep_never_mails_about_a_publish_token(
+        self, sample_team_with_owner_member: Any, guest_user: Any
+    ) -> None:
+        """The email side already agrees through its threshold arithmetic; pin
+        the agreement so the two paths cannot drift apart at this boundary."""
+        member = sample_team_with_owner_member
+        _bot_member(guest_user, member.team)
+        AccessToken.objects.create(
+            user=guest_user,
+            team=member.team,
+            description="oidc:github:bind1234abcd",
+            encoded_token="tok-oidc-sweep",
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
 
         assert warn_expiring_tokens.fn() == 0
         assert mail.outbox == []
@@ -265,6 +328,36 @@ class TestEmailSweep:
 
         assert len(mail.outbox) == 1
         assert mail.outbox[0].to == [member.user.email]
+
+    def test_a_partly_delivered_warning_is_retried(
+        self, sample_team_with_owner_member: Any, guest_user: Any, mocker: Any
+    ) -> None:
+        """One owner's address bouncing must not burn the threshold for the rest.
+
+        A bot token warns every owner. If one send fails and the others succeed,
+        marking the threshold would leave that owner unwarned until the token
+        expired, so nothing is marked and the next sweep tries again.
+        """
+        member = sample_team_with_owner_member
+        second = type(member.user).objects.create_user(
+            username="owner2", email="owner2@example.com", password="password"
+        )
+        Member.objects.create(user=second, team=member.team, role="owner")
+        _bot_member(guest_user, member.team)
+        token = _token(guest_user, member.team, days=2, description="release bot")
+
+        real_send = EmailMultiAlternatives.send
+
+        def send_one_then_fail(self: Any, *args: Any, **kwargs: Any) -> Any:
+            if self.to == ["owner2@example.com"]:
+                raise OSError("mailbox unavailable")
+            return real_send(self, *args, **kwargs)
+
+        mocker.patch.object(EmailMultiAlternatives, "send", send_one_then_fail)
+
+        warn_expiring_tokens.fn()
+
+        assert token.expiry_warnings.count() == 0, "a partial delivery must not mark the threshold"
 
     def test_expired_and_eternal_tokens_are_ignored(self, sample_team_with_owner_member: Any) -> None:
         member = sample_team_with_owner_member

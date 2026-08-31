@@ -38,12 +38,4 @@
 {# Footer #}
 {% include "core/components/footer.html.j2" %}
 </div>
-{# Create Modals #}
-{% with current_team=request.session.current_team %}
-    {% if current_team %}
-        {% if can_manage %}
-            {% include "core/components/create_modals.html.j2" %}
-        {% endif %}
-    {% endif %}
-{% endwith %}
 {% endblock %}

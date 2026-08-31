@@ -1,7 +1,7 @@
 {% if suppliers %}
     <c-tables.table fixed>
     <c-tables.head>
-    <c-tables.header-cell>Supplier</c-tables.header-cell>
+    <c-tables.header-cell nowrap>Supplier</c-tables.header-cell>
     <c-tables.header-cell>Contact</c-tables.header-cell>
     <c-tables.header-cell>Website</c-tables.header-cell>
     <c-tables.actions-cell as="th" />
@@ -9,7 +9,7 @@
     <tbody>
         {% for supplier in suppliers %}
             <c-tables.row>
-            <c-tables.cell>
+            <c-tables.cell nowrap>
             <span class="text-text font-medium block">{{ supplier.name }}</span>
             {% if supplier.notes %}
                 <span class="text-text-muted text-sm block truncate max-w-xs">{{ supplier.notes }}</span>

@@ -42,7 +42,7 @@
     <div x-show="!isLoading && releases.length > 0">
         <c-tables.table>
         <c-tables.head>
-        <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+        <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
         <c-tables.header-cell sort="status">Status</c-tables.header-cell>
         <c-tables.header-cell class="text-center">Visibility</c-tables.header-cell>
         <c-tables.header-cell sort="artifacts">Artifacts</c-tables.header-cell>
@@ -52,7 +52,7 @@
         <tbody>
             <template x-for="release in sortedReleases" :key="release.id">
                 <c-tables.row>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <div class="flex items-center gap-2">
                     <a :href="getReleaseUrl(release)"
                        class="text-primary font-medium hover:underline"
