@@ -2427,7 +2427,7 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
         log.error(f"Failed validation data: {metadata.model_dump()}")
         return 422, {"detail": str(ve.errors())}
     except Exception:
-        log.exception(f"Error updating component metadata for {component_id}", exc_info=True)
+        log.exception(f"Error updating component metadata for {component_id}")
         return 500, {"detail": "Failed to update component metadata", "error_code": ErrorCode.INTERNAL_ERROR}
 
 

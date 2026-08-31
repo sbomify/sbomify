@@ -191,6 +191,10 @@ def _undeclared_returned_statuses() -> list[str]:
                         declared = {
                             k.value for k in kw.value.keys if isinstance(k, ast.Constant) and isinstance(k.value, int)
                         }
+                    elif kw.arg == "response":
+                        # response=SomeSchema declares a 200, not nothing; the
+                        # empty set is for endpoints with no response= at all.
+                        declared = {200}
             if declared is None:
                 continue
             for node in ast.walk(fn):
