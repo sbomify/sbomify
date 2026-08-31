@@ -222,6 +222,25 @@ class TestTheTwoDirections:
     """
 
     def test_a_response_reads_the_old_attribute(self):
+        from sbomify.apps.core.schemas import ProductResponseSchema
+
+        variant = SchemaVariants().response(ProductResponseSchema)
+        source = {
+            "id": "p1",
+            "name": "Widget",
+            "description": "",
+            "team_id": "t1",
+            "created_at": "2026-01-01T00:00:00Z",
+            "is_public": False,
+            "latest_uploads": [],
+        }
+        body = variant.model_validate(source).model_dump(by_alias=True, exclude_none=True)
+        assert body["workspace_id"] == "t1"
+        assert "team_id" not in body
+
+    def test_a_dual_field_source_keeps_only_the_new_name(self):
+        """v1 grew the workspace twin next to the deprecated team field, so a
+        rename would write the same key twice; v2 drops the deprecated one."""
         from sbomify.apps.teams.schemas import MemberSchema
 
         variant = SchemaVariants().response(MemberSchema)
@@ -230,6 +249,7 @@ class TestTheTwoDirections:
             "user": {"id": 1, "username": "jo", "email": "a@b.c", "first_name": "J", "last_name": "O"},
             "role": "owner",
             "is_default_team": True,
+            "is_default_workspace": True,
             "is_me": False,
         }
         body = variant.model_validate(source).model_dump(by_alias=True)

@@ -1327,7 +1327,7 @@ class TestThrottleRefusesCleanlyWhenRedisIsDown:
 
         assert response.status_code == 429, response.content
         assert response["Retry-After"] == "5"
-        assert response.json() == {"detail": "Too many requests."}
+        assert response.json() == {"detail": "Too many requests.", "error_code": "TOO_MANY_REQUESTS"}
 
     def test_recovery_clears_the_outage_hint(self, sample_user):  # noqa: F811
         """After Redis comes back, wait() reports the real window again.
