@@ -94,13 +94,11 @@
                     </c-buttons.secondary>
                 {% endif %}
                 {% if release.has_hbom %}
-                    <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                       href="{% url 'api-1:download_release_hbom' release.id %}"
-                       title="Download HBOM (Hardware BOM, CycloneDX)">
-                        <i class="fas fa-microchip text-success" aria-hidden="true"></i>
-                        <span class="text-sm font-semibold tracking-wide">HBOM</span>
-                        <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
-                    </a>
+                    <c-buttons.secondary href="{% url 'api-1:download_release_hbom' release.id %}" title="Download HBOM (Hardware BOM, CycloneDX)" class="no-underline">
+                    <i class="fas fa-microchip" aria-hidden="true"></i>
+                    <span>HBOM</span>
+                    <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                    </c-buttons.secondary>
                 {% endif %}
             </div>
         </div>
