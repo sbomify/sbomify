@@ -74,6 +74,17 @@ class PluginOrchestratorError(Exception):
     pass
 
 
+class SBOMGoneError(PluginOrchestratorError):
+    """The SBOM an assessment was queued for no longer exists.
+
+    Separated from its siblings because it is not a failure: assessments are
+    queued on upload and run later, so deleting an artifact in that window is
+    an ordinary race with an ordinary outcome — there is nothing left to
+    assess. Every other orchestrator error is a fault worth reporting, so the
+    task can only tell the two apart if the race has a type of its own.
+    """
+
+
 class PluginOrchestrator:
     """Framework component that manages plugin execution.
 
@@ -139,7 +150,7 @@ class PluginOrchestrator:
         # Verify SBOM exists and fetch bom_type in a single query (reused later via sbom_id)
         sbom_instance_check = SBOM.objects.filter(id=sbom_id).only("id", "bom_type", "has_crypto_assets").first()
         if sbom_instance_check is None:
-            raise PluginOrchestratorError(f"SBOM '{sbom_id}' not found - it may have been deleted")
+            raise SBOMGoneError(f"SBOM '{sbom_id}' not found - it may have been deleted")
 
         # Get plugin metadata and check bom_type compatibility
         metadata = plugin.get_metadata()

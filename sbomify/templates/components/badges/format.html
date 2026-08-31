@@ -1,0 +1,21 @@
+{% comment %}
+The SBOM format badge. It is its own shell in the stylesheet, not a tw-badge, so
+it does not nest c-badges.badge. There are two formats and pages interpolate the
+one they were given, so the colour is a format rather than two files. A format
+the app does not know keeps the shape with no tint, exactly as the old class
+pair did.
+
+The format is keyed on a data attribute rather than branched in the template,
+because an artifacts table builds its rows in the browser and the server never
+renders one: there, the caller binds the value and nothing else.
+
+    <c-badges.format format="cyclonedx">CycloneDX 1.6</c-badges.format>
+    <c-badges.format ::data-format="row.format">…</c-badges.format>
+
+Both tints are literals, as they were in the stylesheet: this badge names a
+document standard, not a status, so it is deliberately off the theme's scale.
+{% endcomment %}
+<c-vars format class />
+<span data-format="{{ format }}"
+      class="inline-flex items-center px-2.5 py-1 text-[0.6875rem] font-bold tracking-[0.03em] rounded-md whitespace-nowrap transition-all duration-150 data-[format=cyclonedx]:text-[#0d9488] data-[format=cyclonedx]:bg-[rgb(20_184_166/0.1)] data-[format=cyclonedx]:border data-[format=cyclonedx]:border-solid data-[format=cyclonedx]:border-[rgb(20_184_166/0.25)] data-[format=cyclonedx]:hover:bg-[rgb(20_184_166/0.15)] data-[format=spdx]:text-[#7c3aed] data-[format=spdx]:bg-[rgb(139_92_246/0.1)] data-[format=spdx]:border data-[format=spdx]:border-solid data-[format=spdx]:border-[rgb(139_92_246/0.25)] data-[format=spdx]:hover:bg-[rgb(139_92_246/0.15)]{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

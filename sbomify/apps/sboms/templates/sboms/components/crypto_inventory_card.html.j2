@@ -8,351 +8,335 @@ flags plus the PCI DSS 12.3.3 CSV export).
 {% endcomment %}
 {{ asset_terms|json_script:"ci-terms" }}
 {{ asset_statuses|json_script:"ci-statuses" }}
-<section id="crypto-inventory-card"
-         class="tw-card"
-         x-data="{ tab: 'assets', search: '', statusFilter: 'all', page: 1, perPage: 5, terms: (window.parseJsonScript('ci-terms') || []), statuses: (window.parseJsonScript('ci-statuses') || []), get statusOptions() { const order = ['quantum_vulnerable', 'review', 'unknown', 'quantum_safe']; const present = new Set(this.statuses); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, statusLabel(v) { return ({ quantum_vulnerable: 'Vulnerable', review: 'Review', unknown: 'Unknown', quantum_safe: 'Quantum-safe' })[v] || v; }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.statusFilter === 'all' || this.statuses[i] === this.statusFilter)); }, get total() { return this.filteredIdx.length; }, get pageCount() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.page - 1) * this.perPage, this.page * this.perPage)); }, get startIdx() { return this.total ? (this.page - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.page * this.perPage, this.total); } }"
-         x-init="$watch('search', () => { page = 1 }); $watch('statusFilter', () => { page = 1 })">
-    <div class="px-6 py-4 border-b border-border">
-        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-            <i class="fas fa-lock text-primary"></i>
-            Cryptographic Assets
-            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted">{{ crypto_inventory.count }}</span>
-            <span class="tw-badge tw-badge-{{ crypto_inventory.pqc_overall|pqc_overall_variant }} ml-auto">
-                {{ crypto_inventory.pqc_overall|pqc_overall_label }}
-            </span>
-        </h4>
+<c-cards.card id="crypto-inventory-card" x-data="{ tab: 'assets', search: '', statusFilter: 'all', currentPage: 1, perPage: 5, terms: (window.parseJsonScript('ci-terms') || []), statuses: (window.parseJsonScript('ci-statuses') || []), get statusOptions() { const order = ['quantum_vulnerable', 'review', 'unknown', 'quantum_safe']; const present = new Set(this.statuses); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, statusLabel(v) { return ({ quantum_vulnerable: 'Vulnerable', review: 'Review', unknown: 'Unknown', quantum_safe: 'Quantum-safe' })[v] || v; }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.statusFilter === 'all' || this.statuses[i] === this.statusFilter)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); } }" x-init="$watch('search', () => { currentPage = 1 }); $watch('statusFilter', () => { currentPage = 1 })">
+<c-slot name="header">
+{% comment %}
+    The band the app's cards carry: shorter than the library header and without
+    its wash. Kept as the page's own markup so the migration moves no pixels;
+    the library has no matching part yet.
+{% endcomment %}
+<div class="px-6 py-4 border-b border-border">
+    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+        <i class="fas fa-lock text-primary" aria-hidden="true"></i>
+        Cryptographic Assets
+        <c-badges.secondary size="sm">{{ crypto_inventory.count }}</c-badges.secondary>
+        {% comment %}
+            The readiness verdict is a filter's output rather than one of a
+            handful the template can branch on, so the badge takes the value on
+            its attribute and holds every recipe itself.
+        {% endcomment %}
+        <c-badges.dynamic class="ml-auto" data-variant="{{ crypto_inventory.pqc_overall|pqc_overall_variant }}">
+        {{ crypto_inventory.pqc_overall|pqc_overall_label }}
+        </c-badges.dynamic>
+    </h4>
+</div>
+</c-slot>
+<div class="space-y-6">
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <c-layout.stat-card compact>
+        <c-layout.stat.value>{{ crypto_inventory.count }}</c-layout.stat.value>
+        <c-layout.stat.label>Total</c-layout.stat.label>
+        </c-layout.stat-card>
+        {% for asset_type, n in crypto_inventory.by_asset_type.items %}
+            <c-layout.stat-card compact style="--stat-accent: var(--color-info)">
+            <c-layout.stat.value>{{ n }}</c-layout.stat.value>
+            <c-layout.stat.label>{{ asset_type }}</c-layout.stat.label>
+            </c-layout.stat-card>
+        {% endfor %}
     </div>
-    <div class="p-6 space-y-6">
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div class="px-4 py-3 rounded-lg bg-border/30 text-center">
-                <div class="text-2xl font-bold text-text">{{ crypto_inventory.count }}</div>
-                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Total</div>
-            </div>
-            {% for asset_type, n in crypto_inventory.by_asset_type.items %}
-                <div class="px-4 py-3 rounded-lg bg-info/10 border border-info/20 text-center">
-                    <div class="text-2xl font-bold text-info">{{ n }}</div>
-                    <div class="text-xs text-info uppercase tracking-wide mt-1">{{ asset_type }}</div>
-                </div>
-            {% endfor %}
-        </div>
-        {% if certificates or protocols %}
-            <div class="flex items-center gap-1 border-b border-border" role="tablist">
+    {% comment %}
+    The tab row stays the page's own markup: which tab is selected is browser
+    state, and this row is a one-off shape (denser than the library's tabs)
+    rather than the app's tab pattern. It carries no component class.
+    {% endcomment %}
+    {% if certificates or protocols %}
+        <div class="flex items-center gap-1 border-b border-border" role="tablist">
+            <button type="button"
+                    role="tab"
+                    class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
+                    :class="tab === 'assets' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
+                    @click="tab = 'assets'">Assets</button>
+            {% if certificates %}
                 <button type="button"
                         role="tab"
                         class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
-                        :class="tab === 'assets' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
-                        @click="tab = 'assets'">Assets</button>
-                {% if certificates %}
-                    <button type="button"
-                            role="tab"
-                            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
-                            :class="tab === 'certificates' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
-                            @click="tab = 'certificates'">
-                        Certificates
-                        <span class="px-1.5 py-0.5 text-xs rounded-full bg-border/50 text-text-muted">{{ certificates|length }}</span>
-                    </button>
-                {% endif %}
-                {% if protocols %}
-                    <button type="button"
-                            role="tab"
-                            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
-                            :class="tab === 'protocols' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
-                            @click="tab = 'protocols'">
-                        Protocols
-                        <span class="px-1.5 py-0.5 text-xs rounded-full bg-border/50 text-text-muted">{{ protocols|length }}</span>
-                    </button>
-                {% endif %}
-            </div>
-        {% endif %}
-        <div x-show="tab === 'assets'">
-            <div class="pb-4 flex flex-wrap items-center gap-3">
-                <div class="tw-data-table-search max-w-xs">
-                    <i class="fas fa-search tw-data-table-search-icon"></i>
-                    <label for="ci-search" class="sr-only">Search crypto assets</label>
-                    <input type="search"
-                           id="ci-search"
-                           x-model="search"
-                           placeholder="Search assets..."
-                           class="tw-data-table-search-input" />
-                </div>
-                <label for="ci-status-filter" class="sr-only">Filter by quantum readiness</label>
-                <select id="ci-status-filter"
-                        x-model="statusFilter"
-                        class="tw-data-table-page-size-select">
-                    <option value="all">All statuses</option>
-                    <template x-for="v in statusOptions" :key="v">
-                        <option :value="v" x-text="statusLabel(v)"></option>
-                    </template>
-                </select>
-            </div>
-            <div class="overflow-x-auto" x-cloak>
-                <table class="tw-table w-full text-sm">
-                    <thead>
-                        <tr>
-                            <th class="py-2 pr-4 font-medium"></th>
-                            <th class="py-2 pr-4 font-medium">Asset</th>
-                            <th class="py-2 pr-4 font-medium">Quantum readiness</th>
-                            <th class="py-2 pr-4 font-medium">Type</th>
-                            <th class="py-2 pr-4 font-medium">Parameters</th>
-                            <th class="py-2 pr-4 font-medium">NIST Quantum Level</th>
-                        </tr>
-                    </thead>
-                    {% for asset in crypto_inventory.assets %}
-                        <tbody x-data="{ open: false }" x-show="pageSet.has({{ forloop.counter0 }})">
-                            <tr class="cursor-pointer" @click="open = !open">
-                                <td class="py-2 pr-2 text-text-muted w-6">
-                                    <i class="fas fa-chevron-right text-xs transition-transform"
-                                       :class="open ? 'rotate-90' : ''"></i>
-                                </td>
-                                <td class="py-2 pr-4 font-medium text-text">{{ asset.name|default:"-" }}</td>
-                                <td class="py-2 pr-4">
-                                    <span class="tw-badge tw-badge-{{ asset.pqc_status|pqc_variant }}">{{ asset.pqc_status|pqc_label }}</span>
-                                    {% if asset.pqc_data_quality_flag %}
-                                        <i class="fas fa-triangle-exclamation text-warning ml-1"
-                                           title="{{ asset.pqc_data_quality_flag }}"></i>
-                                    {% endif %}
-                                </td>
-                                <td class="py-2 pr-4">
-                                    <span class="tw-badge tw-badge-secondary">{{ asset.asset_type|default:"unknown" }}</span>
-                                </td>
-                                <td class="py-2 pr-4 text-text-muted">
-                                    {% if asset.normalized_family %}
-                                        {{ asset.normalized_family }}
-                                    {% elif asset.algorithm_family %}
-                                        {{ asset.algorithm_family }}
-                                    {% endif %}
-                                    {% if asset.parameter_set %}
-                                        {% if asset.normalized_family or asset.algorithm_family %}·{% endif %}
-                                        {{ asset.parameter_set }}
-                                    {% endif %}
-                                    {% if asset.normalized_curve %}
-                                        {% if asset.normalized_family or asset.algorithm_family or asset.parameter_set %}·{% endif %}
-                                        {{ asset.normalized_curve }}
-                                    {% elif asset.curve %}
-                                        {% if asset.normalized_family or asset.algorithm_family or asset.parameter_set %}·{% endif %}
-                                        {{ asset.curve }}
-                                    {% endif %}
-                                    {% if asset.registry_unrecognized %}
-                                        <i class="fas fa-circle-question text-text-muted ml-1"
-                                           title="Name not in the CycloneDX cryptography registry"></i>
-                                    {% endif %}
-                                    {% if not asset.algorithm_family and not asset.normalized_family and not asset.parameter_set and not asset.curve %}
-                                        -
-                                    {% endif %}
-                                </td>
-                                <td class="py-2 pr-4 text-text-muted">
-                                    {% if asset.nist_quantum_security_level is not None %}
-                                        {{ asset.nist_quantum_security_level }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            <tr x-show="open" x-cloak>
-                                <td></td>
-                                <td colspan="5" class="pb-4 pr-4">
-                                    <div class="rounded-lg bg-border/20 px-4 py-3 space-y-2 text-sm">
-                                        <p class="m-0 text-text">{{ asset.pqc_reason }}</p>
-                                        {% if asset.pqc_replacement %}
-                                            <p class="m-0 text-text">
-                                                <span class="font-medium">Replacement:</span> {{ asset.pqc_replacement }}
-                                            </p>
-                                        {% endif %}
-                                        {% if asset.pqc_data_quality_flag %}<p class="m-0 text-warning">{{ asset.pqc_data_quality_flag }}</p>{% endif %}
-                                        <dl class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 m-0 text-text-muted">
-                                            {% if asset.primitive %}
-                                                <div>
-                                                    <dt class="inline font-medium">Primitive:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ asset.primitive }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if asset.classical_security_level is not None %}
-                                                <div>
-                                                    <dt class="inline font-medium">Classical level:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ asset.classical_security_level }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if asset.crypto_functions %}
-                                                <div>
-                                                    <dt class="inline font-medium">Functions:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ asset.crypto_functions|join:", " }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if asset.execution_environment %}
-                                                <div>
-                                                    <dt class="inline font-medium">Execution:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ asset.execution_environment }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if asset.implementation_platform %}
-                                                <div>
-                                                    <dt class="inline font-medium">Platform:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ asset.implementation_platform }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if asset.certification_level %}
-                                                <div>
-                                                    <dt class="inline font-medium">Certification:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ asset.certification_level|join:", " }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if asset.oid %}
-                                                <div>
-                                                    <dt class="inline font-medium">OID:</dt>
-                                                    <dd class="inline ml-1 font-mono text-xs">
-                                                        {{ asset.oid }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                        </dl>
-                                        {% if asset.relations %}
-                                            <div class="text-text-muted">
-                                                <span class="font-medium">Related assets:</span>
-                                                {% for line in asset.relations %}
-                                                    <span class="ml-1">{{ line }}
-                                                        {% if not forloop.last %};{% endif %}
-                                                    </span>
-                                                {% endfor %}
-                                            </div>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    {% endfor %}
-                    <tbody>
-                        <tr x-show="total === 0">
-                            <td colspan="6" class="py-8 text-center text-text-muted">No assets match your search.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="pt-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-                <span class="text-sm text-text-muted">
-                    Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
-                </span>
-                <div class="flex items-center gap-2">
-                    <button type="button"
-                            class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                            :disabled="page === 1"
-                            @click="if (page > 1) page--"
-                            aria-label="Previous page">
-                        <i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>
-                    </button>
-                    <span class="text-sm text-text-muted">Page <span x-text="page"></span> / <span x-text="pageCount"></span></span>
-                    <button type="button"
-                            class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                            :disabled="page === pageCount"
-                            @click="if (page < pageCount) page++"
-                            aria-label="Next page">
-                        <i class="fas fa-chevron-right text-xs" aria-hidden="true"></i>
-                    </button>
-                </div>
-            </div>
+                        :class="tab === 'certificates' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
+                        @click="tab = 'certificates'">
+                    Certificates
+                    <c-badges.secondary size="sm">{{ certificates|length }}</c-badges.secondary>
+                </button>
+            {% endif %}
+            {% if protocols %}
+                <button type="button"
+                        role="tab"
+                        class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
+                        :class="tab === 'protocols' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
+                        @click="tab = 'protocols'">
+                    Protocols
+                    <c-badges.secondary size="sm">{{ protocols|length }}</c-badges.secondary>
+                </button>
+            {% endif %}
         </div>
-        {% if certificates %}
-            <div x-show="tab === 'certificates'" x-cloak>
-                <div class="overflow-x-auto">
-                    <table class="tw-table w-full text-sm">
-                        <thead>
-                            <tr>
-                                <th class="py-2 pr-4 font-medium">Subject</th>
-                                <th class="py-2 pr-4 font-medium">Issuer</th>
-                                <th class="py-2 pr-4 font-medium">Valid until</th>
-                                <th class="py-2 pr-4 font-medium">Expires in</th>
-                                <th class="py-2 pr-4 font-medium">State</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for cert in certificates %}
-                                {% with view=cert.certificate_view %}
-                                    <tr>
-                                        <td class="py-2 pr-4 font-medium text-text">{{ view.subject|default:cert.name|default:"-" }}</td>
-                                        <td class="py-2 pr-4 text-text-muted">{{ view.issuer|default:"-" }}</td>
-                                        <td class="py-2 pr-4 text-text-muted">{{ view.not_after|default:"-" }}</td>
-                                        <td class="py-2 pr-4">
-                                            {% if view.expired %}
-                                                <span class="tw-badge tw-badge-danger">Expired</span>
-                                            {% elif view.expiring_soon %}
-                                                <span class="px-2 py-1 text-xs font-semibold rounded bg-severity-high-soft text-severity-high border border-severity-high-soft">{{ view.days_to_expiry }} days</span>
-                                            {% elif view.days_to_expiry is not None %}
-                                                <span class="text-text-muted">{{ view.days_to_expiry }} days</span>
-                                            {% else %}
-                                                <span class="text-text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="py-2 pr-4">
-                                            {% if view.states %}
-                                                {% for state in view.states %}<span class="tw-badge tw-badge-secondary">{{ state }}</span>{% endfor %}
-                                            {% else %}
-                                                <span class="text-text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                {% endwith %}
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <p class="pt-3 text-xs text-text-muted m-0">Sorted by expiry, soonest first.</p>
-            </div>
-        {% endif %}
-        {% if protocols %}
-            <div x-show="tab === 'protocols'" x-cloak class="space-y-4">
-                {% for proto in protocols %}
-                    {% with view=proto.protocol_view %}
-                        <div class="rounded-lg border border-border px-4 py-3">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="font-medium text-text">{{ proto.name|default:"Protocol" }}</span>
-                                {% if view.type %}<span class="tw-badge tw-badge-secondary uppercase">{{ view.type }}</span>{% endif %}
-                                {% if view.version %}<span class="text-sm text-text-muted">v{{ view.version }}</span>{% endif %}
-                                {% if view.weak_version %}
-                                    <span class="tw-badge tw-badge-danger" title="{{ view.weak_version }}">Deprecated version</span>
-                                {% endif %}
+    {% endif %}
+    <div x-show="tab === 'assets'">
+        <c-tables.shell nested>
+        <c-tables.toolbar>
+        <c-tables.search id="ci-search" label="Search crypto assets" placeholder="Search assets..." x-model="search" />
+        <c-tables.select id="ci-status-filter" label="Filter by quantum readiness" x-model="statusFilter">
+        <option value="all">All statuses</option>
+        <template x-for="v in statusOptions" :key="v">
+            <option :value="v" x-text="statusLabel(v)"></option>
+        </template>
+        </c-tables.select>
+        </c-tables.toolbar>
+        <c-tables.table x-cloak>
+        <c-tables.head>
+        <c-tables.header-cell></c-tables.header-cell>
+        <c-tables.header-cell nowrap>Asset</c-tables.header-cell>
+        <c-tables.header-cell>Quantum readiness</c-tables.header-cell>
+        <c-tables.header-cell>Type</c-tables.header-cell>
+        <c-tables.header-cell>Parameters</c-tables.header-cell>
+        <c-tables.header-cell>NIST Quantum Level</c-tables.header-cell>
+        </c-tables.head>
+        {% for asset in crypto_inventory.assets %}
+            <tbody x-data="{ open: false }" x-show="pageSet.has({{ forloop.counter0 }})">
+                <c-tables.row class="cursor-pointer" @click="open = !open">
+                <c-tables.cell class="w-6" nowrap>
+                <i class="fas fa-chevron-right text-xs transition-transform"
+                   :class="open ? 'rotate-90' : ''"></i>
+                </c-tables.cell>
+                <c-tables.cell nowrap class="font-medium">{{ asset.name|default:"-" }}</c-tables.cell>
+                <c-tables.cell>
+                <c-badges.dynamic data-variant="{{ asset.pqc_status|pqc_variant }}">{{ asset.pqc_status|pqc_label }}</c-badges.dynamic>
+                {% if asset.pqc_data_quality_flag %}
+                    <i class="fas fa-triangle-exclamation text-warning ml-1"
+                       title="{{ asset.pqc_data_quality_flag }}"></i>
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell>
+                <c-badges.secondary>{{ asset.asset_type|default:"unknown" }}</c-badges.secondary>
+                </c-tables.cell>
+                {% comment %}
+                    The muted ink these cells named never applied: the
+                    stylesheet's unlayered `.tw-table td` colour outranked the
+                    utility, so they have always read in the body colour.
+                {% endcomment %}
+                <c-tables.cell>
+                {% if asset.normalized_family %}
+                    {{ asset.normalized_family }}
+                {% elif asset.algorithm_family %}
+                    {{ asset.algorithm_family }}
+                {% endif %}
+                {% if asset.parameter_set %}
+                    {% if asset.normalized_family or asset.algorithm_family %}·{% endif %}
+                    {{ asset.parameter_set }}
+                {% endif %}
+                {% if asset.normalized_curve %}
+                    {% if asset.normalized_family or asset.algorithm_family or asset.parameter_set %}·{% endif %}
+                    {{ asset.normalized_curve }}
+                {% elif asset.curve %}
+                    {% if asset.normalized_family or asset.algorithm_family or asset.parameter_set %}·{% endif %}
+                    {{ asset.curve }}
+                {% endif %}
+                {% if asset.registry_unrecognized %}
+                    <i class="fas fa-circle-question text-text-muted ml-1"
+                       title="Name not in the CycloneDX cryptography registry"></i>
+                {% endif %}
+                {% if not asset.algorithm_family and not asset.normalized_family and not asset.parameter_set and not asset.curve %}
+                    -
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell>
+                {% if asset.nist_quantum_security_level is not None %}
+                    {{ asset.nist_quantum_security_level }}
+                {% else %}
+                    -
+                {% endif %}
+                </c-tables.cell>
+                </c-tables.row>
+                <c-tables.row x-show="open" x-cloak>
+                <c-tables.cell nowrap></c-tables.cell>
+                <c-tables.cell colspan="5">
+                <div class="rounded-lg bg-border/20 px-4 py-3 space-y-2 text-sm">
+                    <p class="m-0 text-text">{{ asset.pqc_reason }}</p>
+                    {% if asset.pqc_replacement %}
+                        <p class="m-0 text-text">
+                            <span class="font-medium">Replacement:</span> {{ asset.pqc_replacement }}
+                        </p>
+                    {% endif %}
+                    {% if asset.pqc_data_quality_flag %}<p class="m-0 text-warning">{{ asset.pqc_data_quality_flag }}</p>{% endif %}
+                    <dl class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 m-0 text-text-muted">
+                        {% if asset.primitive %}
+                            <div>
+                                <dt class="inline font-medium">Primitive:</dt>
+                                <dd class="inline ml-1">
+                                    {{ asset.primitive }}
+                                </dd>
                             </div>
-                            {% if view.cipher_suites %}
-                                <div class="flex flex-wrap gap-2 mt-3">
-                                    {% for suite in view.cipher_suites %}
-                                        {% if suite.weaknesses %}
-                                            <span class="px-2 py-1 text-xs font-mono rounded border border-danger/40 bg-danger/10 text-danger"
-                                                  title="{{ suite.weaknesses|join:'; ' }}">{{ suite.name|default:"?" }}</span>
-                                        {% else %}
-                                            <span class="px-2 py-1 text-xs font-mono rounded border border-border bg-border/20 text-text-muted">{{ suite.name|default:"?" }}</span>
-                                        {% endif %}
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <p class="mt-2 mb-0 text-sm text-text-muted">No cipher suites declared.</p>
-                            {% endif %}
+                        {% endif %}
+                        {% if asset.classical_security_level is not None %}
+                            <div>
+                                <dt class="inline font-medium">Classical level:</dt>
+                                <dd class="inline ml-1">
+                                    {{ asset.classical_security_level }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% if asset.crypto_functions %}
+                            <div>
+                                <dt class="inline font-medium">Functions:</dt>
+                                <dd class="inline ml-1">
+                                    {{ asset.crypto_functions|join:", " }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% if asset.execution_environment %}
+                            <div>
+                                <dt class="inline font-medium">Execution:</dt>
+                                <dd class="inline ml-1">
+                                    {{ asset.execution_environment }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% if asset.implementation_platform %}
+                            <div>
+                                <dt class="inline font-medium">Platform:</dt>
+                                <dd class="inline ml-1">
+                                    {{ asset.implementation_platform }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% if asset.certification_level %}
+                            <div>
+                                <dt class="inline font-medium">Certification:</dt>
+                                <dd class="inline ml-1">
+                                    {{ asset.certification_level|join:", " }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% if asset.oid %}
+                            <div>
+                                <dt class="inline font-medium">OID:</dt>
+                                <dd class="inline ml-1 font-mono text-xs">
+                                    {{ asset.oid }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                    </dl>
+                    {% if asset.relations %}
+                        <div class="text-text-muted">
+                            <span class="font-medium">Related assets:</span>
+                            {% for line in asset.relations %}
+                                <span class="ml-1">{{ line }}
+                                    {% if not forloop.last %};{% endif %}
+                                </span>
+                            {% endfor %}
                         </div>
+                    {% endif %}
+                </div>
+                </c-tables.cell>
+                </c-tables.row>
+            </tbody>
+        {% endfor %}
+        <tbody>
+            <tr x-show="total === 0">
+                <td colspan="6" class="text-center text-text-muted">No assets match your search.</td>
+            </tr>
+        </tbody>
+        </c-tables.table>
+        <c-tables.footer>
+        <c-tables.info>
+        Showing <strong x-text="startIdx"></strong> to <strong x-text="endIdx"></strong> of <strong x-text="total"></strong>
+        </c-tables.info>
+        <c-tables.pager />
+        </c-tables.footer>
+        </c-tables.shell>
+    </div>
+    {% if certificates %}
+        <div x-show="tab === 'certificates'" x-cloak>
+            <c-tables.table>
+            <c-tables.head>
+            <c-tables.header-cell nowrap>Subject</c-tables.header-cell>
+            <c-tables.header-cell>Issuer</c-tables.header-cell>
+            <c-tables.header-cell date>Valid until</c-tables.header-cell>
+            <c-tables.header-cell date>Expires in</c-tables.header-cell>
+            <c-tables.header-cell>State</c-tables.header-cell>
+            </c-tables.head>
+            <tbody>
+                {% for cert in certificates %}
+                    {% with view=cert.certificate_view %}
+                        <c-tables.row>
+                        <c-tables.cell nowrap class="font-medium">{{ view.subject|default:cert.name|default:"-" }}</c-tables.cell>
+                        <c-tables.cell>{{ view.issuer|default:"-" }}</c-tables.cell>
+                        <c-tables.cell date>{{ view.not_after|default:"-" }}</c-tables.cell>
+                        <c-tables.cell date>
+                        {% if view.expired %}
+                            <c-badges.danger>Expired</c-badges.danger>
+                        {% elif view.expiring_soon %}
+                            <c-badges.severity level="high">{{ view.days_to_expiry }} days</c-badges.severity>
+                        {% elif view.days_to_expiry is not None %}
+                            <span class="text-text-muted">{{ view.days_to_expiry }} days</span>
+                        {% else %}
+                            <span class="text-text-muted">-</span>
+                        {% endif %}
+                        </c-tables.cell>
+                        <c-tables.cell>
+                        {% if view.states %}
+                            {% for state in view.states %}<c-badges.secondary>{{ state }}</c-badges.secondary>{% endfor %}
+                        {% else %}
+                            <span class="text-text-muted">-</span>
+                        {% endif %}
+                        </c-tables.cell>
+                        </c-tables.row>
                     {% endwith %}
                 {% endfor %}
-                <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
-                    <p class="text-xs text-text-muted m-0">
-                        Cipher-suite and protocol inventory with annual review is PCI DSS 4.x requirement 12.3.3.
-                    </p>
-                    <a href="{% url 'api-1:download_cipher_suite_inventory_csv' sbom_id %}"
-                       class="tw-btn-secondary inline-flex items-center gap-2 no-underline text-sm">
-                        <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                        Export CSV
-                    </a>
-                </div>
+            </tbody>
+            </c-tables.table>
+            <p class="pt-3 text-xs text-text-muted m-0">Sorted by expiry, soonest first.</p>
+        </div>
+    {% endif %}
+    {% if protocols %}
+        <div x-show="tab === 'protocols'" x-cloak class="space-y-4">
+            {% for proto in protocols %}
+                {% with view=proto.protocol_view %}
+                    <c-cards.inset>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-medium text-text">{{ proto.name|default:"Protocol" }}</span>
+                        {% if view.type %}<c-badges.secondary class="uppercase">{{ view.type }}</c-badges.secondary>{% endif %}
+                        {% if view.version %}<span class="text-sm text-text-muted">v{{ view.version }}</span>{% endif %}
+                        {% if view.weak_version %}
+                            <c-badges.danger title="{{ view.weak_version }}">Deprecated version</c-badges.danger>
+                        {% endif %}
+                    </div>
+                    {% if view.cipher_suites %}
+                        <div class="flex flex-wrap gap-2 mt-3">
+                            {% for suite in view.cipher_suites %}
+                                {% if suite.weaknesses %}
+                                    <c-tags.danger class="font-mono" title="{{ suite.weaknesses|join:'; ' }}">{{ suite.name|default:"?" }}</c-tags.danger>
+                                {% else %}
+                                    <c-tags.tag class="font-mono">{{ suite.name|default:"?" }}</c-tags.tag>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="mt-2 mb-0 text-sm text-text-muted">No cipher suites declared.</p>
+                    {% endif %}
+                    </c-cards.inset>
+                {% endwith %}
+            {% endfor %}
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <p class="text-xs text-text-muted m-0">
+                    Cipher-suite and protocol inventory with annual review is PCI DSS 4.x requirement 12.3.3.
+                </p>
+                <c-buttons.secondary href="{% url 'api-1:download_cipher_suite_inventory_csv' sbom_id %}">
+                <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                Export CSV
+                </c-buttons.secondary>
             </div>
-        {% endif %}
-        <p class="text-xs text-text-muted m-0">
-            Derived from the CycloneDX document. sbomify does not modify the uploaded artifact.
-        </p>
-    </div>
-</section>
+        </div>
+    {% endif %}
+    <p class="text-xs text-text-muted m-0">
+        Derived from the CycloneDX document. sbomify does not modify the uploaded artifact.
+    </p>
+</div>
+</c-cards.card>

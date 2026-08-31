@@ -42,7 +42,7 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
             <h1 class="tc-detail-title">{{ advisory.title }}</h1>
             {% if advisory.summary %}<p class="tc-detail-summary">{{ advisory.summary }}</p>{% endif %}
             <div class="tc-detail-meta">
-                <span class="tw-badge tw-badge-{{ advisory.severity_variant }}">{{ advisory.severity_label }}</span>
+                <c-badges.severity level="{{ advisory.severity }}">{{ advisory.severity_label }}</c-badges.severity>
                 {% if advisory.status_label %}
                     <span class="tc-detail-meta-item">
                         <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
@@ -129,11 +129,11 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                     <h2 class="tc-panel-title">{{ vulnerability.cve_id|default:vulnerability.title }}</h2>
                     <div class="flex items-center gap-2 flex-wrap mb-3">
                         {% if vulnerability.severity %}
-                            <span class="tw-badge tw-badge-{{ vulnerability.severity_variant }}">{{ vulnerability.severity|title }}</span>
+                            <c-badges.severity level="{{ vulnerability.severity }}">{{ vulnerability.severity }}</c-badges.severity>
                         {% endif %}
                         {% for cwe in vulnerability.cwe_ids %}<span class="tc-product-chip">{{ cwe }}</span>{% endfor %}
                         {% for score in vulnerability.cvss_scores %}
-                            <span class="tc-meta-item">CVSS {{ score.version }}: {{ score.base_score }}</span>
+                            <span class="tc-meta-item">{{ score.label }}: {{ score.base_score }}</span>
                         {% endfor %}
                     </div>
                     {% if vulnerability.description %}<div class="tc-prose">{{ vulnerability.description }}</div>{% endif %}

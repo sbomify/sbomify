@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
@@ -45,6 +46,7 @@ urlpatterns = [
     ),
     # Main URLs
     path("products/", views.ProductsDashboardView.as_view(), name="products_dashboard"),
+    path("products/new/", views.ProductCreateView.as_view(), name="product_new"),
     path("products/table/", views.ProductsTableView.as_view(), name="products_table"),
     path(
         "product/<str:product_id>/",
@@ -77,6 +79,7 @@ urlpatterns = [
         name="product_link_redirect",
     ),
     path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),
+    path("components/new/", views.ComponentCreateView.as_view(), name="component_new"),
     path("components/table/", views.ComponentsTableView.as_view(), name="components_table"),
     path(
         "component/<str:component_id>/",
@@ -99,6 +102,12 @@ urlpatterns = [
         "security-advisories/table/",
         views.SecurityAdvisoriesTableView.as_view(),
         name="security_advisories_table",
+    ),
+    # Before the <advisory_id> pattern, which would otherwise swallow "new".
+    path(
+        "security-advisories/new/",
+        views.SecurityAdvisoryCreateView.as_view(),
+        name="security_advisory_new",
     ),
     path(
         "security-advisories/<str:advisory_id>/",
@@ -199,8 +208,6 @@ urlpatterns = [
     path("support/contact/", views.support_contact, name="support_contact"),
     path("support/contact/success/", views.support_contact_success, name="support_contact_success"),
     path("search/", views.SearchView.as_view(), name="search"),
-    # Tailwind CSS test page
-    # path("tailwind-test/", views.TailwindTestView.as_view(), name="tailwind_test"),
     re_path(
         r"^components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents|vex|cbom)/(?P<item_id>[^/]+)/$",
         views.ComponentItemView.as_view(),
@@ -212,3 +219,8 @@ urlpatterns = [
         name="component_item_public",
     ),
 ]
+
+if settings.DEBUG:
+    urlpatterns += [
+        path("design-system/", views.DesignSystemView.as_view(), name="design_system"),
+    ]

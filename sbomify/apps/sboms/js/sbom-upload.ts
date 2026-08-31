@@ -99,6 +99,8 @@ export function registerSbomUpload(): void {
 
                 if (response.ok) {
                     showSuccess(`${this.bomTypeLabel} uploaded successfully! Reloading page...`)
+                    // The upload is done; the modal has nothing left to say.
+                    window.dispatchEvent(new CustomEvent('close-upload'))
                     window.dispatchEvent(new CustomEvent('sbom-uploaded'))
                 } else {
                     const errorMessage = (data.detail as string) || `Upload failed with status ${response.status}`

@@ -1,0 +1,82 @@
+{% comment %}
+    The header every main page starts with: a mark, the page title, one line
+    under it, and the page's actions on the right.
+
+    Block content becomes the actions area, because actions are real controls
+    (buttons, a filter form, a menu) and a list of parameters cannot describe
+    them. Pages with no actions still close the tag:
+
+        {% page_header title="Products" subtitle="Your products and their components." icon="fas fa-cube" %}{% endpage_header %}
+
+        {% page_header title="Security advisories" icon="fas fa-shield-halved" %}
+            {% button_link text="New advisory" url=new_advisory_url variant="primary" icon="fas fa-plus" %}
+        {% endpage_header %}
+
+    Put it above the page's content stack, not inside it. The gap under the title
+    belongs to this component, so every page has the same one, and a header
+    inside a `space-y-*` stack would get that gap twice.
+
+    Params:
+      title        the page title, rendered as its h1 (required)
+      subtitle     one short line under the title
+      icon         Font Awesome class for the mark; omitted, the title starts the row
+      mark         "chip" (default) renders the icon chip; "avatar" renders the
+                   detail-page avatar mark. Tint it via --avatar-accent on the
+                   wrapper, e.g. attrs='style="--avatar-accent: var(--color-warning)"'
+      copy_values  list of {value, title} dicts from the view; each renders as a
+                   click-to-copy chip beside the title
+      breadcrumbs  items list ({label, url}) from the view, rendered where the
+                   subtitle goes; replaces subtitle
+      editable_item_type, editable_item_id
+                   when both are set, the title renders as the inline editable
+                   field instead of plain text
+      class        extra classes on the wrapper
+{% endcomment %}
+<div class="tw-page-header{% if class %} {{ class }}{% endif %}"
+     {{ attrs|safe }}>
+    <div class="tw-page-header-lead">
+        {% if icon %}
+            {% if mark == "avatar" %}
+                <span class="tw-avatar tw-avatar-lg" aria-hidden="true">
+                    <i class="{{ icon }}"></i>
+                </span>
+            {% else %}
+                <span class="tw-icon-chip tw-icon-chip-lg" aria-hidden="true">
+                    <i class="{{ icon }}"></i>
+                </span>
+            {% endif %}
+        {% endif %}
+        <div>
+            {% if copy_values %}
+                <div class="flex items-center gap-3 flex-wrap">
+                    <h1 class="tw-page-header-title">
+                        {% if editable_item_type and editable_item_id %}
+                            {% include 'core/components/editable_single_field.html.j2' with item_type=editable_item_type item_id=editable_item_id item_value=title only %}
+                        {% else %}
+                            {{ title }}
+                        {% endif %}
+                    </h1>
+                    <div class="flex items-center gap-2">
+                        {% for cv in copy_values %}
+                            {% include 'core/components/copyable_value.html.j2' with value=cv.value title=cv.title only %}
+                        {% endfor %}
+                    </div>
+                </div>
+            {% else %}
+                <h1 class="tw-page-header-title">
+                    {% if editable_item_type and editable_item_id %}
+                        {% include 'core/components/editable_single_field.html.j2' with item_type=editable_item_type item_id=editable_item_id item_value=title only %}
+                    {% else %}
+                        {{ title }}
+                    {% endif %}
+                </h1>
+            {% endif %}
+            {% if breadcrumbs %}
+                {% include 'components/tw/breadcrumb.html.j2' with items=breadcrumbs class="tw-page-header-subtitle" only %}
+            {% elif subtitle %}
+                <p class="tw-page-header-subtitle">{{ subtitle }}</p>
+            {% endif %}
+        </div>
+    </div>
+    {% if content %}<div class="tw-page-header-actions">{{ content|safe }}</div>{% endif %}
+</div>

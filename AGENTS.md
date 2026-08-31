@@ -15,10 +15,10 @@ sbomify is a Software Bill of Materials (SBOM) and document management platform.
 ```bash
 # Start development environment with Docker (recommended)
 ./bin/developer_mode.sh build
-./bin/developer_mode.sh up
+./bin/developer_mode.sh start
 
 # Alternative: Run Django locally with Docker services
-docker compose up sbomify-db sbomify-minio sbomify-createbuckets -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up sbomify-db sbomify-s3 -d
 uv sync && bun install
 uv run python manage.py migrate
 uv run python manage.py runserver  # Terminal 1
@@ -207,26 +207,157 @@ htmx_error_response(message, triggers=None, content=None)    # error toast + HX-
 htmx_error_from_exception(error: DomainError)                # converts DomainError via content=error.to_dict()
 ```
 
-### Frontend Architecture (ADR-005)
+### Frontend (UI)
 
-| Layer     | Technology                           | Responsibility                                   |
-| --------- | ------------------------------------ | ------------------------------------------------ |
-| Structure | Django/Jinja2 templates (`.html.j2`) | HTML generation, server-side logic               |
-| Styling   | Tailwind CSS                         | Visual presentation via `tw-*` component classes |
-| State     | Alpine.js                            | Component state, client-side interactivity       |
-| Updates   | HTMX                                 | Partial page updates, form submissions           |
+| Layer     | Technology                                   | Responsibility                             |
+| --------- | -------------------------------------------- | ------------------------------------------ |
+| Structure | Components (`sbomify/templates/components/`) | The HTML every page composes               |
+| Styling   | Tailwind utilities, inside components        | Visual presentation                        |
+| State     | Alpine.js                                    | Component state, client-side interactivity |
+| Updates   | HTMX                                         | Partial page updates, form submissions     |
 
-Key patterns:
+**Pages compose components. They do not style.** A page may use layout
+utilities (grid, flex, spacing) and nothing else. The moment you write a
+styled control, a repeated visual pattern, or anything wanting its own class,
+it belongs in `sbomify/templates/components/`.
 
-- **Tailwind component classes**: `tw-btn-primary`, `tw-badge-success`, `tw-form-input`, `tw-card-*`, `tw-data-table` — defined in `sbomify/assets/css/tailwind.src.css`
-- **Jinja2 component macros**: Reusable UI in `sbomify/apps/core/templates/components/tw/` (button, card, modal, input, badge, etc.)
-- **Server data to Alpine.js**: Use `{{ data|json_script:"id" }}` + `window.parseJsonScript('id')` — never client-side fetch
-- **HTMX partials**: Views return partial HTML for HTMX requests; triggers like `hx-trigger="refresh-items from:body"`
-- **Dark mode**: `.dark` class on `<html>` element (not `[data-bs-theme]`)
-- **Component reference**: The tw-tests page at `/tailwind-test/` is the source of truth for all component patterns
+```html
+{# No load tag needed: <c-dir.name> works in any template #}
+<c-tables.shell>
+  <c-tables.toolbar>
+    <c-tables.search id="things-search" label="Search things" x-model="search" />
+  </c-tables.toolbar>
+  <c-tables.table fixed>…</c-tables.table>
+</c-tables.shell>
+
+<c-buttons.primary size="sm" hx-get="{% url 'core:new_thing' %}">New thing</c-buttons.primary>
+```
+
+**Two references, both live, neither prose.** Browse `/design-system/`
+(DEBUG-only, URL name `core:design_system`) to see every component rendered
+with its variants. Read the component's own file for its parameters: each one
+opens with a comment explaining what it is for and why it is built that way.
+The gallery is built from the components, so a broken component breaks the
+gallery first.
+
+Adding to the library: a variant is a new file nesting the base and passing
+`variant_class`; a modifier (size, state, density) is a prop. Ship it with a
+gallery demo in `core/design_system.html.j2` in the same change.
+
+Colour, radius, shadow and type come from the tokens in
+`sbomify/assets/css/tailwind.src.css` (`:root` is dark, `:root.light`
+overrides). Use token utilities (`bg-surface`, `text-text-muted`,
+`border-border`) or arbitrary values referencing tokens
+(`bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]`). A raw hex
+in a diff is a review blocker.
+
+#### The things that actually break
+
+- **Two utilities for one CSS property.** Tailwind resolves them by stylesheet
+  order, not the order you wrote them. Prop-dependent utilities must render as
+  ONE `{% if %}` segment covering every case.
+- **A `{# … #}` comment spanning more than one line is not a comment.** Django's
+  tag pattern is single-line, so the text renders on the page or becomes junk
+  attributes. Use `{% comment %}…{% endcomment %}`.
+- **`:class` on a `<c-*>` tag.** Cotton reads a leading `:` as its own dynamic-prop
+  prefix, so Alpine's bindings there are written `::class` / `::style`. On plain
+  HTML inside a component they pass through untouched.
+- **An omitted `<c-vars>` prop is undefined, not empty.** `{% if class %}` is safe;
+  `"x-"|add:class` raises `VariableDoesNotExist`.
+- **A form control does not inherit `text-transform`.** The UA stylesheet resets it,
+  so a label wrapped in a `<button>` drops out of its parent's casing.
+- **State belongs on the real element.** `disabled` on the button, `:checked` on the
+  input, `[aria-disabled]` on a link. Never a styled sibling.
+- **State only the browser knows goes on a data attribute.** The component carries
+  every recipe keyed by `data-*`, the caller binds the value
+  (`<c-badges.dynamic ::data-variant="row.status_variant" />`). Never hand a page a
+  class expression: Tailwind never compiles a computed class name.
+- **Referencing a class that does not exist fails silently.** Grep before shipping.
+- **Copy is part of the component.** See Copy under Key Conventions; in UI it is a
+  review blocker, same as a raw hex.
+
+#### Other
+
+- **Server data to Alpine**: `{{ data|json_script:"id" }}` + `window.parseJsonScript('id')`, never client-side fetch
+- **HTMX partials**: views return partial HTML for HTMX requests; triggers like `hx-trigger="refresh-items from:body"`
+- **Theme**: `.dark` / `.light` class on `<html>`; dark is the default
 - **Vite entry points** in `vite.config.ts`: core, sboms, teams, billing, documents, vulnerability_scanning, plugins (plus alerts, djangoMessages, htmxBundle, tailwind). Dev server runs on port **5170**
+- **Changing an existing page**: it probably has an e2e snapshot. Change structure
+  only, and if the baselines move, confirm every move was intended before
+  regenerating them.
+- **`tw-*` classes are the old layer.** Do not add callers and do not delete them;
+  unmigrated pages still consume them.
 
-> **Migration note**: Bootstrap and Tailwind coexist during transition. New components use Tailwind exclusively. Bootstrap is removed once all pages are converted.
+#### Branded components (`components/branded/`, `<c-branded.*>`)
+
+A second, smaller library for pages we render **on behalf of a workspace, for
+their customers**: the trust centre first, anything shared outwards later. Same
+cotton conventions as above, plus one rule.
+
+A workspace picks **one colour**. It reaches the components as two custom
+properties and nothing else:
+
+```html
+<c-branded.theme brand="{{ brand.accent_color }}">…</c-branded.theme>
+{# --brand: the fill   --brand-ink: the text that goes on it #}
+```
+
+A whole public page is one brand scope, so the page root is the normal entry
+point: `public_base.htmx.j2` publishes both properties at `:root`, in the same
+inline block as the rest of the branding. `<c-branded.theme>` is for a smaller
+scope, a widget, an email preview or one card on a page the root does not brand.
+
+- **`--brand-ink` is measured, not chosen.** `is_dark_color()` in
+  `teams/branding.py` compares WCAG relative luminance against the point where
+  white and black contrast equally. Never branch on the brand yourself; use
+  `ink_on_color()`, or the `brand_fill` / `brand_ink` filters in `brand_tags.py`.
+- **The brand is a solid fill under `--brand-ink`, or a low-alpha tint behind
+  neutral text. Never a text or icon colour.** A pale brand on its own tint is
+  invisible. The nav underline is the one exception: 2px of rule, not something
+  read through.
+- **Surfaces, body text, borders, radius, type and the severity colours are not
+  brandable.** Red means critical on every trust centre.
+- **Custom properties inherit**, so one scope brands everything below it, page
+  root or wrapper alike. No prop drilling, and any future surface can reuse the
+  library by branding its own root or wrapping.
+
+Class names need more care here than in the main library: these render on public
+pages, which load seven legacy stylesheets with 140 `!important` rules. `p-4`,
+`rounded-lg`, `shadow-sm`, `w-50` and `text-muted` all lose there. Stay on
+`px-*`, `py-*`, `gap-*`, `rounded-xl`, arbitrary values and the token utilities.
+`test_cotton_branded.py` enforces this and the fill-not-text rule; an anchor also
+needs `data-button` or the legacy sheet repaints it.
+
+**Which library a trust-centre control belongs to.** Not everything on a branded
+page is branded. The brand goes on what the page *is*, not on the machinery for
+reading it:
+
+| Use `<c-branded.*>` | Use the main library |
+| --- | --- |
+| The page and section headings, record rows, figures | **Buttons** |
+| Status the workspace owns, the restricted callout | Date, search, select, checkbox, text fields |
+| The nav and its current marker | Tables, pagination, the filter panel |
+| Any surface holding the above | Alerts, empty states, spinners |
+
+**There is no branded button, and there should not be one.** A trust centre
+button should look like an sbomify button, and every one there today is
+`c-buttons.secondary`, which is neutral and carries no fill to be unreadable on.
+
+That leaves one constraint to respect rather than discover.
+`public_base.htmx.j2` remaps `--color-primary` to the workspace accent at
+`:root`, but the app stylesheet loads after that inline block and wins, so the
+remap does nothing at page level: a main-library control on a trust centre
+renders in platform colours. Verified, not assumed: on a workspace with accent
+`#C2410C` the computed `--color-primary` is still the platform navy.
+
+What *does* apply is the scoped `.public-page [data-button]` rule, which remaps
+the token on library buttons only. `c-buttons.primary` hardcodes `text-white`,
+so a filled library button there is white text over whatever colour the
+workspace picked, with no ink measurement: fine on navy, unreadable on pale
+amber. No token can fix it, because the ink is not a token. **So do not put a
+filled main-library button on a public page.** There are 8 today across 5 pages
+this branch has not touched; each needs a neutral button or an ink measured from
+`ink_on_color`.
 
 ### API Layer
 
@@ -272,7 +403,7 @@ Dramatiq with Redis for async processing (vulnerability scanning, assessments). 
 ### Storage
 
 - **Database**: PostgreSQL 17
-- **Object Storage**: S3-compatible (Minio for development) — separate buckets for media, SBOMs, documents
+- **Object Storage**: S3-compatible (SeaweedFS for development) — separate buckets for media, SBOMs, documents
 - **Caching/Broker**: Redis 8
 
 ### Authentication
@@ -281,14 +412,29 @@ Keycloak with django-allauth. Auto-bootstrapped via Docker in development. Requi
 
 ### Team Roles and Permissions
 
-Supported roles: `"owner"`, `"admin"`, `"guest"` (defined in `TEAMS_SUPPORTED_ROLES`). Legacy code may reference `"member"` but it is not in the current choices. CBV mixins in `sbomify.apps.teams.permissions`:
+Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"member"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. A `member_role_is_supported` CheckConstraint on `Member` enforces the set at the database, so a role the code does not know about can no longer be written (which is how `"member"` itself existed for years as a value matching no role check).
+
+**`sbomify/apps/core/authz.py` is the single source of truth.** `can(actor, action, resource)` maps a named action to a capability tier; the tier tuples are the only place roles are enumerated. Two rules keep it simple:
+
+1. **The ladder stays linear** — `guest ⊂ member ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
+2. **Granularity is added as a tier, never as a per-user permission bundle or per-resource ACL.**
+
+Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` = `READ_INTERNAL` (+ member) ⊂ `PUBLISH` = `READ_INTERNAL_OR_BOT` (+ bot).
+
+`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities. Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capability they lack is deleting the workspace (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+
+Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 
 ```python
+from sbomify.apps.core.authz import ADMINISTER
+
 class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)  # not a hardcoded ["owner", "admin"]
 ```
 
-`GuestAccessBlockedMixin` redirects guest members to the public workspace page.
+**`guest` is an external role and holds no capability tier at all.** A guest `Member` row is an ACL anchor for the trust-center access-request/NDA machinery, not a grant: guests reach restricted content solely through the attribute-based `component:access` path (`core/services/access_control.py`), never through a role check. `GuestAccessBlockedMixin` redirects guest members to the public workspace page. Do not add `guest` to a tier — if an external user needs to contribute, that is what the internal roles are for.
+
+**Templates must not branch on `request.session.current_team.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
 
 ## Key Conventions
 
@@ -296,6 +442,23 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
 - "sbomify" is always lowercase
 - "Workspace" in UI maps to "Team" in models (legacy naming)
+
+### Copy (anything a user reads)
+
+Covers UI strings, labels, hints, placeholders, empty states, toasts, error
+messages and docs pages.
+
+- **Never use an em dash (—) or an en dash (–) as punctuation.** Use a comma, a
+  colon, a full stop, or split it into two sentences.
+- Keep it short. One idea per sentence. Cut any word that does not change the
+  meaning.
+- Use plain words. "Fix" not "remediation", "version" not "release artifact
+  revision", "delete" not "permanently remove".
+- Say what the user does or gets, not how it works inside. Names of internal
+  models, statuses and fields are not copy.
+- Write a button as the action it performs: "Create advisory", not "Submit".
+
+In UI this is a review blocker, same as a raw hex value.
 
 ### Python
 

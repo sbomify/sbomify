@@ -1,36 +1,29 @@
 {# Document card — used inside x-for loop with `doc` variable (docKinds item) in scope #}
-<div class="tw-card">
-    <div class="px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <i class="fas fa-file-lines text-text-muted"></i>
-            <span class="font-medium text-text text-sm" x-text="doc.label"></span>
-        </div>
-        <div class="flex items-center gap-2">
-            <template x-if="getDocStatus(doc.key) === 'current'">
-                <span class="tw-badge-success text-xs">Current</span>
-            </template>
-            <template x-if="getDocStatus(doc.key) === 'stale'">
-                <span class="tw-badge-warning text-xs">Stale</span>
-            </template>
-            <template x-if="getDocStatus(doc.key) === 'not_generated'">
-                <span class="tw-badge-neutral text-xs">Not generated</span>
-            </template>
-            <button type="button"
-                    @click="previewDocument(doc.key, doc.label)"
-                    :aria-label="'Preview ' + doc.label"
-                    class="tw-btn-ghost text-xs px-2 py-1">
-                <i class="fas fa-eye"></i>
-            </button>
-            <button type="button"
-                    @click="generateDocument(doc.key)"
-                    :disabled="generatingDoc === doc.key"
-                    :aria-label="'Generate ' + doc.label"
-                    class="tw-btn-ghost text-xs px-2 py-1">
-                <span x-show="generatingDoc === doc.key">
-                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
-                </span>
-                <i x-show="generatingDoc !== doc.key" class="fas fa-rotate"></i>
-            </button>
-        </div>
+<c-cards.card flush>
+<div class="px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+        <i class="fas fa-file-lines text-text-muted"></i>
+        <span class="font-medium text-text text-sm" x-text="doc.label"></span>
+    </div>
+    <div class="flex items-center gap-2">
+        <template x-if="getDocStatus(doc.key) === 'current'">
+            <c-badges.success>Current</c-badges.success>
+        </template>
+        <template x-if="getDocStatus(doc.key) === 'stale'">
+            <c-badges.warning>Stale</c-badges.warning>
+        </template>
+        <template x-if="getDocStatus(doc.key) === 'not_generated'">
+            <c-badges.secondary>Not generated</c-badges.secondary>
+        </template>
+        <c-buttons.ghost size="sm" @click="previewDocument(doc.key, doc.label)" ::aria-label="'Preview ' + doc.label">
+        <i class="fas fa-eye"></i>
+        </c-buttons.ghost>
+        <c-buttons.ghost size="sm" @click="generateDocument(doc.key)" ::disabled="generatingDoc === doc.key" ::aria-label="'Generate ' + doc.label">
+        <span x-show="generatingDoc === doc.key">
+            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+        </span>
+        <i x-show="generatingDoc !== doc.key" class="fas fa-rotate"></i>
+        </c-buttons.ghost>
     </div>
 </div>
+</c-cards.card>

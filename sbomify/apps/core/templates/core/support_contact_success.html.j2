@@ -14,35 +14,33 @@
                     <!-- Success Message -->
                     <h1 class="text-4xl font-bold text-success mb-4">Thank You!</h1>
                     <h2 class="text-xl text-text-muted mb-6">Your support request has been sent successfully</h2>
-                    <div class="tw-card shadow-sm border-0 mb-8">
-                        <div class="p-6">
-                            <div class="text-center">
-                                <h5 class="font-semibold text-text mb-4">What happens next?</h5>
-                                <ul class="list-none p-0 m-0 space-y-3">
-                                    <li class="flex items-center justify-center gap-2 text-text">
-                                        <i class="fas fa-clock text-primary"></i>
-                                        <span>We typically respond within 1-2 business days</span>
-                                    </li>
-                                    <li class="flex items-center justify-center gap-2 text-text">
-                                        <i class="fas fa-envelope text-primary"></i>
-                                        <span>You'll receive a confirmation email shortly</span>
-                                    </li>
-                                    <li class="flex items-center justify-center gap-2 text-text">
-                                        <i class="fas fa-user-headset text-primary"></i>
-                                        <span>Our support team will review your request</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
+                    <c-cards.card class="mb-8">
+                    <div class="text-center">
+                        <h5 class="font-semibold text-text mb-4">What happens next?</h5>
+                        <ul class="list-none p-0 m-0 space-y-3">
+                            <li class="flex items-center justify-center gap-2 text-text">
+                                <i class="fas fa-clock text-primary"></i>
+                                <span>We typically respond within 1-2 business days</span>
+                            </li>
+                            <li class="flex items-center justify-center gap-2 text-text">
+                                <i class="fas fa-envelope text-primary"></i>
+                                <span>You'll receive a confirmation email shortly</span>
+                            </li>
+                            <li class="flex items-center justify-center gap-2 text-text">
+                                <i class="fas fa-user-headset text-primary"></i>
+                                <span>Our support team will review your request</span>
+                            </li>
+                        </ul>
                     </div>
+                    </c-cards.card>
                     <!-- Action Buttons -->
                     <div class="flex flex-col md:flex-row justify-center gap-4">
-                        <a href="{% url 'core:dashboard' %}" class="tw-btn-primary px-6">
-                            <i class="fas fa-tachometer-alt mr-2"></i>Back to Dashboard
-                        </a>
-                        <a href="{% url 'core:support_contact' %}" class="tw-btn-secondary px-6">
-                            <i class="fas fa-plus mr-2"></i>Submit Another Request
-                        </a>
+                        <c-buttons.primary href="{% url 'core:dashboard' %}" size="lg">
+                        <i class="fas fa-tachometer-alt mr-2"></i>Back to Dashboard
+                        </c-buttons.primary>
+                        <c-buttons.secondary href="{% url 'core:support_contact' %}" size="lg">
+                        <i class="fas fa-plus mr-2"></i>Submit Another Request
+                        </c-buttons.secondary>
                     </div>
                 </div>
             </div>

@@ -4,6 +4,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
@@ -13,7 +14,7 @@ from sbomify.apps.teams.utils import get_app_hostname, plan_has_custom_domain_ac
 class TeamCustomDomainView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing workspace custom domain settings."""
 
-    allowed_roles = ["owner"]
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         status_code, team = get_team(request, team_key)

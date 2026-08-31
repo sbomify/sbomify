@@ -11,6 +11,7 @@ which builds the whole initial graph in a transaction.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -34,13 +35,12 @@ from sbomify.apps.security_advisories.models import (
     validate_publishable,
 )
 
-# Severity to the badge variant the templates use.
-SEVERITY_VARIANTS = {
-    "critical": "danger",
-    "high": "warning",
-    "medium": "info",
-    "low": "secondary",
-}
+# Severity is not projected to a badge variant. c-badges.severity owns the five
+# CVSS bands, and mapping them onto the generic semantic variants here shifted
+# every band by one: high rendered in the amber the rest of the app uses for
+# medium, medium in the blue it uses for low. Templates pass the raw band to
+# c-badges.severity (or bind data-level for the Alpine twin) and the component
+# picks the colour.
 SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 
 # Remediation status to badge variant and icon. One dict so the list, the detail
@@ -148,6 +148,61 @@ def worst_severity(advisory: SecurityAdvisory) -> str:
     return max(severities, key=lambda s: SEVERITY_RANK.get(s, 0))
 
 
+# The version is written inside the vector ("CVSS:3.1/AV:N/…"), so a pasted
+# vector names its own version and a bare score stores none rather than a
+# guessed one.
+_CVSS_VECTOR_VERSION_RE = re.compile(r"^CVSS:(\d+(?:\.\d+)?)/", re.IGNORECASE)
+
+
+def cvss_entry(score: float, vector: str = "") -> dict[str, Any]:
+    """One stored CVSS entry, in the shape ``AdvisoryVulnerability`` documents."""
+    vector = vector.strip()
+    match = _CVSS_VECTOR_VERSION_RE.match(vector)
+    return {"version": match.group(1) if match else "", "vector": vector, "base_score": score}
+
+
+def _best_cvss_entry(entries: Any) -> tuple[float, dict[str, Any]] | None:
+    """The highest-scoring entry in one ``cvss_scores`` list, with its score.
+
+    A hand-entered row can be absent or non-numeric; one bad row must not take
+    the whole page down, so malformed entries are skipped rather than raised.
+    """
+    best: tuple[float, dict[str, Any]] | None = None
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            score = float(entry["base_score"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if best is None or score > best[0]:
+            best = (score, entry)
+    return best
+
+
+def worst_cvss(advisory: SecurityAdvisory) -> dict[str, Any] | None:
+    """The highest-scoring CVSS entry across the advisory's vulnerabilities.
+
+    The pages lead with one number, and an advisory carrying three CVEs must
+    not read as the mildest of them. Returns None when nobody scored it.
+    """
+    best: tuple[float, dict[str, Any]] | None = None
+    for vulnerability in advisory.vulnerabilities.all():
+        candidate = _best_cvss_entry(vulnerability.cvss_scores)
+        if candidate and (best is None or candidate[0] > best[0]):
+            best = candidate
+    return best[1] if best else None
+
+
+def _cvss_display(entry: dict[str, Any] | None) -> str:
+    """A CVSS entry as the timeline quotes it: the score, then the vector."""
+    if not entry:
+        return ""
+    score = float(entry["base_score"])
+    vector = str(entry.get("vector") or "")
+    return f"{score} ({vector})" if vector else str(score)
+
+
 def _vulnerability_projection(vulnerability: AdvisoryVulnerability) -> dict[str, Any]:
     return {
         "id": vulnerability.id,
@@ -155,7 +210,6 @@ def _vulnerability_projection(vulnerability: AdvisoryVulnerability) -> dict[str,
         "title": vulnerability.title,
         "description": vulnerability.description,
         "severity": vulnerability.severity,
-        "severity_variant": SEVERITY_VARIANTS.get(vulnerability.severity, "secondary"),
         "cwe_ids": vulnerability.cwe_ids or [],
         "cvss_scores": vulnerability.cvss_scores or [],
         "exploitation_status": vulnerability.exploitation_status,
@@ -253,6 +307,7 @@ def _event_projection(event: AdvisoryEvent) -> dict[str, Any]:
 
 def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) -> dict[str, Any]:
     severity = worst_severity(advisory)
+    best_cvss = worst_cvss(advisory)
     remediation = REMEDIATION_META.get(advisory.remediation_status, _UNKNOWN_EVENT)
     events = list(advisory.events.all())
     vulnerabilities = list(advisory.vulnerabilities.all())
@@ -271,8 +326,11 @@ def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) ->
         "description": advisory.description,
         "advisory_type": advisory.advisory_type,
         "severity": severity,
-        "severity_variant": SEVERITY_VARIANTS.get(severity, "secondary"),
         "severity_rank": SEVERITY_RANK.get(severity, 0),
+        # The same worst-entry the trust center leads with, plus its vector so
+        # the edit form can prefill what the page displays.
+        "cvss_score": float(best_cvss["base_score"]) if best_cvss else None,
+        "cvss_vector": str(best_cvss.get("vector") or "") if best_cvss else "",
         # Two axes, deliberately. status_* is where the fix is, which is what the
         # list's Status column means and what the timeline drives. publication_*
         # is whether anyone outside the workspace can read it. The status_* names
@@ -404,6 +462,9 @@ def create_advisory(
     severity: str = "",
     description: str = "",
     identifier: str = "",
+    remediation_status: str = "",
+    cvss_score: float | None = None,
+    cvss_vector: str = "",
     products: list[Product] | None = None,
     affected_releases: list[Release] | None = None,
 ) -> ServiceResult[str]:
@@ -413,7 +474,8 @@ def create_advisory(
     ``cve_id``; any other identifier is stored as an :class:`AdvisoryReference`
     (a GHSA cannot live in ``cve_id``, which validates strictly) and the
     vulnerability keeps the advisory's title as its working name — the model's
-    own vocabulary for a finding with no id yet.
+    own vocabulary for a finding with no id yet. A CVSS score lands on that
+    vulnerability as the single entry the form manages.
 
     Every product gets an ``in_triage`` status per the vulnerability from
     birth, which is the shape :func:`~..models.validate_publishable` will
@@ -421,11 +483,17 @@ def create_advisory(
     range pinned to that release, so the advisory keeps naming the version
     after the release row is ever deleted.
     """
+    # An advisory written up after the work began opens at the status it is
+    # actually at, and its first timeline entry records that rather than a
+    # fictional "identified" the team would have to correct.
+    opening_status = remediation_status or SecurityAdvisory.RemediationStatus.IDENTIFIED.value
+
     advisory = SecurityAdvisory.objects.create(
         team=team,
         title=title.strip(),
         severity=severity,
         description=description.strip(),
+        remediation_status=opening_status,
         created_by=user,
     )
 
@@ -439,6 +507,7 @@ def create_advisory(
         advisory=advisory,
         cve_id=identifier if is_cve else "",
         title="" if is_cve else advisory.title,
+        cvss_scores=[cvss_entry(cvss_score, cvss_vector)] if cvss_score is not None else [],
     )
     if identifier and not is_cve:
         is_url = identifier.lower().startswith(("http://", "https://"))
@@ -480,7 +549,7 @@ def create_advisory(
         advisory=advisory,
         event_type=AdvisoryEvent.EventType.STATUS_CHANGE,
         actor=user,
-        payload={"to": SecurityAdvisory.RemediationStatus.IDENTIFIED.value},
+        payload={"to": opening_status},
     )
     return ServiceResult.success(advisory.id)
 
@@ -491,9 +560,13 @@ def create_advisory(
 _FIELD_CHANGE_QUOTE_LIMIT = 80
 
 
+# Fields whose display name is not just the field name recapitalised.
+_FIELD_LABELS = {"cvss": "CVSS"}
+
+
 def _field_change_body(field: str, old: Any, new: Any) -> str:
     """What a field_change entry reads as on the timeline."""
-    label = field.replace("_", " ").capitalize()
+    label = _FIELD_LABELS.get(field, field.replace("_", " ").capitalize())
 
     def describe(value: Any) -> str | None:
         text = str(value or "").strip()
@@ -513,13 +586,27 @@ def _field_change_body(field: str, old: Any, new: Any) -> str:
 
 @transaction.atomic
 def update_advisory(
-    team: Any, user: Any, advisory_id: str, *, title: str, severity: str | None = None, description: str = ""
+    team: Any,
+    user: Any,
+    advisory_id: str,
+    *,
+    title: str,
+    severity: str | None = None,
+    description: str = "",
+    cvss_score: str | None = None,
+    cvss_vector: str | None = None,
 ) -> ServiceResult[str]:
     """Edit an advisory's own fields.
 
     Field changes land on the timeline as field_change events, one per field,
     so the append-only history answers "who changed the severity and when"
     rather than only recording status moves.
+
+    CVSS lives on the advisory's vulnerability rather than the advisory row.
+    The form manages one primary entry: the highest-scoring one is what the
+    pages display and what the edit form prefills, so that is the entry an
+    edit replaces and a blank submission clears. ``cvss_score`` arrives as the
+    posted string; None means the form did not carry the field at all.
     """
     advisory = (
         SecurityAdvisory.objects.select_for_update()
@@ -545,13 +632,66 @@ def update_advisory(
             return ServiceResult.failure("Unknown severity.", status_code=400)
         fields.append(("severity", severity))
 
+    cvss_changed = False
+    new_entries: list[dict[str, Any]] = []
+    holder: AdvisoryVulnerability | None = None
+    old_entry: dict[str, Any] | None = None
+    if cvss_score is not None:
+        score_text = cvss_score.strip()
+        vector = (cvss_vector or "").strip()
+        if vector and not score_text:
+            return ServiceResult.failure("Enter the CVSS score for the vector.", status_code=400)
+        if score_text:
+            try:
+                score = float(score_text)
+            except ValueError:
+                return ServiceResult.failure("CVSS score must be a number from 0 to 10.", status_code=400)
+            if not 0 <= score <= 10:
+                return ServiceResult.failure("CVSS score must be a number from 0 to 10.", status_code=400)
+            new_entries = [cvss_entry(score, vector)]
+
+        # The entry being edited is the one the pages display, so the write
+        # goes to the vulnerability holding it; an advisory with no scored
+        # vulnerability falls back to its first, and one with no vulnerability
+        # at all grows one below, the same shape create_advisory builds.
+        vulnerabilities = list(advisory.vulnerabilities.all())
+        best: tuple[float, dict[str, Any]] | None = None
+        for candidate in vulnerabilities:
+            found = _best_cvss_entry(candidate.cvss_scores)
+            if found and (best is None or found[0] > best[0]):
+                best, holder = found, candidate
+        old_entry = best[1] if best else None
+        if holder is None and vulnerabilities:
+            holder = vulnerabilities[0]
+
+        old_key = (float(old_entry["base_score"]), str(old_entry.get("vector") or "")) if old_entry else None
+        new_key = (new_entries[0]["base_score"], new_entries[0]["vector"]) if new_entries else None
+        cvss_changed = new_key != old_key
+
     changes = [(field, getattr(advisory, field), new) for field, new in fields if getattr(advisory, field) != new]
-    if not changes:
+    if not changes and not cvss_changed:
         return ServiceResult.success(advisory.id)
 
-    for field, _old, new in changes:
-        setattr(advisory, field, new)
-    advisory.save(update_fields=[field for field, _o, _n in changes] + ["updated_at"])
+    if changes:
+        for field, _old, new in changes:
+            setattr(advisory, field, new)
+        advisory.save(update_fields=[field for field, _o, _n in changes] + ["updated_at"])
+
+    if cvss_changed:
+        if holder is None:
+            AdvisoryVulnerability.objects.create(advisory=advisory, title=advisory.title, cvss_scores=new_entries)
+        else:
+            holder.cvss_scores = new_entries
+            holder.save(update_fields=["cvss_scores", "updated_at"])
+        old_display = _cvss_display(old_entry)
+        new_display = _cvss_display(new_entries[0]) if new_entries else ""
+        AdvisoryEvent.objects.create(
+            advisory=advisory,
+            event_type=AdvisoryEvent.EventType.FIELD_CHANGE,
+            actor=user,
+            body=_field_change_body("cvss", old_display, new_display),
+            payload={"field": "cvss", "old": old_display, "new": new_display},
+        )
 
     for field, old, new in changes:
         AdvisoryEvent.objects.create(
@@ -700,6 +840,23 @@ def post_update(team: Any, user: Any, advisory_id: str, *, kind: str, note: str 
     advisory.remediation_status = kind
     advisory.save(update_fields=["remediation_status", "updated_at"])
     return ServiceResult.success(advisory.id)
+
+
+def delete_advisory(team: Any, advisory_id: str) -> ServiceResult[str]:
+    """Delete an advisory and everything hanging off it.
+
+    The vulnerability rows, product statuses and timeline all cascade with the
+    advisory, and nothing is recorded afterwards: the timeline that would carry
+    the entry dies here. A published advisory disappears from the trust center,
+    tracking id included, which is why the confirm dialog says so before this
+    runs. Scoped to the workspace like every other lookup, so another
+    workspace's advisory reads as absent rather than forbidden.
+    """
+    advisory = SecurityAdvisory.objects.filter(team=team).filter(Q(id=advisory_id) | Q(tracking_id=advisory_id)).first()
+    if advisory is None:
+        return ServiceResult.failure("Advisory not found", status_code=404)
+    advisory.delete()
+    return ServiceResult.success(advisory_id)
 
 
 def advisory_counts(advisories: list[dict[str, Any]]) -> dict[str, int]:

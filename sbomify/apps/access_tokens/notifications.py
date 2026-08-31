@@ -63,7 +63,9 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         return []
 
     from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.core.authz import ADMINISTER
     from sbomify.apps.teams.models import Member
+    from sbomify.apps.teams.queries import get_member_role_by_key
 
     now = timezone.now()
     cutoff = now + timedelta(days=WARNING_WINDOW_DAYS)
@@ -72,8 +74,11 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         AccessToken.objects.filter(user=request.user, expires_at__gt=now, expires_at__lte=cutoff).select_related("team")
     )
 
+    # Live Member row and the tier, not the session cache and a role literal:
+    # this decides whether someone is shown the workspace's bot tokens, so a
+    # demoted admin would keep seeing them until the 300s cache turned over.
     team_key = (request.session.get("current_team") or {}).get("key")
-    if team_key and (request.session.get("current_team") or {}).get("role") in ("owner", "admin"):
+    if team_key and get_member_role_by_key(request.user, team_key) in ADMINISTER:
         bot_user_ids = Member.objects.filter(team__key=team_key, role="bot").values_list("user_id", flat=True)
         tokens.extend(
             AccessToken.objects.filter(
@@ -86,6 +91,14 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         if token.expires_at is None:
             continue
         days = days_until(token.expires_at, now)
+        lifetime = lifetime_days(token)
+        # A token that lives under a day is born inside its final day, so the
+        # final-day carve-out below would keep it on the bell for its whole
+        # life. The OIDC publish exchange mints a 15-minute token per CI run,
+        # which piled up one "expires tomorrow" badge per publish. Expiring
+        # that soon is the token's design, not an event.
+        if lifetime is not None and lifetime <= 1:
+            continue
         # Keep the final day for short-lived tokens: silence for the whole life
         # would let a pipeline start failing with no notice at all.
         if days > 1 and is_short_lived(token):

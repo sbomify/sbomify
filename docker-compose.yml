@@ -4,16 +4,16 @@ x-common-env: &common-env
   AM_I_IN_DOCKER_CONTAINER: ${AM_I_IN_DOCKER_CONTAINER:-1}
   APP_BASE_URL: ${APP_BASE_URL:-http://dev.sbomify.com}
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
-  AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3:-http://sbomify-minio:9000}
+  AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3:-http://sbomify-s3:9000}
   AWS_MEDIA_ACCESS_KEY_ID: ${AWS_MEDIA_ACCESS_KEY_ID:-minioadmin}
   AWS_MEDIA_SECRET_ACCESS_KEY: ${AWS_MEDIA_SECRET_ACCESS_KEY:-minioadmin}
   AWS_MEDIA_STORAGE_BUCKET_NAME: ${AWS_MEDIA_STORAGE_BUCKET_NAME:-sbomify-media}
-  AWS_MEDIA_STORAGE_BUCKET_URL: ${AWS_MEDIA_STORAGE_BUCKET_URL:-http://sbomify-minio:9000/sbomify-media}
+  AWS_MEDIA_STORAGE_BUCKET_URL: ${AWS_MEDIA_STORAGE_BUCKET_URL:-http://localhost:${S3_API_PORT:-9000}/${AWS_MEDIA_STORAGE_BUCKET_NAME:-sbomify-media}}
   AWS_REGION: ${AWS_REGION:-auto}
   AWS_SBOMS_ACCESS_KEY_ID: ${AWS_SBOMS_ACCESS_KEY_ID:-minioadmin}
   AWS_SBOMS_SECRET_ACCESS_KEY: ${AWS_SBOMS_SECRET_ACCESS_KEY:-minioadmin}
   AWS_SBOMS_STORAGE_BUCKET_NAME: ${AWS_SBOMS_STORAGE_BUCKET_NAME:-sbomify-sboms}
-  AWS_SBOMS_STORAGE_BUCKET_URL: ${AWS_SBOMS_STORAGE_BUCKET_URL:-http://sbomify-minio:9000/sbomify-sboms}
+  AWS_SBOMS_STORAGE_BUCKET_URL: ${AWS_SBOMS_STORAGE_BUCKET_URL:-http://sbomify-s3:9000/sbomify-sboms}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
   CLOUDFLARE_DCV_HOSTNAME: ${CLOUDFLARE_DCV_HOSTNAME:-}
   DATABASE_NAME: ${DATABASE_NAME:-sbomify}
@@ -23,6 +23,19 @@ x-common-env: &common-env
   DATABASE_SSLROOTCERT: ${DATABASE_SSLROOTCERT:-}
   DATABASE_USER: ${DATABASE_USER:-sbomify}
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
+  # Mail has to be here rather than on one service: the backend only queues
+  # onboarding and notification mail, the worker is what actually sends it, so
+  # a value set on a single service silently produces a different From header
+  # depending on which process happened to send the message.
+  # Defaults mirror sbomify/settings.py; docker-compose.dev.yml points the host
+  # at mailpit.
+  DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-hello@sbomify.com}
+  EMAIL_HOST: ${EMAIL_HOST:-localhost}
+  EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+  EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+  EMAIL_PORT: ${EMAIL_PORT:-25}
+  EMAIL_USE_SSL: ${EMAIL_USE_SSL:-False}
+  EMAIL_USE_TLS: ${EMAIL_USE_TLS:-False}
   REDIS_CA_CERTS: ${REDIS_CA_CERTS:-}
   REDIS_URL: ${REDIS_URL:-redis://sbomify-redis:6379}
   SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}

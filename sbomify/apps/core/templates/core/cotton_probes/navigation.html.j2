@@ -1,0 +1,69 @@
+{% comment %}
+Render probe for the cotton navigation set. Unit tests render this file with a
+small context of lists and assert on the output; it is not routed anywhere.
+{% endcomment %}
+<c-navigation.tabs :tabs="probe_tabs" active="overview" class="mb-4" data-probe="tabs" />
+<c-navigation.tabs-pills :tabs="probe_tabs" active="sboms" class="mb-4" data-probe="pills" />
+<c-navigation.tabs>
+<c-navigation.tab panel="hand" active badge="7" @click="pick('hand')" hx-get="/probe/hand">Hand built</c-navigation.tab>
+<c-navigation.tab panel="quiet">Quiet tab</c-navigation.tab>
+<c-navigation.tab panel="settings" icon="fas fa-gear" aria-label="Settings" />
+</c-navigation.tabs>
+<c-navigation.breadcrumbs :items="probe_crumbs" class="mb-2" data-probe="crumbs" />
+<c-navigation.breadcrumbs :items="probe_marked_crumbs" data-probe="marked-crumbs" />
+<c-navigation.pagination :current="3" :total="8" :page_range="probe_page_range" base_url="/components" class="mt-2" data-probe="pager" />
+<c-navigation.pagination :current="1" :total="1" :page_range="probe_single_page" base_url="/single" data-probe="single" />
+<c-navigation.pagination :current="2" :total="4" :page_range="probe_short_range" base_url="/numbers" show_prev_next="" data-probe="numbers" />
+<c-navigation.page-link href="/probe/page-link" hx-boost="false">Standalone link</c-navigation.page-link>
+<c-navigation.stepper data-probe="stepper">
+<c-navigation.stepper-step state="completed" label="Scope"><i class="fas fa-check" aria-hidden="true"></i></c-navigation.stepper-step>
+<c-navigation.stepper-connector completed />
+<c-navigation.stepper-step state="active" label="Assessment">2</c-navigation.stepper-step>
+<c-navigation.stepper-connector />
+<c-navigation.stepper-step label="Declaration" label_class="hidden sm:inline" class="ml-1" data-probe="step">3</c-navigation.stepper-step>
+</c-navigation.stepper>
+<c-navigation.stepper-vertical class="mt-4" data-probe="vertical">
+<c-navigation.stepper-step state="completed" label="Upload">1</c-navigation.stepper-step>
+<c-navigation.stepper-connector completed />
+<c-navigation.stepper-step label="Publish">2</c-navigation.stepper-step>
+</c-navigation.stepper-vertical>
+<c-navigation.accordion class="mb-4" x-data="{ open: 'org' }" data-probe="accordion">
+<c-navigation.accordion-item label="Organisational controls" state="open === 'org'" @click="open = open === 'org' ? '' : 'org'">
+<p class="m-0">Policies, roles and supplier relationships.</p>
+</c-navigation.accordion-item>
+<c-navigation.accordion-item state="open === 'tech'" label_class="flex flex-1 items-center justify-between gap-3 min-w-0 mr-3" @click="open = open === 'tech' ? '' : 'tech'" data-probe="item">
+<c-slot name="label">
+<span class="flex items-center gap-2">Technological controls</span>
+</c-slot>
+<p class="m-0">Access control and cryptography.</p>
+</c-navigation.accordion-item>
+</c-navigation.accordion>
+<c-navigation.accordion density="sm" data-probe="compact">
+<c-navigation.accordion-item label="Compact section">
+<p class="m-0">Always open without a state.</p>
+</c-navigation.accordion-item>
+</c-navigation.accordion>
+{# The details/summary twin, added with the trusted-publishers migration. #}
+<c-navigation.accordion density="sm" data-probe="disclosures">
+<c-navigation.disclosure label_class="flex items-center gap-2" data-probe="disclosure">
+<c-slot name="label">
+<i class="fas fa-code" aria-hidden="true"></i>Configure the workflow
+</c-slot>
+<p class="m-0">The step a workflow needs.</p>
+</c-navigation.disclosure>
+<c-navigation.disclosure label="Already open" open data-probe="disclosure-open">
+<p class="m-0">Open on arrival.</p>
+</c-navigation.disclosure>
+</c-navigation.accordion>
+{# The Alpine pager twin, added with the advisories migration. #}
+<c-navigation.page-button data-probe="page-btn" @click="goToPage(2)">2</c-navigation.page-button>
+<c-navigation.page-button nav label="Previous page" data-probe="page-btn-nav">
+<i class="fas fa-chevron-left" aria-hidden="true"></i>
+</c-navigation.page-button>
+<c-navigation.page-ellipsis data-probe="page-ellipsis" />
+{# The filtered server pager and the segmented control, added with the vulnerability-scans migration. #}
+<c-navigation.pagination :current="2" :total="3" :page_range="probe_short_range" query="days=30" label="Scan pagination" data-probe="filtered" />
+<c-navigation.segmented data-probe="segmented" class="mt-2">
+<c-navigation.segment ::data-active="chart === 'timeline'" @click="pick('timeline')" data-probe="segment">Timeline</c-navigation.segment>
+<c-navigation.segment ::data-active="chart === 'severity'" title="Severity breakdown">Severity</c-navigation.segment>
+</c-navigation.segmented>

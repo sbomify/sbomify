@@ -116,10 +116,12 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
     response = client.get(reverse("core:products_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the expected elements
+    # Check that the page contains the expected elements. Creation moved to its
+    # own page, so the dashboard links there instead of holding a modal form.
     content = response.content.decode()
     assert 'id="products-table-container"' in content
-    assert 'id="addProductForm"' in content
+    assert reverse("core:product_new") in content
+    assert 'id="addProductForm"' not in content
 
 
 @pytest.mark.django_db
@@ -139,10 +141,12 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
     response = client.get(reverse("core:components_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the expected elements
+    # Check that the page contains the expected elements. Creation moved to its
+    # own page, so the dashboard links there instead of holding a modal form.
     content = response.content.decode()
     assert 'id="components-table-container"' in content
-    assert 'id="addComponentForm"' in content
+    assert reverse("core:component_new") in content
+    assert 'id="addComponentForm"' not in content
 
 
 # Removed: test_create_component - POST functionality moved to API tests

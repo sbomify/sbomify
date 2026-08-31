@@ -11,8 +11,34 @@ import re
 from typing import Any, Literal
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.conf import settings
+
+
+def _transfer_config() -> Config:
+    """Bounded timeouts and retries for object-storage transfers.
+
+    Without an explicit ``Config``, botocore waits 60 seconds on a single
+    connect and 60 more on a single read. Both of those sit inside background
+    tasks with their own, shorter time limits — the VEX re-apply allows two
+    minutes for all its work — so one unresponsive read consumed half the task's
+    budget and the task died with ``TimeLimitExceeded`` in the middle of a
+    socket read, rather than failing the read and retrying it.
+
+    ``standard`` mode is the retry behaviour to want here: it backs off between
+    attempts and covers connection errors and 5xx, where the ``legacy`` default
+    is narrower. Three attempts inside a 10s connect and a 30s read stay well
+    under every caller's limit.
+
+    The read timeout is per socket read, not per transfer, so a large artifact
+    is unaffected: it only has to keep producing bytes.
+    """
+    return Config(
+        connect_timeout=int(getattr(settings, "AWS_CONNECT_TIMEOUT", 10)),
+        read_timeout=int(getattr(settings, "AWS_READ_TIMEOUT", 30)),
+        retries={"max_attempts": 3, "mode": "standard"},
+    )
 
 
 class S3Client:
@@ -26,6 +52,7 @@ class S3Client:
             endpoint_url=settings.AWS_ENDPOINT_URL_S3,
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
+            config=_transfer_config(),
         )
 
     def upload_data_as_file(self, bucket_name: str, object_name: str, data: bytes) -> None:

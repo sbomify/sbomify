@@ -433,3 +433,28 @@ describe('SBOM Upload Business Logic', () => {
         })
     })
 })
+
+describe('cbom upload type', () => {
+    test('labels cbom as CBOM', () => {
+        expect(bomTypeLabel('cbom')).toBe('CBOM')
+    })
+
+    test('cbom endpoint carries the explicit bom_type', () => {
+        expect(buildUploadEndpoint('comp123', 'cbom')).toBe('/api/v1/sboms/upload-file/comp123?bom_type=cbom')
+    })
+
+    test('cbom accepts cyclonedx json', () => {
+        const file = new File(['{}'], 'crypto.cdx.json', { type: 'application/json' })
+        expect(validateUploadFile(file, 'cbom')).toBeNull()
+    })
+
+    test('cbom rejects xml', () => {
+        const file = new File(['<bom/>'], 'crypto.xml', { type: 'application/xml' })
+        expect(validateUploadFile(file, 'cbom')).toContain('XML uploads are supported for VEX only')
+    })
+
+    test('cbom rejects spdx naming', () => {
+        const file = new File(['{}'], 'crypto.spdx.json', { type: 'application/json' })
+        expect(validateUploadFile(file, 'cbom')).toContain('CycloneDX JSON')
+    })
+})

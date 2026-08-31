@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from sbomify.apps.core.consumers import WorkspaceConsumer
+from sbomify.apps.core.consumers import (
+    WS_CLOSE_POLICY_VIOLATION,
+    WS_CLOSE_SERVICE_RESTART,
+    WorkspaceConsumer,
+)
 
 
 class TestWorkspaceConsumer:
@@ -40,8 +44,10 @@ class TestWorkspaceConsumer:
 
         await consumer.connect()
 
-        consumer.close.assert_called_once()
-        consumer.accept.assert_not_called()
+        consumer.close.assert_called_once_with(code=WS_CLOSE_POLICY_VIOLATION)
+        # Accepted first so the code above can reach the client at all: a close
+        # before the handshake completes is an HTTP 403 that carries no code.
+        consumer.accept.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_connect_anonymous_user_rejected(self, consumer, mock_channel_layer):
@@ -60,8 +66,10 @@ class TestWorkspaceConsumer:
 
         await consumer.connect()
 
-        consumer.close.assert_called_once()
-        consumer.accept.assert_not_called()
+        consumer.close.assert_called_once_with(code=WS_CLOSE_POLICY_VIOLATION)
+        # Accepted first so the code above can reach the client at all: a close
+        # before the handshake completes is an HTTP 403 that carries no code.
+        consumer.accept.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_connect_authenticated_user_accepted(self, consumer, mock_channel_layer):
@@ -107,8 +115,10 @@ class TestWorkspaceConsumer:
 
         await consumer.connect()
 
-        consumer.close.assert_called_once()
-        consumer.accept.assert_not_called()
+        consumer.close.assert_called_once_with(code=WS_CLOSE_POLICY_VIOLATION)
+        # Accepted first so the code above can reach the client at all: a close
+        # before the handshake completes is an HTTP 403 that carries no code.
+        consumer.accept.assert_awaited_once()
         mock_channel_layer.group_add.assert_not_called()
 
     @pytest.mark.asyncio
@@ -273,11 +283,20 @@ class TestBrokerOutageHandling:
         with patch.object(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(return_value=True)):
             await consumer.connect()
 
-        consumer.close.assert_called_once_with(code=1012)
-        consumer.accept.assert_not_called()
+        consumer.close.assert_called_once_with(code=WS_CLOSE_SERVICE_RESTART)
+        # Accepted first, deliberately: a close sent before the handshake
+        # completes is an HTTP 403 refusal that carries no code at all, so the
+        # code asserted above would never have reached the client.
+        consumer.accept.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_accept_failure_also_closes_orderly(self, consumer):
+    async def test_accept_failure_joins_no_group(self, consumer):
+        """A socket that never opened must not leave a membership behind.
+
+        With the accept moved ahead of the join this is structural rather than
+        cleaned up after the fact: there is nothing to discard because nothing
+        was ever joined.
+        """
         self._authenticated_scope(consumer)
         layer = MagicMock()
         layer.group_add = AsyncMock()
@@ -288,28 +307,23 @@ class TestBrokerOutageHandling:
         with patch.object(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(return_value=True)):
             await consumer.connect()
 
-        consumer.close.assert_called_once_with(code=1012)
-        # group_add succeeded before accept failed, and disconnect() never runs
-        # for a socket that was never accepted, so connect() has to hand the
-        # membership back itself or it lingers until the channel layer expires.
-        layer.group_discard.assert_awaited_once_with(consumer.group_name, consumer.channel_name)
+        layer.group_add.assert_not_awaited()
+        layer.group_discard.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_accept_failure_survives_a_failing_group_discard(self, consumer):
-        """The broker is usually the reason accept() failed, so the cleanup it
-        triggers will often fail too — that must not replace an orderly 1012
-        close with a traceback."""
+    async def test_accept_failure_does_not_raise(self, consumer):
+        """Whatever killed the accept is usually the broker, and an exception
+        escaping connect() is what uvicorn logs as "Exception in ASGI
+        application" — one stack per socket, which is the noise this whole
+        class exists to prevent."""
         self._authenticated_scope(consumer)
         layer = MagicMock()
         layer.group_add = AsyncMock()
-        layer.group_discard = AsyncMock(side_effect=ConnectionError("reset by peer"))
         consumer.channel_layer = layer
         consumer.accept = AsyncMock(side_effect=ConnectionError("reset by peer"))
 
         with patch.object(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(return_value=True)):
-            await consumer.connect()
-
-        consumer.close.assert_called_once_with(code=1012)
+            await consumer.connect()  # must not raise
 
     @pytest.mark.asyncio
     async def test_disconnect_swallows_a_dead_broker(self, consumer):
@@ -404,3 +418,64 @@ class TestBroadcastResilience:
         await consumer.workspace_message({"type": "workspace_message", "data": payload})
 
         consumer.send_json.assert_awaited_once_with(payload)
+
+
+@pytest.mark.django_db
+class TestWorkspaceMembershipCheck:
+    """The real membership check, not a mock.
+
+    Every other test in this file replaces ``_check_workspace_membership`` with
+    an AsyncMock, so the method that actually decides who may listen was never
+    exercised — which is how it went unnoticed that it admitted anyone holding a
+    Member row, guests included.
+    """
+
+    def _check(self, user, workspace_key):
+        # The undecorated function. Driving database_sync_to_async from a sync
+        # test closes the connection under the test transaction; the decision
+        # being tested is in the body, not the threading wrapper.
+        raw = WorkspaceConsumer.__dict__["_check_workspace_membership"].func
+        return raw(WorkspaceConsumer(), user, workspace_key)
+
+    def _user(self, django_user_model, name):
+        return django_user_model.objects.create_user(
+            username=name, email=f"{name}@test.com", password="password"
+        )
+
+    def test_a_guest_cannot_listen_to_internal_workspace_events(self, django_user_model):
+        """A guest is external. Holding a Member row is not permission to listen.
+
+        The row exists as an ACL anchor for the trust-center access-request and
+        NDA machinery; treating it as workspace membership handed an outside
+        visitor the internal event feed.
+        """
+        from sbomify.apps.teams.models import Member, Team
+
+        team = Team.objects.create(name="Socket Workspace")
+        guest = self._user(django_user_model, "socket-guest")
+        Member.objects.create(user=guest, team=team, role="guest")
+
+        assert self._check(guest, team.key) is False
+
+    def test_internal_roles_can_listen(self, django_user_model):
+        from sbomify.apps.teams.models import Member, Team
+
+        team = Team.objects.create(name="Socket Workspace Internal")
+        for role in ("owner", "admin", "member"):
+            user = self._user(django_user_model, f"socket-{role}")
+            Member.objects.create(user=user, team=team, role=role)
+            assert self._check(user, team.key) is True, f"{role} should be able to listen"
+
+    def test_a_non_member_cannot_listen(self, django_user_model):
+        from sbomify.apps.teams.models import Team
+
+        team = Team.objects.create(name="Socket Workspace Outsider")
+        outsider = self._user(django_user_model, "socket-outsider")
+
+        assert self._check(outsider, team.key) is False
+
+    def test_an_unknown_workspace_is_refused(self, django_user_model):
+        """No workspace, no listening — and no exception either."""
+        outsider = self._user(django_user_model, "socket-nowhere")
+
+        assert self._check(outsider, "does-not-exist") is False

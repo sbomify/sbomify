@@ -1,23 +1,28 @@
 """Single authorization decision point.
 
 ``can(actor, action, resource)`` is the one front door for authorization. It maps
-a named ``action`` to the capability the codebase already enforces, then
-**delegates** to the existing checks — ``verify_item_access`` (role-based) and
-``check_component_access`` (resource-attribute-based) — so its decision is
-identical to the scattered inline role checks it is meant to replace.
+a named ``action`` to a capability tier, then **delegates** to the enforcement
+primitives — ``verify_item_access`` (role-based) and ``check_component_access``
+(resource-attribute-based).
 
-Authorization is consolidated here with no behaviour change to role checks: the
-call sites use ``can``, and a ruff banned-api rule blocks new direct
-``verify_item_access`` imports outside the authz core, so role checks don't
-scatter again. ``can`` still delegates to ``verify_item_access`` /
-``check_component_access`` — it unifies the two, it doesn't replace them.
+Authorization is consolidated here: call sites use ``can``, and a ruff
+banned-api rule blocks new direct ``verify_item_access`` imports outside the
+authz core, so role checks don't scatter again. ``can`` still delegates to
+``verify_item_access`` / ``check_component_access`` — it unifies the two, it
+doesn't replace them.
 
 ``can`` also enforces API-token **action scopes** (#215): when the actor is a
 request authenticated by a scoped access token, the action must be in the
 token's scopes (a set of action strings) or the decision is denied *before* the
 role/ABAC check — scope can only narrow, never widen. An unscoped (``NULL``)
-token is full-capability (legacy default). Growing finer workspace roles (#468)
-is the remaining future work.
+token is full-capability (legacy default).
+
+Finer workspace roles (#468): admins were raised to near-owners — the only
+capability they lack is deleting the workspace. Deletion of domain resources,
+workspace settings, billing and member management all moved from owner-only to
+``ADMINISTER``. The remaining owner-exclusive rule, *an admin may not remove an
+owner*, is relational rather than a capability and therefore is NOT expressible
+here; it lives in the member-removal guards in ``teams.views``.
 
 Why a facade instead of a rewrite: every inline check passed a raw role list
 (``["owner", "admin"]``) to ``verify_item_access``. Naming the role sets as
@@ -35,47 +40,112 @@ from django.http import HttpRequest
 # Roles — mirror the keys of ``settings.TEAMS_SUPPORTED_ROLES``.
 ROLE_OWNER = "owner"
 ROLE_ADMIN = "admin"
+ROLE_MEMBER = "member"
 ROLE_GUEST = "guest"
 ROLE_BOT = "bot"
 
-# Capability tiers: the role sets the current checks grant. Each is exactly an
-# ``allowed_roles`` list used at today's call sites, so an action that maps to a
-# tier is behaviour-identical to the inline check it replaces.
-ADMINISTER: tuple[str, ...] = (ROLE_OWNER,)
-"""Owner-only: billing, member management, workspace settings/deletion."""
+# Capability tiers: the named role sets every action is granted to. These tuples
+# are the ONLY place roles are enumerated — call sites, view ``allowed_roles``
+# and template capability flags all derive from them, so widening a tier widens
+# every gate that uses it.
+#
+# Invariant: the human roles form a linear ladder, guest ⊂ member ⊂ admin ⊂ owner.
+# No role
+# may hold a capability a more-privileged role lacks. ``bot`` sits outside the
+# ladder — it is a synthetic OIDC publishing identity that can publish releases
+# without being able to read most internal data. ``test_role_ladder_is_upward_closed``
+# enforces the invariant; keeping it is what stops this degenerating into
+# per-role permission soup where "what can an admin do" needs a codebase search.
+OWNER_ONLY: tuple[str, ...] = (ROLE_OWNER,)
+"""Reserved to the workspace owner. Deliberately tiny: deleting the workspace is
+the only *capability* an admin lacks. The other owner-exclusive rule — an admin
+may not remove an owner — is relational (it depends on the target member's role,
+not just the actor's), so it cannot be expressed as a tier and lives in the
+member-removal guards instead."""
 
-MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
-"""Create/update products, components, releases, and artifact metadata (admins
-included). Destructive *deletion* of a domain resource is the separate, stricter
-``DELETE`` tier (#468)."""
+ADMINISTER: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
+"""Workspace governance: settings, custom domain, trust-center config, branding,
+billing, member management, integrations, and visibility changes. Admins are
+near-owners; see ``OWNER_ONLY`` for the two things they can't do."""
 
-DELETE: tuple[str, ...] = (ROLE_OWNER,)
-"""Owner-only deletion of a domain resource (product / component / release /
-SBOM / document). Carved out of ``MANAGE`` so admins can create and edit but not
-destroy (#468)."""
+MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
+"""Create/update products, components, releases, and artifact metadata — the
+day-to-day work. Deliberately excludes *making things public*: changing a
+product's or component's visibility is ``ADMINISTER``, because publishing to the
+trust center is an outward-facing decision, not routine maintenance."""
 
-PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT, ROLE_GUEST)
-"""Upload artifacts — granted to OIDC/CI ``bot`` identities and, per #468, to
-guests (so a low-trust member can contribute artifacts without management
-rights)."""
+DELETE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
+"""Deletion of a domain resource (product / component / release / SBOM /
+document). Kept as a tier distinct from ``MANAGE`` — deletion policy has moved
+twice already, and a named tier makes moving it again a one-line change."""
 
-RELEASE_PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
-"""Cut and tag a release — the release half of the CI publish workflow. Granted
-to OIDC/CI ``bot`` identities (the action creates a release and tags its uploaded
-artifacts to it) alongside owners and admins. Guests are excluded: they may
-contribute artifacts (``PUBLISH``) but not cut releases. Renaming or deleting a
-release stays the stricter ``MANAGE`` / ``DELETE`` tiers."""
+PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_BOT)
+"""Upload artifacts and cut/tag releases — the CI publish workflow, granted to
+OIDC/CI ``bot`` identities alongside owners and admins.
 
-# Order mirrors the predominant call-site literal ``["guest", "owner", "admin"]``
-# (membership is order-independent, but the parity keeps the claim above honest).
-READ_MEMBER: tuple[str, ...] = (ROLE_GUEST, ROLE_OWNER, ROLE_ADMIN)
-"""Any workspace member may read internal (non-public) workspace data."""
+Guests were briefly in this tier (#468) so a low-trust member could contribute
+artifacts. That grant is withdrawn: ``guest`` is an *external* trust-center role
+and holds no capability at all. The former ``RELEASE_PUBLISH`` tier existed only
+to keep guests out of release-cutting while leaving them artifact upload; with
+guests holding nothing, it was identical to this tier and has been removed."""
 
-READ_MEMBER_OR_BOT: tuple[str, ...] = (ROLE_GUEST, ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
-"""``READ_MEMBER`` plus the CI/OIDC ``bot``: reading releases is part of the
+# ``READ_INTERNAL``/``READ_INTERNAL_OR_BOT`` were ``READ_MEMBER``/``READ_MEMBER_OR_BOT``.
+# Renamed because the tier means "internal roles only, guests excluded", which
+# "READ_MEMBER" no longer conveys once guests are external — and would be
+# actively misleading next to a role literally named ``member`` (#468).
+READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
+"""Read internal (non-public) workspace data. Internal roles only — a guest is
+an external trust-center visitor and must not be able to enumerate a workspace's
+private inventory. Guests reach restricted content solely through the
+attribute-based ``component:access`` path (visibility + NDA + approved request),
+which this tier does not govern."""
+
+READ_INTERNAL_OR_BOT: tuple[str, ...] = READ_INTERNAL + (ROLE_BOT,)
+"""``READ_INTERNAL`` plus the CI/OIDC ``bot``: reading releases is part of the
 publish workflow (the action checks whether a release already exists before
 creating it), so a bot must reach release reads that other internal reads still
 deny it."""
+
+
+# Human-facing explanation of each role, ordered most- to least-privileged.
+# Deliberately kept beside the capability table above: the workspace members page
+# is the only place a user ever learns what a role means, so a tier change and
+# its explanation have to move together or the UI quietly starts lying.
+# ``bot`` is omitted — it is a synthetic OIDC publishing identity, never assigned
+# by a human and never shown in role pickers.
+ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
+    (
+        ROLE_OWNER,
+        "Owner",
+        "Full control of the workspace. Everything an admin can do, plus deleting "
+        "the workspace and removing other owners.",
+    ),
+    (
+        ROLE_ADMIN,
+        "Admin",
+        "Runs the workspace day to day: create, edit and delete products, "
+        "components and releases; upload artifacts; manage workspace settings, "
+        "the Trust Center, integrations, members and billing. Cannot remove an "
+        "owner or delete the workspace.",
+    ),
+    (
+        ROLE_MEMBER,
+        "Member",
+        "Day-to-day work: create and edit products, components and releases, "
+        "upload SBOMs and documents, and triage vulnerabilities. Cannot delete "
+        "anything, change what is public, or reach workspace settings, billing "
+        "or members.",
+    ),
+    (
+        ROLE_GUEST,
+        "Guest",
+        "External access, granted through the Trust Center rather than invited "
+        "directly. Sees your public pages, plus everything on the gated "
+        "components they have been approved for and signed the NDA for — "
+        "documents, SBOMs and vulnerability information alike. Cannot see "
+        "anything else in the workspace.",
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -92,14 +162,26 @@ class Decision:
 # action ("<resource>:<verb>") -> the role tuple it requires. These mirror the
 # allowed_roles lists at today's call sites exactly.
 _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
-    # owner-only administration
+    # owner-only
+    "workspace:delete": OWNER_ONLY,
+    # owner + admin governance
     "workspace:administer": ADMINISTER,
-    "workspace:delete": ADMINISTER,
     "billing:manage": ADMINISTER,
     "member:manage": ADMINISTER,
     "component:administer": ADMINISTER,
+    # Publishing to the trust center is an outward-facing decision, so it is
+    # carved out of MANAGE the way DELETE is: a member maintains a component but
+    # does not decide the world can see it.
+    "product:set_visibility": ADMINISTER,
+    "component:set_visibility": ADMINISTER,
+    # An OIDC trusted-publisher binding is a standing, non-expiring publish grant
+    # to an external repo — unlike a PAT, which is scoped, expiring and tied to
+    # one person. Carved out of component:manage for the same reason.
+    "component:manage_publishers": ADMINISTER,
     # owner + admin management (the dominant capability)
-    "workspace:manage": MANAGE,
+    # Workspace configuration — contact profiles, suppliers. NOT "create a
+    # thing in this workspace": that is product:create / component:create.
+    "workspace:manage": ADMINISTER,
     "product:create": MANAGE,
     "product:manage": MANAGE,
     "component:create": MANAGE,
@@ -108,28 +190,27 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "sbom:manage": MANAGE,
     "document:manage": MANAGE,
     # release publishing — the CI/OIDC bot's job (create a release, tag artifacts
-    # to it). Owners and admins keep it; bots gain it; guests stay out.
-    "release:create": RELEASE_PUBLISH,
-    "release:tag": RELEASE_PUBLISH,
-    # owner-only deletion of domain resources (#468) — stricter than MANAGE
+    # to it), alongside owners and admins.
+    "release:create": PUBLISH,
+    "release:tag": PUBLISH,
+    # deletion of domain resources — owner + admin
     "product:delete": DELETE,
     "component:delete": DELETE,
     "release:delete": DELETE,
     "sbom:delete": DELETE,
     "document:delete": DELETE,
-    # artifact upload — allows OIDC/CI bot identities and guests (#468)
+    # artifact upload — owners, admins and OIDC/CI bot identities
     "artifact:publish": PUBLISH,
     # VEX publishing rewrites the workspace's stored vulnerability posture (the
-    # re-annotated scan summaries feed every dashboard), so guests are excluded;
-    # owners, admins and the CI/OIDC bot keep it.
-    "artifact:publish_vex": RELEASE_PUBLISH,
-    # any-member read of internal (non-public) workspace data
-    "workspace:read": READ_MEMBER,
-    "component:read_internal": READ_MEMBER,
-    "product:read": READ_MEMBER,
-    "release:read": READ_MEMBER_OR_BOT,
-    "document:read": READ_MEMBER,
-    "sbom:read": READ_MEMBER,
+    # re-annotated scan summaries feed every dashboard).
+    "artifact:publish_vex": PUBLISH,
+    # internal reads — guests are external and hold none of these
+    "workspace:read": READ_INTERNAL,
+    "component:read_internal": READ_INTERNAL,
+    "product:read": READ_INTERNAL,
+    "release:read": READ_INTERNAL_OR_BOT,
+    "document:read": READ_INTERNAL,
+    "sbom:read": READ_INTERNAL,
 }
 
 # Actions authorized by resource attributes (visibility / NDA / access request)

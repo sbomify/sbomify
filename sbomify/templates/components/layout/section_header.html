@@ -1,0 +1,32 @@
+{% comment %}
+A chip, a title and one optional line under it, introducing a block inside a
+card. The block itself goes in c-layout.section-body, which indents it to the
+title's left edge.
+
+level renders the title as h2 or h3 so a page keeps one heading outline; the
+two branches differ only in the element and must stay in lockstep. accent is
+the chip's, and reaches c-chips.icon-chip untouched. The slot sits under the
+subtitle, for the rare header that carries a badge or a note of its own.
+
+The named actions slot holds the control the section is headed by, on the
+right: "Add entity" over a list of entities. The title block only takes the
+free space when there is something to push against, so a header with no actions
+still sizes itself to its text and wraps where it always did.
+{% endcomment %}
+<c-vars title subtitle icon accent level class />
+<div class="flex items-start gap-3 mb-4{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    {% if icon %}
+        <c-chips.icon-chip size="sm" accent="{{ accent }}" aria-hidden="true"><i class="{{ icon }}"></i></c-chips.icon-chip>
+    {% endif %}
+    <div {% if actions %}class="flex-1"{% endif %}>
+        {% if level == "2" %}
+            <h2 class="text-base font-semibold text-text m-0">{{ title }}</h2>
+        {% else %}
+            <h3 class="text-base font-semibold text-text m-0">{{ title }}</h3>
+        {% endif %}
+        {% if subtitle %}<p class="text-sm leading-[1.5] text-text-muted mt-0.5">{{ subtitle }}</p>{% endif %}
+        {{ slot }}
+    </div>
+    {% if actions %}{{ actions }}{% endif %}
+</div>
