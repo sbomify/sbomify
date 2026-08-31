@@ -359,3 +359,30 @@ class TestHasComplianceFailures:
             ]
         }
         assert has_compliance_failures(data) is False
+
+
+class TestVulnerabilityTotal:
+    """The count the card shows is the by_severity sum and nothing else."""
+
+    def test_sums_the_severity_map(self):
+        from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_total
+
+        assert vulnerability_total({"by_severity": {"critical": 2, "high": 1, "low": 0}}) == 3
+
+    def test_non_dict_shapes_count_zero(self):
+        from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_total
+
+        assert vulnerability_total(None) == 0
+        assert vulnerability_total("summary") == 0
+        assert vulnerability_total({"by_severity": "high"}) == 0
+        assert vulnerability_total({"by_severity": None}) == 0
+
+    def test_non_integer_values_do_not_count(self):
+        from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_total
+
+        assert vulnerability_total({"by_severity": {"critical": "2", "high": 1.5, "low": None}}) == 0
+
+    def test_a_stray_boolean_is_not_a_vulnerability(self):
+        from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_total
+
+        assert vulnerability_total({"by_severity": {"critical": True, "high": 2}}) == 2
