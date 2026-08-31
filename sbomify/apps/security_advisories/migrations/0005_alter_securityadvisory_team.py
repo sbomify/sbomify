@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("security_advisories", "0002_securityadvisory_remediation_status"),
+        ("security_advisories", "0004_advisorycomponent_and_more"),
         (
             "teams",
             "0042_rename_teams_invit_email_d19291_idx_workspaces__email_77ed9e_idx_and_more",
