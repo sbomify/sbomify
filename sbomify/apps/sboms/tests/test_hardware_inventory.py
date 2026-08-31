@@ -465,4 +465,4 @@ class TestNvdCpeLink:
     )
     def test_a_name_with_nothing_to_search_for_yields_no_link(self, cpe: str) -> None:
         """A link that lands on "no results" is worse than no link."""
-        assert nvd_cpe_url(cpe) == ""
+        assert nvd_cpe_url(cpe) is None

@@ -5,219 +5,210 @@ stored artifact, with the cdx:device property detail (identifiers, certification
 datasheet, linked firmware) in a per-row drill-down.
 {% endcomment %}
 {{ part_terms|json_script:"hi-terms" }}
-<section id="hardware-inventory-card"
-         class="tw-card"
-         x-data="{ search: '', currentPage: 1, perPage: 10, terms: (window.parseJsonScript('hi-terms') || []), get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => !q || this.terms[i].includes(q)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); } }"
-         x-init="$watch('search', () => { currentPage = 1 })">
-    <div class="px-6 py-4 border-b border-border">
-        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-            <i class="fas fa-microchip text-primary" aria-hidden="true"></i>
-            Hardware Components
-            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted">{{ hardware_inventory.count }}</span>
-        </h4>
-    </div>
-    <div class="p-6 space-y-6">
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div class="px-4 py-3 rounded-lg bg-border/30 text-center">
-                <div class="text-2xl font-bold text-text">{{ hardware_inventory.count }}</div>
-                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Parts</div>
-            </div>
-            {% for part_type, n in hardware_inventory.by_type.items %}
-                <div class="px-4 py-3 rounded-lg bg-info/10 border border-info/20 text-center">
-                    <div class="text-2xl font-bold text-info">{{ n }}</div>
-                    <div class="text-xs text-info uppercase tracking-wide mt-1">{{ part_type }}</div>
-                </div>
-            {% endfor %}
-        </div>
-        <div>
-            <div class="pb-4 flex flex-wrap items-center gap-3">
-                <div class="tw-data-table-search max-w-xs">
-                    <i class="fas fa-search tw-data-table-search-icon" aria-hidden="true"></i>
-                    <label for="hi-search" class="sr-only">Search hardware components</label>
-                    <input type="search"
-                           id="hi-search"
-                           x-model="search"
-                           placeholder="Search parts..."
-                           class="tw-data-table-search-input" />
-                </div>
-            </div>
-            <div class="overflow-x-auto" x-cloak>
-                <table class="tw-table w-full text-sm">
-                    <thead>
-                        <tr>
-                            <th class="py-2 pr-4 font-medium"></th>
-                            <th class="py-2 pr-4 font-medium">Part</th>
-                            <th class="py-2 pr-4 font-medium">Manufacturer</th>
-                            <th class="py-2 pr-4 font-medium">Revision</th>
-                            <th class="py-2 pr-4 font-medium">Type</th>
-                            <th class="py-2 pr-4 font-medium">Qty</th>
-                            <th class="py-2 pr-4 font-medium">Function</th>
-                            <th class="py-2 pr-4 font-medium">Location</th>
-                        </tr>
-                    </thead>
-                    {% for part in hardware_inventory.parts %}
-                        <tbody x-data="{ open: false }" x-show="pageSet.has({{ forloop.counter0 }})">
-                            {# The row stays pointer-clickable; the button is the keyboard path. #}
-                            <tr class="cursor-pointer" @click="open = !open">
-                                <td class="py-2 pr-2 text-text-muted w-6">
-                                    <button type="button"
-                                            class="inline-flex items-center"
-                                            :aria-expanded="open"
-                                            aria-label="Show part details"
-                                            @click.stop="open = !open">
-                                        <i class="fas fa-chevron-right text-xs transition-transform"
-                                           :class="open ? 'rotate-90' : ''"
-                                           aria-hidden="true"></i>
-                                    </button>
-                                </td>
-                                <td class="py-2 pr-4 font-medium text-text">{{ part.name|default:"-" }}</td>
-                                <td class="py-2 pr-4 text-text-muted">
-                                    {% if part.manufacturer %}
-                                        {{ part.manufacturer }}
-                                        {% if part.manufacturer_source != "manufacturer" %}
-                                            <span class="text-xs"
-                                                  title="The document names no manufacturer; this is the {{ part.manufacturer_source }}">({{ part.manufacturer_source }})</span>
-                                        {% endif %}
-                                    {% else %}
-                                        -
+<c-cards.card flush id="hardware-inventory-card" x-data="{ search: '', currentPage: 1, perPage: 10, terms: (window.parseJsonScript('hi-terms') || []), get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => !q || this.terms[i].includes(q)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); } }" x-init="$watch('search', () => { currentPage = 1 })">
+<c-cards.header>
+<h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+    <i class="fas fa-microchip text-primary" aria-hidden="true"></i>
+    Hardware Components
+    <c-badges.secondary>{{ hardware_inventory.count }}</c-badges.secondary>
+</h4>
+</c-cards.header>
+<c-cards.body class="pb-0">
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+    <c-layout.stat-card compact>
+    <c-layout.stat.value>{{ hardware_inventory.count }}</c-layout.stat.value>
+    <c-layout.stat.label>Parts</c-layout.stat.label>
+    </c-layout.stat-card>
+    {% for part_type, n in hardware_inventory.by_type.items %}
+        <c-layout.stat-card compact accent="info">
+        <c-layout.stat.value>{{ n }}</c-layout.stat.value>
+        <c-layout.stat.label>{{ part_type }}</c-layout.stat.label>
+        </c-layout.stat-card>
+    {% endfor %}
+</div>
+</c-cards.body>
+<c-tables.shell nested>
+<c-tables.toolbar>
+<c-tables.search id="hi-search" label="Search hardware components" placeholder="Search parts..." class="max-w-xs" x-model="search" />
+</c-tables.toolbar>
+<c-tables.table x-cloak>
+<c-tables.head>
+<c-tables.header-cell><span class="sr-only">Details</span></c-tables.header-cell>
+<c-tables.header-cell>Part</c-tables.header-cell>
+<c-tables.header-cell>Manufacturer</c-tables.header-cell>
+<c-tables.header-cell>Revision</c-tables.header-cell>
+<c-tables.header-cell>Type</c-tables.header-cell>
+<c-tables.header-cell>Qty</c-tables.header-cell>
+<c-tables.header-cell>Function</c-tables.header-cell>
+<c-tables.header-cell>Location</c-tables.header-cell>
+</c-tables.head>
+{% for part in hardware_inventory.parts %}
+    <tbody x-data="{ open: false }" x-show="pageSet.has({{ forloop.counter0 }})">
+        {# The row stays pointer-clickable; the button is the keyboard path. #}
+        <c-tables.row class="cursor-pointer" @click="open = !open">
+        <c-tables.cell class="w-6">
+        <button type="button"
+                class="inline-flex items-center text-text-muted"
+                :aria-expanded="open"
+                aria-label="Show part details"
+                @click.stop="open = !open">
+            <i class="fas fa-chevron-right text-xs transition-transform"
+               :class="open ? 'rotate-90' : ''"
+               aria-hidden="true"></i>
+        </button>
+        </c-tables.cell>
+        <c-tables.cell>
+        <span class="font-medium text-text">{{ part.name|default:"-" }}</span>
+        </c-tables.cell>
+        <c-tables.cell muted>
+        {% if part.manufacturer %}
+            {{ part.manufacturer }}
+            {% if part.manufacturer_source != "manufacturer" %}
+                <span class="text-xs"
+                      title="The document names no manufacturer; this is the {{ part.manufacturer_source }}">({{ part.manufacturer_source }})</span>
+            {% endif %}
+        {% else %}
+            -
+        {% endif %}
+        </c-tables.cell>
+        <c-tables.cell muted>{{ part.revision|default:"-" }}</c-tables.cell>
+        <c-tables.cell>
+        <c-badges.secondary>{{ part.type|default:"unknown" }}</c-badges.secondary>
+        </c-tables.cell>
+        <c-tables.cell muted>{{ part.quantity|default:"-" }}</c-tables.cell>
+        <c-tables.cell muted>{{ part.function|default:"-" }}</c-tables.cell>
+        <c-tables.cell muted>{{ part.location|default:"-" }}</c-tables.cell>
+        </c-tables.row>
+        <tr x-show="open" x-cloak>
+            <td></td>
+            <td colspan="7" class="pb-4 pr-4">
+                <div class="rounded-lg bg-border/20 px-4 py-3 space-y-2 text-sm">
+                    <dl class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 m-0 text-text-muted">
+                        {% if part.device_type %}
+                            <div>
+                                <dt class="inline font-medium">Device type:</dt>
+                                <dd class="inline ml-1">
+                                    {{ part.device_type }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% if part.sku %}
+                            <div>
+                                <dt class="inline font-medium">SKU:</dt>
+                                <dd class="inline ml-1">
+                                    {{ part.sku }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% if part.serial_number %}
+                            <div>
+                                <dt class="inline font-medium">Serial:</dt>
+                                <dd class="inline ml-1">
+                                    {{ part.serial_number }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% if part.lot_number %}
+                            <div>
+                                <dt class="inline font-medium">Lot:</dt>
+                                <dd class="inline ml-1">
+                                    {{ part.lot_number }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% if part.prod_timestamp %}
+                            <div>
+                                <dt class="inline font-medium">Date code:</dt>
+                                <dd class="inline ml-1">
+                                    {{ part.prod_timestamp }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% if part.mac_address %}
+                            <div>
+                                <dt class="inline font-medium">MAC:</dt>
+                                <dd class="inline ml-1">
+                                    <code>{{ part.mac_address }}</code>
+                                </dd>
+                            </div>
+                        {% endif %}
+                        {% for kind, value in part.gs1.items %}
+                            <div>
+                                <dt class="inline font-medium">{{ kind|upper }}:</dt>
+                                <dd class="inline ml-1">
+                                    <code>{{ value }}</code>
+                                </dd>
+                            </div>
+                        {% endfor %}
+                        {% if part.firmware %}
+                            <div>
+                                <dt class="inline font-medium">Firmware:</dt>
+                                <dd class="inline ml-1">
+                                    {{ part.firmware|join:", " }}
+                                </dd>
+                            </div>
+                        {% endif %}
+                    </dl>
+                    {% if part.certifications %}
+                        <div class="text-text-muted">
+                            <span class="font-medium">Certifications:</span>
+                            {% for cert in part.certifications %}
+                                <span class="ml-1">
+                                    {{ cert.country }} {{ cert.authority }}
+                                    {% if cert.identifier %}<code>{{ cert.identifier }}</code>{% endif %}
+                                    {% if cert.url %}
+                                        <a href="{{ cert.url }}"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="text-primary hover:underline">certificate</a>
                                     {% endif %}
-                                </td>
-                                <td class="py-2 pr-4 text-text-muted">{{ part.revision|default:"-" }}</td>
-                                <td class="py-2 pr-4">
-                                    <span class="tw-badge tw-badge-secondary">{{ part.type|default:"unknown" }}</span>
-                                </td>
-                                <td class="py-2 pr-4 text-text-muted">{{ part.quantity|default:"-" }}</td>
-                                <td class="py-2 pr-4 text-text-muted">{{ part.function|default:"-" }}</td>
-                                <td class="py-2 pr-4 text-text-muted">{{ part.location|default:"-" }}</td>
-                            </tr>
-                            <tr x-show="open" x-cloak>
-                                <td></td>
-                                <td colspan="7" class="pb-4 pr-4">
-                                    <div class="rounded-lg bg-border/20 px-4 py-3 space-y-2 text-sm">
-                                        <dl class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 m-0 text-text-muted">
-                                            {% if part.device_type %}
-                                                <div>
-                                                    <dt class="inline font-medium">Device type:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ part.device_type }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if part.sku %}
-                                                <div>
-                                                    <dt class="inline font-medium">SKU:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ part.sku }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if part.serial_number %}
-                                                <div>
-                                                    <dt class="inline font-medium">Serial:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ part.serial_number }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if part.lot_number %}
-                                                <div>
-                                                    <dt class="inline font-medium">Lot:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ part.lot_number }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if part.prod_timestamp %}
-                                                <div>
-                                                    <dt class="inline font-medium">Date code:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ part.prod_timestamp }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% if part.mac_address %}
-                                                <div>
-                                                    <dt class="inline font-medium">MAC:</dt>
-                                                    <dd class="inline ml-1">
-                                                        <code>{{ part.mac_address }}</code>
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                            {% for kind, value in part.gs1.items %}
-                                                <div>
-                                                    <dt class="inline font-medium">{{ kind|upper }}:</dt>
-                                                    <dd class="inline ml-1">
-                                                        <code>{{ value }}</code>
-                                                    </dd>
-                                                </div>
-                                            {% endfor %}
-                                            {% if part.firmware %}
-                                                <div>
-                                                    <dt class="inline font-medium">Firmware:</dt>
-                                                    <dd class="inline ml-1">
-                                                        {{ part.firmware|join:", " }}
-                                                    </dd>
-                                                </div>
-                                            {% endif %}
-                                        </dl>
-                                        {% if part.certifications %}
-                                            <div class="text-text-muted">
-                                                <span class="font-medium">Certifications:</span>
-                                                {% for cert in part.certifications %}
-                                                    <span class="ml-1">
-                                                        {{ cert.country }} {{ cert.authority }}
-                                                        {% if cert.identifier %}<code>{{ cert.identifier }}</code>{% endif %}
-                                                        {% if cert.url %}
-                                                            <a href="{{ cert.url }}"
-                                                               target="_blank"
-                                                               rel="noopener noreferrer"
-                                                               class="text-primary hover:underline">certificate</a>
-                                                        {% endif %}
-                                                    </span>
-                                                    {% if not forloop.last %}·{% endif %}
-                                                {% endfor %}
-                                            </div>
-                                        {% endif %}
-                                        {% if part.datasheets %}
-                                            <div class="text-text-muted">
-                                                <span class="font-medium">Datasheet:</span>
-                                                {% for url in part.datasheets %}
-                                                    <a href="{{ url }}"
-                                                       target="_blank"
-                                                       rel="noopener noreferrer"
-                                                       class="text-primary hover:underline ml-1 break-all">{{ url }}</a>
-                                                {% endfor %}
-                                            </div>
-                                        {% endif %}
-                                        {% if part.cpe %}
-                                            <div class="text-text-muted">
-                                                <span class="font-medium">CPE:</span> <code>{{ part.cpe }}</code>
-                                                <a href="{{ part.cpe_nvd_url }}"
-                                                   target="_blank"
-                                                   rel="noopener noreferrer"
-                                                   class="text-primary hover:underline ml-1">
-                                                    Look this CPE up in NVD
-                                                    <i class="fas fa-arrow-up-right-from-square text-xs" aria-hidden="true"></i>
-                                                </a>
-                                                <p class="m-0 mt-1 text-xs">
-                                                    A manual lookup. Hardware CPEs carry no version and the advisory feeds
-                                                    almost never use them, so sbomify does not match hardware to CVEs.
-                                                </p>
-                                            </div>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    {% endfor %}
-                </table>
-            </div>
-            <div class="pt-4 flex flex-wrap items-center justify-between gap-3">
-                <span class="text-sm text-text-muted">
-                    Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
-                </span>
-                {% include "components/tw/table_pager.html.j2" %}
-            </div>
-        </div>
-    </div>
-</section>
+                                </span>
+                                {% if not forloop.last %}·{% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if part.datasheets %}
+                        <div class="text-text-muted">
+                            <span class="font-medium">Datasheet:</span>
+                            {% for url in part.datasheets %}
+                                <a href="{{ url }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="text-primary hover:underline ml-1 break-all">{{ url }}</a>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if part.cpe %}
+                        <div class="text-text-muted">
+                            <span class="font-medium">CPE:</span> <code>{{ part.cpe }}</code>
+                            {% if part.cpe_nvd_url %}
+                                <a href="{{ part.cpe_nvd_url }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="text-primary hover:underline ml-1">
+                                    Look this CPE up in NVD
+                                    <i class="fas fa-arrow-up-right-from-square text-xs" aria-hidden="true"></i>
+                                </a>
+                            {% endif %}
+                            <p class="m-0 mt-1 text-xs">
+                                A manual lookup. Hardware CPEs carry no version and the advisory feeds
+                                almost never use them, so sbomify does not match hardware to CVEs.
+                            </p>
+                        </div>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+    </tbody>
+{% endfor %}
+</c-tables.table>
+<c-tables.footer>
+<c-tables.info>
+Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+</c-tables.info>
+<div x-show="totalPages > 1">
+    <c-tables.pager />
+</div>
+</c-tables.footer>
+</c-tables.shell>
+</c-cards.card>

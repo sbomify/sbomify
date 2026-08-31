@@ -231,7 +231,7 @@ def _cpe_fields(cpe: str) -> list[str]:
     return fields
 
 
-def nvd_cpe_url(cpe: str) -> str:
+def nvd_cpe_url(cpe: str) -> str | None:
     """NVD product search for a hardware CPE — an operator lookup, not a scan.
 
     Hardware CPEs are unversioned and the advisory feeds carry almost no
@@ -245,18 +245,19 @@ def nvd_cpe_url(cpe: str) -> str:
     not match a CPE string: searching the dictionary for the full 2.3 name of a
     real Intel part returns nothing, while its vendor and product as separate
     terms return hundreds of entries. So the vendor and product are what get
-    sent, and an empty string comes back when the name yields neither, since a
-    link that lands on "no results" is worse than no link.
+    sent, and None comes back when the name yields neither, since a link that
+    lands on "no results" is worse than no link, and the template renders a
+    link only when there is one.
     """
     if not cpe.startswith("cpe:2.3:"):
-        return ""
+        return None
     fields = _cpe_fields(cpe)
     # cpe:2.3:part:vendor:product:... — indices 3 and 4.
     if len(fields) < 5:
-        return ""
+        return None
     terms = [f.replace("\\", "") for f in fields[3:5] if f and f not in ("*", "-")]
     if not terms:
-        return ""
+        return None
     return f"{_NVD_CPE_SEARCH_URL}?{urlencode({'namingFormat': '2.3', 'keyword': ' '.join(terms)})}"
 
 
