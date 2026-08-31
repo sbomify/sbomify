@@ -1042,7 +1042,8 @@ class SBOM(models.Model):
         null=True,
         default=None,
         help_text=(
-            "Whether the document contains device components, computed at upload. "
+            "Whether the document names a device component, in components[] or as the "
+            "metadata component, computed at upload. "
             "None means unknown (rows predating the field); hardware-gated work runs for "
             "True and None, and skips dispatch for False — except for a document "
             "explicitly tagged bom_type=hbom, which dispatches whatever this says, so a "

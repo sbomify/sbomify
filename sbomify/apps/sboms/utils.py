@@ -2261,7 +2261,12 @@ def _is_cbom(sbom_data: dict[str, Any]) -> bool:
 # device-driver, firmware and platform ride along in a hardware document (cdxgen
 # emits all three beside the devices it enumerates), but none of them is hardware
 # on its own: each describes software that runs on or talks to a device.
-_HARDWARE_TYPES = frozenset({"device", "device-driver", "firmware", "platform"})
+# What an HBOM is allowed to contain, not what counts as hardware. Only
+# "device" is a physical part; device-driver, firmware and platform are
+# software that ships on one, and a hardware BOM lists them alongside the
+# board. _contains_hardware_components is the narrower question and keys on
+# "device" alone.
+_HBOM_COMPONENT_TYPES = frozenset({"device", "device-driver", "firmware", "platform"})
 
 
 def _component_type(component: Any) -> str:
@@ -2315,7 +2320,9 @@ def _is_hbom(sbom_data: dict[str, Any]) -> bool:
     components = sbom_data.get("components")
     if not isinstance(components, list):
         return False
-    return any(_is_device(c) for c in components) and all(_component_type(c) in _HARDWARE_TYPES for c in components)
+    return any(_is_device(c) for c in components) and all(
+        _component_type(c) in _HBOM_COMPONENT_TYPES for c in components
+    )
 
 
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:

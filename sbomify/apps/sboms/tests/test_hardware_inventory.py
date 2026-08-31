@@ -34,7 +34,8 @@ def test_derives_the_pcie_sata_example():
     inventory = derive_hardware_inventory(_load("hbom_pcie_sata_adapter.cdx.json"))
 
     # Six board parts. The adaptor board itself is metadata.component — the
-    # subject of the document, not a line on its own bill of materials.
+    # subject of the document rather than a line on its own bill of materials —
+    # so it joins the parts only on a display read (include_root, below).
     assert inventory.count == 6
     assert inventory.by_type == {"device": 6}
     assert "pcie-sata-adaptor-board" not in {p.name for p in inventory.parts}
@@ -205,17 +206,116 @@ def test_ignores_software_components():
     assert [p.name for p in inventory.parts] == ["board"]
 
 
-def test_cpe_becomes_an_nvd_lookup_url():
-    url = nvd_cpe_url("cpe:2.3:h:intel:core_i7:-:*:*:*:*:*:*:*")
-    assert url.startswith("https://nvd.nist.gov/vuln/search/results?")
-    assert "isCpeNameSearch=true" in url
-    assert "query=cpe%3A2.3%3Ah%3Aintel%3Acore_i7" in url  # the CPE is URL-encoded, not interpolated raw
+class TestTheDeviceTheDocumentDescribes:
+    """``metadata.component`` is the assembled board, and a display read lists it.
+
+    The stamp that makes a page select an artifact counts a device found there,
+    and the release-level merge lifts the same component into its inventory, so
+    leaving it out rendered "no parts" for a document that demonstrably holds
+    hardware — and showed a board as a part of the release but not of the
+    artifact the release pinned. Assessment keeps the default: the HBOM plugin
+    scores the assembly through its own final-goods-assembly checks.
+    """
+
+    def _rooted(self, root: Any, *components: dict[str, Any]) -> dict[str, Any]:
+        return _document(*components, metadata={"component": root})
+
+    def test_a_device_named_only_in_metadata_is_a_part(self):
+        document = self._rooted({"type": "device", "bom-ref": "board-1", "name": "adaptor board"})
+
+        assert derive_hardware_inventory(document, include_root=True).count == 1
+        assert derive_hardware_inventory(document).count == 0  # assessment path, unchanged
+
+    def test_the_root_is_projected_like_any_other_part(self):
+        document = self._rooted(
+            {
+                "type": "device",
+                "name": "adaptor board",
+                "version": "rev-1",
+                "manufacturer": {"name": "Maker"},
+                "properties": [{"name": "cdx:device:location", "value": "chassis"}],
+            }
+        )
+
+        part = derive_hardware_inventory(document, include_root=True).parts[0]
+        assert (part.name, part.revision, part.manufacturer, part.location) == (
+            "adaptor board",
+            "rev-1",
+            "Maker",
+            "chassis",
+        )
+
+    def test_the_root_comes_last_and_the_parts_keep_document_order(self):
+        document = self._rooted(
+            {"type": "device", "bom-ref": "board", "name": "board"},
+            {"type": "device", "bom-ref": "p1", "name": "p1"},
+            {"type": "device", "bom-ref": "p2", "name": "p2"},
+        )
+
+        inventory = derive_hardware_inventory(document, include_root=True)
+        assert [p.bom_ref for p in inventory.parts] == ["p1", "p2", "board"]
+
+    def test_a_platform_root_is_lifted_too(self):
+        """The merge lifts any hardware root, not only a ``device``."""
+        document = self._rooted({"type": "platform", "bom-ref": "rack", "name": "rack"})
+
+        assert [p.type for p in derive_hardware_inventory(document, include_root=True).parts] == ["platform"]
+
+    def test_a_software_root_is_never_lifted(self):
+        document = self._rooted(
+            {"type": "application", "bom-ref": "app", "name": "app"},
+            {"type": "device", "bom-ref": "p1", "name": "p1"},
+        )
+
+        assert [p.bom_ref for p in derive_hardware_inventory(document, include_root=True).parts] == ["p1"]
+
+    def test_a_root_repeated_in_components_yields_one_part(self):
+        """Generators emit the board in both places; the merge collapses it, so this does too."""
+        board = {"type": "device", "bom-ref": "board", "name": "board"}
+        document = self._rooted(board, board, {"type": "device", "bom-ref": "p1", "name": "p1"})
+
+        assert [p.bom_ref for p in derive_hardware_inventory(document, include_root=True).parts] == ["board", "p1"]
+
+    def test_the_root_picks_up_its_firmware_edge(self):
+        document = _document(
+            {"type": "firmware", "bom-ref": "fw", "name": "bootloader", "version": "2.1"},
+            metadata={"component": {"type": "device", "bom-ref": "board", "name": "board"}},
+            dependencies=[{"ref": "board", "dependsOn": ["fw"]}],
+        )
+
+        inventory = derive_hardware_inventory(document, include_root=True)
+        assert _by_name(inventory, "board").firmware == ("bootloader 2.1",)
+
+    @pytest.mark.parametrize(
+        "document",
+        [
+            {},
+            {"metadata": "not-a-dict"},
+            {"metadata": {}},
+            {"metadata": {"component": "not-a-dict"}},
+            {"metadata": {"component": None}},
+            {"metadata": {"component": {"type": None}}},
+            {"components": "not-a-list", "metadata": {"component": {"type": "device", "name": "board"}}},
+            {"metadata": {"component": {"type": "device", "bom-ref": ["not-a-string"]}}},
+        ],
+    )
+    def test_malformed_metadata_never_raises(self, document: Any):
+        assert isinstance(derive_hardware_inventory(document, include_root=True), HardwareInventory)
+
+    def test_a_document_with_no_components_key_still_lifts_its_root(self):
+        """The projection used to bail before reading metadata when ``components`` was absent."""
+        document = {"metadata": {"component": {"type": "device", "name": "board"}}}
+
+        assert [p.name for p in derive_hardware_inventory(document, include_root=True).parts] == ["board"]
 
 
-@pytest.mark.parametrize("cpe", ["cpe:/h:intel:core_i7", "cpe:2.3:h:intel", "not a cpe", ""])
-def test_a_cpe_that_is_not_a_2_3_name_falls_back_to_keyword_search(cpe: str):
-    # A CPE-name search errors on anything but a well-formed 2.3 name.
-    assert "isCpeNameSearch" not in nvd_cpe_url(cpe)
+def test_the_board_itself_is_a_part_only_on_a_display_read():
+    document = _load("hbom_pcie_sata_adapter.cdx.json")
+
+    lifted = derive_hardware_inventory(document, include_root=True)
+    assert lifted.count == 7
+    assert lifted.by_type == {"device": 7}
+    assert lifted.parts[-1].bom_ref == "pcie-sata-adaptor-board"
 
 
 @pytest.mark.parametrize(
@@ -328,3 +428,41 @@ class TestUploaderControlledUrls:
         )
 
         assert part.datasheets == ()
+
+
+class TestNvdCpeLink:
+    """The link-out targets NVD's CPE dictionary, not its vulnerability search.
+
+    NVD replaced the query-parameter vulnerability results endpoint with a
+    single-page app whose only input is a keyword, and that keyword search does
+    not match a CPE string. Verified against the live site: the full 2.3 name of
+    a real Intel part returns 0 records, its vendor and product as terms return
+    784.
+    """
+
+    def test_vendor_and_product_become_the_search_terms(self) -> None:
+        url = nvd_cpe_url("cpe:2.3:h:intel:core_i7:-:*:*:*:*:*:*:*")
+
+        assert url.startswith("https://nvd.nist.gov/products/cpe/search/results?")
+        assert "keyword=intel+core_i7" in url
+        assert "namingFormat=2.3" in url
+
+    def test_an_escaped_colon_does_not_split_a_field(self) -> None:
+        """A CPE field may contain an escaped colon, so counting colons to test
+        well-formedness rejects valid names."""
+        url = nvd_cpe_url(r"cpe:2.3:h:acme:foo\:bar:-:*:*:*:*:*:*:*")
+
+        assert "keyword=acme+foo%3Abar" in url
+
+    @pytest.mark.parametrize(
+        "cpe",
+        [
+            "cpe:2.2:/h:intel:core_i7",  # a 2.2 URI, not a 2.3 name
+            "not-a-cpe",
+            "cpe:2.3:h",  # truncated before vendor and product
+            "cpe:2.3:h:*:*:-:*:*:*:*:*:*:*",  # wildcards carry no search terms
+        ],
+    )
+    def test_a_name_with_nothing_to_search_for_yields_no_link(self, cpe: str) -> None:
+        """A link that lands on "no results" is worse than no link."""
+        assert nvd_cpe_url(cpe) is None

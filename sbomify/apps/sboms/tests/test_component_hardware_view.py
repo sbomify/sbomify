@@ -35,6 +35,18 @@ def _device_doc(*names: str) -> bytes:
     return json.dumps({"bomFormat": "CycloneDX", "specVersion": "1.6", "components": components}).encode()
 
 
+def _root_only_doc(name: str) -> bytes:
+    """A device named only in metadata.component — enough to stamp the artifact hardware-bearing."""
+    return json.dumps(
+        {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "metadata": {"component": {"type": "device", "bom-ref": name, "name": name}},
+            "components": [{"type": "library", "name": "left-pad"}],
+        }
+    ).encode()
+
+
 def _software_doc() -> bytes:
     return json.dumps({"specVersion": "1.6", "components": [{"type": "library", "name": "left-pad"}]}).encode()
 
@@ -63,6 +75,20 @@ def test_renders_the_parts_of_a_hardware_bearing_sbom(sample_sbom: SBOM, mocker:
     assert "Hardware Components" in html
     assert "PCIE-098-02-F-D-EMS2" in html
     assert "Samtec" in html
+
+
+@pytest.mark.django_db
+def test_renders_a_device_named_only_in_metadata(sample_sbom: SBOM, mocker: MockerFixture):
+    """The upload stamp counts a device found in metadata.component, so this page
+    selects the artifact *because* it holds hardware. Rendering "no parts" then
+    contradicts its own selector — and the merged release HBOM lists that board."""
+    _make_hardware_bearing(sample_sbom)
+    _mock_s3(mocker, {sample_sbom.sbom_filename: _root_only_doc("MAX-9611-BOARD")})
+
+    html = _owner_client(sample_sbom).get(_url(sample_sbom.component_id)).content.decode()
+
+    assert "MAX-9611-BOARD" in html
+    assert "No parts to show" not in html
 
 
 @pytest.mark.django_db

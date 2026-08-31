@@ -166,9 +166,17 @@ def models_q_hardware_bearing() -> Any:
     The crypto counterpart's shape: a dedicated HBOM, or a mixed SBOM stamped
     ``has_hardware_components`` at upload (mixed documents keep
     ``bom_type=sbom`` so they retain NTIA and vulnerability assessment, but
-    their device components must still surface). Rows predating the flag are
-    ``None`` and stay out — the page would read them from storage only to render
-    an empty parts table.
+    their device components must still surface).
+
+    An ``hbom`` row qualifies on its bom_type alone, whatever the stamp says —
+    the same escape hatch the plugin dispatch gate uses. The stamp is ``None``
+    on every row predating the field, and the field's contract reads ``None`` as
+    unknown rather than false, so requiring ``True`` of an HBOM would hide a
+    hardware artifact until the retag backfill has run. The stamp is load-bearing
+    only for a ``sbom`` row, where it is the sole signal separating a mixed
+    hardware document from the software-only majority: those stay out unknown,
+    since reading every pre-field SBOM from storage to find the few with devices
+    is what the stamp exists to avoid.
     """
     from django.db.models import Q
 
