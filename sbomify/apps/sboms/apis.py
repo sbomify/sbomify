@@ -9,10 +9,10 @@ from typing import Any
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
-from ninja import File, Query, Router, UploadedFile
+from ninja import File, Query, Router, Schema, UploadedFile
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth
 from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
@@ -31,6 +31,7 @@ from sbomify.apps.core.utils import (
     obj_extract,
 )
 from sbomify.apps.oidc.permissions import is_authorised_for_component
+from sbomify.apps.sboms.hardware_inventory import get_hardware_inventory
 from sbomify.apps.sboms.utils import (
     _contains_crypto_assets,
     _contains_hardware_components,
@@ -979,6 +980,81 @@ def download_cipher_suite_inventory_csv(request: HttpRequest, sbom_id: str) -> A
     response = HttpResponse(buffer.getvalue(), content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="cipher-suite-inventory-{sbom_id}.csv"'
     return response
+
+
+class HardwareCertificationSchema(Schema):
+    """A regulatory approval declared on a hardware component."""
+
+    country: str
+    authority: str
+    identifier: str | None = None
+    url: str | None = None
+
+
+class HardwarePartSchema(Schema):
+    """One hardware component, projected into BOM-line shape."""
+
+    name: str | None = None
+    bom_ref: str | None = None
+    type: str | None = None
+    manufacturer: str | None = None
+    manufacturer_source: str | None = None
+    revision: str | None = None
+    quantity: str | None = None
+    function: str | None = None
+    location: str | None = None
+    device_type: str | None = None
+    sku: str | None = None
+    serial_number: str | None = None
+    lot_number: str | None = None
+    prod_timestamp: str | None = None
+    mac_address: str | None = None
+    gs1: dict[str, str] = Field(default_factory=dict)
+    certifications: list[HardwareCertificationSchema] = Field(default_factory=list)
+    datasheets: list[str] = Field(default_factory=list)
+    cpe: str | None = None
+    # An NVD search link for an operator to follow, not a scan result: hardware
+    # CPEs are unversioned and the advisory feeds carry almost no part:h
+    # identifiers, so sbomify never matches them to CVEs automatically.
+    cpe_nvd_url: str | None = None
+    firmware: list[str] = Field(default_factory=list)
+
+
+class HardwareInventorySchema(Schema):
+    """Derived hardware-parts inventory (HBOM) for a single SBOM."""
+
+    sbom_id: str
+    component_id: str
+    count: int
+    by_type: dict[str, int]
+    parts: list[HardwarePartSchema]
+
+
+@router.get(
+    "/{sbom_id}/hardware-inventory",
+    response={
+        200: HardwareInventorySchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        503: ErrorResponse,
+    },
+    auth=None,  # Allow unauthenticated access for public SBOMs
+)
+@decorate_view(optional_auth)
+def get_sbom_hardware_inventory(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
+    """Return the derived hardware (HBOM) inventory for an SBOM.
+
+    Projects the ``device`` / ``firmware`` / ``device-driver`` / ``platform``
+    components of the stored CycloneDX artifact, with the part detail carried in
+    the ``cdx:device`` property namespace. Software-only SBOMs return an empty
+    inventory rather than an error.
+    """
+    result = get_hardware_inventory(request, sbom_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
+
+    return 200, result.value or {}
 
 
 @router.get(

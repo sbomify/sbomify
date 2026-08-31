@@ -1,0 +1,87 @@
+{# HBOM issues drill-down for the newest hardware artifact. Rendered only when the hardware assessment reported gaps. #}
+{% if latest_hbom_issues %}
+    {{ latest_hbom_issue_terms|json_script:"latest-hbom-issue-terms" }}
+    {{ latest_hbom_issue_severities|json_script:"latest-hbom-issue-severities" }}
+    <c-cards.collapsible x-data="{ open: true, search: '', sevFilter: 'all', currentPage: 1, perPage: 5, terms: (window.parseJsonScript('latest-hbom-issue-terms') || []), severities: (window.parseJsonScript('latest-hbom-issue-severities') || []), get sevOptions() { const order = ['critical', 'high', 'medium', 'low', 'info']; const present = new Set(this.severities); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.sevFilter === 'all' || this.severities[i] === this.sevFilter)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); }, }" x-init="$watch('search', () => { currentPage = 1 }); $watch('sevFilter', () => { currentPage = 1 })">
+    <c-cards.collapsible-trigger state="open" @click="open = !open">
+    <span class="text-lg">
+        HBOM issues
+        {% if latest_hbom_version %}
+            <span class="font-normal text-text-muted text-sm">· {{ latest_hbom_version|truncatechars:24 }} (latest)</span>
+        {% endif %}
+    </span>
+    </c-cards.collapsible-trigger>
+    <div class="overflow-hidden" x-show="open" x-collapse>
+        <c-tables.shell nested>
+        {# Recommendations from a voluntary framework carry one severity today, so the filter appears only once a second one does. #}
+        <c-tables.toolbar>
+        <c-tables.search id="hbom-issue-search" label="Search HBOM issues" placeholder="Search HBOM issues..." class="max-w-xs" x-model="search" />
+        <div x-show="sevOptions.length > 1">
+            <c-tables.select id="hbom-issue-sev-filter" label="Filter by severity" x-model="sevFilter">
+            <option value="all">All Severities</option>
+            <template x-for="v in sevOptions" :key="v">
+                <option :value="v" x-text="v.charAt(0).toUpperCase() + v.slice(1)"></option>
+            </template>
+            </c-tables.select>
+        </div>
+        </c-tables.toolbar>
+        <c-tables.table x-cloak>
+        <c-tables.head>
+        <c-tables.header-cell>Severity</c-tables.header-cell>
+        <c-tables.header-cell>Issue</c-tables.header-cell>
+        <c-tables.header-cell>Recommendation</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for issue in latest_hbom_issues %}
+                <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
+                <c-tables.cell nowrap>
+                {% if issue.status == 'fail' %}
+                    <c-badges.danger>{{ issue.severity|title }}</c-badges.danger>
+                {% elif issue.severity == 'critical' or issue.severity == 'high' or issue.severity == 'medium' or issue.severity == 'low' %}
+                    <c-badges.severity level="{{ issue.severity|lower }}">{{ issue.severity|capfirst }}</c-badges.severity>
+                {% else %}
+                    <c-badges.severity level="unknown">{{ issue.severity|title }}</c-badges.severity>
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell>
+                {% if latest_hbom_id %}
+                    <a href="{% url 'core:component_item' component_id=component.id item_type='hbom' item_id=latest_hbom_id %}"
+                       class="font-medium text-text hover:text-primary no-underline">{{ issue.title }}</a>
+                {% else %}
+                    <span class="font-medium text-text">{{ issue.title }}</span>
+                {% endif %}
+                {% if issue.description %}
+                    <div class="text-xs text-text-muted mt-1 max-w-xl">{{ issue.description|truncatechars:180 }}</div>
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell>
+                <span class="text-sm text-text-muted">{{ issue.remediation|truncatechars:120 }}</span>
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+            <tr x-show="total === 0">
+                <td colspan="3" class="text-center">
+                    <span class="text-text-muted">No HBOM issues match your search.</span>
+                </td>
+            </tr>
+        </tbody>
+        </c-tables.table>
+        {# Footer: row count + parts list link on the left, pagination on the right #}
+        <c-tables.footer>
+        <div class="flex flex-wrap items-center gap-4">
+            <c-tables.info>
+            Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+            </c-tables.info>
+            <a href="{% url 'sboms:component_hardware' component_id=component.id %}"
+               class="text-sm text-primary hover:underline no-underline inline-flex items-center gap-1">
+                View parts list<i class="fas fa-arrow-right text-xs"></i>
+            </a>
+        </div>
+        <div x-show="totalPages > 1">
+            <c-tables.pager />
+        </div>
+        </c-tables.footer>
+        </c-tables.shell>
+    </div>
+    </c-cards.collapsible>
+{% endif %}

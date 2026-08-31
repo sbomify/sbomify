@@ -274,6 +274,10 @@
             <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
                  hx-trigger="load"
                  hx-swap="outerHTML"></div>
+            {# Hardware parts (HBOM) — same lazy load; the card collapses when the document has none #}
+            <div hx-get="{% url 'sboms:sbom_hardware_inventory' sbom_id=item.id %}"
+                 hx-trigger="load"
+                 hx-swap="outerHTML"></div>
             {# Assessment Results Section — not shown for VEX (a VEX isn't an SBOM to verify) #}
             {% if assessment_runs and not is_vex %}
                 <div>
