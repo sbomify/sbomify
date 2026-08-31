@@ -11,12 +11,11 @@ from sbomify.apps.core.authz import can
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.services.component_security import models_q_hardware_bearing
-from sbomify.apps.sboms.hardware_inventory import get_hardware_inventory
-from sbomify.apps.sboms.models import SBOM
 
 # The card's own search-term builder — the page embeds that same table, and a
 # second copy would drift into a search matching different fields per page.
-from sbomify.apps.sboms.views.sbom_hardware_inventory import _part_term
+from sbomify.apps.sboms.hardware_inventory import get_hardware_inventory, part_search_term
+from sbomify.apps.sboms.models import SBOM
 
 TEMPLATE = "sboms/component_hardware.html.j2"
 
@@ -70,6 +69,6 @@ class ComponentHardwareView(LoginRequiredMixin, View):
                 "component": component,
                 "artifact": artifact,
                 "hardware_inventory": inventory,
-                "part_terms": [_part_term(part) for part in inventory["parts"]] if inventory else [],
+                "part_terms": [part_search_term(part) for part in inventory["parts"]] if inventory else [],
             },
         )

@@ -283,7 +283,26 @@ def _project_part(component: dict[str, Any], firmware_by_ref: dict[str, tuple[st
     )
 
 
-def derive_hardware_inventory(document: dict[str, Any] | None) -> HardwareInventory:
+def part_search_term(part: dict[str, Any]) -> str:
+    """Everything the client-side search matches a part on, pre-lowercased."""
+    fields = (
+        part.get("name"),
+        part.get("manufacturer"),
+        part.get("revision"),
+        part.get("type"),
+        part.get("function"),
+        part.get("location"),
+        part.get("device_type"),
+        part.get("sku"),
+        part.get("serial_number"),
+        part.get("cpe"),
+        *(part.get("gs1") or {}).values(),
+        *(c.get("identifier") or "" for c in part.get("certifications") or []),
+    )
+    return " ".join(str(f) for f in fields if f).lower()
+
+
+def derive_hardware_inventory(document: object) -> HardwareInventory:
     """Project the hardware components of a CycloneDX document into a parts list.
 
     Reads ``components`` only. ``metadata.component`` is the subject the document

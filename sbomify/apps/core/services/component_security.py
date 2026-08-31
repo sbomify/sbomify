@@ -115,7 +115,10 @@ def build_latest_hbom_issues(component_id: str) -> HbomIssuesContext:
         .order_by("-created_at")
         .values("id", "version")
     )
-    artifact = artifacts.filter(bom_type=SBOM.BomType.HBOM).first() or artifacts.first()
+    # HBOM artifacts only: the template links these issues to the hbom item
+    # type, and a mixed software SBOM that merely carries device components
+    # would link to a page that is not there.
+    artifact = artifacts.filter(bom_type=SBOM.BomType.HBOM).first()
     if not artifact:
         return HbomIssuesContext()
 

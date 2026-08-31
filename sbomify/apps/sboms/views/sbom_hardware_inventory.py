@@ -6,28 +6,9 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.sboms.hardware_inventory import get_hardware_inventory
+from sbomify.apps.sboms.hardware_inventory import get_hardware_inventory, part_search_term
 
 CARD_TEMPLATE = "sboms/components/hardware_inventory_card.html.j2"
-
-
-def _part_term(part: dict[str, Any]) -> str:
-    """Everything the client-side search matches a part on, pre-lowercased."""
-    fields = (
-        part.get("name"),
-        part.get("manufacturer"),
-        part.get("revision"),
-        part.get("type"),
-        part.get("function"),
-        part.get("location"),
-        part.get("device_type"),
-        part.get("sku"),
-        part.get("serial_number"),
-        part.get("cpe"),
-        *(part.get("gs1") or {}).values(),
-        *(c.get("identifier") or "" for c in part.get("certifications") or []),
-    )
-    return " ".join(str(f) for f in fields if f).lower()
 
 
 class SbomHardwareInventoryView(View):
@@ -52,7 +33,7 @@ class SbomHardwareInventoryView(View):
             CARD_TEMPLATE,
             {
                 "hardware_inventory": inventory,
-                "part_terms": [_part_term(p) for p in inventory["parts"]],
+                "part_terms": [part_search_term(p) for p in inventory["parts"]],
                 "sbom_id": sbom_id,
             },
         )

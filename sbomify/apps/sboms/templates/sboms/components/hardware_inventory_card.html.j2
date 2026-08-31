@@ -57,11 +57,19 @@ datasheet, linked firmware) in a per-row drill-down.
                     </thead>
                     {% for part in hardware_inventory.parts %}
                         <tbody x-data="{ open: false }" x-show="pageSet.has({{ forloop.counter0 }})">
+                            {# The row stays pointer-clickable; the button carries the keyboard
+                               and screen-reader path for the same disclosure. #}
                             <tr class="cursor-pointer" @click="open = !open">
                                 <td class="py-2 pr-2 text-text-muted w-6">
-                                    <i class="fas fa-chevron-right text-xs transition-transform"
-                                       :class="open ? 'rotate-90' : ''"
-                                       aria-hidden="true"></i>
+                                    <button type="button"
+                                            class="inline-flex items-center"
+                                            :aria-expanded="open"
+                                            aria-label="Show part details"
+                                            @click.stop="open = !open">
+                                        <i class="fas fa-chevron-right text-xs transition-transform"
+                                           :class="open ? 'rotate-90' : ''"
+                                           aria-hidden="true"></i>
+                                    </button>
                                 </td>
                                 <td class="py-2 pr-4 font-medium text-text">{{ part.name|default:"-" }}</td>
                                 <td class="py-2 pr-4 text-text-muted">
