@@ -507,6 +507,18 @@ class Member(models.Model):
         indexes = [
             models.Index(fields=["team", "role"], name="teams_member_team_role_idx"),
         ]
+        constraints = [
+            # ``choices`` is not enforced by the database and ``save()`` skips
+            # full_clean(), which is how ``role="member"`` survived for years as a
+            # value the code did not recognise — accepted by every persistence
+            # path, matched by no role check, and worked around by comments in
+            # three files. This constraint is what stops another one appearing:
+            # it covers bulk_create(), raw SQL, fixtures and admin actions alike.
+            models.CheckConstraint(
+                condition=models.Q(role__in=[role for role, _label in settings.TEAMS_SUPPORTED_ROLES]),
+                name="member_role_is_supported",
+            ),
+        ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
@@ -531,15 +543,17 @@ class Invitation(models.Model):
             models.Index(fields=["expires_at"]),
         ]
         constraints = [
-            # DB-level guard against ``role="bot"`` invitations —
-            # covers EVERY persistence path including bulk_create(),
-            # raw SQL, fixture loading, and admin actions that bypass
-            # full_clean(). The Python clean()/save() pair below
-            # produces a friendlier ValidationError for the normal
-            # form/save flow; the DB constraint is the backstop.
+            # The invitable set, not merely "not bot". Constraining only the bot
+            # case left every other unrecognised value insertable here, and an
+            # invitation is a deferred Member row: the bad value sat until accept
+            # time and then failed against member_role_is_supported, turning a
+            # write nobody validated into an IntegrityError for whoever clicked
+            # the link. Covers every persistence path — bulk_create(), raw SQL,
+            # fixtures, admin — that bypasses full_clean(). The clean() below
+            # gives the normal form flow a friendlier ValidationError first.
             models.CheckConstraint(
-                check=~models.Q(role="bot"),
-                name="invitation_role_not_bot",
+                condition=models.Q(role__in=[role for role, _label in settings.TEAMS_INVITABLE_ROLES]),
+                name="invitation_role_is_invitable",
             ),
         ]
 
@@ -566,12 +580,13 @@ class Invitation(models.Model):
         # ValidationError before the DB throws IntegrityError.
         #
         # We deliberately do NOT override ``save()`` to call
-        # ``full_clean()``: that would also enforce ``choices`` at the
-        # Python level, breaking legacy rows / tests that have written
-        # non-canonical role values (``"member"`` was historically used
-        # by some fixtures and remains silently stored because Django
-        # CharField choices aren't DB-enforced). The security-critical
-        # case (``role="bot"``) is locked in by the DB constraint.
+        # ``full_clean()``: that would enforce every field's ``choices`` at the
+        # Python level on paths that never asked for validation. Role values are
+        # guarded at the database instead — ``Member.member_role_is_supported``
+        # and ``Invitation.invitation_role_is_invitable`` — which is what closed
+        # the gap that let ``role="member"`` exist for years as a value the code
+        # did not recognise. The security-critical case (``role="bot"``) is
+        # covered by the invitable set excluding it.
         super().clean()
         if self.role == "bot":
             from django.core.exceptions import ValidationError

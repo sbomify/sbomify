@@ -16,7 +16,7 @@ cannot carry, and must stay in lockstep.
 <c-vars variant_class shape size pill type class />
 {% if type %}
     <button type="{{ type }}"
-            class="inline-flex items-center font-semibold transition-all duration-150 border border-solid {% if shape == 'severity' %}px-2 py-1 text-xs leading-[1.5] uppercase tracking-[0.04em]{% elif size == 'sm' %}px-1.5 py-0.5 text-[0.625rem] leading-[1.5] tracking-[0.01em]{% else %}px-3 py-1 text-xs leading-[1.5] tracking-[0.01em]{% endif %} {% if shape == 'severity' and not pill %}rounded{% else %}rounded-full{% endif %} {% if variant_class %}{{ variant_class }}{% else %}text-text-muted bg-[color-mix(in_oklab,var(--color-border)_12%,transparent)] border-[color-mix(in_oklab,var(--color-border)_20%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+            class="inline-flex items-center font-semibold transition-all duration-150 border border-solid whitespace-nowrap {% if shape == 'severity' %}px-2 py-1 text-xs leading-[1.5] uppercase tracking-[0.04em]{% elif size == 'sm' %}px-1.5 py-0.5 text-[0.625rem] leading-[1.5] tracking-[0.01em]{% else %}px-3 py-1 text-xs leading-[1.5] tracking-[0.01em]{% endif %} {% if shape == 'severity' and not pill %}rounded{% else %}rounded-full{% endif %} {% if variant_class %}{{ variant_class }}{% else %}text-text-muted bg-[color-mix(in_oklab,var(--color-border)_12%,transparent)] border-[color-mix(in_oklab,var(--color-border)_20%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
             {{ attrs }}>{{ slot }}
     </button>
 {% else %}

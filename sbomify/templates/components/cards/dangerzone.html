@@ -1,15 +1,20 @@
 {% comment %}
-The danger zone: the card surface repainted in danger, for the actions a
-workspace cannot take back. It is the one card that answers the pointer,
-because the warning has to read as live. The header carries the warning icon by
-default; pass icon to swap it.
+The danger zone: the plain card surface with its border, its header rule and
+its ink turned danger, for the actions a workspace cannot take back. The
+ground stays calm on purpose: colour goes on what identifies the zone (the
+hairline, the title, the warning icon) and on the actions inside it, never
+behind the text a reader has to weigh before clicking something destructive.
+Like every container it sits still: no hover repaint, no lift.
+
+The header carries the warning icon by default; pass icon to swap it.
 
 flush hands the inside over to the caller, for the zone that opens and closes:
 its band is c-cards.dangerzone-header carrying the click, and its panel is
-c-cards.dangerzone-body carrying the collapse.
+c-cards.dangerzone-body carrying the collapse. c-cards.dangerzone-collapsible
+assembles all of that; compose it rather than these parts.
 {% endcomment %}
 <c-vars title subtitle icon="fas fa-exclamation-triangle" body_class flush class />
-<c-cards.card variant_class="relative overflow-hidden border-2 border-solid border-[color-mix(in_oklab,var(--color-danger)_50%,transparent)] bg-[color-mix(in_oklab,var(--color-danger)_4%,transparent)] shadow-[var(--shadow-card)] hover:border-[color-mix(in_oklab,var(--color-danger)_70%,transparent)] hover:bg-[color-mix(in_oklab,var(--color-danger)_6%,transparent)] hover:shadow-[0_4px_12px_-1px_rgb(239_68_68/0.25),0_2px_6px_-2px_rgb(239_68_68/0.15)]" header_class="flex items-center gap-3 border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-danger)_8%,transparent)_0%,color-mix(in_oklab,var(--color-danger)_12%,transparent)_100%)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-danger)_50%,transparent)]" body_class="bg-[color-mix(in_oklab,var(--color-danger)_2%,transparent)] {{ body_class }}" title_class="text-danger" icon_class="text-danger" title="{{ title }}" subtitle="{{ subtitle }}" icon="{{ icon }}" :flush="flush" class="{{ class }}" :attrs="attrs">
+<c-cards.card variant_class="relative overflow-hidden bg-surface border border-solid border-[color-mix(in_oklab,var(--color-danger)_35%,transparent)] shadow-[var(--shadow-card)]" header_class="flex items-center gap-3 border-[color-mix(in_oklab,var(--color-danger)_25%,transparent)] bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-surface-elevated)_50%,transparent),transparent)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-danger)_50%,transparent)]" body_class="{{ body_class }}" title_class="text-danger" icon_class="text-danger" title="{{ title }}" subtitle="{{ subtitle }}" icon="{{ icon }}" :flush="flush" class="{{ class }}" :attrs="attrs">
 {% if header %}<c-slot name="header">{{ header }}</c-slot>{% endif %}
 {% if footer %}<c-slot name="footer">{{ footer }}</c-slot>{% endif %}
 {{ slot }}</c-cards.card>

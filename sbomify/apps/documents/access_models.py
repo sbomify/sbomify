@@ -68,12 +68,48 @@ class AccessRequest(models.Model):
     def __str__(self) -> str:
         return f"AccessRequest {self.id} - {self.user.username} - {self.team.name} - {self.status}"
 
+    @property
+    def nda_signature(self) -> "NDASignature | None":
+        """The newest live signature — the shape every display consumer reads.
+
+        Was the reverse accessor of a OneToOneField; kept as a property when
+        signatures became history-preserving so templates and serializers did
+        not have to change. Superseded rows (revoked/rejected requests) are
+        history, not a live signature, so they are excluded here.
+
+        Reads the ``nda_signatures`` prefetch cache when one is present, so
+        the queue's list view stays a single query.
+        """
+        cache = getattr(self, "_prefetched_objects_cache", {})
+        if "nda_signatures" in cache:
+            live = [s for s in cache["nda_signatures"] if s.superseded_at is None]
+            return max(live, key=lambda s: s.signed_at) if live else None
+        return self.nda_signatures.live().order_by("-signed_at").first()
+
+
+class NDASignatureQuerySet(models.QuerySet["NDASignature"]):
+    def live(self) -> "NDASignatureQuerySet":
+        """Signatures that still satisfy the access flow.
+
+        Every "has the user signed?" decision must go through this — a
+        superseded row is history (the request was rejected or access
+        revoked), and counting it would let a revoked user skip re-signing.
+        """
+        return self.filter(superseded_at__isnull=True)
+
 
 class NDASignature(models.Model):
     """NDA signature record for access requests.
 
     Stores the signature details when a user signs an NDA as part of
     requesting access to gated components.
+
+    A signature is a legal record — who accepted which document version, when,
+    from where — so rows are never deleted while their request exists. An
+    access request accumulates one row per acceptance (each NDA version signed,
+    each re-request after a revocation); ``superseded_at`` marks a signature
+    that no longer satisfies the flow (access revoked or request rejected)
+    without destroying the evidence of what was agreed to.
     """
 
     class Meta:
@@ -83,12 +119,25 @@ class NDASignature(models.Model):
             models.Index(fields=["signed_at"]),
         ]
         ordering = ["-signed_at"]
+        constraints = [
+            # At most one live signature per (request, document): two
+            # concurrent signing POSTs must not both insert. Superseded rows
+            # are history and may repeat — a user who re-signs the same
+            # version after a revocation legitimately creates a second row.
+            models.UniqueConstraint(
+                fields=["access_request", "nda_document"],
+                condition=models.Q(superseded_at__isnull=True),
+                name="one_live_signature_per_request_document",
+            ),
+        ]
+
+    objects = NDASignatureQuerySet.as_manager()
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    access_request = models.OneToOneField(
+    access_request = models.ForeignKey(
         AccessRequest,
         on_delete=models.CASCADE,
-        related_name="nda_signature",
+        related_name="nda_signatures",
         help_text="Associated access request",
     )
     nda_document = models.ForeignKey(
@@ -108,6 +157,16 @@ class NDASignature(models.Model):
         max_length=500,
         blank=True,
         help_text="User agent string of browser when signing",
+    )
+    superseded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Set when this signature stopped satisfying the access flow — the "
+            "request was rejected or access revoked — so a later re-request "
+            "must sign again. NULL = live. The row itself is history and is "
+            "never deleted while its request exists."
+        ),
     )
 
     def __str__(self) -> str:

@@ -34,8 +34,8 @@ def test_reject_access_request_captures_document_access_denied(
     mock_capture = patch_capture(mocker)
     # The reject path sends an email — patch the renderer so the test doesn't
     # depend on template files or SMTP fixtures.
-    mocker.patch("sbomify.apps.documents.views.access_requests.render_to_string", return_value="<html />")
-    mocker.patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
+    mocker.patch("sbomify.apps.documents.services.access_emails.render_to_string", return_value="<html />")
+    mocker.patch("sbomify.apps.documents.services.access_emails.EmailMultiAlternatives")
 
     client = Client()
     setup_authenticated_client_session(client, team_with_business_plan, sample_user)

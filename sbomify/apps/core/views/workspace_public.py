@@ -7,6 +7,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpRes
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.url_utils import (
@@ -173,7 +174,7 @@ class WorkspacePublicView(View):
         # Check if authenticated user is a workspace admin/owner
         is_workspace_admin = (
             request.user.is_authenticated
-            and Member.objects.filter(user=request.user, team=team, role__in=["owner", "admin"]).exists()
+            and Member.objects.filter(user=request.user, team=team, role__in=ADMINISTER).exists()
         )
 
         # Check if any vulnerability scanning plugin is enabled

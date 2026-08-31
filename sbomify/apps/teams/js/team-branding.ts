@@ -1,5 +1,6 @@
 import Alpine from 'alpinejs';
 import { showSuccess, showError } from '../../core/js/alerts';
+import { brandFill, inkOnColor } from './brand-ink';
 import { defaultBrandColors } from '../../core/js/constants/colors';
 import { getCsrfToken } from '../../core/js/csrf';
 import { formatLastChecked as sharedFormatLastChecked } from '../../core/js/utils';
@@ -172,6 +173,8 @@ export function registerTeamBranding() {
                 brand_color: '',
                 accent_color: '',
             },
+            /** Object URLs for freshly picked files, so the preview shows them before they are saved. */
+            previewAssetUrls: { icon: '', logo: '' } as Record<FileFields, string>,
 
             init() {
                 // Normalize once and keep an immutable baseline for change detection.
@@ -201,6 +204,8 @@ export function registerTeamBranding() {
 
                 this.localBrandingInfo[field] = file;
                 this.localBrandingInfo[`${field}_pending_deletion`] = false;
+                if (this.previewAssetUrls[field]) URL.revokeObjectURL(this.previewAssetUrls[field]);
+                this.previewAssetUrls[field] = URL.createObjectURL(file);
             },
 
             removeFile(field: FileFields) {
@@ -209,6 +214,8 @@ export function registerTeamBranding() {
                 );
                 if (input) input.value = '';
                 this.localBrandingInfo[field] = null;
+                if (this.previewAssetUrls[field]) URL.revokeObjectURL(this.previewAssetUrls[field]);
+                this.previewAssetUrls[field] = '';
             },
 
             handleExistingFileRemoval(field: FileFields) {
@@ -219,6 +226,25 @@ export function registerTeamBranding() {
             updateColor(field: 'brand_color' | 'accent_color', value: string) {
                 this.uiColors[field] = value;
                 this.localBrandingInfo[field] = value;
+            },
+
+            /** The brand scope the trust center preview renders in, live as the accent is edited.
+             *  With branding turned off the preview falls back to the platform accent, the same
+             *  way the public page does. */
+            previewBrand() {
+                const accent = this.localBrandingInfo.branding_enabled ? this.uiColors.accent_color : '';
+                const fill = brandFill(accent);
+                return { '--brand': fill, '--brand-ink': inkOnColor(fill) };
+            },
+
+            /** The image the preview's brand header shows: a freshly picked file wins over the
+             *  saved asset, and the logo wins over the icon, matching branding.py's brand_image.
+             *  Empty means the caller should fall back to the platform logo. */
+            previewBrandImage() {
+                if (!this.localBrandingInfo.branding_enabled) return '';
+                const logo = this.previewAssetUrls.logo || this.localBrandingInfo.logo_url;
+                const icon = this.previewAssetUrls.icon || this.localBrandingInfo.icon_url;
+                return logo || icon || '';
             },
 
             setDefaultColors() {

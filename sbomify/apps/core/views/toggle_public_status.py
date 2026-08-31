@@ -53,7 +53,13 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 errors = result.get("errors", {})
                 if errors:
                     error_detail = f"{error_detail}: {errors}"
-                log.error(f"Failed to update component {item_id}: {error_detail}, errors: {errors}")
+                # A 4xx here is the answer to what was asked — a plan that does
+                # not allow private items, a component that is not theirs. The
+                # user already sees it as a toast, and logging it as an error
+                # put every one of those in the error tracker. Only a 5xx is a
+                # fault of ours.
+                log_at = log.error if status_code >= 500 else log.info
+                log_at(f"Failed to update component {item_id}: {error_detail}, errors: {errors}")
                 return htmx_error_response(error_detail, content={})
 
             # ``visibility`` is the validated lowercase string from request.POST;

@@ -48,18 +48,15 @@
                     <div x-data="{ open: false }"
                          class="relative"
                          @keydown.escape.window="if(open) open = false">
-                        <c-buttons.primary aria-label="Create new item" aria-haspopup="true" @click="open = !open" ::aria-expanded="open">
+                        <c-buttons.primary size="sm" aria-label="Create new item" aria-haspopup="true" @click="open = !open" ::aria-expanded="open">
                         <i class="fas fa-plus" aria-hidden="true"></i>
                         <span class="hidden sm:inline">New</span>
-                        <i class="fas fa-chevron-down text-xs hidden sm:inline transition-transform duration-200"
-                           :class="open ? 'rotate-180' : ''"
-                           aria-hidden="true"></i>
                         </c-buttons.primary>
                         <c-dropdowns.dropdown class="right-0 mt-2 w-48" aria-label="Create options" x-show="open" x-cloak x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-1" @click.away="open = false">
-                        <c-dropdowns.item icon="fas fa-cube" @click="open = false; $dispatch('open-product-modal')">
+                        <c-dropdowns.item icon="fas fa-cube" href="{% url 'core:product_new' %}" @click="open = false">
                         Product
                         </c-dropdowns.item>
-                        <c-dropdowns.item icon="fas fa-puzzle-piece" @click="open = false; $dispatch('open-component-modal')">
+                        <c-dropdowns.item icon="fas fa-puzzle-piece" href="{% url 'core:component_new' %}" @click="open = false">
                         Component
                         </c-dropdowns.item>
                         <c-dropdowns.item icon="fas fa-shield-halved" href="{% url 'core:security_advisory_new' %}" @click="open = false">

@@ -28,6 +28,7 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.models import User
 from sbomify.apps.security_advisories.forms import AdvisoryCreateForm
 from sbomify.apps.security_advisories.services.advisories import (
@@ -36,6 +37,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     advisory_counts,
     create_advisory,
     creation_options,
+    delete_advisory,
     get_advisory,
     list_advisories,
     post_update,
@@ -94,7 +96,24 @@ SEVERITY_OPTIONS: list[dict[str, str]] = [
 
 # Roles that may change an advisory, mirroring the has_crud_permissions the
 # templates use to decide whether to render the controls at all.
-_ADVISORY_WRITE_ROLES = ("owner", "admin")
+# Publishing an advisory is an outward-facing act — it appears on the public
+# trust center — so it is ADMINISTER, not the MANAGE tier that covers day-to-day
+# artifact work. Bound to the tier rather than repeated as a literal so it cannot
+# quietly widen when a role is added.
+_ADVISORY_WRITE_ROLES = ADMINISTER
+
+
+def _can_write_advisories(request: HttpRequest) -> bool:
+    """Whether this user may change advisories, from the live Member row.
+
+    Not from ``session["current_team"]["role"]``: that is a cache with a 300s
+    TTL, so a demoted user kept seeing the compose and edit controls (and a
+    promoted one kept missing them) while the handler enforced the real answer.
+    """
+    key = (request.session.get("current_team") or {}).get("key")
+    if not key:
+        return False
+    return Member.objects.filter(user=cast(User, request.user), team__key=key, role__in=_ADVISORY_WRITE_ROLES).exists()
 
 
 def _writable_team(request: HttpRequest) -> Team | None:
@@ -127,7 +146,7 @@ def _advisories_context(request: HttpRequest) -> dict[str, Any]:
     counts = advisory_counts(advisories)
     return {
         "current_team": current_team,
-        "has_crud_permissions": current_team.get("role") in ["owner", "admin"],
+        "has_crud_permissions": _can_write_advisories(request),
         "advisories": advisories,
         "advisories_count": counts["total"],
         "open_count": counts["open"],
@@ -163,9 +182,13 @@ class SecurityAdvisoryCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
         if team is None:
             raise Http404("Workspace not found")
 
-        current_team = request.session.get("current_team") or {}
-        if current_team.get("role") not in ["owner", "admin"]:
+        # The live Member row, not the session's cached role: same reason the
+        # rest of this module reads it that way, and it keeps the tier in one
+        # place instead of a literal list that widens when a role is added.
+        if not _can_write_advisories(request):
             raise Http404("Workspace not found")
+
+        current_team = request.session.get("current_team") or {}
 
         products = creation_options(team).value or []
         # ``?product=`` lets a product's row menu open this form with that
@@ -225,6 +248,8 @@ def _create_advisory(request: HttpRequest, *, on_error: str) -> HttpResponse:
         description=form.cleaned_data.get("description") or "",
         identifier=form.cleaned_data.get("vulnerability_id") or "",
         remediation_status=form.cleaned_data.get("remediation_status") or "",
+        cvss_score=form.cleaned_data.get("cvss_score"),
+        cvss_vector=form.cleaned_data.get("cvss_vector") or "",
         products=list(form.cleaned_data.get("products") or []),
         affected_releases=list(form.cleaned_data.get("affected_releases") or []),
     )
@@ -262,7 +287,7 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
             "core/security_advisory_detail.html.j2",
             {
                 "current_team": current_team,
-                "has_crud_permissions": current_team.get("role") in ["owner", "admin"],
+                "has_crud_permissions": _can_write_advisories(request),
                 "advisory": advisory,
                 "timeline": advisory["timeline"],
                 "update_kinds": UPDATE_KINDS,
@@ -302,8 +327,11 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 title=request.POST.get("title", ""),
                 # None when the form did not carry the field at all, so a
                 # partial edit cannot silently set a severity nobody chose.
+                # The same rule guards the CVSS pair.
                 severity=request.POST.get("severity"),
                 description=request.POST.get("description", ""),
+                cvss_score=request.POST.get("cvss_score"),
+                cvss_vector=request.POST.get("cvss_vector"),
             )
             if result.ok:
                 messages.success(request, "Advisory updated.")
@@ -312,6 +340,16 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
             else:
                 messages.error(request, result.error or "Advisory not updated.")
             return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+
+        if intent == "delete":
+            result = delete_advisory(team, advisory_id)
+            if not result.ok:
+                if result.status_code == 404:
+                    raise Http404("Advisory not found")
+                messages.error(request, result.error or "Advisory not deleted.")
+                return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+            messages.success(request, "Advisory deleted.")
+            return redirect("core:security_advisories_dashboard")
 
         if intent in ("edit_update", "link_vex"):
             # Only the stubs pay for the full projection lookup; the real

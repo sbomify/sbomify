@@ -37,7 +37,7 @@
         <tbody>
             {% for issue in latest_cbom_issues %}
                 <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 {% if issue.severity == 'critical' or issue.severity == 'high' or issue.severity == 'medium' or issue.severity == 'low' %}
                     <c-badges.severity level="{{ issue.severity|lower }}">{{ issue.severity|capfirst }}</c-badges.severity>
                 {% else %}

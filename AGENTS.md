@@ -15,10 +15,10 @@ sbomify is a Software Bill of Materials (SBOM) and document management platform.
 ```bash
 # Start development environment with Docker (recommended)
 ./bin/developer_mode.sh build
-./bin/developer_mode.sh up
+./bin/developer_mode.sh start
 
 # Alternative: Run Django locally with Docker services
-docker compose up sbomify-db sbomify-minio sbomify-createbuckets -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up sbomify-db sbomify-s3 -d
 uv sync && bun install
 uv run python manage.py migrate
 uv run python manage.py runserver  # Terminal 1
@@ -288,6 +288,77 @@ in a diff is a review blocker.
 - **`tw-*` classes are the old layer.** Do not add callers and do not delete them;
   unmigrated pages still consume them.
 
+#### Branded components (`components/branded/`, `<c-branded.*>`)
+
+A second, smaller library for pages we render **on behalf of a workspace, for
+their customers**: the trust centre first, anything shared outwards later. Same
+cotton conventions as above, plus one rule.
+
+A workspace picks **one colour**. It reaches the components as two custom
+properties and nothing else:
+
+```html
+<c-branded.theme brand="{{ brand.accent_color }}">…</c-branded.theme>
+{# --brand: the fill   --brand-ink: the text that goes on it #}
+```
+
+A whole public page is one brand scope, so the page root is the normal entry
+point: `public_base.htmx.j2` publishes both properties at `:root`, in the same
+inline block as the rest of the branding. `<c-branded.theme>` is for a smaller
+scope, a widget, an email preview or one card on a page the root does not brand.
+
+- **`--brand-ink` is measured, not chosen.** `is_dark_color()` in
+  `teams/branding.py` compares WCAG relative luminance against the point where
+  white and black contrast equally. Never branch on the brand yourself; use
+  `ink_on_color()`, or the `brand_fill` / `brand_ink` filters in `brand_tags.py`.
+- **The brand is a solid fill under `--brand-ink`, or a low-alpha tint behind
+  neutral text. Never a text or icon colour.** A pale brand on its own tint is
+  invisible. The nav underline is the one exception: 2px of rule, not something
+  read through.
+- **Surfaces, body text, borders, radius, type and the severity colours are not
+  brandable.** Red means critical on every trust centre.
+- **Custom properties inherit**, so one scope brands everything below it, page
+  root or wrapper alike. No prop drilling, and any future surface can reuse the
+  library by branding its own root or wrapping.
+
+Class names need more care here than in the main library: these render on public
+pages, which load seven legacy stylesheets with 140 `!important` rules. `p-4`,
+`rounded-lg`, `shadow-sm`, `w-50` and `text-muted` all lose there. Stay on
+`px-*`, `py-*`, `gap-*`, `rounded-xl`, arbitrary values and the token utilities.
+`test_cotton_branded.py` enforces this and the fill-not-text rule; an anchor also
+needs `data-button` or the legacy sheet repaints it.
+
+**Which library a trust-centre control belongs to.** Not everything on a branded
+page is branded. The brand goes on what the page *is*, not on the machinery for
+reading it:
+
+| Use `<c-branded.*>` | Use the main library |
+| --- | --- |
+| The page and section headings, record rows, figures | **Buttons** |
+| Status the workspace owns, the restricted callout | Date, search, select, checkbox, text fields |
+| The nav and its current marker | Tables, pagination, the filter panel |
+| Any surface holding the above | Alerts, empty states, spinners |
+
+**There is no branded button, and there should not be one.** A trust centre
+button should look like an sbomify button, and every one there today is
+`c-buttons.secondary`, which is neutral and carries no fill to be unreadable on.
+
+That leaves one constraint to respect rather than discover.
+`public_base.htmx.j2` remaps `--color-primary` to the workspace accent at
+`:root`, but the app stylesheet loads after that inline block and wins, so the
+remap does nothing at page level: a main-library control on a trust centre
+renders in platform colours. Verified, not assumed: on a workspace with accent
+`#C2410C` the computed `--color-primary` is still the platform navy.
+
+What *does* apply is the scoped `.public-page [data-button]` rule, which remaps
+the token on library buttons only. `c-buttons.primary` hardcodes `text-white`,
+so a filled library button there is white text over whatever colour the
+workspace picked, with no ink measurement: fine on navy, unreadable on pale
+amber. No token can fix it, because the ink is not a token. **So do not put a
+filled main-library button on a public page.** There are 8 today across 5 pages
+this branch has not touched; each needs a neutral button or an ink measured from
+`ink_on_color`.
+
 ### API Layer
 
 Central router in `sbomify/apis.py` registers per-app routers. Most apps expose a `Router()` in `apis.py` (some use `api.py`, e.g. `licensing`):
@@ -332,7 +403,7 @@ Dramatiq with Redis for async processing (vulnerability scanning, assessments). 
 ### Storage
 
 - **Database**: PostgreSQL 17
-- **Object Storage**: S3-compatible (Minio for development) — separate buckets for media, SBOMs, documents
+- **Object Storage**: S3-compatible (SeaweedFS for development) — separate buckets for media, SBOMs, documents
 - **Caching/Broker**: Redis 8
 
 ### Authentication
@@ -341,14 +412,16 @@ Keycloak with django-allauth. Auto-bootstrapped via Docker in development. Requi
 
 ### Team Roles and Permissions
 
-Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. Legacy rows may still carry `"member"`, which is not in the current choices.
+Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"member"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. A `member_role_is_supported` CheckConstraint on `Member` enforces the set at the database, so a role the code does not know about can no longer be written (which is how `"member"` itself existed for years as a value matching no role check).
 
 **`sbomify/apps/core/authz.py` is the single source of truth.** `can(actor, action, resource)` maps a named action to a capability tier; the tier tuples are the only place roles are enumerated. Two rules keep it simple:
 
-1. **The ladder stays linear** — `guest ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
+1. **The ladder stays linear** — `guest ⊂ member ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
 2. **Granularity is added as a tier, never as a per-user permission bundle or per-resource ACL.**
 
-Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `MANAGE` = `DELETE` = `READ_INTERNAL` (owner + admin) ⊂ `PUBLISH` = `READ_INTERNAL_OR_BOT` (+ bot). Admins are near-owners: the only capability they lack is deleting the workspace (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` = `READ_INTERNAL` (+ member) ⊂ `PUBLISH` = `READ_INTERNAL_OR_BOT` (+ bot).
+
+`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities. Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capability they lack is deleting the workspace (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
 
 Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 

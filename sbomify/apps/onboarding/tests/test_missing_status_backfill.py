@@ -76,7 +76,12 @@ class TestTheGapIsClosed:
 @pytest.mark.django_db
 class TestNobodyStartsGettingMail:
     """The property that makes backfilling safe instead of a way to mail four
-    long-standing users out of nowhere."""
+    long-standing users out of nowhere.
+
+    Not one property but two, which is the correction this class exists to
+    carry: three predicates decline because welcome_email_sent is False, and
+    should_receive_sbom_reminder declines because has_created_component is.
+    """
 
     def test_the_backfilled_owner_is_queued_for_nothing(self, owner_without_status) -> None:
         results = OnboardingEmailService.get_users_for_onboarding_sequence()

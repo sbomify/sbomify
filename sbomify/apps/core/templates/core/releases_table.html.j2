@@ -30,7 +30,7 @@
         </c-tables.toolbar>
         <c-tables.table fixed>
         <c-tables.head>
-        <c-tables.header-cell sort="name">Release</c-tables.header-cell>
+        <c-tables.header-cell sort="name" nowrap>Release</c-tables.header-cell>
         <c-tables.header-cell sort="product_name" class="hidden md:table-cell">Product</c-tables.header-cell>
         <c-tables.header-cell sort="artifacts_count" class="hidden lg:table-cell">Artifacts</c-tables.header-cell>
         <c-tables.header-cell sort="created_at" date class="hidden lg:table-cell">Created</c-tables.header-cell>
@@ -39,7 +39,7 @@
         <tbody>
             <template x-for="release in paginatedData" :key="release.id">
                 <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" tabindex="0" @click="window.location.href = '{% url 'core:release_details' 0 0 %}'.replace('/0/', '/' + release.product_id + '/').replace('/0', '/' + release.id)" @keydown.enter.prevent="window.location.href = '{% url 'core:release_details' 0 0 %}'.replace('/0/', '/' + release.product_id + '/').replace('/0', '/' + release.id)">
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <div class="min-w-0">
                     <span class="text-text font-medium block truncate" x-text="release.name"></span>
                     <div class="flex flex-wrap gap-1 mt-1">

@@ -142,7 +142,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # Return a skipped result so the UI shows "not applicable" rather than
         # a hard error finding for a format choice the user made deliberately.
         if not self._validate_cyclonedx(sbom_bytes):
-            return self._create_skipped_result(
+            return self.create_skipped_result(
                 finding_id="dependency-track:unsupported-format",
                 title="Format Not Supported",
                 description=(
@@ -175,7 +175,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # may not exist yet when the upload-triggered scan fires).
         has_product = sbom.component.products.filter(team=team).exists()
         if not has_product:
-            return self._create_skipped_result(
+            return self.create_skipped_result(
                 finding_id="dependency-track:no-product",
                 title="Skipped — component has no product membership",
                 description=(
@@ -233,7 +233,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 # cannot process it — so it skips rather than errors.
                 if _is_unsupported_spec_version(e):
                     logger.info(f"[DT] SBOM {sbom_id} uses a spec version this Dependency Track does not accept: {e}")
-                    return self._create_skipped_result(
+                    return self.create_skipped_result(
                         finding_id="dependency-track:unsupported-spec-version",
                         title="Spec Version Not Supported",
                         description=(
@@ -836,52 +836,6 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         return findings
 
-    def _build_single_finding_result(
-        self,
-        *,
-        finding_id: str,
-        title: str,
-        description: str,
-        status: str,
-        severity: str,
-        metadata: dict[str, Any],
-        pass_count: int = 0,
-        fail_count: int = 0,
-        warning_count: int = 0,
-        error_count: int = 0,
-    ) -> AssessmentResult:
-        """Construct an AssessmentResult with a single Finding.
-
-        Used by both _create_error_result (for operational failures) and
-        _create_skipped_result (for "plugin preconditions not met" cases).
-        Keeps the plugin_name, version, category, and timestamp construction
-        in one place so future changes don't need to be duplicated across
-        result helpers.
-        """
-        finding = Finding(
-            id=finding_id,
-            title=title,
-            description=description,
-            status=status,
-            severity=severity,
-        )
-        summary = AssessmentSummary(
-            total_findings=1,
-            pass_count=pass_count,
-            fail_count=fail_count,
-            warning_count=warning_count,
-            error_count=error_count,
-        )
-        return AssessmentResult(
-            plugin_name="dependency-track",
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.SECURITY.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=summary,
-            findings=[finding],
-            metadata=metadata,
-        )
-
     def _create_error_result(self, error_message: str) -> AssessmentResult:
         """Create an error result when assessment cannot be completed.
 
@@ -891,7 +845,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         Returns:
             AssessmentResult with a single error finding.
         """
-        return self._build_single_finding_result(
+        return self.build_single_finding_result(
             finding_id="dependency-track:error",
             title="Scan Error",
             description=error_message,
@@ -899,54 +853,4 @@ class DependencyTrackPlugin(AssessmentPlugin):
             severity="high",
             metadata={"error": True},
             error_count=1,
-        )
-
-    def _create_skipped_result(
-        self,
-        finding_id: str,
-        title: str,
-        description: str,
-        unsupported_input: bool = False,
-    ) -> AssessmentResult:
-        """Create a non-failing result indicating the assessment was skipped.
-
-        Used when the plugin's preconditions aren't met but the situation is
-        not an error. Currently used when an SBOM has no release association
-        (e.g., a cron-triggered scan picks up an SBOM that was never linked
-        to a release).
-
-        The returned finding uses status="warning" with severity="info", and
-        the top-level AssessmentResult metadata contains {"skipped": True}.
-        API consumers that aggregate plugin results into an overall posture
-        MUST check metadata["skipped"] to distinguish "assessment was skipped"
-        from "assessment ran and reported a real warning finding". A raw
-        status check alone is not sufficient.
-
-        Args:
-            finding_id: Stable identifier for the finding.
-            title: Human-readable title.
-            description: Detailed reason the assessment was skipped.
-            unsupported_input: True when the skip is because the server could
-                not read the artifact at all, rather than because a
-                per-run precondition was unmet. Re-running such an SBOM on the
-                next sweep repeats the rejection verbatim, so the scheduled
-                task backs it off; see ``UNSUPPORTED_INPUT_SKIP_HOURS``.
-
-        Returns:
-            AssessmentResult with a single warning finding and metadata
-            containing ``skipped: True``, plus ``unsupported_input: True`` when
-            that argument is set. Consumers should test for the keys they care
-            about rather than compare the dict, since this shape grows.
-        """
-        metadata: dict[str, Any] = {"skipped": True}
-        if unsupported_input:
-            metadata["unsupported_input"] = True
-        return self._build_single_finding_result(
-            finding_id=finding_id,
-            title=title,
-            description=description,
-            status="warning",
-            severity="info",
-            metadata=metadata,
-            warning_count=1,
         )

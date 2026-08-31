@@ -30,8 +30,10 @@ The ``as`` form swallows NoReverseMatch, so a session without a workspace
 leaves it empty and the button is not offered rather than 500ing the page.
 {% endcomment %}
 {% url 'teams:ci_token' team_key=request.session.current_team.key as ci_token_url %}
-{# Reachable from onboarding, where there is no component, so the copy
-   target needs an id that still resolves. #}
+{% comment %}
+    Reachable from onboarding, where there is no component, so the copy target
+    needs an id that still resolves.
+{% endcomment %}
 {% firstof component.id 'onboarding' as cicd_copy_suffix %}
 <div x-data="{ cicdOpen: false }"
      @open-cicd.window="cicdOpen = true"
