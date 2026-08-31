@@ -13,6 +13,34 @@ from sbomify.apps.teams.models import Member, Team
 class TestTeamGeneralView:
     """Test cases for TeamGeneralView."""
 
+    def test_rename_refreshes_the_cached_workspace_list(
+        self, client: Client, sample_team_with_owner_member
+    ):
+        """A rename has to bust the sidebar and header fragment caches.
+
+        Those fragments are keyed on ``user_teams_version``, so a rename that
+        only refreshes ``current_team`` leaves the switcher showing the old
+        name until the cache expires.
+        """
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        stale_version = client.session.get("user_teams_version")
+
+        response = client.post(
+            reverse("teams:team_general", kwargs={"team_key": team.key}),
+            {"action": "update_name", "name": "Renamed Workspace"},
+        )
+
+        assert response.status_code == 200
+        assert Team.objects.get(pk=team.pk).name == "Renamed Workspace"
+
+        session = client.session
+        assert session["current_team"]["name"] == "Renamed Workspace"
+        assert session["user_teams"][team.key]["name"] == "Renamed Workspace"
+        assert session["user_teams_version"] != stale_version
+
     def test_set_default_workspace(
         self, client: Client, sample_team_with_owner_member
     ):

@@ -21,7 +21,7 @@ are different gestures.
 <c-vars variant_class removable label remove_label remove_title remove_click href class />
 {% if href %}
     <a href="{{ href }}"
-       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs leading-[1.5] font-medium rounded-md no-underline transition-all duration-150 {% if variant_class %}{{ variant_class }}{% else %}text-text bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs leading-[1.5] font-medium rounded-md no-underline transition-all duration-150 whitespace-nowrap {% if variant_class %}{{ variant_class }}{% else %}text-text bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
        {{ attrs }}>{{ slot }}</a>
 {% else %}
     <span class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs leading-[1.5] font-medium rounded-md transition-all duration-150 {% if variant_class %}{{ variant_class }}{% else %}text-text bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"

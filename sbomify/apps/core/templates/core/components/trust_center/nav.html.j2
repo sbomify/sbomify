@@ -15,23 +15,42 @@ without needing to know about this file.
 {% workspace_public_url as tc_home_url %}
 {% workspace_advisories_url as tc_advisories_url %}
 {% if tc_home_url %}
-    <nav class="tc-topnav" aria-label="Trust center">
-        <div class="tc-topnav-inner">
-            <a class="tc-topnav-item {% if request.path == tc_home_url %}is-current{% endif %}"
-               href="{{ tc_home_url }}"
-               {% if request.path == tc_home_url %}aria-current="page"{% endif %}>
-                <i class="fas fa-house" aria-hidden="true"></i>
-                Overview
-            </a>
+    {% comment %}
+        The sticky band and the width-limited track are layout, which a page
+        owns; the row of destinations and the current marker are the component's.
+
+        The band draws the rule so it spans the viewport rather than stopping
+        at the track, which is why the nav is flush. px-4 matches the page
+        header's track, so the first destination lines up with the title.
+
+        The track scrolls on a narrow screen, with the scrollbar hidden: it
+        would otherwise sit under the destinations on every page, and there is
+        nothing below the nav to scroll it away.
+    {% endcomment %}
+    <div class="sticky top-0 z-[60] border-b border-solid border-border bg-[color-mix(in_oklab,var(--color-background)_92%,transparent)] backdrop-blur-[10px]">
+        <div class="mx-auto max-w-[1200px] px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <c-branded.nav flush aria-label="Trust center">
+            {% comment %}
+                The current flag is written as two whole tags rather than
+                :current="request.path == tc_home_url". Cotton's colon prefix
+                resolves a variable, not an expression, so a comparison there
+                evaluates falsy in silence and the nav simply never marks a
+                current page.
+            {% endcomment %}
+            {% if request.path == tc_home_url %}
+                <c-branded.nav-item href="{{ tc_home_url }}" icon="fas fa-house" current>Overview</c-branded.nav-item>
+            {% else %}
+                <c-branded.nav-item href="{{ tc_home_url }}" icon="fas fa-house">Overview</c-branded.nav-item>
+            {% endif %}
             {% if tc_advisories_url %}
                 {# startswith, so an advisory detail page still marks the section current. #}
-                <a class="tc-topnav-item {% if tc_advisories_url in request.path %}is-current{% endif %}"
-                   href="{{ tc_advisories_url }}"
-                   {% if tc_advisories_url in request.path %}aria-current="page"{% endif %}>
-                    <i class="fas fa-shield-halved" aria-hidden="true"></i>
-                    Security advisories
-                </a>
+                {% if tc_advisories_url in request.path %}
+                    <c-branded.nav-item href="{{ tc_advisories_url }}" icon="fas fa-shield-halved" current>Security advisories</c-branded.nav-item>
+                {% else %}
+                    <c-branded.nav-item href="{{ tc_advisories_url }}" icon="fas fa-shield-halved">Security advisories</c-branded.nav-item>
+                {% endif %}
             {% endif %}
+            </c-branded.nav>
         </div>
-    </nav>
+    </div>
 {% endif %}

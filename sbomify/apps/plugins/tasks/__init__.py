@@ -42,7 +42,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
 from sbomify.task_utils import format_task_error
 
-from ..orchestrator import PluginOrchestrator, PluginOrchestratorError
+from ..orchestrator import PluginOrchestrator, PluginOrchestratorError, SBOMGoneError
 from ..sdk.base import RetryLaterError
 from ..sdk.enums import RunReason, ScanMode
 
@@ -402,6 +402,14 @@ def run_assessment_task(
             "plugin_name": plugin_name,
             "error": assessment_run.error_message or None,
         }
+
+    except SBOMGoneError as e:
+        # The artifact was deleted between queueing and running. Nothing to
+        # assess and nothing to fix, so it is reported as the ordinary outcome
+        # it is rather than raised as a fault — it was producing two error
+        # lines apiece in the error tracker for a race the design allows.
+        logger.info(f"[TASK_run_assessment] Nothing to assess: {e}")
+        return {"status": "skipped", "reason": str(e), "sbom_id": sbom_id, "task": "run_assessment"}
 
     except PluginOrchestratorError as e:
         logger.error(f"[TASK_run_assessment] Orchestrator error: {e}")

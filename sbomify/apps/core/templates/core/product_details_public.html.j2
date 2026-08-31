@@ -55,35 +55,35 @@
                     <h2 class="tc-panel-title">Download latest release</h2>
                     <p class="tc-prose mb-4">Combined artifacts from the latest release of this product.</p>
                     {% comment %}
-                    outline-primary, not outline: the workspace accent overrides in
-                    public_base drove the legacy outline button to the accent, and
-                    public_base hands the accent to a library button as its primary.
+                    secondary, not a primary or accent-tinted button: on a public page
+                    the accent is the workspace's own colour, and a neutral button is
+                    the only one readable on every accent a workspace might pick.
                     {% endcomment %}
                     <div class="flex gap-3 flex-wrap">
                         {% if has_downloadable_content %}
-                            <c-buttons.outline-primary href="{% url 'core:sbom_download_product' product.id %}" title="Download combined SBOM as CycloneDX" class="no-underline">
+                            <c-buttons.secondary href="{% url 'core:sbom_download_product' product.id %}" title="Download combined SBOM as CycloneDX" class="no-underline">
                             <img src="{% static 'img/cyclonedx-logo.svg' %}"
                                  alt="CycloneDX"
                                  class="h-5 w-auto dark:brightness-0 dark:invert"
                                  height="20"
                                  width="20">
                             <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                            </c-buttons.outline-primary>
-                            <c-buttons.outline-primary href="{% url 'core:sbom_download_product' product.id %}?format=spdx" title="Download combined SBOM as SPDX" class="no-underline">
+                            </c-buttons.secondary>
+                            <c-buttons.secondary href="{% url 'core:sbom_download_product' product.id %}?format=spdx" title="Download combined SBOM as SPDX" class="no-underline">
                             <img src="{% static 'img/spdx-logo.svg' %}"
                                  alt="SPDX"
                                  class="h-5 w-auto dark:brightness-0 dark:invert"
                                  height="20"
                                  width="20">
                             <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                            </c-buttons.outline-primary>
+                            </c-buttons.secondary>
                         {% endif %}
                         {% if has_cbom %}
-                            <c-buttons.outline-primary href="{% url 'api-1:download_product_cbom' product.id %}" title="Download CBOM (Cryptography BOM, CycloneDX)" class="no-underline">
+                            <c-buttons.secondary href="{% url 'api-1:download_product_cbom' product.id %}" title="Download CBOM (Cryptography BOM, CycloneDX)" class="no-underline">
                             <i class="fas fa-key" aria-hidden="true"></i>
                             <span>CBOM</span>
                             <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                            </c-buttons.outline-primary>
+                            </c-buttons.secondary>
                         {% endif %}
                     </div>
                 </div>
