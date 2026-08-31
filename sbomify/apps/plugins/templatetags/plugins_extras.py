@@ -332,7 +332,7 @@ def vex_justification_label(value: object) -> str:
 
 
 @register.filter
-def vulnerability_total(summary: dict[str, Any]) -> int:
+def vulnerability_total(summary: object) -> int:
     """How many vulnerabilities a security run actually reported.
 
     Not ``total_findings``. That counts every row a plugin emitted, and a
