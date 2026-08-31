@@ -36,6 +36,16 @@ def advisories(team_with_business_plan):  # noqa: F811
                 **extra,
             )
         )
+    # The e2e suite freezes the clock, so auto_now_add stamps all twelve rows
+    # with the same instant and the list's -created_at ordering becomes a
+    # twelve-way tie postgres breaks arbitrarily. The snapshot then only
+    # matches its baseline when the arbitrary order happens to repeat.
+    # Distinct timestamps make the render deterministic: Advisory 11 first.
+    # Set on the instances and bulk-updated, so a test reading created_at off
+    # the fixture sees the same value the database holds.
+    for i, advisory in enumerate(created):
+        advisory.created_at = published_at - timezone.timedelta(minutes=len(created) - i)
+    SecurityAdvisory.objects.bulk_update(created, ["created_at"])
     yield created
 
 

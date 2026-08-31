@@ -337,6 +337,23 @@ class Release(models.Model):
         self.clean()
         super().save(*args, **kwargs)
 
+    def component_releases(self) -> "models.QuerySet[ComponentRelease]":
+        """The component versions this release ships.
+
+        Derived, not stored. The relationship already exists through the SBOM:
+        a ReleaseArtifact names an SBOM, and ComponentReleaseArtifact.sbom is
+        unique, so each SBOM belongs to exactly one ComponentRelease and the
+        join is single-valued. It resolves in one query.
+
+        A stored edge would have to be maintained on every pin and unpin, and
+        would go stale the moment one was missed, in exchange for a join the
+        database already does. The method exists so callers stop rewriting it,
+        not because the edge was missing.
+        """
+        return ComponentRelease.objects.filter(
+            artifacts__sbom__in=ReleaseArtifact.objects.filter(release=self, sbom__isnull=False).values("sbom_id")
+        ).distinct()
+
     def bump_collection_version(self, reason: "Release.CollectionUpdateReason") -> None:
         """Increment the collection version when artifacts change.
 
@@ -607,6 +624,16 @@ class ComponentRelease(models.Model):
         if self.qualifiers:
             label += f" ({self.qualifiers})"
         return label
+
+    def product_releases(self) -> "models.QuerySet[Release]":
+        """The product releases shipping this component version.
+
+        The mirror of :meth:`Release.component_releases`, derived the same way
+        and for the same reason.
+        """
+        return Release.objects.filter(
+            artifacts__sbom__in=ComponentReleaseArtifact.objects.filter(component_release=self).values("sbom_id")
+        ).distinct()
 
     def bump_collection_version(self, reason: "ComponentRelease.CollectionUpdateReason") -> None:
         """Increment the collection version when artifacts change.

@@ -15,6 +15,13 @@ _client: Any = None
 _initialized = False
 
 
+#: The tenant word in event names. ``team:*`` is emitted beside ``workspace:*``
+#: until the PostHog dashboards are cut over, then the pair below collapses to
+#: one and the dual-emit in capture_for_request goes with it.
+EVENT_PREFIX = "workspace"
+RETIRED_EVENT_PREFIX = "team"
+
+
 def _get_client() -> Any:
     """Lazy-initialize the PostHog client. Returns None when disabled."""
     global _client, _initialized
@@ -250,6 +257,17 @@ def capture(
         if groups:
             kwargs["groups"] = groups
         client.capture(distinct_id, event, properties=merged, **kwargs)
+
+        # Dual-emit while the dashboards migrate. Here rather than in
+        # capture_for_request, because not every emission goes through a view:
+        # team:role_changed fires from a signal inside transaction.on_commit
+        # with no request in hand, and a twin emitted one layer up would have
+        # missed it forever. The twin skips the registry check on purpose; it
+        # is the same payload under the migrating name, and warning on every
+        # fire for the whole window is noise, not drift.
+        if event.startswith(f"{RETIRED_EVENT_PREFIX}:"):
+            renamed = f"{EVENT_PREFIX}{event[len(RETIRED_EVENT_PREFIX) :]}"
+            client.capture(distinct_id, renamed, properties=merged, **kwargs)
     except Exception:
         logger.exception("Failed to capture PostHog event %s", event)
 
