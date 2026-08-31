@@ -105,7 +105,7 @@ def _check_admin_role(request: HttpRequest, team: Team) -> tuple[int, ErrorRespo
 
 @router.get(
     "/catalogs/",
-    response={200: list[CatalogSchema], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: list[CatalogSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="List catalogs for the current workspace",
 )
@@ -327,6 +327,10 @@ def delete_catalog_endpoint(request: HttpRequest, catalog_id: str) -> tuple[int,
 
 @router.get(
     "/catalogs/{catalog_id}/export/csv",
+    # 200 is the CSV itself, an HttpResponse ninja passes through unvalidated.
+    # Without the declaration, the error tuples below raised ConfigError and
+    # every failure became a raw 500.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Export controls as CSV",
 )
@@ -364,6 +368,10 @@ def export_csv(request: HttpRequest, catalog_id: str, product_id: str | None = N
 
 @router.get(
     "/catalogs/{catalog_id}/export/summary-csv",
+    # 200 is the CSV itself, an HttpResponse ninja passes through unvalidated.
+    # Without the declaration, the error tuples below raised ConfigError and
+    # every failure became a raw 500.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Export controls summary as CSV",
 )
@@ -397,7 +405,7 @@ def export_summary_csv(request: HttpRequest, catalog_id: str) -> HttpResponse | 
 
 @router.get(
     "/catalogs/{catalog_id}/controls/",
-    response={200: list[ControlWithStatusSchema], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: list[ControlWithStatusSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="List controls with statuses for a catalog",
 )
@@ -524,7 +532,7 @@ def bulk_update(request: HttpRequest, payload: BulkStatusUpdateSchema) -> tuple[
 
 @router.get(
     "/controls/{control_id}/mappings/",
-    response={200: list[ControlMappingSchema], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: list[ControlMappingSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Get all mappings for a control (both directions)",
 )

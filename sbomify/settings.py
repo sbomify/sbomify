@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 import warnings
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse, urlunparse
@@ -23,6 +24,7 @@ import dj_database_url
 import redis
 import sentry_sdk
 from django.contrib import messages
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import find_dotenv, load_dotenv
 from redis.asyncio.retry import Retry as AsyncRedisRetry
 from redis.backoff import ExponentialBackoff
@@ -213,6 +215,33 @@ INSTALLED_APPS = [
 ]
 
 
+# /api/v1/ deprecation, announced per RFC 9745 and RFC 8594 by
+# ApiVersionDeprecationMiddleware. v2 renames the SBOM-era prefixes and the
+# team vocabulary; v1 keeps serving until the sunset below.
+#
+# Deprecation is announced; a retirement date is not. v1 stays up for a long
+# time, and a Sunset header is a promise of a date, so none is sent until one
+# is deliberately set here or in the environment.
+#
+# Both read from the environment as YYYY-MM-DD, with "none" meaning unset.
+# When a sunset is eventually committed to, give the action's users a long
+# runway: it runs in other people's CI and some of them pin a version and
+# forget it.
+
+
+def _sunset_date(name: str, default: str) -> datetime | None:
+    raw = os.environ.get(name, default).strip()
+    if raw.lower() in ("", "none", "never"):
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"{name} must be YYYY-MM-DD or 'none', got {raw!r}") from exc
+
+
+API_V1_DEPRECATED_ON = _sunset_date("API_V1_DEPRECATED_ON", "2026-08-26")
+API_V1_SUNSET = _sunset_date("API_V1_SUNSET", "none")
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     # Outer enough to see the final API response; copies the per-token throttle budget
@@ -229,6 +258,7 @@ MIDDLEWARE = [
     # Must precede CsrfViewMiddleware so the bearer exemption flag is set before any
     # CSRF enforcement can run (Ninja's check_csrf and CsrfViewMiddleware both honour it).
     "sbomify.apps.core.middleware.BearerAuthCsrfExemptMiddleware",
+    "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
