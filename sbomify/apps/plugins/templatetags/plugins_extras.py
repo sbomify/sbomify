@@ -350,4 +350,5 @@ def vulnerability_total(summary: dict[str, Any]) -> int:
     by_severity = summary.get("by_severity") or {}
     if not isinstance(by_severity, dict):
         return 0
-    return sum(value for value in by_severity.values() if isinstance(value, int))
+    # bool subclasses int, and a stray True must not count as one vulnerability.
+    return sum(value for value in by_severity.values() if isinstance(value, int) and not isinstance(value, bool))
