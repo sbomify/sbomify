@@ -1,10 +1,6 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% block title %}sbomify Hardware: {{ component.name }}{% endblock %}
 {% block content %}
-    {% comment %}
-    The component page is private-only, but this page's gate is component:access —
-    a public component is readable anonymously, so the links back must be too.
-    {% endcomment %}
     {% comment %}The view requires login and this page renders in the authenticated dashboard shell, so there is no anonymous visitor to send to the public component page.{% endcomment %}
     {% url 'core:component_details' component.id as component_url %}
     <div class="space-y-6">
@@ -35,7 +31,8 @@
                             SBOM carrying device components
                         {% endif %}
                         {% if artifact.version %}(version {{ artifact.version }}){% endif %}
-                        — the stored document is never modified.
+                        .
+                        The stored document is never modified.
                     </p>
                 {% endif %}
             </div>
