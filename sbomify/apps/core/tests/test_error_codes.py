@@ -197,7 +197,7 @@ def _undeclared_returned_statuses() -> list[str]:
                         declared = {200}
             if declared is None:
                 continue
-            for node in ast.walk(fn):
+            for node in _returns_in_scope(fn):
                 # Any literal status in tuple position, whatever the body
                 # expression is. The first cut required a dict literal and
                 # missed `return 404, ErrorResponse(...)`, which is how the
@@ -216,6 +216,25 @@ def _undeclared_returned_statuses() -> list[str]:
                         f"{node.value.elts[0].value}, declared {sorted(declared)}"
                     )
     return offenders
+
+
+def _returns_in_scope(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.Return]:
+    """Return statements of the view itself, not of helpers nested inside it.
+
+    ast.walk descends into inner defs, whose returns are values for their own
+    callers, so a `return 404, ...` inside a local formatter would read as the
+    view answering 404.
+    """
+    returns: list[ast.Return] = []
+    stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        if isinstance(node, ast.Return):
+            returns.append(node)
+        stack.extend(ast.iter_child_nodes(node))
+    return returns
 
 
 class TestEveryReturnedStatusIsDeclared:
