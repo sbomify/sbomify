@@ -57,8 +57,7 @@ datasheet, linked firmware) in a per-row drill-down.
                     </thead>
                     {% for part in hardware_inventory.parts %}
                         <tbody x-data="{ open: false }" x-show="pageSet.has({{ forloop.counter0 }})">
-                            {# The row stays pointer-clickable; the button carries the keyboard
-                               and screen-reader path for the same disclosure. #}
+                            {# The row stays pointer-clickable; the button is the keyboard path. #}
                             <tr class="cursor-pointer" @click="open = !open">
                                 <td class="py-2 pr-2 text-text-muted w-6">
                                     <button type="button"
