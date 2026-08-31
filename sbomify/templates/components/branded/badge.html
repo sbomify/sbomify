@@ -1,0 +1,24 @@
+{% comment %}
+A small status word: a severity, a state, or a label the workspace owns.
+
+Two recipes, not seven. A tone badge is a tint of its colour behind text of that
+colour; a brand badge is a solid fill under the measured ink. Which colour a
+tone uses is the only thing that varies, so it arrives as --tone in the style
+attribute and the utilities below name it once. Six near-identical colour-mix
+branches was the alternative, and that is how a ramp drifts: one branch gets a
+tweak and the others do not.
+
+The severity ramp is the platform's own, straight from the tokens. It is not
+brandable and must not be: critical has to read as critical on every trust
+centre, whatever colour the workspace picked. Anything a workspace legitimately
+owns takes brand instead, which is a solid fill because a pale brand as text on
+its own tint is invisible.
+
+An unknown tone falls through to neutral rather than rendering an unstyled
+badge, so a status the model gains later is quiet instead of broken.
+{% endcomment %}
+<c-vars tone brand class />
+<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap border border-solid {% if brand %}bg-[var(--brand)] text-[var(--brand-ink)] border-[var(--brand)]{% else %}bg-[color-mix(in_oklab,var(--tone)_14%,transparent)] text-[var(--tone)] border-[color-mix(in_oklab,var(--tone)_32%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+      {% if not brand %}style="--tone: {% if tone == 'critical' %}var(--color-severity-critical){% elif tone == 'high' %}var(--color-severity-high){% elif tone == 'medium' %}var(--color-severity-medium){% elif tone == 'low' %}var(--color-severity-low){% elif tone == 'success' %}var(--color-success){% else %}var(--color-text-muted){% endif %}"{% endif %}
+      {{ attrs }}>{{ slot }}
+</span>

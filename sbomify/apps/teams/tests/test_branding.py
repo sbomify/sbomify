@@ -1,13 +1,19 @@
 """Security and edge case tests for branding functionality."""
 
 import pytest
+from django.urls import reverse
 
+from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.teams.branding import (
     DEFAULT_ACCENT_COLOR,
     DEFAULT_BRAND_COLOR,
     DEFAULT_FALLBACK_GRAY,
     build_branding_context,
     hex_to_rgb_tuple,
+    ink_on_color,
+    is_dark_color,
+    relative_luminance,
+    resolve_brand_color,
     sanitize_hex_color,
 )
 from sbomify.apps.teams.models import Team
@@ -211,3 +217,120 @@ class TestBuildBrandingContext:
         # Should be a valid hex color
         assert context["accent_color_dark"].startswith("#")
         assert len(context["accent_color_dark"]) == 7
+
+
+class TestIsDarkColor:
+    """Which of the two inks belongs on a brand colour."""
+
+    @pytest.mark.parametrize(
+        "color",
+        ["#000000", "#25293F", "#4263EB", "#0000FF", "#7C2D12"],
+    )
+    def test_dark_colors_take_light_text(self, color):
+        assert is_dark_color(color) is True
+        assert ink_on_color(color) == "#ffffff"
+
+    @pytest.mark.parametrize(
+        "color",
+        ["#ffffff", "#FFFF00", "#00FF00", "#FDE68A", "#808080"],
+    )
+    def test_light_colors_take_dark_text(self, color):
+        assert is_dark_color(color) is False
+        assert ink_on_color(color) == DEFAULT_BRAND_COLOR
+
+    def test_luminance_not_lightness_decides_it(self):
+        """Yellow and blue share an HSL lightness but not a legible ink.
+
+        A lightness-based check calls both mid and would put white on yellow.
+        Relative luminance separates them, which is the whole reason this is
+        not a one-line brightness average.
+        """
+        assert is_dark_color("#FFFF00") is False
+        assert is_dark_color("#0000FF") is True
+        assert relative_luminance("#FFFF00") > relative_luminance("#0000FF")
+
+    def test_the_answer_is_always_the_higher_contrast_ink(self):
+        """Whatever the colour, the ink chosen out-contrasts the other one."""
+        for color in ["#000000", "#ffffff", "#FF0000", "#4263EB", "#FDE68A", "#808080", "#00FF00"]:
+            luminance = relative_luminance(color)
+            against_white = 1.05 / (luminance + 0.05)
+            against_black = (luminance + 0.05) / 0.05
+            assert is_dark_color(color) is (against_white > against_black), color
+
+    def test_unusable_input_falls_back_to_dark_text(self):
+        """An unreadable brand must not produce an unreadable answer."""
+        assert is_dark_color(None) is False
+        assert is_dark_color("not-a-colour") is False
+        assert is_dark_color("#000; }</style><script>alert(1)</script>") is False
+
+
+class TestResolveBrandColor:
+    """The accent a branded surface paints with."""
+
+    def test_a_set_brand_is_used(self):
+        assert resolve_brand_color("#7C2D12") == "#7C2D12"
+
+    def test_no_brand_falls_back_to_the_platform_accent(self):
+        """Not to the neutral gray: an unbranded page still looks like sbomify."""
+        assert resolve_brand_color(None) == DEFAULT_ACCENT_COLOR
+        assert resolve_brand_color("") == DEFAULT_ACCENT_COLOR
+        assert resolve_brand_color(DEFAULT_FALLBACK_GRAY) == DEFAULT_FALLBACK_GRAY
+
+    def test_css_injection_falls_back_rather_than_escaping(self):
+        assert resolve_brand_color("#000; }</style><script>alert(1)</script>") == DEFAULT_ACCENT_COLOR
+
+    def test_fill_and_ink_never_measure_different_colors(self):
+        """The pair is resolved the same way, so they cannot disagree."""
+        for brand in [None, "", "bogus", "#fff", "#25293F"]:
+            fill = resolve_brand_color(brand)
+            assert ink_on_color(fill) == ink_on_color(resolve_brand_color(brand))
+            assert is_dark_color(fill) is (ink_on_color(fill) == "#ffffff")
+
+
+@pytest.mark.django_db
+class TestBrandingOffNotice:
+    """The notice that says saved colours are not reaching public pages.
+
+    It was bound with x-show to ``branding_info``, which is Django context and
+    never reaches the Alpine scope, so the page threw
+    "branding_info is not defined" and the notice never rendered. Nothing
+    caught it because nothing rendered the template.
+    """
+
+    NOTICE = "customers still see the default sbomify look"
+
+    def _render(self, client, team):
+        return client.get(reverse("teams:team_branding", kwargs={"team_key": team.key}))
+
+    def test_the_notice_renders_when_branding_is_off(self, client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        team.branding_info = {"branding_enabled": False}
+        team.save(update_fields=["branding_info"])
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        response = self._render(client, team)
+
+        assert response.status_code == 200
+        assert self.NOTICE in response.content.decode()
+
+    def test_the_notice_stays_away_when_branding_is_on(self, client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        team.branding_info = {"branding_enabled": True}
+        team.save(update_fields=["branding_info"])
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        response = self._render(client, team)
+
+        assert response.status_code == 200
+        assert self.NOTICE not in response.content.decode()
+
+    def test_the_page_names_no_alpine_variable_it_does_not_define(self, client, sample_team_with_owner_member):
+        """x-show on a server-only name is invisible until a browser runs it."""
+        team = sample_team_with_owner_member.team
+        team.branding_info = {"branding_enabled": False}
+        team.save(update_fields=["branding_info"])
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        html = self._render(client, team).content.decode()
+
+        assert "branding_info." not in html, "branding_info is Django context, not Alpine state"

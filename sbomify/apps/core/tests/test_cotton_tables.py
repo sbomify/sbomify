@@ -6,8 +6,13 @@ the Alpine state names the sortable header and the pager rely on, so a page can
 nest the set without ever writing a class itself.
 """
 
+from pathlib import Path
+
 import pytest
+from django.conf import settings
 from django.template.loader import render_to_string
+
+TABLES_DIR = Path(settings.BASE_DIR) / "sbomify" / "templates" / "components" / "tables"
 
 
 @pytest.fixture(scope="module")
@@ -225,6 +230,40 @@ def test_cell_end_and_date_segments(rendered: str) -> None:
     assert 'hx-get="/probe"' in end
 
 
+def test_nowrap_cell_holds_the_name_on_one_line_and_caps_it(rendered: str) -> None:
+    """The column that names the row keeps its name on one line.
+
+    The truncation lives on a block inside the cell, not on the cell: max-width
+    on a td is ignored under table-layout auto, which most of these tables use,
+    so a name with no break opportunity would widen the column instead of
+    ending in an ellipsis.
+    """
+    cell = _element_holding(rendered, "td", "Nowrap body cell")
+    assert '<div class="truncate max-w-[24rem]">Nowrap body cell</div>' in cell
+    assert "whitespace-nowrap" not in cell
+
+
+def test_a_cell_without_nowrap_gets_no_wrapper(rendered: str) -> None:
+    plain = _element_holding(rendered, "td", "Plain body cell")
+    assert "truncate" not in plain
+    assert "max-w-[24rem]" not in plain
+
+
+def test_nowrap_header_cell_holds_its_label_on_one_line(rendered: str) -> None:
+    """A label is written once and is short, so it needs no cap and no ellipsis."""
+    header = _element_holding(rendered, "th", "Nowrap column")
+    assert "whitespace-nowrap" in header
+    assert "truncate" not in header
+
+
+def test_header_cell_writes_white_space_once(rendered: str) -> None:
+    """date and nowrap both set it, so they share one conditional segment and a
+    column can never take two rules for the same property."""
+    source = (TABLES_DIR / "header_cell.html").read_text()
+    assert source.count("whitespace-nowrap") == 1
+    assert "{% if date or nowrap %} whitespace-nowrap{% endif %}" in source
+
+
 def test_actions_header_cell_names_the_column_for_screen_readers(rendered: str) -> None:
     header = _element_holding(rendered, "th", "Row actions")
     assert '<span class="sr-only">Row actions</span>' in header
@@ -278,5 +317,8 @@ def test_pager_drives_the_current_page_state(rendered: str) -> None:
 def test_pager_arrows_render_through_the_buttons_set(rendered: str) -> None:
     pager = [part for part in rendered.split('<div class="flex items-center gap-2"') if "Previous page" in part][0]
     assert "px-3.5 py-2 min-h-9 text-xs rounded-md" in pager
-    assert "bg-surface text-text border border-solid border-border" in pager
+    # Asserted as separate utilities, not one substring: secondary restates its
+    # resting colour on hover, which sits between them in the class list.
+    for utility in ("bg-surface", "text-text", "hover:text-text", "border-border"):
+        assert utility in pager
     assert '<i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>' in pager

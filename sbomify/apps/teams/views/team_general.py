@@ -94,6 +94,11 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 team_obj.save(update_fields=["name", "sbom_freshness_days"])
 
             refresh_current_team_session(request, team_obj)
+            # The sidebar and header are cached fragments keyed on
+            # ``user_teams_version``, and only this call recomputes that
+            # checksum. Without it the switcher keeps showing the old name
+            # until the cache expires on its own.
+            update_user_teams_session(request, cast(User, request.user))
 
             return htmx_success_response(
                 "Workspace settings updated successfully", triggers={"refreshTeamGeneral": True}

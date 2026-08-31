@@ -12,7 +12,10 @@
              x-data="{ isPublic: {{ product.is_public|yesno:'true,false' }} }"
              @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic">
             {% url 'core:product_details_public' product.id as product_public_url %}
-            {% include 'core/components/product_visibility_selector.html.j2' with item_id=product.id is_public=product.is_public %}
+            {# ADMINISTER, not MANAGE — see component_details_private_base. #}
+            {% if can_administer %}
+                {% include 'core/components/product_visibility_selector.html.j2' with item_id=product.id is_public=product.is_public %}
+            {% endif %}
             <c-actions-menu label="Product actions" stretch width="w-64">
             <c-dropdowns.header>Product</c-dropdowns.header>
             <c-dropdowns.item icon="fas fa-download" href="{% url 'core:sbom_download_product' product.id %}">Download SBOM · CycloneDX</c-dropdowns.item>
@@ -144,7 +147,7 @@
             </div>
             <c-tables.table x-cloak>
             <c-tables.head>
-            <c-tables.header-cell>Name</c-tables.header-cell>
+            <c-tables.header-cell nowrap>Name</c-tables.header-cell>
             <c-tables.header-cell>Latest version</c-tables.header-cell>
             <c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
             <c-tables.header-cell date>Last scan</c-tables.header-cell>
@@ -153,7 +156,7 @@
             <tbody>
                 {% for row in component_rows %}
                     <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
-                    <c-tables.cell>
+                    <c-tables.cell nowrap>
                     <a href="{% url 'core:component_details' row.id %}"
                        class="text-primary font-medium hover:underline">{{ row.name }}</a>
                     </c-tables.cell>

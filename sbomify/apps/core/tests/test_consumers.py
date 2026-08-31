@@ -418,3 +418,64 @@ class TestBroadcastResilience:
         await consumer.workspace_message({"type": "workspace_message", "data": payload})
 
         consumer.send_json.assert_awaited_once_with(payload)
+
+
+@pytest.mark.django_db
+class TestWorkspaceMembershipCheck:
+    """The real membership check, not a mock.
+
+    Every other test in this file replaces ``_check_workspace_membership`` with
+    an AsyncMock, so the method that actually decides who may listen was never
+    exercised — which is how it went unnoticed that it admitted anyone holding a
+    Member row, guests included.
+    """
+
+    def _check(self, user, workspace_key):
+        # The undecorated function. Driving database_sync_to_async from a sync
+        # test closes the connection under the test transaction; the decision
+        # being tested is in the body, not the threading wrapper.
+        raw = WorkspaceConsumer.__dict__["_check_workspace_membership"].func
+        return raw(WorkspaceConsumer(), user, workspace_key)
+
+    def _user(self, django_user_model, name):
+        return django_user_model.objects.create_user(
+            username=name, email=f"{name}@test.com", password="password"
+        )
+
+    def test_a_guest_cannot_listen_to_internal_workspace_events(self, django_user_model):
+        """A guest is external. Holding a Member row is not permission to listen.
+
+        The row exists as an ACL anchor for the trust-center access-request and
+        NDA machinery; treating it as workspace membership handed an outside
+        visitor the internal event feed.
+        """
+        from sbomify.apps.teams.models import Member, Team
+
+        team = Team.objects.create(name="Socket Workspace")
+        guest = self._user(django_user_model, "socket-guest")
+        Member.objects.create(user=guest, team=team, role="guest")
+
+        assert self._check(guest, team.key) is False
+
+    def test_internal_roles_can_listen(self, django_user_model):
+        from sbomify.apps.teams.models import Member, Team
+
+        team = Team.objects.create(name="Socket Workspace Internal")
+        for role in ("owner", "admin", "member"):
+            user = self._user(django_user_model, f"socket-{role}")
+            Member.objects.create(user=user, team=team, role=role)
+            assert self._check(user, team.key) is True, f"{role} should be able to listen"
+
+    def test_a_non_member_cannot_listen(self, django_user_model):
+        from sbomify.apps.teams.models import Team
+
+        team = Team.objects.create(name="Socket Workspace Outsider")
+        outsider = self._user(django_user_model, "socket-outsider")
+
+        assert self._check(outsider, team.key) is False
+
+    def test_an_unknown_workspace_is_refused(self, django_user_model):
+        """No workspace, no listening — and no exception either."""
+        outsider = self._user(django_user_model, "socket-nowhere")
+
+        assert self._check(outsider, "does-not-exist") is False
