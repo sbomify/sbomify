@@ -117,11 +117,13 @@ class TestUrlBuilding:
         assert result is not None
         assert result["url"].endswith("#tokens")
 
-    def test_a_query_destination_carries_its_param(self):
+    def test_a_create_destination_points_at_its_page(self):
+        # The create flows are pages now, not dashboard modals, so the
+        # destination lands on the form itself.
         result = self._find("New product")
 
         assert result is not None
-        assert "new=1" in result["url"]
+        assert result["url"] == "/products/new/"
 
     def test_a_team_scoped_destination_is_dropped_without_a_workspace(self):
         """Better a missing row than a link that 500s on reverse()."""

@@ -1,0 +1,9 @@
+{% comment %}
+The quiet count or label chip: "+3 more" after a truncated list, a CVSS score
+beside a finding, a role beside an invited member. It carries no status, so it
+takes the border tint rather than an accent, and it is smaller and squarer than
+a tag, which is a thing you can act on.
+{% endcomment %}
+<c-vars class />
+<span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold leading-tight rounded-lg text-text-muted bg-[color-mix(in_oklab,var(--color-border)_50%,transparent)] whitespace-nowrap {% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

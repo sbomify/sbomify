@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
@@ -16,6 +17,7 @@ from ninja.security import django_auth
 from pydantic import BaseModel
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.access_tokens.throttling import OnDemandTLSRateThrottle
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
@@ -52,6 +54,11 @@ from sbomify.apps.teams.services.suppliers import (
     delete_supplier,
     list_suppliers,
     update_supplier,
+)
+from sbomify.apps.teams.utils import (
+    on_demand_tls_cache_key,
+    refresh_current_team_session,
+    update_user_teams_session,
 )
 from sbomify.logging import getLogger
 
@@ -198,8 +205,6 @@ def update_team_branding_field(
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
 
-    user = cast(User, request.user)
-
     # Validate field name
     valid_fields = {"brand_color", "accent_color", "prefer_logo_over_icon", "icon", "logo"}
     if field not in valid_fields:
@@ -210,10 +215,6 @@ def update_team_branding_field(
     except (ValueError, Team.DoesNotExist):
         logger.warning(f"Workspace not found: {team_key}")
         return 404, {"detail": "Workspace not found"}
-
-    if not Member.objects.filter(user=user, team=team, role="owner").exists():
-        logger.warning(f"User {user.username} is not owner of team {team_key}")
-        return 403, {"detail": "Only allowed for owners"}
 
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -271,6 +272,28 @@ def delete_from_s3(
     s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
 
 
+def _refresh_workspace_list_session(request: HttpRequest) -> None:
+    """Recompute the cached workspace list after a rename.
+
+    Only for callers that already carry one. SessionMiddleware hands every
+    request a lazy SessionStore, so writing to it unconditionally would mint a
+    session row and a Set-Cookie for token clients that never asked for one.
+    """
+    session = getattr(request, "session", None)
+    user = getattr(request, "user", None)
+    if session is None or user is None or not user.is_authenticated:
+        return
+
+    # Refresh a workspace list only where one already exists. session_key alone
+    # is the unloaded cookie value, so a token client sending a stale sessionid
+    # would pass that check and then get a fresh session minted on write. Reading
+    # a key loads the store, and a dead key loads as empty.
+    if "user_teams" not in session:
+        return
+
+    update_user_teams_session(request, user)
+
+
 @router.put(
     "/{team_key}/branding",
     response={200: BrandingInfoWithUrls, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
@@ -280,18 +303,12 @@ def update_team_branding(
     team_key: str,
     payload: UpdateTeamBrandingSchema,
 ) -> tuple[int, Any]:
-    user = cast(User, request.user)
-
     # TODO: has to be in middleware or decorator or anything else
     try:
         team = Team.objects.get(pk=token_to_number(team_key))
     except (ValueError, Team.DoesNotExist):
         logger.warning(f"Workspace not found: {team_key}")
         return 404, {"detail": "Workspace not found"}
-
-    if not Member.objects.filter(user=user, team=team, role="owner").exists():
-        logger.warning(f"User {user.username} is not owner of team {team_key}")
-        return 403, {"detail": "Only allowed for owners"}
 
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -356,8 +373,6 @@ def upload_branding_file(
 
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
-    user = cast(User, request.user)
-
     if file_type not in ["icon", "logo"]:
         return 400, {"detail": "Invalid file type. Must be 'icon' or 'logo'"}
 
@@ -365,9 +380,6 @@ def upload_branding_file(
         team = Team.objects.get(pk=token_to_number(team_key))
     except (ValueError, Team.DoesNotExist):
         return 404, {"detail": "Workspace not found"}
-
-    if not Member.objects.filter(user=user, team=team, role="owner").exists():
-        return 403, {"detail": "Only allowed for owners"}
 
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -1033,8 +1045,6 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
 
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
-    user = cast(User, request.user)
-
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -1044,10 +1054,6 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
-
-    # Check if user is owner
-    if not Member.objects.filter(user=user, team=team, role="owner").exists():
-        return 403, {"detail": "Only owners can update team information"}
 
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -1060,6 +1066,14 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
                     return 403, {"detail": "Disabling the Trust Center is available on Business or Enterprise plans."}
                 team.is_public = payload.is_public
             team.save()
+
+        # The navbar reads the session's current_team; without this the old
+        # name survives every reload until the session cache expires. The
+        # sidebar and header are also cached fragments keyed on
+        # ``user_teams_version``, so the workspace list has to be recomputed
+        # too or the switcher keeps the old name regardless.
+        refresh_current_team_session(request, team)
+        _refresh_workspace_list_session(request)
 
         return 200, _build_team_response(request, team)
 
@@ -1082,8 +1096,6 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
 
     Note: 'team_key' parameter name is retained for backward compatibility and represents the workspace key.
     """
-    user = cast(User, request.user)
-
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -1093,10 +1105,6 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
-
-    # Check if user is owner
-    if not Member.objects.filter(user=user, team=team, role="owner").exists():
-        return 403, {"detail": "Only owners can update team information"}
 
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -1111,6 +1119,9 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
             for field, value in update_data.items():
                 setattr(team, field, value)
             team.save()
+
+        refresh_current_team_session(request, team)
+        _refresh_workspace_list_session(request)
 
         return 200, _build_team_response(request, team)
 
@@ -1142,8 +1153,6 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
     from sbomify.apps.teams.utils import invalidate_custom_domain_cache
     from sbomify.apps.teams.validators import validate_custom_domain
 
-    user = cast(User, request.user)
-
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -1153,10 +1162,6 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
-
-    # Check if user is owner
-    if not Member.objects.filter(user=user, team=team, role="owner").exists():
-        return 403, {"detail": "Only owners can update team domain"}
 
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -1223,8 +1228,6 @@ def delete_team_domain(request: HttpRequest, team_key: str) -> tuple[int, Any]:
     """Remove workspace custom domain."""
     from sbomify.apps.teams.utils import invalidate_custom_domain_cache
 
-    user = cast(User, request.user)
-
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -1234,10 +1237,6 @@ def delete_team_domain(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
-
-    # Check if user is owner
-    if not Member.objects.filter(user=user, team=team, role="owner").exists():
-        return 403, {"detail": "Only owners can update team domain"}
 
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -1330,8 +1329,29 @@ def get_team(request: HttpRequest, team_key: str) -> tuple[int, Any]:
 # Internal endpoints (no auth required - secured at proxy level)
 internal_router = Router(tags=["Internal"], auth=None)
 
+# How long an on-demand TLS decision is reused before the database is consulted
+# again. Caddy asks once per TLS handshake against an unprovisioned hostname, so
+# a client retrying in a loop turns into one query per handshake without this.
+#
+# The two directions carry different risk, hence different windows. A stale
+# *allow* means a certificate is issued for a workspace that has just gone
+# private, which the proxy layer still gates on; a stale *deny* means a
+# newly-created trust center waits for its first certificate, which the user is
+# sitting in front of. So denials expire quickly and approvals are held longer.
+ON_DEMAND_TLS_ALLOW_CACHE_SECONDS = 300
+ON_DEMAND_TLS_DENY_CACHE_SECONDS = 60
 
-@internal_router.get("/domains", response={200: None, 404: None})
+
+@internal_router.get(
+    "/domains",
+    response={200: None, 404: None},
+    throttle=[OnDemandTLSRateThrottle()],
+    # A per-operation throttle replaces the global list rather than adding to
+    # it, so naming this one is what takes the ask out of the shared anonymous
+    # budget. Declared here rather than relying on the cache below, because
+    # ninja charges throttles in Operation._run_checks() before the view runs —
+    # a cache inside the view cannot stop the budget being spent.
+)
 def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
     """
     Check if a domain is allowed for on-demand TLS certificate provisioning.
@@ -1359,8 +1379,6 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
     """
     from urllib.parse import urlparse
 
-    logger.info(f"On-demand TLS check: domain={domain} from {request.META.get('REMOTE_ADDR')}")
-
     # Sanitize and normalize domain input using urlparse
     # This handles cases where input might include protocol, port, or path
     # Note: urlparse requires a scheme to identify hostname, so we add one if missing
@@ -1381,6 +1399,41 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
         logger.warning(f"On-demand TLS denied: failed to parse domain '{domain}': {e}")
         return 404, None
 
+    # Logged before the cache is consulted. Moving it behind the lookup removed
+    # the only record of who asked: support tracing "my certificate never
+    # issued" would find the failing handshake answered from cache with no line
+    # for it at all, and an abusive prober could no longer be attributed to an
+    # address. Debug rather than info, so the volume this endpoint sees stays
+    # out of the default stream while remaining recoverable.
+    logger.debug(f"On-demand TLS check: domain={domain} from {request.META.get('REMOTE_ADDR')}")
+
+    # Answered from cache before the query: a hostname being probed in a loop is
+    # the case this endpoint sees most, and repeating the lookup and the denial
+    # warning for every handshake is what made it the single loudest source of
+    # traffic and log volume in production.
+    cache_key = on_demand_tls_cache_key(domain_normalized)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return (200, None) if cached else (404, None)
+
+    status = _resolve_on_demand_tls(domain_normalized)
+    cache.set(
+        cache_key,
+        status == 200,
+        timeout=(ON_DEMAND_TLS_ALLOW_CACHE_SECONDS if status == 200 else ON_DEMAND_TLS_DENY_CACHE_SECONDS),
+    )
+    return status, None
+
+
+def _resolve_on_demand_tls(domain_normalized: str) -> int:
+    """Decide whether ``domain_normalized`` may be issued a certificate.
+
+    Split from the endpoint so the decision can be cached without the cache
+    having to reproduce the branching. Returns the HTTP status Caddy reads:
+    200 to issue, 404 to refuse.
+    """
+    from urllib.parse import urlparse
+
     # Check if domain is the main application domain
     if settings.APP_BASE_URL:
         try:
@@ -1391,7 +1444,7 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
             app_domain = parsed_app.hostname
             if app_domain and domain_normalized == app_domain.lower():
                 logger.info(f"On-demand TLS approved: {domain_normalized} (main application domain)")
-                return 200, None
+                return 200
         except (ValueError, AttributeError):
             # Invalid APP_BASE_URL - continue to check custom domains
             logger.warning(f"Failed to parse APP_BASE_URL: {settings.APP_BASE_URL}")
@@ -1405,9 +1458,9 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
         if slug and 3 <= len(slug) <= 63 and _SLUG_PATTERN.match(slug):
             if Team.objects.filter(slug=slug, is_public=True).exists():
                 logger.info(f"On-demand TLS approved: {domain_normalized} (trust center subdomain)")
-                return 200, None
+                return 200
         logger.warning(f"On-demand TLS denied: {domain_normalized} (unknown trust center slug)")
-        return 404, None
+        return 404
 
     # Check if domain exists and belongs to Business/Enterprise team
     is_allowed = Team.objects.filter(
@@ -1416,10 +1469,10 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
 
     if is_allowed:
         logger.info(f"On-demand TLS approved: {domain_normalized} (custom domain)")
-        return 200, None
+        return 200
     else:
         logger.warning(f"On-demand TLS denied: {domain_normalized} (not found in allowed domains)")
-        return 404, None
+        return 404
 
 
 def _supplier_team(request: HttpRequest, team_key: str, action: str) -> tuple[int, Any]:

@@ -6,10 +6,12 @@ from typing import cast
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.views import View
 
+from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY
+from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team
@@ -26,9 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    """View for managing workspace general settings (name, default, deletion)."""
+    """View for managing workspace general settings (name, default, deletion).
 
-    allowed_roles = ["owner"]
+    Gated at the ``ADMINISTER`` tier (owners and admins). Workspace *deletion* is
+    the exception — ``_delete_workspace`` re-checks for owner, since deleting the
+    workspace is one of the two things an admin may not do.
+    """
+
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         user = cast(User, request.user)
@@ -87,6 +94,11 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 team_obj.save(update_fields=["name", "sbom_freshness_days"])
 
             refresh_current_team_session(request, team_obj)
+            # The sidebar and header are cached fragments keyed on
+            # ``user_teams_version``, and only this call recomputes that
+            # checksum. Without it the switcher keeps showing the old name
+            # until the cache expires on its own.
+            update_user_teams_session(request, cast(User, request.user))
 
             return htmx_success_response(
                 "Workspace settings updated successfully", triggers={"refreshTeamGeneral": True}
@@ -123,10 +135,20 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return htmx_error_response("Failed to set default workspace. Please try again.")
 
     def _delete_workspace(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        """Delete the workspace."""
+        """Delete the workspace — owner only.
+
+        The class gate admits admins; this is the ``OWNER_ONLY`` carve-out, so
+        re-check here rather than relying on the mixin.
+        """
         user = cast(User, request.user)
         try:
-            membership = Member.objects.select_related("team").get(user=user, team__key=team_key, role="owner")
+            membership = Member.objects.select_related("team").get(user=user, team__key=team_key)
+            if membership.role not in OWNER_ONLY:
+                # A real 403, matching what TeamRoleRequiredMixin returns for the
+                # rest of the view — an authorization failure, not a form error.
+                return error_response(
+                    request, HttpResponseForbidden("Only the workspace owner can delete a workspace.")
+                )
 
             if membership.is_default_team:
                 return htmx_error_response(

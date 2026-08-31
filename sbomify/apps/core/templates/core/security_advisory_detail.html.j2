@@ -1,5 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load static %}
+{% load static public_url_tags %}
 {% block title %}{{ advisory.title }} · sbomify{% endblock %}
 {% block dashboard_content %}
     <div class="space-y-6">
@@ -9,12 +9,26 @@
             <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i>
             Security advisories
         </a>
+        {% comment %}A draft is invisible outside the workspace, which is not obvious from the page itself, so it is said once at the top. The action opens the same publish modal the actions menu opens, so there is one publish flow and one confirmation, and it is gated on has_crud_permissions because that is what renders that modal.{% endcomment %}
+        {% if advisory.publication_status == 'draft' %}
+            <c-feedback.alert icon="fas fa-file-pen" title="This advisory is a draft">
+            Only your workspace can see it. Publish it to put it on your Trust Center.
+            {% if has_crud_permissions %}
+                <c-slot name="action">
+                <c-buttons.primary size="sm" class="shrink-0" @click="$dispatch('open-publish-advisory-modal')">
+                <i class="fas fa-bullhorn" aria-hidden="true"></i>
+                Publish advisory
+                </c-buttons.primary>
+                </c-slot>
+            {% endif %}
+            </c-feedback.alert>
+        {% endif %}
         {% comment %}Header — same shape as the product and component detail pages: the actions drop below the title on narrow viewports rather than squeezing it.{% endcomment %}
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div class="flex items-start gap-4 min-w-0">
-                <div class="tw-avatar tw-avatar-lg shrink-0">
-                    <i class="fas fa-shield-halved"></i>
-                </div>
+                <c-avatar size="lg">
+                <i class="fas fa-shield-halved"></i>
+                </c-avatar>
                 {% comment %}Both clamps are line-based, so the cut follows the rendered width and the ellipsis is the browser's — a wide screen shows more of the same title than a narrow one. One disclosure governs both, because a title long enough to clip usually comes with a description long enough to clip too. clipped is only re-measured while collapsed: expanding removes the clamp, so a measurement taken then would report nothing overflowing and the button would vanish mid-use. break-words keeps an unbroken string (a pasted identifier, a hostname) from running under the header actions.{% endcomment %}
                 <div class="flex-1 min-w-0"
                      x-data="{ expanded: false, clipped: false, measure() { this.clipped = [$refs.title, $refs.summary].some((el) => el && el.scrollHeight > el.clientHeight) } }"
@@ -42,75 +56,55 @@
             </div>
             {# Header actions #}
             <div class="flex items-center gap-2 shrink-0 flex-wrap">
-                <a href="{% url 'core:workspace_public_current' %}"
-                   target="_blank"
-                   rel="noopener"
-                   class="tw-btn-secondary tw-btn-sm gap-2">
+                {% comment %}
+                    Straight to this advisory on the trust centre, not the trust
+                    centre's front page. A draft is not published there at all,
+                    so the link is only offered once it is, and the same URL is
+                    what the copy action puts on the clipboard.
+
+                    advisory.pk, not advisory.id: id is the display identifier
+                    and the view accepts both, but the trust centre's own list
+                    links by pk, and one page should have one URL.
+                {% endcomment %}
+                {% if advisory.publication_status != 'draft' %}
+                    <c-buttons.secondary size="sm" href="{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id=advisory.pk %}" target="_blank" rel="noopener">
                     <i class="fas fa-arrow-up-right-from-square text-xs" aria-hidden="true"></i>
                     <span class="hidden sm:inline">View in Trust Center</span>
-                </a>
+                    </c-buttons.secondary>
+                {% endif %}
                 {% if has_crud_permissions %}
-                    <div x-data="{ open: false }"
-                         class="relative shrink-0"
-                         @keydown.escape.window="if(open) open = false">
-                        <button type="button"
-                                @click="open = !open"
-                                :aria-expanded="open"
-                                aria-haspopup="true"
-                                aria-label="Advisory actions"
-                                class="w-10 h-10 rounded-lg flex items-center justify-center text-text-muted hover:bg-border/50 hover:text-text transition-colors">
-                            <i class="fas fa-ellipsis" aria-hidden="true"></i>
-                        </button>
-                        <div x-show="open"
-                             x-cloak
-                             @click.away="open = false"
-                             class="tw-dropdown right-0 top-full mt-2"
-                             role="menu"
-                             aria-orientation="vertical"
-                             aria-label="Advisory actions">
-                            {% if advisory.publication_status == 'draft' %}
-                                {# Publishing is what puts an advisory on the Trust Center — until it runs, an advisory is a draft with private visibility and both are filtered out there. #}
-                                <button type="button"
-                                        class="tw-dropdown-item"
-                                        role="menuitem"
-                                        @click="open = false; $dispatch('open-publish-advisory-modal')">
-                                    <i class="fas fa-bullhorn w-5 text-center opacity-70" aria-hidden="true"></i>
-                                    Publish advisory
-                                </button>
-                                <div class="tw-dropdown-divider"></div>
-                            {% endif %}
-                            <button type="button"
-                                    class="tw-dropdown-item"
-                                    role="menuitem"
-                                    @click="open = false; $dispatch('open-edit-advisory-modal')">
-                                <i class="fas fa-pen w-5 text-center opacity-70" aria-hidden="true"></i>
-                                Edit advisory
-                            </button>
-                            <button type="button"
-                                    class="tw-dropdown-item"
-                                    role="menuitem"
-                                    @click="open = false; navigator.clipboard && navigator.clipboard.writeText(window.location.href)">
-                                <i class="fas fa-link w-5 text-center opacity-70" aria-hidden="true"></i>
-                                Copy link
-                            </button>
-                            <button type="button"
-                                    class="tw-dropdown-item"
-                                    role="menuitem"
-                                    @click="open = false; $dispatch('open-link-vex-modal')">
-                                <i class="fas fa-file-shield w-5 text-center opacity-70"
-                                   aria-hidden="true"></i>
-                                Link a VEX
-                            </button>
-                            <div class="tw-dropdown-divider"></div>
-                            <button type="button"
-                                    class="tw-dropdown-item tw-dropdown-item-danger"
-                                    role="menuitem"
-                                    @click="open = false">
-                                <i class="fas fa-trash w-5 text-center opacity-70" aria-hidden="true"></i>
-                                Delete advisory
-                            </button>
-                        </div>
-                    </div>
+                    <c-actions-menu label="Advisory actions">
+                    {% if advisory.publication_status == 'draft' %}
+                        {# Publishing is what puts an advisory on the Trust Center — until it runs, an advisory is a draft with private visibility and both are filtered out there. #}
+                        <c-dropdowns.item icon="fas fa-bullhorn" @click="$dispatch('open-publish-advisory-modal')">
+                        Publish advisory
+                        </c-dropdowns.item>
+                        <c-dropdowns.divider />
+                    {% endif %}
+                    <c-dropdowns.item icon="fas fa-pen" @click="$dispatch('open-edit-advisory-modal')">
+                    Edit advisory
+                    </c-dropdowns.item>
+                    {% if advisory.publication_status != 'draft' %}
+                        {% comment %}
+                            The public URL, not this page's. Someone copying a
+                            link from an advisory means to send it to a customer,
+                            and this page needs a login. new URL resolves the
+                            path against the origin, so it works whether the tag
+                            returns a path on the app domain or an absolute URL
+                            on a custom one.
+                        {% endcomment %}
+                        <c-dropdowns.item icon="fas fa-link" @click="navigator.clipboard && navigator.clipboard.writeText(new URL('{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id=advisory.pk %}', window.location.origin).href)">
+                        Copy public link
+                        </c-dropdowns.item>
+                    {% endif %}
+                    <c-dropdowns.item icon="fas fa-file-shield" @click="$dispatch('open-link-vex-modal')">
+                    Link a VEX
+                    </c-dropdowns.item>
+                    <c-dropdowns.divider />
+                    <c-dropdowns.item-danger icon="fas fa-trash" @click="$dispatch('open-delete-advisory-modal', { id: '{{ advisory.id|escapejs }}', title: '{{ advisory.title|escapejs }}' })">
+                    Delete advisory
+                    </c-dropdowns.item-danger>
+                    </c-actions-menu>
                 {% endif %}
             </div>
         </div>
@@ -126,9 +120,9 @@
                 {% if has_crud_permissions %}
                     <div class="flex gap-4">
                         <div class="flex flex-col items-center">
-                            <span class="w-8 h-8 rounded-full bg-primary/15 border border-primary/40 flex items-center justify-center text-primary shrink-0">
-                                <i class="fas fa-pen text-xs" aria-hidden="true"></i>
-                            </span>
+                            <c-chips.icon-chip size="sm" circle>
+                            <i class="fas fa-pen text-xs" aria-hidden="true"></i>
+                            </c-chips.icon-chip>
                             <span class="w-px flex-1 bg-border/70 my-1"></span>
                         </div>
                         <div class="flex-1 min-w-0 pb-8">
@@ -146,19 +140,18 @@
                                     <div class="flex items-center justify-between gap-3 px-3 py-2.5 border-t border-border/50 bg-background/30">
                                         <div>
                                             <label for="composerKind" class="sr-only">Update type</label>
-                                            <select id="composerKind"
-                                                    name="kind"
-                                                    class="tw-form-select !w-auto min-w-[190px] text-sm py-1.5">
-                                                <option value="update">Note only</option>
-                                                <option value="investigating">Investigating</option>
-                                                <option value="fix_in_progress">Fix in progress</option>
-                                                <option value="resolved">Resolved</option>
-                                                <option value="wont_fix">Won't fix</option>
-                                            </select>
+                                            {# The field sizes to its content here, so width is the caller's layout. #}
+                                            <c-forms.select id="composerKind" name="kind" class="!w-auto min-w-[190px]">
+                                            <option value="update">Note only</option>
+                                            <option value="investigating">Investigating</option>
+                                            <option value="fix_in_progress">Fix in progress</option>
+                                            <option value="resolved">Resolved</option>
+                                            <option value="wont_fix">Won't fix</option>
+                                            </c-forms.select>
                                         </div>
-                                        <button type="submit" class="tw-btn-primary tw-btn-sm">
-                                            <i class="fas fa-paper-plane mr-2"></i>Post update
-                                        </button>
+                                        <c-buttons.primary type="submit" size="sm">
+                                        <i class="fas fa-paper-plane mr-2"></i>Post update
+                                        </c-buttons.primary>
                                     </div>
                                 </div>
                             </form>
@@ -169,9 +162,9 @@
                 {% for u in timeline %}
                     <div class="flex gap-4 group" x-data="{ editing: false }">
                         <div class="flex flex-col items-center">
-                            <span class="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-text-muted shrink-0">
-                                <i class="{{ u.icon }} text-xs" aria-hidden="true"></i>
-                            </span>
+                            <c-chips.icon-chip size="sm" circle accent="neutral">
+                            <i class="{{ u.icon }} text-xs" aria-hidden="true"></i>
+                            </c-chips.icon-chip>
                             {% if not forloop.last %}<span class="w-px flex-1 bg-border/70 my-1"></span>{% endif %}
                         </div>
                         <div class="flex-1 min-w-0 {% if not forloop.last %}pb-8{% endif %}"
@@ -183,7 +176,8 @@
                                         <i class="fas fa-arrow-right text-[10px] text-text-muted shrink-0"
                                            aria-hidden="true"></i>
                                     {% endif %}
-                                    <span class="tw-badge tw-badge-{{ u.variant }}">{{ u.label }}</span>
+                                    {% comment %}The variant is a value the projection carries, so the badge takes it on the data attribute it keys every recipe from rather than as an interpolated class name.{% endcomment %}
+                                    <c-badges.dynamic variant="{{ u.variant }}">{{ u.label }}</c-badges.dynamic>
                                 </span>
                                 <div class="flex items-center gap-3 shrink-0">
                                     <span class="text-xs text-text-muted">{{ u.date_display }}</span>
@@ -209,16 +203,10 @@
                                     <input type="hidden" name="intent" value="edit_update" />
                                     <input type="hidden" name="update_id" value="{{ forloop.counter }}" />
                                     <label class="sr-only" for="editUpdate{{ forloop.counter }}">Edit update note</label>
-                                    <textarea id="editUpdate{{ forloop.counter }}"
-                                              name="note"
-                                              rows="2"
-                                              required
-                                              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text resize-none transition-colors focus:outline-none focus:border-primary/60">{{ u.note }}</textarea>
+                                    <c-forms.textarea id="editUpdate{{ forloop.counter }}" name="note" rows="2" value="{{ u.note }}" required />
                                     <div class="flex items-center gap-2 mt-2">
-                                        <button type="submit" class="tw-btn-primary tw-btn-sm">Save</button>
-                                        <button type="button"
-                                                class="tw-btn-ghost tw-btn-sm"
-                                                @click.stop="editing = false">Cancel</button>
+                                        <c-buttons.primary type="submit" size="sm">Save</c-buttons.primary>
+                                        <c-buttons.ghost size="sm" @click.stop="editing = false">Cancel</c-buttons.ghost>
                                     </div>
                                 </form>
                             {% endif %}
@@ -234,14 +222,27 @@
                         <div class="flex items-center justify-between gap-3">
                             <dt class="text-text-muted">Status</dt>
                             <dd>
-                                <span class="tw-badge tw-badge-{{ advisory.status_variant }}">{{ advisory.status_label }}</span>
+                                <c-badges.dynamic variant="{{ advisory.status_variant }}">{{ advisory.status_label }}</c-badges.dynamic>
                             </dd>
                         </div>
                         <div class="flex items-center justify-between gap-3">
                             <dt class="text-text-muted">Severity</dt>
                             <dd>
-                                <span class="tw-badge tw-badge-{{ advisory.severity_variant }}">{{ advisory.severity|title }}</span>
+                                <c-badges.severity level="{{ advisory.severity }}">{{ advisory.severity|default:"none" }}</c-badges.severity>
                             </dd>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <dt class="text-text-muted">CVSS</dt>
+                            {% if advisory.cvss_score %}
+                                <dd class="text-text"
+                                    {% if advisory.cvss_vector %}title="{{ advisory.cvss_vector }}"{% endif %}>
+                                    {{ advisory.cvss_score }}
+                                </dd>
+                            {% else %}
+                                <dd class="text-text-muted">
+                                    Not set
+                                </dd>
+                            {% endif %}
                         </div>
                         <div class="flex items-center justify-between gap-3">
                             <dt class="text-text-muted">Type</dt>
@@ -278,24 +279,24 @@
                                 {% if advisory.advisory_type == 'workspace_notice' %}
                                     A workspace notice names no products.
                                 {% else %}
-                                    No products recorded yet — publishing a product advisory requires at least one.
+                                    No products recorded yet. Publishing a product advisory requires at least one.
                                 {% endif %}
                             </p>
                         {% endif %}
                         {% for product in advisory.products %}
-                            <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-border/20 text-text-muted border border-border/40">
-                                <i class="fas fa-cube text-[10px] mr-1.5 opacity-70"></i>
-                                {% if product.id %}
-                                    <a href="{% url 'core:product_details' product.id %}"
-                                       class="transition-colors hover:opacity-80">{{ product.name }}</a>
-                                {% else %}
-                                    {{ product.name }}
-                                {% endif %}
-                                {% if product.affected_ranges %}
-                                    <span class="ml-1.5 pl-1.5 border-l border-border/60 font-normal opacity-80"
-                                          title="Affected releases">{{ product.affected_ranges|join:", " }}</span>
-                                {% endif %}
-                            </span>
+                            <c-chips.neutral>
+                            <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
+                            {% if product.id %}
+                                <a href="{% url 'core:product_details' product.id %}"
+                                   class="transition-colors hover:opacity-80">{{ product.name }}</a>
+                            {% else %}
+                                {{ product.name }}
+                            {% endif %}
+                            {% if product.affected_ranges %}
+                                <span class="ml-1.5 pl-1.5 border-l border-border/60 font-normal opacity-80"
+                                      title="Affected releases">{{ product.affected_ranges|join:", " }}</span>
+                            {% endif %}
+                            </c-chips.neutral>
                         {% endfor %}
                     </div>
                 </div>
@@ -327,90 +328,50 @@
         {% if has_crud_permissions and advisory.publication_status == 'draft' %}
             <div x-data="{ open: false }"
                  @open-publish-advisory-modal.window="open = true">
-                <template x-teleport="body">
-                    <div x-show="open"
-                         x-cloak
-                         class="fixed inset-0 z-[100]"
-                         role="dialog"
-                         aria-modal="true"
-                         aria-labelledby="publishAdvisoryModalLabel">
-                        <div x-show="open"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0"
-                             x-transition:enter-end="opacity-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100"
-                             x-transition:leave-end="opacity-0"
-                             class="tw-modal-overlay"
-                             @click="open = false"></div>
-                        <div class="tw-modal"
-                             x-show="open"
-                             x-trap.noscroll="open"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0 scale-95"
-                             x-transition:enter-end="opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100 scale-100"
-                             x-transition:leave-end="opacity-0 scale-95"
-                             @click.stop
-                             @keydown.escape="if(open) open = false">
-                            <div class="tw-modal-content">
-                                <div class="tw-modal-header">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                            <i class="fas fa-bullhorn text-primary"></i>
-                                        </div>
-                                        <h4 id="publishAdvisoryModalLabel" class="tw-modal-title">Publish advisory</h4>
-                                    </div>
-                                    <button type="button"
-                                            class="tw-modal-close"
-                                            @click="open = false"
-                                            aria-label="Close">
-                                        <i class="fas fa-times" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                                <form method="post"
-                                      action="{% url 'core:security_advisory_detail' advisory.id %}">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="intent" value="publish" />
-                                    <div class="tw-modal-body space-y-4">
-                                        {# Clamped like the page header: a pasted identifier for a title would otherwise run past the modal's edge. #}
-                                        <p class="text-sm text-text-muted m-0">
-                                            <strong class="text-text block break-words line-clamp-2"
-                                                    title="{{ advisory.title }}">{{ advisory.title }}</strong>
-                                            becomes readable outside this workspace and is assigned a permanent
-                                            tracking id.
-                                        </p>
-                                        <fieldset class="space-y-2 pt-1">
-                                            <legend class="tw-form-label mb-1">Who can read it</legend>
-                                            {% for value, meta in publish_visibilities.items %}
-                                                <label class="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/40">
-                                                    <input type="radio"
-                                                           name="visibility"
-                                                           value="{{ value }}"
-                                                           class="tw-radio mt-0.5"
-                                                           {% if forloop.first %}checked{% endif %} />
-                                                    <span class="min-w-0">
-                                                        <span class="block text-sm font-medium text-text">{{ meta.label }}</span>
-                                                        <span class="block text-xs text-text-muted">{{ meta.help }}</span>
-                                                    </span>
-                                                </label>
-                                            {% endfor %}
-                                        </fieldset>
-                                    </div>
-                                    <div class="tw-modal-footer">
-                                        <p class="text-xs text-text-muted m-0 mr-auto">The tracking id and the disclosure date are recorded permanently.</p>
-                                        <button type="button" class="tw-btn-secondary" @click="open = false">Cancel</button>
-                                        <button type="submit" class="tw-btn-primary gap-2">
-                                            <i class="fas fa-bullhorn" aria-hidden="true"></i>
-                                            Publish
-                                        </button>
-                                    </div>
-                                </form>
+                <c-modal id="publishAdvisoryModal" title="Publish advisory" icon="fas fa-bullhorn">
+                <form id="publishAdvisoryForm"
+                      method="post"
+                      action="{% url 'core:security_advisory_detail' advisory.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="intent" value="publish" />
+                    <div class="space-y-4">
+                        {# Clamped like the page header: a pasted identifier for a title would otherwise run past the modal's edge. #}
+                        <p class="text-sm text-text-muted m-0">
+                            <strong class="text-text block break-words line-clamp-2"
+                                    title="{{ advisory.title }}">{{ advisory.title }}</strong>
+                            becomes readable outside this workspace and is assigned a permanent
+                            tracking id.
+                        </p>
+                        <fieldset class="pt-1">
+                            <c-forms.label as="legend">Who can read it</c-forms.label>
+                            <div class="rounded-lg border border-border divide-y divide-border overflow-hidden">
+                                {% comment %}Each row is the label for the radio inside it, which is what names the control, so the row stays a label rather than becoming the library's div row.{% endcomment %}
+                                {% for value, meta in publish_visibilities.items %}
+                                    <label class="tw-select-row">
+                                        <input type="radio"
+                                               name="visibility"
+                                               value="{{ value }}"
+                                               class="tw-radio mt-0.5"
+                                               {% if forloop.first %}checked{% endif %} />
+                                        <span class="min-w-0">
+                                            <span class="block text-sm font-medium text-text">{{ meta.label }}</span>
+                                            <span class="block text-xs text-text-muted">{{ meta.help }}</span>
+                                        </span>
+                                    </label>
+                                {% endfor %}
                             </div>
-                        </div>
+                        </fieldset>
                     </div>
-                </template>
+                </form>
+                <c-slot name="footer">
+                <p class="text-xs text-text-muted m-0 mr-auto">The tracking id and the disclosure date are recorded permanently.</p>
+                <c-buttons.secondary @click="open = false">Cancel</c-buttons.secondary>
+                <c-buttons.primary type="submit" form="publishAdvisoryForm">
+                <i class="fas fa-bullhorn" aria-hidden="true"></i>
+                Publish
+                </c-buttons.primary>
+                </c-slot>
+                </c-modal>
             </div>
         {% endif %}
         {# Edit Advisory Modal (Alpine.js) #}
@@ -422,238 +383,141 @@
                     false
                 {% endif %}
                 }" @open-edit-advisory-modal.window="open = true; showRef = {% if advisory.vulnerability_id %}true{% else %}false{% endif %}">
-                <template x-teleport="body">
-                    <div x-show="open"
-                         x-cloak
-                         class="fixed inset-0 z-[100]"
-                         role="dialog"
-                         aria-modal="true"
-                         aria-labelledby="editAdvisoryModalLabel">
-                        <div x-show="open"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0"
-                             x-transition:enter-end="opacity-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100"
-                             x-transition:leave-end="opacity-0"
-                             class="tw-modal-overlay"
-                             @click="open = false"></div>
-                        <div class="tw-modal"
-                             x-show="open"
-                             x-trap.noscroll="open"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0 scale-95"
-                             x-transition:enter-end="opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100 scale-100"
-                             x-transition:leave-end="opacity-0 scale-95"
-                             @click.stop
-                             @keydown.escape="if(open) open = false">
-                            <div class="tw-modal-content">
-                                <div class="tw-modal-header">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                            <i class="fas fa-pen text-primary"></i>
-                                        </div>
-                                        <h4 id="editAdvisoryModalLabel" class="tw-modal-title">Edit advisory</h4>
-                                    </div>
-                                    <button type="button"
-                                            class="tw-modal-close"
-                                            @click="open = false"
-                                            aria-label="Close">
-                                        <i class="fas fa-times" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                                <form method="post"
-                                      action="{% url 'core:security_advisory_detail' advisory.id %}">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="intent" value="edit" />
-                                    <div class="tw-modal-body space-y-4">
-                                        <div>
-                                            <label class="tw-form-label" for="editTitle">
-                                                Title <span class="text-danger">*</span>
-                                            </label>
-                                            <input id="editTitle"
-                                                   name="title"
-                                                   type="text"
-                                                   class="tw-form-input"
-                                                   value="{{ advisory.title }}"
-                                                   required />
-                                        </div>
-                                        <div>
-                                            <label class="tw-form-label" for="editSeverity">Severity</label>
-                                            {# An advisory may legitimately carry no severity, and without a blank option the select would silently promote it to the first one on any save. #}
-                                            <select id="editSeverity" name="severity" class="tw-form-input">
-                                                <option value="" {% if not advisory.severity %}selected{% endif %}>Not set</option>
-                                                <option value="critical"
-                                                        {% if advisory.severity == 'critical' %}selected{% endif %}>
-                                                    Critical
-                                                </option>
-                                                <option value="high" {% if advisory.severity == 'high' %}selected{% endif %}>High</option>
-                                                <option value="medium"
-                                                        {% if advisory.severity == 'medium' %}selected{% endif %}>
-                                                    Medium
-                                                </option>
-                                                <option value="low" {% if advisory.severity == 'low' %}selected{% endif %}>Low</option>
-                                            </select>
-                                        </div>
-                                        {# CVE / reference is optional — hidden until the user chooses to add it. #}
-                                        <div>
-                                            <button type="button"
-                                                    x-show="!showRef"
-                                                    @click="showRef = true; $nextTick(() => $refs.editVulnId.focus())"
-                                                    class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors">
-                                                <i class="fas fa-plus text-xs"></i>Link a CVE or reference
-                                            </button>
-                                            <div x-show="showRef" x-cloak class="space-y-1.5">
-                                                <div class="flex items-center justify-between">
-                                                    <label class="tw-form-label !mb-0" for="editVulnId">CVE or reference</label>
-                                                    <button type="button"
-                                                            @click="showRef = false; $refs.editVulnId.value = ''"
-                                                            class="text-xs text-text-muted hover:text-text transition-colors">
-                                                        Remove
-                                                    </button>
-                                                </div>
-                                                <input type="hidden" name="type" value="cve" />
-                                                <input id="editVulnId"
-                                                       name="vulnerability_id"
-                                                       x-ref="editVulnId"
-                                                       type="text"
-                                                       class="tw-form-input"
-                                                       placeholder="CVE-2026-0000"
-                                                       value="{{ advisory.vulnerability_id }}" />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label class="tw-form-label" for="editDescription">Description</label>
-                                            <textarea id="editDescription"
-                                                      name="description"
-                                                      class="tw-form-input"
-                                                      rows="3"
-                                                      placeholder="Describe the vulnerability...">{{ advisory.description }}</textarea>
-                                        </div>
-                                    </div>
-                                    <div class="tw-modal-footer">
-                                        <button type="button" class="tw-btn-ghost" @click="open = false">Cancel</button>
-                                        <button type="submit" class="tw-btn-primary">
-                                            <i class="fas fa-check mr-2"></i>Save changes
-                                        </button>
-                                    </div>
-                                </form>
+                <c-modal id="editAdvisoryModal" title="Edit advisory" icon="fas fa-pen">
+                <form id="editAdvisoryForm"
+                      method="post"
+                      action="{% url 'core:security_advisory_detail' advisory.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="intent" value="edit" />
+                    <div class="space-y-4">
+                        <div>
+                            <c-forms.label for="editTitle" required>Title</c-forms.label>
+                            <c-forms.input id="editTitle" name="title" type="text" value="{{ advisory.title }}" required />
+                        </div>
+                        <div>
+                            <c-forms.label for="editSeverity">Severity</c-forms.label>
+                            {# An advisory may legitimately carry no severity, and without a blank option the select would silently promote it to the first one on any save. #}
+                            <c-forms.select id="editSeverity" name="severity">
+                            <option value="" {% if not advisory.severity %}selected{% endif %}>Not set</option>
+                            <option value="critical"
+                                    {% if advisory.severity == 'critical' %}selected{% endif %}>Critical</option>
+                            <option value="high" {% if advisory.severity == 'high' %}selected{% endif %}>High</option>
+                            <option value="medium"
+                                    {% if advisory.severity == 'medium' %}selected{% endif %}>Medium</option>
+                            <option value="low" {% if advisory.severity == 'low' %}selected{% endif %}>Low</option>
+                            </c-forms.select>
+                        </div>
+                        <div class="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-3">
+                            <div>
+                                <c-forms.label for="editCvssScore">CVSS score</c-forms.label>
+                                <c-forms.input id="editCvssScore" name="cvss_score" type="number" min="0" max="10" step="0.1" inputmode="decimal" placeholder="9.8" value="{{ advisory.cvss_score|default_if_none:'' }}" />
+                            </div>
+                            <div>
+                                <c-forms.label for="editCvssVector">CVSS vector</c-forms.label>
+                                <c-forms.input id="editCvssVector" name="cvss_vector" type="text" placeholder="CVSS:3.1/AV:N/…" value="{{ advisory.cvss_vector }}" />
                             </div>
                         </div>
+                        {# CVE / reference is optional — hidden until the user chooses to add it. #}
+                        <div>
+                            <button type="button"
+                                    x-show="!showRef"
+                                    @click="showRef = true; $nextTick(() => $refs.editVulnId.focus())"
+                                    class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors">
+                                <i class="fas fa-plus text-xs"></i>Link a CVE or reference
+                            </button>
+                            <div x-show="showRef" x-cloak class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <c-forms.label for="editVulnId" class="!mb-0">CVE or reference</c-forms.label>
+                                    <button type="button"
+                                            @click="showRef = false; $refs.editVulnId.value = ''"
+                                            class="text-xs text-text-muted hover:text-text transition-colors">
+                                        Remove
+                                    </button>
+                                </div>
+                                <input type="hidden" name="type" value="cve" />
+                                <c-forms.input id="editVulnId" name="vulnerability_id" type="text" placeholder="CVE-2026-0000" value="{{ advisory.vulnerability_id }}" x-ref="editVulnId" />
+                            </div>
+                        </div>
+                        <div>
+                            <c-forms.label for="editDescription">Description</c-forms.label>
+                            <c-forms.textarea id="editDescription" name="description" rows="3" value="{{ advisory.description }}" placeholder="Describe the vulnerability..." />
+                        </div>
                     </div>
-                </template>
+                </form>
+                <c-slot name="footer">
+                <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
+                <c-buttons.primary type="submit" form="editAdvisoryForm">
+                <i class="fas fa-check mr-2"></i>Save changes
+                </c-buttons.primary>
+                </c-slot>
+                </c-modal>
             </div>
             {# Link a VEX Modal (Alpine.js) — front-end preview, does not persist yet (#1172) #}
             <div x-data="{ open: false, sel: [], search: '', candidates: [], init() { this.candidates = window.parseJsonScript('vex-candidates') || []; if (window.location.hash === '#link-vex') this.open = true; }, get filtered() { if (!this.search) return this.candidates; const s = this.search.toLowerCase(); return this.candidates.filter(v => (v.product + ' ' + v.coverage + ' ' + v.format).toLowerCase().includes(s)); } }"
                  @open-link-vex-modal.window="open = true; sel = []; search = ''">
                 {{ vex_candidates|json_script:"vex-candidates" }}
-                <template x-teleport="body">
-                    <div x-show="open"
-                         x-cloak
-                         class="fixed inset-0 z-[100]"
-                         role="dialog"
-                         aria-modal="true"
-                         aria-labelledby="linkVexModalLabel">
-                        <div x-show="open"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0"
-                             x-transition:enter-end="opacity-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100"
-                             x-transition:leave-end="opacity-0"
-                             class="tw-modal-overlay"
-                             @click="open = false"></div>
-                        <div class="tw-modal"
-                             x-show="open"
-                             x-trap.noscroll="open"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0 scale-95"
-                             x-transition:enter-end="opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100 scale-100"
-                             x-transition:leave-end="opacity-0 scale-95"
-                             @click.stop
-                             @keydown.escape="if(open) open = false">
-                            <div class="tw-modal-content">
-                                <div class="tw-modal-header">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                            <i class="fas fa-file-shield text-primary"></i>
-                                        </div>
-                                        <h4 id="linkVexModalLabel" class="tw-modal-title">Link a VEX</h4>
-                                    </div>
-                                    <button type="button"
-                                            class="tw-modal-close"
-                                            @click="open = false"
-                                            aria-label="Close">
-                                        <i class="fas fa-times" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                                <form method="post"
-                                      action="{% url 'core:security_advisory_detail' advisory.id %}">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="intent" value="link_vex" />
-                                    <div class="tw-modal-body space-y-4">
-                                        <p class="text-sm text-text-muted">
-                                            Associate an existing VEX with this advisory. VEX statements are maintained per component — linking references the live statement rather than copying it.
-                                        </p>
-                                        {% if vex_candidates %}
-                                            <div class="relative">
-                                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs"
-                                                   aria-hidden="true"></i>
-                                                <label for="vexSearch" class="sr-only">Search VEX documents</label>
-                                                <input id="vexSearch"
-                                                       type="search"
-                                                       x-model="search"
-                                                       placeholder="Search VEX documents…"
-                                                       class="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors focus:outline-none focus:border-primary/60" />
-                                            </div>
-                                            <div class="space-y-2">
-                                                <template x-for="v in filtered" :key="v.id">
-                                                    <label class="flex items-start gap-3 rounded-lg border border-border p-3 cursor-pointer transition-colors hover:border-primary/50">
-                                                        <input type="checkbox"
-                                                               name="vex_ids"
-                                                               :value="v.id"
-                                                               x-model="sel"
-                                                               class="mt-0.5 accent-primary" />
-                                                        <span class="min-w-0">
-                                                            <span class="block text-sm font-medium text-text"
-                                                                  x-text="v.product + ' — maintained VEX'"></span>
-                                                            <span class="block text-xs text-text-muted mt-0.5"
-                                                                  x-text="v.format + ' · covers ' + v.coverage + ' · updated ' + v.updated"></span>
-                                                        </span>
-                                                    </label>
-                                                </template>
-                                                <template x-if="filtered.length === 0">
-                                                    <div class="rounded-lg border border-border bg-surface p-4 text-sm text-text-muted text-center">
-                                                        No VEX matches your search.
-                                                    </div>
-                                                </template>
-                                            </div>
-                                        {% else %}
-                                            <div class="rounded-lg border border-border bg-surface p-4 text-sm text-text-muted text-center">
-                                                No VEX found for this advisory's products yet.
-                                            </div>
-                                        {% endif %}
-                                    </div>
-                                    <div class="tw-modal-footer">
-                                        <button type="button" class="tw-btn-ghost" @click="open = false">Cancel</button>
-                                        <button type="submit"
-                                                class="tw-btn-primary"
-                                                :disabled="sel.length === 0"
-                                                :class="sel.length === 0 ? 'opacity-50 cursor-not-allowed' : ''">
-                                            <i class="fas fa-file-shield mr-2"></i>
-                                            <span x-text="sel.length > 1 ? ('Link ' + sel.length + ' VEX documents') : 'Link VEX'"></span>
-                                        </button>
-                                    </div>
-                                </form>
+                <c-modal id="linkVexModal" title="Link a VEX" icon="fas fa-file-shield">
+                <form id="linkVexForm"
+                      method="post"
+                      action="{% url 'core:security_advisory_detail' advisory.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="intent" value="link_vex" />
+                    <div class="space-y-4">
+                        <p class="text-sm text-text-muted">
+                            Associate an existing VEX with this advisory. VEX statements are maintained per component. Linking references the live statement, not a copy.
+                        </p>
+                        {% if vex_candidates %}
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs"
+                                   aria-hidden="true"></i>
+                                <label for="vexSearch" class="sr-only">Search VEX documents</label>
+                                <c-forms.input id="vexSearch" type="search" placeholder="Search VEX documents…" x-model="search" />
                             </div>
-                        </div>
+                            <div class="space-y-2">
+                                <div class="rounded-lg border border-border divide-y divide-border overflow-hidden"
+                                     x-show="filtered.length > 0">
+                                    {% comment %}Each row is the label for the checkbox inside it, which is what names the control, so the row stays a label rather than becoming the library's div row.{% endcomment %}
+                                    <template x-for="v in filtered" :key="v.id">
+                                        <label class="tw-select-row">
+                                            <input type="checkbox"
+                                                   name="vex_ids"
+                                                   :value="v.id"
+                                                   x-model="sel"
+                                                   class="tw-checkbox mt-0.5" />
+                                            <span class="min-w-0">
+                                                <span class="block text-sm font-medium text-text"
+                                                      x-text="v.product + ': maintained VEX'"></span>
+                                                <span class="block text-xs text-text-muted mt-0.5"
+                                                      x-text="v.format + ' · covers ' + v.coverage + ' · updated ' + v.updated"></span>
+                                            </span>
+                                        </label>
+                                    </template>
+                                </div>
+                                <template x-if="filtered.length === 0">
+                                    <div class="rounded-lg border border-border bg-surface p-4 text-sm text-text-muted text-center">
+                                        No VEX matches your search.
+                                    </div>
+                                </template>
+                            </div>
+                        {% else %}
+                            <div class="rounded-lg border border-border bg-surface p-4 text-sm text-text-muted text-center">
+                                No VEX found for this advisory's products yet.
+                            </div>
+                        {% endif %}
                     </div>
-                </template>
+                </form>
+                <c-slot name="footer">
+                <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
+                <c-buttons.primary type="submit" form="linkVexForm" ::disabled="sel.length === 0" ::class="sel.length === 0 ? 'opacity-50 cursor-not-allowed' : ''">
+                <i class="fas fa-file-shield mr-2"></i>
+                <span x-text="sel.length > 1 ? ('Link ' + sel.length + ' VEX documents') : 'Link VEX'"></span>
+                </c-buttons.primary>
+                </c-slot>
+                </c-modal>
             </div>
+        {% endif %}
+        {% if has_crud_permissions %}
+            {% include 'core/components/advisory_delete_modal.html.j2' %}
         {% endif %}
     </div>
 {% endblock %}

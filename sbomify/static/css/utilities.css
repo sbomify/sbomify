@@ -23,19 +23,19 @@
 
 /* ===== BORDER UTILITIES ===== */
 .border-left {
-  border-left: 1px solid rgb(var(--color-border));
+  border-left: 1px solid var(--color-border);
 }
 
 .border-secondary {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--color-border);
 }
 
 /* ===== LAYOUT UTILITIES ===== */
 .dashboard-empty {
   text-align: center;
   padding: var(--spacing-2xl) var(--spacing-lg);
-  color: rgb(var(--color-text-muted));
-  background: rgb(var(--color-surface-elevated));
+  color: var(--color-text-muted);
+  background: var(--color-surface-elevated);
   border-radius: var(--radius-lg);
 }
 
@@ -234,35 +234,35 @@
 }
 
 .text-primary {
-  color: var(--brand-primary) !important;
+  color: var(--brand-primary);
 }
 
 .text-secondary {
-  color: var(--text-secondary) !important;
+  color: var(--text-secondary);
 }
 
 .text-success {
-  color: var(--brand-success) !important;
+  color: var(--brand-success);
 }
 
 .text-danger {
-  color: var(--brand-danger) !important;
+  color: var(--brand-danger);
 }
 
 .text-warning {
-  color: var(--brand-warning) !important;
+  color: var(--brand-warning);
 }
 
 .text-info {
-  color: var(--brand-info) !important;
+  color: var(--brand-info);
 }
 
 .text-muted {
-  color: var(--text-muted) !important;
+  color: var(--text-muted);
 }
 
 .text-white {
-  color: #fff !important;
+  color: #fff;
 }
 
 /* ===== SPACING UTILITIES ===== */

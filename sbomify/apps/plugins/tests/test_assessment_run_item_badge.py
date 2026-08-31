@@ -10,6 +10,11 @@ from __future__ import annotations
 
 from django.template.loader import render_to_string
 
+# The card takes its border from c-cards.collapsible's level; this is the recipe
+# that level="warning" emits, and its absence is what "not a warning" means now
+# that the card carries no tw-collapsible-card--warning class.
+WARNING_BORDER = "border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)]"
+
 
 def _run(**overrides) -> dict:
     run = {
@@ -87,7 +92,7 @@ class TestSkippedRunBadge:
 
         html = _render(run)
 
-        assert "tw-collapsible-card--warning" not in html
+        assert WARNING_BORDER not in html
 
     def test_a_skipped_compliance_run_reads_the_same(self):
         """PQC skips a document with no crypto assets. Different category, same
@@ -205,7 +210,7 @@ class TestSkippedSecurityRunBadge:
         run = _security_run()
         run["result"]["metadata"] = {"skipped": True}
 
-        assert "tw-collapsible-card--warning" not in _render(run)
+        assert WARNING_BORDER not in _render(run)
 
     def test_a_real_scan_is_untouched(self):
         """The case beside it on the same page: OSV reporting real findings."""
@@ -241,3 +246,51 @@ class TestSkippedSecurityRunBadge:
 
         assert "No Vulnerabilities" in header
         assert "Skipped" not in header
+
+
+class TestStatusMarkersAreNotVulnerabilities:
+    """The status marker a skipped scanner leaves in the findings array
+    explains the run; it is not a vulnerability. It must not appear in the
+    vulnerabilities list, grow a Triage button, or count in the Total card."""
+
+    def _skipped_security_run(self) -> dict:
+        run = _security_run()
+        run["result"]["metadata"] = {"skipped": True}
+        run["result"]["findings"] = [
+            {
+                "id": "dependency-track:no-product",
+                "title": "Skipped — component has no product membership",
+                "description": "Dependency Track scanning requires product membership.",
+                "status": "info",
+                "severity": "info",
+            }
+        ]
+        return run
+
+    def test_marker_does_not_render_as_a_vulnerability_row(self):
+        html = _render(self._skipped_security_run())
+        assert "findings-list" not in html
+        assert "Triage" not in html
+
+    def test_skipped_total_renders_zero(self):
+        import re
+
+        html = _render(self._skipped_security_run())
+        total_value = re.search(r">(\d+)</span>\s*<span[^>]*>\s*Total</span>", html.replace("\n", " "))
+        assert total_value, "Total stat card not found"
+        # The stored summary says 1 (the marker); the card must say 0.
+        assert total_value.group(1) == "0"
+
+    def test_real_findings_still_render(self):
+        run = _security_run()
+        run["result"]["findings"] = [
+            {
+                "id": "CVE-2025-1111",
+                "title": "A real vulnerability",
+                "severity": "high",
+                "component": {"name": "django", "version": "5.2.3"},
+            }
+        ]
+        html = _render(run)
+        assert "CVE-2025-1111" in html
+        assert "findings-list" in html

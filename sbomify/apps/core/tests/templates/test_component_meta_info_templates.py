@@ -1,5 +1,6 @@
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.template.loader import render_to_string
 
 from sbomify.apps.core.models import Component
@@ -11,6 +12,7 @@ class TestComponentMetaInfoTemplates:
     def test_component_meta_info_wrapper_rendering(self, rf, component_factory, product_factory):
         # Setup
         request = rf.get("/")
+        request.user = AnonymousUser()
         request.session = {"current_team": {"key": "test-team"}}
         product = product_factory("Test Product")
         component = component_factory(
@@ -60,6 +62,7 @@ class TestComponentMetaInfoTemplates:
     def test_component_meta_info_editor_rendering(self, rf, component_factory, product_factory):
         # Setup
         request = rf.get("/")
+        request.user = AnonymousUser()
         request.session = {"current_team": {"key": "test-team"}}
         product = product_factory("Test Product")
         component = component_factory("Test Component", product=product)
@@ -110,7 +113,7 @@ class TestComponentMetaInfoTemplates:
         rendered = render_to_string("sboms/components/ci_cd_info.html.j2", context)
         
         # Assertions
-        assert "CI/CD Integration" in rendered
+        assert "Get started" in rendered
         assert component.id in rendered
         # The dialog is the wizard command now. Asserting on the command rather
         # than on an Alpine component name keeps this checking what the reader

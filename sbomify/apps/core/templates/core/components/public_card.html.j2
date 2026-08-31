@@ -1,5 +1,5 @@
 {% comment %}
-PublicCard Component - A wrapper around StandardCard for public-facing pages
+PublicCard Component - A wrapper around the library card for public-facing pages
 
 Usage:
 {% include 'core/components/public_card.html.j2' with {
@@ -22,24 +22,21 @@ Parameters:
 - padded: Add body padding (default: true)
 {% endcomment %}
 <div class="mt-4 {% if hoverable %}hover:shadow-md transition-shadow{% endif %}">
-    <div class="tw-card shadow-sm">
-        {% if title or header_content %}
-            <div class="px-6 py-4 border-b border-border">
-                <div class="flex items-center justify-between gap-4">
-                    {% if title %}<h4 class="text-lg font-semibold text-text m-0">{{ title }}</h4>{% endif %}
-                    {% if header_content %}<div class="flex items-center gap-2">{{ header_content }}</div>{% endif %}
-                </div>
-            </div>
-        {% endif %}
-        <div class="p-6">
-            {% if subtitle %}
-                <div class="flex items-center gap-2 mb-4 p-3 rounded-lg bg-info/10">
-                    <i class="{{ icon|default:'fas fa-info-circle' }} text-primary"></i>
-                    <span class="text-text-muted text-sm">{{ subtitle }}</span>
-                </div>
-            {% endif %}
-            {{ content }}
+    <c-cards.card class="shadow-sm">
+    {% if title or header_content %}
+        <c-slot name="header">
+        <c-cards.header>
+        <div class="flex items-center justify-between gap-4">
+            {% if title %}<h4 class="text-lg font-semibold text-text m-0">{{ title }}</h4>{% endif %}
+            {% if header_content %}<div class="flex items-center gap-2">{{ header_content }}</div>{% endif %}
         </div>
-        {% if footer_content %}<div class="px-6 py-4 border-t border-border">{{ footer_content }}</div>{% endif %}
-    </div>
+        </c-cards.header>
+        </c-slot>
+    {% endif %}
+    {% if subtitle %}
+        <c-feedback.alert icon="{{ icon|default:'fas fa-info-circle' }}" class="mb-4">{{ subtitle }}</c-feedback.alert>
+    {% endif %}
+    {{ content }}
+    {% if footer_content %}<c-slot name="footer">{{ footer_content }}</c-slot>{% endif %}
+    </c-cards.card>
 </div>

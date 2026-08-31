@@ -1,0 +1,36 @@
+{% comment %}
+The shimmer placeholder. type is the shape and renders as one conditional
+segment, because every shape resets the same properties (size, radius, margin);
+letting two of them land together would be resolved by stylesheet order, not by
+the caller. paragraph is a stack of text skeletons and is the one branch with
+its own wrapper: it nests this component rather than restating the shimmer.
+width and height stay inline styles, as in the macro this replaces, because they
+are arbitrary caller values.
+{% endcomment %}
+<c-vars type="text" lines width height class />
+{% if type == "paragraph" %}
+    <div class="space-y-2{% if class %} {{ class }}{% endif %}" {{ attrs }}>
+        {% comment %}
+            `slice` takes the first N when given a bare count, so this is "lines rows",
+            defaulting to 3 when the caller does not say. class is cleared for the
+            rows: a prop declared bare falls through to the surrounding context, so
+            the wrapper's own class would otherwise land on every line as well.
+        {% endcomment %}
+        {% with count=lines|default:3 class="" %}
+            {% for i in "123456789"|make_list|slice:count %}
+                {% if forloop.last %}
+                    <c-feedback.skeleton width="60%" height="{{ height }}" />
+                {% else %}
+                    <c-feedback.skeleton width="100%" height="{{ height }}" />
+                {% endif %}
+            {% endfor %}
+        {% endwith %}
+    </div>
+{% else %}
+    <div class="bg-[linear-gradient(90deg,color-mix(in_oklab,var(--color-border)_50%,transparent)_25%,var(--color-surface-elevated)_50%,color-mix(in_oklab,var(--color-border)_50%,transparent)_75%)] bg-[length:200%_100%] animate-[shimmer_1.5s_ease-in-out_infinite] {% if type == 'title' %}h-6 w-[60%] mb-3 rounded-md{% elif type == 'avatar' %}w-12 h-12 shrink-0 rounded-full{% elif type == 'button' %}h-10 w-28 rounded-lg{% elif type == 'image' %}w-full h-48 rounded-lg{% else %}h-4 mb-2.5 rounded-sm last:w-[70%] last:mb-0{% endif %}{% if class %} {{ class }}{% endif %}"
+         style="{% if width %}width: {{ width }};
+                {% endif %}{% if height %}height: {{ height }};
+                {% endif %}"
+         {{ attrs }}>
+    </div>
+{% endif %}

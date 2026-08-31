@@ -35,6 +35,22 @@ def _is_mailable(user: Any) -> bool:
     return True
 
 
+def _unsubscribe_headers(unsubscribe_url: str | None) -> dict[str, str]:
+    """List-Unsubscribe headers for a drip message.
+
+    Gmail and Yahoo require these on bulk mail, and they are what puts the
+    native "Unsubscribe" control next to the sender name. The One-Click header
+    tells the client to POST rather than follow the link, which is also why the
+    view treats GET as an offer and POST as the action.
+    """
+    if not unsubscribe_url:
+        return {}
+    return {
+        "List-Unsubscribe": f"<{unsubscribe_url}>, <mailto:hello@sbomify.com?subject=unsubscribe>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    }
+
+
 class OnboardingEmailService:
     """Service for sending onboarding emails."""
 
@@ -89,6 +105,11 @@ class OnboardingEmailService:
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[user.email],
                 reply_to=["hello@sbomify.com"],
+                # Welcome opens the sequence, so it carries the opt-out too. It
+                # is not suppressed by one (nobody can unsubscribe before their
+                # first email), but bulk-sender rules look at the header, not at
+                # our reasoning about which message is transactional.
+                headers=_unsubscribe_headers(context.get("unsubscribe_url")),
             )
             email.attach_alternative(html_content, "text/html")
             email.send(fail_silently=False)
@@ -111,6 +132,14 @@ class OnboardingEmailService:
         Checks deduplication, eligibility, and handles record creation/failure tracking.
         """
         if not _is_mailable(user):
+            return False
+
+        # The opt-out is checked here as well as in the eligibility helpers, so
+        # a backfill or an admin action cannot route around it the way the bot
+        # guard above cannot be routed around either.
+        status_for_optout = OnboardingStatus.objects.filter(user=user).first()
+        if status_for_optout is not None and status_for_optout.drip_unsubscribed:
+            logger.info("%s email suppressed: user %s unsubscribed", email_type, user.id)
             return False
 
         # Dedup check — only skip if successfully sent
@@ -156,6 +185,7 @@ class OnboardingEmailService:
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[user.email],
                 reply_to=["hello@sbomify.com"],
+                headers=_unsubscribe_headers(context.get("unsubscribe_url")),
             )
             email.attach_alternative(html_content, "text/html")
             email.send(fail_silently=False)
@@ -254,15 +284,44 @@ class OnboardingEmailService:
             ).values_list("user_id", "email_type")
         )
 
-        skipped_no_status = 0
+        backfilled_status = 0
         skipped_errors = 0
         for member in primary_owners:
             try:
-                try:
-                    status = OnboardingStatus.objects.get(user=member.user)
-                except OnboardingStatus.DoesNotExist:
-                    skipped_no_status += 1
+                # Synthetic OIDC bot identities have no row because the creation
+                # signal refuses to make one — that absence is the intended
+                # state, not a gap, and is a plausible source of the skipped
+                # count in the first place. Backfilling them would resurrect a
+                # row an operator deleted, on every run, and list a bot among
+                # onboarding users. Checked with the same helper signals.py and
+                # _is_mailable use, so the three cannot drift.
+                if not _is_mailable(member.user):
                     continue
+
+                # The row is created by a signal on user creation, so a human
+                # primary owner without one predates that signal or was made by
+                # a path that bypassed it. Every other call site in this app
+                # reaches for it with get_or_create; this one used a bare get
+                # and counted the miss, so those owners were stepped over on
+                # every run and the count never converged or said who.
+                #
+                # Backdated to the account rather than to now. created_at is
+                # what days_since_signup and the drip anchor are computed from,
+                # so a fresh row would show "0 days since signup" on the admin
+                # screen for someone who joined years ago, and would restart the
+                # drip at day 0 if welcome_email_sent were ever set.
+                status, created = OnboardingStatus.objects.get_or_create(user=member.user)
+                if created:
+                    joined = getattr(member.user, "date_joined", None)
+                    if joined:
+                        # Assigned and saved rather than update()+refresh: that
+                        # was two round trips per backfilled row for a value
+                        # already in hand. auto_now_add only fills the field on
+                        # insert, so an explicit save on an existing row keeps
+                        # what is assigned here.
+                        status.created_at = joined
+                        status.save(update_fields=["created_at"])
+                    backfilled_status += 1
 
                 user_id = member.user.id
 
@@ -297,10 +356,13 @@ class OnboardingEmailService:
                 skipped_errors += 1
                 logger.error("Error processing onboarding sequence for user %s: %s", member.user.id, e, exc_info=True)
 
-        if skipped_no_status:
-            logger.warning(
-                "Skipped %d primary owners with missing OnboardingStatus during sequence processing",
-                skipped_no_status,
+        if backfilled_status:
+            # Info, not warning: the gap is now closed by the time this is
+            # written, and the count converges to zero instead of being
+            # restated every day.
+            logger.info(
+                "Backfilled OnboardingStatus for %d primary owners during sequence processing",
+                backfilled_status,
             )
         if skipped_errors:
             logger.error(

@@ -62,27 +62,30 @@ export function registerAssessmentBadge() {
         return this.teamBillingPlan === 'business' || this.teamBillingPlan === 'enterprise'
       },
 
+      // Library badge variants. These previously returned Bootstrap's `*-subtle`
+      // utilities, which this build does not generate — every assessment badge
+      // rendered unstyled.
       getBadgeClasses(): string {
         if (!this.isAssessmentAvailable && this.totalAssessments === 0) {
-          return 'bg-secondary-subtle text-secondary'
+          return 'tw-badge-secondary'
         }
 
         switch (this.overallStatus) {
           case 'all_pass':
-            return 'bg-success-subtle text-success'
+            return 'tw-badge-success'
           case 'has_failures':
-            return 'bg-warning-subtle text-warning'
+            return 'tw-badge-warning'
           case 'pending':
           case 'in_progress':
-            return 'bg-info-subtle text-info assessment-checking'
+            return 'tw-badge-info assessment-checking'
           case 'no_plugins_enabled':
-            return 'bg-secondary-subtle text-secondary'
+            return 'tw-badge-secondary'
           case 'no_assessments':
           default:
             if (this.isAssessmentAvailable) {
-              return 'bg-info-subtle text-info assessment-checking'
+              return 'tw-badge-info assessment-checking'
             }
-            return 'bg-secondary-subtle text-secondary'
+            return 'tw-badge-secondary'
         }
       },
 
@@ -167,7 +170,7 @@ export function registerAssessmentBadge() {
 
       getPluginStatusBadgeClass(status: string): string {
         void status
-        return 'bg-secondary-subtle text-secondary'
+        return 'tw-badge-secondary'
       },
 
       getPluginStatusText(status: string): string {

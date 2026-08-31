@@ -8,6 +8,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.apis import get_component
+from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import (
@@ -130,7 +131,7 @@ class ComponentDetailsPublicView(View):
             is_owner_or_admin = False
             try:
                 member = Member.objects.get(team=team, user=request.user)
-                if member.role in ("owner", "admin"):
+                if member.role in READ_INTERNAL:
                     is_owner_or_admin = True
             except Member.DoesNotExist:
                 # User is not a member, continue with access check
@@ -144,8 +145,12 @@ class ComponentDetailsPublicView(View):
                 # Check if NDA is required and user hasn't signed it
                 has_signed_current_nda = user_has_signed_current_nda(user, team)
                 # Check if user has signed an old NDA (has signature but not for current NDA)
+                # Live rows only: a superseded signature (revoked access) must
+                # read as first-time signing, not as "the NDA was updated".
                 has_old_nda_signature = (
-                    NDASignature.objects.filter(access_request__team=team, access_request__user=request.user).exists()
+                    NDASignature.objects.live()
+                    .filter(access_request__team=team, access_request__user=request.user)
+                    .exists()
                     and not has_signed_current_nda
                 )
 
@@ -195,7 +200,7 @@ class ComponentDetailsPublicView(View):
             if pending_access_request and team is not None:
                 company_nda = team.get_company_nda_document()
                 if company_nda:
-                    has_signed = NDASignature.objects.filter(access_request=pending_access_request).exists()
+                    has_signed = NDASignature.objects.live().filter(access_request=pending_access_request).exists()
                     if not has_signed:
                         pending_request_needs_nda = True
                         pending_request_id = pending_access_request.id

@@ -42,26 +42,29 @@
             </div>
         </template>
     </div>
+    {% comment %}
+        The picked-file row: a name and the control that clears it. It is a
+        one-off strip, so it is composed from utilities with the library's icon
+        button doing the acting part.
+    {% endcomment %}
     <template x-if="file">
-        <div class="flex items-center justify-between mt-3 p-3 bg-background/50 rounded-lg border border-border">
-            <span class="text-text text-sm font-medium truncate" x-text="file.name"></span>
-            <button type="button"
-                    class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-                    @click.prevent="removeFile"
-                    aria-label="Remove file">
-                <i class="fas fa-trash"></i>
-            </button>
+        <div class="flex items-center gap-3 mt-4 px-4 py-3 bg-surface border border-solid border-border rounded-lg">
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-text truncate m-0" x-text="file.name"></p>
+            </div>
+            <c-buttons.icon label="Remove file" variant="danger" @click.prevent="removeFile">
+            <i class="fas fa-trash" aria-hidden="true"></i>
+            </c-buttons.icon>
         </div>
     </template>
     <template x-if="showExisting">
-        <div class="flex items-center justify-between mt-3 p-3 bg-background/50 rounded-lg border border-border">
-            <span class="text-text text-sm font-medium">Current file</span>
-            <button type="button"
-                    class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-                    @click.prevent="removeExistingFile"
-                    aria-label="Remove existing file">
-                <i class="fas fa-trash"></i>
-            </button>
+        <div class="flex items-center gap-3 mt-4 px-4 py-3 bg-surface border border-solid border-border rounded-lg">
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-text truncate m-0">Current file</p>
+            </div>
+            <c-buttons.icon label="Remove existing file" variant="danger" @click.prevent="removeExistingFile">
+            <i class="fas fa-trash" aria-hidden="true"></i>
+            </c-buttons.icon>
         </div>
     </template>
 </div>

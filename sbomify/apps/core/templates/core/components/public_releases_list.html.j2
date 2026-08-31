@@ -10,46 +10,42 @@
                 </a>
             {% endif %}
         </div>
-        <div class="tw-data-table-container">
-            <table class="tw-table">
-                <thead>
-                    <tr>
-                        <th scope="col">Release</th>
-                        <th scope="col">Status</th>
-                        <th scope="col" class="hidden md:table-cell">Released</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for release in public_releases %}
-                        <tr>
-                            <td>
-                                <a class="font-medium text-text hover:text-primary no-underline"
-                                   href="{{ release.public_url }}">{{ release.name }}</a>
-                                {% if release.description %}
-                                    <div class="text-xs opacity-75 mt-1" title="{{ release.description }}">{{ release.description|truncatechars:60 }}</div>
-                                {% endif %}
-                                <div class="md:hidden text-xs opacity-75 mt-1">
-                                    {{ release.released_at|default_if_none:release.created_at|naturaltime }}
-                                </div>
-                            </td>
-                            <td>
-                                {% if release.is_latest %}
-                                    <span class="tw-badge tw-badge-success">Latest</span>
-                                {% elif release.is_prerelease %}
-                                    <span class="tw-badge tw-badge-warning">Pre-release</span>
-                                {% else %}
-                                    <span class="text-xs opacity-75">Stable</span>
-                                {% endif %}
-                            </td>
-                            <td class="hidden md:table-cell whitespace-nowrap">
-                                <span title="{{ release.released_at|default_if_none:release.created_at }}">
-                                    {{ release.released_at|default_if_none:release.created_at|naturaltime }}
-                                </span>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell nowrap>Release</c-tables.header-cell>
+        <c-tables.header-cell>Status</c-tables.header-cell>
+        <c-tables.header-cell date class="hidden md:table-cell">Released</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for release in public_releases %}
+                <c-tables.row>
+                <c-tables.cell nowrap>
+                <a class="font-medium text-text hover:text-primary no-underline"
+                   href="{{ release.public_url }}">{{ release.name }}</a>
+                {% if release.description %}
+                    <div class="text-xs opacity-75 mt-1" title="{{ release.description }}">{{ release.description|truncatechars:60 }}</div>
+                {% endif %}
+                <div class="md:hidden text-xs opacity-75 mt-1">
+                    {{ release.released_at|default_if_none:release.created_at|naturaltime }}
+                </div>
+                </c-tables.cell>
+                <c-tables.cell>
+                {% if release.is_latest %}
+                    <c-badges.success>Latest</c-badges.success>
+                {% elif release.is_prerelease %}
+                    <c-badges.warning>Pre-release</c-badges.warning>
+                {% else %}
+                    <span class="text-xs opacity-75">Stable</span>
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell date class="hidden md:table-cell">
+                <span title="{{ release.released_at|default_if_none:release.created_at }}">
+                    {{ release.released_at|default_if_none:release.created_at|naturaltime }}
+                </span>
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
     </div>
 {% endif %}

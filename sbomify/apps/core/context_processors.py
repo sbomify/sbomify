@@ -110,6 +110,7 @@ def pending_access_requests_context(request: Any) -> Any:
         from django.conf import settings
         from django.core.cache import cache
 
+        from sbomify.apps.core.authz import ADMINISTER
         from sbomify.apps.documents.access_models import AccessRequest
         from sbomify.apps.teams.models import Member, Team
 
@@ -117,7 +118,7 @@ def pending_access_requests_context(request: Any) -> Any:
         team = Team.objects.get(key=team_key)
         member = Member.objects.filter(team=team, user=request.user).first()
 
-        if not member or member.role not in ("owner", "admin"):
+        if not member or member.role not in ADMINISTER:
             return {
                 "pending_access_requests_count": 0,
                 "has_pending_access_requests": False,
@@ -140,7 +141,7 @@ def pending_access_requests_context(request: Any) -> Any:
             # If NDA is not required, count all pending requests
             if requires_nda:
                 # Only count requests that have NDA signature (request is complete)
-                signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+                signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
                 count = AccessRequest.objects.filter(
                     team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
                 ).count()
@@ -165,10 +166,17 @@ def pending_access_requests_context(request: Any) -> Any:
 
 def team_context(request: Any) -> Any:
     """
-    Add current team and user role to context.
+    Add current team, user role, and derived capability flags to context.
 
-    This enables global access to 'team' and 'is_owner' for banners/navigation
-    without requiring every view to pass them explicitly.
+    This enables global access to 'team', 'is_owner' and the ``can_*`` flags for
+    banners/navigation without requiring every view to pass them explicitly.
+
+    The ``can_*`` flags are derived from the capability tiers in
+    ``sbomify.apps.core.authz`` rather than from hardcoded role strings, so a
+    template gate and the ``can()`` check guarding the same action can't drift
+    apart. Templates should branch on these, not on
+    ``request.session.current_team.role`` — the session role is a cache with a
+    300s TTL, while the role read here comes from the live ``Member`` row.
 
     Reads billing status from the DB only — no Stripe API calls. ``billing_plan_limits``
     is kept current by Stripe webhooks plus a daily safety-net sync task.
@@ -177,8 +185,19 @@ def team_context(request: Any) -> Any:
         return {}
 
     current_team_data = request.session.get("current_team", {})
-    team_key = current_team_data.get("key")
+    session_team_key = current_team_data.get("key")
 
+    # The workspace this page is *about*, which is not always the one in the
+    # session. TeamRoleRequiredMixin authorizes the URL's workspace, so flags
+    # derived from the session would describe a different workspace than the
+    # page renders — an admin in A viewing B would be shown B's admin controls
+    # and refused when they used them.
+    url_team_key = None
+    resolver_match = getattr(request, "resolver_match", None)
+    if resolver_match is not None:
+        url_team_key = resolver_match.kwargs.get("team_key")
+
+    team_key = url_team_key or session_team_key
     if not team_key:
         return {}
 
@@ -186,7 +205,15 @@ def team_context(request: Any) -> Any:
         from sbomify.apps.teams.models import Member, Team
 
         # We could use select_related hooks or simple caching here if performance is an issue
-        team = Team.objects.get(key=team_key)
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            # A ``team_key`` kwarg that names no workspace isn't necessarily a
+            # workspace key at all. Fall back rather than dropping the whole
+            # context and stripping the chrome off the page.
+            if not url_team_key or not session_team_key:
+                raise
+            team = Team.objects.get(key=session_team_key)
 
         # Determine if owner. Billing status (banners/notifications) is read
         # straight from team.billing_plan_limits below; it is NOT synced from
@@ -195,18 +222,23 @@ def team_context(request: Any) -> Any:
         # client disconnect. The DB is kept current by Stripe webhooks
         # (customer.subscription.updated / invoice.*) plus a daily safety-net
         # task (billing.cron.daily_subscription_sync).
-        is_owner = False
         member = Member.objects.filter(team=team, user=request.user).first()
-        if member and member.role == "owner":
-            is_owner = True
+        role = member.role if member else None
 
         from django.conf import settings
 
         from sbomify.apps.billing.config import is_billing_enabled
+        from sbomify.apps.core.authz import ADMINISTER, DELETE, MANAGE, ROLE_OWNER
 
         return {
             "team": team,
-            "is_owner": is_owner,
+            "workspace_role": role,
+            "is_owner": role == ROLE_OWNER,
+            # Capability flags — see the docstring. Keep these derived from the
+            # authz tiers; never re-introduce a hardcoded role list here.
+            "can_administer": role in ADMINISTER,
+            "can_manage": role in MANAGE,
+            "can_delete": role in DELETE,
             "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
             "billing_enabled": is_billing_enabled(),
         }

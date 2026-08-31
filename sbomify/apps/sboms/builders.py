@@ -136,16 +136,20 @@ class BaseSBOMBuilder(ABC):
     in different formats (CycloneDX, SPDX) and versions.
     """
 
-    def __init__(self, entity: Any = None, user: Any = None):
+    def __init__(self, entity: Any = None, user: Any = None, include_non_public: bool = False):
         """
         Initialize the builder.
 
         Args:
             entity: The entity (product or release) to build SBOM for
             user: User for signed URL generation
+            include_non_public: Include gated/private members in the aggregate.
+                Only set for a requester the view layer has already authorized;
+                such a build must never land in the public aggregate cache.
         """
         self.entity = entity
         self.user = user
+        self.include_non_public = include_non_public
         self.temp_files: list[Path] = []
         self.target_folder: Optional[Path] = None
         # Set when a member SBOM fetch fails (non-fatal — the member is skipped).
@@ -275,7 +279,8 @@ class BaseSBOMBuilder(ABC):
         members = [
             artifact
             for artifact in sbom_artifacts
-            if not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
+            if self.include_non_public
+            or not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
         ]
         fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
         return members, fetched
@@ -1132,6 +1137,7 @@ def get_sbom_builder(
     version: SBOMVersion | str | None = None,
     entity: Any = None,
     user: Any = None,
+    include_non_public: bool = False,
 ) -> BaseSBOMBuilder:
     """
     Factory function to get the appropriate SBOM builder.
@@ -1177,7 +1183,7 @@ def get_sbom_builder(
             f"version={version.value}. Supported: {supported}"
         )
 
-    return builder_class(entity=entity, user=user)
+    return builder_class(entity=entity, user=user, include_non_public=include_non_public)
 
 
 def get_supported_output_formats() -> dict[str, list[str]]:

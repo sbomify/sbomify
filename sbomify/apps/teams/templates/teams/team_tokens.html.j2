@@ -1,68 +1,39 @@
 {% load static %}
 {% load widget_tweaks %}
 {% load form_helpers %}
-<div class="tw-settings-card">
-    {# Card Header #}
-    <div class="px-6 py-4 border-b border-border">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-key text-primary"></i>
-                </div>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">API Tokens</h5>
-                    <p class="text-text-muted text-sm m-0">Manage personal access tokens for API authentication</p>
-                </div>
-            </div>
-            {% if access_tokens %}
-                <span class="tw-badge-secondary">{{ access_tokens|length }} token{{ access_tokens|length|pluralize }}</span>
-            {% endif %}
+{% comment %}
+    API tokens, in the settings-tab style the branding tab set: no card chrome,
+    an h2 and one explainer line up top, then plain h3 sections separated by
+    hairlines.
+{% endcomment %}
+<div>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h2 class="text-lg font-semibold text-text m-0">API tokens</h2>
+            <p class="text-sm text-text-muted mt-1 m-0">Personal access tokens for API authentication.</p>
         </div>
+        {% if access_tokens %}
+            <c-badges.secondary>{{ access_tokens|length }} token{{ access_tokens|length|pluralize }}</c-badges.secondary>
+        {% endif %}
     </div>
-    {# Card Content #}
-    <div class="p-6">
-        {# Deprecation Warning for Unscoped Tokens #}
-        {% if has_unscoped_tokens %}
-            <div class="tw-alert tw-alert-warning mb-4">
-                <i class="fas fa-exclamation-triangle tw-alert-icon"></i>
-                <div class="tw-alert-content">
-                    <p class="tw-alert-title">Unscoped tokens detected</p>
-                    <p class="text-sm m-0">
-                        These tokens reach every workspace you belong to. They stay valid until you rotate them; there is no forced cutover or auto-expiry. Create a workspace-scoped replacement, move your integration across, then delete the unscoped token.
-                    </p>
-                </div>
-            </div>
-        {% endif %}
-        {# New Token Alert (only shown when a new token is created) #}
-        {% if new_encoded_access_token %}
-            <div class="tw-alert tw-alert-warning mb-4">
-                <i class="fas fa-exclamation-triangle tw-alert-icon"></i>
-                <div class="tw-alert-content">
-                    <p class="tw-alert-title">Copy your token now!</p>
-                    <p class="text-sm m-0">You won't be able to see it again.</p>
-                </div>
-            </div>
-            <div class="bg-success/5 border border-success/20 rounded-xl p-5 mb-4">
-                <div class="flex items-center gap-3 mb-3">
-                    <div class="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-check-circle text-success text-sm"></i>
-                    </div>
-                    <label class="tw-form-label m-0">Your New Token</label>
-                </div>
-                <div class="ml-11">{% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}</div>
-            </div>
-        {% endif %}
-        {# Generate New Token Section #}
-        <div class="mb-6">
-            <div class="flex items-start gap-3 mb-4">
-                <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-plus-circle text-text-muted text-sm"></i>
-                </div>
-                <div>
-                    <h6 class="text-base font-semibold text-text m-0">Generate New Token</h6>
-                    <p class="text-text-muted text-sm m-0">Create a new personal access token scoped to this workspace</p>
-                </div>
-            </div>
+    {# Deprecation Warning for Unscoped Tokens #}
+    {% if has_unscoped_tokens %}
+        <c-feedback.alert variant="warning" title="Unscoped tokens detected" class="mt-6">
+        These tokens reach every workspace you belong to. They stay valid until you rotate them; there is no forced cutover or auto-expiry. Create a workspace-scoped replacement, move your integration across, then delete the unscoped token.
+        </c-feedback.alert>
+    {% endif %}
+    {# New Token Alert (only shown when a new token is created) #}
+    {% if new_encoded_access_token %}
+        <c-feedback.alert variant="warning" title="Copy your token now!" class="mt-6">You won't be able to see it again.</c-feedback.alert>
+        <c-feedback.alert variant="success" title="Your New Token" class="mt-4">
+        {% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}
+        </c-feedback.alert>
+    {% endif %}
+    {# Generate new token #}
+    <section class="mt-8">
+        <h3 class="text-sm font-semibold text-text m-0">Generate new token</h3>
+        <p class="text-sm text-text-muted mt-1 m-0">Scoped to this workspace.</p>
+        <div class="mt-4">
             {# expiryChoice drives the custom TTL row; seeded from the bound value so a validation re-render keeps it open. #}
             <form method="post"
                   id="tokenGenerationForm"
@@ -70,37 +41,45 @@
                   hx-post="{% url 'teams:team_tokens' team.key %}"
                   hx-target="#team-tokens-content"
                   hx-disabled-elt="find button[type='submit']"
-                  hx-swap="innerHTML"
-                  class="ml-11">
+                  hx-swap="innerHTML">
                 {% csrf_token %}
                 <div class="space-y-4">
                     {# Token name is the primary field — full width, clearly labelled. #}
                     <div>
                         {% with field=create_access_token_form.description %}
-                            <label for="{{ field.id_for_label }}" class="tw-form-label">Token name</label>
-                            <input type="text"
-                                   id="{{ field.id_for_label }}"
-                                   name="{{ field.html_name }}"
-                                   class="tw-form-input w-full"
-                                   placeholder="e.g., CI/CD Pipeline Token"
-                                   value="{{ field.value|default:'' }}">
-                            {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                            <c-forms.label for="{{ field.id_for_label }}">Token name</c-forms.label>
+                            <c-forms.input id="{{ field.id_for_label }}" name="{{ field.html_name }}" placeholder="e.g., CI/CD Pipeline Token" value="{{ field.value|default:'' }}" />
+                            {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
                         {% endwith %}
                     </div>
                     {# Scope and expiry sit side by side in a two-column grid. #}
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             {% with field=create_access_token_form.scope %}
-                                <label for="{{ field.id_for_label }}" class="tw-form-label">Access scope</label>
-                                {{ field }}
-                                {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                                <c-forms.label for="{{ field.id_for_label }}">Access scope</c-forms.label>
+                                <c-forms.select id="{{ field.id_for_label }}" name="{{ field.html_name }}">
+                                {% for value, label in field.field.choices %}
+                                    <option value="{{ value }}"
+                                            {% if field.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                                </c-forms.select>
+                                {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
                             {% endwith %}
                         </div>
                         <div>
                             {% with field=create_access_token_form.expires_in_hours %}
-                                <label for="{{ field.id_for_label }}" class="tw-form-label">Expiration</label>
-                                {{ field }}
-                                {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                                <c-forms.label for="{{ field.id_for_label }}">Expiration</c-forms.label>
+                                <c-forms.select id="{{ field.id_for_label }}" name="{{ field.html_name }}" x-model="expiryChoice">
+                                {% for value, label in field.field.choices %}
+                                    <option value="{{ value }}"
+                                            {% if field.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                                </c-forms.select>
+                                {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
                             {% endwith %}
                         </div>
                     </div>
@@ -110,169 +89,138 @@
                          class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             {% with field=create_access_token_form.custom_expiry_value %}
-                                <label for="{{ field.id_for_label }}" class="tw-form-label">Expires after</label>
-                                {{ field }}
-                                {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                                <c-forms.label for="{{ field.id_for_label }}">Expires after</c-forms.label>
+                                <c-forms.input type="number" id="{{ field.id_for_label }}" name="{{ field.html_name }}" placeholder="e.g. 8" min="1" value="{{ field.value|default:'' }}" />
+                                {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
                             {% endwith %}
                         </div>
                         <div>
                             {% with field=create_access_token_form.custom_expiry_unit %}
-                                <label for="{{ field.id_for_label }}" class="tw-form-label">Unit</label>
-                                {{ field }}
-                                {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                                <c-forms.label for="{{ field.id_for_label }}">Unit</c-forms.label>
+                                <c-forms.select id="{{ field.id_for_label }}" name="{{ field.html_name }}">
+                                {% for value, label in field.field.choices %}
+                                    <option value="{{ value }}"
+                                            {% if field.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                                </c-forms.select>
+                                {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
                             {% endwith %}
                         </div>
                     </div>
                     {# Security rationale on the left, the action on the right. #}
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
-                        <p class="tw-form-hint m-0">
-                            <i class="fas fa-shield-halved text-xs mr-1 opacity-70"></i>
-                            Narrow scopes and a short expiry limit the damage if a token is leaked.
-                        </p>
-                        <button type="submit" class="tw-btn-primary flex-shrink-0">
-                            <i class="fas fa-plus mr-2"></i>Generate token
-                        </button>
+                        <c-forms.hint>
+                        <i class="fas fa-shield-halved text-xs mr-1"></i>
+                        Narrow scopes and a short expiry limit the damage if a token is leaked.
+                        </c-forms.hint>
+                        <c-buttons.primary type="submit" class="flex-shrink-0">
+                        <i class="fas fa-plus mr-2"></i>Generate token
+                        </c-buttons.primary>
                     </div>
                 </div>
             </form>
         </div>
-        {# Existing Tokens Section #}
-        <div class="pt-6 border-t border-border">
-            <div class="flex items-start gap-3 mb-4">
-                <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-list text-text-muted text-sm"></i>
-                </div>
-                <div>
-                    <h6 class="text-base font-semibold text-text m-0">Your Tokens</h6>
-                    <p class="text-text-muted text-sm m-0">Manage your existing personal access tokens</p>
-                </div>
-            </div>
-            {% if access_tokens or unscoped_tokens %}
+    </section>
+    {# Existing tokens #}
+    <section class="mt-8 pt-8 border-t border-border">
+        <h3 class="text-sm font-semibold text-text m-0">Your tokens</h3>
+        {% if access_tokens or unscoped_tokens %}
+            <div class="mt-4">
                 <div x-data="window.getBulkRevokeData({ url: '{% url 'teams:team_tokens' team.key %}', csrfToken: '{{ csrf_token }}', refreshEvent: 'refreshTeamTokens' })">
                     {# Bulk-revoke toolbar #}
-                    <div class="flex items-center justify-between mb-3 ml-11">
-                        <label class="flex items-center gap-2 text-sm text-text-muted cursor-pointer">
-                            <input type="checkbox"
-                                   @change="toggleAll($event.target.checked, [{% for t in access_tokens %}{{ t.id }},{% endfor %}{% for t in unscoped_tokens %}{{ t.id }},{% endfor %}])">
-                            Select all
-                        </label>
+                    <div class="flex items-center justify-between mb-3">
+                        <c-forms.checkbox @change="toggleAll($event.target.checked, [
+                        {% for t in access_tokens %}{{ t.id }},{% endfor %}
+                        {% for t in unscoped_tokens %}{{ t.id }},{% endfor %}
+                        ])">
+                        Select all
+                        </c-forms.checkbox>
                         <div class="flex items-center gap-2">
-                            <button type="button"
-                                    class="tw-btn-danger tw-btn-sm"
-                                    x-show="selected.length"
-                                    x-cloak
-                                    @click="showBulkModal = true">
-                                <span x-text="`Revoke selected (${selected.length})`">Revoke selected</span>
-                            </button>
-                            <button type="button"
-                                    class="tw-btn-ghost tw-btn-sm text-danger hover:bg-danger/10"
-                                    @click="showRevokeAllModal = true">Revoke all</button>
+                            <c-buttons.danger size="sm" x-show="selected.length" x-cloak @click="showBulkModal = true">
+                            <span x-text="`Revoke selected (${selected.length})`">Revoke selected</span>
+                            </c-buttons.danger>
+                            <c-buttons.ghost-danger size="sm" @click="showRevokeAllModal = true">Revoke all</c-buttons.ghost-danger>
                         </div>
                     </div>
-                    <div class="space-y-3 ml-11">
+                    <div class="border border-border rounded-xl divide-y divide-border/50 overflow-hidden">
                         {% for token in access_tokens %}
-                            <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg border border-border/50"
-                                 x-cloak
-                                 x-data="{ showDeleteModal: false }">
-                                <input type="checkbox"
-                                       value="{{ token.id }}"
-                                       x-model.number="selected"
-                                       class="flex-shrink-0"
-                                       aria-label="Select token {{ token.description }}">
-                                <div class="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
-                                    <i class="fas fa-key text-primary/60"></i>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
-                                    <p class="text-sm text-text-muted m-0">
-                                        <i class="fas fa-clock text-xs mr-1"></i>
-                                        Created
-                                        {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
-                                    </p>
-                                    <p class="text-sm text-text-muted m-0">
-                                        <i class="fas fa-clock-rotate-left text-xs mr-1" aria-hidden="true"></i>
-                                        Last used
-                                        {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
-                                    </p>
-                                    {% include 'teams/components/token_expiry.html.j2' with token=token %}
-                                </div>
-                                <div class="flex-shrink-0">
-                                    <button type="button"
-                                            class="tw-btn-ghost tw-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
-                                            title="Delete token"
-                                            @click="showDeleteModal = true">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                                {% url 'core:delete_access_token' token_id=token.id as delete_url %}
-                                {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
+                            <c-layout.select-row x_data="{ showDeleteModal: false }" x-cloak>
+                            <c-forms.checkbox class="flex-shrink-0" value="{{ token.id }}" x-model.number="selected" aria-label="Select token {{ token.description }}" />
+                            <c-chips.icon-chip>
+                            <i class="fas fa-key" aria-hidden="true"></i>
+                            </c-chips.icon-chip>
+                            <div class="flex-1 min-w-0">
+                                <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
+                                <p class="text-sm text-text-muted m-0">
+                                    <i class="fas fa-clock text-xs mr-1"></i>
+                                    Created
+                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
+                                </p>
+                                <p class="text-sm text-text-muted m-0">
+                                    <i class="fas fa-clock-rotate-left text-xs mr-1" aria-hidden="true"></i>
+                                    Last used
+                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
+                                </p>
+                                {% include 'teams/components/token_expiry.html.j2' with token=token %}
                             </div>
+                            <div class="flex-shrink-0">
+                                <c-buttons.ghost size="sm" title="Delete token" @click="showDeleteModal = true">
+                                <i class="fas fa-trash"></i>
+                                </c-buttons.ghost>
+                            </div>
+                            {% url 'core:delete_access_token' token_id=token.id as delete_url %}
+                            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
+                            </c-layout.select-row>
                         {% endfor %}
                         {% for token in unscoped_tokens %}
-                            <div class="flex items-center gap-4 p-4 bg-warning/5 rounded-lg border border-warning/30"
-                                 x-cloak
-                                 x-data="{ showDeleteModal: false }">
-                                <input type="checkbox"
-                                       value="{{ token.id }}"
-                                       x-model.number="selected"
-                                       class="flex-shrink-0"
-                                       aria-label="Select token {{ token.description }}">
-                                <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center flex-shrink-0">
-                                    <i class="fas fa-exclamation-circle text-warning"></i>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
-                                    <p class="text-sm text-warning m-0">
-                                        <i class="fas fa-globe text-xs mr-1"></i>
-                                        Unscoped — not tied to any workspace. Please replace with a scoped token.
-                                    </p>
-                                    <p class="text-sm text-text-muted m-0">
-                                        <i class="fas fa-clock text-xs mr-1"></i>
-                                        Created
-                                        {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
-                                    </p>
-                                    <p class="text-sm text-text-muted m-0">
-                                        <i class="fas fa-clock-rotate-left text-xs mr-1" aria-hidden="true"></i>
-                                        Last used
-                                        {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
-                                    </p>
-                                    {% include 'teams/components/token_expiry.html.j2' with token=token %}
-                                </div>
-                                <div class="flex-shrink-0">
-                                    <button type="button"
-                                            class="tw-btn-ghost tw-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
-                                            title="Delete token"
-                                            @click="showDeleteModal = true">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                                {% url 'core:delete_access_token' token_id=token.id as delete_url %}
-                                {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
+                            <c-layout.select-row x_data="{ showDeleteModal: false }" x-cloak>
+                            <c-forms.checkbox class="flex-shrink-0" value="{{ token.id }}" x-model.number="selected" aria-label="Select token {{ token.description }}" />
+                            <c-chips.icon-chip accent="warning">
+                            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                            </c-chips.icon-chip>
+                            <div class="flex-1 min-w-0">
+                                <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
+                                <p class="text-sm text-warning m-0">
+                                    <i class="fas fa-globe text-xs mr-1"></i>
+                                    Unscoped: not tied to any workspace. Replace it with a scoped token.
+                                </p>
+                                <p class="text-sm text-text-muted m-0">
+                                    <i class="fas fa-clock text-xs mr-1"></i>
+                                    Created
+                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
+                                </p>
+                                <p class="text-sm text-text-muted m-0">
+                                    <i class="fas fa-clock-rotate-left text-xs mr-1" aria-hidden="true"></i>
+                                    Last used
+                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
+                                </p>
+                                {% include 'teams/components/token_expiry.html.j2' with token=token %}
                             </div>
+                            <div class="flex-shrink-0">
+                                <c-buttons.ghost size="sm" title="Delete token" @click="showDeleteModal = true">
+                                <i class="fas fa-trash"></i>
+                                </c-buttons.ghost>
+                            </div>
+                            {% url 'core:delete_access_token' token_id=token.id as delete_url %}
+                            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
+                            </c-layout.select-row>
                         {% endfor %}
                     </div>
                     {# Bulk-revoke confirm modal #}
                     {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showBulkModal' title='Revoke Tokens' message='Are you sure you want to revoke' item_name_expression='countLabel' warning_message='This action cannot be undone. The selected tokens will stop working immediately.' confirm_text='Revoke' confirm_callback='revokeSelected()' %}
                     {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showRevokeAllModal' title='Revoke All Tokens' message='Are you sure you want to revoke' item_name='all tokens in this workspace' warning_message='This action cannot be undone. Every token listed here, including unscoped legacy tokens, will stop working immediately.' confirm_text='Revoke all' confirm_callback='revokeAll()' %}
                 </div>
-            {% else %}
-                <div class="tw-empty-state py-10">
-                    <div class="tw-empty-state-icon bg-border/30">
-                        <i class="fas fa-key text-2xl text-text-muted"></i>
-                    </div>
-                    <h4 class="tw-empty-state-title">No tokens yet</h4>
-                    <p class="tw-empty-state-description">Generate a token above to get started with the API.</p>
-                </div>
-            {% endif %}
-        </div>
-        {# Security Info Section #}
-        <div class="tw-alert tw-alert-info mt-4">
-            <i class="fas fa-shield-alt tw-alert-icon"></i>
-            <div class="tw-alert-content">
-                <p class="text-sm m-0">
-                    <strong>Security tip:</strong> Treat tokens like passwords. Never share them or commit them to version control. New tokens created here are scoped to this workspace only.
-                </p>
             </div>
-        </div>
-    </div>
+        {% else %}
+            <div class="mt-4">
+                <c-feedback.empty-state icon="fas fa-key" icon_variant="neutral" title="No tokens yet" message="Generate a token above to get started with the API." />
+            </div>
+        {% endif %}
+    </section>
+    {# Security Info #}
+    <c-feedback.alert variant="info" icon="fas fa-shield-alt" class="mt-8">
+    <strong>Security tip:</strong> Treat tokens like passwords. Never share them or commit them to version control. New tokens created here are scoped to this workspace only.
+    </c-feedback.alert>
 </div>

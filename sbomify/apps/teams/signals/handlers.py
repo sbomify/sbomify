@@ -10,12 +10,14 @@ if typing.TYPE_CHECKING:
     from sbomify.apps.core.models import User
 
 from allauth.socialaccount.models import SocialAccount
+from django.contrib import messages
 from django.contrib.auth.signals import user_logged_in
 from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 
+from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, update_user_teams_session
@@ -71,8 +73,26 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
             is_default_team=not has_default,
         )
         has_default = has_default or membership.is_default_team
+        # Accepting deletes the invitation, so the pending-invitation
+        # notification has nothing left to show and the user is put in a
+        # workspace without being told. The accept-invite view announces it
+        # only for someone who arrives through the emailed link.
+        #
+        # Whether it lands is recorded rather than assumed: a login can reach
+        # here with no message storage, and the accept-invite view reads this
+        # flag to decide whether it still has to say so itself.
+        announced = False
+        if request is not None and hasattr(request, "_messages"):
+            messages.info(request, f"You have joined {invitation.team.name} as {invitation.role}")
+            announced = True
+
         accepted.append(
-            {"team_key": invitation.team.key, "invitation_id": invitation.id, "invitation_token": str(invitation.token)}
+            {
+                "team_key": invitation.team.key,
+                "invitation_id": invitation.id,
+                "invitation_token": str(invitation.token),
+                "announced": announced,
+            }
         )
 
         if request is not None:
@@ -196,6 +216,68 @@ def capture_role_change(sender: type, instance: Member, created: bool, **kwargs:
             groups={"workspace": workspace_key} if workspace_key else None,
         )
     )
+
+
+@receiver(post_save, sender=Member)
+def retire_access_requests_on_internal_promotion(sender: type, instance: Member, created: bool, **kwargs: Any) -> None:
+    """Retire a trust-center access request once its holder joins the workspace.
+
+    A guest reaches gated components through the access-request/NDA path. The
+    moment they hold an internal role that path is redundant: their access now
+    comes from the role. Leaving the request behind keeps a stale row in the
+    admin queue and an approval that outlives the reason it was granted.
+
+    Superseded, not deleted. The obvious implementation is
+    ``AccessRequest.objects.filter(...).delete()``, but ``NDASignature`` points
+    at the request with ``on_delete=CASCADE``, so deleting would take the signed
+    NDA rows with it. Rejection and revocation both go out of their way to keep
+    those ("it is the legal record of what was accepted"), and a promotion is no
+    more entitled to erase them.
+
+    Deliberately does not read the pre_save role snapshot. ``capture_role_change``
+    pops it unconditionally, so a receiver registered after it would always see
+    nothing, and depending on receiver order for correctness is a trap. The
+    condition here needs no history: an internal member with a live access
+    request has a stale row whatever they were before. That also means this
+    self-heals rows left by promotions that happened before this handler
+    existed.
+    """
+    if created:
+        return
+
+    if instance.role not in READ_INTERNAL:
+        return
+
+    try:
+        from sbomify.apps.documents.access_models import AccessRequest
+        from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
+
+        stale = AccessRequest.objects.filter(team=instance.team, user=instance.user).exclude(
+            status=AccessRequest.Status.REVOKED
+        )
+        if not stale.exists():
+            return
+
+        now = timezone.now()
+        for access_request in stale:
+            access_request.nda_signatures.live().update(superseded_at=now)
+        retired = stale.update(status=AccessRequest.Status.REVOKED, revoked_at=now)
+
+        logger.info(
+            "Retired %s trust-center access request(s) for user %s in team %s after promotion to %s",
+            retired,
+            instance.user_id,
+            instance.team.key,
+            instance.role,
+        )
+        transaction.on_commit(lambda: _invalidate_access_requests_cache(instance.team))
+    except Exception:
+        # A promotion must not fail because the trust-center tidy-up did.
+        logger.exception(
+            "Could not retire access requests for user %s in team %s after promotion",
+            instance.user_id,
+            instance.team_id,
+        )
 
 
 @receiver(post_save, sender=Invitation)

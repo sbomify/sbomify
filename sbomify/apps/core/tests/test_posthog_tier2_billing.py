@@ -34,7 +34,7 @@ def test_handle_trial_period_emits_trial_expired_only_once(
     from sbomify.apps.billing.billing_processing import handle_trial_period
 
     mock_capture = patch_capture(mocker)
-    # The downgrade calls notify_team_owners → email_notifications.notify_trial_expired;
+    # The downgrade calls notify_billing_managers → email_notifications.notify_trial_expired;
     # patch them out so the test does not depend on SMTP fixtures.
     mocker.patch("sbomify.apps.billing.billing_processing.email_notifications")
     mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")

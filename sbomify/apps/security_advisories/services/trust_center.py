@@ -53,9 +53,9 @@ from sbomify.apps.security_advisories.services.advisories import (
     PUBLICATION_VARIANTS,
     REMEDIATION_META,
     SEVERITY_RANK,
-    SEVERITY_VARIANTS,
     display_date,
     display_id,
+    worst_cvss,
     worst_severity,
 )
 
@@ -182,18 +182,27 @@ def resolve_viewer_scope(request: Any, team: Any) -> ViewerScope:
     * **Gated grant** — adds products whose components are gated. This is the
       NDA-holding customer, and it is the tier the visibility rule was written
       for.
-    * **Workspace insider** (owner/admin) — every product, including ones the
+    * **Workspace insider** — anyone holding ``product:read``, i.e. every
+      internal role (owner, admin, member): every product, including ones the
       trust center never lists, so an advisory about an unlisted product is
-      readable by the people who wrote it and nobody else.
+      readable internally and nobody else.
+
+      Derived from the capability rather than a hand-picked tier. This is a read
+      gate over product data, so it has to follow ``product:read`` or the same
+      person sees different inventory depending on which page they open. It
+      discloses nothing new: the internal advisory views
+      (``core/views/security_advisories.py``) carry no role tier at all, so an
+      internal member can already read every advisory there — including drafts
+      and PRIVATE ones, which this page never shows anyone.
 
     The gated decision itself is delegated to ``_check_gated_access`` rather than
     re-derived, so an advisory and a component cannot disagree about who is
     inside the NDA.
     """
+    from sbomify.apps.core.authz import can
     from sbomify.apps.core.models import Product
     from sbomify.apps.core.services.access_control import _check_gated_access
     from sbomify.apps.sboms.models import Component
-    from sbomify.apps.teams.models import Member
 
     user = getattr(request, "user", None)
     is_authenticated = user is not None and bool(user.is_authenticated)
@@ -202,7 +211,7 @@ def resolve_viewer_scope(request: Any, team: Any) -> ViewerScope:
     is_insider = False
     if user is not None and is_authenticated:
         has_gated_grant, _needs_nda = _check_gated_access(user, team)
-        is_insider = Member.objects.filter(team=team, user=user, role__in=("owner", "admin")).exists()
+        is_insider = can(user, "product:read", team).allowed
 
     if is_insider:
         products = Product.objects.filter(team=team)
@@ -281,6 +290,25 @@ def _visible_products(advisory: SecurityAdvisory, scope: ViewerScope) -> tuple[l
     return chips, withheld
 
 
+def _cvss_chips(entries: Any) -> list[dict[str, Any]]:
+    """A vulnerability's scores as the detail chips render them.
+
+    A hand-entered row can be malformed or carry no version; the label absorbs
+    both ("CVSS 3.1" or plain "CVSS") so the template stays a flat loop.
+    """
+    chips: list[dict[str, Any]] = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            score = float(entry["base_score"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        version = str(entry.get("version") or "").strip()
+        chips.append({"label": f"CVSS {version}" if version else "CVSS", "base_score": score})
+    return chips
+
+
 def _public_vulnerability(vulnerability: AdvisoryVulnerability) -> dict[str, Any]:
     return {
         "id": vulnerability.id,
@@ -288,9 +316,8 @@ def _public_vulnerability(vulnerability: AdvisoryVulnerability) -> dict[str, Any
         "title": vulnerability.title,
         "description": vulnerability.description,
         "severity": vulnerability.severity,
-        "severity_variant": SEVERITY_VARIANTS.get(vulnerability.severity, "secondary"),
         "cwe_ids": vulnerability.cwe_ids or [],
-        "cvss_scores": vulnerability.cvss_scores or [],
+        "cvss_scores": _cvss_chips(vulnerability.cvss_scores),
         "exploitation_status": vulnerability.exploitation_status,
         "recommendation": vulnerability.recommendation,
     }
@@ -454,18 +481,8 @@ def _cvss_score(advisory: SecurityAdvisory) -> float | None:
     read as the mildest of them. Returns None when nobody scored it, which the
     template renders as a dash rather than a misleading 0.0.
     """
-    scores: list[float] = []
-    for vulnerability in advisory.vulnerabilities.all():
-        for entry in vulnerability.cvss_scores or []:
-            if not isinstance(entry, dict):
-                continue
-            try:
-                scores.append(float(entry["base_score"]))
-            except (KeyError, TypeError, ValueError):
-                # A hand-entered score can be absent or non-numeric; one bad row
-                # must not take the whole page down.
-                continue
-    return max(scores) if scores else None
+    entry = worst_cvss(advisory)
+    return float(entry["base_score"]) if entry else None
 
 
 def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail: bool = False) -> dict[str, Any]:
@@ -489,7 +506,6 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         "description": advisory.description,
         "severity": severity,
         "severity_label": severity.title() if severity else "Unrated",
-        "severity_variant": SEVERITY_VARIANTS.get(severity, "secondary"),
         "severity_rank": SEVERITY_RANK.get(severity, 0),
         "status": advisory.remediation_status,
         "status_label": remediation.get("label", ""),
