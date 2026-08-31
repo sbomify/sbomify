@@ -159,6 +159,8 @@ class Team(models.Model):
         ENTERPRISE = "enterprise", "Enterprise"
 
     class Meta:
+        # Deliberate half-state: the table says workspace, the Python model
+        # keeps its Team name until the code rename lands as its own change.
         db_table = "workspaces_workspaces"
         indexes = [
             models.Index(fields=["key"]),
@@ -504,7 +506,7 @@ class Member(models.Model):
         db_table = "workspaces_members"
         unique_together = ("user", "team")
         indexes = [
-            models.Index(fields=["team", "role"], name="teams_member_team_role_idx"),
+            models.Index(fields=["team", "role"], name="workspace_member_role_idx"),
         ]
         constraints = [
             # ``choices`` is not enforced by the database and ``save()`` skips
@@ -870,7 +872,7 @@ class Supplier(models.Model):
             models.UniqueConstraint(Lower("name"), "team", name="unique_supplier_name_per_team"),
         ]
         indexes = [
-            models.Index(fields=["team", "name"], name="teams_supplier_team_name_idx"),
+            models.Index(fields=["team", "name"], name="workspace_supplier_name_idx"),
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)

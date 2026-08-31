@@ -5,12 +5,28 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    """Hard rename of the teams_* tables to workspaces_*.
+
+    Not a rolling migration: code from before this change breaks the moment
+    it applies, so it must ship inside one deploy with the code that reads
+    the new names.
+    """
 
     dependencies = [
         ("teams", "0041_member_role"),
     ]
 
     operations = [
+        migrations.RenameIndex(
+            model_name="member",
+            new_name="workspace_member_role_idx",
+            old_name="teams_member_team_role_idx",
+        ),
+        migrations.RenameIndex(
+            model_name="supplier",
+            new_name="workspace_supplier_name_idx",
+            old_name="teams_supplier_team_name_idx",
+        ),
         migrations.RenameIndex(
             model_name="invitation",
             new_name="workspaces__email_77ed9e_idx",
