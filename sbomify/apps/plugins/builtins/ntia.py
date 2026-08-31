@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sbomify.apps.plugins.builtins._component_scope import is_non_software_component
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
     get_spdx3_creation_info_fields,
@@ -512,14 +513,13 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         for i, component in enumerate(components):
             component_name = component.get("name", f"Component {i + 1}")
 
-            # Skip type=file components (e.g., lockfiles) — they're input metadata,
-            # not software packages, so NTIA minimum-element fields (supplier, version,
-            # unique identifiers) don't apply. Component Name is still checked because
-            # even file-type entries should be named.
-            is_file_type = str(component.get("type", "")).lower() == "file"
+            # Non-software entries (files, hardware devices) carry none of the
+            # NTIA minimum-element fields by design — see _component_scope.
+            # Component Name is still checked because every entry should be named.
+            is_exempt = is_non_software_component(component)
 
             # 1. Supplier name (publisher or supplier.name)
-            if not is_file_type:
+            if not is_exempt:
                 supplier_field = component.get("supplier")
                 supplier = component.get("publisher") or (
                     supplier_field.get("name") if isinstance(supplier_field, dict) else None
@@ -532,12 +532,12 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
                 component_name_failures.append(f"Component at index {i}")
 
             # 3. Version
-            if not is_file_type and not component.get("version"):
+            if not is_exempt and not component.get("version"):
                 version_failures.append(component_name)
 
             # 4. Unique identifiers (PURL, CPE, SWID)
             # Note: hashes are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
-            if not is_file_type:
+            if not is_exempt:
                 has_unique_id = component.get("purl") or component.get("cpe") or component.get("swid")
                 if not has_unique_id:
                     unique_id_failures.append(component_name)

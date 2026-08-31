@@ -311,6 +311,32 @@ class TestTEAProductReleaseEndpoint:
         assert data["product"] == str(tea_enabled_product.uuid)
         assert data["productName"] == tea_enabled_product.name
 
+    def test_hbom_only_component_resolves_release_ref(self, tea_enabled_product, tea_enabled_component):
+        """A component whose only artifact is an HBOM still resolves a ComponentRelease uuid."""
+        from sbomify.apps.core.models import ReleaseArtifact
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        hbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Test HBOM",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            source="test",
+            bom_type=SBOM.BomType.HBOM,
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=hbom)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}?workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        refs = {c["uuid"]: c["release"] for c in response.json()["components"]}
+        cr = ComponentRelease.objects.get(component=tea_enabled_component, version=hbom.version)
+        assert refs[str(tea_enabled_component.uuid)] == str(cr.uuid)
+
     def test_get_product_release_not_found(self, tea_enabled_product):
         """Test getting a non-existent release."""
         client = Client()

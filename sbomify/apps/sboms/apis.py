@@ -33,8 +33,10 @@ from sbomify.apps.core.utils import (
 from sbomify.apps.oidc.permissions import is_authorised_for_component
 from sbomify.apps.sboms.utils import (
     _contains_crypto_assets,
+    _contains_hardware_components,
     _is_cbom,
     _is_duplicate_integrity_error,
+    _is_hbom,
     verify_download_token,
 )
 from sbomify.apps.teams.models import ContactProfile
@@ -471,14 +473,19 @@ def sbom_upload_cyclonedx(
         sbom_version = sbom_dict.get("version", "")
         sbom_format = "cyclonedx"
 
-        # Auto-detect CBOM content: an action-published CBOM arrives with the
-        # default bom_type; tag it cbom so the cbom-gated PQC plugin runs. Only
-        # when the caller left the type as the default — an explicit bom_type
-        # (e.g. the delegated /artifact/vex/ path passing "vex") is honored so
-        # a crypto-heavy VEX is never re-tagged cbom.
-        if bom_type == SBOM.BomType.SBOM.value and "bom_type" not in request.GET and _is_cbom(sbom_data):
-            bom_type = "cbom"
+        # Auto-detect CBOM/HBOM content: an action-published CBOM or a hardware
+        # BOM arrives with the default bom_type; tag it so the type-gated
+        # pipelines run. Only when the caller left the type as the default — an
+        # explicit bom_type (e.g. the delegated /artifact/vex/ path passing
+        # "vex") is honored, so a crypto-heavy VEX is never re-tagged cbom and a
+        # device-bearing one is never re-tagged hbom.
+        if bom_type == SBOM.BomType.SBOM.value and "bom_type" not in request.GET:
+            if _is_cbom(sbom_data):
+                bom_type = "cbom"
+            elif _is_hbom(sbom_data):
+                bom_type = "hbom"
         sbom_dict["has_crypto_assets"] = _contains_crypto_assets(sbom_data)
+        sbom_dict["has_hardware_components"] = _contains_hardware_components(sbom_data)
 
         # Extract PURL qualifiers from metadata.component.purl
         cdx_purl = _extract_cdx_purl(payload)
@@ -709,10 +716,13 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
         sbom_dict["format"] = sbom_format
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
-        # SPDX has no CycloneDX crypto-asset lineage; stamp crypto-free so the
-        # crypto-gated plugins skip these artifacts instead of treating the
-        # unstamped NULL as "maybe crypto".
+        # SPDX has neither the CycloneDX crypto-asset lineage nor a device
+        # component type; stamp both false so the gated pipelines skip instead
+        # of treating NULL as "maybe". Both stamps have to match the file-upload
+        # path below: the same document through the two endpoints must reach the
+        # dispatch gates saying the same thing about itself.
         sbom_dict["has_crypto_assets"] = False
+        sbom_dict["has_hardware_components"] = False
         sbom_dict["format_version"] = spdx_version  # Already extracted from validation
         sbom_dict["sha256_hash"] = sha256_hash
 
@@ -1262,10 +1272,11 @@ def sbom_upload_file(
             sbom_dict["format"] = sbom_format
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
-            # SPDX has no CycloneDX crypto-asset lineage; stamp crypto-free so
-            # the crypto-gated plugins skip instead of treating NULL as
-            # "maybe crypto".
+            # SPDX has neither the CycloneDX crypto-asset lineage nor a device
+            # component type; stamp both false so the gated pipelines skip
+            # instead of treating NULL as "maybe".
             sbom_dict["has_crypto_assets"] = False
+            sbom_dict["has_hardware_components"] = False
             sbom_dict["format_version"] = spdx_version  # Already extracted from validation
             sbom_dict["sha256_hash"] = sha256_hash
 
@@ -1353,12 +1364,17 @@ def sbom_upload_file(
             sbom_version = sbom_dict.get("version", "")
             sbom_format = "cyclonedx"
 
-            # Auto-detect CBOM content: tag a crypto BOM uploaded with the
-            # default bom_type as cbom so the cbom-gated PQC plugin runs. Only when
-            # the caller omitted bom_type — an explicit ?bom_type=sbom is honored.
-            if "bom_type" not in request.GET and _is_cbom(sbom_data):
-                bom_type = "cbom"
+            # Auto-detect CBOM/HBOM content: tag a crypto or hardware BOM
+            # uploaded with the default bom_type so the type-gated pipelines run.
+            # Only when the caller omitted bom_type — an explicit ?bom_type=sbom
+            # is honored.
+            if "bom_type" not in request.GET:
+                if _is_cbom(sbom_data):
+                    bom_type = "cbom"
+                elif _is_hbom(sbom_data):
+                    bom_type = "hbom"
             sbom_dict["has_crypto_assets"] = _contains_crypto_assets(sbom_data)
+            sbom_dict["has_hardware_components"] = _contains_hardware_components(sbom_data)
 
             # Extract PURL qualifiers from metadata.component.purl
             cdx_purl = _extract_cdx_purl(cdx_payload)

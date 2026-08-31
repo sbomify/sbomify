@@ -1038,6 +1038,17 @@ class SBOM(models.Model):
             "True and None, and skip dispatch for False."
         ),
     )
+    has_hardware_components = models.BooleanField(
+        null=True,
+        default=None,
+        help_text=(
+            "Whether the document contains device components, computed at upload. "
+            "None means unknown (rows predating the field); hardware-gated work runs for "
+            "True and None, and skips dispatch for False — except for a document "
+            "explicitly tagged bom_type=hbom, which dispatches whatever this says, so a "
+            "generator that emits no device components is reported rather than skipped."
+        ),
+    )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         qualifiers = self.qualifiers

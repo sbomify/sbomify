@@ -93,15 +93,15 @@
                 does, so without this branch an artifact no
                 scanner could read renders as "Clean".
                 {% endcomment %}
-                <template x-if="item.vuln && item.vuln.total === 0 && item.vuln.scanned_nothing">
+                <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0 && item.vuln.scanned_nothing">
                     <c-badges.warning title="A scan ran but matched no packages, so nothing was checked against any advisory source.">
                     Nothing scanned
                     </c-badges.warning>
                 </template>
-                <template x-if="item.vuln && item.vuln.total === 0 && !item.vuln.scanned_nothing">
+                <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0 && !item.vuln.scanned_nothing">
                     <c-badges.success>Clean</c-badges.success>
                 </template>
-                <template x-if="item.vuln && item.vuln.total > 0">
+                <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total > 0">
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <template x-if="item.vuln.critical > 0">
                             <c-badges.severity level="critical" x-text="item.vuln.critical + ' Critical'" />
