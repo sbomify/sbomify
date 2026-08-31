@@ -34,6 +34,73 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
+# Ceiling on how much captured stderr reaches a log line. Generous enough that
+# a real scanner failure fits whole, bounded so a scanner looping on per-package
+# warnings cannot emit a megabyte-wide record.
+_STDERR_LOG_LIMIT = 2000
+
+# How much of that budget the head keeps when the output is longer. A panic
+# message, a usage error and an early TLS failure all announce themselves in
+# the first line or two; the tail gets the rest because a scanner that dies
+# part way through has usually said why just before it stopped.
+_STDERR_HEAD_CHARS = 600
+
+
+def _collapse_for_log(text: str) -> str:
+    """Fold multi-line captured output into a single log-safe line.
+
+    The log pipeline splits records on newlines, so a multi-line stderr arrives
+    as one line per line and only the first survives as part of the message
+    that names it. osv-scanner opens with a progress line, which is how a
+    failed scan came through staging as
+
+        [OSV] Scanner returned code 127: Starting filesystem walk for root: /
+
+    — the exit code preserved and the reason for it discarded.
+
+    Truncation keeps both ends. Keeping only the tail was the first attempt,
+    on the reasoning that a scanner says why it died in its last few lines —
+    true for a lockfile or network error, false for the case that matters most:
+    a Go panic puts its message on line one and then ten kilobytes of goroutine
+    stack after it, so a tail-only cut discarded the cause and kept the frames.
+    Since this helper is the only route stderr takes to the logs, whatever it
+    drops is not written anywhere.
+    """
+    joined = " | ".join(line.strip() for line in (text or "").splitlines() if line.strip())
+    if len(joined) <= _STDERR_LOG_LIMIT:
+        return joined
+    head = joined[:_STDERR_HEAD_CHARS]
+    tail = joined[-(_STDERR_LOG_LIMIT - _STDERR_HEAD_CHARS) :]
+    return f"{head} ...[{len(joined) - _STDERR_LOG_LIMIT} chars omitted]... {tail}"
+
+
+# What the parsers osv-scanner embeds say when the document's spec version is
+# newer than they know. CycloneDX's is the first line; SPDX phrases it as an
+# unsupported version. Both arrive as the same generic extraction failure, so
+# the wording is the only thing that separates them from a corrupt document.
+_UNSUPPORTED_SPEC_VERSION_PHRASES = (
+    "invalid specification version",
+    "unsupported specversion",
+    "unsupported spec version",
+    "unsupported spdx version",
+)
+
+
+def _is_unsupported_spec_version(stderr: str) -> bool:
+    """Whether osv-scanner refused the document over its spec version.
+
+    Matched on stderr rather than on the exit code, because 127 is also the
+    conventional shell code for "command not found" — a genuine failure that
+    has to keep erroring. The scanner exits 127 for every extraction failure
+    alike and says which one only in the message.
+
+    Deliberately narrow, like the Dependency Track check it mirrors. A document
+    that is actually malformed still gets its error result: reading a corrupt
+    BOM as "not applicable" would hide the thing worth knowing.
+    """
+    haystack = (stderr or "").lower()
+    return any(phrase in haystack for phrase in _UNSUPPORTED_SPEC_VERSION_PHRASES)
+
 
 class OSVPlugin(AssessmentPlugin):
     """OSV vulnerability scanning plugin.
@@ -54,6 +121,19 @@ class OSVPlugin(AssessmentPlugin):
     VERSION = "1.0.0"
     DEFAULT_TIMEOUT = 300
     DEFAULT_SCANNER_PATH = "/usr/local/bin/osv-scanner"
+    # osv-scanner exits 0 when it matched nothing and 1 when it found
+    # vulnerabilities. Every other code means the scan itself did not run to
+    # completion, so its (empty) output says nothing about the SBOM.
+    SUCCESS_EXIT_CODES = (0, 1)
+    # Except this one: 128 is "no package sources found", which is the scanner
+    # working correctly and having nothing to match — the case
+    # ``_create_no_packages_result`` already exists for. Staging bears that out:
+    # every exit-128 run was followed by the no-packages skip firing on its
+    # stderr, while only exit 127 fell through to a clean result. Treating it as
+    # a hard failure would turn a deliberate "Nothing scanned" into a
+    # high-severity Scan Error for documents whose PURLs the scanner does not
+    # recognise.
+    NO_PACKAGE_SOURCES_EXIT_CODE = 128
 
     def get_metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
@@ -119,6 +199,42 @@ class OSVPlugin(AssessmentPlugin):
             # Execute osv-scanner
             stdout, stderr, returncode = self._execute_scanner(scanner_path, scan_path, timeout)
 
+            # "Nothing to scan" is reported as an exit code as well as on
+            # stderr, and it is not a failure — checked before the abort guard
+            # so it keeps the skipped result rather than being reclassified as
+            # a high-severity error.
+            if returncode == self.NO_PACKAGE_SOURCES_EXIT_CODE:
+                logger.warning(
+                    f"[OSV] Scan of SBOM {sbom_id} found no package sources; reporting as skipped rather than clean"
+                )
+                return self._create_no_packages_result()
+
+            # A spec version the bundled scanner does not know is a capability
+            # gap, not a fault: the scan never ran, but the artifact is fine and
+            # a later osv-scanner reads it without anyone intervening. Reported
+            # as an error it becomes a high-severity Scan Error on a valid SBOM,
+            # again on every scheduled rescan. Same reasoning, and the same
+            # answer, as the Dependency Track plugin gives for the same
+            # documents. Checked before the abort guard so it keeps the skip.
+            if returncode not in self.SUCCESS_EXIT_CODES and _is_unsupported_spec_version(stderr):
+                logger.info(
+                    f"[OSV] SBOM {sbom_id} uses a spec version this osv-scanner does not accept: "
+                    f"{_collapse_for_log(stderr)}"
+                )
+                return self._create_unsupported_spec_version_result()
+
+            # A scanner that aborted produces no findings for the same reason a
+            # clean SBOM does — an empty result set — so the two are
+            # indistinguishable downstream unless the exit code is checked
+            # first. Falling through here published "0 vulnerabilities found"
+            # for SBOMs osv-scanner never actually scanned.
+            if returncode not in self.SUCCESS_EXIT_CODES:
+                logger.error(f"[OSV] Scan of SBOM {sbom_id} failed with exit code {returncode}; reporting as error")
+                return self._create_error_result(
+                    f"osv-scanner exited with code {returncode} without completing the scan. "
+                    "No vulnerability result can be inferred from this run."
+                )
+
             # Parse results into findings
             findings = self._parse_scan_output(stdout, returncode)
 
@@ -171,8 +287,21 @@ class OSVPlugin(AssessmentPlugin):
                 },
             )
 
-        except subprocess.TimeoutExpired:
-            logger.error(f"[OSV] Scanner timed out after {timeout}s for SBOM {sbom_id}")
+        except subprocess.TimeoutExpired as exc:
+            # The exception carries whatever the scanner managed to write before
+            # it was killed, and that is the only account of where it stalled —
+            # the lockfile it was on, a network retry loop, the ecosystem it was
+            # resolving. Discarding it left the same "exit condition preserved,
+            # reason discarded" gap on this path that the non-zero-exit path was
+            # fixed for. Decoded defensively: stderr is bytes when the call was
+            # made without text mode, and a partial read can be invalid UTF-8.
+            raw = exc.stderr
+            partial = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes | bytearray) else (raw or "")
+            detail = _collapse_for_log(partial)
+            logger.error(
+                f"[OSV] Scanner timed out after {timeout}s for SBOM {sbom_id}"
+                + (f": {detail}" if detail else " with no output")
+            )
             return self._create_error_result(f"OSV scanner timed out after {timeout} seconds")
 
         except FileNotFoundError:
@@ -245,35 +374,30 @@ class OSVPlugin(AssessmentPlugin):
         return False
 
     def _create_unsupported_format_result(self) -> AssessmentResult:
-        """Create a result indicating SPDX 3.0 is not yet supported by osv-scanner."""
-        finding = Finding(
-            id="osv:unsupported-format",
+        """SPDX 3.0, which osv-scanner cannot read at all, reported as skipped.
+
+        This returns before the scanner is invoked, so it is the earliest of the
+        plugin's "nothing was examined" paths and was the last one still missing
+        the marker that says so. Without ``skipped`` the run read as a clean
+        scan: ``_is_run_passing`` put a green "no known vulnerabilities" badge on
+        an artifact nothing opened, and ``lifecycle.run_scanned`` took the empty
+        findings array as evidence and resolved everything a previous, real scan
+        had found. ``unsupported_format`` was in the metadata but nothing reads
+        it, and the sibling skips had moved on without this one.
+
+        Carries ``unsupported_input`` for the same reason the spec-version skip
+        does: re-running buys nothing until osv-scanner learns the format.
+        """
+        return self.create_skipped_result(
+            finding_id="osv:unsupported-format",
             title="SPDX 3.0 Not Supported",
             description=(
-                "osv-scanner does not yet support SPDX 3.0 format. "
-                "Vulnerability scanning requires SPDX 2.x or CycloneDX format. "
-                "See https://github.com/google/osv-scanner for format support updates."
+                "osv-scanner does not read SPDX 3.0 yet, so this SBOM was not scanned "
+                "for vulnerabilities. Upload it as SPDX 2.x or CycloneDX to have it "
+                "scanned now."
             ),
-            status="warning",
-            severity="info",
-        )
-
-        summary = AssessmentSummary(
-            total_findings=1,
-            pass_count=0,
-            fail_count=0,
-            error_count=0,
-            warning_count=1,
-        )
-
-        return AssessmentResult(
-            plugin_name="osv",
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.SECURITY.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=summary,
-            findings=[finding],
-            metadata={
+            unsupported_input=True,
+            extra_metadata={
                 "scanner": "osv-scanner",
                 "sbom_format": "spdx3",
                 "unsupported_format": True,
@@ -340,9 +464,29 @@ class OSVPlugin(AssessmentPlugin):
             cwd=str(absolute_path.parent),
         )
 
-        # Exit code 0 = no vulns, 1 = vulns found, other = error
-        if process.returncode not in (0, 1):
-            logger.warning(f"[OSV] Scanner returned code {process.returncode}: {process.stderr}")
+        # Exit code 0 = no vulns, 1 = vulns found, 128 = nothing to scan,
+        # anything else = the scan did not run to completion.
+        #
+        # Error rather than warning for the last group: it used to be advisory,
+        # because the run carried on and published a result regardless, and it
+        # is now the point at which the scan is abandoned. A line that reads as
+        # non-fatal for an outcome the caller treats as fatal is what makes a
+        # log hard to trust.
+        #
+        # 128 is excluded because assess() turns it into a skipped result, and
+        # settings wires Sentry to capture on logger.error — so leaving it in
+        # the error branch raised an incident for a Yocto SBOM the scanner
+        # simply had no packages to match, every hour. A spec version the
+        # scanner is too old to read is excluded for the same reason: assess()
+        # skips it, and nobody should be paged because CycloneDX shipped a new
+        # version.
+        if process.returncode == self.NO_PACKAGE_SOURCES_EXIT_CODE:
+            logger.warning(f"[OSV] Scanner found no package sources: {_collapse_for_log(process.stderr)}")
+        elif process.returncode not in self.SUCCESS_EXIT_CODES:
+            if _is_unsupported_spec_version(process.stderr):
+                logger.warning(f"[OSV] Scanner does not read this spec version: {_collapse_for_log(process.stderr)}")
+            else:
+                logger.error(f"[OSV] Scanner returned code {process.returncode}: {_collapse_for_log(process.stderr)}")
 
         return process.stdout, process.stderr, process.returncode
 
@@ -582,6 +726,33 @@ class OSVPlugin(AssessmentPlugin):
             summary=summary,
             findings=[finding],
             metadata={"scanner": "osv-scanner", "skipped": True, "no_packages": True},
+        )
+
+    def _create_unsupported_spec_version_result(self) -> AssessmentResult:
+        """A document the bundled scanner is too old to read, reported as skipped.
+
+        ``unsupported_input`` is the marker the scheduled sweep's backoff reads:
+        the next run gets the identical rejection, so re-scanning sooner than a
+        scanner upgrade buys nothing. OSV's own sweeps already sit at a day and
+        a week, which is longer than the backoff, so it changes nothing today —
+        it is set because the marker means "the scanner cannot read this input"
+        and this is that, and a shorter cadence must not have to remember.
+
+        The scanner's own words stay in the log line, not in the description.
+        They name the orchestrator's temp path, run to whatever length the
+        scanner felt like, and say nothing the reader can act on: the SBOM is
+        fine and the fix is a scanner upgrade they do not perform.
+        """
+        return self.create_skipped_result(
+            finding_id="osv:unsupported-spec-version",
+            title="Spec Version Not Supported",
+            description=(
+                "osv-scanner does not read this SBOM's spec version yet, so it was not "
+                "scanned for vulnerabilities. Nothing is wrong with the SBOM. It will be "
+                "scanned once the scanner supports the version."
+            ),
+            unsupported_input=True,
+            extra_metadata={"scanner": "osv-scanner", "unsupported_spec_version": True},
         )
 
     def _create_error_result(self, error_message: str) -> AssessmentResult:

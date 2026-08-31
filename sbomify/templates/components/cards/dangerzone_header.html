@@ -1,0 +1,12 @@
+{% comment %}
+The danger zone's header band, standalone: the ordinary header wash under a
+danger hairline. Use it for the header a danger zone builds by hand, above all
+the one that is also the control that opens the zone — the role, the expanded
+state and the keyboard handlers belong on the band itself, and they arrive as
+attributes.
+
+c-cards.dangerzone paints this same band for its title header, through
+header_class. One recipe in two places: they must stay in lockstep.
+{% endcomment %}
+<c-vars class />
+<c-cards.header variant_class="flex items-center gap-3 border-[color-mix(in_oklab,var(--color-danger)_25%,transparent)] bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-surface-elevated)_50%,transparent),transparent)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-danger)_50%,transparent)]" class="{{ class }}" :attrs="attrs">{{ slot }}</c-cards.header>

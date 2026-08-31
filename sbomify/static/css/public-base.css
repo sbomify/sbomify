@@ -14,7 +14,7 @@
 }
 
 .public-header {
-    background: linear-gradient(135deg, var(--bg-primary) 0%, rgb(var(--color-surface)) 100%);
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--color-surface) 100%);
     padding: 2rem 0;
     position: relative;
     overflow: hidden;
@@ -166,11 +166,6 @@
         transition-duration: 0.01ms !important;
         animation-duration: 0.01ms !important;
     }
-}
-
-*:focus {
-    outline: 2px solid var(--accent-color);
-    outline-offset: 2px;
 }
 
 @media (prefers-contrast: high) {

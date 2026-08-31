@@ -1,4 +1,5 @@
 {# Individual assessment run collapsible card - rendered server-side #}
+{% load design_system %}
 {% load plugins_extras %}
 {% load advisory_tags %}
 {# Safely compute has_issues - run.result may be None for pending/running assessments #}
@@ -10,481 +11,446 @@
         {% if is_security and run.result.summary.by_severity %}
             {% with sev=run.result.summary.by_severity security_total=run.result.summary.total_findings|default:0 %}
                 {% comment %}A skipped run keeps the neutral base border: it produced no verdict, so it is neither a warning nor a clean scan.{% endcomment %}
-                <div class="tw-collapsible-card {% if skipped %}{% elif security_total %}tw-collapsible-card--warning{% elif run.status == 'completed' %}tw-collapsible-card--success{% endif %}"
-                     id="plugin-{{ run.plugin_name }}"
-                     x-data="{ expanded: false }">
-                    <div class="tw-collapsible-header" @click="expanded = !expanded">
-                        <div class="flex items-center gap-3 flex-grow min-w-0">
-                            <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
-                            {# release_names is populated by _run_to_schema from the M2M #}
-                            {% if run.release_names %}
-                                <span class="flex items-center gap-1 flex-wrap">
-                                    {% for name in run.release_names %}
-                                        <span class="tw-badge-secondary"
-                                              title="Release this scan result applies to">
-                                            <i class="fas fa-tag mr-1"></i>{{ name }}
-                                        </span>
-                                    {% endfor %}
-                                </span>
-                            {% endif %}
-                            {% if run.status == 'completed' %}
-                                {% comment %}A skipped scanner counts its own stand-down notice as one info finding, so security_total is 1 and the card would otherwise claim a vulnerability the scanner never reported.{% endcomment %}
-                                {% if skipped %}
-                                    <span class="tw-badge-secondary"
-                                          title="This plugin did not scan, so it reported no verdict.">
-                                        <i class="fas fa-ban mr-1"></i>Skipped
-                                    </span>
-                                {% elif security_total %}
-                                    <span class="tw-badge-secondary">
-                                        <i class="fas fa-shield-alt mr-1"></i>{{ security_total }} Vulnerabilit{{ security_total|pluralize:"y,ies" }}
-                                    </span>
-                                {% else %}
-                                    <span class="tw-badge-secondary">
-                                        <i class="fas fa-check-circle mr-1"></i>No Vulnerabilities
-                                    </span>
-                                {% endif %}
-                            {% elif run.status == 'failed' %}
-                                <span class="tw-badge-secondary">
-                                    <i class="fas fa-times-circle mr-1"></i>Error
-                                </span>
-                            {% elif run.status == 'running' %}
-                                <span class="tw-badge-secondary">
-                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
-                                    Running
-                                </span>
-                            {% else %}
-                                <span class="tw-badge-secondary">
-                                    <i class="fas fa-clock mr-1"></i>Pending
-                                </span>
-                            {% endif %}
-                            {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
-                            {% if skipped %}
-                                <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
-                            {% elif run.result.summary %}
-                                <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
-                            {% endif %}
-                        </div>
-                        <i class="fas fa-chevron-down tw-collapsible-icon text-text-muted"
-                           :class="expanded && 'tw-collapsible-icon-open'"></i>
+                {# The level must render as one bare word, so its branch stays on one line. #}
+                {# djlint:off #}
+                <c-cards.collapsible level="{% if skipped %}{% elif security_total %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ expanded: false }">
+                {# djlint:on #}
+                <c-cards.collapsible-trigger bare state="expanded" @click="expanded = !expanded">
+                <div class="flex items-center gap-3 flex-grow min-w-0">
+                    <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                    {# release_names is populated by _run_to_schema from the M2M #}
+                    {% if run.release_names %}
+                        <span class="flex items-center gap-1 flex-wrap">
+                            {% for name in run.release_names %}
+                                <c-badges.secondary title="Release this scan result applies to">
+                                <i class="fas fa-tag mr-1"></i>{{ name }}
+                                </c-badges.secondary>
+                            {% endfor %}
+                        </span>
+                    {% endif %}
+                    {% if run.status == 'completed' %}
+                        {% comment %}A skipped scanner counts its own stand-down notice as one info finding, so security_total is 1 and the card would otherwise claim a vulnerability the scanner never reported.{% endcomment %}
+                        {% if skipped %}
+                            <c-badges.secondary title="This plugin did not scan, so it reported no verdict.">
+                            <i class="fas fa-ban mr-1"></i>Skipped
+                            </c-badges.secondary>
+                        {% elif security_total %}
+                            <c-badges.secondary>
+                            <i class="fas fa-shield-alt mr-1"></i>{{ security_total }} Vulnerabilit{{ security_total|pluralize:"y,ies" }}
+                            </c-badges.secondary>
+                        {% else %}
+                            <c-badges.secondary>
+                            <i class="fas fa-check-circle mr-1"></i>No Vulnerabilities
+                            </c-badges.secondary>
+                        {% endif %}
+                    {% elif run.status == 'failed' %}
+                        <c-badges.secondary>
+                        <i class="fas fa-times-circle mr-1"></i>Error
+                        </c-badges.secondary>
+                    {% elif run.status == 'running' %}
+                        <c-badges.secondary>
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                        Running
+                        </c-badges.secondary>
+                    {% else %}
+                        <c-badges.secondary>
+                        <i class="fas fa-clock mr-1"></i>Pending
+                        </c-badges.secondary>
+                    {% endif %}
+                    {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
+                    {% if skipped %}
+                        <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
+                    {% elif run.result.summary %}
+                        <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
+                    {% endif %}
+                </div>
+                </c-cards.collapsible-trigger>
+                <c-cards.collapsible-body state="expanded">
+                {% if run.status == 'completed' or run.status == 'failed' %}
+                    {# Run Metadata #}
+                    <div class="flex flex-wrap gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
+                        <span>
+                            <i class="fas fa-code-branch mr-1"></i>
+                            v{{ run.plugin_version }}
+                        </span>
+                        <span>
+                            <i class="fas fa-play-circle mr-1"></i>
+                            {{ run.run_reason|format_run_reason }}
+                        </span>
+                        {% include 'plugins/components/_rerun_button.html.j2' %}
+                        {% if run.completed_at %}
+                            <span>
+                                <i class="fas fa-calendar-check mr-1"></i>
+                                {{ run.completed_at|date:"M d, Y \a\t H:i" }}
+                            </span>
+                        {% endif %}
                     </div>
-                    <div x-show="expanded" x-collapse>
-                        <div class="tw-collapsible-body">
-                            {% if run.status == 'completed' or run.status == 'failed' %}
-                                {# Run Metadata #}
-                                <div class="flex flex-wrap gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
-                                    <span>
-                                        <i class="fas fa-code-branch mr-1"></i>
-                                        v{{ run.plugin_version }}
-                                    </span>
-                                    <span>
-                                        <i class="fas fa-play-circle mr-1"></i>
-                                        {{ run.run_reason|format_run_reason }}
-                                    </span>
-                                    {% include 'plugins/components/_rerun_button.html.j2' %}
-                                    {% if run.completed_at %}
-                                        <span>
-                                            <i class="fas fa-calendar-check mr-1"></i>
-                                            {{ run.completed_at|date:"M d, Y \a\t H:i" }}
-                                        </span>
-                                    {% endif %}
-                                </div>
-                                {% if run.status == 'failed' and run.error_message %}
-                                    {# Error Message #}
-                                    <div class="flex items-start gap-3 p-4 bg-danger/10 border border-danger/30 rounded-lg mb-4">
-                                        <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
-                                        <div class="text-danger">{{ run.error_message }}</div>
-                                    </div>
+                    {% if run.status == 'failed' and run.error_message %}
+                        {# Error Message #}
+                        <c-feedback.alert variant="danger" class="mb-4">{{ run.error_message }}</c-feedback.alert>
+                    {% endif %}
+                    {% if run.result.summary %}
+                        {# Security Summary - Severity grid #}
+                        <div class="mb-4">
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                                <c-layout.stat-card compact accent="danger">
+                                <c-layout.stat.value>{{ sev.critical|default:0 }}</c-layout.stat.value>
+                                <c-layout.stat.label>Critical</c-layout.stat.label>
+                                </c-layout.stat-card>
+                                <c-layout.stat-card compact accent="warning">
+                                <c-layout.stat.value>{{ sev.high|default:0 }}</c-layout.stat.value>
+                                <c-layout.stat.label>High</c-layout.stat.label>
+                                </c-layout.stat-card>
+                                <c-layout.stat-card compact style="--stat-accent: var(--color-severity-medium)">
+                                <c-layout.stat.value>{{ sev.medium|default:0 }}</c-layout.stat.value>
+                                <c-layout.stat.label>Medium</c-layout.stat.label>
+                                </c-layout.stat-card>
+                                <c-layout.stat-card compact style="--stat-accent: var(--color-severity-low)">
+                                <c-layout.stat.value>{{ sev.low|default:0 }}</c-layout.stat.value>
+                                <c-layout.stat.label>Low</c-layout.stat.label>
+                                </c-layout.stat-card>
+                                <c-layout.stat-card compact>
+                                {% comment %}A skipped run's summary counts its status marker, which is not a vulnerability.{% endcomment %}
+                                <c-layout.stat.value>{{ skipped|yesno:"0,"|default:security_total }}</c-layout.stat.value>
+                                <c-layout.stat.label>Total</c-layout.stat.label>
+                                </c-layout.stat-card>
+                                {% if run.result.summary.suppressed_count %}
+                                    <c-layout.stat-card compact style="--stat-accent: var(--color-info)" title="Findings suppressed by VEX (not_affected / false_positive)">
+                                    <c-layout.stat.value>{{ run.result.summary.suppressed_count }}</c-layout.stat.value>
+                                    <c-layout.stat.label>VEX suppressed</c-layout.stat.label>
+                                    </c-layout.stat-card>
                                 {% endif %}
-                                {% if run.result.summary %}
-                                    {# Security Summary - Severity grid #}
-                                    <div class="mb-4">
-                                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
-                                            <div class="bg-danger/10 p-3 rounded-lg text-center">
-                                                <div class="font-bold text-danger">{{ sev.critical|default:0 }}</div>
-                                                <small class="text-text-muted">Critical</small>
+                            </div>
+                        </div>
+                    {% endif %}
+                    {% if run.result.findings|vulnerability_findings %}
+                        {# Security Findings List #}
+                        <div class="findings-list">
+                            <h6>
+                                <i class="fas fa-list-ul mr-1"></i>Vulnerabilities
+                            </h6>
+                            {% for finding in run.result.findings|vulnerability_findings %}
+                                <div class="finding-item {{ finding.severity|severity_border_class }}">
+                                    <div class="flex items-start">
+                                        <span class="finding-status-icon {{ finding.severity|severity_text_class }}">
+                                            <i class="{{ finding.severity|severity_icon }}"></i>
+                                        </span>
+                                        <div class="flex-1 ml-2">
+                                            <div class="finding-title flex items-center gap-2 flex-wrap">
+                                                {% comment %}Not every finding id is an advisory: a plugin's own operational ids (dependency-track:unsupported-format) used to be linked to OSV too, which resolved to nothing.{% endcomment %}
+                                                {% with finding_url=finding.id|advisory_url %}
+                                                    {% if finding_url %}
+                                                        <a href="{{ finding_url }}"
+                                                           target="_blank"
+                                                           rel="noopener noreferrer"
+                                                           class="text-primary hover:underline no-underline inline-flex items-center gap-1">
+                                                            <i class="fas fa-external-link-alt text-xs"></i>{{ finding.id }}
+                                                        </a>
+                                                    {% else %}
+                                                        <span class="text-text font-medium">{{ finding.id }}</span>
+                                                    {% endif %}
+                                                {% endwith %}
+                                                {# Severity badge #}
+                                                {% comment %}The band off the scale takes the component's unknown tint, which is what the else-branch here used to spell out.{% endcomment %}
+                                                {% if finding.severity %}
+                                                    <c-badges.severity level="{{ finding.severity|lower }}">{{ finding.severity|upper }}</c-badges.severity>
+                                                {% endif %}
+                                                {# CVSS score #}
+                                                {% if finding.cvss_score is not None %}<c-chips.neutral>CVSS: {{ finding.cvss_score }}</c-chips.neutral>{% endif %}
+                                                {% comment %}A malicious package is a different decision from a vulnerable one: rip it out now rather than schedule a patch. Shown ahead of severity because the severity is not the point, and the OpenSSF records carry none at all.{% endcomment %}
+                                                {% if finding.malicious %}
+                                                    <c-badges.solid-danger size="sm" class="uppercase" title="Malicious package: remove it rather than upgrade">
+                                                    <i class="fas fa-skull-crossbones mr-1"></i>Malicious
+                                                    </c-badges.solid-danger>
+                                                {% endif %}
+                                                {# CISA KEV: confirmed exploited in the wild #}
+                                                {% comment %}EPSS is the likelihood half of the pair: CVSS says how bad, EPSS says how likely. Rendered as the raw 0..1 probability to three decimals, which is how FIRST publishes it. Both badges test "is not None" rather than truthiness, because 0.0 is a real score for either and would otherwise vanish.{% endcomment %}
+                                                {% if finding.epss_score is not None %}
+                                                    <c-chips.neutral title="EPSS: probability of exploitation in the next 30 days">EPSS: {{ finding.epss_score|floatformat:"-3" }}</c-chips.neutral>
+                                                {% endif %}
+                                                {% if finding.kev %}
+                                                    <c-badges.solid-danger size="sm" class="uppercase" title="In CISA's Known Exploited Vulnerabilities catalog">KEV</c-badges.solid-danger>
+                                                {% endif %}
+                                                {% if finding.euvd %}
+                                                    <c-badges.solid-danger size="sm" class="uppercase" title="In ENISA's EUVD exploited vulnerabilities list">EU KEV</c-badges.solid-danger>
+                                                {% endif %}
+                                                {# VEX analysis state #}
+                                                {% if finding.analysis_state %}
+                                                    <c-badges.info title="{{ finding.analysis_justification|vex_justification_label }} {{ finding.analysis_detail|default:'' }}">
+                                                    <i class="fas fa-clipboard-check mr-0.5"></i>{{ finding.analysis_state }}
+                                                    </c-badges.info>
+                                                {% endif %}
+                                                {# Stale: a component-wide suppression asserted for a different version of this package #}
+                                                {% if finding.analysis_stale %}
+                                                    <c-badges.warning title="This suppression was asserted for a different version of this package. Re-review whether it still applies">
+                                                    <i class="fas fa-triangle-exclamation mr-0.5"></i>re-review
+                                                    </c-badges.warning>
+                                                {% endif %}
+                                                {% if can_triage and run.category == 'security' %}
+                                                    <c-buttons.outline size="sm" @click="$dispatch('open-triage', { id: '{{ finding.id|escapejs }}', purl: '{{ finding.component.purl|default:''|escapejs }}', state: '{{ finding.analysis_state|default:''|escapejs }}', justification: '{{ finding.analysis_justification|default:''|escapejs }}', detail: '{{ finding.analysis_detail|default:''|escapejs }}', aliases: '{{ finding.aliases|default:''|join:','|escapejs }}' })">
+                                                    <i class="fas fa-stethoscope mr-1"></i>Triage
+                                                    </c-buttons.outline>
+                                                {% endif %}
                                             </div>
-                                            <div class="bg-warning/10 p-3 rounded-lg text-center">
-                                                <div class="font-bold text-warning">{{ sev.high|default:0 }}</div>
-                                                <small class="text-text-muted">High</small>
-                                            </div>
-                                            <div class="bg-info/10 p-3 rounded-lg text-center">
-                                                <div class="font-bold text-info">{{ sev.medium|default:0 }}</div>
-                                                <small class="text-text-muted">Medium</small>
-                                            </div>
-                                            <div class="bg-success/10 p-3 rounded-lg text-center">
-                                                <div class="font-bold text-success">{{ sev.low|default:0 }}</div>
-                                                <small class="text-text-muted">Low</small>
-                                            </div>
-                                            <div class="bg-border/30 p-3 rounded-lg text-center">
-                                                <div class="font-bold text-text">{{ security_total }}</div>
-                                                <small class="text-text-muted">Total</small>
-                                            </div>
-                                            {% if run.result.summary.suppressed_count %}
-                                                <div class="bg-info/10 p-3 rounded-lg text-center"
-                                                     title="Findings suppressed by VEX (not_affected / false_positive)">
-                                                    <div class="font-bold text-info">{{ run.result.summary.suppressed_count }}</div>
-                                                    <small class="text-text-muted">VEX suppressed</small>
+                                            <div class="finding-description">{{ finding.title }}</div>
+                                            {# Component info #}
+                                            {% if finding.component %}
+                                                <div class="mt-1 text-sm text-text-muted">
+                                                    <i class="fas fa-cube mr-1"></i>
+                                                    <span class="font-mono">{{ finding.component.name }}
+                                                        {% if finding.component.version %}@{{ finding.component.version }}{% endif %}
+                                                    </span>
+                                                    {% if finding.component.ecosystem %}
+                                                        <c-badges.secondary size="sm" class="ml-1">{{ finding.component.ecosystem }}</c-badges.secondary>
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                            {# Aliases #}
+                                            {% if finding.aliases %}
+                                                <div class="mt-1 flex flex-wrap gap-1">
+                                                    {% for alias in finding.aliases %}
+                                                        {% with alias_url=alias|advisory_url %}
+                                                            {% if alias_url %}
+                                                                <a href="{{ alias_url }}"
+                                                                   target="_blank"
+                                                                   rel="noopener noreferrer"
+                                                                   class="hover:underline no-underline">
+                                                                    <c-code-inline accent="primary">{{ alias }}</c-code-inline>
+                                                                </a>
+                                                            {% else %}
+                                                                <c-code-inline>{{ alias }}</c-code-inline>
+                                                            {% endif %}
+                                                        {% endwith %}
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                            {# References #}
+                                            {% if finding.references %}
+                                                <div class="mt-2">
+                                                    {% if finding.references|length <= 3 %}
+                                                        <span class="text-xs text-text-muted">References:</span>
+                                                        {% for ref in finding.references %}
+                                                            {% if ref and ref != "" %}
+                                                                <a href="{{ ref }}"
+                                                                   target="_blank"
+                                                                   rel="noopener noreferrer"
+                                                                   class="inline-flex items-center gap-1 text-xs text-primary hover:underline no-underline mr-2">
+                                                                    <i class="fas fa-external-link-alt"></i>Reference
+                                                                </a>
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        <details class="group">
+                                                            <summary class="text-xs text-primary cursor-pointer hover:underline">
+                                                                {{ finding.references|length }} references
+                                                            </summary>
+                                                            <div class="mt-1 flex flex-col gap-1">
+                                                                {% for ref in finding.references %}
+                                                                    {% if ref and ref != "" %}
+                                                                        <a href="{{ ref }}"
+                                                                           target="_blank"
+                                                                           rel="noopener noreferrer"
+                                                                           class="inline-flex items-center gap-1 text-xs text-primary hover:underline no-underline truncate">
+                                                                            <i class="fas fa-external-link-alt flex-shrink-0"></i>{{ ref|truncatechars:80 }}
+                                                                        </a>
+                                                                    {% endif %}
+                                                                {% endfor %}
+                                                            </div>
+                                                        </details>
+                                                    {% endif %}
                                                 </div>
                                             {% endif %}
                                         </div>
                                     </div>
-                                {% endif %}
-                                {% if run.result.findings %}
-                                    {# Security Findings List #}
-                                    <div class="findings-list">
-                                        <h6>
-                                            <i class="fas fa-list-ul mr-1"></i>Vulnerabilities
-                                        </h6>
-                                        {% for finding in run.result.findings %}
-                                            <div class="finding-item {{ finding.severity|severity_border_class }}">
-                                                <div class="flex items-start">
-                                                    <span class="finding-status-icon {{ finding.severity|severity_text_class }}">
-                                                        <i class="{{ finding.severity|severity_icon }}"></i>
-                                                    </span>
-                                                    <div class="flex-1 ml-2">
-                                                        <div class="finding-title flex items-center gap-2 flex-wrap">
-                                                            {% comment %}Not every finding id is an advisory: a plugin's own operational ids (dependency-track:unsupported-format) used to be linked to OSV too, which resolved to nothing.{% endcomment %}
-                                                            {% with finding_url=finding.id|advisory_url %}
-                                                                {% if finding_url %}
-                                                                    <a href="{{ finding_url }}"
-                                                                       target="_blank"
-                                                                       rel="noopener noreferrer"
-                                                                       class="text-primary hover:underline no-underline inline-flex items-center gap-1">
-                                                                        <i class="fas fa-external-link-alt text-xs"></i>{{ finding.id }}
-                                                                    </a>
-                                                                {% else %}
-                                                                    <span class="text-text font-medium">{{ finding.id }}</span>
-                                                                {% endif %}
-                                                            {% endwith %}
-                                                            {# Severity badge #}
-                                                            {% if finding.severity %}
-                                                                {% if finding.severity == 'critical' %}
-                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger/10 text-danger border border-danger/30">{{ finding.severity|upper }}</span>
-                                                                {% elif finding.severity == 'high' %}
-                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-warning/10 text-warning border border-warning/30">{{ finding.severity|upper }}</span>
-                                                                {% elif finding.severity == 'medium' %}
-                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">{{ finding.severity|upper }}</span>
-                                                                {% elif finding.severity == 'low' %}
-                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-success/10 text-success border border-success/30">{{ finding.severity|upper }}</span>
-                                                                {% else %}
-                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-surface text-text-muted border border-border">{{ finding.severity|upper }}</span>
-                                                                {% endif %}
-                                                            {% endif %}
-                                                            {# CVSS score #}
-                                                            {% if finding.cvss_score is not None %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface text-text-muted border border-border">CVSS: {{ finding.cvss_score }}</span>
-                                                            {% endif %}
-                                                            {% comment %}A malicious package is a different decision from a vulnerable one: rip it out now rather than schedule a patch. Shown ahead of severity because the severity is not the point, and the OpenSSF records carry none at all.{% endcomment %}
-                                                            {% if finding.malicious %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger text-white"
-                                                                      title="Malicious package: remove it rather than upgrade">
-                                                                    <i class="fas fa-skull-crossbones mr-1"></i>Malicious
-                                                                </span>
-                                                            {% endif %}
-                                                            {# CISA KEV: confirmed exploited in the wild #}
-                                                            {% comment %}EPSS is the likelihood half of the pair: CVSS says how bad, EPSS says how likely. Rendered as the raw 0..1 probability to three decimals, which is how FIRST publishes it. Both badges test "is not None" rather than truthiness, because 0.0 is a real score for either and would otherwise vanish.{% endcomment %}
-                                                            {% if finding.epss_score is not None %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface text-text-muted border border-border"
-                                                                      title="EPSS: probability of exploitation in the next 30 days">EPSS: {{ finding.epss_score|floatformat:"-3" }}</span>
-                                                            {% endif %}
-                                                            {% if finding.kev %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger text-white"
-                                                                      title="In CISA's Known Exploited Vulnerabilities catalog">KEV</span>
-                                                            {% endif %}
-                                                            {% if finding.euvd %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger/80 text-white"
-                                                                      title="In ENISA's EUVD exploited vulnerabilities list">EU KEV</span>
-                                                            {% endif %}
-                                                            {# VEX analysis state #}
-                                                            {% if finding.analysis_state %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-info/10 text-info border border-info/30"
-                                                                      title="{{ finding.analysis_justification|default:'' }} {{ finding.analysis_detail|default:'' }}">
-                                                                    <i class="fas fa-clipboard-check mr-0.5"></i>{{ finding.analysis_state }}
-                                                                </span>
-                                                            {% endif %}
-                                                            {# Stale: a component-wide suppression asserted for a different version of this package #}
-                                                            {% if finding.analysis_stale %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-warning/10 text-warning border border-warning/30"
-                                                                      title="This suppression was asserted for a different version of this package — re-review whether it still applies">
-                                                                    <i class="fas fa-triangle-exclamation mr-0.5"></i>re-review
-                                                                </span>
-                                                            {% endif %}
-                                                            {% if can_triage and run.category == 'security' %}
-                                                                <button type="button"
-                                                                        class="px-2 py-0.5 text-xs rounded border border-border text-text-muted hover:text-primary hover:border-primary"
-                                                                        @click="$dispatch('open-triage', { id: '{{ finding.id|escapejs }}', purl: '{{ finding.component.purl|default:''|escapejs }}', state: '{{ finding.analysis_state|default:''|escapejs }}', justification: '{{ finding.analysis_justification|default:''|escapejs }}', detail: '{{ finding.analysis_detail|default:''|escapejs }}', aliases: '{{ finding.aliases|default:''|join:','|escapejs }}' })">
-                                                                    <i class="fas fa-stethoscope mr-1"></i>Triage
-                                                                </button>
-                                                            {% endif %}
-                                                        </div>
-                                                        <div class="finding-description">{{ finding.title }}</div>
-                                                        {# Component info #}
-                                                        {% if finding.component %}
-                                                            <div class="mt-1 text-sm text-text-muted">
-                                                                <i class="fas fa-cube mr-1"></i>
-                                                                <span class="font-mono">{{ finding.component.name }}
-                                                                    {% if finding.component.version %}@{{ finding.component.version }}{% endif %}
-                                                                </span>
-                                                                {% if finding.component.ecosystem %}
-                                                                    <span class="tw-badge-secondary ml-1"
-                                                                          style="font-size: 0.65rem;
-                                                                                 padding: 0.1rem 0.35rem">{{ finding.component.ecosystem }}</span>
-                                                                {% endif %}
-                                                            </div>
-                                                        {% endif %}
-                                                        {# Aliases #}
-                                                        {% if finding.aliases %}
-                                                            <div class="mt-1 flex flex-wrap gap-1">
-                                                                {% for alias in finding.aliases %}
-                                                                    {% with alias_url=alias|advisory_url %}
-                                                                        {% if alias_url %}
-                                                                            <a href="{{ alias_url }}"
-                                                                               target="_blank"
-                                                                               rel="noopener noreferrer"
-                                                                               class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
-                                                                        {% else %}
-                                                                            <span class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-text-muted">{{ alias }}</span>
-                                                                        {% endif %}
-                                                                    {% endwith %}
-                                                                {% endfor %}
-                                                            </div>
-                                                        {% endif %}
-                                                        {# References #}
-                                                        {% if finding.references %}
-                                                            <div class="mt-2">
-                                                                {% if finding.references|length <= 3 %}
-                                                                    <span class="text-xs text-text-muted">References:</span>
-                                                                    {% for ref in finding.references %}
-                                                                        {% if ref and ref != "" %}
-                                                                            <a href="{{ ref }}"
-                                                                               target="_blank"
-                                                                               rel="noopener noreferrer"
-                                                                               class="inline-flex items-center gap-1 text-xs text-primary hover:underline no-underline mr-2">
-                                                                                <i class="fas fa-external-link-alt"></i>Reference
-                                                                            </a>
-                                                                        {% endif %}
-                                                                    {% endfor %}
-                                                                {% else %}
-                                                                    <details class="group">
-                                                                        <summary class="text-xs text-primary cursor-pointer hover:underline">
-                                                                            {{ finding.references|length }} references
-                                                                        </summary>
-                                                                        <div class="mt-1 flex flex-col gap-1">
-                                                                            {% for ref in finding.references %}
-                                                                                {% if ref and ref != "" %}
-                                                                                    <a href="{{ ref }}"
-                                                                                       target="_blank"
-                                                                                       rel="noopener noreferrer"
-                                                                                       class="inline-flex items-center gap-1 text-xs text-primary hover:underline no-underline truncate">
-                                                                                        <i class="fas fa-external-link-alt flex-shrink-0"></i>{{ ref|truncatechars:80 }}
-                                                                                    </a>
-                                                                                {% endif %}
-                                                                            {% endfor %}
-                                                                        </div>
-                                                                    </details>
-                                                                {% endif %}
-                                                            </div>
-                                                        {% endif %}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
-                            {% else %}
-                                {# Pending state #}
-                                <div class="text-center text-text-muted py-6">
-                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-2xl block mb-3" %}
-                                    <p class="mb-0">Assessment in progress...</p>
                                 </div>
-                            {% endif %}
+                            {% endfor %}
                         </div>
+                    {% endif %}
+                {% else %}
+                    {# Pending state #}
+                    <div class="text-center text-text-muted py-6">
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-2xl block mb-3" %}
+                        <p class="mb-0">Assessment in progress...</p>
                     </div>
-                </div>
+                {% endif %}
+                </c-cards.collapsible-body>
+                </c-cards.collapsible>
             {% endwith %}
         {% else %}
             {# Compliance / non-security rendering #}
             {% comment %}A skipped run keeps the neutral base border: it produced no verdict, so it is neither a warning nor a pass.{% endcomment %}
-            <div class="tw-collapsible-card {% if skipped %}{% elif error_count %}tw-collapsible-card--danger{% elif fail_count %}tw-collapsible-card--warning{% elif run.status == 'completed' and pass_count == 0 %}tw-collapsible-card--warning{% elif run.status == 'completed' %}tw-collapsible-card--success{% endif %}"
-                 id="plugin-{{ run.plugin_name }}"
-                 x-data="{ expanded: false }">
-                <div class="tw-collapsible-header" @click="expanded = !expanded">
-                    <div class="flex items-center gap-3 flex-grow min-w-0">
-                        <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
-                        {# release_names is populated by _run_to_schema from the M2M #}
-                        {% if run.release_names %}
-                            <span class="flex items-center gap-1 flex-wrap">
-                                {% for name in run.release_names %}
-                                    <span class="tw-badge-secondary"
-                                          title="Release this scan result applies to">
-                                        <i class="fas fa-tag mr-1"></i>{{ name }}
-                                    </span>
-                                {% endfor %}
-                            </span>
-                        {% endif %}
-                        {% if run.status == 'completed' %}
-                            {% if skipped %}
-                                <span class="tw-badge-secondary"
-                                      title="This plugin did not run, so it reported no verdict.">
-                                    <i class="fas fa-ban mr-1"></i>Skipped
-                                </span>
-                            {% elif has_issues %}
-                                <span class="tw-badge-secondary">
-                                    <i class="fas fa-exclamation-triangle mr-1"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
-                                </span>
-                            {% elif pass_count == 0 %}
-                                {% comment %}All findings were warnings — no positive verdict was produced. Surface distinctly so operators don't misread as a pass.{% endcomment %}
-                                <span class="tw-badge-secondary">
-                                    <i class="fas fa-exclamation-circle mr-1"></i>Warnings Only
-                                </span>
-                            {% else %}
-                                <span class="tw-badge-secondary">
-                                    <i class="fas fa-check-circle mr-1"></i>Passed
-                                </span>
-                            {% endif %}
-                        {% elif run.status == 'failed' %}
-                            <span class="tw-badge-secondary">
-                                <i class="fas fa-times-circle mr-1"></i>Error
-                            </span>
-                        {% elif run.status == 'running' %}
-                            <span class="tw-badge-secondary">
-                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
-                                Running
-                            </span>
-                        {% else %}
-                            <span class="tw-badge-secondary">
-                                <i class="fas fa-clock mr-1"></i>Pending
-                            </span>
-                        {% endif %}
-                        {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
-                        {% if skipped %}
-                            <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
-                        {% elif run.result.summary %}
-                            <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
-                        {% endif %}
-                    </div>
-                    <i class="fas fa-chevron-down tw-collapsible-icon text-text-muted"
-                       :class="expanded && 'tw-collapsible-icon-open'"></i>
+            {# The level must render as one bare word, so its branch stays on one line. #}
+            {# djlint:off #}
+            <c-cards.collapsible level="{% if skipped %}{% elif error_count %}danger{% elif fail_count %}warning{% elif run.status == 'completed' and pass_count == 0 %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ expanded: false }">
+            {# djlint:on #}
+            <c-cards.collapsible-trigger bare state="expanded" @click="expanded = !expanded">
+            <div class="flex items-center gap-3 flex-grow min-w-0">
+                <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                {# release_names is populated by _run_to_schema from the M2M #}
+                {% if run.release_names %}
+                    <span class="flex items-center gap-1 flex-wrap">
+                        {% for name in run.release_names %}
+                            <c-badges.secondary title="Release this scan result applies to">
+                            <i class="fas fa-tag mr-1"></i>{{ name }}
+                            </c-badges.secondary>
+                        {% endfor %}
+                    </span>
+                {% endif %}
+                {% if run.status == 'completed' %}
+                    {% if skipped %}
+                        <c-badges.secondary title="This plugin did not run, so it reported no verdict.">
+                        <i class="fas fa-ban mr-1"></i>Skipped
+                        </c-badges.secondary>
+                    {% elif has_issues %}
+                        <c-badges.secondary>
+                        <i class="fas fa-exclamation-triangle mr-1"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
+                        </c-badges.secondary>
+                    {% elif pass_count == 0 %}
+                        {% comment %}All findings were warnings — no positive verdict was produced. Surface distinctly so operators don't misread as a pass.{% endcomment %}
+                        <c-badges.secondary>
+                        <i class="fas fa-exclamation-circle mr-1"></i>Warnings Only
+                        </c-badges.secondary>
+                    {% else %}
+                        <c-badges.secondary>
+                        <i class="fas fa-check-circle mr-1"></i>Passed
+                        </c-badges.secondary>
+                    {% endif %}
+                {% elif run.status == 'failed' %}
+                    <c-badges.secondary>
+                    <i class="fas fa-times-circle mr-1"></i>Error
+                    </c-badges.secondary>
+                {% elif run.status == 'running' %}
+                    <c-badges.secondary>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                    Running
+                    </c-badges.secondary>
+                {% else %}
+                    <c-badges.secondary>
+                    <i class="fas fa-clock mr-1"></i>Pending
+                    </c-badges.secondary>
+                {% endif %}
+                {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
+                {% if skipped %}
+                    <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
+                {% elif run.result.summary %}
+                    <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
+                {% endif %}
+            </div>
+            </c-cards.collapsible-trigger>
+            <c-cards.collapsible-body state="expanded">
+            {% if run.status == 'completed' or run.status == 'failed' %}
+                {# Run Metadata #}
+                <div class="flex flex-wrap gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
+                    <span>
+                        <i class="fas fa-code-branch mr-1"></i>
+                        v{{ run.plugin_version }}
+                    </span>
+                    <span>
+                        <i class="fas fa-play-circle mr-1"></i>
+                        {{ run.run_reason|format_run_reason }}
+                    </span>
+                    {% include 'plugins/components/_rerun_button.html.j2' %}
+                    {% if run.completed_at %}
+                        <span>
+                            <i class="fas fa-calendar-check mr-1"></i>
+                            {{ run.completed_at|date:"M d, Y \a\t H:i" }}
+                        </span>
+                    {% endif %}
                 </div>
-                <div x-show="expanded" x-collapse>
-                    <div class="tw-collapsible-body">
-                        {% if run.status == 'completed' or run.status == 'failed' %}
-                            {# Run Metadata #}
-                            <div class="flex flex-wrap gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
-                                <span>
-                                    <i class="fas fa-code-branch mr-1"></i>
-                                    v{{ run.plugin_version }}
-                                </span>
-                                <span>
-                                    <i class="fas fa-play-circle mr-1"></i>
-                                    {{ run.run_reason|format_run_reason }}
-                                </span>
-                                {% include 'plugins/components/_rerun_button.html.j2' %}
-                                {% if run.completed_at %}
-                                    <span>
-                                        <i class="fas fa-calendar-check mr-1"></i>
-                                        {{ run.completed_at|date:"M d, Y \a\t H:i" }}
+                {% if run.status == 'failed' and run.error_message %}
+                    {# Error Message #}
+                    <c-feedback.alert variant="danger" class="mb-4">{{ run.error_message }}</c-feedback.alert>
+                {% endif %}
+                {% if run.result.summary %}
+                    {# Compliance Findings Summary - Compact grid #}
+                    <div class="mb-4">
+                        <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
+                            <c-layout.stat-card compact accent="success">
+                            <c-layout.stat.value>{{ run.result.summary.pass_count|default:0 }}</c-layout.stat.value>
+                            <c-layout.stat.label>Pass</c-layout.stat.label>
+                            </c-layout.stat-card>
+                            <c-layout.stat-card compact accent="warning">
+                            <c-layout.stat.value>{{ run.result.summary.fail_count|default:0 }}</c-layout.stat.value>
+                            <c-layout.stat.label>Fail</c-layout.stat.label>
+                            </c-layout.stat-card>
+                            <c-layout.stat-card compact accent="danger">
+                            <c-layout.stat.value>{{ run.result.summary.error_count|default:0 }}</c-layout.stat.value>
+                            <c-layout.stat.label>Error</c-layout.stat.label>
+                            </c-layout.stat-card>
+                            <c-layout.stat-card compact style="--stat-accent: var(--color-info)">
+                            <c-layout.stat.value>{{ run.result.summary.warning_count|default:0 }}</c-layout.stat.value>
+                            <c-layout.stat.label>Warn</c-layout.stat.label>
+                            </c-layout.stat-card>
+                            <c-layout.stat-card compact accent="muted">
+                            <c-layout.stat.value>{{ run.result.summary.info_count|default:0 }}</c-layout.stat.value>
+                            <c-layout.stat.label>Info</c-layout.stat.label>
+                            </c-layout.stat-card>
+                            <c-layout.stat-card compact>
+                            <c-layout.stat.value>{{ run.result.summary.total_findings|default:0 }}</c-layout.stat.value>
+                            <c-layout.stat.label>Total</c-layout.stat.label>
+                            </c-layout.stat-card>
+                        </div>
+                    </div>
+                {% endif %}
+                {% if run.result.findings %}
+                    {# Compliance Findings List #}
+                    <div class="findings-list">
+                        <h6>
+                            <i class="fas fa-list-ul mr-1"></i>Findings
+                        </h6>
+                        {% for finding in run.result.findings %}
+                            <div class="finding-item {{ finding.status|status_border_class }}">
+                                <div class="flex items-start">
+                                    <span class="finding-status-icon {{ finding.status|status_text_class }}">
+                                        <i class="{{ finding.status|status_icon }}"></i>
                                     </span>
-                                {% endif %}
-                            </div>
-                            {% if run.status == 'failed' and run.error_message %}
-                                {# Error Message #}
-                                <div class="flex items-start gap-3 p-4 bg-danger/10 border border-danger/30 rounded-lg mb-4">
-                                    <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
-                                    <div class="text-danger">{{ run.error_message }}</div>
-                                </div>
-                            {% endif %}
-                            {% if run.result.summary %}
-                                {# Compliance Findings Summary - Compact grid #}
-                                <div class="mb-4">
-                                    <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
-                                        <div class="bg-success/10 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-success">{{ run.result.summary.pass_count|default:0 }}</div>
-                                            <small class="text-text-muted">Pass</small>
-                                        </div>
-                                        <div class="bg-warning/10 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-warning">{{ run.result.summary.fail_count|default:0 }}</div>
-                                            <small class="text-text-muted">Fail</small>
-                                        </div>
-                                        <div class="bg-danger/10 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-danger">{{ run.result.summary.error_count|default:0 }}</div>
-                                            <small class="text-text-muted">Error</small>
-                                        </div>
-                                        <div class="bg-info/10 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-info">{{ run.result.summary.warning_count|default:0 }}</div>
-                                            <small class="text-text-muted">Warn</small>
-                                        </div>
-                                        <div class="bg-border/30 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-text-muted">{{ run.result.summary.info_count|default:0 }}</div>
-                                            <small class="text-text-muted">Info</small>
-                                        </div>
-                                        <div class="bg-border/30 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-text">{{ run.result.summary.total_findings|default:0 }}</div>
-                                            <small class="text-text-muted">Total</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% endif %}
-                            {% if run.result.findings %}
-                                {# Compliance Findings List #}
-                                <div class="findings-list">
-                                    <h6>
-                                        <i class="fas fa-list-ul mr-1"></i>Findings
-                                    </h6>
-                                    {% for finding in run.result.findings %}
-                                        <div class="finding-item {{ finding.status|status_border_class }}">
-                                            <div class="flex items-start">
-                                                <span class="finding-status-icon {{ finding.status|status_text_class }}">
-                                                    <i class="{{ finding.status|status_icon }}"></i>
-                                                </span>
-                                                <div class="flex-1 ml-2">
-                                                    <div class="finding-title">{{ finding.title }}</div>
-                                                    <div class="finding-description">{{ finding.description|format_finding_description }}</div>
-                                                    {% if finding.remediation %}
-                                                        <div class="finding-remediation">
-                                                            <i class="fas fa-lightbulb mr-1"></i>
-                                                            {{ finding.remediation }}
-                                                        </div>
-                                                    {% endif %}
-                                                </div>
+                                    <div class="flex-1 ml-2">
+                                        <div class="finding-title">{{ finding.title }}</div>
+                                        <div class="finding-description">{{ finding.description|format_finding_description }}</div>
+                                        {% if finding.remediation %}
+                                            <div class="finding-remediation">
+                                                <i class="fas fa-lightbulb mr-1"></i>
+                                                {{ finding.remediation }}
                                             </div>
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                            {% if run.result.metadata.standard_name %}
-                                {# Standard Info (for compliance plugins) #}
-                                <div class="standard-info mt-4">
-                                    <h6>
-                                        <i class="fas fa-book mr-1"></i>Standard Reference
-                                    </h6>
-                                    <div class="text-sm">
-                                        <strong>Standard:</strong> {{ run.result.metadata.standard_name }}
-                                        <br>
-                                        <strong>Version:</strong> {{ run.result.metadata.standard_version }}
-                                        {% if run.result.metadata.standard_url %}
-                                            <br>
-                                            <strong>Reference:</strong>
-                                            <a href="{{ run.result.metadata.standard_url }}"
-                                               target="_blank"
-                                               rel="noopener noreferrer"
-                                               class="text-primary hover:underline no-underline">
-                                                View Standard <i class="fas fa-external-link-alt ml-1"></i>
-                                            </a>
                                         {% endif %}
                                     </div>
                                 </div>
-                            {% endif %}
-                        {% else %}
-                            {# Pending state #}
-                            <div class="text-center text-text-muted py-6">
-                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-2xl block mb-3" %}
-                                <p class="mb-0">Assessment in progress...</p>
                             </div>
-                        {% endif %}
+                        {% endfor %}
                     </div>
+                {% endif %}
+                {% if run.result.metadata.standard_name %}
+                    {# Standard Info (for compliance plugins) #}
+                    <div class="standard-info mt-4">
+                        <h6>
+                            <i class="fas fa-book mr-1"></i>Standard Reference
+                        </h6>
+                        <div class="text-sm">
+                            <strong>Standard:</strong> {{ run.result.metadata.standard_name }}
+                            <br>
+                            <strong>Version:</strong> {{ run.result.metadata.standard_version }}
+                            {% if run.result.metadata.standard_url %}
+                                <br>
+                                <strong>Reference:</strong>
+                                <a href="{{ run.result.metadata.standard_url }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="text-primary hover:underline no-underline">
+                                    View Standard <i class="fas fa-external-link-alt ml-1"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            {% else %}
+                {# Pending state #}
+                <div class="text-center text-text-muted py-6">
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-2xl block mb-3" %}
+                    <p class="mb-0">Assessment in progress...</p>
                 </div>
-            </div>
+            {% endif %}
+            </c-cards.collapsible-body>
+            </c-cards.collapsible>
         {% endif %}
     {% endwith %}
 {% endwith %}

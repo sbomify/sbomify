@@ -2,72 +2,55 @@
 <div x-cloak
      x-data="dangerZone()"
      @delete-component.window="showDeleteModal = true">
-    <div class="tw-dangerzone-card">
-        <div class="tw-card-header cursor-pointer select-none flex items-center justify-between"
-             role="button"
-             tabindex="0"
-             :aria-expanded="isExpanded"
-             @click="toggle()"
-             @keydown.enter.prevent="toggle()"
-             @keydown.space.prevent="toggle()">
-            <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
-                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>Danger Zone
-            </h4>
-            <i class="fas fa-chevron-down text-danger transition-transform duration-200"
-               :class="isExpanded ? 'rotate-180' : ''"
-               aria-hidden="true"></i>
+    <c-cards.dangerzone-collapsible>
+    {% if can_delete %}
+        {# Transfer Component Section #}
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border">
+            <div class="flex items-start gap-3">
+                <c-chips.icon-chip accent="warning">
+                <i class="fas fa-exchange-alt" aria-hidden="true"></i>
+                </c-chips.icon-chip>
+                <div>
+                    <h6 class="font-semibold text-text m-0">Transfer Component</h6>
+                    <p class="text-text-muted text-sm m-0 mt-1">Move this component to a different workspace</p>
+                </div>
+            </div>
+            <form action="/component/{{ component_id }}/transfer"
+                  method="post"
+                  class="flex items-center gap-2 flex-shrink-0">
+                {% csrf_token %}
+                {# The width is the row's, not the control's: the select fills what it is given. #}
+                <div class="w-48">
+                    <c-forms.select id="team_key" name="team_key">
+                    <option value="" disabled selected>Choose workspace...</option>
+                    {% for key, workspace in request.session.user_teams.items %}
+                        <option value="{{ key }}">{{ workspace.name }}</option>
+                    {% endfor %}
+                    </c-forms.select>
+                </div>
+                <c-buttons.warning type="submit">
+                <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                Transfer
+                </c-buttons.warning>
+            </form>
         </div>
-        <div class="tw-card-body" x-show="isExpanded" x-collapse>
-            {% if is_owner %}
-                {# Transfer Component Section #}
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border">
-                    <div class="flex items-start gap-3">
-                        <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center flex-shrink-0">
-                            <i class="fas fa-exchange-alt text-warning" aria-hidden="true"></i>
-                        </div>
-                        <div>
-                            <h6 class="font-semibold text-text m-0">Transfer Component</h6>
-                            <p class="text-text-muted text-sm m-0 mt-1">Move this component to a different workspace</p>
-                        </div>
-                    </div>
-                    <form action="/component/{{ component_id }}/transfer"
-                          method="post"
-                          class="flex items-center gap-2 flex-shrink-0">
-                        {% csrf_token %}
-                        <select id="team_key" name="team_key" class="tw-form-input w-48">
-                            <option value="" disabled selected>Choose workspace...</option>
-                            {% for key, workspace in request.session.user_teams.items %}
-                                <option value="{{ key }}">{{ workspace.name }}</option>
-                            {% endfor %}
-                        </select>
-                        <button type="submit"
-                                class="px-4 py-2 bg-warning text-white rounded-lg font-medium hover:bg-warning/90 transition-colors flex items-center gap-2">
-                            <i class="fas fa-arrow-right" aria-hidden="true"></i>
-                            Transfer
-                        </button>
-                    </form>
-                </div>
-            {% endif %}
-            {# Delete Component Section #}
-            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div class="flex items-start gap-3">
-                    <div class="w-10 h-10 rounded-lg bg-danger/10 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-trash-alt text-danger" aria-hidden="true"></i>
-                    </div>
-                    <div>
-                        <h6 class="font-semibold text-text m-0">Delete Component</h6>
-                        <p class="text-text-muted text-sm m-0 mt-1">Permanently remove this component and all associated data</p>
-                    </div>
-                </div>
-                <button id="del_{{ component_id }}"
-                        class="px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors flex items-center gap-2 flex-shrink-0"
-                        @click="showDeleteModal = true"
-                        aria-label="Delete component {{ component_name }}">
-                    <i class="fas fa-trash-alt" aria-hidden="true"></i>
-                    Delete Component
-                </button>
+    {% endif %}
+    {# Delete Component Section #}
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="flex items-start gap-3">
+            <c-chips.icon-chip accent="danger">
+            <i class="fas fa-trash-alt" aria-hidden="true"></i>
+            </c-chips.icon-chip>
+            <div>
+                <h6 class="font-semibold text-text m-0">Delete Component</h6>
+                <p class="text-text-muted text-sm m-0 mt-1">Permanently remove this component and all associated data</p>
             </div>
         </div>
+        <c-buttons.danger id="del_{{ component_id }}" @click="showDeleteModal = true" aria-label="Delete component {{ component_name }}">
+        <i class="fas fa-trash-alt" aria-hidden="true"></i>
+        Delete Component
+        </c-buttons.danger>
     </div>
+    </c-cards.dangerzone-collapsible>
     {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Component' message='Are you sure you want to delete the component' item_name=component_name warning_message='This action cannot be undone and will permanently remove the component from the system.' confirm_text='Delete Component' hx_url='/api/v1/components/'|add:component_id hx_method='delete' success_message='Component deleted successfully!' redirect_url='/components/' %}
 </div>

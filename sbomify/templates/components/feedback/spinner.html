@@ -1,0 +1,19 @@
+{% comment %}
+The brand loader at a size, for the small in-place "working" marks: a button
+that is submitting, a panel waiting on HTMX. The animation is a keyframed
+brand mark, so it stays a Django include and its tw-loader-* size class is the
+same documented exception c-feedback.loading reaches for.
+
+For a whole panel waiting on content use c-feedback.loading, which puts this
+inside a bordered surface with a message.
+
+class is branched rather than concatenated: with isolation on, a bare prop
+that the caller omits is undefined, and a filter chain like |add:class raises
+where {% if class %} is simply false.
+{% endcomment %}
+<c-vars size="sm" class />
+{% if class %}
+    {% include "core/components/brand/loader.html.j2" with class="tw-loader-"|add:size|add:" text-primary "|add:class only %}
+{% else %}
+    {% include "core/components/brand/loader.html.j2" with class="tw-loader-"|add:size|add:" text-primary" only %}
+{% endif %}

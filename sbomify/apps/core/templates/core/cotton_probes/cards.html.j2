@@ -1,0 +1,86 @@
+{% comment %}
+Render probe for the cotton cards set. Unit tests render this file and assert
+on the output; it is not routed anywhere.
+{% endcomment %}
+<c-cards.card title="Plain surface" subtitle="Header and body">
+<p>Body copy</p>
+</c-cards.card>
+<c-cards.card title="With an icon" icon="fas fa-cube">Iconned</c-cards.card>
+<c-cards.card>Bodyonly</c-cards.card>
+<c-cards.card title="With a footer" class="mb-8" hx-get="/probe" @click.stop="fire()">
+Footed body
+<c-slot name="footer">
+<span>Footer actions</span>
+</c-slot>
+</c-cards.card>
+<c-cards.card>
+<c-slot name="header">
+<c-cards.header class="flex items-center justify-between">
+<span>Hand built header</span>
+</c-cards.header>
+</c-slot>
+Custom header body
+</c-cards.card>
+<c-cards.card title="Ignored when a header slot is given">
+<c-slot name="header">
+<c-cards.header>Slot wins</c-cards.header>
+</c-slot>
+Slot precedence body
+</c-cards.card>
+<c-cards.card flush>
+<c-slot name="header">
+<c-cards.header>Flush header</c-cards.header>
+</c-slot>
+<div>Flush body</div>
+</c-cards.card>
+<c-cards.dashboard title="Workspace panel" subtitle="The dashboard variant" class="col-span-2" data-probe="dashboard">
+Dashboard body
+</c-cards.dashboard>
+<c-cards.dashboard title="Panel with bands">
+Banded dashboard body
+<c-slot name="footer">
+<span>Dashboard footer</span>
+</c-slot>
+</c-cards.dashboard>
+<c-cards.dangerzone title="Danger zone" subtitle="Irreversible actions">
+Danger body
+</c-cards.dangerzone>
+<c-cards.dangerzone title="Custom warning icon" icon="fas fa-skull">Skulled</c-cards.dangerzone>
+<c-cards.dangerzone flush data-probe="danger-collapsible">
+<c-slot name="header">
+<c-cards.dangerzone-header class="cursor-pointer select-none" role="button" tabindex="0" ::aria-expanded="isExpanded" @click="toggle()">
+<span>Danger zone trigger</span>
+</c-cards.dangerzone-header>
+</c-slot>
+<c-cards.dangerzone-body x-show="isExpanded" x-collapse>Collapsible danger body</c-cards.dangerzone-body>
+</c-cards.dangerzone>
+<c-cards.dangerzone-collapsible data-probe="dangerzone-assembled">Assembled danger rows</c-cards.dangerzone-collapsible>
+<c-cards.dangerzone-collapsible state="zoneOpen" title="Purge queue" subtitle="Emptying it drops every queued job.">Custom state danger rows</c-cards.dangerzone-collapsible>
+<c-cards.body>Standalone body</c-cards.body>
+<c-cards.footer class="text-right">Standalone footer</c-cards.footer>
+<c-cards.inset>
+<p>Outer inset</p>
+<c-cards.inset class="mt-3">Inner inset</c-cards.inset>
+</c-cards.inset>
+<c-cards.collapsible>
+<c-cards.collapsible-trigger state="open === 'links'" @click="open = open === 'links' ? '' : 'links'">Product links</c-cards.collapsible-trigger>
+<c-cards.collapsible-body state="open === 'links'">
+<p>Links panel</p>
+</c-cards.collapsible-body>
+</c-cards.collapsible>
+<c-cards.collapsible level="success">
+<c-cards.collapsible-trigger state="expanded">Clean run</c-cards.collapsible-trigger>
+<c-cards.collapsible-body state="expanded">Success panel</c-cards.collapsible-body>
+</c-cards.collapsible>
+<c-cards.collapsible level="warning" id="probe-warning">Warning shell</c-cards.collapsible>
+<c-cards.collapsible level="danger">Danger shell</c-cards.collapsible>
+{# bare: the row is a title plus its status chips, so it carries its own line. #}
+<c-cards.collapsible level="warning">
+<c-cards.collapsible-trigger bare state="expanded" @click="expanded = !expanded">
+<div class="flex items-center gap-3 flex-grow min-w-0">
+    <span class="font-semibold text-text">Bare row</span>
+    <c-badges.secondary>7 Vulnerabilities</c-badges.secondary>
+</div>
+</c-cards.collapsible-trigger>
+<c-cards.collapsible-body state="expanded">Bare panel</c-cards.collapsible-body>
+</c-cards.collapsible>

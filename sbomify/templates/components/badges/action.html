@@ -1,0 +1,12 @@
+{% comment %}
+The badge you can press: the re-run beside an assessment run's metadata, which
+reads as one of the muted facts in that row and acts as a control. It is the
+secondary badge's tint on a real button, so it focuses, disables and announces
+itself as a control; the hover lifts the ink to the brand colour, which is the
+only thing that says it is pressable.
+
+Reach for it only where the control belongs to a row of badges. A control that
+stands on its own is a button: c-buttons.ghost, at size="sm".
+{% endcomment %}
+<c-vars size pill class />
+<c-badges.badge type="button" variant_class="text-text-muted bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] hover:text-primary disabled:opacity-50" size="{{ size }}" :pill="pill" class="{{ class }}" :attrs="attrs">{{ slot }}</c-badges.badge>

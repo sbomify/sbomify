@@ -11,10 +11,12 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.apis import get_product, patch_product
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProductPatchSchema
 from sbomify.apps.tea.mappers import get_product_tei_urn
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+from sbomify.apps.teams.queries import get_member_role_by_key
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +38,12 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             )
 
         current_team = request.session.get("current_team", {})
-        is_owner = current_team.get("role") == "owner"
         team_billing_plan = current_team.get("billing_plan")
+
+        # Live Member row, not the session cache: these gate rendering, and the
+        # cache has a 300s TTL, so a demoted user would keep seeing controls the
+        # handlers behind them now refuse. Resolved once and reused.
+        is_admin_or_owner = get_member_role_by_key(request.user, current_team.get("key")) in ADMINISTER
 
         # Build TEI URN if TEA is enabled with a validated custom domain
         product_tei = get_product_tei_urn(product["id"], product["team_id"])
@@ -49,8 +55,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             from sbomify.apps.compliance.models import CRAAssessment
             from sbomify.apps.compliance.permissions import check_cra_access
 
-            team_role = current_team.get("role")
-            has_cra_access = team_role in ("owner", "admin") and check_cra_access(billing_plan_key=team_billing_plan)
+            has_cra_access = is_admin_or_owner and check_cra_access(billing_plan_key=team_billing_plan)
 
             if has_cra_access:
                 cra = CRAAssessment.objects.filter(
@@ -98,8 +103,6 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
             logging.getLogger(__name__).warning("Controls app not available", exc_info=True)
 
-        is_admin_or_owner = current_team.get("role") in ("owner", "admin")
-
         # Components-and-security table + severity rollup, and the releases strip.
         from sbomify.apps.core.services.product_page import (
             build_product_components_rows,
@@ -110,6 +113,12 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         component_rows = components_data["rows"]
         releases_summary = build_product_releases_summary(product_id)
 
+        header_copy_values = [
+            {"value": product["id"], "title": f"Product ID: {product['id']} (click to copy)"},
+        ]
+        if product_tei:
+            header_copy_values.append({"value": product_tei, "title": f"TEI: {product_tei} (click to copy)"})
+
         return render(
             request,
             "core/product_details_private.html.j2",
@@ -118,10 +127,10 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "cra_assessment": cra_assessment,
                 "has_cra_access": has_cra_access,
                 "current_team": current_team,
-                "is_owner": is_owner,
                 "is_admin_or_owner": is_admin_or_owner,
                 "product": product,
                 "product_tei": product_tei,
+                "header_copy_values": header_copy_values,
                 "team_billing_plan": team_billing_plan,
                 "product_controls": product_controls_list[0] if product_controls_list else None,
                 "product_controls_list": product_controls_list,

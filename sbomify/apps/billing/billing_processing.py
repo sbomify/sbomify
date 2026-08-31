@@ -23,7 +23,7 @@ from .billing_helpers import (
     generate_webhook_id,
     get_community_plan_limits,
     handle_community_downgrade_visibility,
-    notify_team_owners,
+    notify_billing_managers,
     parse_cancel_at,
 )
 from .config import get_unlimited_plan_limits, is_billing_enabled
@@ -269,7 +269,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             team.save()
 
         if days_remaining <= settings.TRIAL_ENDING_NOTIFICATION_DAYS:
-            notify_team_owners(team, email_notifications.notify_trial_ending, days_remaining)
+            notify_billing_managers(team, email_notifications.notify_trial_ending, days_remaining)
             logger.info("Trial ending notification sent")
 
         if days_remaining <= 0:
@@ -294,7 +294,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
 
             if should_run_side_effects:
                 handle_community_downgrade_visibility(team)
-                notify_team_owners(team, email_notifications.notify_trial_expired)
+                notify_billing_managers(team, email_notifications.notify_trial_expired)
                 logger.info("Trial expired — downgraded team %s to community plan", team.key)
 
                 # Signal/background context: no request, so consent is not gated here.
@@ -569,19 +569,19 @@ def _send_subscription_notifications(team: Team, status: str, previous_status: A
         return
 
     if status == "past_due":
-        notify_team_owners(team, email_notifications.notify_payment_past_due)
+        notify_billing_managers(team, email_notifications.notify_payment_past_due)
         logger.warning("Payment past due notification sent")
 
     elif status == "active":
-        notify_team_owners(team, email_notifications.notify_payment_succeeded)
+        notify_billing_managers(team, email_notifications.notify_payment_succeeded)
         logger.info("Payment restored notification sent")
 
     elif status == "canceled":
-        notify_team_owners(team, email_notifications.notify_subscription_cancelled)
+        notify_billing_managers(team, email_notifications.notify_subscription_cancelled)
         logger.info("Subscription cancelled notification sent")
 
     elif status in ["incomplete", "incomplete_expired"]:
-        notify_team_owners(team, email_notifications.notify_payment_failed, None)
+        notify_billing_managers(team, email_notifications.notify_payment_failed, None)
         logger.warning("Initial payment failed notification sent")
 
 
@@ -706,7 +706,10 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                 team.save()
 
         _best_effort(
-            "subscription ended notification", notify_team_owners, team, email_notifications.notify_subscription_ended
+            "subscription ended notification",
+            notify_billing_managers,
+            team,
+            email_notifications.notify_subscription_ended,
         )
         logger.info("Subscription ended notification sent")
 
@@ -775,7 +778,7 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
 
         _best_effort(
             "payment failed notification",
-            notify_team_owners,
+            notify_billing_managers,
             team,
             email_notifications.notify_payment_failed,
             invoice.id,
@@ -856,7 +859,10 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         _best_effort("invoice cache invalidation", invalidate_subscription_cache, invoice.subscription, team.key)
 
         _best_effort(
-            "payment succeeded notification", notify_team_owners, team, email_notifications.notify_payment_succeeded
+            "payment succeeded notification",
+            notify_billing_managers,
+            team,
+            email_notifications.notify_payment_succeeded,
         )
         logger.info("Payment successful notification sent")
 

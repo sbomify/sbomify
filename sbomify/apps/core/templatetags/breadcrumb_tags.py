@@ -20,7 +20,7 @@ def _get_trust_center_crumb(context: Any) -> Any:
     if workspace_public_url:
         brand_name = brand.get("name") if isinstance(brand, dict) else getattr(brand, "name", None)
         return {
-            "name": f"{brand_name} Trust Center" if brand_name else "Trust Center",
+            "label": f"{brand_name} Trust Center" if brand_name else "Trust Center",
             "url": workspace_public_url,
             "icon": "fas fa-shield-alt",
         }
@@ -100,7 +100,7 @@ def breadcrumb(context: Any, item: Any, item_type: Any) -> Any:
             if product_name and product_id:
                 crumbs.append(
                     {
-                        "name": product_name,
+                        "label": product_name,
                         "url": reverse("core:product_details_public", kwargs={"product_id": product_id}),
                         "icon": "fas fa-box",
                     }
@@ -133,7 +133,7 @@ def breadcrumb(context: Any, item: Any, item_type: Any) -> Any:
 
             crumbs.append(
                 {
-                    "name": product.name,
+                    "label": product.name,
                     "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),
                     "icon": "fas fa-box",
                 }

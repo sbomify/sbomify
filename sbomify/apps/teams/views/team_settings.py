@@ -5,7 +5,7 @@ from typing import Any, cast
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -14,6 +14,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
+from sbomify.apps.core.authz import ADMINISTER, MANAGE, ROLE_DESCRIPTIONS
 from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
@@ -21,8 +22,8 @@ from sbomify.apps.core.url_utils import build_custom_domain_url
 from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Team
-from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
-from sbomify.apps.teams.queries import get_pending_invitations_for_user
+from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, check_member_removal
+from sbomify.apps.teams.queries import get_member_role_by_key, get_pending_invitations_for_user
 from sbomify.apps.teams.utils import refresh_current_team_session
 from sbomify.logging import getLogger
 
@@ -97,7 +98,10 @@ PLAN_LIMITS = {
 
 @method_decorator(never_cache, name="dispatch")
 class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    allowed_roles = ["owner", "admin"]
+    # MANAGE so members can reach the tabs they are allowed (API tokens, Account).
+    # Which sections they actually see is decided per-tab by visible_tabs(), and
+    # every POST sub-action re-checks ADMINISTER for itself.
+    allowed_roles = list(MANAGE)
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Take ``tab`` off the URL and hold it, rather than pass it to a handler.
@@ -195,7 +199,6 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             team_data = team  # Use schema as-is
 
         can_set_private = team_data.get("can_set_private") if isinstance(team_data, dict) else team.can_set_private
-        is_owner = request.session.get("current_team", {}).get("role") == "owner"
 
         # Get branding info for trust center settings
         branding_info = team_obj.branding_info if team_obj else {}
@@ -255,13 +258,24 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # open is neither linked nor rendered.
         from sbomify.apps.teams.settings_tabs import resolve_tab, visible_tabs
 
-        role = request.session.get("current_team", {}).get("role")
+        # Live Member row, not the session cache. This decides which settings
+        # sections are linked AND rendered, so a demoted user reading a stale
+        # cached role would be shown sections they can no longer act on — and
+        # this view was just widened to MANAGE so members can reach their own
+        # tabs, which makes an accurate role here load-bearing rather than
+        # cosmetic.
+        role = get_member_role_by_key(request.user, team_key)
         billing_enabled_flag = is_billing_enabled()
         active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
         if active_tab is None:
-            # The typed domain error rather than a hand-built HttpResponse:
-            # error_response understands it, it carries its own 403, and it keeps
-            # this on the same path as every other permission failure.
+            # Defence in depth: get_team() above already refuses non-members and
+            # guests, so nobody who reaches here should have an empty tab list.
+            # Kept because the two gates answer different questions — that one is
+            # about the workspace, this one about what the role opens — and a
+            # future tier that opens no section should be denied, not shown a
+            # blank page. The typed domain error rather than a hand-built
+            # HttpResponse: error_response understands it, it carries its own 403,
+            # and it keeps this on the same path as every other permission failure.
             return error_response(request, PermissionDeniedError("No settings available for this role"))
         # A stale or renamed slug resolves to the first section instead of 404ing;
         # send the browser to the URL that actually rendered so the address bar,
@@ -287,7 +301,6 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "plan_pricing": plan_pricing,
                 "plan_limits": plan_limits,
                 "can_set_private": can_set_private,
-                "is_owner": is_owner,
                 # Trust center settings
                 "branding_info": branding_info,
                 "company_nda_document": company_nda_document,
@@ -312,6 +325,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "access_token_count": access_token_count,
                 # Members tab — incoming invitations for the current user
                 "pending_invitations": pending_invitations,
+                # Members tab — role legend, sourced from the capability table
+                "role_descriptions": ROLE_DESCRIPTIONS,
                 # Controls tab
                 "active_catalogs": active_catalogs,
                 "active_catalog_names": {c["catalog"].name for c in active_catalogs},
@@ -335,7 +350,10 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     ("pci-dss-v4", "PCI DSS", "PCI DSS", "fa-credit-card"),
                     ("nist-800-53-r5", "NIST SP 800-53", "NIST 800-53", "fa-building-columns"),
                 ],
-                "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
+                # ``role`` above is the same live lookup against the same row;
+                # re-querying only asked the database a question it had already
+                # answered.
+                "is_admin_or_owner": role in ADMINISTER,
             },
         )
 
@@ -384,30 +402,36 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.error(request, "Member not found")
             return self._redirect_with_tab(request, team_key)
 
-        if membership.role == "owner":
-            # Check if actor is an admin trying to remove an owner
-            actor_membership = Member.objects.filter(user=user, team=membership.team).first()
-            if actor_membership and actor_membership.role == "admin":
-                messages.error(
-                    request,
-                    "Admins cannot remove workspace owners.",
-                )
-                return self._redirect_with_tab(request, team_key)
-
-            from sbomify.apps.teams.queries import count_team_owners
-
-            owners_count = count_team_owners(membership.team.id)
-            if owners_count <= 1:
-                messages.warning(
-                    request,
-                    "Cannot delete the only owner of the workspace. Please assign another owner first.",
-                )
-                return self._redirect_with_tab(request, team_key)
+        # Same rules as the bare-PK ``teams.views.delete_member`` path; kept in
+        # one helper so the two can't drift (they already had, this one was
+        # missing the admin self-removal rule).
+        denial = check_member_removal(actor=user, target=membership)
+        if denial:
+            # Honour ``forbidden`` exactly as the bare-PK path does. Both are
+            # plain form posts, so there is no rendering reason for the two to
+            # answer an authorization refusal differently — and downgrading a
+            # 403 to a redirect here is precisely the drift the shared helper
+            # exists to prevent.
+            if denial.forbidden:
+                return error_response(request, HttpResponseForbidden(denial.message))
+            messages.add_message(request, denial.level, denial.message)
+            return self._redirect_with_tab(request, team_key)
 
         active_tab = request.POST.get("active_tab", "")
         return remove_member_safely(request, membership, active_tab=active_tab if active_tab else None)
 
     def _delete_invitation(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        # Managing invitations is ADMINISTER, but the class gate is MANAGE so
+        # members can reach their own tabs — so this has to re-check for itself,
+        # as its siblings do. Without it a member could cancel any invitation in
+        # the workspace, including an owner-level one. A 403 rather than a
+        # message: this is an authorization failure, matching _delete_member.
+        membership = Member.objects.filter(user=cast(User, request.user), team__key=team_key).first()
+        if not membership or membership.role not in ADMINISTER:
+            return error_response(
+                request, HttpResponseForbidden("You don't have permission to manage this workspace's invitations")
+            )
+
         form = DeleteInvitationForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
@@ -434,8 +458,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
-        if not membership or membership.role != "owner":
-            messages.error(request, "Only workspace owners can change visibility")
+        if not membership or membership.role not in ADMINISTER:
+            messages.error(request, "Only workspace owners and admins can change visibility")
             return self._redirect_with_tab(request, team_key)
 
         visibility_values = request.POST.getlist("is_public")
@@ -463,8 +487,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
-        if not membership or membership.role != "owner":
-            messages.error(request, "Only workspace owners can change the trust center description")
+        if not membership or membership.role not in ADMINISTER:
+            messages.error(request, "Only workspace owners and admins can change the trust center description")
             return self._redirect_with_tab(request, team_key)
 
         description = request.POST.get("trust_center_description", "").strip()
@@ -497,8 +521,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
-        if not membership or membership.role != "owner":
-            messages.error(request, "Only workspace owners can manage company NDA")
+        if not membership or membership.role not in ADMINISTER:
+            messages.error(request, "Only workspace owners and admins can manage company NDA")
             return self._redirect_with_tab(request, team_key)
 
         if action == "delete":
@@ -676,8 +700,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
-        if not membership or membership.role != "owner":
-            messages.error(request, "Only workspace owners can change TEA settings")
+        if not membership or membership.role not in ADMINISTER:
+            messages.error(request, "Only workspace owners and admins can change TEA settings")
             return self._redirect_with_tab(request, team_key)
 
         tea_values = request.POST.getlist("tea_enabled")
@@ -700,8 +724,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
-        if not membership or membership.role != "owner":
-            messages.error(request, "Only workspace owners can change security.txt settings")
+        if not membership or membership.role not in ADMINISTER:
+            messages.error(request, "Only workspace owners and admins can change security.txt settings")
             return self._redirect_with_tab(request, team_key)
 
         from sbomify.apps.teams.services.security_txt import validate_security_txt_url
@@ -729,6 +753,17 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return self._redirect_with_tab(request, team_key)
         config["contact_id"] = contact_id
 
+        # CSIRT mailbox — the second contact line TR-03183-3 4.2.3 expects
+        from sbomify.apps.teams.services.security_txt import validate_security_email
+
+        csirt_email = request.POST.get("security_txt_csirt_email", "").strip()
+        if csirt_email:
+            email_error = validate_security_email(csirt_email)
+            if email_error:
+                messages.error(request, f"Invalid CSIRT email: {email_error}")
+                return self._redirect_with_tab(request, team_key)
+        config["csirt_email"] = csirt_email
+
         # Validate and store URL fields
         # Note: validation is intentionally duplicated here and in the service layer
         # (generate_security_txt) for defense-in-depth — the view rejects bad input early,
@@ -738,6 +773,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             "acknowledgments_url": "security_txt_acknowledgments_url",
             "hiring_url": "security_txt_hiring_url",
             "canonical_url": "security_txt_canonical_url",
+            "report_url": "security_txt_report_url",
+            "csaf_url": "security_txt_csaf_url",
         }
         for config_key, post_key in url_fields.items():
             value = request.POST.get(post_key, "").strip()
@@ -779,8 +816,11 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
         config["preferred_languages"] = preferred_languages
 
-        # Refresh Expires on every save per RFC 9116 semantics
-        config["expires"] = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+        # Refresh Expires on every save per RFC 9116 semantics; clean_expires
+        # keeps it at most a year out and drops sub-second precision.
+        from sbomify.apps.teams.services.security_txt import clean_expires
+
+        config["expires"] = clean_expires((datetime.now(timezone.utc) + timedelta(days=365)).isoformat())
 
         team.security_txt_config = config
         team.save(update_fields=["security_txt_config"])
@@ -804,8 +844,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
-        if not membership or membership.role != "owner":
-            messages.error(request, "Only workspace owners can change the slug")
+        if not membership or membership.role not in ADMINISTER:
+            messages.error(request, "Only workspace owners and admins can change the slug")
             return self._redirect_with_tab(request, team_key)
 
         new_slug = request.POST.get("slug", "").strip().lower()

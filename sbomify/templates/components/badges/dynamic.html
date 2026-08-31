@@ -1,0 +1,27 @@
+{% comment %}
+A badge whose variant is only known in the browser: rows built by Alpine from
+a JSON projection, where the server never renders the row and so cannot pick
+c-badges.danger over c-badges.success.
+
+The caller binds one data attribute and nothing else:
+
+    <c-badges.dynamic ::data-variant="advisory.status_variant" x-text="advisory.status_label" />
+
+Not for severity. A CVSS band is not a semantic variant, and projecting it to
+one shifts every band: reach for c-badges.severity-dynamic and bind data-level.
+
+Every recipe still lives here, keyed by data-variant, the same technique the
+sortable table header uses for its carets. An unknown or missing variant falls
+back to the neutral tint, so a new value from the server degrades quietly
+instead of rendering an unstyled chip.
+
+The resting ink is written as an arbitrary value rather than text-text-muted:
+that utility is declared !important in tailwind.src.css, and an important
+declaration outranks every data-[variant=…]:text-… rule no matter how specific,
+which left each variant with its tint and its border but the neutral text
+colour. The arbitrary form compiles without the flag, so the attribute decides.
+{% endcomment %}
+<c-vars variant="secondary" size class />
+<span data-variant="{{ variant }}"
+      class="inline-flex items-center font-semibold transition-all duration-150 border border-solid rounded-full whitespace-nowrap {% if size == 'sm' %}px-1.5 py-0.5 text-[0.625rem] leading-[1.5] tracking-[0.01em]{% else %}px-3 py-1 text-xs leading-[1.5] tracking-[0.01em]{% endif %} text-[color:var(--color-text-muted)] bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] data-[variant=primary]:text-primary data-[variant=primary]:bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)] data-[variant=primary]:border-[color-mix(in_oklab,var(--color-primary)_20%,transparent)] data-[variant=success]:text-success data-[variant=success]:bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)] data-[variant=success]:border-[color-mix(in_oklab,var(--color-success)_20%,transparent)] data-[variant=warning]:text-warning data-[variant=warning]:bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)] data-[variant=warning]:border-[color-mix(in_oklab,var(--color-warning)_20%,transparent)] data-[variant=danger]:text-danger data-[variant=danger]:bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)] data-[variant=danger]:border-[color-mix(in_oklab,var(--color-danger)_20%,transparent)] data-[variant=info]:text-info data-[variant=info]:bg-[color-mix(in_oklab,var(--color-info)_12%,transparent)] data-[variant=info]:border-[color-mix(in_oklab,var(--color-info)_20%,transparent)] data-[variant=violet]:text-accent data-[variant=violet]:bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)] data-[variant=violet]:border-[color-mix(in_oklab,var(--color-accent)_20%,transparent)]{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

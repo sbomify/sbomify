@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.utils import timezone
 
@@ -35,6 +35,33 @@ def get_team_user_counts(team_id: int | str) -> tuple[int, int, int]:
 
 def get_member_role(user_id: int, team_id: str) -> str | None:
     return Member.objects.filter(user_id=user_id, team_id=team_id).values_list("role", flat=True).first()
+
+
+def get_member_role_by_key(user: Any, team_key: str | None) -> str | None:
+    """The user's live role in a workspace, by workspace key.
+
+    Use this for anything that decides what to render. ``session["current_team"]["role"]``
+    is a cache with a 300s TTL, so a demoted user keeps seeing controls they can
+    no longer use (and a promoted one keeps missing controls they can) until it
+    refreshes — while the handler behind the control enforces the real answer and
+    returns 403. The role here comes from the ``Member`` row.
+    """
+    if not team_key or not getattr(user, "is_authenticated", False):
+        return None
+    return Member.objects.filter(user=user, team__key=team_key).values_list("role", flat=True).first()
+
+
+def has_pending_invitation(email: str) -> bool:
+    """Is there a live invitation for this address?
+
+    "Pending" means unexpired. Kept beside get_pending_invitations_for_email so
+    the two cannot disagree about what pending means — a caller that filters on
+    neither expiry nor case ends up honouring an invitation that lapsed months
+    ago.
+    """
+    if not email:
+        return False
+    return Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).exists()
 
 
 def get_pending_invitations_for_email(email: str) -> list[Invitation]:

@@ -74,7 +74,7 @@ class TestTheResultItProduces:
     def result(self) -> dict[str, Any]:
         plugin = DependencyTrackPlugin()
         return _as_dict(
-            plugin._create_skipped_result(
+            plugin.create_skipped_result(
                 finding_id="dependency-track:unsupported-spec-version",
                 title="Spec Version Not Supported",
                 description="This Dependency Track server does not accept this CycloneDX spec version.",
@@ -109,7 +109,7 @@ class TestItDoesNotRenderAsPassingEither:
             category="security",
             status=RunStatus.COMPLETED.value,
             result=_as_dict(
-                plugin._create_skipped_result(
+                plugin.create_skipped_result(
                     finding_id="dependency-track:unsupported-spec-version",
                     title="Spec Version Not Supported",
                     description="x",
@@ -124,7 +124,7 @@ class TestItDoesNotRenderAsPassingEither:
 class TestTheWiringInAssess:
     """The branch itself, not just the pieces it is built from.
 
-    ``_is_unsupported_spec_version`` and ``_create_skipped_result`` can both be
+    ``_is_unsupported_spec_version`` and ``create_skipped_result`` can both be
     correct while nothing calls them. These drive the real ``assess()`` with the
     upload raising, which is the only way to know the two are connected.
     """
@@ -174,6 +174,35 @@ class TestTheWiringInAssess:
         assert result["metadata"].get("skipped") is True
         assert result["findings"][0]["id"] == "dependency-track:unsupported-spec-version"
         assert result["summary"]["error_count"] == 0
+
+    def test_the_rejection_carries_the_backoff_marker(self, scannable_sbom) -> None:
+        """Asserted here, on the real assess() path, rather than only against
+        the helper that builds the result. The scheduled sweep reads this flag
+        from the stored run and the two live in different modules — dropping
+        ``unsupported_input=True`` from this call site left the whole suite
+        green while every stored rejection lost the marker, the backoff matched
+        nothing, and the hourly re-upload loop came back."""
+        sbom, path, server = scannable_sbom
+
+        result = self._assess_with_upload_raising(DependencyTrackPlugin(), sbom, path, server, REAL_REJECTION)
+
+        assert result["metadata"].get("unsupported_input") is True
+
+    def test_an_upload_failure_does_not_carry_it(self, scannable_sbom) -> None:
+        """The marker means "cannot read this input", and nothing else.
+
+        Named for what this actually drives: a 401 from the upload, which
+        returns an error result rather than a skip. The point is that a failure
+        the scanner might recover from keeps the hourly cadence instead of
+        being parked for a day.
+        """
+        sbom, path, server = scannable_sbom
+
+        result = self._assess_with_upload_raising(
+            DependencyTrackPlugin(), sbom, path, server, Exception("Dependency Track error (401): Unauthorized")
+        )
+
+        assert result["metadata"].get("unsupported_input") is not True
 
     def test_any_other_upload_failure_is_still_an_error(self, scannable_sbom) -> None:
         """The half that keeps the change honest: a real failure must not be

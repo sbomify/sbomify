@@ -1,0 +1,10 @@
+{% comment %}
+The danger zone's body, standalone: c-cards.body, unwashed. The zone's body is
+deliberately plain — the reader weighs destructive actions here, so the ground
+under that text stays the same surface as every other card. Use it with
+c-cards.dangerzone flush, for the panel a header opens: x-show and x-collapse
+have to land on the padded element itself, or a shut zone still shows a band
+of its own padding.
+{% endcomment %}
+<c-vars class />
+<c-cards.body class="{{ class }}" :attrs="attrs">{{ slot }}</c-cards.body>

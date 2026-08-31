@@ -1,0 +1,21 @@
+{% comment %}
+The multi-line input, in plain Tailwind utilities. It grows vertically only, so
+a long answer never breaks the column it sits in.
+
+The text is a prop, not a slot: whitespace inside a textarea is part of the
+value, and a slot would hand it the template's indentation.
+
+state is one conditional segment holding the resting border colour and the
+focus ring together, exactly as on c-forms.input, and data-state is its runtime
+twin for an editor whose validity is only known in the browser.
+{% endcomment %}
+<c-vars name id rows="4" value placeholder state required disabled readonly class />
+<textarea {% if id or name %}id="{% firstof id name %}"{% endif %}
+          {% if name %}name="{{ name }}"{% endif %}
+          rows="{{ rows }}"
+          {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+          class="w-full min-h-28 px-4 py-3 bg-surface border-[1.5px] border-solid rounded-lg text-text text-sm leading-normal resize-y transition-all duration-200 placeholder:text-text-muted hover:not-focus:border-border-light focus:outline-none focus:border-primary {% if state == 'error' %}border-danger focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)]{% elif state == 'success' %}border-success focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-success)_15%,transparent)]{% else %}border-border focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent)]{% endif %} data-[state=error]:border-danger data-[state=error]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)] data-[state=success]:border-success data-[state=success]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-success)_15%,transparent)]{% if class %} {{ class }}{% endif %}"
+          {% if required %}required{% endif %}
+          {% if disabled %}disabled{% endif %}
+          {% if readonly %}readonly{% endif %}
+          {{ attrs }}>{{ value }}</textarea>

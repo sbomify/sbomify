@@ -20,6 +20,20 @@ const RECONNECT_BASE_DELAY_MS = 1000; // Start with 1 second
 const RECONNECT_MAX_DELAY_MS = 30000; // Max 30 seconds
 const RECONNECT_MAX_ATTEMPTS = 10; // Give up after 10 attempts
 
+// How long a socket must stay open before the attempt budget is refunded.
+//
+// A completed handshake is not success. The server accepts the handshake
+// before it applies its verdict, precisely so it can answer with a close code
+// the browser can read, which means `onopen` fires on rejected connections
+// too. Refunding the budget there made every rejection look like a fresh
+// start: the delay was recomputed from attempt zero and the cap was never
+// reached, so a broker outage turned into one reconnect per second per tab
+// against an already-degraded server.
+//
+// Long enough to outlast an immediate accept-then-close, short enough that a
+// genuinely working socket is credited well before the next drop.
+const CONNECTION_STABLE_AFTER_MS = 5000;
+
 // Terminal verdicts about this client: policy violation (auth), protocol
 // error, unsupported data. Retrying these replays the same rejection.
 const NO_RETRY_CLOSE_CODES = new Set([1002, 1003, 1008]);
@@ -36,6 +50,7 @@ interface WebSocketStoreState {
     workspaceKey: string | null;
     reconnectAttempts: number;
     reconnectTimer: ReturnType<typeof setTimeout> | null;
+    stableTimer: ReturnType<typeof setTimeout> | null;
     lastError: string | null;
 }
 
@@ -50,6 +65,7 @@ export function registerWebSocketStore(): void {
         workspaceKey: null,
         reconnectAttempts: 0,
         reconnectTimer: null,
+        stableTimer: null,
         lastError: null,
 
         /**
@@ -93,8 +109,19 @@ export function registerWebSocketStore(): void {
                 state.socket.onopen = () => {
                     state.connected = true;
                     state.connecting = false;
-                    state.reconnectAttempts = 0;
                     state.lastError = null;
+
+                    // Budget refunded only once the socket has held open, not
+                    // here: see CONNECTION_STABLE_AFTER_MS. onclose clears this
+                    // timer, so a socket closed before it fires — every
+                    // server-side rejection — keeps its place in the backoff.
+                    if (state.stableTimer) {
+                        clearTimeout(state.stableTimer);
+                    }
+                    state.stableTimer = setTimeout(() => {
+                        state.reconnectAttempts = 0;
+                        state.stableTimer = null;
+                    }, CONNECTION_STABLE_AFTER_MS);
 
                     // Dispatch connection event
                     window.dispatchEvent(new CustomEvent('ws:connected', {
@@ -128,6 +155,13 @@ export function registerWebSocketStore(): void {
                     state.connected = false;
                     state.connecting = false;
                     state.socket = null;
+
+                    // A socket that closed before it was credited never proves
+                    // anything, so it must not refund the budget after the fact.
+                    if (state.stableTimer) {
+                        clearTimeout(state.stableTimer);
+                        state.stableTimer = null;
+                    }
 
                     // Dispatch disconnection event
                     window.dispatchEvent(new CustomEvent('ws:disconnected', {
@@ -176,6 +210,13 @@ export function registerWebSocketStore(): void {
             if (state.reconnectTimer) {
                 clearTimeout(state.reconnectTimer);
                 state.reconnectTimer = null;
+            }
+
+            // A deliberate disconnect resets the budget outright below, so a
+            // pending credit would only fire against the next socket.
+            if (state.stableTimer) {
+                clearTimeout(state.stableTimer);
+                state.stableTimer = null;
             }
 
             if (state.socket) {

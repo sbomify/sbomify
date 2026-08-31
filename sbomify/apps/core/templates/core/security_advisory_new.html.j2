@@ -1,0 +1,62 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}sbomify New Advisory{% endblock %}
+{% comment %}
+    The New Advisory form. It was a modal, but the affected-products picker is a
+    filterable tree with range selection that needs room: in a modal the scope
+    line and the version list fell under the fold on a short window.
+
+    Three steps in one form, laid out with c-layout.form-section — what the step
+    is on the left, its fields on the right, a hairline between. No cards: the
+    sections are the structure, and boxing each one made three panels out of one
+    form.
+{% endcomment %}
+{% block dashboard_content %}
+    {% url 'core:security_advisories_dashboard' as advisories_url %}
+    <div class="max-w-5xl">
+        <c-layout.page-header title="New advisory" subtitle="Opens as a draft. The first timeline entry shows this status." icon="fas fa-shield-halved">
+        <c-buttons.ghost href="{{ advisories_url }}" size="sm">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i><span>Back to advisories</span>
+        </c-buttons.ghost>
+        </c-layout.page-header>
+        <form method="post" action="{% url 'core:security_advisory_new' %}">
+            {% csrf_token %}
+            <c-layout.form-section step="1" title="What it is" description="A title is all a draft needs.">
+            <div class="space-y-5">
+                <c-forms.field label="Title" for="title" required>
+                <c-forms.input name="title" required placeholder="e.g. Improper authentication in SAML assertion handling" />
+                </c-forms.field>
+                <c-layout.choice-group name="severity" label="Severity" :options="severity_options" selected="medium" />
+                <c-layout.choice-group name="remediation_status" label="Status" :options="status_options" selected="identified" hint="Where the work stands now." />
+            </div>
+            </c-layout.form-section>
+            <c-layout.form-section step="2" title="What it affects" description="Tick a product to cover every version. Open one to pick versions.">
+            <div>{% include "core/components/advisory_product_picker.html.j2" %}</div>
+            </c-layout.form-section>
+            <c-layout.form-section step="3" accent="neutral" title="What else is known" description="Optional. You can add these later.">
+            <div class="space-y-5">
+                <input type="hidden" name="type" value="cve">
+                <c-forms.field label="CVE or reference" for="vulnerability_id">
+                <c-forms.input name="vulnerability_id" placeholder="CVE-2026-0000" />
+                </c-forms.field>
+                <div class="grid gap-5 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]">
+                    <c-forms.field label="CVSS score" for="cvss_score">
+                    <c-forms.input name="cvss_score" type="number" min="0" max="10" step="0.1" inputmode="decimal" placeholder="9.8" />
+                    </c-forms.field>
+                    <c-forms.field label="CVSS vector" for="cvss_vector">
+                    <c-forms.input name="cvss_vector" placeholder="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" />
+                    </c-forms.field>
+                </div>
+                <c-forms.field label="Description" for="description">
+                <c-forms.textarea name="description" rows="4" placeholder="What is the problem, and who does it affect?" />
+                </c-forms.field>
+            </div>
+            </c-layout.form-section>
+            <div class="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-6">
+                <c-buttons.ghost href="{{ advisories_url }}"><span>Cancel</span></c-buttons.ghost>
+                <c-buttons.primary type="submit">
+                <i class="fas fa-plus" aria-hidden="true"></i><span>Create advisory</span>
+                </c-buttons.primary>
+            </div>
+        </form>
+    </div>
+{% endblock %}

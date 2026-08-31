@@ -2,37 +2,27 @@
      hx-get="{% url 'teams:team_branding' team.key %}"
      hx-trigger="load, refreshTeamBranding from:body"
      hx-swap="innerHTML">
-    {# Skeleton Loading State #}
-    <div class="tw-settings-card">
-        <div class="px-6 py-4 border-b border-border">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
-                <div>
-                    <div class="h-5 w-28 bg-border/50 rounded animate-pulse"></div>
-                    <div class="h-4 w-52 bg-border/30 rounded animate-pulse mt-1"></div>
-                </div>
+    {# Skeleton loading state, shaped like the loaded layout: form rail left, preview right. #}
+    <div class="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-start">
+        <div class="space-y-6">
+            <div>
+                <div class="h-5 w-28 bg-border/50 rounded animate-pulse"></div>
+                <div class="h-4 w-56 bg-border/30 rounded animate-pulse mt-2"></div>
+            </div>
+            <div class="space-y-3">
+                <div class="h-4 w-20 bg-border/50 rounded animate-pulse"></div>
+                <div class="h-12 bg-border/30 rounded-lg animate-pulse"></div>
+                <div class="h-12 bg-border/30 rounded-lg animate-pulse"></div>
+            </div>
+            <div class="space-y-3">
+                <div class="h-4 w-24 bg-border/50 rounded animate-pulse"></div>
+                <c-feedback.skeleton type="image" height="8rem" />
             </div>
         </div>
-        <div class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {# Logo upload skeleton #}
-                <div class="space-y-3">
-                    <div class="h-4 w-20 bg-border/50 rounded animate-pulse"></div>
-                    <div class="h-32 w-full bg-border/30 rounded-lg animate-pulse border-2 border-dashed border-border"></div>
-                </div>
-                {# Color picker skeleton #}
-                <div class="space-y-3">
-                    <div class="h-4 w-24 bg-border/50 rounded animate-pulse"></div>
-                    <div class="flex gap-3">
-                        <div class="h-10 w-10 bg-border/50 rounded-lg animate-pulse"></div>
-                        <div class="h-10 flex-1 bg-border/30 rounded-lg animate-pulse"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="flex items-center justify-center py-4 mt-4">
-                {% include "core/components/brand/loader.html.j2" with class="tw-loader-sm mx-auto text-primary" %}
-                <span class="ml-3 text-text-muted text-sm">Loading branding settings...</span>
-            </div>
+        <div class="space-y-3">
+            <div class="h-4 w-24 bg-border/50 rounded animate-pulse"></div>
+            <c-feedback.skeleton type="image" height="24rem" />
         </div>
     </div>
+    <c-feedback.loading row message="Loading branding settings..." class="mt-4" />
 </div>

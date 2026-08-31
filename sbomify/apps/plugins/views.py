@@ -7,6 +7,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
@@ -20,7 +21,7 @@ logger = getLogger(__name__)
 class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing team plugin settings."""
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         """Render the plugin settings page."""
@@ -148,7 +149,7 @@ class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     a redundant get_team_plugin_settings call on initial page load.
     """
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the standalone plugins page."""
@@ -158,7 +159,7 @@ class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """HTMX partial: returns the plugin summary bar with counts."""
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Return the summary bar partial."""

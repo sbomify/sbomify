@@ -1,0 +1,22 @@
+{% comment %}
+A page control for a table that pages in the browser. c-navigation.pagination
+is the server-rendered pager, where the view knows the current page and every
+link is an href; this is its Alpine twin, for a table whose current page is
+client state.
+
+The caller binds state, never classes:
+
+    <c-navigation.page-button ::data-active="currentPage === page" @click="goToPage(page)" x-text="page" />
+    <c-navigation.page-button nav label="Previous page" ::disabled="currentPage === 1" @click="goToPage(currentPage - 1)">…</c-navigation.page-button>
+
+The active recipe hangs off data-active and the unavailable one off the real
+disabled attribute, so the look can never drift from the state that drives it.
+Recipes match c-navigation.page-link, which the server-rendered pager uses.
+{% endcomment %}
+<c-vars nav label class />
+<button type="button"
+        data-active="false"
+        class="flex items-center justify-center min-w-8 h-8 px-2 rounded-md border border-solid border-transparent transition-all duration-150 {% if nav %}text-xs{% else %}text-[0.8125rem]{% endif %} bg-transparent text-text-muted font-medium cursor-pointer hover:bg-surface hover:border-border hover:text-text active:scale-95 data-[active=true]:bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)] data-[active=true]:text-white data-[active=true]:font-semibold data-[active=true]:shadow-[0_2px_4px_color-mix(in_oklab,var(--color-primary)_30%,transparent)] data-[active=true]:hover:border-transparent disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-transparent disabled:hover:text-text-muted disabled:active:scale-100{% if class %} {{ class }}{% endif %}"
+        {% if label %}aria-label="{{ label }}"{% endif %}
+        {{ attrs }}>{{ slot }}
+</button>
