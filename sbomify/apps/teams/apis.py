@@ -86,7 +86,9 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
                 email=member.user.email,
             ),
             role=member.role,
+            # One value, two names, while clients migrate off the old one.
             is_default_team=member.is_default_team,
+            is_default_workspace=member.is_default_team,
             is_me=(current_user_id == member.user.id),
         )
         # Bots are excluded alongside guests: a role="bot" membership is the

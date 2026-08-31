@@ -329,3 +329,25 @@ def vex_justification_label(value: object) -> str:
     from sbomify.apps.vulnerability_scanning.utils import justification_label
 
     return justification_label(value)
+
+
+@register.filter
+def vulnerability_total(summary: dict[str, Any]) -> int:
+    """How many vulnerabilities a security run actually reported.
+
+    Not ``total_findings``. That counts every row a plugin emitted, and a
+    security plugin emits rows that are not vulnerabilities: a scanner that
+    stood down records its own notice as one info finding, which is why the
+    card had to special-case skipped runs to stop claiming a vulnerability
+    nobody reported.
+
+    Summing ``by_severity`` is what the public badge already does
+    (``public_assessment_utils._is_passing``), so this brings the private card
+    onto the same count rather than inventing a second one.
+    """
+    if not isinstance(summary, dict):
+        return 0
+    by_severity = summary.get("by_severity") or {}
+    if not isinstance(by_severity, dict):
+        return 0
+    return sum(value for value in by_severity.values() if isinstance(value, int))
