@@ -266,7 +266,7 @@ def capture(
         # is the same payload under the migrating name, and warning on every
         # fire for the whole window is noise, not drift.
         if event.startswith(f"{RETIRED_EVENT_PREFIX}:"):
-            renamed = f"{EVENT_PREFIX}{event[len(RETIRED_EVENT_PREFIX) :]}"
+            renamed = f"{EVENT_PREFIX}{event.removeprefix(RETIRED_EVENT_PREFIX)}"
             client.capture(distinct_id, renamed, properties=merged, **kwargs)
     except Exception:
         logger.exception("Failed to capture PostHog event %s", event)
