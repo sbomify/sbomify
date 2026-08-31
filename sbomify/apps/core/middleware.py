@@ -766,5 +766,8 @@ class ApiVersionDeprecationMiddleware:
         if sunset is not None:
             response["Sunset"] = http_date(sunset.timestamp())
 
-        response["Link"] = self._LINK
+        # Appended, not assigned: Link is comma-joinable and a view may
+        # already carry one (pagination, hypermedia).
+        existing = response.get("Link")
+        response["Link"] = f"{existing}, {self._LINK}" if existing else self._LINK
         return response
