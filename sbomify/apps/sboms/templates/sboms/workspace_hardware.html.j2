@@ -1,0 +1,88 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}Hardware{% endblock %}
+{% block dashboard_content %}
+    <div class="mb-6">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <i class="fas fa-microchip text-primary text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-text">Hardware</h1>
+                <p class="text-text-muted text-sm">
+                    {{ team.name }} · parts across every hardware-bearing artifact, and where they concentrate
+                </p>
+            </div>
+        </div>
+    </div>
+    {% if rollup.rows %}
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <c-layout.stat-card compact>
+            <c-layout.stat.value>{{ rollup.components_with_hardware }}</c-layout.stat.value>
+            <c-layout.stat.label>Components with hardware</c-layout.stat.label>
+            </c-layout.stat-card>
+            <c-layout.stat-card compact>
+            <c-layout.stat.value>{{ rollup.distinct_parts }}</c-layout.stat.value>
+            <c-layout.stat.label>Distinct parts</c-layout.stat.label>
+            </c-layout.stat-card>
+            <c-layout.stat-card compact
+            {% if rollup.shared_parts %}accent="warning"{% endif %}
+            >
+            <c-layout.stat.value>{{ rollup.shared_parts }}</c-layout.stat.value>
+            <c-layout.stat.label>Shared across products</c-layout.stat.label>
+            </c-layout.stat-card>
+            <c-layout.stat-card compact>
+            <c-layout.stat.value>{{ rollup.parts_total }}</c-layout.stat.value>
+            <c-layout.stat.label>Part lines</c-layout.stat.label>
+            </c-layout.stat-card>
+        </div>
+        {% if rollup.top_manufacturers %}
+            <c-cards.card title="Manufacturers" class="mb-6">
+            <div class="flex flex-wrap gap-2">
+                {% for entry in rollup.top_manufacturers %}
+                    <c-badges.secondary>
+                    {{ entry.name }}
+                    <span class="text-xs text-text-muted">· {{ entry.parts }} part{{ entry.parts|pluralize }}</span>
+                    </c-badges.secondary>
+                {% endfor %}
+            </div>
+            </c-cards.card>
+        {% endif %}
+        <c-cards.card flush>
+        <c-cards.header>
+        <h4 class="text-lg font-semibold text-text m-0">Parts</h4>
+        <p class="text-text-muted text-sm m-0 mt-1">
+            Parts used by more than one product are shown first. That concentration is the single-source risk to review.
+        </p>
+        </c-cards.header>
+        <c-tables.shell nested>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell>Manufacturer</c-tables.header-cell>
+        <c-tables.header-cell>Part</c-tables.header-cell>
+        <c-tables.header-cell>Type</c-tables.header-cell>
+        <c-tables.header-cell>Products</c-tables.header-cell>
+        <c-tables.header-cell>Components</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for row in rollup.rows %}
+                <c-tables.row>
+                <c-tables.cell muted>{{ row.manufacturer|default:"-" }}</c-tables.cell>
+                <c-tables.cell>
+                <span class="font-medium text-text">{{ row.name }}</span>
+                {% if row.shared %}<span class="ml-2"><c-badges.warning>shared</c-badges.warning></span>{% endif %}
+                </c-tables.cell>
+                <c-tables.cell muted>{{ row.type|default:"-" }}</c-tables.cell>
+                <c-tables.cell muted>{{ row.products|join:", " }}</c-tables.cell>
+                <c-tables.cell muted>{{ row.components|join:", " }}</c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        </c-tables.shell>
+        </c-cards.card>
+    {% else %}
+        <c-cards.card flush>
+        <c-feedback.empty-state icon="fas fa-microchip" title="No hardware artifacts yet" message="Upload an HBOM, or an SBOM carrying hardware components, and its parts appear here." />
+        </c-cards.card>
+    {% endif %}
+{% endblock %}
