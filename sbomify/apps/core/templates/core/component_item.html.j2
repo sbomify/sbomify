@@ -22,6 +22,8 @@
         {% firstof "VEX" as item_kind_label %}
     {% elif is_cbom %}
         {% firstof "CBOM" as item_kind_label %}
+    {% elif is_hbom %}
+        {% firstof "HBOM" as item_kind_label %}
     {% else %}
         {% firstof "SBOM" as item_kind_label %}
     {% endif %}

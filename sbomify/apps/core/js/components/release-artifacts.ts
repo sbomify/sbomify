@@ -1,6 +1,9 @@
 import Alpine from 'alpinejs';
-import $axios, { formatDate as sharedFormatDate } from '../utils';
-import { showError, showSuccess } from '../alerts';
+// Namespace imports, not named ones: bun's module mocks are process-wide, so a
+// sibling spec that stubs '../utils' or '../alerts' with a subset of their exports
+// would otherwise make this module unloadable in unit tests.
+import $axios, * as utils from '../utils';
+import * as alerts from '../alerts';
 
 interface SBOMData {
     id: string;
@@ -67,6 +70,64 @@ interface ReleaseArtifactsParams {
     initialArtifacts?: Artifact[];
     canEdit?: boolean;
     isLatest?: boolean;
+}
+
+interface ArtifactTypeStyle {
+    icon: string;
+    iconClass: string;
+    badgeClass: string;
+}
+
+/**
+ * Every BOM is stored as an SBOM row tagged with a bom_type, so a row's real type
+ * IS its bom_type — collapsing them to 'sbom' makes a component's SBOM and its
+ * HBOM render as two identical rows. Tones match the public release table, where
+ * CBOM is already green; HBOM shares that green because the palette has no sixth
+ * colour carrying the opacity utilities this table uses, and the microchip icon
+ * plus the badge text tell the two apart.
+ */
+const ARTIFACT_TYPE_STYLES: Record<string, ArtifactTypeStyle> = {
+    sbom: {
+        icon: 'fas fa-file-code',
+        iconClass: 'bg-primary/10 text-primary',
+        badgeClass: 'bg-primary/10 text-primary border border-primary/30',
+    },
+    vex: {
+        icon: 'fas fa-file-contract',
+        iconClass: 'bg-info/10 text-info',
+        badgeClass: 'bg-info/10 text-info border border-info/30',
+    },
+    cbom: {
+        icon: 'fas fa-key',
+        iconClass: 'bg-success/10 text-success',
+        badgeClass: 'bg-success/10 text-success border border-success/30',
+    },
+    hbom: {
+        icon: 'fas fa-microchip',
+        iconClass: 'bg-success/10 text-success',
+        badgeClass: 'bg-success/10 text-success border border-success/30',
+    },
+    document: {
+        icon: 'fas fa-file-alt',
+        iconClass: 'bg-warning/10 text-warning',
+        badgeClass: 'bg-warning/10 text-warning border border-warning/30',
+    },
+};
+
+const UNKNOWN_ARTIFACT_TYPE_STYLE: ArtifactTypeStyle = {
+    icon: 'fas fa-file',
+    iconClass: 'bg-surface text-text-muted',
+    badgeClass: 'bg-surface text-text-muted border border-border',
+};
+
+/** Row type for an artifact: the bom_type of an SBOM row, else the artifact_type. */
+export function artifactTypeOf(artifactType?: string, bomType?: string): string {
+    if (artifactType === 'sbom') return bomType || 'sbom';
+    return artifactType || 'unknown';
+}
+
+export function artifactTypeStyle(type?: string): ArtifactTypeStyle {
+    return ARTIFACT_TYPE_STYLES[(type || '').toLowerCase()] || UNKNOWN_ARTIFACT_TYPE_STYLE;
 }
 
 function formatSbomDisplay(format?: string, version?: string): string {
@@ -138,7 +199,7 @@ export function registerReleaseArtifacts() {
                     this.artifacts = artifactsData;
                 } catch (error) {
                     console.error('Failed to load artifacts:', error);
-                    showError('Failed to load artifacts');
+                    alerts.showError('Failed to load artifacts');
                 } finally {
                     this.isLoading = false;
                 }
@@ -152,7 +213,7 @@ export function registerReleaseArtifacts() {
                     this.availableArtifacts = data;
                 } catch (error) {
                     console.error('Failed to load available artifacts:', error);
-                    showError('Failed to load available artifacts');
+                    alerts.showError('Failed to load available artifacts');
                 } finally {
                     this.isLoadingAvailable = false;
                 }
@@ -362,14 +423,10 @@ export function registerReleaseArtifacts() {
             // Artifact data extraction methods
             getArtifactType(artifact: Artifact): string {
                 if (artifact.sbom || artifact.artifact_type === 'sbom') {
-                    // VEX, CBOM and HBOM are stored as SBOM rows with a bom_type;
-                    // badge them as themselves so they don't read as duplicate
-                    // SBOMs of the component.
-                    const bomType = artifact.bom_type || 'sbom';
-                    return bomType === 'sbom' ? 'sbom' : bomType;
+                    return artifactTypeOf('sbom', artifact.bom_type);
                 }
                 if (artifact.document || artifact.artifact_type === 'document') return 'document';
-                return artifact.type || 'unknown';
+                return artifactTypeOf(artifact.type);
             },
 
             getArtifactName(artifact: Artifact): string {
@@ -472,63 +529,28 @@ export function registerReleaseArtifacts() {
             },
 
             getTypeIcon(type?: string): string {
-                if (!type) return 'fas fa-file';
-                switch (type.toLowerCase()) {
-                    case 'sbom':
-                        return 'fas fa-file-code';
-                    case 'vex':
-                        return 'fas fa-file-contract';
-                    case 'cbom':
-                        return 'fas fa-key';
-                    case 'hbom':
-                        return 'fas fa-microchip';
-                    case 'document':
-                        return 'fas fa-file-alt';
-                    default:
-                        return 'fas fa-file';
-                }
+                return artifactTypeStyle(type).icon;
             },
 
             getArtifactIconClass(artifact: Artifact): string {
-                const type = this.getArtifactType(artifact);
-                if (type === 'sbom') return 'bg-success/10 text-success';
-                if (type === 'vex') return 'bg-info/10 text-info';
-                if (type === 'cbom' || type === 'hbom') return 'bg-primary/10 text-primary';
-                if (type === 'document') return 'bg-warning/10 text-warning';
-                return 'bg-surface text-text-muted';
+                return artifactTypeStyle(this.getArtifactType(artifact)).iconClass;
             },
 
             getArtifactBadgeClass(artifact: Artifact): string {
-                const type = this.getArtifactType(artifact);
-                if (type === 'sbom') return 'bg-success/10 text-success border border-success/30';
-                if (type === 'vex') return 'bg-info/10 text-info border border-info/30';
-                if (type === 'cbom' || type === 'hbom') return 'bg-primary/10 text-primary border border-primary/30';
-                if (type === 'document') return 'bg-warning/10 text-warning border border-warning/30';
-                return 'bg-surface text-text-muted border border-border';
+                return artifactTypeStyle(this.getArtifactType(artifact)).badgeClass;
             },
 
             // Available artifact methods
             getAvailableArtifactType(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom') {
-                    return artifact.bom_type === 'vex' ? 'vex' : 'sbom';
-                }
-                return artifact.artifact_type;
+                return artifactTypeOf(artifact.artifact_type, artifact.bom_type);
             },
 
             getAvailableTypeIcon(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom') {
-                    return artifact.bom_type === 'vex' ? 'fas fa-file-contract' : 'fas fa-file-code';
-                }
-                if (artifact.artifact_type === 'document') return 'fas fa-file-alt';
-                return 'fas fa-file';
+                return artifactTypeStyle(this.getAvailableArtifactType(artifact)).icon;
             },
 
             getAvailableArtifactIconClass(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom') {
-                    return artifact.bom_type === 'vex' ? 'bg-info/10 text-info' : 'bg-success/10 text-success';
-                }
-                if (artifact.artifact_type === 'document') return 'bg-warning/10 text-warning';
-                return 'bg-surface text-text-muted';
+                return artifactTypeStyle(this.getAvailableArtifactType(artifact)).iconClass;
             },
 
             getAvailableArtifactFormat(artifact: AvailableArtifact): string {
@@ -568,7 +590,7 @@ export function registerReleaseArtifacts() {
 
             // Utility methods
             formatDate(dateString?: string): string {
-                return sharedFormatDate(dateString);
+                return utils.formatDate(dateString);
             },
 
             truncateText(text: string, maxLength: number): string {
@@ -704,17 +726,17 @@ export function registerReleaseArtifacts() {
                     }
 
                     if (addedCount > 0) {
-                        showSuccess(`${addedCount} artifact(s) added to release`);
+                        alerts.showSuccess(`${addedCount} artifact(s) added to release`);
                     }
                     if (errors.length > 0) {
-                        showError(`Failed to add some artifacts:\n${errors.join('\n')}`);
+                        alerts.showError(`Failed to add some artifacts:\n${errors.join('\n')}`);
                     }
 
                     this.closeAddModal();
                     await this.loadArtifacts();
                 } catch (error) {
                     console.error('Failed to add artifacts:', error);
-                    showError('Failed to add artifacts');
+                    alerts.showError('Failed to add artifacts');
                 } finally {
                     this.isSubmitting = false;
                 }
@@ -735,12 +757,12 @@ export function registerReleaseArtifacts() {
 
                 try {
                     await $axios.delete(`/api/v1/releases/${this.releaseId}/artifacts/${this.deleteTarget.id}`);
-                    showSuccess('Artifact removed from release');
+                    alerts.showSuccess('Artifact removed from release');
                     this.closeDeleteModal();
                     await this.loadArtifacts();
                 } catch (error) {
                     console.error('Failed to remove artifact:', error);
-                    showError('Failed to remove artifact');
+                    alerts.showError('Failed to remove artifact');
                 }
             }
         };

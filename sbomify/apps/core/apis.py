@@ -2915,11 +2915,15 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
     artifact_count = artifacts_qs.count()
 
     # Which bom_types the release carries — one query drives all the download
-    # capability flags (SBOM download, and the Trust Center VEX/CBOM downloads).
+    # capability flags (SBOM download, and the Trust Center VEX/CBOM/HBOM downloads).
+    # artifacts_qs, not release.artifacts: the flags must respect the same
+    # visibility filtering as every other derived field, or a viewer without
+    # CRUD could be offered a download of an artifact the listing hides.
     bom_types_present = set(artifacts_qs.filter(sbom__isnull=False).values_list("sbom__bom_type", flat=True).distinct())
     has_sboms = SBOM.BomType.SBOM.value in bom_types_present
     has_vex = SBOM.BomType.VEX.value in bom_types_present
     has_cbom = SBOM.BomType.CBOM.value in bom_types_present
+    has_hbom = SBOM.BomType.HBOM.value in bom_types_present
 
     response = {
         "id": str(release.id),
@@ -2939,6 +2943,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
         "has_sboms": has_sboms,
         "has_vex": has_vex,
         "has_cbom": has_cbom,
+        "has_hbom": has_hbom,
         "product": {
             "id": str(release.product.id),
             "name": release.product.name,
@@ -3706,6 +3711,78 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
     capture_for_request(
         request,
         events.RELEASE_CBOM_DOWNLOADED,
+        {"release_id": str(release.id), "product_id": str(release.product_id)},
+        team_key=release.product.team.key or "",
+    )
+    return response
+
+
+@router.get(
+    "/releases/{release_id}/hbom/download",
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    auth=None,
+    tags=["Releases"],
+)
+@decorate_view(optional_token_auth)
+def download_release_hbom(request: HttpRequest, release_id: str, version: str = Query("1.6")) -> Any:  # type: ignore[type-arg]
+    """Download the merged HBOM (Hardware BOM) for a release.
+
+    Combines the newest HBOM of each component in the release into a single CycloneDX document, so a
+    consumer pulls one hardware BOM per release. Gated exactly like the SBOM, VEX and CBOM downloads:
+    open for a public product, otherwise authenticated with release read access.
+
+    ``version`` is the emitted ``specVersion``: "1.6" (default) or "1.7". Unlike
+    the CBOM merge nothing is translated between the two — hardware vocabulary is
+    identical in both.
+    """
+    if version not in ("1.6", "1.7"):
+        return 400, {"detail": "version must be 1.6 or 1.7", "error_code": ErrorCode.BAD_REQUEST}
+    try:
+        release = Release.objects.select_related("product", "product__team").get(pk=release_id)
+    except Release.DoesNotExist:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+
+    if not release.product.is_public:
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
+        if not can(request, "release:read", release.product):
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    from django.core.cache import cache
+    from django.db.models import Count, Max
+
+    from sbomify.apps.sboms.hbom import build_release_hbom
+    from sbomify.apps.sboms.models import SBOM
+
+    # Same cache-by-slot-state approach as the VEX/CBOM downloads: the merge fans
+    # out one S3 fetch per pinned HBOM and this endpoint is open for public
+    # products. The key carries the slot state, so it changes the moment an HBOM
+    # is added to or replaced in the release.
+    #
+    # newest reads the *pin's* created_at, not the SBOM's. Replacing a pin is a
+    # delete plus a create (add_artifact_to_release), so the pin row is always
+    # new while the artifact behind it may be old: re-pinning a release to an
+    # earlier revision leaves both the count and the newest upload time
+    # unchanged, and keying on the upload time would serve the superseded merge
+    # for the rest of the TTL.
+    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.HBOM).aggregate(
+        n=Count("id"), newest=Max("created_at")
+    )
+    cache_key = f"release-hbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
+    document = cache.get(cache_key)
+    if document is None:
+        document = build_release_hbom(release, spec_version=version) or {"__absent__": True}
+        cache.set(cache_key, document, 900)
+    if document.get("__absent__"):
+        return 404, {"detail": "No HBOM available for this release", "error_code": ErrorCode.NOT_FOUND}
+
+    content = json.dumps(document, indent=2)
+    filename = _download_filename(release.product.name, release.name, ".hbom.cdx.json")
+    response = HttpResponse(content, content_type="application/json")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    capture_for_request(
+        request,
+        events.RELEASE_HBOM_DOWNLOADED,
         {"release_id": str(release.id), "product_id": str(release.product_id)},
         team_key=release.product.team.key or "",
     )

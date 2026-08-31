@@ -48,7 +48,7 @@ class ComponentItemPublicView(View):
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
 
-        if item_type in ("sboms", "vex", "cbom"):
+        if item_type in ("sboms", "vex", "cbom", "hbom"):
             result = get_sbom_detail(request, item_id)
             if not result.ok:
                 return error_response(
@@ -133,10 +133,11 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         vex_suppression_terms: list[str] = []
         vex_suppression_states: list[str] = []
 
-        # VEX and CBOM artifacts are SBOM-backed rows served under their own paths.
+        # VEX, CBOM and HBOM artifacts are SBOM-backed rows served under their own paths.
         is_vex = item_type == "vex"
         is_cbom = item_type == "cbom"
-        is_sbom_backed = item_type in ("sboms", "vex", "cbom")
+        is_hbom = item_type == "hbom"
+        is_sbom_backed = item_type in ("sboms", "vex", "cbom", "hbom")
 
         if is_sbom_backed:
             result = get_sbom_detail(request, item_id)
@@ -153,10 +154,13 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             sbom_row = SBOM.objects.filter(pk=item_id).only("id", "bom_type", "sbom_filename").first()
             actual_bom_type = sbom_row.bom_type if sbom_row else None
             # Keep the URL canonical: a VEX opens under /vex/, a CBOM under /cbom/,
-            # everything else under /sboms/. Redirect a mismatched path.
-            canonical_type = {SBOM.BomType.VEX.value: "vex", SBOM.BomType.CBOM.value: "cbom"}.get(
-                actual_bom_type or "", "sboms"
-            )
+            # an HBOM under /hbom/, everything else under /sboms/. Redirect a
+            # mismatched path.
+            canonical_type = {
+                SBOM.BomType.VEX.value: "vex",
+                SBOM.BomType.CBOM.value: "cbom",
+                SBOM.BomType.HBOM.value: "hbom",
+            }.get(actual_bom_type or "", "sboms")
             if item_type != canonical_type:
                 return HttpResponseRedirect(
                     reverse("core:component_item", args=[component_id, canonical_type, item_id])
@@ -348,6 +352,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "vex_suppression_states": vex_suppression_states,
                 "is_vex": is_vex,
                 "is_cbom": is_cbom,
+                "is_hbom": is_hbom,
                 "is_sbom_backed": is_sbom_backed,
                 "can_triage": can_triage,
                 "can_rerun": can_rerun,
