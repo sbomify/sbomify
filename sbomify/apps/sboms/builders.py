@@ -85,14 +85,14 @@ def _spdx3_component_info(sbom_data: dict[str, Any]) -> tuple[str, str | None, s
     declares the BOM subject), then a ``describes`` relationship, then the
     first package.
     """
-    elements = sbom_data.get("@graph", sbom_data.get("elements", []))
-    if not isinstance(elements, list):
-        return None
-    packages = [e for e in elements if isinstance(e, dict) and e.get("type") == "software_Package"]
+    from sbomify.apps.plugins.builtins._spdx_shared import iter_spdx3_elements, spdx3_document_subjects
+
+    # The shared iterator, not a raw .get: it falls back from a malformed
+    # @graph to a valid elements alias, the same reading every plugin uses.
+    elements = list(iter_spdx3_elements(sbom_data))
+    packages = [e for e in elements if e.get("type") == "software_Package"]
     if not packages:
         return None
-
-    from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
 
     pkg = None
     _, root_element_ids = spdx3_document_subjects({"@graph": elements})

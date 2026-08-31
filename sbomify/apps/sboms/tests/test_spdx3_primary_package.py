@@ -156,3 +156,17 @@ class TestCompactDescribesTarget:
         )
 
         assert info == ("libbar", "2.0.0", None)
+
+
+def test_a_malformed_graph_falls_back_to_the_elements_alias():
+    """The shared iterator's contract, pinned here too: a null @graph must
+    not hide a usable elements container from release aggregation."""
+    from sbomify.apps.sboms.builders import _spdx3_component_info
+
+    document = {
+        "@graph": None,
+        "elements": [
+            {"type": "software_Package", "spdxId": "urn:p1", "name": "board", "software_packageVersion": "2"},
+        ],
+    }
+    assert _spdx3_component_info(document) == ("board", "2", None)
