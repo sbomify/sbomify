@@ -181,13 +181,15 @@ datasheet, linked firmware) in a per-row drill-down.
                     {% if part.cpe %}
                         <div class="text-text-muted">
                             <span class="font-medium">CPE:</span> <code>{{ part.cpe }}</code>
-                            <a href="{{ part.cpe_nvd_url }}"
-                               target="_blank"
-                               rel="noopener noreferrer"
-                               class="text-primary hover:underline ml-1">
-                                Look this CPE up in NVD
-                                <i class="fas fa-arrow-up-right-from-square text-xs" aria-hidden="true"></i>
-                            </a>
+                            {% if part.cpe_nvd_url %}
+                                <a href="{{ part.cpe_nvd_url }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="text-primary hover:underline ml-1">
+                                    Look this CPE up in NVD
+                                    <i class="fas fa-arrow-up-right-from-square text-xs" aria-hidden="true"></i>
+                                </a>
+                            {% endif %}
                             <p class="m-0 mt-1 text-xs">
                                 A manual lookup. Hardware CPEs carry no version and the advisory feeds
                                 almost never use them, so sbomify does not match hardware to CVEs.
