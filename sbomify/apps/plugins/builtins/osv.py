@@ -383,8 +383,8 @@ class OSVPlugin(AssessmentPlugin):
             title="SPDX 3.0 Not Supported",
             description=(
                 "osv-scanner does not read SPDX 3.0 yet, so this SBOM was not scanned "
-                "for vulnerabilities. Upload it as SPDX 2.x or CycloneDX to have it "
-                "scanned now."
+                "for vulnerabilities. To scan it now, convert it with `syft convert` "
+                "(v1.46.0+, emits SPDX 2.3 or CycloneDX, lossily) and upload the result."
             ),
             unsupported_input=True,
             extra_metadata={
