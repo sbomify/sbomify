@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             name="has_hardware_components",
             field=models.BooleanField(
                 default=None,
-                help_text="Whether the document contains device components, computed at upload. None means unknown (rows predating the field); hardware-gated work runs for True and None, and skips dispatch for False.",
+                help_text="Whether the document contains device components, computed at upload. None means unknown (rows predating the field); hardware-gated work runs for True and None, and skips dispatch for False — except for a document explicitly tagged bom_type=hbom, which dispatches whatever this says, so a generator that emits no device components is reported rather than skipped.",
                 null=True,
             ),
         ),

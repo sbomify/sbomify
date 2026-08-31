@@ -343,7 +343,26 @@ def _hardware_parts(components: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return parts
 
 
-def derive_hardware_inventory(document: dict[str, Any] | None, *, include_root: bool = False) -> HardwareInventory:
+def part_search_term(part: dict[str, Any]) -> str:
+    """Everything the client-side search matches a part on, pre-lowercased."""
+    fields = (
+        part.get("name"),
+        part.get("manufacturer"),
+        part.get("revision"),
+        part.get("type"),
+        part.get("function"),
+        part.get("location"),
+        part.get("device_type"),
+        part.get("sku"),
+        part.get("serial_number"),
+        part.get("cpe"),
+        *(part.get("gs1") or {}).values(),
+        *(c.get("identifier") or "" for c in part.get("certifications") or []),
+    )
+    return " ".join(str(f) for f in fields if f).lower()
+
+
+def derive_hardware_inventory(document: object, *, include_root: bool = False) -> HardwareInventory:
     """Project the hardware components of a CycloneDX document into a parts list.
 
     ``metadata.component`` is the subject the document describes — the assembled

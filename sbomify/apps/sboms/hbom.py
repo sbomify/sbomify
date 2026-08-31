@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from functools import lru_cache
 from typing import Any
 
 from sbomify.logging import getLogger
@@ -34,6 +35,7 @@ def _component_keys(model: Any) -> set[str]:
     return {field.alias or name for name, field in model.model_fields.items()}
 
 
+@lru_cache(maxsize=1)
 def _fields_added_after_1_6() -> frozenset[str]:
     """Component keys 1.7 accepts and 1.6 forbids.
 
@@ -95,7 +97,10 @@ def build_release_hbom(release: Any, spec_version: str = "1.6") -> dict[str, Any
     artifacts = (
         ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.HBOM)
         .select_related("sbom")
-        .order_by("sbom__component_id", "-sbom__created_at")
+        # Newest by the pin itself, not by upload time: a release that
+        # deliberately pins an older HBOM after a newer upload exists must
+        # merge what it pinned. id breaks a same-instant tie one way.
+        .order_by("sbom__component_id", "-created_at", "-id")
     )
     for artifact in artifacts:
         hbom_sbom = artifact.sbom
