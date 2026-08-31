@@ -28,6 +28,7 @@ Reading rules that keep old documents scoring:
       object — Agent_derived allows all three.
 """
 
+from collections.abc import Iterator
 from typing import Any
 
 # The literal "SpdxOrganization" in an Agent position denotes the SPDX
@@ -86,14 +87,12 @@ def resolve_spdx3_agent(ref: Any, agents: dict[str, dict[str, Any]]) -> dict[str
     return {}
 
 
-def iter_spdx3_external_identifiers(entity: dict[str, Any]) -> list[dict[str, Any]]:
+def iter_spdx3_external_identifiers(entity: dict[str, Any]) -> Iterator[dict[str, Any]]:
     """All ExternalIdentifier dicts on an element, spec and legacy spellings."""
-    identifiers: list[dict[str, Any]] = []
     for key in ("externalIdentifier", "externalIdentifiers"):
         value = entity.get(key)
         if isinstance(value, list):
-            identifiers.extend(item for item in value if isinstance(item, dict))
-    return identifiers
+            yield from (item for item in value if isinstance(item, dict))
 
 
 def spdx3_package_purl(package: dict[str, Any]) -> str | None:
@@ -127,6 +126,10 @@ def extract_spdx3_elements(
     dict[str, dict[str, Any]],
 ]:
     """Extract typed elements from @graph.
+
+    The fourth member of the tuple is historically named persons_orgs at the
+    call sites, but it maps every agent shape the spec allows: Person,
+    Organization, SoftwareAgent and bare Agent alike.
 
     Args:
         data: Parsed SPDX 3.0 SBOM dictionary.
@@ -203,9 +206,16 @@ def get_spdx3_creation_info_fields(
 
     tools = tools or {}
 
-    # Extract creators from createdBy references
+    # Extract creators from createdBy references. Normalized like the
+    # package agent fields: a bare string is a singleton reference, and any
+    # other non-list shape resolves nobody instead of iterating characters.
+    created_by = creation_info.get("createdBy", [])
+    if isinstance(created_by, str):
+        created_by = [created_by]
+    elif not isinstance(created_by, list):
+        created_by = []
     creators: list[str] = []
-    for ref in creation_info.get("createdBy", []):
+    for ref in created_by:
         entity = resolve_spdx3_agent(ref, persons_orgs)
         name = entity.get("name", "")
         if name:
