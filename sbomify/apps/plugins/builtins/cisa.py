@@ -909,7 +909,14 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         # Create findings for per-component elements
 
         # 2. Software Producer
-        status, details = element_verdict(producer_failures, no_producer_graded)
+        status, details = element_verdict(
+            producer_failures,
+            no_producer_graded,
+            not_graded_detail=(
+                "Not graded: every component in this document is a file entry, "
+                "the generator's own scan input, which names no producer."
+            ),
+        )
         findings.append(
             self._create_finding(
                 "software_producer",

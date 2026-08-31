@@ -27,7 +27,8 @@ from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.orchestrator import PluginOrchestrator
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin
 from sbomify.apps.plugins.sdk.enums import RunReason
-from sbomify.apps.sboms.models import SBOM, Component
+from sbomify.apps.core.models import Component
+from sbomify.apps.sboms.models import SBOM
 
 _DATA = pathlib.Path(__file__).parent.resolve() / "test_data"
 _PCIE_HBOM = _DATA / "hbom_pcie_sata_adapter.cdx.json"

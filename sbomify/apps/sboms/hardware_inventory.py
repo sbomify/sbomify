@@ -38,7 +38,7 @@ from sbomify.apps.sboms.models import SBOM
 # The same set that decides a document is an HBOM. Detection and projection must
 # never diverge: a stricter set here renders an HBOM page with an empty parts
 # table, a looser one lists parts on a document nothing calls hardware.
-from sbomify.apps.sboms.utils import _HBOM_COMPONENT_TYPES as HARDWARE_TYPES
+from sbomify.apps.sboms.utils import _HBOM_COMPONENT_TYPES as HBOM_COMPONENT_TYPES
 
 log = logging.getLogger(__name__)
 
@@ -332,7 +332,7 @@ def _hardware_parts(components: list[dict[str, Any]]) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     seen: set[str] = set()
     for component in components:
-        if component.get("type") not in HARDWARE_TYPES:
+        if component.get("type") not in HBOM_COMPONENT_TYPES:
             continue
         ref = component.get("bom-ref")
         if isinstance(ref, str) and ref:
@@ -343,13 +343,34 @@ def _hardware_parts(components: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return parts
 
 
-def derive_hardware_inventory(document: dict[str, Any] | None, *, include_root: bool = False) -> HardwareInventory:
+def part_search_term(part: dict[str, Any]) -> str:
+    """Everything the client-side search matches a part on, pre-lowercased."""
+    fields = (
+        part.get("name"),
+        part.get("manufacturer"),
+        part.get("revision"),
+        part.get("type"),
+        part.get("function"),
+        part.get("location"),
+        part.get("device_type"),
+        part.get("sku"),
+        part.get("serial_number"),
+        part.get("cpe"),
+        *(part.get("gs1") or {}).values(),
+        *(c.get("identifier") or "" for c in part.get("certifications") or []),
+    )
+    return " ".join(str(f) for f in fields if f).lower()
+
+
+def derive_hardware_inventory(document: object, *, include_root: bool = False) -> HardwareInventory:
     """Project the hardware components of a CycloneDX document into a parts list.
 
     ``metadata.component`` is the subject the document describes — the assembled
     board — rather than a line on its own bill of materials, so it is lifted in
-    only when ``include_root`` is set, and then only when it carries a hardware
-    type. Display paths set it, matching the release merge in ``hbom.py``: an
+    only when ``include_root`` is set, and then only when it carries an
+    HBOM-permitted component type (the set includes device-driver and
+    firmware, which are software; the predicate is about HBOM inclusion,
+    not physicality). Display paths set it, matching the release merge in ``hbom.py``: an
     artifact naming its device only in ``metadata.component`` is stamped
     hardware-bearing at upload, so a page selects it *because* it holds hardware
     and would otherwise render "no parts" for the board the merged release HBOM
@@ -371,7 +392,7 @@ def derive_hardware_inventory(document: dict[str, Any] | None, *, include_root: 
         root = metadata.get("component") if isinstance(metadata, dict) else None
         # Any hardware root, not only ``device`` — the same predicate the merge
         # applies, so a board rooted at a ``platform`` is lifted by both.
-        if isinstance(root, dict) and root.get("type") in HARDWARE_TYPES:
+        if isinstance(root, dict) and root.get("type") in HBOM_COMPONENT_TYPES:
             components.append(root)
     parts = _hardware_parts(components)
     if not parts:
