@@ -127,4 +127,4 @@ class TestView:
     def test_non_member_is_refused(self, hardware_workspace, guest_user, client):
         client.force_login(guest_user)
         response = client.get(f"/workspaces/{hardware_workspace.key}/hardware/")
-        assert response.status_code in (302, 403)
+        assert response.status_code == 403

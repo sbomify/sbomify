@@ -62,7 +62,7 @@ def _load_inventory(sbom_id: str, filename: str | None) -> HardwareInventory:
         return HardwareInventory()
     try:
         document = json.loads(raw) if raw else None
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, UnicodeDecodeError):
         document = None
     # include_root=False: the rollup counts constituent parts, and the root
     # assembly is the component's own board — counting it would make every
@@ -124,11 +124,13 @@ def build_workspace_hardware_rollup(team_id: int) -> dict[str, Any]:
                 {
                     "manufacturer": part.manufacturer or "",
                     "name": part.name,
-                    "type": part.type or "",
+                    "types": set(),
                     "components": set(),
                     "products": set(),
                 },
             )
+            if part.type:
+                group["types"].add(part.type)
             group["components"].add(component_names.get(component_id, component_id))
             group["products"].update(products_by_component.get(component_id, set()))
 
@@ -136,7 +138,9 @@ def build_workspace_hardware_rollup(team_id: int) -> dict[str, Any]:
         {
             "manufacturer": group["manufacturer"],
             "name": group["name"],
-            "type": group["type"],
+            # One agreed type reads as itself; artifacts disagreeing about the
+            # same part read as "mixed" rather than whichever came first.
+            "type": next(iter(group["types"])) if len(group["types"]) == 1 else ("mixed" if group["types"] else ""),
             "components": sorted(group["components"]),
             "products": sorted(group["products"]),
             "shared": len(group["products"]) > 1,
