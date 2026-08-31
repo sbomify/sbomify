@@ -74,7 +74,7 @@ class TestTheResultItProduces:
     def result(self) -> dict[str, Any]:
         plugin = DependencyTrackPlugin()
         return _as_dict(
-            plugin._create_skipped_result(
+            plugin.create_skipped_result(
                 finding_id="dependency-track:unsupported-spec-version",
                 title="Spec Version Not Supported",
                 description="This Dependency Track server does not accept this CycloneDX spec version.",
@@ -109,7 +109,7 @@ class TestItDoesNotRenderAsPassingEither:
             category="security",
             status=RunStatus.COMPLETED.value,
             result=_as_dict(
-                plugin._create_skipped_result(
+                plugin.create_skipped_result(
                     finding_id="dependency-track:unsupported-spec-version",
                     title="Spec Version Not Supported",
                     description="x",
@@ -124,7 +124,7 @@ class TestItDoesNotRenderAsPassingEither:
 class TestTheWiringInAssess:
     """The branch itself, not just the pieces it is built from.
 
-    ``_is_unsupported_spec_version`` and ``_create_skipped_result`` can both be
+    ``_is_unsupported_spec_version`` and ``create_skipped_result`` can both be
     correct while nothing calls them. These drive the real ``assess()`` with the
     upload raising, which is the only way to know the two are connected.
     """

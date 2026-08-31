@@ -12,5 +12,12 @@
     {% endcomment %}
     <c-layout.page-header title="Security advisories" subtitle="Publish advisories for your products." icon="fas fa-shield-halved" />
     <div class="space-y-6">{% include 'core/security_advisories_table.html.j2' %}</div>
+    {% comment %}
+        At page level, not inside the table include: the table container is an
+        HTMX swap target, and a swap would tear the dialog out mid-confirm.
+    {% endcomment %}
+    {% if has_crud_permissions %}
+        {% include 'core/components/advisory_delete_modal.html.j2' %}
+    {% endif %}
 {% endblock %}
 {% block scripts %}{% endblock %}

@@ -10,27 +10,25 @@
         null
     {% endif %}
     , hasAccess: {{ has_custom_domain_access|yesno:'true,false' }} })">
-    <c-cards.card>
-    <c-slot name="header">
-    <c-cards.header>
-    <div class="flex justify-between items-center">
+    {# Section heading, matching the settings-tab style: no card chrome. #}
+    <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-2">
-            <h4 class="text-lg font-semibold text-text m-0">Custom Domain</h4>
+            <h3 class="text-sm font-semibold text-text m-0">Custom domain</h3>
             {% if not has_custom_domain_access %}
                 <c-badges.secondary size="sm">Business / Enterprise</c-badges.secondary>
             {% endif %}
         </div>
         <div class="flex items-center gap-2" x-show="hasAccess">
-            <c-buttons.secondary x-show="hasUnsavedChanges() && !isLoading" @click="cancelChanges()">
+            <c-buttons.secondary size="sm" x-show="hasUnsavedChanges() && !isLoading" @click="cancelChanges()">
             <i class="fas fa-undo mr-2"></i> Cancel
             </c-buttons.secondary>
-            <c-buttons.primary x-show="hasUnsavedChanges() && !isLoading" @click="saveDomain()" ::disabled="!canSave()">
+            <c-buttons.primary size="sm" x-show="hasUnsavedChanges() && !isLoading" @click="saveDomain()" ::disabled="!canSave()">
             <i class="fas fa-save mr-2"></i>
-            Save Domain
+            Save domain
             </c-buttons.primary>
             <c-buttons.outline-danger size="sm" x-show="currentDomain && !hasUnsavedChanges() && !isLoading" @click="removeDomain()">
             <i class="fas fa-trash mr-2"></i>
-            Remove Domain
+            Remove domain
             </c-buttons.outline-danger>
             <span x-show="isLoading" class="text-text-muted">
                 {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
@@ -38,10 +36,8 @@
             </span>
         </div>
     </div>
-    </c-cards.header>
-    </c-slot>
     {% if has_custom_domain_access %}
-        <p class="text-text-muted mb-6">Configure a custom domain for your Trust Center to use your own branded URL.</p>
+        <p class="text-sm text-text-muted mt-1 mb-6">Serve your Trust Center from your own branded URL.</p>
         <!-- Domain Configuration -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
@@ -146,7 +142,7 @@
         </div>
         </c-feedback.alert>
     {% else %}
-        <div class="flex items-start gap-4 p-6 bg-border/20 rounded-lg">
+        <div class="flex items-start gap-4 p-6 mt-4 bg-border/20 rounded-xl">
             <c-chips.icon-chip size="lg">
             <i class="fas fa-globe text-xl" aria-hidden="true"></i>
             </c-chips.icon-chip>
@@ -169,5 +165,4 @@
             </div>
         </div>
     {% endif %}
-    </c-cards.card>
 </div>

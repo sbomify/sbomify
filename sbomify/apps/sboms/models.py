@@ -831,12 +831,16 @@ class Component(models.Model):
         if self.visibility == self.Visibility.PRIVATE:
             if not user or not user.is_authenticated:
                 return False
-            # For private components, check owner/admin access
+            # Private components are internal: any internal role may read them.
+            # Bound to the tier rather than repeating ("owner", "admin"), which
+            # is how this copy and check_component_access could have disagreed
+            # about the same rule after a role was added.
+            from sbomify.apps.core.authz import READ_INTERNAL
             from sbomify.apps.teams.models import Member
 
             try:
                 member = Member.objects.get(team=team, user=user)
-                return member.role in ("owner", "admin")
+                return member.role in READ_INTERNAL
             except Member.DoesNotExist:
                 return False
 

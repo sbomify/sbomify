@@ -46,9 +46,9 @@ These variables are set in the `x-dev-env` anchor in `docker-compose.dev.yml` an
 The Python backend relies on the following services:
 
 1. **PostgreSQL**: Used as the database.
-2. **Blob Storage**: We use **MinIO**, an S3-compatible storage server.
+2. **Blob Storage**: We use **SeaweedFS**, an S3-compatible storage server.
 
-These services can either be run inside Docker Compose or directly on your local machine. Even when running the Python backend locally, it's recommended to use Docker Compose for spinning up the supporting services (e.g., PostgreSQL and MinIO). Ensure your environment file is properly configured when doing so.
+These services can either be run inside Docker Compose or directly on your local machine. Even when running the Python backend locally, it's recommended to use Docker Compose for spinning up the supporting services (e.g., PostgreSQL and SeaweedFS). Ensure your environment file is properly configured when doing so.
 
 ### Frontend
 

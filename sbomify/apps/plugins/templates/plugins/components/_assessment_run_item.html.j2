@@ -110,7 +110,8 @@
                                 <c-layout.stat.label>Low</c-layout.stat.label>
                                 </c-layout.stat-card>
                                 <c-layout.stat-card compact>
-                                <c-layout.stat.value>{{ security_total }}</c-layout.stat.value>
+                                {% comment %}A skipped run's summary counts its status marker, which is not a vulnerability.{% endcomment %}
+                                <c-layout.stat.value>{{ skipped|yesno:"0,"|default:security_total }}</c-layout.stat.value>
                                 <c-layout.stat.label>Total</c-layout.stat.label>
                                 </c-layout.stat-card>
                                 {% if run.result.summary.suppressed_count %}
@@ -122,13 +123,13 @@
                             </div>
                         </div>
                     {% endif %}
-                    {% if run.result.findings %}
+                    {% if run.result.findings|vulnerability_findings %}
                         {# Security Findings List #}
                         <div class="findings-list">
                             <h6>
                                 <i class="fas fa-list-ul mr-1"></i>Vulnerabilities
                             </h6>
-                            {% for finding in run.result.findings %}
+                            {% for finding in run.result.findings|vulnerability_findings %}
                                 <div class="finding-item {{ finding.severity|severity_border_class }}">
                                     <div class="flex items-start">
                                         <span class="finding-status-icon {{ finding.severity|severity_text_class }}">
@@ -175,7 +176,7 @@
                                                 {% endif %}
                                                 {# VEX analysis state #}
                                                 {% if finding.analysis_state %}
-                                                    <c-badges.info title="{{ finding.analysis_justification|default:'' }} {{ finding.analysis_detail|default:'' }}">
+                                                    <c-badges.info title="{{ finding.analysis_justification|vex_justification_label }} {{ finding.analysis_detail|default:'' }}">
                                                     <i class="fas fa-clipboard-check mr-0.5"></i>{{ finding.analysis_state }}
                                                     </c-badges.info>
                                                 {% endif %}
