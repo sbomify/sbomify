@@ -141,7 +141,7 @@ class Command(BaseCommand):
         slots: dict[tuple[str, str], list[str]] = defaultdict(list)
         for release_id, bom_type, name in (
             ReleaseArtifact.objects.filter(
-                release_id__in=[pin[0] for pin in pins],
+                release_id__in={pin[0] for pin in pins},
                 sbom__component_id=sbom.component_id,
                 sbom__format=sbom.format,
             )
