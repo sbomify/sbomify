@@ -63,6 +63,9 @@ class InviteUserForm(forms.Form):
         # ``bot`` is reserved for synthetic OIDC binding identities and
         # must NEVER be human-assignable — see settings.TEAMS_SUPPORTED_ROLES.
         choices=[(role, label) for role, label in settings.TEAMS_SUPPORTED_ROLES if role not in ("guest", "bot")],
+        # Least privilege by default: most people being invited need to do the
+        # work, not configure the workspace.
+        initial="member",
         widget=forms.Select(attrs={"class": "form-control"}),
     )
 

@@ -50,11 +50,15 @@ def _user_has_signed_current_nda(user: User, team: Team) -> bool:
 
     # Optimize: Single query to check if signature exists for current NDA
     # This avoids fetching the AccessRequest separately
-    return NDASignature.objects.filter(
-        access_request__team=team,
-        access_request__user=user,
-        nda_document=company_nda,
-    ).exists()
+    return (
+        NDASignature.objects.live()
+        .filter(
+            access_request__team=team,
+            access_request__user=user,
+            nda_document=company_nda,
+        )
+        .exists()
+    )
 
 
 def _check_gated_access(user: User, team: Team) -> tuple[bool, bool]:

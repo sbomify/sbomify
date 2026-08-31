@@ -81,10 +81,13 @@ def test_modal_show_prop_drives_every_alpine_hook(rendered: str) -> None:
     assert "open = false" not in dialog
 
 
-def test_modal_backdrop_closes_and_the_panel_stops_the_click(rendered: str) -> None:
+def test_modal_any_outside_click_closes(rendered: str) -> None:
     section = _section(rendered, "modal-default")
+    # The backdrop dismisses, and so does the centering wrapper above it: .self
+    # keeps a click inside the panel from counting as outside.
     assert '@click="open = false"' in section
-    assert "@click.stop" in section
+    assert '@click.self="open = false"' in section
+    assert "@click.stop" not in section
 
 
 def test_close_prop_replaces_the_show_assignment_everywhere(rendered: str) -> None:

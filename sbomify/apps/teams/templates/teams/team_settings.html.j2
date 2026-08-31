@@ -74,7 +74,7 @@
       })();
     </script>
     {# Access Request Modals - at page level to avoid hidden tab pane issues #}
-    {% if request.session.current_team.role == 'owner' and team.is_public %}
+    {% if is_owner and team.is_public %}
         {# Invite User Modal #}
         <div x-data="{ open: false }"
              @open-invite-user-modal.window="open = true"

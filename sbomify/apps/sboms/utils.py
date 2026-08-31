@@ -1848,6 +1848,7 @@ def get_release_sbom_package(
     user: Any = None,
     output_format: str = "cyclonedx",
     version: str | None = None,
+    include_non_public: bool = False,
 ) -> Path:
     """
     Generates the aggregated release SBOM file.
@@ -1902,7 +1903,9 @@ def get_release_sbom_package(
     # Computed unconditionally so the orphan-GC sweep below can reference it
     # without a possibly-undefined flow; it's only USED on the cached public path.
     resolved_version = _resolve_output_version(format_lower, version)
-    if release.product.is_public:
+    # An authorized requester's build may include gated/private members, so it
+    # must neither be served from nor written to the public aggregate cache.
+    if release.product.is_public and not include_non_public:
         from sbomify.apps.core.object_store import S3Client
 
         fingerprint = compute_release_aggregate_fingerprint(release)
@@ -1939,6 +1942,7 @@ def get_release_sbom_package(
         version=version,
         entity=release,
         user=user,
+        include_non_public=include_non_public,
     )
     sbom = builder(target_folder)
     # CycloneDX + SPDX 2.3 builders return a pydantic model; SPDX 3.0 builders

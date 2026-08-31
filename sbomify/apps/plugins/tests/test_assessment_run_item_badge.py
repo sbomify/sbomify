@@ -246,3 +246,51 @@ class TestSkippedSecurityRunBadge:
 
         assert "No Vulnerabilities" in header
         assert "Skipped" not in header
+
+
+class TestStatusMarkersAreNotVulnerabilities:
+    """The status marker a skipped scanner leaves in the findings array
+    explains the run; it is not a vulnerability. It must not appear in the
+    vulnerabilities list, grow a Triage button, or count in the Total card."""
+
+    def _skipped_security_run(self) -> dict:
+        run = _security_run()
+        run["result"]["metadata"] = {"skipped": True}
+        run["result"]["findings"] = [
+            {
+                "id": "dependency-track:no-product",
+                "title": "Skipped — component has no product membership",
+                "description": "Dependency Track scanning requires product membership.",
+                "status": "info",
+                "severity": "info",
+            }
+        ]
+        return run
+
+    def test_marker_does_not_render_as_a_vulnerability_row(self):
+        html = _render(self._skipped_security_run())
+        assert "findings-list" not in html
+        assert "Triage" not in html
+
+    def test_skipped_total_renders_zero(self):
+        import re
+
+        html = _render(self._skipped_security_run())
+        total_value = re.search(r">(\d+)</span>\s*<span[^>]*>\s*Total</span>", html.replace("\n", " "))
+        assert total_value, "Total stat card not found"
+        # The stored summary says 1 (the marker); the card must say 0.
+        assert total_value.group(1) == "0"
+
+    def test_real_findings_still_render(self):
+        run = _security_run()
+        run["result"]["findings"] = [
+            {
+                "id": "CVE-2025-1111",
+                "title": "A real vulnerability",
+                "severity": "high",
+                "component": {"name": "django", "version": "5.2.3"},
+            }
+        ]
+        html = _render(run)
+        assert "CVE-2025-1111" in html
+        assert "findings-list" in html

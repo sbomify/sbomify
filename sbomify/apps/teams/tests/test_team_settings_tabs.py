@@ -1,4 +1,7 @@
 """Tests for workspace settings tab persistence."""
+
+import re
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import Client
@@ -389,3 +392,29 @@ class TestTrustCenterDescription:
         team.refresh_from_db()
         assert team.branding_info.get("trust_center_description", "") != "Should not be saved"
 
+
+@pytest.mark.django_db
+class TestTrustCenterControlsFollowTheRole:
+    """The tab's controls are gated per role in the template. HTML treats any
+    ``disabled`` attribute as disabling, so an authorized user's controls must
+    render without the attribute entirely, not with an empty value."""
+
+    # The attribute, not the word: component buttons carry Tailwind ``disabled:``
+    # variant classes on every render, which are styling, not state.
+    _DISABLED_ATTRIBUTE = re.compile(r"(?<![-\w])disabled(?![:\w-])")
+
+    def _trust_center_html(self, member: Member) -> str:
+        client = Client()
+        setup_authenticated_client_session(client, member.team, member.user)
+        response = client.get(
+            reverse("teams:team_settings_tab", kwargs={"team_key": member.team.key, "tab": "trust-center"})
+        )
+        assert response.status_code == 200
+        return response.content.decode()
+
+    def test_owner_controls_are_enabled(self, sample_team_with_owner_member: Member):  # noqa: F811
+        html = self._trust_center_html(sample_team_with_owner_member)
+        upload_nda = html.split("Upload NDA")[0].rsplit("<button", 1)[-1]
+        assert not self._DISABLED_ATTRIBUTE.search(upload_nda)
+        description = html.split('id="trust_center_description"')[1].split(">")[0]
+        assert not self._DISABLED_ATTRIBUTE.search(description)
