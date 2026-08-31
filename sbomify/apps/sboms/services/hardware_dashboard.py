@@ -47,8 +47,10 @@ def _newest_hardware_stamped(component_ids: list[str]) -> dict[str, str]:
 
 
 def _load_inventory(sbom_id: str, filename: str | None) -> HardwareInventory:
-    """The artifact's parts, from the same per-SBOM cache the inventory card
-    fills; a failed or unparseable read degrades to an empty inventory."""
+    """The artifact's parts, from the rollup's own per-SBOM cache (separate
+    from the inventory card's, whose entries carry include_root and serialized
+    extras this aggregation does not want); a failed or unparseable read
+    degrades to an empty inventory."""
     if not filename:
         return HardwareInventory()
     cache_key = f"hardware-rollup-inventory:v1:{sbom_id}"

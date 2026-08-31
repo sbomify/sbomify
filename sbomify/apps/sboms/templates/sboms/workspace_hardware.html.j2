@@ -16,88 +16,73 @@
     </div>
     {% if rollup.rows %}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <div class="tw-card px-4 py-3 text-center">
-                <div class="text-2xl font-bold text-text">{{ rollup.components_with_hardware }}</div>
-                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Components with hardware</div>
-            </div>
-            <div class="tw-card px-4 py-3 text-center">
-                <div class="text-2xl font-bold text-text">{{ rollup.distinct_parts }}</div>
-                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Distinct parts</div>
-            </div>
-            <div class="tw-card px-4 py-3 text-center">
-                <div class="text-2xl font-bold {% if rollup.shared_parts %}text-warning{% else %}text-text{% endif %}">
-                    {{ rollup.shared_parts }}
-                </div>
-                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Shared across products</div>
-            </div>
-            <div class="tw-card px-4 py-3 text-center">
-                <div class="text-2xl font-bold text-text">{{ rollup.parts_total }}</div>
-                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Part lines</div>
-            </div>
+            <c-layout.stat-card compact>
+            <c-layout.stat.value>{{ rollup.components_with_hardware }}</c-layout.stat.value>
+            <c-layout.stat.label>Components with hardware</c-layout.stat.label>
+            </c-layout.stat-card>
+            <c-layout.stat-card compact>
+            <c-layout.stat.value>{{ rollup.distinct_parts }}</c-layout.stat.value>
+            <c-layout.stat.label>Distinct parts</c-layout.stat.label>
+            </c-layout.stat-card>
+            <c-layout.stat-card compact
+            {% if rollup.shared_parts %}accent="warning"{% endif %}
+            >
+            <c-layout.stat.value>{{ rollup.shared_parts }}</c-layout.stat.value>
+            <c-layout.stat.label>Shared across products</c-layout.stat.label>
+            </c-layout.stat-card>
+            <c-layout.stat-card compact>
+            <c-layout.stat.value>{{ rollup.parts_total }}</c-layout.stat.value>
+            <c-layout.stat.label>Part lines</c-layout.stat.label>
+            </c-layout.stat-card>
         </div>
         {% if rollup.top_manufacturers %}
-            <div class="tw-card mb-6">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text m-0">Manufacturers</h4>
-                </div>
-                <div class="p-6">
-                    <div class="flex flex-wrap gap-2">
-                        {% for entry in rollup.top_manufacturers %}
-                            <span class="px-3 py-1.5 text-sm rounded-lg border border-border bg-background text-text">
-                                {{ entry.name }}
-                                <span class="text-xs text-text-muted">· {{ entry.parts }} part{{ entry.parts|pluralize }}</span>
-                            </span>
-                        {% endfor %}
-                    </div>
-                </div>
+            <c-cards.card title="Manufacturers" class="mb-6">
+            <div class="flex flex-wrap gap-2">
+                {% for entry in rollup.top_manufacturers %}
+                    <c-badges.secondary>
+                    {{ entry.name }}
+                    <span class="text-xs text-text-muted">· {{ entry.parts }} part{{ entry.parts|pluralize }}</span>
+                    </c-badges.secondary>
+                {% endfor %}
             </div>
+            </c-cards.card>
         {% endif %}
-        <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text m-0">Parts</h4>
-                <p class="text-text-muted text-sm m-0 mt-1">
-                    Parts used by more than one product are shown first. That concentration is the single-source risk to review.
-                </p>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="tw-data-table w-full">
-                    <thead>
-                        <tr>
-                            <th scope="col">Manufacturer</th>
-                            <th scope="col">Part</th>
-                            <th scope="col">Type</th>
-                            <th scope="col">Products</th>
-                            <th scope="col">Components</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in rollup.rows %}
-                            <tr>
-                                <td class="text-text-muted">{{ row.manufacturer|default:"—" }}</td>
-                                <td>
-                                    <span class="font-medium text-text">{{ row.name }}</span>
-                                    {% if row.shared %}<span class="tw-badge-warning ml-2">shared</span>{% endif %}
-                                </td>
-                                <td class="text-text-muted">{{ row.type|default:"—" }}</td>
-                                <td class="text-text-muted">{{ row.products|join:", " }}</td>
-                                <td class="text-text-muted">{{ row.components|join:", " }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <c-cards.card flush>
+        <c-cards.header>
+        <h4 class="text-lg font-semibold text-text m-0">Parts</h4>
+        <p class="text-text-muted text-sm m-0 mt-1">
+            Parts used by more than one product are shown first. That concentration is the single-source risk to review.
+        </p>
+        </c-cards.header>
+        <c-tables.shell nested>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell>Manufacturer</c-tables.header-cell>
+        <c-tables.header-cell>Part</c-tables.header-cell>
+        <c-tables.header-cell>Type</c-tables.header-cell>
+        <c-tables.header-cell>Products</c-tables.header-cell>
+        <c-tables.header-cell>Components</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for row in rollup.rows %}
+                <c-tables.row>
+                <c-tables.cell muted>{{ row.manufacturer|default:"-" }}</c-tables.cell>
+                <c-tables.cell>
+                <span class="font-medium text-text">{{ row.name }}</span>
+                {% if row.shared %}<span class="ml-2"><c-badges.warning>shared</c-badges.warning></span>{% endif %}
+                </c-tables.cell>
+                <c-tables.cell muted>{{ row.type|default:"-" }}</c-tables.cell>
+                <c-tables.cell muted>{{ row.products|join:", " }}</c-tables.cell>
+                <c-tables.cell muted>{{ row.components|join:", " }}</c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        </c-tables.shell>
+        </c-cards.card>
     {% else %}
-        <div class="tw-card">
-            <div class="tw-empty-state py-12">
-                <div class="tw-empty-state-icon">
-                    <i class="fas fa-microchip text-2xl"></i>
-                </div>
-                <h4 class="tw-empty-state-title">No hardware artifacts yet</h4>
-                <p class="tw-empty-state-description">
-                    Upload an HBOM, or an SBOM carrying hardware components, and its parts appear here.
-                </p>
-            </div>
-        </div>
+        <c-cards.card flush>
+        <c-feedback.empty-state icon="fas fa-microchip" title="No hardware artifacts yet" message="Upload an HBOM, or an SBOM carrying hardware components, and its parts appear here." />
+        </c-cards.card>
     {% endif %}
 {% endblock %}
