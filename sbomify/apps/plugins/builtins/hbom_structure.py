@@ -169,7 +169,9 @@ def _finding(
         description=description,
         status=status,
         severity=_SEVERITY[status],
-        remediation=remediation if status == "warning" else None,
+        # A failing check needs the way out as much as a warning does; only
+        # pass/info drop the remediation, where there is nothing to fix.
+        remediation=remediation if status in ("warning", "fail") else None,
         metadata=metadata,
     )
 
@@ -191,7 +193,7 @@ def _unmapped_fields_note() -> Finding:
         (
             f"{_CISA} defines roughly 40 fields across seven categories, and its own mapping annotates all but a "
             "handful of them 'Equivalent CycloneDX field: None'. Country of origin and the other location fields, "
-            "quantity, lead time, technology node, datasheet, and the supplier and part-code identifiers are among "
+            "quantity, lead time, technology node, and the supplier and part-code identifiers are among "
             "them. This check does not score those fields, and their absence is not a defect in this document: "
             f"CycloneDX 1.6 and 1.7 have nowhere to record them. Several travel in the `cdx:device` namespace of "
             f"{_TAXONOMY} by convention instead, which the property checks in this assessment cover."

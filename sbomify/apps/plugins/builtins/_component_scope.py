@@ -125,6 +125,7 @@ def element_verdict(
     *,
     missing_status: str = "fail",
     clean_detail: str | None = None,
+    not_graded_detail: str | None = None,
 ) -> tuple[str, str | None]:
     """Return the ``(status, details)`` for one per-component element.
 
@@ -137,9 +138,12 @@ def element_verdict(
         missing_status: What a non-empty ``failures`` scores. ``warning`` for
             the BSI fields that are only advisory.
         clean_detail: Detail line for a clean, non-empty grading run.
+        not_graded_detail: Detail line when nothing was graded. The default
+            names the device-and-file exemption; a check whose exemption set
+            differs (supplier grading applies to devices) passes its own.
     """
     if failures:
         return missing_status, missing_detail if missing_detail is not None else f"Missing for: {', '.join(failures)}"
     if nothing_graded:
-        return "warning", NOT_GRADED_DETAIL
+        return "warning", not_graded_detail if not_graded_detail is not None else NOT_GRADED_DETAIL
     return "pass", clean_detail

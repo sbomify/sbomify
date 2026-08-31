@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("sboms", "0069_alter_sbom_has_hardware_components"),
+        ("sboms", "0068_sbom_has_hardware_components"),
     ]
 
     operations = [
