@@ -2274,7 +2274,11 @@ def _component_type(component: Any) -> str:
     hardware BOM with capitalised types was filed as software *and* exempted
     from the checks that would have graded it.
     """
-    return str(component.get("type", "")).lower() if isinstance(component, dict) else ""
+    if not isinstance(component, dict):
+        return ""
+    value = component.get("type", "")
+    # A non-string type (None, a dict) is missing, not the word "none".
+    return value.strip().lower() if isinstance(value, str) else ""
 
 
 def _is_device(component: Any) -> bool:
