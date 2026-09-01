@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime
 from enum import Enum
 from types import ModuleType
@@ -668,15 +669,40 @@ def get_supported_spdx_versions() -> list[str]:
 
 
 def _detect_spdx3_context(sbom_data: dict[str, Any]) -> bool:
-    """Check if SBOM data has an @context indicating SPDX 3.0."""
+    """Check if SBOM data has an @context indicating any SPDX 3.x.
+
+    Matching ``3.`` rather than ``3.0`` is deliberate: a 3.1 document must
+    land in the SPDX 3 branch to be rejected with an error that names the
+    supported version — matched on ``3.0`` it fell through to the SPDX 2
+    branch and complained about a ``spdxVersion`` field SPDX 3 does not have.
+    """
     context = sbom_data.get("@context", "")
     if isinstance(context, str):
-        return "spdx.org/rdf/3.0" in context
+        return "spdx.org/rdf/3." in context
     if isinstance(context, list):
-        return any("spdx.org/rdf/3.0" in str(c) for c in context)
+        return any("spdx.org/rdf/3." in str(c) for c in context)
     if isinstance(context, dict):
-        return "spdx.org/rdf/3.0" in str(context)
+        return "spdx.org/rdf/3." in str(context)
     return False
+
+
+def _spdx3_version_tuple(version: str | None) -> tuple[int, ...] | None:
+    """``"3.0.1"`` → ``(3, 0, 1)``; tolerant of a bare ``"3.0"`` and of
+    semver prerelease/build suffixes; None when unparseable."""
+    if not version:
+        return None
+    # Anchored to the whole string, with only a -prerelease or +build tail
+    # allowed past the numbers: "3.0.beta" must not read as a valid 3.0.
+    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?(?:[-+].*)?$", version)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.groups() if part is not None)
+
+
+_SPDX31_REJECTION = (
+    "SPDX {version} is not supported. sbomify accepts SPDX 2.2, 2.3 and "
+    "3.0.x; send 3.0.1 to also satisfy the BSI TR-03183-2 floor."
+)
 
 
 def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Schema, str]:
@@ -701,12 +727,16 @@ def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Sch
         ValueError: If the SPDX version is unsupported
         ValidationError: If the SBOM data is invalid for the detected version
     """
-    # Detect SPDX 3.0 via @context (spec-compliant format has no spdxVersion at root)
+    # Detect SPDX 3.x via @context (spec-compliant format has no spdxVersion at root)
     if _detect_spdx3_context(sbom_data):
         spdx3_payload = SPDX3Schema.model_validate(sbom_data)
         payload: SPDXSchema | SPDX3Schema = spdx3_payload
         # Extract version from CreationInfo.specVersion in the graph
         full_version = spdx3_payload.spec_version
+
+        version_tuple = _spdx3_version_tuple(full_version)
+        if version_tuple and version_tuple[:2] > (3, 0):
+            raise ValueError(_SPDX31_REJECTION.format(version=full_version))
 
         # Normalize SPDX 3.0.x patch versions to "3.0" for enum lookup
         if full_version and (full_version == "3.0" or full_version.startswith("3.0.")):
@@ -720,6 +750,17 @@ def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Sch
             supported = ", ".join(get_supported_spdx_versions())
             raise ValueError(f"Unsupported SPDX version: {full_version}. Supported versions: {supported}")
 
+        # A document claiming 3.0.1 or later is held to the vendored official
+        # schema. 3.0/3.0.0 stays lenient — syft, sbom-tool and JFrog emit it
+        # and no 3.0.0 schema is vendored to hold them to — and the legacy
+        # spdxVersion/elements branch below never reaches this check.
+        if version_tuple and version_tuple >= (3, 0, 1):
+            from sbomify.apps.sboms.spdx3_validation import spdx3_schema_errors
+
+            errors = spdx3_schema_errors(sbom_data)
+            if errors:
+                raise ValueError(f"SPDX {full_version} document failed 3.0.1 schema validation: " + "; ".join(errors))
+
         return payload, full_version
 
     # Fall back to spdxVersion-based detection
@@ -728,6 +769,10 @@ def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Sch
         raise ValueError(f"Invalid spdxVersion format: {spdx_version_str}. Expected format: SPDX-X.X")
 
     full_version = spdx_version_str.removeprefix("SPDX-")
+
+    legacy_version_tuple = _spdx3_version_tuple(full_version)
+    if legacy_version_tuple and (3, 0) < legacy_version_tuple[:2] < (4, 0):
+        raise ValueError(_SPDX31_REJECTION.format(version=full_version))
 
     # Normalize SPDX 3.0.x patch versions to "3.0" for enum lookup
     if full_version == "3.0" or full_version.startswith("3.0."):
