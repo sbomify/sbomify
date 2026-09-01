@@ -19,7 +19,6 @@ from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
 from .sbom_format_schemas import cyclonedx_1_7 as cdx17
 from .sbom_format_schemas import spdx_2_3 as spdx23
-from .sbom_format_schemas import spdx_3_0 as spdx30
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
 
 __all__ = [
@@ -52,9 +51,7 @@ __all__ = [
     "get_cyclonedx_module",
     "get_supported_cyclonedx_versions",
     "get_supported_spdx_versions",
-    "get_spdx_module",
     "spdx23",
-    "spdx30",
     "validate_cyclonedx_sbom",
     "validate_spdx_sbom",
 ]
@@ -623,44 +620,16 @@ class SBOMFormat(str, Enum):
 
 class SPDXSupportedVersion(str, Enum):
     """
-    Supported SPDX specification versions.
+    Supported SPDX specification versions, as accepted by validate_spdx_sbom.
 
-    To add support for a new SPDX version (e.g., 3.0):
-    1. Add the version here: v3_0 = "3.0"
-    2. Import the schema module at the top of this file, for example:
-       from sbomify.apps.sboms.sbom_format_schemas import spdx_3_0 as spdx30
-    3. Add it to the module_map in get_spdx_module() below
-    4. That's it! The API will automatically support the new version.
-
-    Note: SPDX 2.x versions share compatible schemas, but SPDX 3.0 will require
-    a different schema structure.
+    SPDX 2.x parses through the lenient SPDXSchema; SPDX 3.0.x parses through
+    SPDX3Schema, with documents claiming 3.0.1+ additionally validated against
+    the vendored official schema (see spdx3_validation).
     """
 
     v2_2 = "2.2"
     v2_3 = "2.3"
     v3_0 = "3.0"
-
-
-def get_spdx_module(spec_version: SPDXSupportedVersion) -> ModuleType:
-    """
-    Get the appropriate SPDX schema module for a given version.
-
-    When adding a new version, add it to this mapping.
-
-    Note: This function provides the strict generated Pydantic schema for SPDX.
-    It is used by:
-    - sbomify.apps.sboms.builders for generating aggregated SBOMs (strict output)
-
-    For parsing uploaded SBOMs, use the lenient SPDXSchema class instead,
-    which allows extra fields and provides aliased properties.
-    """
-    module_map: dict[SPDXSupportedVersion, ModuleType] = {
-        # SPDX 2.2 and 2.3 are compatible, use 2.3 schema for both
-        SPDXSupportedVersion.v2_2: spdx23,
-        SPDXSupportedVersion.v2_3: spdx23,
-        SPDXSupportedVersion.v3_0: spdx30,
-    }
-    return module_map[spec_version]
 
 
 def get_supported_spdx_versions() -> list[str]:
@@ -669,12 +638,19 @@ def get_supported_spdx_versions() -> list[str]:
 
 
 def _detect_spdx3_context(sbom_data: dict[str, Any]) -> bool:
-    """Check if SBOM data has an @context indicating any SPDX 3.x.
+    """Whether the document is in NATIVE SPDX 3 form (an @context naming any
+    3.x line).
+
+    Deliberately narrower than the shared ``is_spdx3`` detector: this gate
+    decides which documents claim spec conformance and are held to the
+    vendored 3.0.1 schema. Legacy ``spdxVersion``/``elements`` documents are
+    SPDX 3 too, but they declare themselves non-conformant by shape and keep
+    the lenient path — routing them through ``is_spdx3`` here would strict-
+    validate them and reject stored producers' output.
 
     Matching ``3.`` rather than ``3.0`` is deliberate: a 3.1 document must
     land in the SPDX 3 branch to be rejected with an error that names the
-    supported version — matched on ``3.0`` it fell through to the SPDX 2
-    branch and complained about a ``spdxVersion`` field SPDX 3 does not have.
+    supported version.
     """
     context = sbom_data.get("@context", "")
     if isinstance(context, str):

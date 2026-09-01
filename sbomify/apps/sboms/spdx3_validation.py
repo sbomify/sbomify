@@ -22,6 +22,15 @@ from typing import Any
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schemas" / "spdx_3.0.1-schema.json"
 
+# Validation walks every element at roughly 9 ms each (measured, linear), and
+# a VALID document pays the full walk — a Yocto-scale graph of tens of
+# thousands of elements would hold the upload request for minutes and a
+# document near the upload size cap for ~20. Elements beyond this cap go
+# unchecked; the conformance claim is still tested, not exhaustively. Raise
+# the ceiling by swapping in a compiled validator or moving validation into
+# the async pipeline, not by lifting the number.
+MAX_VALIDATED_ELEMENTS = 500
+
 
 @cache
 def _validator() -> Any:
@@ -36,7 +45,31 @@ def spdx3_schema_errors(document: dict[str, Any], limit: int = 3) -> list[str]:
     The full error list on a large document can run to thousands of entries;
     the first few name the offending property paths, which is what an API
     error response can usefully carry.
+
+    Documents whose ``@graph`` exceeds ``MAX_VALIDATED_ELEMENTS`` are checked
+    on that many elements only. The schema's checks are per-element (JSON
+    Schema cannot follow cross-references), so validating a prefix is sound
+    for what it covers and silent about the rest.
     """
+    graph = document.get("@graph")
+    if isinstance(graph, list) and len(graph) > MAX_VALIDATED_ELEMENTS:
+        # The capped subset keeps the document-level elements first: the
+        # SpdxDocument and CreationInfo entries carry the conformance claim
+        # itself, and a producer that serializes them last would otherwise
+        # have exactly those escape the check.
+        def _is_document_level(element: object) -> bool:
+            if not isinstance(element, dict):
+                return False
+            elem_type = element.get("type", element.get("@type", ""))
+            if not isinstance(elem_type, str):
+                return False
+            tail = elem_type.rsplit("/", 1)[-1]
+            return tail in ("SpdxDocument", "CreationInfo")
+
+        core = [e for e in graph if _is_document_level(e)]
+        rest = [e for e in graph if not _is_document_level(e)]
+        document = {**document, "@graph": (core + rest)[:MAX_VALIDATED_ELEMENTS]}
+
     errors: list[str] = []
     for error in _validator().iter_errors(document):
         # Pointer-shaped location labels for a human reader: tokens are

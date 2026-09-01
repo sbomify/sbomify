@@ -217,7 +217,15 @@ def yocto_shaped() -> dict[str, Any]:
     return _doc(
         _creation_info(created_by=["urn:oe:org"]),
         {"type": "Organization", "spdxId": "urn:oe:org", "creationInfo": _CI, "name": "OpenEmbedded"},
-        _document(["urn:oe:image"]),
+        _document(["urn:oe:sbom"]),
+        {
+            "type": "software_Sbom",
+            "spdxId": "urn:oe:sbom",
+            "creationInfo": _CI,
+            "software_sbomType": ["build"],
+            "rootElement": ["urn:oe:image"],
+            "element": ["urn:oe:image", "urn:oe:netbase"],
+        },
         _package(
             "urn:oe:image",
             name="core-image-minimal",

@@ -463,14 +463,26 @@ class BSICompliancePlugin(AssessmentPlugin):
                 details=f"{format_name} {version} meets minimum requirement of {min_version}",
             )
         else:
+            if sbom_format == self.FORMAT_SPDX and version in ("3.0", "3.0.0"):
+                # The one-patch-short case: syft, Microsoft sbom-tool, JFrog
+                # Xray and Zephyr 4.5 emit 3.0, and the sender has no way to
+                # know the floor sits a patch digit higher.
+                remediation = (
+                    "BSI TR-03183-2 v2.1.0 §4 requires SPDX version 3.0.1 or higher; "
+                    "SPDX 3.0 falls one patch release short. Producers that emit 3.0.1: "
+                    "cdxgen 12.3.0+, and Yocto 5.2 onward (upgrade if this SBOM came "
+                    "from an older Yocto). CycloneDX 1.6+ also satisfies the floor."
+                )
+            else:
+                remediation = (
+                    f"BSI TR-03183-2 §4 requires {format_name} version {min_version} or higher. "
+                    f"Please regenerate your SBOM using a compliant format version."
+                )
             return self._create_finding(
                 "sbom_format",
                 status="fail",
                 details=f"{format_name} {version} does not meet minimum requirement of {min_version}",
-                remediation=(
-                    f"BSI TR-03183-2 §4 requires {format_name} version {min_version} or higher. "
-                    f"Please regenerate your SBOM using a compliant format version."
-                ),
+                remediation=remediation,
             )
 
     def _validate_cyclonedx(self, data: dict[str, Any], format_version: str) -> list[Finding]:

@@ -136,3 +136,49 @@ class TestLenientWhereCompatibilityDemands:
         payload, version = validate_spdx_sbom(document)
 
         assert version == "2.3"
+
+
+class TestBoundedValidation:
+    """Schema validation is O(elements) at roughly 9 ms each — unbounded, a
+    Yocto-scale graph (tens of thousands of elements) would hold the upload
+    request for minutes and a document near the 100 MB cap for ~20. The
+    validator therefore checks at most its cap of elements; a conformance
+    claim is still tested, just not exhaustively on huge documents."""
+
+    def _doc_with_garbage_at(self, index: int, total: int) -> dict:
+        graph: list[dict] = [
+            {
+                "type": "CreationInfo",
+                "@id": "_:ci",
+                "specVersion": "3.0.1",
+                "created": "2026-08-01T00:00:00Z",
+                "createdBy": ["urn:x:org"],
+            },
+            {"type": "Organization", "spdxId": "urn:x:org", "creationInfo": "_:ci", "name": "X"},
+        ]
+        for i in range(total):
+            graph.append(
+                {
+                    "type": "software_Package",
+                    "spdxId": f"urn:x:p{i}",
+                    "creationInfo": "_:ci",
+                    "name": f"p{i}",
+                }
+            )
+        graph[index] = {"type": "NotARealSpdxType", "junk": True}
+        return {"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": graph}
+
+    def test_garbage_inside_the_cap_is_still_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            validate_spdx_sbom(self._doc_with_garbage_at(index=5, total=700))
+
+    def test_garbage_beyond_the_cap_is_accepted_by_design(self) -> None:
+        """The documented ceiling: elements past the cap go unchecked rather
+        than holding the request for minutes."""
+        from sbomify.apps.sboms.spdx3_validation import MAX_VALIDATED_ELEMENTS
+
+        payload, version = validate_spdx_sbom(
+            self._doc_with_garbage_at(index=MAX_VALIDATED_ELEMENTS + 50, total=MAX_VALIDATED_ELEMENTS + 100)
+        )
+
+        assert version == "3.0.1"
