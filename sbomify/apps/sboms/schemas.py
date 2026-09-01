@@ -801,12 +801,13 @@ class SPDX3Package(BaseModel):
 
     @property
     def purl(self) -> str:
-        for ext_id in getattr(self, "externalIdentifiers", []):
-            if isinstance(ext_id, dict) and ext_id.get("externalIdentifierType") in {"purl", "packageURL"}:
-                identifier = ext_id.get("identifier")
-                if identifier:
-                    return str(identifier)
-        return f"pkg:/{self.name}@{self.version}"
+        # Deferred so this parsing module carries no import-time edge into the
+        # plugins app; the helper is a pure function over the raw dict.
+        from sbomify.apps.plugins.builtins._spdx3_helpers import spdx3_package_purl
+
+        raw = self.model_dump(by_alias=False)
+        raw.update(self.model_extra or {})
+        return spdx3_package_purl(raw) or f"pkg:/{self.name}@{self.version}"
 
 
 class SPDX3Schema(BaseModel):
