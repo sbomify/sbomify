@@ -56,6 +56,7 @@ from sbomify.apps.controls.services.status_service import (
     get_controls_detail,
     upsert_status,
 )
+from sbomify.apps.core.api.errors import CSV_RESPONSE_DOCS
 from sbomify.apps.core.authz import ADMINISTER, can
 from sbomify.apps.core.models import Product, User
 from sbomify.apps.core.schemas import ErrorResponse
@@ -331,6 +332,7 @@ def delete_catalog_endpoint(request: HttpRequest, catalog_id: str) -> tuple[int,
     # Without the declaration, the error tuples below raised ConfigError and
     # every failure became a raw 500.
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Export controls as CSV",
 )
@@ -372,6 +374,7 @@ def export_csv(request: HttpRequest, catalog_id: str, product_id: str | None = N
     # Without the declaration, the error tuples below raised ConfigError and
     # every failure became a raw 500.
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Export controls summary as CSV",
 )

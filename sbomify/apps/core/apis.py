@@ -23,6 +23,7 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.analytics import events
+from sbomify.apps.core.api.errors import CSV_RESPONSE_DOCS
 from sbomify.apps.core.authz import MANAGE, READ_INTERNAL, can
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -5138,6 +5139,7 @@ def _csv_response(csv_text: str, filename: str) -> HttpResponse:
     "/exports/inventory.csv",
     # 200 is the CSV itself, an HttpResponse passed through unvalidated.
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export the package inventory as CSV",
     tags=["Exports"],
 )
@@ -5168,6 +5170,7 @@ def export_inventory(request: HttpRequest, product_id: str | None = None) -> Htt
     "/exports/licenses.csv",
     # 200 is the CSV itself, an HttpResponse passed through unvalidated.
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export the license list as CSV",
     tags=["Exports"],
 )
@@ -5203,6 +5206,7 @@ def export_licenses(
     "/exports/findings.csv",
     # 200 is the CSV itself, an HttpResponse passed through unvalidated.
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export assessment findings as CSV",
     tags=["Exports"],
 )
@@ -5229,6 +5233,7 @@ def export_findings(request: HttpRequest, sbom_id: str) -> HttpResponse | tuple[
     "/exports/vulnerabilities.csv",
     # 200 is the CSV itself, an HttpResponse passed through unvalidated.
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export vulnerability findings as CSV",
     tags=["Exports"],
 )
