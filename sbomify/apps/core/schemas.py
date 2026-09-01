@@ -15,6 +15,10 @@ class ErrorCode(str, Enum):
     # Authentication errors
     UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
+    # Frozen, code and prose alike. A v1 response is a contract down to its
+    # strings: a client may branch on this value or match on the ``detail``
+    # beside it, so both keep their team wording until a v2 serves the new
+    # names. Same for TEAM_NOT_FOUND and TEAM_MISMATCH.
     NO_CURRENT_TEAM = "NO_CURRENT_TEAM"
 
     # Validation errors
