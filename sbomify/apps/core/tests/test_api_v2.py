@@ -265,6 +265,16 @@ class TestTheTwoDirections:
         assert "team_key" not in properties
 
 
+class TestOpenapiExtraSurvivesTheClone:
+    def test_v2_csv_export_documents_its_body(self):
+        from sbomify.apis import api_v2
+
+        schema = api_v2.get_openapi_schema()
+        op = schema["paths"]["/api/v2/exports/inventory.csv"]["get"]
+        assert op["responses"][200]["content"]["text/csv"]["schema"] == {"type": "string"}
+        assert 403 in op["responses"]
+
+
 class TestV2ServesWhatTheViewsReturn:
     """The shared views return v1 class instances; v2 must accept them.
 
