@@ -59,6 +59,7 @@ from typing import Any
 from packaging import version as pkg_version
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
+    extract_spdx3_elements,
     get_spdx3_package_fields,
     iter_spdx3_external_identifiers,
     resolve_spdx3_agent,
@@ -885,32 +886,26 @@ class BSICompliancePlugin(AssessmentPlugin):
         """
         findings: list[Finding] = []
 
-        # SPDX 3.x has an "elements" array with different types
+        # SPDX 3.x has an "elements" array with different types. The nested
+        # spdxDocument.elements shape predates the shared helper and is kept.
         elements = data.get("@graph", data.get("spdxDocument", {}).get("elements", []))
         if not elements:
             elements = data.get("elements", [])
 
-        # Extract elements by type
-        creation_info = None
-        packages: list[dict[str, Any]] = []
-        files: list[dict[str, Any]] = []
-        relationships: list[dict[str, Any]] = []
-        persons_orgs: dict[str, dict[str, Any]] = {}
-
-        for element in elements:
-            elem_type = element.get("type", element.get("@type", ""))
-            if "CreationInfo" in elem_type:
-                creation_info = element
-            elif "software_Package" in elem_type or "Package" in elem_type:
-                packages.append(element)
-            elif "software_File" in elem_type or "File" in elem_type:
-                files.append(element)
-            elif "Relationship" in elem_type:
-                relationships.append(element)
-            elif "Person" in elem_type or "Organization" in elem_type:
-                spdx_id = element.get("spdxId", element.get("@id", ""))
-                if spdx_id:
-                    persons_orgs[spdx_id] = element
+        # One extraction, shared with the other plugins — a private routing
+        # copy here is how SoftwareAgent suppliers scored two findings worse
+        # in BSI than everywhere else. Files are BSI-specific, so that pass
+        # stays local.
+        creation_info, packages, relationships, persons_orgs, _ = extract_spdx3_elements({"@graph": elements})
+        # Same normalization as the shared extractor: the bare tail of a
+        # compact or IRI type, matched exactly, so a type merely containing
+        # the word File cannot classify as one.
+        files: list[dict[str, Any]] = [
+            e
+            for e in elements
+            if isinstance(e, dict)
+            and str(e.get("type", e.get("@type", ""))).rsplit("/", 1)[-1] in ("software_File", "File")
+        ]
 
         # === SBOM-level required fields ===
 
