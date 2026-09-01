@@ -219,7 +219,13 @@ def _spdx_creator_names_sbomify_action(creator: str) -> bool:
     """
     if not creator.lower().startswith("tool:"):
         return False
-    tool_name = creator.split(":", 1)[1].strip()
+    return _tool_name_is_sbomify_action(creator.split(":", 1)[1].strip())
+
+
+def _tool_name_is_sbomify_action(tool_name: str) -> bool:
+    """The version-stripping half of the creator match, shared with the
+    SPDX 3 detector — Tool element names carry the same ``<name>-<version>``
+    composite without the ``Tool:`` prefix."""
     # No version segment: the entire payload IS the name.
     if _matches_sbomify_action_name(tool_name):
         return True
@@ -253,6 +259,29 @@ def _spdx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
         if isinstance(creator, str) and _spdx_creator_names_sbomify_action(creator):
             return True
     return False
+
+
+def _spdx3_metadata_has_sbomify_action(sbom_data: Any) -> bool:
+    """Detect sbomify-action in a parsed SPDX 3.x SBOM.
+
+    SPDX 3 has no root ``creationInfo.creators`` — tools live in
+    ``createdUsing`` on the CreationInfo element, pointing at Tool elements
+    in the graph. Same fail-safe shape guards as the other detectors.
+    """
+    if not isinstance(sbom_data, dict):
+        return False
+    from sbomify.apps.plugins.builtins._spdx3_helpers import (
+        extract_spdx3_elements,
+        get_spdx3_creation_info_fields,
+    )
+
+    try:
+        creation_info, _, _, agents, tools = extract_spdx3_elements(sbom_data)
+        fields = get_spdx3_creation_info_fields(creation_info, agents, tools)
+    except Exception:
+        return False
+    entries = fields.get("tool_entries", [])
+    return any(isinstance(entry, str) and _tool_name_is_sbomify_action(entry) for entry in entries)
 
 
 def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
@@ -309,9 +338,23 @@ def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
             _cache_set(False, _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL)
             return False
         sbom_data = json.loads(sbom_bytes.decode("utf-8"))
+        if not isinstance(sbom_data, dict):
+            # Valid JSON that is not an object (a top-level list, a string)
+            # is a durable fact about the document, not a transient failure:
+            # fall through to the long-TTL cache with a clean negative.
+            _cache_set(False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+            return False
         fmt = (sbom.format or "").lower()
         if fmt == "spdx":
-            result = _spdx_metadata_has_sbomify_action(sbom_data)
+            # SPDX 3 keeps its tools in the graph, not in creators[] — the
+            # 2.x detector reads a field 3.x does not have, so every SPDX 3
+            # document from the action still showed the enrichment CTA.
+            from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+            if is_spdx3(sbom_data):
+                result = _spdx3_metadata_has_sbomify_action(sbom_data)
+            else:
+                result = _spdx_metadata_has_sbomify_action(sbom_data)
         else:
             # Default to CycloneDX detection — covers ``cyclonedx`` and any
             # future variant (sbom.format defaults to "spdx" but most uploads

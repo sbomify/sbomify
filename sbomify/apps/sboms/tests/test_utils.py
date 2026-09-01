@@ -1208,6 +1208,29 @@ class TestSbomWasGeneratedBySbomifyAction:
         ttl_used = cache_set.call_args.args[2]
         assert ttl_used == _SBOMIFY_ACTION_CHECK_CACHE_TTL
 
+    def test_non_object_json_is_a_durable_clean_negative(
+        self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache
+    ):  # noqa: F811
+        """A top-level JSON array decodes fine but is no SBOM; that is a fact
+        about the document, so it caches at the long TTL instead of retrying
+        on every page load through the transient path."""
+        from sbomify.apps.sboms.utils import (
+            _SBOMIFY_ACTION_CHECK_CACHE_TTL,
+            sbom_was_generated_by_sbomify_action,
+        )
+
+        sample_sbom.format = "spdx"
+        sample_sbom.save(update_fields=["format"])
+        cache_set = mocker.patch("django.core.cache.cache.set")
+        mocker.patch("django.core.cache.cache.get", return_value=None)
+        mock_client = mocker.MagicMock()
+        mock_client.get_sbom_data.return_value = b"[1, 2, 3]"
+        mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+
+        assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
+
+        assert cache_set.call_args.args[2] == _SBOMIFY_ACTION_CHECK_CACHE_TTL
+
     def test_cache_get_failure_treated_as_miss(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache):  # noqa: F811
         """django-redis without IGNORE_EXCEPTIONS raises on Redis outage.
         cache.get() failure must NOT propagate — Step 2 must keep rendering."""

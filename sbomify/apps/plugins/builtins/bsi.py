@@ -1793,18 +1793,36 @@ class BSICompliancePlugin(AssessmentPlugin):
         return bool(doc_ids)
 
     def _spdx3_has_source_code_uri(self, package: dict[str, Any]) -> bool:
-        """Per BSI §5.2.4. Accept any non-empty software_sourceInfo or an
-        externalIdentifier referencing a VCS / repository URL.
+        """Per BSI §5.2.4. Accept any non-empty software_sourceInfo, or an
+        externalRef pointing at the source — ``vcs`` and ``sourceArtifact``
+        live in the ExternalRefType vocabulary, not ExternalIdentifierType,
+        so this is the shape a conformant document actually carries.
         """
         source_info = package.get("software_sourceInfo")
         if isinstance(source_info, str) and source_info.strip():
             return True
-        ext_ids = package.get("externalIdentifiers")
-        if not isinstance(ext_ids, list):
-            return False
-        for ext_id in ext_ids:
-            if not isinstance(ext_id, dict):
-                continue
+
+        external_refs = package.get("externalRef")
+        if isinstance(external_refs, list):
+            for ref in external_refs:
+                if not isinstance(ref, dict):
+                    continue
+                # Lowercased like every other externalRefType read here:
+                # producers emit VCS and SourceArtifact casings in the wild.
+                ref_type = str(ref.get("externalRefType") or "").strip().lower()
+                if ref_type not in ("vcs", "sourceartifact"):
+                    continue
+                locators = ref.get("locator") or []
+                # JSON-LD compact form: a one-element set may serialise as a
+                # bare string.
+                if isinstance(locators, str):
+                    locators = [locators]
+                if any(isinstance(loc, str) and loc.strip() for loc in locators):
+                    return True
+
+        # Documents stored before this fix carry a not-in-vocabulary
+        # externalIdentifier of type vcs/url; keep reading it.
+        for ext_id in iter_spdx3_external_identifiers(package):
             id_type = str(ext_id.get("externalIdentifierType") or "").strip().lower()
             ident = ext_id.get("identifier") or ""
             if id_type in ("vcs", "url") and isinstance(ident, str) and ident.strip():
