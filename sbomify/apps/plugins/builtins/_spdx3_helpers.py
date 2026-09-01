@@ -326,3 +326,230 @@ def get_spdx3_package_fields(
         "external_refs": external_refs,
         "external_identifiers": external_identifiers,
     }
+
+
+# Licensing element types from the SimpleLicensing and ExpandedLicensing
+# profiles, matched on the unprefixed tail like every other type here. The
+# NoAssertion/None singletons are collected too so a reference to them
+# resolves deliberately to "no licence" rather than falling through as an
+# unknown target.
+# Spec spelling first (lowercase profile prefixes, per the 3.0.1 schema:
+# simplelicensing_, expandedlicensing_), with the camelCase variants this
+# module's reading rules extend to every other profile-prefixed name.
+def _license_type_tail(elem_type: str) -> str:
+    """The bare type name, whatever the serialization: full IRI (.../Simple
+    Licensing/LicenseExpression), JSON-LD compact IRI (simplelicensing:
+    LicenseExpression) or the underscore compact form, which is already bare.
+    """
+    return elem_type.rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+
+
+def _with_vocabulary_prefixes(bases: frozenset[str], *prefixes: str) -> frozenset[str]:
+    """The bare names plus each prefixed spelling, so the sets cannot drift
+    from the casing variants by hand-maintenance."""
+    return bases | frozenset(f"{prefix}{base}" for base in bases for prefix in prefixes)
+
+
+_SIMPLE_LICENSING_BASES = frozenset({"LicenseExpression", "SimpleLicensingText"})
+_EXPANDED_LICENSING_BASES = frozenset(
+    {
+        "ListedLicense",
+        "CustomLicense",
+        "NoAssertionLicense",
+        "NoneLicense",
+        "ConjunctiveLicenseSet",
+        "DisjunctiveLicenseSet",
+        "OrLaterOperator",
+        "WithAdditionOperator",
+        "ListedLicenseException",
+        "CustomLicenseAddition",
+    }
+)
+
+_LICENSE_TYPE_TAILS = _with_vocabulary_prefixes(
+    _SIMPLE_LICENSING_BASES, "simplelicensing_", "simpleLicensing_"
+) | _with_vocabulary_prefixes(_EXPANDED_LICENSING_BASES, "expandedlicensing_", "expandedLicensing_")
+
+_NO_LICENSE_TAILS = _with_vocabulary_prefixes(
+    frozenset({"NoAssertionLicense", "NoneLicense"}), "expandedlicensing_", "expandedLicensing_"
+)
+
+
+def extract_spdx3_licenses(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Licensing elements from @graph, keyed by spdxId.
+
+    Kept separate from ``extract_spdx3_elements`` so its five-tuple contract
+    (and every existing unpack site) stays untouched; the licence checks are
+    the only consumers of this map.
+    """
+    elements = data.get("@graph", data.get("elements", []))
+    if not isinstance(elements, list):
+        return {}
+    licenses: dict[str, dict[str, Any]] = {}
+    for element in elements:
+        if not isinstance(element, dict):
+            continue
+        elem_type = element.get("type", element.get("@type", "")) or ""
+        if not isinstance(elem_type, str):
+            continue
+        if _license_type_tail(elem_type) not in _LICENSE_TYPE_TAILS:
+            continue
+        spdx_id = element.get("spdxId", element.get("@id", ""))
+        if isinstance(spdx_id, str) and spdx_id:
+            licenses[spdx_id] = element
+    return licenses
+
+
+def _spdx_listed_license_tail(reference: str) -> str | None:
+    """The licence id from a real SPDX licence-list URL, else ``None``.
+
+    Parsed, not substring-matched: an untrusted document could otherwise
+    smuggle ``spdx.org/licenses/`` inside a hostile URL's path and have a
+    crafted string score as a listed licence.
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(reference)
+    if parsed.scheme not in ("http", "https") or parsed.netloc not in ("spdx.org", "www.spdx.org"):
+        return None
+    if not parsed.path.startswith("/licenses/"):
+        return None
+    tail = parsed.path[len("/licenses/") :].rstrip("/")
+    return tail if tail and "/" not in tail else None
+
+
+def resolve_spdx3_license_expression(
+    target: Any, licenses: dict[str, dict[str, Any]], _seen: frozenset[str] = frozenset()
+) -> str | None:
+    """The licence string a relationship target denotes, or ``None``.
+
+    Resolution order: a LicenseExpression's expression string, then the
+    ExpandedLicensing compound shapes (AND/OR sets, or-later, with-addition)
+    composed recursively, then a Listed/Custom licence's name, then the SPDX
+    licence-list id tail for a ``spdx.org/licenses/…`` reference that carries
+    no element (the conventional way documents cite listed licences).
+    NoAssertion/None singletons and anything unresolvable are ``None`` — a
+    reference to nothing must not score as a licence.
+    """
+    element: dict[str, Any] | None
+    if isinstance(target, dict):
+        element = target
+    elif isinstance(target, str):
+        if target in _seen:
+            return None  # a licence set citing itself must not recurse forever
+        _seen = _seen | {target}
+        element = licenses.get(target)
+    else:
+        return None
+
+    if element is None:
+        if isinstance(target, str):
+            return _spdx_listed_license_tail(target)
+        return None
+
+    elem_type = element.get("type", element.get("@type", "")) or ""
+    if isinstance(elem_type, str) and _license_type_tail(elem_type) in _NO_LICENSE_TAILS:
+        return None
+
+    bare_type = _license_type_tail(elem_type) if isinstance(elem_type, str) else ""
+    compound = _resolve_compound_license(bare_type, element, licenses, _seen)
+    if compound is not None:
+        return compound
+
+    expression = element.get("simplelicensing_licenseExpression", element.get("simpleLicensing_licenseExpression"))
+    if isinstance(expression, str) and expression.strip():
+        return expression.strip()
+    name = element.get("name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    spdx_id = element.get("spdxId", element.get("@id", ""))
+    if bare_type.endswith("SimpleLicensingText"):
+        # A nameless free-text licence still IS a licence; its id is the only
+        # string that identifies it without dumping the text into a report.
+        text = element.get("simplelicensing_licenseText", element.get("simpleLicensing_licenseText"))
+        if isinstance(text, str) and text.strip() and isinstance(spdx_id, str) and spdx_id:
+            return spdx_id
+    if isinstance(spdx_id, str):
+        return _spdx_listed_license_tail(spdx_id)
+    return None
+
+
+def _field(element: dict[str, Any], name: str) -> Any:
+    """Both vocabulary casings, like every ExpandedLicensing read here."""
+    lower = "expandedlicensing_" + name
+    camel = "expandedLicensing_" + name
+    return element.get(lower, element.get(camel))
+
+
+def _resolve_compound_license(
+    bare_type: str, element: dict[str, Any], licenses: dict[str, dict[str, Any]], seen: frozenset[str]
+) -> str | None:
+    """Compose an SPDX expression from the ExpandedLicensing compound shapes.
+
+    A member that is itself compound is parenthesized, so AND/OR nesting
+    survives the round trip through a flat string.
+    """
+
+    def _operand(target: Any) -> str | None:
+        resolved = resolve_spdx3_license_expression(target, licenses, seen)
+        if resolved is None:
+            return None
+        if " AND " in resolved or " OR " in resolved:
+            return f"({resolved})"
+        return resolved
+
+    if bare_type.endswith(("ConjunctiveLicenseSet", "DisjunctiveLicenseSet")):
+        members = _field(element, "member")
+        if isinstance(members, (str, dict)):
+            members = [members]
+        if not isinstance(members, list):
+            return None
+        resolved_members = [_operand(m) for m in members]
+        if len(resolved_members) < 2 or any(m is None for m in resolved_members):
+            return None  # a set with an unresolvable member must not half-score
+        joiner = " AND " if bare_type.endswith("ConjunctiveLicenseSet") else " OR "
+        return joiner.join(resolved_members)  # type: ignore[arg-type]
+
+    if bare_type.endswith("OrLaterOperator"):
+        subject = _operand(_field(element, "subjectLicense"))
+        return f"{subject}+" if subject else None
+
+    if bare_type.endswith("WithAdditionOperator"):
+        subject = _operand(_field(element, "subjectLicense"))
+        addition = _operand(_field(element, "subjectAddition"))
+        return f"{subject} WITH {addition}" if subject and addition else None
+
+    return None
+
+
+def get_spdx3_package_license(
+    package: dict[str, Any],
+    relationships: list[dict[str, Any]],
+    licenses: dict[str, dict[str, Any]],
+    relationship_type: str,
+) -> str | None:
+    """The resolved licence for ``package`` via ``relationship_type``.
+
+    ``hasConcludedLicense`` and ``hasDeclaredLicense`` relationships point
+    from the package at licensing elements; the first resolvable target wins.
+    ``None`` when no relationship exists or every target is unresolvable —
+    the callers treat both as the same failure, deliberately.
+    """
+    pkg_id = package.get("spdxId", package.get("@id", ""))
+    if not pkg_id:
+        return None
+    for rel in relationships:
+        if not isinstance(rel, dict):
+            continue
+        if rel.get("from") != pkg_id or rel.get("relationshipType") != relationship_type:
+            continue
+        targets = rel.get("to", [])
+        if isinstance(targets, (str, dict)):
+            targets = [targets]
+        if not isinstance(targets, list):
+            continue
+        for target in targets:
+            resolved = resolve_spdx3_license_expression(target, licenses)
+            if resolved:
+                return resolved
+    return None
