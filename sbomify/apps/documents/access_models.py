@@ -32,7 +32,7 @@ class AccessRequest(models.Model):
         ordering = ["-requested_at"]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="access_requests")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="access_requests", db_column="workspace_id")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="access_requests")
     status = models.CharField(
         max_length=20,

@@ -202,7 +202,9 @@ class SecurityAdvisory(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    team = models.ForeignKey("teams.Team", on_delete=models.CASCADE, related_name="security_advisories")
+    team = models.ForeignKey(
+        "teams.Team", on_delete=models.CASCADE, related_name="security_advisories", db_column="workspace_id"
+    )
 
     advisory_type = models.CharField(max_length=20, choices=AdvisoryType.choices, default=AdvisoryType.PRODUCT_ADVISORY)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)

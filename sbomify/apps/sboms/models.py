@@ -64,7 +64,7 @@ class Product(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
     name = models.CharField(max_length=255, blank=False)
     description = models.TextField(blank=True, help_text="Optional product description")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -314,7 +314,7 @@ class ProductIdentifier(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="identifiers")
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
     identifier_type = models.CharField(
         max_length=20, choices=IdentifierType.choices, help_text="Type of product identifier"
     )
@@ -364,7 +364,7 @@ class ProductLink(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="links")
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
     link_type = models.CharField(max_length=20, choices=LinkType.choices, help_text="Type of product link")
     title = models.CharField(max_length=255, help_text="Display title for the link")
     url = models.URLField(max_length=500, help_text="The URL", validators=[URLValidator()])
@@ -525,7 +525,7 @@ class Component(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
     contact_profile = models.ForeignKey(
         "teams.ContactProfile",
         on_delete=models.SET_NULL,

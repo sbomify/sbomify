@@ -14,6 +14,7 @@ from django.contrib import messages
 from django.core.exceptions import DisallowedHost
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.utils.deprecation import MiddlewareMixin
+from django.utils.http import http_date
 
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.teams.utils import normalize_host
@@ -720,3 +721,53 @@ class BearerAuthCsrfExemptMiddleware:
             # Django-internal flag honoured by CsrfViewMiddleware / Ninja's check_csrf.
             request._dont_enforce_csrf_checks = True  # type: ignore[attr-defined]  # noqa: SLF001
         return self.get_response(request)
+
+
+class ApiVersionDeprecationMiddleware:
+    """Announce that /api/v1/ is going away, on every v1 response.
+
+    RFC 9745 (Deprecation) and RFC 8594 (Sunset) describe a resource, not a
+    field, so they belong on the whole version rather than on the handful of
+    endpoints v2 renamed. A client that never reads our docs still sees the
+    date and the replacement in the headers of every call it already makes.
+
+    The dates live in settings so ops can move them without a code change.
+    ``API_V1_DEPRECATED_ON`` unset turns the headers off entirely;
+    ``API_V1_SUNSET`` stays unset until a retirement date is actually
+    committed to, because Sunset is a promise and Deprecation is not.
+    """
+
+    #: rel values per RFC 8288. "successor-version" is the replacement, and
+    #: "deprecation" points at the human explanation. Relative references,
+    #: which the RFC permits: an absolute form would need the scheme and host
+    #: reconstructed from the request, and both lie behind a proxy.
+    _LINK = '</api/v2/docs>; rel="successor-version", </api/v1/docs>; rel="deprecation"'
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        response = self.get_response(request)
+        if not request.path.startswith("/api/v1/"):
+            return response
+
+        deprecation = getattr(settings, "API_V1_DEPRECATED_ON", None)
+        if deprecation is None:
+            return response
+
+        # RFC 9745 carries a Structured Fields Date, which is "@" and a unix
+        # timestamp. Not an HTTP-date; that is Sunset's format.
+        response["Deprecation"] = f"@{int(deprecation.timestamp())}"
+
+        # Deprecation and Sunset are separate statements on purpose: v1 is
+        # deprecated, and v1 is not going away for a long time. A Sunset
+        # header is a promise of a date, so none is sent until one is set.
+        sunset = getattr(settings, "API_V1_SUNSET", None)
+        if sunset is not None:
+            response["Sunset"] = http_date(sunset.timestamp())
+
+        # Appended, not assigned: Link is comma-joinable and a view may
+        # already carry one (pagination, hypermedia).
+        existing = response.get("Link")
+        response["Link"] = f"{existing}, {self._LINK}" if existing else self._LINK
+        return response

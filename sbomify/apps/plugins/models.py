@@ -134,9 +134,9 @@ class TeamPluginSettings(models.Model):
     """
 
     class Meta:
-        db_table = apps.get_app_config("plugins").label + "_team_settings"
-        verbose_name = "Team Plugin Settings"
-        verbose_name_plural = "Team Plugin Settings"
+        db_table = "plugins_workspace_settings"
+        verbose_name = "Workspace Plugin Settings"
+        verbose_name_plural = "Workspace Plugin Settings"
         indexes = [
             models.Index(fields=["team"]),
         ]
@@ -146,6 +146,7 @@ class TeamPluginSettings(models.Model):
         "teams.Team",
         on_delete=models.CASCADE,
         related_name="plugin_settings",
+        db_column="workspace_id",
     )
     enabled_plugins = models.JSONField(
         default=list,
