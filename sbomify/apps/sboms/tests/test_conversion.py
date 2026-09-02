@@ -134,8 +134,6 @@ class TestAgainstTheRealConverter:
 
         assert converted["spdxVersion"] == "SPDX-2.3"
         locators = [
-            ref["referenceLocator"]
-            for package in converted["packages"]
-            for ref in package.get("externalRefs") or []
+            ref["referenceLocator"] for package in converted["packages"] for ref in package.get("externalRefs") or []
         ]
         assert "pkg:generic/openssl@3.0.11" in locators
