@@ -51,10 +51,11 @@ def converter_path() -> str | None:
     a missing converter before it has a document in hand.
     """
     configured = getattr(settings, "SBOM_CONVERTER_PATH", "") or "syft"
-    if found := shutil.which(configured):
-        return found
-    candidate = Path(configured)
-    return str(candidate) if candidate.is_file() else None
+    # which() alone, deliberately. It resolves a bare name on PATH and takes a
+    # path as given, and it checks the file is executable. Falling back to "is
+    # there a file by this name" would let a syft sitting in the working
+    # directory answer for the bare default.
+    return shutil.which(configured)
 
 
 def convert_sbom(data: bytes, target_format: str, *, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> bytes:
