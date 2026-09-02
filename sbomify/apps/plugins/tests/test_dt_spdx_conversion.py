@@ -65,6 +65,9 @@ class TestWithoutAConverter:
         assert result["metadata"].get("skipped") is True
         assert result["findings"][0]["id"] == "dependency-track:unsupported-format"
         assert "no converter installed" in result["metadata"]["conversion_error"]
+        # Puts it on the longer sweep backoff, so a converter that is not there
+        # is not re-attempted on every pass.
+        assert result["metadata"]["unsupported_input"] is True
 
 
 @pytest.mark.django_db
@@ -147,6 +150,7 @@ class TestTheUploadCarriesTheConversion:
         assert result["metadata"].get("skipped") is True
         assert result["findings"][0]["id"] == "dependency-track:unsupported-format"
         assert "no SPDX document found" in result["metadata"]["conversion_error"]
+        assert result["metadata"]["unsupported_input"] is True
 
 
 @pytest.mark.django_db
