@@ -234,7 +234,9 @@ RUN set -e && apk add --no-cache curl && \
     curl -fsSL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_checksums.txt" \
         -o /tmp/syft_checksums.txt && \
     cd /tmp && \
-    grep " ${SYFT_ARCHIVE}$" /tmp/syft_checksums.txt > /tmp/syft-checksum.txt && \
+    # Exact filename match: grep would read the dots in the name as a regex.
+    awk -v archive="${SYFT_ARCHIVE}" '$2 == archive' /tmp/syft_checksums.txt > /tmp/syft-checksum.txt && \
+    test -s /tmp/syft-checksum.txt && \
     sha256sum -c /tmp/syft-checksum.txt && \
     tar -xzf "/tmp/${SYFT_ARCHIVE}" -C /usr/local/bin syft && \
     chmod +x /usr/local/bin/syft && \
