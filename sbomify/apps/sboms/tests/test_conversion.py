@@ -76,6 +76,13 @@ class TestConversion:
             with pytest.raises(ConversionFailed):
                 convert_sbom(DOCUMENT, "spdx-json")
 
+    def test_output_that_only_starts_like_a_document_is_a_failure(self, tmp_path: Path) -> None:
+        """Truncated output would otherwise reach a scanner and read as its fault."""
+        binary = _stub_converter(tmp_path, 'printf \'{"bomFormat": "Cyclone\'\n')
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            with pytest.raises(ConversionFailed, match="no usable document"):
+                convert_sbom(DOCUMENT, "spdx-json")
+
     def test_a_hanging_converter_is_killed(self, tmp_path: Path) -> None:
         binary = _stub_converter(tmp_path, "sleep 30\n")
         with override_settings(SBOM_CONVERTER_PATH=binary):
