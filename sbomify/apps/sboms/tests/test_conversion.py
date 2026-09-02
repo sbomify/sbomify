@@ -44,6 +44,22 @@ class TestConverterAvailability:
         with override_settings(SBOM_CONVERTER_PATH=binary):
             assert converter_path() == binary
 
+    def test_a_file_that_is_not_executable_is_not_the_converter(self, tmp_path: Path) -> None:
+        not_a_binary = tmp_path / "syft"
+        not_a_binary.write_text("this is not a program")
+        with override_settings(SBOM_CONVERTER_PATH=str(not_a_binary)):
+            assert converter_path() is None
+
+    def test_the_bare_default_does_not_pick_up_a_local_file(self, tmp_path: Path, monkeypatch) -> None:
+        """A syft in the working directory must not answer for a name on PATH."""
+        _stub_converter(tmp_path, 'echo "{}"\n')  # tmp_path/stub-converter
+        (tmp_path / "syft").write_text("#!/bin/sh\necho '{}'\n")
+        (tmp_path / "syft").chmod(0o755)
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("PATH", "/nonexistent-for-this-test")
+        with override_settings(SBOM_CONVERTER_PATH="syft"):
+            assert converter_path() is None
+
 
 class TestConversion:
     def test_the_converted_document_comes_back(self, tmp_path: Path) -> None:
