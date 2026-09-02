@@ -488,7 +488,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return declared
         # SPDX 3 moved the version into CreationInfo, so the context is what
         # identifies the document without walking the graph.
-        if "spdx.org/rdf/3" in str(content.get("@context", "")):
+        if "spdx.org/rdf/3.0" in str(content.get("@context", "")):
             return "SPDX-3.0"
         return "unknown"
 
