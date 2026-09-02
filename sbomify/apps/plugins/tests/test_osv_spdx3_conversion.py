@@ -93,6 +93,26 @@ class TestTheScannerReadsTheDerivedCopy:
         assert list(spdx3_file.parent.iterdir()) == [spdx3_file]
 
 
+class TestTheYoctoOutcomeIsTraceable:
+    def test_a_converted_scan_that_recognises_nothing_still_says_it_converted(
+        self, plugin: OSVPlugin, spdx3_file: Path
+    ) -> None:
+        """The path a Yocto document takes, and the one most needing an explanation."""
+        with (
+            patch("sbomify.apps.plugins.builtins.osv.convert_sbom", return_value=CONVERTED),
+            patch.object(
+                plugin,
+                "_execute_scanner",
+                return_value=('{"results": []}', "Scanned /tmp/x.spdx.json file and found 0 packages", 0),
+            ),
+        ):
+            result = _as_dict(plugin.assess("sbom-1", spdx3_file))
+
+        assert result["findings"][0]["id"] == "osv:no-packages"
+        assert result["metadata"]["converted_from"] == "SPDX-3.0"
+        assert result["metadata"]["converted_to"] == "SPDX-2.3"
+
+
 class TestWhatStillSkips:
     def test_no_converter_installed_keeps_the_old_skip(self, plugin: OSVPlugin, spdx3_file: Path) -> None:
         """A deployment without the binary behaves exactly as it did before."""
