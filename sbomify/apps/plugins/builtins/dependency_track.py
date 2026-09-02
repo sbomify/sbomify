@@ -29,6 +29,13 @@ from sbomify.apps.plugins.sdk.results import (
     Finding,
     PluginMetadata,
 )
+from sbomify.apps.sboms.conversion import (
+    CYCLONEDX_1_6_JSON,
+    ConversionFailed,
+    ConversionUnavailable,
+    convert_sbom,
+    converter_path,
+)
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -137,19 +144,16 @@ class DependencyTrackPlugin(AssessmentPlugin):
             logger.error(f"[DT] Failed to read SBOM file: {e}")
             return self._create_error_result(f"Failed to read SBOM: {e}")
 
-        # Validate CycloneDX format (DT does not support SPDX).
-        # Non-CycloneDX SBOMs aren't an error — DT simply can't process them.
-        # Return a skipped result so the UI shows "not applicable" rather than
-        # a hard error finding for a format choice the user made deliberately.
-        if not self._validate_cyclonedx(sbom_bytes):
-            return self.create_skipped_result(
-                finding_id="dependency-track:unsupported-format",
-                title="Format Not Supported",
-                description=(
-                    "Dependency Track only supports CycloneDX format. "
-                    "This SBOM appears to be SPDX or an unrecognized format — "
-                    "vulnerability scanning was skipped."
-                ),
+        # Dependency Track reads CycloneDX only, so a document in any other
+        # format is uploaded as a derived CycloneDX copy rather than skipped.
+        # The stored artifact is never modified and the findings come back
+        # against it (ADR-004). The conversion itself happens at the upload
+        # below, not here: this runs again on every poll, and converting each
+        # time would spend a subprocess to learn what it already knew.
+        needs_conversion = not self._validate_cyclonedx(sbom_bytes)
+        if needs_conversion and converter_path() is None:
+            return self._create_unconvertible_result(
+                "this deployment has no converter installed to derive a CycloneDX copy"
             )
 
         # Look up SBOM → Component → Team
@@ -216,6 +220,14 @@ class DependencyTrackPlugin(AssessmentPlugin):
             # First scan for this SBOM against this DT server. Upload bytes,
             # discover the new DT project version UUID, persist the row, set
             # the initial tag set, then raise RetryLater to poll for results.
+            if needs_conversion:
+                try:
+                    sbom_bytes = convert_sbom(sbom_bytes, CYCLONEDX_1_6_JSON)
+                except (ConversionUnavailable, ConversionFailed) as exc:
+                    logger.warning(f"[DT] SBOM {sbom_id} could not be converted to CycloneDX: {exc}")
+                    return self._create_unconvertible_result(str(exc))
+                logger.info(f"[DT] Uploading SBOM {sbom_id} as a derived CycloneDX copy")
+
             try:
                 version_row = self._upload_new_sbom_version(
                     sbom=sbom,
@@ -283,6 +295,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 sbom_id=sbom_id,
                 project_name=project_name,
                 current_release_names=current_release_names,
+                converted_from=self._source_format_label(sbom_bytes) if needs_conversion else None,
             )
         except RetryLaterError:
             raise
@@ -454,6 +467,40 @@ class DependencyTrackPlugin(AssessmentPlugin):
         except (json.JSONDecodeError, UnicodeDecodeError):
             return False
 
+    def _source_format_label(self, sbom_bytes: bytes) -> str:
+        """What the stored document calls itself, recorded on a converted scan."""
+        try:
+            content = json.loads(sbom_bytes.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return "unknown"
+        if not isinstance(content, dict):
+            return "unknown"
+        declared = content.get("spdxVersion")
+        if isinstance(declared, str) and declared:
+            return declared
+        # SPDX 3 moved the version into CreationInfo, so the context is what
+        # identifies the document without walking the graph.
+        if "spdx.org/rdf/3" in str(content.get("@context", "")):
+            return "SPDX-3.0"
+        return "unknown"
+
+    def _create_unconvertible_result(self, reason: str) -> AssessmentResult:
+        """A document Dependency Track cannot read and we cannot convert either.
+
+        Still not an error. The format is a choice the uploader made and the
+        artifact may be perfectly valid, so this stays the skip it has always
+        been, now carrying why no conversion happened.
+        """
+        return self.create_skipped_result(
+            finding_id="dependency-track:unsupported-format",
+            title="Format Not Supported",
+            description=(
+                "Dependency Track only supports CycloneDX format, and this SBOM could not be "
+                "converted to CycloneDX, so vulnerability scanning was skipped."
+            ),
+            extra_metadata={"conversion_error": reason[:500]},
+        )
+
     def _team_has_dt_enabled(self, team: Any) -> bool:
         """Check if team has the dependency-track plugin enabled.
 
@@ -523,6 +570,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         sbom_id: str,
         project_name: str,
         current_release_names: list[str],
+        converted_from: str | None = None,
     ) -> AssessmentResult:
         """Poll DT for vulnerability results using the stored per-SBOM version UUID.
 
@@ -615,6 +663,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "dt_project_version": version_row.dt_project_version,
                 "dt_project_release_tags": sorted(set(current_release_names)),
                 "metrics": metrics,
+                # Says the scan read a derived copy, so a surprising result is
+                # traceable to the conversion rather than to the scanner.
+                **({"converted_from": converted_from, "converted_to": "CycloneDX-1.6"} if converted_from else {}),
             },
         )
 
