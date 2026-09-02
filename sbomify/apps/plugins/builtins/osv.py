@@ -30,6 +30,12 @@ from sbomify.apps.plugins.sdk.results import (
     Finding,
     PluginMetadata,
 )
+from sbomify.apps.sboms.conversion import (
+    SPDX_2_3_JSON,
+    ConversionFailed,
+    ConversionUnavailable,
+    convert_sbom,
+)
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -179,17 +185,37 @@ class OSVPlugin(AssessmentPlugin):
             logger.error(f"[OSV] Failed to read SBOM file: {e}")
             return self._create_error_result(f"Failed to read SBOM: {e}")
 
-        # Check for unsupported SPDX 3.0 format
+        # osv-scanner has no SPDX 3 reader, so the scan runs against a copy
+        # derived in a format it does know. The stored artifact is untouched
+        # and the findings are reported against it (ADR-004).
+        source_format = self._detect_format_name(sbom_bytes)
+        converted_from: str | None = None
         if self._is_spdx3(sbom_bytes):
-            logger.warning(f"[OSV] SPDX 3.0 format not supported by osv-scanner for SBOM {sbom_id}")
-            return self._create_unsupported_format_result()
+            source_format = "spdx3"
+            try:
+                sbom_bytes = convert_sbom(sbom_bytes, SPDX_2_3_JSON, timeout=timeout)
+            except ConversionUnavailable:
+                logger.warning(f"[OSV] No SBOM converter installed, so SBOM {sbom_id} stays unscanned")
+                return self._create_unsupported_format_result()
+            except ConversionFailed as exc:
+                logger.warning(f"[OSV] SPDX 3.0 SBOM {sbom_id} could not be converted for scanning: {exc}")
+                return self._create_conversion_failed_result(str(exc))
+            converted_from = "SPDX-3.0"
+            logger.info(f"[OSV] Scanning SBOM {sbom_id} through a derived SPDX 2.3 copy")
 
         # Determine correct file suffix and create temp copy if needed
         suffix = self._determine_file_suffix(sbom_bytes)
         scan_path = sbom_path
         temp_copy: Path | None = None
 
-        if not str(sbom_path).endswith(suffix):
+        if converted_from is not None:
+            # The file on disk still holds the original, so the derived bytes
+            # need a file of their own for the scanner to read.
+            temp_copy = sbom_path.parent / f"{sbom_path.stem}.converted{suffix}"
+            temp_copy.write_bytes(sbom_bytes)
+            scan_path = temp_copy
+            logger.debug(f"[OSV] Wrote derived copy for scanning: {temp_copy}")
+        elif not str(sbom_path).endswith(suffix):
             temp_copy = sbom_path.parent / f"{sbom_path.stem}{suffix}"
             shutil.copy2(sbom_path, temp_copy)
             scan_path = temp_copy
@@ -283,7 +309,10 @@ class OSVPlugin(AssessmentPlugin):
                 findings=findings,
                 metadata={
                     "scanner": "osv-scanner",
-                    "sbom_format": self._detect_format_name(sbom_bytes),
+                    "sbom_format": source_format,
+                    # Says the scan read a derived copy, so a surprising result
+                    # is traceable to the conversion rather than to the scanner.
+                    **({"converted_from": converted_from, "converted_to": "SPDX-2.3"} if converted_from else {}),
                 },
             )
 
@@ -373,8 +402,32 @@ class OSVPlugin(AssessmentPlugin):
             pass
         return False
 
+    def _create_conversion_failed_result(self, detail: str) -> AssessmentResult:
+        """A document the converter would not read, reported as skipped.
+
+        The scan never ran, and re-running changes nothing until the document
+        or the converter does, so this carries ``unsupported_input`` like the
+        sibling skips rather than presenting as a scan error on an artifact
+        that may be perfectly valid.
+        """
+        return self.create_skipped_result(
+            finding_id="osv:conversion-failed",
+            title="SBOM Could Not Be Converted For Scanning",
+            description=(
+                "osv-scanner does not read SPDX 3.0, and this document could not be converted "
+                "to a format it does read, so it was not scanned for vulnerabilities."
+            ),
+            unsupported_input=True,
+            extra_metadata={
+                "scanner": "osv-scanner",
+                "sbom_format": "spdx3",
+                "conversion_failed": True,
+                "conversion_error": detail[:500],
+            },
+        )
+
     def _create_unsupported_format_result(self) -> AssessmentResult:
-        """SPDX 3.0, which osv-scanner cannot read at all, reported as skipped.
+        """SPDX 3.0 on a deployment with no converter installed, reported as skipped.
 
         This returns before the scanner is invoked, so it is the earliest of the
         plugin's "nothing was examined" paths and was the last one still missing
@@ -392,9 +445,9 @@ class OSVPlugin(AssessmentPlugin):
             finding_id="osv:unsupported-format",
             title="SPDX 3.0 Not Supported",
             description=(
-                "osv-scanner does not read SPDX 3.0 yet, so this SBOM was not scanned "
-                "for vulnerabilities. Upload it as SPDX 2.x or CycloneDX to have it "
-                "scanned now."
+                "osv-scanner does not read SPDX 3.0, and this deployment has no converter "
+                "installed to derive a copy it can read, so this SBOM was not scanned for "
+                "vulnerabilities."
             ),
             unsupported_input=True,
             extra_metadata={

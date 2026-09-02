@@ -2,6 +2,10 @@
 ARG PYTHON_VERSION=3.14-slim-trixie@sha256:fb83750094b46fd6b8adaa80f66e2302ecbe45d513f6cece637a841e1025b4ca
 ARG BUILD_ENV=production # Default to production
 ARG OSV_SCANNER_VERSION=v2.3.8
+# Derives a scanner-readable copy of a document the scanners cannot read:
+# osv-scanner has no SPDX 3 reader, Dependency Track takes CycloneDX only.
+# For releases, see: https://github.com/anchore/syft/releases
+ARG SYFT_VERSION=v1.51.1
 # For releases, see: https://github.com/sigstore/cosign/releases
 # Pin Cosign to a current release to pick up security fixes and ensure reproducible builds.
 ARG COSIGN_VERSION=v3.1.3
@@ -198,6 +202,7 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
 FROM alpine:3.24 AS binary-downloader
 ARG OSV_SCANNER_VERSION
 ARG COSIGN_VERSION
+ARG SYFT_VERSION
 ARG TARGETARCH
 
 RUN set -e && apk add --no-cache curl && \
@@ -221,7 +226,20 @@ RUN set -e && apk add --no-cache curl && \
     sed -i "s|cosign-linux-${ARCH}|cosign|" /tmp/cosign-checksum.txt && \
     sha256sum -c /tmp/cosign-checksum.txt && \
     chmod +x /usr/local/bin/cosign && \
-    rm -f /tmp/osv-scanner_SHA256SUMS /tmp/osv-checksum.txt /tmp/cosign_checksums.txt /tmp/cosign-checksum.txt
+    # Download syft and verify checksum. Ships as a tarball rather than a bare
+    # binary, so the checksum is verified on the archive before extracting.
+    SYFT_ARCHIVE="syft_${SYFT_VERSION#v}_linux_${ARCH}.tar.gz" && \
+    curl -fsSL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/${SYFT_ARCHIVE}" \
+        -o "/tmp/${SYFT_ARCHIVE}" && \
+    curl -fsSL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_checksums.txt" \
+        -o /tmp/syft_checksums.txt && \
+    cd /tmp && \
+    grep " ${SYFT_ARCHIVE}$" /tmp/syft_checksums.txt > /tmp/syft-checksum.txt && \
+    sha256sum -c /tmp/syft-checksum.txt && \
+    tar -xzf "/tmp/${SYFT_ARCHIVE}" -C /usr/local/bin syft && \
+    chmod +x /usr/local/bin/syft && \
+    rm -f /tmp/osv-scanner_SHA256SUMS /tmp/osv-checksum.txt /tmp/cosign_checksums.txt /tmp/cosign-checksum.txt \
+          "/tmp/${SYFT_ARCHIVE}" /tmp/syft_checksums.txt /tmp/syft-checksum.txt
 
 ### Stage 6: Python Application for Development (python-app-dev)
 FROM python-dependencies AS python-app-dev
@@ -234,9 +252,10 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the osv-scanner and cosign binaries from the binary-downloader stage
+# Copy the osv-scanner, cosign and syft binaries from the binary-downloader stage
 COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=binary-downloader /usr/local/bin/cosign /usr/local/bin/cosign
+COPY --from=binary-downloader /usr/local/bin/syft /usr/local/bin/syft
 
 # Create directories with proper permissions for non-root user
 # Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
@@ -422,9 +441,10 @@ ENTRYPOINT []
 # Copy application code, .venv (with fixed symlinks), and collected static files
 COPY --from=collectstatic /code /code
 
-# Copy the osv-scanner and cosign binaries from the binary-downloader stage
+# Copy the osv-scanner, cosign and syft binaries from the binary-downloader stage
 COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=binary-downloader /usr/local/bin/cosign /usr/local/bin/cosign
+COPY --from=binary-downloader /usr/local/bin/syft /usr/local/bin/syft
 
 # Copy the slimmed /staged tree (pre-filtered to WeasyPrint's actual .so
 # closure plus the Liberation Sans / Mono fonts the print CSS references).
