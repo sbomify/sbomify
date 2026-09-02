@@ -188,6 +188,14 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "component:manage": MANAGE,
     "release:manage": MANAGE,
     "sbom:manage": MANAGE,
+    # Advisories sit at MANAGE, matching what the workspace pages already
+    # allow: any member who is not a guest can write one. Publishing is its
+    # own action so the tier can move without touching the call sites, and it
+    # arguably belongs at ADMINISTER with the other outward-facing writes; the
+    # pages would have to move with it, so that is a decision rather than a
+    # detail.
+    "advisory:manage": MANAGE,
+    "advisory:publish": MANAGE,
     "document:manage": MANAGE,
     # release publishing — the CI/OIDC bot's job (create a release, tag artifacts
     # to it), alongside owners and admins.
@@ -208,6 +216,7 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "workspace:read": READ_INTERNAL,
     "component:read_internal": READ_INTERNAL,
     "product:read": READ_INTERNAL,
+    "advisory:read": READ_INTERNAL,
     "release:read": READ_INTERNAL_OR_BOT,
     "document:read": READ_INTERNAL,
     "sbom:read": READ_INTERNAL,
