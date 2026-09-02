@@ -155,6 +155,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # upload is waiting for. Availability is settled where it is acted on,
         # at the upload below, which runs once.
         needs_conversion = not self._validate_cyclonedx(sbom_bytes)
+        if needs_conversion and self._source_format_label(sbom_bytes) == "unknown":
+            # Neither CycloneDX nor SPDX, so there is nothing to convert from,
+            # and that is knowable without a database round trip.
+            return self._create_unconvertible_result("the document is neither CycloneDX nor SPDX")
 
         # Look up SBOM → Component → Team
         try:
