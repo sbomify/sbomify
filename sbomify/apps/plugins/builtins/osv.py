@@ -194,9 +194,9 @@ class OSVPlugin(AssessmentPlugin):
             source_format = "spdx3"
             try:
                 sbom_bytes = convert_sbom(sbom_bytes, SPDX_2_3_JSON, timeout=timeout)
-            except ConversionUnavailable:
-                logger.warning(f"[OSV] No SBOM converter installed, so SBOM {sbom_id} stays unscanned")
-                return self._create_unsupported_format_result()
+            except ConversionUnavailable as exc:
+                logger.warning(f"[OSV] No usable SBOM converter, so SBOM {sbom_id} stays unscanned: {exc}")
+                return self._create_unsupported_format_result(str(exc))
             except ConversionFailed as exc:
                 logger.warning(f"[OSV] SPDX 3.0 SBOM {sbom_id} could not be converted for scanning: {exc}")
                 return self._create_conversion_failed_result(str(exc))
@@ -426,8 +426,13 @@ class OSVPlugin(AssessmentPlugin):
             },
         )
 
-    def _create_unsupported_format_result(self) -> AssessmentResult:
-        """SPDX 3.0 on a deployment with no converter installed, reported as skipped.
+    def _create_unsupported_format_result(self, reason: str = "") -> AssessmentResult:
+        """SPDX 3.0 on a deployment with no usable converter, reported as skipped.
+
+        "Unusable" rather than "absent" on purpose: a converter can also be
+        installed and refuse to run, for the wrong architecture or without the
+        permission to execute, and an operator reading "not installed" would go
+        looking for the wrong thing. The reason travels in the metadata.
 
         This returns before the scanner is invoked, so it is the earliest of the
         plugin's "nothing was examined" paths and was the last one still missing
@@ -445,8 +450,8 @@ class OSVPlugin(AssessmentPlugin):
             finding_id="osv:unsupported-format",
             title="SPDX 3.0 Not Supported",
             description=(
-                "osv-scanner does not read SPDX 3.0, and this deployment has no converter "
-                "installed to derive a copy it can read, so this SBOM was not scanned for "
+                "osv-scanner does not read SPDX 3.0, and no working converter is available "
+                "here to derive a copy it can read, so this SBOM was not scanned for "
                 "vulnerabilities."
             ),
             unsupported_input=True,
@@ -454,6 +459,7 @@ class OSVPlugin(AssessmentPlugin):
                 "scanner": "osv-scanner",
                 "sbom_format": "spdx3",
                 "unsupported_format": True,
+                **({"conversion_error": reason[:500]} if reason else {}),
             },
         )
 
