@@ -466,6 +466,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
         """
         try:
             content = json.loads(sbom_bytes.decode("utf-8"))
+            if not isinstance(content, dict):
+                # Valid JSON that is not an object, an array say, is not
+                # CycloneDX and must not raise on the way to saying so.
+                return False
             is_cyclonedx: bool = content.get("bomFormat") == "CycloneDX"
             return is_cyclonedx
         except (json.JSONDecodeError, UnicodeDecodeError):

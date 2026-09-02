@@ -32,6 +32,31 @@ def _as_dict(result: Any) -> dict[str, Any]:
     return result.model_dump() if hasattr(result, "model_dump") else dataclasses.asdict(result)
 
 
+def _records(tmp_path, document: str, fmt: str, key: str, filename: str):
+    """Real rows, so assess() gets past the lookup and reaches the upload."""
+    from sbomify.apps.core.models import Component, Product
+    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.teams.models import Team
+    from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+
+    team = Team.objects.create(name=f"Team {key}", key=key, billing_plan="business")
+    server = DependencyTrackServer.objects.create(
+        name=f"Server {key}",
+        url=f"https://{key}.example.com",
+        api_key="key",
+        health_status="healthy",
+        max_concurrent_scans=10,
+    )
+    component = Component.objects.create(name=f"Component {key}", team=team)
+    product = Product.objects.create(name=f"Product {key}", team=team)
+    product.components.add(component)
+    sbom = SBOM.objects.create(name="s", component=component, format=fmt, format_version="1.6")
+
+    path = tmp_path / filename
+    path.write_text(document)
+    return sbom, path, server
+
+
 @pytest.fixture
 def plugin() -> DependencyTrackPlugin:
     return DependencyTrackPlugin()
@@ -178,31 +203,49 @@ class TestTheUploadCarriesTheConversion:
 
 @pytest.mark.django_db
 class TestWhatIsNotConverted:
-    def test_cyclonedx_never_reaches_the_converter(self, plugin: DependencyTrackPlugin, tmp_path) -> None:
-        path = tmp_path / "sbom.cdx.json"
-        path.write_text(CYCLONEDX)
+    def test_cyclonedx_reaches_the_upload_unconverted(self, plugin: DependencyTrackPlugin, tmp_path) -> None:
+        """Driven all the way to the upload, so this says more than "not yet"."""
+        sbom, path, server = _records(tmp_path, CYCLONEDX, "cyclonedx", "dtcdxteam", "sbom.cdx.json")
+        captured: dict[str, Any] = {}
+
+        def capture(**kwargs: Any) -> None:
+            captured["bytes"] = kwargs["sbom_bytes"]
+            raise RuntimeError("stop after the upload was handed its bytes")
 
         with (
             patch("sbomify.apps.plugins.builtins.dependency_track.convert_sbom") as convert,
-            patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=False),
+            patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
+            patch.object(DependencyTrackPlugin, "_select_dt_server", return_value=server),
+            patch.object(DependencyTrackPlugin, "_resolve_release_context", return_value=[]),
+            patch.object(DependencyTrackPlugin, "_upload_new_sbom_version", side_effect=capture),
         ):
-            plugin.assess("sbom-1", path)
+            plugin.assess(str(sbom.id), path)
 
         convert.assert_not_called()
+        assert captured["bytes"] == CYCLONEDX.encode()
 
     def test_conversion_waits_for_the_upload(self, plugin: DependencyTrackPlugin, tmp_path) -> None:
         """The gate runs on every poll, so it must not convert.
 
-        Stopping the run before the upload (the workspace has DT switched off)
-        proves the conversion is not done on the way past the gate.
+        The run stops after the lookup, on the workspace having Dependency
+        Track switched off, which is past the gate and short of the upload.
         """
-        path = tmp_path / "sbom.json"
-        path.write_text(SPDX_2_3)
+        sbom, path, _ = _records(tmp_path, SPDX_2_3, "spdx", "dtgateteam", "sbom.json")
 
         with (
             patch("sbomify.apps.plugins.builtins.dependency_track.convert_sbom") as convert,
             patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=False),
         ):
-            plugin.assess("sbom-1", path)
+            plugin.assess(str(sbom.id), path)
 
         convert.assert_not_called()
+
+    def test_a_json_array_is_a_skip_rather_than_a_crash(self, plugin: DependencyTrackPlugin, tmp_path) -> None:
+        """Valid JSON that is not an object must not raise on the way to the skip."""
+        path = tmp_path / "sbom.json"
+        path.write_text("[1, 2, 3]")
+
+        result = _as_dict(plugin.assess("sbom-1", path))
+
+        assert result["metadata"].get("skipped") is True
+        assert result["findings"][0]["id"] == "dependency-track:unsupported-format"
