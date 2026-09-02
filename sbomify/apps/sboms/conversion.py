@@ -22,6 +22,7 @@ import shutil
 import subprocess  # nosec B404 - fixed argv, no shell, input is a temp file we wrote
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 
@@ -104,9 +105,114 @@ def convert_sbom(data: bytes, target_format: str, *, timeout: int = DEFAULT_TIME
     # into what looks like a scanner fault.
     if completed.returncode == 0 and stdout.strip():
         try:
-            json.loads(stdout)
+            converted = json.loads(stdout)
         except ValueError as exc:
             raise ConversionFailed(f"converter produced no usable document: {exc}") from exc
+        try:
+            source = json.loads(data)
+        except ValueError:
+            # The converter read it, so this only means we cannot, and the
+            # conversion itself still stands.
+            return stdout
+        if isinstance(converted, dict) and _restore_cpes(source, converted):
+            return json.dumps(converted).encode()
         return stdout
     detail = (completed.stderr or b"").decode("utf-8", "replace").strip().splitlines()
     raise ConversionFailed(detail[-1] if detail else f"converter exited {completed.returncode}")
+
+
+#: Where a CPE hides, by format. SPDX 3 writes external identifiers, SPDX 2.x
+#: writes external refs, and both spell the type more than one way.
+_CPE_IDENTIFIER_TYPES = frozenset({"cpe22", "cpe23", "cpe22Type", "cpe23Type"})
+
+
+def _package_key(name: Any, version: Any) -> tuple[str, str] | None:
+    """What a package is called, as the two documents can agree on it.
+
+    Name and version rather than the purl: the purl is exactly what a
+    document lacking a usable one does not have, which is the case this
+    exists for.
+    """
+    if not isinstance(name, str) or not name:
+        return None
+    return name.strip().lower(), str(version or "").strip()
+
+
+def _cpes_in_source(document: Any) -> dict[tuple[str, str], list[str]]:
+    """Every CPE the source document states, keyed by package."""
+    if not isinstance(document, dict):
+        return {}
+    found: dict[tuple[str, str], list[str]] = {}
+
+    def record(name: Any, version: Any, values: list[str]) -> None:
+        key = _package_key(name, version)
+        if key and values:
+            found.setdefault(key, []).extend(values)
+
+    def cpes_from(entries: Any, type_field: str, value_field: str) -> list[str]:
+        values = []
+        for entry in entries if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            kind = str(entry.get(type_field) or "").rsplit("/", 1)[-1].rsplit("_", 1)[-1]
+            value = entry.get(value_field)
+            if kind in _CPE_IDENTIFIER_TYPES and isinstance(value, str) and value.startswith("cpe:"):
+                values.append(value)
+        return values
+
+    # SPDX 3: elements in the graph.
+    graph = document.get("@graph")
+    for element in graph if isinstance(graph, list) else []:
+        if not isinstance(element, dict):
+            continue
+        record(
+            element.get("name"),
+            element.get("software_packageVersion"),
+            cpes_from(element.get("externalIdentifier"), "externalIdentifierType", "identifier"),
+        )
+
+    # SPDX 2.x: packages with external refs.
+    for package in document.get("packages") or []:
+        if isinstance(package, dict):
+            record(
+                package.get("name"),
+                package.get("versionInfo"),
+                cpes_from(package.get("externalRefs"), "referenceType", "referenceLocator"),
+            )
+    return found
+
+
+def _restore_cpes(source: Any, converted: dict[str, Any]) -> bool:
+    """Put back the CPEs the converter dropped. True when anything changed.
+
+    A converter carries purls across and loses the CPE, and for a build
+    system that names its packages with a purl type no scanner maps, such as
+    Yocto's ``pkg:yocto``, the CPE is the only identifier a scanner can match
+    on. Losing it in a copy made for scanning is losing the scan.
+    """
+    cpes = _cpes_in_source(source)
+    if not cpes:
+        return False
+    changed = False
+
+    for package in converted.get("packages") or []:
+        if not isinstance(package, dict):
+            continue
+        key = _package_key(package.get("name"), package.get("versionInfo"))
+        refs = package.setdefault("externalRefs", []) if key and cpes.get(key) else []
+        present = {r.get("referenceLocator") for r in refs if isinstance(r, dict)}
+        for cpe in cpes.get(key, []) if key else []:
+            if cpe not in present:
+                refs.append({"referenceCategory": "SECURITY", "referenceType": "cpe23Type", "referenceLocator": cpe})
+                changed = True
+
+    for component in converted.get("components") or []:
+        if not isinstance(component, dict) or component.get("cpe"):
+            continue
+        key = _package_key(component.get("name"), component.get("version"))
+        # CycloneDX carries one cpe per component, so the first is the one.
+        for cpe in cpes.get(key, []) if key else []:
+            component["cpe"] = cpe
+            changed = True
+            break
+    return changed

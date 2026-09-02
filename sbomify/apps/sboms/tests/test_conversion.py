@@ -7,9 +7,11 @@ document while still exiting 0, and only a real process reproduces that.
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 from pathlib import Path
+from typing import Any
 
 import pytest
 from django.test import override_settings
@@ -112,6 +114,107 @@ class TestConversion:
         with override_settings(SBOM_CONVERTER_PATH=binary):
             convert_sbom(DOCUMENT, "spdx-json")
         assert not Path(leaked.read_text()).exists()
+
+
+CPE = "cpe:2.3:a:openssl:openssl:3.0.11:*:*:*:*:*:*:*"
+
+
+class TestTheCpeSurvives:
+    """A converter carries purls across and drops the CPE.
+
+    For a build system whose purl type no scanner maps, Yocto's ``pkg:yocto``
+    being the case in hand, the CPE is the only identifier left that a scanner
+    can match on, so losing it in a copy made for scanning loses the scan.
+    """
+
+    SPDX3_WITH_CPE = json.dumps(
+        {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:pkg",
+                    "name": "openssl",
+                    "software_packageVersion": "3.0.11",
+                    "software_packageUrl": "pkg:yocto/meta/openssl@3.0.11",
+                    "externalIdentifier": [{"externalIdentifierType": "cpe23", "identifier": CPE}],
+                }
+            ],
+        }
+    ).encode()
+
+    def _converter_emitting(self, tmp_path: Path, document: dict[str, Any]) -> str:
+        return _stub_converter(tmp_path, f"cat <<'JSON'\n{json.dumps(document)}\nJSON\n")
+
+    def test_it_is_put_back_on_the_spdx_copy(self, tmp_path: Path) -> None:
+        binary = self._converter_emitting(
+            tmp_path,
+            {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]},
+        )
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(self.SPDX3_WITH_CPE, "spdx-json"))
+
+        refs = converted["packages"][0]["externalRefs"]
+        assert refs == [
+            {
+                "referenceCategory": "SECURITY",
+                "referenceType": "cpe23Type",
+                "referenceLocator": CPE,
+            }
+        ]
+
+    def test_it_is_put_back_on_the_cyclonedx_copy(self, tmp_path: Path) -> None:
+        binary = self._converter_emitting(
+            tmp_path,
+            {"bomFormat": "CycloneDX", "components": [{"name": "openssl", "version": "3.0.11"}]},
+        )
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(self.SPDX3_WITH_CPE, "cyclonedx-json@1.6"))
+
+        assert converted["components"][0]["cpe"] == CPE
+
+    def test_a_package_the_source_says_nothing_about_is_left_alone(self, tmp_path: Path) -> None:
+        binary = self._converter_emitting(
+            tmp_path,
+            {"spdxVersion": "SPDX-2.3", "packages": [{"name": "zlib", "versionInfo": "1.3"}]},
+        )
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(self.SPDX3_WITH_CPE, "spdx-json"))
+
+        assert "externalRefs" not in converted["packages"][0]
+
+    def test_a_cpe_the_converter_kept_is_not_repeated(self, tmp_path: Path) -> None:
+        binary = self._converter_emitting(
+            tmp_path,
+            {
+                "spdxVersion": "SPDX-2.3",
+                "packages": [
+                    {
+                        "name": "openssl",
+                        "versionInfo": "3.0.11",
+                        "externalRefs": [
+                            {
+                                "referenceCategory": "SECURITY",
+                                "referenceType": "cpe23Type",
+                                "referenceLocator": CPE,
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(self.SPDX3_WITH_CPE, "spdx-json"))
+
+        assert len(converted["packages"][0]["externalRefs"]) == 1
+
+    def test_a_source_with_no_cpe_changes_nothing(self, tmp_path: Path) -> None:
+        emitted = {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]}
+        binary = self._converter_emitting(tmp_path, emitted)
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(b'{"@graph": []}', "spdx-json"))
+
+        assert converted == emitted
 
 
 @pytest.mark.skipif(not os.environ.get("SBOM_CONVERTER_E2E"), reason="needs a real converter installed")
