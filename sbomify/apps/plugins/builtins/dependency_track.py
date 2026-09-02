@@ -490,6 +490,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
         Still not an error. The format is a choice the uploader made and the
         artifact may be perfectly valid, so this stays the skip it has always
         been, now carrying why no conversion happened.
+
+        ``unsupported_input`` puts it on the longer backoff the scheduled sweep
+        keeps for capability gaps. That matters more than it did before this
+        plugin could convert: without it, every sweep would re-attempt a
+        conversion that has no reason to succeed until the document or the
+        deployment changes.
         """
         return self.create_skipped_result(
             finding_id="dependency-track:unsupported-format",
@@ -498,6 +504,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "Dependency Track only supports CycloneDX format, and this SBOM could not be "
                 "converted to CycloneDX, so vulnerability scanning was skipped."
             ),
+            unsupported_input=True,
             extra_metadata={"conversion_error": reason[:500]},
         )
 
