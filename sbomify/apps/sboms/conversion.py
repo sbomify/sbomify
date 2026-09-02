@@ -81,8 +81,7 @@ def convert_sbom(data: bytes, target_format: str, *, timeout: int = DEFAULT_TIME
             # The binary is an operator setting rather than anything a request
             # supplies, the source is a path this function just created, and
             # the format is one of the module constants above.
-            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-            completed = subprocess.run(  # nosec B603 - fixed argv, shell=False
+            completed = subprocess.run(  # nosec B603  # nosemgrep
                 argv,
                 capture_output=True,
                 timeout=timeout,
