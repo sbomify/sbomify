@@ -77,12 +77,14 @@ def convert_sbom(data: bytes, target_format: str, *, timeout: int = DEFAULT_TIME
         source.write_bytes(data)
         argv = [binary, "convert", str(source), "-o", target_format]
         try:
-            # Audited, which is what the rule asks for: argv is a fixed list run
-            # with shell=False, so nothing in it is interpreted as a command.
+            # The scanner flags every subprocess call and asks for an audit,
+            # and its inline suppression is not honoured in this repo, so the
+            # audit is written here instead: argv is a fixed list run with
+            # shell=False, so nothing in it is interpreted as a command.
             # The binary is an operator setting rather than anything a request
             # supplies, the source is a path this function just created, and
             # the format is one of the module constants above.
-            completed = subprocess.run(  # nosemgrep  # nosec B603
+            completed = subprocess.run(  # nosec B603
                 argv,
                 capture_output=True,
                 timeout=timeout,
