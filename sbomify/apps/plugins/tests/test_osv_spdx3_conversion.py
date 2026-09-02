@@ -106,6 +106,25 @@ class TestWhatStillSkips:
         assert result["findings"][0]["id"] == "osv:unsupported-format"
         assert result["metadata"]["skipped"] is True
 
+    def test_a_converter_that_will_not_run_says_which_problem_it_is(self, plugin: OSVPlugin, spdx3_file: Path) -> None:
+        """Installed but unrunnable is not the same as absent.
+
+        An operator told "no converter installed" would go looking for a
+        missing binary rather than a wrong architecture.
+        """
+        with (
+            patch(
+                "sbomify.apps.plugins.builtins.osv.convert_sbom",
+                side_effect=ConversionUnavailable("converter could not be run: [Errno 8] Exec format error"),
+            ),
+            patch.object(plugin, "_execute_scanner") as scanner,
+        ):
+            result = _as_dict(plugin.assess("sbom-1", spdx3_file))
+
+        scanner.assert_not_called()
+        assert result["findings"][0]["id"] == "osv:unsupported-format"
+        assert "Exec format error" in result["metadata"]["conversion_error"]
+
     def test_a_document_the_converter_refuses_is_its_own_skip(self, plugin: OSVPlugin, spdx3_file: Path) -> None:
         with (
             patch(
