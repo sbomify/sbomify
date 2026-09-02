@@ -16,6 +16,7 @@ stored original instead.
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import subprocess  # nosec B404 - fixed argv, no shell, input is a temp file we wrote
@@ -94,9 +95,15 @@ def convert_sbom(data: bytes, target_format: str, *, timeout: int = DEFAULT_TIME
 
     stdout = completed.stdout or b""
     # The converter reports a document it cannot read on stderr and still exits
-    # 0, so an empty or non-JSON body is the reliable failure signal rather than
-    # the return code.
-    if completed.returncode != 0 or not stdout.lstrip().startswith(b"{"):
-        detail = (completed.stderr or b"").decode("utf-8", "replace").strip().splitlines()
-        raise ConversionFailed(detail[-1] if detail else f"converter exited {completed.returncode}")
-    return stdout
+    # 0, so the body is the reliable failure signal rather than the return code.
+    # Parsed rather than sniffed: output that merely starts like JSON can still
+    # be truncated, and handing that to a scanner turns a conversion failure
+    # into what looks like a scanner fault.
+    if completed.returncode == 0 and stdout.strip():
+        try:
+            json.loads(stdout)
+        except ValueError as exc:
+            raise ConversionFailed(f"converter produced no usable document: {exc}") from exc
+        return stdout
+    detail = (completed.stderr or b"").decode("utf-8", "replace").strip().splitlines()
+    raise ConversionFailed(detail[-1] if detail else f"converter exited {completed.returncode}")
