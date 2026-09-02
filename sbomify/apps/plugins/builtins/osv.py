@@ -233,7 +233,7 @@ class OSVPlugin(AssessmentPlugin):
                 logger.warning(
                     f"[OSV] Scan of SBOM {sbom_id} found no package sources; reporting as skipped rather than clean"
                 )
-                return self._create_no_packages_result()
+                return self._create_no_packages_result(converted_from)
 
             # A spec version the bundled scanner does not know is a capability
             # gap, not a fault: the scan never ran, but the artifact is fine and
@@ -275,7 +275,7 @@ class OSVPlugin(AssessmentPlugin):
                 logger.warning(
                     f"[OSV] Scan of SBOM {sbom_id} recognised no packages; reporting as skipped rather than clean"
                 )
-                return self._create_no_packages_result()
+                return self._create_no_packages_result(converted_from)
 
             # Build severity summary
             by_severity: dict[str, int] = {
@@ -751,12 +751,16 @@ class OSVPlugin(AssessmentPlugin):
         match = self._SCANNED_PACKAGES.search(stderr or "")
         return int(match.group(1)) if match else None
 
-    def _create_no_packages_result(self) -> AssessmentResult:
+    def _create_no_packages_result(self, converted_from: str | None = None) -> AssessmentResult:
         """A scan that recognised nothing, reported as skipped rather than clean.
 
         Skipped is the shape that already means "the plugin never scanned
         anything" — ``public_assessment_utils._is_run_skipped`` reads it and
         withholds the public pass, which is the whole point here.
+
+        Carries the conversion provenance when there was one. This is the path
+        a Yocto document takes, so without it the one outcome most likely to
+        need explaining would be the one that does not say a copy was scanned.
         """
         finding = Finding(
             id="osv:no-packages",
@@ -784,7 +788,12 @@ class OSVPlugin(AssessmentPlugin):
             assessed_at=datetime.now(timezone.utc).isoformat(),
             summary=summary,
             findings=[finding],
-            metadata={"scanner": "osv-scanner", "skipped": True, "no_packages": True},
+            metadata={
+                "scanner": "osv-scanner",
+                "skipped": True,
+                "no_packages": True,
+                **({"converted_from": converted_from, "converted_to": "SPDX-2.3"} if converted_from else {}),
+            },
         )
 
     def _create_unsupported_spec_version_result(self) -> AssessmentResult:
