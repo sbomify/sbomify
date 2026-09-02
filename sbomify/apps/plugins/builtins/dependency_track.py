@@ -34,7 +34,6 @@ from sbomify.apps.sboms.conversion import (
     ConversionFailed,
     ConversionUnavailable,
     convert_sbom,
-    converter_path,
 )
 from sbomify.logging import getLogger
 
@@ -150,11 +149,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # against it (ADR-004). The conversion itself happens at the upload
         # below, not here: this runs again on every poll, and converting each
         # time would spend a subprocess to learn what it already knew.
+        # Whether a converter exists is deliberately not asked here. This runs
+        # again on every poll of a scan already in flight, and a worker without
+        # the binary would answer a poll with a skip instead of the findings the
+        # upload is waiting for. Availability is settled where it is acted on,
+        # at the upload below, which runs once.
         needs_conversion = not self._validate_cyclonedx(sbom_bytes)
-        if needs_conversion and converter_path() is None:
-            return self._create_unconvertible_result(
-                "this deployment has no converter installed to derive a CycloneDX copy"
-            )
 
         # Look up SBOM → Component → Team
         try:

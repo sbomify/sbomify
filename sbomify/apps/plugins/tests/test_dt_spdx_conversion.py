@@ -13,13 +13,14 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import uuid
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
-from sbomify.apps.sboms.conversion import ConversionFailed
+from sbomify.apps.sboms.conversion import ConversionFailed, ConversionUnavailable
 
 SPDX_2_3 = json.dumps({"spdxVersion": "SPDX-2.3", "name": "image", "packages": []})
 SPDX_3 = json.dumps({"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": []})
@@ -51,23 +52,6 @@ class TestNamingTheSourceFormat:
         self, plugin: DependencyTrackPlugin, document: str, expected: str
     ) -> None:
         assert plugin._source_format_label(document.encode()) == expected
-
-
-class TestWithoutAConverter:
-    def test_spdx_still_skips_and_says_why(self, plugin: DependencyTrackPlugin, tmp_path) -> None:
-        """A deployment with no converter behaves as it always did."""
-        path = tmp_path / "sbom.json"
-        path.write_text(SPDX_2_3)
-
-        with patch("sbomify.apps.plugins.builtins.dependency_track.converter_path", return_value=None):
-            result = _as_dict(plugin.assess("sbom-1", path))
-
-        assert result["metadata"].get("skipped") is True
-        assert result["findings"][0]["id"] == "dependency-track:unsupported-format"
-        assert "no converter installed" in result["metadata"]["conversion_error"]
-        # Puts it on the longer sweep backoff, so a converter that is not there
-        # is not re-attempted on every pass.
-        assert result["metadata"]["unsupported_input"] is True
 
 
 @pytest.mark.django_db
@@ -105,12 +89,6 @@ class TestTheUploadCarriesTheConversion:
             raise RuntimeError("stop after the upload was handed its bytes")
 
         with (
-            # The gate checks a converter exists before letting the run
-            # continue; the tests container has no binary installed.
-            patch(
-                "sbomify.apps.plugins.builtins.dependency_track.converter_path",
-                return_value="/usr/local/bin/syft",
-            ),
             patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
             patch.object(DependencyTrackPlugin, "_select_dt_server", return_value=server),
             patch.object(DependencyTrackPlugin, "_resolve_release_context", return_value=[]),
@@ -139,6 +117,51 @@ class TestTheUploadCarriesTheConversion:
         self._assess_capturing_upload(plugin, scannable, convert)
 
         assert path.read_text() == SPDX_2_3
+
+    def test_no_converter_installed_is_a_skip_that_says_so(self, plugin: DependencyTrackPlugin, scannable) -> None:
+        """A deployment without the binary behaves as it always did."""
+        convert = patch(
+            "sbomify.apps.plugins.builtins.dependency_track.convert_sbom",
+            side_effect=ConversionUnavailable("no SBOM converter is installed"),
+        )
+        _, result = self._assess_capturing_upload(plugin, scannable, convert)
+
+        assert result["metadata"].get("skipped") is True
+        assert "no SBOM converter is installed" in result["metadata"]["conversion_error"]
+        # The longer sweep backoff, so a converter that is not there is not
+        # re-attempted on every pass.
+        assert result["metadata"]["unsupported_input"] is True
+
+    def test_a_poll_neither_converts_nor_needs_a_converter(self, plugin: DependencyTrackPlugin, scannable) -> None:
+        """The upload already happened, and a poll must return its findings.
+
+        Workers are not guaranteed to be identical, so one without the binary
+        has to be able to poll a scan another worker uploaded. It also records
+        the provenance, which is only known from the stored document.
+        """
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        sbom, path, server = scannable
+        SbomDependencyTrackProjectVersion.objects.create(
+            sbom=sbom, dt_server=server, dt_project_version="1.0", dt_project_version_uuid=uuid.uuid4()
+        )
+        captured: dict[str, Any] = {}
+
+        def fake_poll(**kwargs: Any) -> Any:
+            captured.update(kwargs)
+            return MagicMock()
+
+        with (
+            patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
+            patch.object(DependencyTrackPlugin, "_select_dt_server", return_value=server),
+            patch.object(DependencyTrackPlugin, "_resolve_release_context", return_value=[]),
+            patch("sbomify.apps.plugins.builtins.dependency_track.convert_sbom") as convert,
+            patch.object(DependencyTrackPlugin, "_poll_results", side_effect=fake_poll),
+        ):
+            plugin.assess(str(sbom.id), path)
+
+        convert.assert_not_called()
+        assert captured["converted_from"] == "SPDX-2.3"
 
     def test_a_document_no_converter_reads_is_a_skip(self, plugin: DependencyTrackPlugin, scannable) -> None:
         convert = patch(
@@ -178,10 +201,6 @@ class TestWhatIsNotConverted:
 
         with (
             patch("sbomify.apps.plugins.builtins.dependency_track.convert_sbom") as convert,
-            patch(
-                "sbomify.apps.plugins.builtins.dependency_track.converter_path",
-                return_value="/usr/local/bin/syft",
-            ),
             patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=False),
         ):
             plugin.assess("sbom-1", path)
