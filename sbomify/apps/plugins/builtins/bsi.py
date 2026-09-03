@@ -59,6 +59,7 @@ from typing import Any
 from packaging import version as pkg_version
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
+    extract_spdx3_elements,
     get_spdx3_package_fields,
     iter_spdx3_external_identifiers,
     resolve_spdx3_agent,
@@ -462,14 +463,26 @@ class BSICompliancePlugin(AssessmentPlugin):
                 details=f"{format_name} {version} meets minimum requirement of {min_version}",
             )
         else:
+            if sbom_format == self.FORMAT_SPDX and version in ("3.0", "3.0.0"):
+                # The one-patch-short case: syft, Microsoft sbom-tool, JFrog
+                # Xray and Zephyr 4.5 emit 3.0, and the sender has no way to
+                # know the floor sits a patch digit higher.
+                remediation = (
+                    "BSI TR-03183-2 v2.1.0 §4 requires SPDX version 3.0.1 or higher; "
+                    "SPDX 3.0 falls one patch release short. Producers that emit 3.0.1: "
+                    "cdxgen 12.3.0+, and Yocto 5.2 onward (upgrade if this SBOM came "
+                    "from an older Yocto). CycloneDX 1.6+ also satisfies the floor."
+                )
+            else:
+                remediation = (
+                    f"BSI TR-03183-2 §4 requires {format_name} version {min_version} or higher. "
+                    f"Please regenerate your SBOM using a compliant format version."
+                )
             return self._create_finding(
                 "sbom_format",
                 status="fail",
                 details=f"{format_name} {version} does not meet minimum requirement of {min_version}",
-                remediation=(
-                    f"BSI TR-03183-2 §4 requires {format_name} version {min_version} or higher. "
-                    f"Please regenerate your SBOM using a compliant format version."
-                ),
+                remediation=remediation,
             )
 
     def _validate_cyclonedx(self, data: dict[str, Any], format_version: str) -> list[Finding]:
@@ -885,32 +898,26 @@ class BSICompliancePlugin(AssessmentPlugin):
         """
         findings: list[Finding] = []
 
-        # SPDX 3.x has an "elements" array with different types
+        # SPDX 3.x has an "elements" array with different types. The nested
+        # spdxDocument.elements shape predates the shared helper and is kept.
         elements = data.get("@graph", data.get("spdxDocument", {}).get("elements", []))
         if not elements:
             elements = data.get("elements", [])
 
-        # Extract elements by type
-        creation_info = None
-        packages: list[dict[str, Any]] = []
-        files: list[dict[str, Any]] = []
-        relationships: list[dict[str, Any]] = []
-        persons_orgs: dict[str, dict[str, Any]] = {}
-
-        for element in elements:
-            elem_type = element.get("type", element.get("@type", ""))
-            if "CreationInfo" in elem_type:
-                creation_info = element
-            elif "software_Package" in elem_type or "Package" in elem_type:
-                packages.append(element)
-            elif "software_File" in elem_type or "File" in elem_type:
-                files.append(element)
-            elif "Relationship" in elem_type:
-                relationships.append(element)
-            elif "Person" in elem_type or "Organization" in elem_type:
-                spdx_id = element.get("spdxId", element.get("@id", ""))
-                if spdx_id:
-                    persons_orgs[spdx_id] = element
+        # One extraction, shared with the other plugins — a private routing
+        # copy here is how SoftwareAgent suppliers scored two findings worse
+        # in BSI than everywhere else. Files are BSI-specific, so that pass
+        # stays local.
+        creation_info, packages, relationships, persons_orgs, _ = extract_spdx3_elements({"@graph": elements})
+        # Same normalization as the shared extractor: the bare tail of a
+        # compact or IRI type, matched exactly, so a type merely containing
+        # the word File cannot classify as one.
+        files: list[dict[str, Any]] = [
+            e
+            for e in elements
+            if isinstance(e, dict)
+            and str(e.get("type", e.get("@type", ""))).rsplit("/", 1)[-1] in ("software_File", "File")
+        ]
 
         # === SBOM-level required fields ===
 
@@ -1793,18 +1800,36 @@ class BSICompliancePlugin(AssessmentPlugin):
         return bool(doc_ids)
 
     def _spdx3_has_source_code_uri(self, package: dict[str, Any]) -> bool:
-        """Per BSI §5.2.4. Accept any non-empty software_sourceInfo or an
-        externalIdentifier referencing a VCS / repository URL.
+        """Per BSI §5.2.4. Accept any non-empty software_sourceInfo, or an
+        externalRef pointing at the source — ``vcs`` and ``sourceArtifact``
+        live in the ExternalRefType vocabulary, not ExternalIdentifierType,
+        so this is the shape a conformant document actually carries.
         """
         source_info = package.get("software_sourceInfo")
         if isinstance(source_info, str) and source_info.strip():
             return True
-        ext_ids = package.get("externalIdentifiers")
-        if not isinstance(ext_ids, list):
-            return False
-        for ext_id in ext_ids:
-            if not isinstance(ext_id, dict):
-                continue
+
+        external_refs = package.get("externalRef")
+        if isinstance(external_refs, list):
+            for ref in external_refs:
+                if not isinstance(ref, dict):
+                    continue
+                # Lowercased like every other externalRefType read here:
+                # producers emit VCS and SourceArtifact casings in the wild.
+                ref_type = str(ref.get("externalRefType") or "").strip().lower()
+                if ref_type not in ("vcs", "sourceartifact"):
+                    continue
+                locators = ref.get("locator") or []
+                # JSON-LD compact form: a one-element set may serialise as a
+                # bare string.
+                if isinstance(locators, str):
+                    locators = [locators]
+                if any(isinstance(loc, str) and loc.strip() for loc in locators):
+                    return True
+
+        # Documents stored before this fix carry a not-in-vocabulary
+        # externalIdentifier of type vcs/url; keep reading it.
+        for ext_id in iter_spdx3_external_identifiers(package):
             id_type = str(ext_id.get("externalIdentifierType") or "").strip().lower()
             ident = ext_id.get("identifier") or ""
             if id_type in ("vcs", "url") and isinstance(ident, str) and ident.strip():

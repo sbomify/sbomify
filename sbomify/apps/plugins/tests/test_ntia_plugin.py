@@ -845,13 +845,13 @@ def _create_base_spdx3_sbom() -> dict:
                 "type": "Organization",
                 "spdxId": "SPDXRef-Creator",
                 "name": "SBOM Creator Corp",
-                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "creator@example.com"}],
+                "externalIdentifier": [{"externalIdentifierType": "email", "identifier": "creator@example.com"}],
             },
             {
                 "type": "Organization",
                 "spdxId": "SPDXRef-Supplier",
                 "name": "Supplier Corp",
-                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "supplier@example.com"}],
+                "externalIdentifier": [{"externalIdentifierType": "email", "identifier": "supplier@example.com"}],
             },
             {
                 "type": "software_Package",
@@ -859,8 +859,8 @@ def _create_base_spdx3_sbom() -> dict:
                 "name": "example-package",
                 "software_packageVersion": "1.0.0",
                 "originatedBy": ["SPDXRef-Supplier"],
-                "externalIdentifiers": [
-                    {"externalIdentifierType": "packageURL", "identifier": "pkg:pypi/example@1.0.0"}
+                "externalIdentifier": [
+                    {"externalIdentifierType": "packageUrl", "identifier": "pkg:pypi/example@1.0.0"}
                 ],
             },
             {
@@ -916,7 +916,7 @@ class TestSPDX3Validation:
     def test_spdx3_missing_unique_identifiers(self) -> None:
         """Test SPDX 3.0 SBOM missing unique identifiers."""
         sbom_data = _create_base_spdx3_sbom()
-        del sbom_data["@graph"][3]["externalIdentifiers"]
+        del sbom_data["@graph"][3]["externalIdentifier"]
 
         result = self._assess_sbom(sbom_data)
 
