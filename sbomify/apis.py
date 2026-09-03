@@ -4,12 +4,18 @@ from enum import Enum
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
+from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
+from django.http import HttpRequest
+from django.utils.module_loading import import_string
 from ninja import NinjaAPI
 from ninja.errors import Throttled
 from ninja.renderers import JSONRenderer
 
+from sbomify.api_schema_variants import SchemaVariants
+from sbomify.api_versioning import clone_router
 from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle, AnonymousIPRateThrottle
+from sbomify.apps.core.schemas import DEFAULT_ERROR_CODE_BY_STATUS
 
 try:
     __version__ = version("sbomify")
@@ -30,6 +36,21 @@ class _UTCZEncoder(DjangoJSONEncoder):
 
 class UTCZRenderer(JSONRenderer):
     encoder_class = _UTCZEncoder
+
+    def render(self, request: HttpRequest, data: Any, *, response_status: int) -> Any:
+        """Fill in ``error_code`` when the view left it out.
+
+        Around two hundred error returns ship a bare ``detail``, so a client
+        branching on the code reads null and has to fall back to matching the
+        prose, which is not a contract. Deriving it from the status here covers
+        every route at once, including ninja's own 422 and the throttle
+        handler below, and means a new error cannot ship uncoded. A view that
+        names its own code always wins.
+        """
+        if response_status >= 400 and isinstance(data, dict) and "detail" in data and data.get("error_code") is None:
+            if default := DEFAULT_ERROR_CODE_BY_STATUS.get(response_status):
+                data = {**data, "error_code": default.value}
+        return super().render(request, data, response_status=response_status)
 
 
 api = NinjaAPI(
@@ -160,29 +181,166 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
 )
 
 
-@api.exception_handler(Throttled)
-def _on_throttled(request: Any, exc: Throttled) -> Any:
-    """429 with a Retry-After header (#1060); ninja's default HttpError handler drops exc.wait."""
-    response = api.create_response(request, {"detail": "Too many requests."}, status=429)
-    if exc.wait is not None:
-        # Round up (never below 1s) so a fractional wait doesn't truncate to 0 and
-        # invite clients to retry too early into the throttle.
-        response["Retry-After"] = str(max(1, math.ceil(exc.wait)))
-    return response
+def _register_throttle_handler(api_object: NinjaAPI) -> None:
+    """429 with a Retry-After header (#1060); ninja's default HttpError handler drops exc.wait.
+
+    Registered per API object, because an exception handler belongs to the
+    instance it is registered on: v2 declares the same global throttles, and
+    without its own handler a throttled /api/v2/ call answered a bare 429
+    with no backoff hint, the regression #1060 fixed once already.
+    """
+
+    @api_object.exception_handler(Throttled)
+    def _on_throttled(request: Any, exc: Throttled) -> Any:
+        response = api_object.create_response(request, {"detail": "Too many requests."}, status=429)
+        if exc.wait is not None:
+            # Round up (never below 1s) so a fractional wait doesn't truncate to 0
+            # and invite clients to retry too early into the throttle.
+            response["Retry-After"] = str(max(1, math.ceil(exc.wait)))
+        return response
 
 
-api.add_router("/sboms", "sbomify.apps.sboms.apis.router")
-api.add_router("/documents", "sbomify.apps.documents.apis.router")
-api.add_router("/", "sbomify.apps.documents.access_apis.router")
-api.add_router("/workspaces", "sbomify.apps.teams.apis.router")
-api.add_router("/", "sbomify.apps.core.apis.router")
-api.add_router("/", "sbomify.apps.core.cle_apis.router")
-api.add_router("/billing", "sbomify.apps.billing.apis.router")
-api.add_router("/notifications", "sbomify.apps.notifications.apis.router")
-api.add_router("/vulnerability-scanning", "sbomify.apps.vulnerability_scanning.apis.router")
-api.add_router("/licensing", "sbomify.apps.licensing.api.router")
-api.add_router("/plugins", "sbomify.apps.plugins.apis.router")
-api.add_router("/compliance", "sbomify.apps.compliance.apis.router")
-api.add_router("/controls", "sbomify.apps.controls.apis.router")
-api.add_router("/internal", "sbomify.apps.teams.apis.internal_router")
-api.add_router("/auth/oidc", "sbomify.apps.oidc.apis.router")
+_register_throttle_handler(api)
+
+
+# Every router is mounted once per API version. v1 is the surface we shipped;
+# v2 serves the same views under the vocabulary the product actually uses.
+MOUNTS: tuple[tuple[str, str], ...] = (
+    ("/sboms", "sbomify.apps.sboms.apis.router"),
+    ("/documents", "sbomify.apps.documents.apis.router"),
+    ("/", "sbomify.apps.documents.access_apis.router"),
+    ("/workspaces", "sbomify.apps.teams.apis.router"),
+    ("/", "sbomify.apps.core.apis.router"),
+    ("/", "sbomify.apps.core.cle_apis.router"),
+    ("/billing", "sbomify.apps.billing.apis.router"),
+    ("/notifications", "sbomify.apps.notifications.apis.router"),
+    ("/vulnerability-scanning", "sbomify.apps.vulnerability_scanning.apis.router"),
+    ("/licensing", "sbomify.apps.licensing.api.router"),
+    ("/plugins", "sbomify.apps.plugins.apis.router"),
+    ("/compliance", "sbomify.apps.compliance.apis.router"),
+    ("/controls", "sbomify.apps.controls.apis.router"),
+    ("/internal", "sbomify.apps.teams.apis.internal_router"),
+    ("/auth/oidc", "sbomify.apps.oidc.apis.router"),
+)
+
+# Both API objects are bound before either is mounted, and that ordering is
+# load-bearing rather than tidy. add_router resolves and attaches its routers
+# straight away, so the mount below mutates module-level Router objects. If
+# anything imported during that mount reaches sbomify.urls, its
+# ``from sbomify.apis import api, api_v2`` runs against a half-executed module:
+# with api_v2 defined further down, that is an ImportError, python drops
+# sbomify.apis from sys.modules, and the retry finds the routers already
+# attached and dies with a ConfigError naming /sboms. The real fault is then
+# invisible, buried under a cascade blaming the wrong line.
+
+api_v2 = NinjaAPI(
+    version="2.0.0",
+    urls_namespace="api-2",
+    csrf=True,
+    throttle=[AccessTokenRateThrottle(), AnonymousIPRateThrottle()],
+    renderer=UTCZRenderer(),
+    title="sbomify API",
+    description=(
+        "Version 2 of the sbomify API. Same resources as v1, named the way the "
+        "product names them: artifacts rather than sboms, workspaces rather "
+        "than teams.\n\n"
+        "See /api/v1/docs for the version this replaces."
+    ),
+)
+
+for _prefix, _dotted in MOUNTS:
+    api.add_router(_prefix, _dotted)
+
+
+# ---------------------------------------------------------------------------
+# v2
+#
+# Same views, same handlers, one vocabulary. The v1 surface grew a prefix named
+# for SBOMs that now holds eight artifact types, a path parameter still called
+# team_key under a prefix already renamed to /workspaces/, and a resource that
+# answers on both /sboms/{id} and /sboms/sbom/{id}. None of that can be fixed
+# in place without breaking callers, which is what a second version is for.
+# ---------------------------------------------------------------------------
+
+# Prefixes that differ from v1. Anything absent keeps its v1 prefix.
+V2_PREFIXES: dict[str, str] = {
+    "sbomify.apps.sboms.apis.router": "/artifacts",
+}
+
+# Path parameters renamed across every router. The view keeps its own argument
+# name; ``clone_router`` wraps it so ninja sees the new one.
+V2_PARAM_RENAMES: dict[str, str] = {
+    "team_key": "workspace_key",
+    "sbom_id": "artifact_id",
+}
+
+# Literal segments rewritten inside a router's own paths, applied longest
+# first so /artifact/vex is not shortened before /artifact is considered.
+V2_SEGMENTS: dict[str, dict[str, str]] = {
+    # The prefix already says artifacts, so the segment repeating it goes, and
+    # /sbom/{id} collapses onto /{id} where the other verbs already live.
+    "sbomify.apps.sboms.apis.router": {"/artifact/": "/", "/sbom/": "/"},
+    # Access requests are the last routes still under the old noun.
+    "sbomify.apps.documents.access_apis.router": {"/teams/": "/workspaces/"},
+    # An artifact's releases are declared in the core router, which mounts at
+    # the root, so the /artifacts prefix above never reaches them. Renaming the
+    # mount is not enough: a literal path inside another router keeps whatever
+    # noun it was written with.
+    "sbomify.apps.core.apis.router": {"/sboms/": "/artifacts/"},
+}
+
+
+def _v2_path_rewriter(dotted: str) -> Any:
+    segments = V2_SEGMENTS.get(dotted)
+    if not segments:
+        return None
+
+    def rewrite(path: str) -> str:
+        for old, new in sorted(segments.items(), key=lambda kv: -len(kv[0])):
+            if path.startswith(old):
+                return new + path[len(old) :]
+        return path
+
+    return rewrite
+
+
+# One instance for the whole version, because it caches: the OpenAPI document
+# keys components by model name, so a schema converted twice would render as
+# two components that only differ by identity.
+_register_throttle_handler(api_v2)
+
+_v2_schemas = SchemaVariants()
+
+# Replayed for v2 with one exception. The internal router is auth=None on
+# purpose, secured by proxy rules pinned to /api/v1/internal/* with a client
+# allowlist; replaying it would publish those endpoints, unauthenticated, at
+# /api/v2/internal/* where no rule matches. Operators call v1 directly.
+V2_EXCLUDED: frozenset[str] = frozenset({"sbomify.apps.teams.apis.internal_router"})
+
+for _prefix, _dotted in MOUNTS:
+    if _dotted in V2_EXCLUDED:
+        continue
+    api_v2.add_router(
+        V2_PREFIXES.get(_dotted, _prefix),
+        clone_router(
+            import_string(_dotted),
+            rewrite_path=_v2_path_rewriter(_dotted),
+            param_renames=V2_PARAM_RENAMES,
+            rewrite_response=lambda _path, _status, schema: _v2_schemas.response(schema),
+            convert_request=_v2_schemas.request,
+        ),
+    )
+
+
+# Struck through in /api/v1/docs and flagged in generated clients. This runs
+# after the v2 block on purpose: clone_router builds new Operation objects, so
+# marking the originals now touches v1 alone. Doing it before the clone would
+# have marked v2 deprecated on the day it shipped.
+#
+# Keyed on the deprecation, not the sunset: v1 is deprecated the day v2 ships,
+# while a retirement date may never be set at all.
+if getattr(settings, "API_V1_DEPRECATED_ON", None) is not None:
+    for _prefix, _router in api._routers:
+        for _path_view in _router.path_operations.values():
+            for _operation in _path_view.operations:
+                _operation.deprecated = True

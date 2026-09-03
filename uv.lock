@@ -2967,6 +2967,7 @@ dependencies = [
     { name = "dramatiq-crontab" },
     { name = "email-validator" },
     { name = "gunicorn" },
+    { name = "jsonschema" },
     { name = "libtea" },
     { name = "license-expression" },
     { name = "mcp" },
@@ -3008,6 +3009,7 @@ dev = [
     { name = "types-channels" },
     { name = "types-defusedxml" },
     { name = "types-gunicorn" },
+    { name = "types-jsonschema" },
     { name = "types-psycopg2" },
     { name = "types-pyyaml" },
     { name = "types-requests" },
@@ -3050,6 +3052,7 @@ requires-dist = [
     { name = "dramatiq-crontab", specifier = ">=1.0.12,<2" },
     { name = "email-validator", specifier = ">=2.3.0,<3" },
     { name = "gunicorn", specifier = ">=25.0.3,<27" },
+    { name = "jsonschema", specifier = ">=4.26,<5" },
     { name = "libtea", specifier = "==0.5.1" },
     { name = "license-expression", specifier = ">=30.4.4,<31" },
     { name = "mcp", specifier = ">=1.28.1,<2" },
@@ -3091,6 +3094,7 @@ dev = [
     { name = "types-channels", specifier = ">=4.3.0,<5" },
     { name = "types-defusedxml", specifier = ">=0.7.0.20260504" },
     { name = "types-gunicorn", specifier = ">=25.1.0,<27" },
+    { name = "types-jsonschema", specifier = ">=4.25.0,<5" },
     { name = "types-psycopg2", specifier = ">=2.9.21,<3" },
     { name = "types-pyyaml", specifier = ">=6.0.12,<7" },
     { name = "types-requests", specifier = ">=2.32.0,<3" },
@@ -3454,6 +3458,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8a/92/0e5e58a871c59428481d964c740ad287851c8c8eb86b1a9b153c9a523276/types_gunicorn-25.1.0.20260215.tar.gz", hash = "sha256:a1cc9f59a3211d3048a22ba29ac5f54f8adb2230e87e90eb5860bdd9aaf822ea", size = 32097, upload-time = "2026-02-15T04:10:46.087Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/48/5a/30149601920587dfdb7b21a41716ae60545342f691d31941bf22d4cef1a9/types_gunicorn-25.1.0.20260215-py3-none-any.whl", hash = "sha256:fe548d19d0e3b1c98aa449f4f51074b3516c4405c17a73d4946fa3aa396f2628", size = 50887, upload-time = "2026-02-15T04:10:45.197Z" },
+]
+
+[[package]]
+name = "types-jsonschema"
+version = "4.26.0.20260518"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "referencing" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dd/46/73b6a5d61a61015c4248030a8cb07e5bdddb4041430fae9e585a68692578/types_jsonschema-4.26.0.20260518.tar.gz", hash = "sha256:e1dd53dc97a64f5eccdd6fa9839666e09bb500a8ebba2db6fdaf1789faea81a6", size = 16638, upload-time = "2026-05-18T06:06:44.106Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/d5/134f8a147dcecda10db7f60cfc6af0578a25a5c53c87b3907a64385e0184/types_jsonschema-4.26.0.20260518-py3-none-any.whl", hash = "sha256:30b30a518c7fe335df85c919fcbcc631b69c03d4a4b5b632fa916bea03065307", size = 16072, upload-time = "2026-05-18T06:06:43.264Z" },
 ]
 
 [[package]]

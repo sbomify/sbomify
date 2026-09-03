@@ -23,6 +23,7 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.analytics import events
+from sbomify.apps.core.api.errors import CSV_RESPONSE_DOCS
 from sbomify.apps.core.authz import MANAGE, READ_INTERNAL, can
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -634,7 +635,7 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
 
 @router.post(
     "/products",
-    response={201: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse},
+    response={201: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 500: ErrorResponse},
 )
 def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
     """Create a new product."""
@@ -700,14 +701,14 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
         }
     except Team.DoesNotExist:
         return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
-    except Exception as e:
-        log.error(f"Error creating product: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error creating product")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/products",
-    response={200: PaginatedProductsResponse, 403: ErrorResponse},
+    response={200: PaginatedProductsResponse, 403: ErrorResponse, 500: ErrorResponse},
 )
 def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
     """List products for the authenticated user's workspace."""
@@ -749,9 +750,9 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         ]
 
         return 200, PaginatedProductsResponse(items=items, pagination=pagination_meta)
-    except Exception as e:
-        log.error(f"Error listing products: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing products")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 def _get_product_with_instance(
@@ -838,7 +839,13 @@ def get_product_eol_readiness(request: HttpRequest, product_id: str) -> Any:
 
 @router.put(
     "/products/{product_id}",
-    response={200: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ProductResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def update_product(request: HttpRequest, product_id: str, payload: ProductUpdateSchema) -> Any:
     """Update a product."""
@@ -886,14 +893,20 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             "detail": "A product with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error updating product {product_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating product {product_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
     "/products/{product_id}",
-    response={200: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ProductResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSchema) -> Any:
     """Partially update a product."""
@@ -969,14 +982,14 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
             "detail": "A product with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error patching product {product_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error patching product {product_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
     "/products/{product_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )
 def delete_product(request: HttpRequest, product_id: str) -> Any:
     """Delete a product."""
@@ -1004,9 +1017,9 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
             schedule_broadcast(workspace_key, "product_deleted", {"product_id": product_id, "name": product_name})
 
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting product {product_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error deleting product {product_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1016,7 +1029,13 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
 
 @router.post(
     "/products/{product_id}/identifiers",
-    response={201: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        201: ProductIdentifierSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def create_product_identifier(request: HttpRequest, product_id: str, payload: ProductIdentifierCreateSchema) -> Any:
     """Create a new product identifier."""
@@ -1073,14 +1092,14 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
         }
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
-    except Exception as e:
-        log.error(f"Error creating product identifier: {e}")
-        return 400, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error creating product identifier")
+        return 500, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/products/{product_id}/identifiers",
-    response={200: PaginatedProductIdentifiersResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedProductIdentifiersResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
 )
 @decorate_view(optional_token_auth)
@@ -1124,14 +1143,20 @@ def list_product_identifiers(
         ]
 
         return 200, {"items": items, "pagination": pagination_meta}
-    except Exception as e:
-        log.error(f"Error listing product identifiers: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing product identifiers")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
     "/products/{product_id}/identifiers/{identifier_id}",
-    response={200: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ProductIdentifierSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def update_product_identifier(
     request: HttpRequest, product_id: str, identifier_id: str, payload: ProductIdentifierUpdateSchema
@@ -1192,14 +1217,14 @@ def update_product_identifier(
         }
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
-    except Exception as e:
-        log.error(f"Error updating product identifier {identifier_id}: {e}")
-        return 400, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating product identifier {identifier_id}")
+        return 500, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
     "/products/{product_id}/identifiers/{identifier_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )
 def delete_product_identifier(request: HttpRequest, product_id: str, identifier_id: str) -> Any:
     """Delete a product identifier."""
@@ -1239,14 +1264,20 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
     try:
         identifier.delete()
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting product identifier {identifier_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error deleting product identifier {identifier_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
     "/products/{product_id}/identifiers",
-    response={200: list[ProductIdentifierSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: list[ProductIdentifierSchema],
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def bulk_update_product_identifiers(
     request: HttpRequest,
@@ -1312,9 +1343,9 @@ def bulk_update_product_identifiers(
             "detail": "One or more identifiers already exist in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error bulk updating product identifiers: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error bulk updating product identifiers")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1324,7 +1355,7 @@ def bulk_update_product_identifiers(
 
 @router.post(
     "/products/{product_id}/links",
-    response={201: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={201: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )
 def create_product_link(request: HttpRequest, product_id: str, payload: ProductLinkCreateSchema) -> Any:
     """Create a new product link."""
@@ -1365,20 +1396,20 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
             "created_at": link.created_at.isoformat(),
         }
 
-    except IntegrityError as e:
-        log.error(f"IntegrityError creating product link: {e}")
-        return 400, {
+    except IntegrityError:
+        log.exception("IntegrityError creating product link")
+        return 500, {
             "detail": "Failed to create link due to data integrity issue",
             "error_code": ErrorCode.INTERNAL_ERROR,
         }
-    except Exception as e:
-        log.error(f"Error creating product link: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error creating product link")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/products/{product_id}/links",
-    response={200: PaginatedProductLinksResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedProductLinksResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
 )
 @decorate_view(optional_token_auth)
@@ -1419,14 +1450,14 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
         ]
 
         return 200, {"items": items, "pagination": pagination_meta}
-    except Exception as e:
-        log.error(f"Error listing product links: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing product links")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
     "/products/{product_id}/links/{link_id}",
-    response={200: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )
 def update_product_link(request: HttpRequest, product_id: str, link_id: str, payload: ProductLinkUpdateSchema) -> Any:
     """Update a product link."""
@@ -1470,20 +1501,20 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
             "created_at": link.created_at.isoformat(),
         }
 
-    except IntegrityError as e:
-        log.error(f"IntegrityError updating product link {link_id}: {e}")
-        return 400, {
+    except IntegrityError:
+        log.exception(f"IntegrityError updating product link {link_id}")
+        return 500, {
             "detail": "Failed to update link due to data integrity issue",
             "error_code": ErrorCode.INTERNAL_ERROR,
         }
-    except Exception as e:
-        log.error(f"Error updating product link {link_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating product link {link_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
     "/products/{product_id}/links/{link_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )
 def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> Any:
     """Delete a product link."""
@@ -1513,14 +1544,20 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> 
     try:
         link.delete()
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting product link {link_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error deleting product link {link_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
     "/products/{product_id}/links",
-    response={200: list[ProductLinkSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: list[ProductLinkSchema],
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def bulk_update_product_links(request: HttpRequest, product_id: str, payload: ProductLinkBulkUpdateSchema) -> Any:
     """Bulk update product links - replaces all existing links."""
@@ -1576,9 +1613,9 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
             "detail": "One or more links already exist for this product",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error bulk updating product links: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error bulk updating product links")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1590,7 +1627,7 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
 
 @router.post(
     "/components",
-    response={201: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse},
+    response={201: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 500: ErrorResponse},
     tags=["Components"],
 )
 def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> Any:
@@ -1686,14 +1723,14 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
         }
     except Team.DoesNotExist:
         return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
-    except Exception as e:
-        log.error(f"Error creating component: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error creating component")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/components",
-    response={200: PaginatedComponentsResponse, 400: ErrorResponse, 403: ErrorResponse},
+    response={200: PaginatedComponentsResponse, 400: ErrorResponse, 403: ErrorResponse, 500: ErrorResponse},
     tags=["Components"],
 )
 def list_components(
@@ -1747,9 +1784,9 @@ def list_components(
         ]
 
         return 200, PaginatedComponentsResponse(items=items, pagination=pagination_meta)
-    except Exception as e:
-        log.error(f"Error listing components: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing components")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -1785,7 +1822,13 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
 
 @router.put(
     "/components/{component_id}",
-    response={200: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ComponentResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
     tags=["Components"],
 )
 def update_component(request: HttpRequest, component_id: str, payload: ComponentUpdateSchema) -> Any:
@@ -1891,14 +1934,20 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             "detail": "A component with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error updating component {component_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating component {component_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
     "/components/{component_id}",
-    response={200: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ComponentResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
     tags=["Components"],
 )
 def patch_component(request: HttpRequest, component_id: str, payload: ComponentPatchSchema) -> Any:
@@ -1982,17 +2031,16 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
 
                 nda_document_id = update_data.pop("nda_document_id")
                 if nda_document_id:
-                    try:
-                        # NDA document must belong to a component in the same team
-                        nda_document = Document.objects.filter(id=nda_document_id).select_related("component").first()
-                        if not nda_document or nda_document.component.team_id != component.team_id:
-                            return 400, {
-                                "detail": "NDA document not found or belongs to different team",
-                                "error_code": ErrorCode.NOT_FOUND,
-                            }
-                        component.nda_document = nda_document
-                    except Document.DoesNotExist:
-                        return 400, {"detail": "NDA document not found", "error_code": ErrorCode.NOT_FOUND}
+                    # NDA document must belong to a component in the same team.
+                    # filter().first() returns None rather than raising, so the
+                    # missing-document case is the branch below, not an except.
+                    nda_document = Document.objects.filter(id=nda_document_id).select_related("component").first()
+                    if not nda_document or nda_document.component.team_id != component.team_id:
+                        return 400, {
+                            "detail": "NDA document not found or belongs to different team",
+                            "error_code": ErrorCode.NOT_FOUND,
+                        }
+                    component.nda_document = nda_document
                 else:
                     component.nda_document = None
 
@@ -2033,14 +2081,14 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             "detail": "A component with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error patching component {component_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error patching component {component_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
     "/components/{component_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     tags=["Components"],
 )
 def delete_component(request: HttpRequest, component_id: str) -> Any:
@@ -2085,9 +2133,9 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
             )
 
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting component {component_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error deleting component {component_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -2228,6 +2276,8 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        422: ErrorResponse,
+        500: ErrorResponse,
     },
     tags=["Components"],
 )
@@ -2380,14 +2430,14 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
         log.error(f"Pydantic validation error for component {component_id}: {ve.errors()}")
         log.error(f"Failed validation data: {metadata.model_dump()}")
         return 422, {"detail": str(ve.errors())}
-    except Exception as e:
-        log.error(f"Error updating component metadata for {component_id}: {e}", exc_info=True)
-        return 400, {"detail": "Failed to update component metadata", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating component metadata for {component_id}")
+        return 500, {"detail": "Failed to update component metadata", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/components/{component_id}/releases",
-    response={200: PaginatedReleasesResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedReleasesResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
@@ -2496,9 +2546,9 @@ def list_component_releases(
 
         return 200, {"items": response_data, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing releases for component {component_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error listing releases for component {component_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -2508,7 +2558,7 @@ def list_component_releases(
 
 @router.get(
     "/dashboard/summary",
-    response={200: DashboardStatsResponse, 403: ErrorResponse},
+    response={200: DashboardStatsResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
     tags=["Components"],
 )
@@ -2694,8 +2744,8 @@ def download_product_sbom(
     except ValueError as e:
         # Format/version validation errors
         return 400, {"detail": str(e), "error_code": ErrorCode.BAD_REQUEST}
-    except Exception as e:
-        log.error(f"Error generating product SBOM {product_id}: {e}")
+    except Exception:
+        log.exception(f"Error generating product SBOM {product_id}")
         return 500, {"detail": "Error generating product SBOM"}
 
 
@@ -2752,7 +2802,7 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
 
 @router.get(
     "/releases",
-    response={200: PaginatedReleasesResponse, 403: ErrorResponse},
+    response={200: PaginatedReleasesResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
@@ -2888,9 +2938,9 @@ def list_all_releases(
 
         return 200, {"items": response_data, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing all releases: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing all releases")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 def _build_release_response(request: HttpRequest, release: Release, include_artifacts: bool = False) -> dict[str, Any]:
@@ -3088,6 +3138,7 @@ def _is_release_version_conflict(exc: IntegrityError) -> bool:
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        500: ErrorResponse,
     },
     tags=["Releases"],
 )
@@ -3210,7 +3261,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
             # dressing it up as a duplicate. Re-raising would escape the sibling
             # except Exception below and 500, so this mirrors that branch.
             log.error(f"Unexpected IntegrityError creating release: {e}")
-            return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+            return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
         existing = Release.objects.filter(product=product, name=payload.name).first()
         if existing is not None:
             return 200, _build_release_response(request, existing, include_artifacts=True)
@@ -3223,9 +3274,9 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
         # fault: reporting it as "Internal server error" told them nothing to
         # act on, and put a plain 400 in the error tracker on every attempt.
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
-    except Exception as e:
-        log.error(f"Error creating release: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error creating release")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -3254,7 +3305,13 @@ def get_release(request: HttpRequest, release_id: str) -> Any:
 
 @router.put(
     "/releases/{release_id}",
-    response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ReleaseResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
     tags=["Releases"],
 )
 def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdateSchema) -> Any:
@@ -3319,14 +3376,20 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
         return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
-    except Exception as e:
-        log.error(f"Error updating release {release_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating release {release_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
     "/releases/{release_id}",
-    response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ReleaseResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
     tags=["Releases"],
 )
 def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSchema) -> Any:
@@ -3399,14 +3462,14 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
         return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
-    except Exception as e:
-        log.error(f"Error patching release {release_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error patching release {release_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
     "/releases/{release_id}",
-    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     tags=["Releases"],
 )
 def delete_release(request: HttpRequest, release_id: str) -> Any:
@@ -3449,9 +3512,9 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
             )
 
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting release {release_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error deleting release {release_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -3519,9 +3582,10 @@ def download_release(
     )
 
     if not sbom_artifacts.exists():
-        return HttpResponse(
-            status=500, content='{"detail": "Error generating release SBOM"}', content_type="application/json"
-        )
+        # An empty release is the caller's situation, not a server fault. This
+        # answered a hand-rolled 500 with no error_code, built outside ninja's
+        # pipeline, for what is simply "nothing here to download".
+        return 404, {"detail": "This release has no SBOMs to download", "error_code": ErrorCode.NOT_FOUND}
 
     # Normalize format early
     format_lower = output_format.lower()
@@ -3933,6 +3997,7 @@ def list_release_artifacts(
         403: ErrorResponse,
         404: ErrorResponse,
         409: ErrorResponse,
+        500: ErrorResponse,
     },
     auth=None,
     tags=["Releases"],
@@ -3982,7 +4047,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                         "detail": "Artifact already in this release",
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
-                return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
+                return 400, {"detail": result["error"], "error_code": ErrorCode.BAD_REQUEST}
             artifact = result["artifact"]
             created = {
                 "id": str(artifact.id),
@@ -3998,9 +4063,9 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_version": None,
                 "component_slug": artifact.sbom.component.slug,
             }
-        except Exception as e:
-            log.error(f"Error processing SBOM: {e}")
-            return 400, {"detail": "Error processing SBOM", "error_code": ErrorCode.INTERNAL_ERROR}
+        except Exception:
+            log.exception("Error processing SBOM")
+            return 500, {"detail": "Error processing SBOM", "error_code": ErrorCode.INTERNAL_ERROR}
 
         # Outside the try on purpose: the row is committed by here, and letting a
         # broadcast failure fall into the handler above would report a successful
@@ -4030,7 +4095,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                         "detail": "Artifact already in this release",
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
-                return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
+                return 400, {"detail": result["error"], "error_code": ErrorCode.BAD_REQUEST}
             artifact = result["artifact"]
             created = {
                 "id": str(artifact.id),
@@ -4045,9 +4110,9 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_version": artifact.document.version or "",
                 "component_slug": artifact.document.component.slug,
             }
-        except Exception as e:
-            log.error(f"Error processing document: {e}")
-            return 400, {"detail": "Error processing document", "error_code": ErrorCode.INTERNAL_ERROR}
+        except Exception:
+            log.exception("Error processing document")
+            return 500, {"detail": "Error processing document", "error_code": ErrorCode.INTERNAL_ERROR}
 
         # Outside the try on purpose: the row is committed by here, and letting a
         # broadcast failure fall into the handler above would report a successful
@@ -4839,14 +4904,20 @@ def list_component_sboms(
 
         return 200, {"items": items, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing component SBOMs: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing component SBOMs")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/components/{component_id}/documents",
-    response={200: PaginatedDocumentsResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: PaginatedDocumentsResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
     auth=None,
     tags=["Components"],
 )
@@ -4936,9 +5007,9 @@ def list_component_documents(
 
         return 200, {"items": items, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing component documents: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing component documents")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 class DeleteAccountRequest(BaseModel):
@@ -5069,7 +5140,9 @@ def _csv_response(csv_text: str, filename: str) -> HttpResponse:
 
 @router.get(
     "/exports/inventory.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export the package inventory as CSV",
     tags=["Exports"],
 )
@@ -5098,7 +5171,9 @@ def export_inventory(request: HttpRequest, product_id: str | None = None) -> Htt
 
 @router.get(
     "/exports/licenses.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export the license list as CSV",
     tags=["Exports"],
 )
@@ -5132,7 +5207,9 @@ def export_licenses(
 
 @router.get(
     "/exports/findings.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export assessment findings as CSV",
     tags=["Exports"],
 )
@@ -5157,7 +5234,9 @@ def export_findings(request: HttpRequest, sbom_id: str) -> HttpResponse | tuple[
 
 @router.get(
     "/exports/vulnerabilities.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export vulnerability findings as CSV",
     tags=["Exports"],
 )

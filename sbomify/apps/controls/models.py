@@ -21,7 +21,9 @@ class ControlCatalog(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    team = models.ForeignKey("teams.Team", on_delete=models.CASCADE, related_name="control_catalogs")
+    team = models.ForeignKey(
+        "teams.Team", on_delete=models.CASCADE, related_name="control_catalogs", db_column="workspace_id"
+    )
     name = models.CharField(max_length=255)
     version = models.CharField(max_length=50)
     source = models.CharField(max_length=20, choices=Source.choices, default=Source.BUILTIN)

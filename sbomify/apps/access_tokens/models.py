@@ -24,7 +24,7 @@ class AccessToken(models.Model):
     description = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    team = models.ForeignKey("teams.Team", on_delete=models.CASCADE, null=True, blank=True)
+    team = models.ForeignKey("teams.Team", on_delete=models.CASCADE, null=True, blank=True, db_column="workspace_id")
     scopes = models.JSONField(
         null=True,
         blank=True,

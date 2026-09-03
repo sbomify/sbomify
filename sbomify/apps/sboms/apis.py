@@ -320,9 +320,12 @@ def _extract_spdx3_primary_package(
     """Extract primary package from SPDX 3.0 document.
 
     Strategy:
-    1. Find a 'describes' relationship and use its target package
-    2. Fall back to matching package name with document name
-    3. Fall back to first software_Package element
+    1. Follow the SpdxDocument's rootElement — how SPDX 3 declares the BOM
+       subject
+    2. Find a 'describes' relationship and use its target package (SPDX 2
+       idiom some producers still write)
+    3. Fall back to matching package name with document name
+    4. Fall back to first software_Package element
     """
     packages = payload.packages
     if not packages:
@@ -330,12 +333,28 @@ def _extract_spdx3_primary_package(
 
     package: SPDX3Package | None = None
 
-    # Strategy 1: Find 'describes' relationship target
+    # Strategy 1: the declared BOM subject. spdx3_document_subjects handles
+    # the JSON-LD compact single-string form and a hostile @graph.
+    from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
+
+    _, root_element_ids = spdx3_document_subjects({"@graph": payload.graph})
+    for pkg in packages:
+        if pkg.spdx_id and pkg.spdx_id in root_element_ids:
+            package = pkg
+            break
+    if package:
+        return package, ""
+
+    # Strategy 2: Find 'describes' relationship target
     for rel in payload.relationships:
         rel_type = rel.get("relationshipType", "")
         if rel_type == "describes":
             target_ids = rel.get("to", [])
-            if target_ids:
+            # JSON-LD compact form: a one-element set may serialise as a bare
+            # string; indexing it would yield one character.
+            if isinstance(target_ids, str):
+                target_ids = [target_ids]
+            if isinstance(target_ids, list) and target_ids:
                 target_id = target_ids[0]
                 for pkg in packages:
                     if pkg.spdx_id == target_id:
@@ -344,14 +363,14 @@ def _extract_spdx3_primary_package(
             if package:
                 break
 
-    # Strategy 2: Match by document name
+    # Strategy 3: Match by document name
     if not package and payload.name:
         for pkg in packages:
             if pkg.name == payload.name:
                 package = pkg
                 break
 
-    # Strategy 3: Fall back to first package
+    # Strategy 4: Fall back to first package
     if not package:
         package = packages[0]
 
@@ -881,6 +900,7 @@ def get_cyclonedx_component_metadata(
     response={200: SBOMResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public SBOMs
 )
+@decorate_view(optional_auth)
 def get_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
     """Get a specific SBOM by ID."""
     result = get_sbom_detail(request, sbom_id)
@@ -976,6 +996,7 @@ def download_cipher_suite_inventory_csv(request: HttpRequest, sbom_id: str) -> A
     response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public SBOMs
 )
+@decorate_view(optional_auth)
 def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
     """Download an SBOM file.
 

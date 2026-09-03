@@ -602,7 +602,9 @@ def test_optional_token_auth_invalid_bearer_returns_401():
 
     assert isinstance(response, JsonResponse)
     assert response.status_code == 401
-    assert json.loads(response.content) == {"detail": "Unauthorized"}
+    # error_code included: this JsonResponse never passes through the ninja
+    # renderer that fills codes in, so it has to carry its own.
+    assert json.loads(response.content) == {"detail": "Unauthorized", "error_code": "UNAUTHORIZED"}
     assert calls == []  # handler must not run
 
 
@@ -1121,20 +1123,25 @@ def test_throttled_handler_sets_retry_after():
     """#1060: the 429 response carries Retry-After from the Throttled wait, and omits it when None."""
     from ninja.errors import Throttled
 
-    from sbomify.apis import _on_throttled
+    from sbomify.apis import api, api_v2
 
     req = RequestFactory().get("/api/v1/x")
-    resp = _on_throttled(req, Throttled(wait=42))
-    assert resp.status_code == 429
-    assert resp["Retry-After"] == "42"
+    # The handler is registered per API object now (v2 needed its own; an
+    # exception handler belongs to the instance it is registered on), so it is
+    # reached through the registration rather than a module-level name.
+    for api_object in (api, api_v2):
+        handler = api_object._exception_handlers[Throttled]
+        resp = handler(req, Throttled(wait=42))
+        assert resp.status_code == 429
+        assert resp["Retry-After"] == "42"
 
-    # Fractional waits round UP (never truncate to 0), so clients don't retry too early.
-    assert _on_throttled(req, Throttled(wait=0.4))["Retry-After"] == "1"
-    assert _on_throttled(req, Throttled(wait=5.1))["Retry-After"] == "6"
+        # Fractional waits round UP (never truncate to 0), so clients don't retry too early.
+        assert handler(req, Throttled(wait=0.4))["Retry-After"] == "1"
+        assert handler(req, Throttled(wait=5.1))["Retry-After"] == "6"
 
-    resp_no_wait = _on_throttled(req, Throttled(wait=None))
-    assert resp_no_wait.status_code == 429
-    assert "Retry-After" not in resp_no_wait
+        resp_no_wait = handler(req, Throttled(wait=None))
+        assert resp_no_wait.status_code == 429
+        assert "Retry-After" not in resp_no_wait
 
 
 def test_heavy_throttle_independent_budget_and_distinct_key():
@@ -1258,3 +1265,125 @@ def test_api_response_carries_ratelimit_headers(sample_product, sample_access_to
     assert int(resp["X-RateLimit-Limit"]) > 0
     assert int(resp["X-RateLimit-Remaining"]) >= 0
     assert int(resp["X-RateLimit-Reset"]) > 0
+
+
+@pytest.mark.django_db
+class TestThrottleRefusesCleanlyWhenRedisIsDown:
+    """Fail closed, but with a 429 rather than a traceback.
+
+    The throttle alias raises on a Redis failure by design, so a swallowed
+    failure cannot hand out fresh budgets during an outage. ninja runs
+    throttles outside Operation.run's try, so anything RAISED in
+    allow_request bypasses every handler and lands as a raw 500, which is
+    what production did on every throttled endpoint for the length of a
+    blip; Sentry's loudest transaction was the trust-center release
+    download. Returning False routes the refusal through ninja's own
+    Throttled path and the 429 handler.
+    """
+
+    def _broken_cache(self):
+        from unittest.mock import MagicMock
+
+        from django_redis.exceptions import ConnectionInterrupted
+
+        cache = MagicMock()
+        cache.get.side_effect = ConnectionInterrupted(connection=None)
+        cache.set.side_effect = ConnectionInterrupted(connection=None)
+        return cache
+
+    def test_allow_request_refuses_instead_of_raising(self, sample_user):  # noqa: F811
+        from unittest.mock import patch
+
+        from django.test import RequestFactory
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+        token = create_personal_access_token(sample_user)
+        record = AccessToken.objects.create(user=sample_user, encoded_token=token, description="t")
+        request = RequestFactory().get("/")
+        request.access_token_record = record
+
+        throttle = AccessTokenRateThrottle()
+        with patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": self._broken_cache()}):
+            assert throttle.allow_request(request) is False
+        assert throttle.wait() == 5.0
+
+    def test_the_api_answers_429_with_retry_after_not_500(self, sample_user):  # noqa: F811
+        from unittest.mock import patch
+
+        from django.test import Client
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+        from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+
+        token_str = create_personal_access_token(sample_user)
+        record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t")
+
+        with patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": self._broken_cache()}):
+            response = Client().get("/api/v1/products", **get_api_headers(record))
+
+        assert response.status_code == 429, response.content
+        assert response["Retry-After"] == "5"
+        assert response.json() == {"detail": "Too many requests.", "error_code": "TOO_MANY_REQUESTS"}
+
+    def test_recovery_clears_the_outage_hint(self, sample_user):  # noqa: F811
+        """After Redis comes back, wait() reports the real window again.
+
+        The outage flag survives on the shared instance, so without the
+        clear a genuine rate-limit inside the 5s window would borrow the
+        outage Retry-After instead of its own.
+        """
+        from unittest.mock import patch
+
+        from django.core.cache.backends.locmem import LocMemCache
+        from django.test import RequestFactory
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+        token = create_personal_access_token(sample_user)
+        record = AccessToken.objects.create(user=sample_user, encoded_token=token, description="t")
+        request = RequestFactory().get("/")
+        request.access_token_record = record
+
+        throttle = AccessTokenRateThrottle()
+        with patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": self._broken_cache()}):
+            assert throttle.allow_request(request) is False
+        assert throttle.wait() == 5.0
+
+        working = LocMemCache("recovered", {"TIMEOUT": 300})
+        with patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": working}):
+            assert throttle.allow_request(request) is True
+        assert throttle._backend_refusal_until == 0.0
+        assert throttle.wait() != 5.0 or throttle.wait() is None
+
+    def test_the_outage_logs_once_per_refusal_window(self, sample_user):  # noqa: F811
+        """The old 500 was the alert; the refusal keeps the signal without the storm."""
+        from unittest.mock import patch
+
+        from django.test import RequestFactory
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+        token = create_personal_access_token(sample_user)
+        record = AccessToken.objects.create(user=sample_user, encoded_token=token, description="t")
+        request = RequestFactory().get("/")
+        request.access_token_record = record
+
+        throttle = AccessTokenRateThrottle()
+        with (
+            patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": self._broken_cache()}),
+            patch("sbomify.apps.access_tokens.throttling.logger") as mock_logger,
+        ):
+            assert throttle.allow_request(request) is False
+            assert throttle.allow_request(request) is False
+
+        # Second refusal lands inside the first refusal window, so it must not
+        # log again: one alert per window, not one per rejected request.
+        assert mock_logger.exception.call_count == 1

@@ -24,7 +24,7 @@ from django.conf import settings
 from django.urls import include, path
 from django.views.generic import RedirectView
 
-from sbomify.apis import api
+from sbomify.apis import api, api_v2
 from sbomify.apps.billing.views import PublicEnterpriseContactView
 from sbomify.apps.core.admin import admin_site
 from sbomify.apps.tea.mappers import TEA_API_VERSION
@@ -61,6 +61,7 @@ urlpatterns = [
     path("", include("sbomify.apps.vulnerability_scanning.urls")),
     path("", include("sbomify.apps.oidc.urls")),
     path("api/v1/", api.urls, name="api-1"),
+    path("api/v2/", api_v2.urls, name="api-2"),
     path(r"UuPha8mu/", include("health_check.urls")),  # Random string
 ]
 

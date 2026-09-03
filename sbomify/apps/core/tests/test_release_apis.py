@@ -1052,8 +1052,13 @@ def test_download_release_sbom_no_artifacts(
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
 
-    assert response.status_code == 500  # Error generating SBOM from empty release
-    assert "Error generating release SBOM" in response.json()["detail"]
+    # The docstring above always said 404; the assertion pinned a hand-rolled
+    # 500 built outside ninja's pipeline. An empty release is the caller's
+    # situation, not a server fault.
+    assert response.status_code == 404
+    body = response.json()
+    assert body["error_code"] == "NOT_FOUND"
+    assert "no SBOMs" in body["detail"]
 
 
 # =============================================================================
