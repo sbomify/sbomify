@@ -170,10 +170,19 @@ def _package_key(name: Any, version: Any) -> tuple[str, str] | None:
     Name and version rather than the purl: the purl is exactly what a
     document lacking a usable one does not have, which is the case this
     exists for.
+
+    Only ``None`` counts as no version. A numeric ``0`` is a version a
+    document can state, and folding it to the empty string stopped it
+    matching the ``"0"`` the converter writes, which lost the CPE for that
+    package. A name that is only whitespace is no name, rather than a key
+    every such package would share.
     """
-    if not isinstance(name, str) or not name:
+    if not isinstance(name, str):
         return None
-    return name.strip().lower(), str(version or "").strip()
+    cleaned = name.strip()
+    if not cleaned:
+        return None
+    return cleaned.lower(), "" if version is None else str(version).strip()
 
 
 def _cpes_in_source(document: Any) -> dict[tuple[str, str], list[str]]:

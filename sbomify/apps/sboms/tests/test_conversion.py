@@ -21,6 +21,7 @@ from sbomify.apps.sboms.conversion import (
     SPDX_2_3_JSON,
     ConversionFailed,
     ConversionUnavailable,
+    _package_key,
     convert_sbom,
     converter_path,
 )
@@ -320,6 +321,37 @@ class TestTheCpeSurvives:
             converted = json.loads(convert_sbom(source, SPDX_2_3_JSON))
 
         assert [r["referenceLocator"] for r in converted["packages"][0]["externalRefs"]] == [CPE]
+
+    def test_a_numeric_zero_version_still_matches_its_string(self, tmp_path: Path) -> None:
+        """Only None is a missing version, so 0 is not folded onto the empty string."""
+        source = json.dumps(
+            {
+                "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                "@graph": [
+                    {
+                        "type": "software_Package",
+                        "spdxId": "urn:pkg",
+                        "name": "widget",
+                        "software_packageVersion": 0,
+                        "externalIdentifier": [{"externalIdentifierType": "cpe23", "identifier": CPE}],
+                    }
+                ],
+            }
+        ).encode()
+        binary = self._converter_emitting(
+            tmp_path,
+            {"spdxVersion": "SPDX-2.3", "packages": [{"name": "widget", "versionInfo": "0"}]},
+        )
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(source, SPDX_2_3_JSON))
+
+        assert converted["packages"][0]["externalRefs"][0]["referenceLocator"] == CPE
+
+    def test_a_whitespace_name_is_no_name(self) -> None:
+        """Otherwise every such package shares one key and they collide."""
+        assert _package_key("   ", "1.0") is None
+        assert _package_key("openssl", None) == ("openssl", "")
+        assert _package_key(" OpenSSL ", " 3.0.11 ") == ("openssl", "3.0.11")
 
     def test_a_source_with_no_cpe_changes_nothing(self, tmp_path: Path) -> None:
         emitted = {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]}
