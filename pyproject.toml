@@ -67,6 +67,7 @@ dependencies = [
     "weasyprint>=69.0,<70",
     "defusedxml>=0.7.1",
     "defusedcsv>=3.0.0",
+    "jsonschema>=4.26,<5",
     "django-cotton>=2.7.2",
 ]
 
@@ -94,6 +95,7 @@ dev = [
     "types-channels>=4.3.0,<5",
     "types-requests>=2.32.0,<3",
     "types-defusedxml>=0.7.0.20260504",
+    "types-jsonschema>=4.25.0,<5",
 ]
 test = [
     "pytest>=9.0.3,<10",

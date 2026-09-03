@@ -302,3 +302,58 @@ class TestHostileGraphEntries:
 
         assert creation_info is None
         assert packages == [] and relationships == [] and agents == {} and tools == {}
+
+
+class TestContentAddressableIdentifiers:
+    """The CISA 2026 mapping counts gitoid and swhid external identifiers and
+    the first-class software_contentIdentifier property as component
+    identifiers; a package carrying only those scored as having none."""
+
+    def test_gitoid_external_identifier_counts(self) -> None:
+        package = {
+            "type": "software_Package",
+            "name": "p",
+            "externalIdentifier": [{"externalIdentifierType": "gitoid", "identifier": "gitoid:blob:sha256:abc123"}],
+        }
+
+        assert get_spdx3_package_fields(package)["has_unique_id"] is True
+
+    def test_swhid_external_identifier_counts(self) -> None:
+        package = {
+            "type": "software_Package",
+            "name": "p",
+            "externalIdentifier": [
+                {"externalIdentifierType": "swhid", "identifier": "swh:1:rel:22ece559cc7cc2364edc5e5593d63ae8bd229f9f"}
+            ],
+        }
+
+        assert get_spdx3_package_fields(package)["has_unique_id"] is True
+
+    def test_content_identifier_property_counts(self) -> None:
+        package = {
+            "type": "software_Package",
+            "name": "p",
+            "software_contentIdentifier": [
+                {
+                    "type": "software_ContentIdentifier",
+                    "software_contentIdentifierType": "swhid",
+                    "software_contentIdentifierValue": "swh:1:cnt:94a9ed024d3859793618152ea559a168bbcbb5e2",
+                }
+            ],
+        }
+
+        assert get_spdx3_package_fields(package)["has_unique_id"] is True
+
+    def test_empty_or_malformed_content_identifier_does_not(self) -> None:
+        assert (
+            get_spdx3_package_fields({"type": "software_Package", "name": "p", "software_contentIdentifier": []})[
+                "has_unique_id"
+            ]
+            is False
+        )
+        assert (
+            get_spdx3_package_fields(
+                {"type": "software_Package", "name": "p", "software_contentIdentifier": "not-a-list"}
+            )["has_unique_id"]
+            is False
+        )
