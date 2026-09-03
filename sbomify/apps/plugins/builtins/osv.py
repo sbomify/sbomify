@@ -383,24 +383,14 @@ class OSVPlugin(AssessmentPlugin):
 
     @staticmethod
     def _is_spdx3(sbom_data: bytes) -> bool:
-        """Check if raw SBOM data is SPDX 3.x format.
+        """Whether raw SBOM bytes hold an SPDX 3.x document — parsing here,
+        detection delegated to the one shared detector."""
+        from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
 
-        Detection criteria:
-            - @context contains "spdx.org/rdf/3.0" (string, list, or dict), or
-            - root-level spdxVersion starts with "SPDX-3.".
-        """
         try:
-            content = json.loads(sbom_data.decode("utf-8"))
-            context = content.get("@context")
-            if context is not None and "spdx.org/rdf/3.0" in str(context):
-                return True
-
-            spdx_version = content.get("spdxVersion")
-            if isinstance(spdx_version, str) and spdx_version.startswith("SPDX-3."):
-                return True
+            return is_spdx3(json.loads(sbom_data.decode("utf-8")))
         except (json.JSONDecodeError, UnicodeDecodeError):
-            pass
-        return False
+            return False
 
     def _create_conversion_failed_result(self, detail: str) -> AssessmentResult:
         """A document the converter would not read, reported as skipped.
