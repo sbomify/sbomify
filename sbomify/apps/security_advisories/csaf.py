@@ -63,8 +63,12 @@ _EXPLOIT_STATUS = {
     AdvisoryVulnerability.ExploitationStatus.KNOWN_EXPLOITED: "Exploitation is known.",
 }
 
-# What _version_expressions prints when it has nothing to say.
-_NO_VERSIONS = {"", "—"}
+# What the trust-center table prints where there is no version range to give:
+# a dash when none was recorded, and "None"/"All" for a product the advisory
+# says is not affected. The API strips these, but the renderer takes the
+# projection directly, so it recognises them too rather than naming a CSAF
+# product "Acme Gateway None".
+_NO_VERSIONS = {"", "—", "None", "All"}
 
 
 def _stamp(value: Any) -> str | None:

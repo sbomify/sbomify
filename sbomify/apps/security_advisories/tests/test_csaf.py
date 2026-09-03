@@ -208,6 +208,15 @@ class TestTheDocument:
         withdrawn = [n for n in document["document"]["notes"] if n.get("title") == "Withdrawn"]
         assert withdrawn == [{"category": "other", "title": "Withdrawn", "text": "The vault was affected after all."}]
 
+    def test_a_not_affected_product_is_named_without_a_placeholder(self, client, team, rich_advisory) -> None:
+        """The table prints "None"/"All" there; a CSAF product name must not carry them."""
+        document = client.get(_csaf(team.key, rich_advisory.tracking_id)).json()
+        validate_csaf(document)
+
+        names = list(_by_name(document))
+        assert "Acme Vault" in names
+        assert not [n for n in names if n.endswith(" None") or n.endswith(" All")], names
+
     def test_a_notice_without_products_is_a_base_document(self, client, team, sample_user) -> None:
         """The advisory profile needs a product tree; a workspace notice has none to give."""
         notice = SecurityAdvisory.objects.create(
