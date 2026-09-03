@@ -305,7 +305,14 @@ def _cvss_chips(entries: Any) -> list[dict[str, Any]]:
         except (KeyError, TypeError, ValueError):
             continue
         version = str(entry.get("version") or "").strip()
-        chips.append({"label": f"CVSS {version}" if version else "CVSS", "base_score": score})
+        chips.append(
+            {
+                "label": f"CVSS {version}" if version else "CVSS",
+                "base_score": score,
+                "version": version,
+                "vector": str(entry.get("vector") or "").strip(),
+            }
+        )
     return chips
 
 
@@ -549,6 +556,7 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
                 "external_id": r.external_id,
                 "url": r.url,
                 "summary": r.summary,
+                "category": r.category,
             }
             for r in advisory.references.all()
         ]
@@ -583,17 +591,25 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
                 scope_label = "All products"
             else:
                 scope_label = advisory_product.product_name or (product.name if product else "")
+            affected, unaffected = _version_expressions(status)
             rows.append(
                 {
                     "id": status.id,
                     "vulnerability": vulnerability.cve_id or vulnerability.title,
                     "product": scope_label,
+                    "product_id": product.id if product else None,
+                    # The version expressions the index shows, so a machine
+                    # reader gets the same answer as the table.
+                    "affected": affected,
+                    "unaffected": unaffected,
                     "status": status.status,
                     "status_label": status.get_status_display(),
                     "status_variant": STATUS_VARIANTS.get(status.status, "secondary"),
                     "justification": status.get_justification_display() if status.justification else "",
+                    "justification_value": status.justification,
                     "impact_statement": status.impact_statement,
                     "action_statement": status.action_statement,
+                    "response": status.response,
                     "recommended_version": status.recommended_version,
                     "version_ranges": [str(r) for r in status.version_ranges.all()],
                 }
