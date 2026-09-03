@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime
 from enum import Enum
 from types import ModuleType
@@ -18,7 +19,6 @@ from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
 from .sbom_format_schemas import cyclonedx_1_7 as cdx17
 from .sbom_format_schemas import spdx_2_3 as spdx23
-from .sbom_format_schemas import spdx_3_0 as spdx30
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
 
 __all__ = [
@@ -51,9 +51,7 @@ __all__ = [
     "get_cyclonedx_module",
     "get_supported_cyclonedx_versions",
     "get_supported_spdx_versions",
-    "get_spdx_module",
     "spdx23",
-    "spdx30",
     "validate_cyclonedx_sbom",
     "validate_spdx_sbom",
 ]
@@ -622,44 +620,16 @@ class SBOMFormat(str, Enum):
 
 class SPDXSupportedVersion(str, Enum):
     """
-    Supported SPDX specification versions.
+    Supported SPDX specification versions, as accepted by validate_spdx_sbom.
 
-    To add support for a new SPDX version (e.g., 3.0):
-    1. Add the version here: v3_0 = "3.0"
-    2. Import the schema module at the top of this file, for example:
-       from sbomify.apps.sboms.sbom_format_schemas import spdx_3_0 as spdx30
-    3. Add it to the module_map in get_spdx_module() below
-    4. That's it! The API will automatically support the new version.
-
-    Note: SPDX 2.x versions share compatible schemas, but SPDX 3.0 will require
-    a different schema structure.
+    SPDX 2.x parses through the lenient SPDXSchema; SPDX 3.0.x parses through
+    SPDX3Schema, with documents claiming 3.0.1+ additionally validated against
+    the vendored official schema (see spdx3_validation).
     """
 
     v2_2 = "2.2"
     v2_3 = "2.3"
     v3_0 = "3.0"
-
-
-def get_spdx_module(spec_version: SPDXSupportedVersion) -> ModuleType:
-    """
-    Get the appropriate SPDX schema module for a given version.
-
-    When adding a new version, add it to this mapping.
-
-    Note: This function provides the strict generated Pydantic schema for SPDX.
-    It is used by:
-    - sbomify.apps.sboms.builders for generating aggregated SBOMs (strict output)
-
-    For parsing uploaded SBOMs, use the lenient SPDXSchema class instead,
-    which allows extra fields and provides aliased properties.
-    """
-    module_map: dict[SPDXSupportedVersion, ModuleType] = {
-        # SPDX 2.2 and 2.3 are compatible, use 2.3 schema for both
-        SPDXSupportedVersion.v2_2: spdx23,
-        SPDXSupportedVersion.v2_3: spdx23,
-        SPDXSupportedVersion.v3_0: spdx30,
-    }
-    return module_map[spec_version]
 
 
 def get_supported_spdx_versions() -> list[str]:
@@ -668,15 +638,47 @@ def get_supported_spdx_versions() -> list[str]:
 
 
 def _detect_spdx3_context(sbom_data: dict[str, Any]) -> bool:
-    """Check if SBOM data has an @context indicating SPDX 3.0."""
+    """Whether the document is in NATIVE SPDX 3 form (an @context naming any
+    3.x line).
+
+    Deliberately narrower than the shared ``is_spdx3`` detector: this gate
+    decides which documents claim spec conformance and are held to the
+    vendored 3.0.1 schema. Legacy ``spdxVersion``/``elements`` documents are
+    SPDX 3 too, but they declare themselves non-conformant by shape and keep
+    the lenient path — routing them through ``is_spdx3`` here would strict-
+    validate them and reject stored producers' output.
+
+    Matching ``3.`` rather than ``3.0`` is deliberate: a 3.1 document must
+    land in the SPDX 3 branch to be rejected with an error that names the
+    supported version.
+    """
     context = sbom_data.get("@context", "")
     if isinstance(context, str):
-        return "spdx.org/rdf/3.0" in context
+        return "spdx.org/rdf/3." in context
     if isinstance(context, list):
-        return any("spdx.org/rdf/3.0" in str(c) for c in context)
+        return any("spdx.org/rdf/3." in str(c) for c in context)
     if isinstance(context, dict):
-        return "spdx.org/rdf/3.0" in str(context)
+        return "spdx.org/rdf/3." in str(context)
     return False
+
+
+def _spdx3_version_tuple(version: str | None) -> tuple[int, ...] | None:
+    """``"3.0.1"`` → ``(3, 0, 1)``; tolerant of a bare ``"3.0"`` and of
+    semver prerelease/build suffixes; None when unparseable."""
+    if not version:
+        return None
+    # Anchored to the whole string, with only a -prerelease or +build tail
+    # allowed past the numbers: "3.0.beta" must not read as a valid 3.0.
+    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?(?:[-+].*)?$", version)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.groups() if part is not None)
+
+
+_SPDX31_REJECTION = (
+    "SPDX {version} is not supported. sbomify accepts SPDX 2.2, 2.3 and "
+    "3.0.x; send 3.0.1 to also satisfy the BSI TR-03183-2 floor."
+)
 
 
 def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Schema, str]:
@@ -701,12 +703,16 @@ def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Sch
         ValueError: If the SPDX version is unsupported
         ValidationError: If the SBOM data is invalid for the detected version
     """
-    # Detect SPDX 3.0 via @context (spec-compliant format has no spdxVersion at root)
+    # Detect SPDX 3.x via @context (spec-compliant format has no spdxVersion at root)
     if _detect_spdx3_context(sbom_data):
         spdx3_payload = SPDX3Schema.model_validate(sbom_data)
         payload: SPDXSchema | SPDX3Schema = spdx3_payload
         # Extract version from CreationInfo.specVersion in the graph
         full_version = spdx3_payload.spec_version
+
+        version_tuple = _spdx3_version_tuple(full_version)
+        if version_tuple and version_tuple[:2] > (3, 0):
+            raise ValueError(_SPDX31_REJECTION.format(version=full_version))
 
         # Normalize SPDX 3.0.x patch versions to "3.0" for enum lookup
         if full_version and (full_version == "3.0" or full_version.startswith("3.0.")):
@@ -720,6 +726,17 @@ def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Sch
             supported = ", ".join(get_supported_spdx_versions())
             raise ValueError(f"Unsupported SPDX version: {full_version}. Supported versions: {supported}")
 
+        # A document claiming 3.0.1 or later is held to the vendored official
+        # schema. 3.0/3.0.0 stays lenient — syft, sbom-tool and JFrog emit it
+        # and no 3.0.0 schema is vendored to hold them to — and the legacy
+        # spdxVersion/elements branch below never reaches this check.
+        if version_tuple and version_tuple >= (3, 0, 1):
+            from sbomify.apps.sboms.spdx3_validation import spdx3_schema_errors
+
+            errors = spdx3_schema_errors(sbom_data)
+            if errors:
+                raise ValueError(f"SPDX {full_version} document failed 3.0.1 schema validation: " + "; ".join(errors))
+
         return payload, full_version
 
     # Fall back to spdxVersion-based detection
@@ -728,6 +745,10 @@ def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Sch
         raise ValueError(f"Invalid spdxVersion format: {spdx_version_str}. Expected format: SPDX-X.X")
 
     full_version = spdx_version_str.removeprefix("SPDX-")
+
+    legacy_version_tuple = _spdx3_version_tuple(full_version)
+    if legacy_version_tuple and (3, 0) < legacy_version_tuple[:2] < (4, 0):
+        raise ValueError(_SPDX31_REJECTION.format(version=full_version))
 
     # Normalize SPDX 3.0.x patch versions to "3.0" for enum lookup
     if full_version == "3.0" or full_version.startswith("3.0."):

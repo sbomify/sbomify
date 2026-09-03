@@ -354,24 +354,14 @@ class OSVPlugin(AssessmentPlugin):
 
     @staticmethod
     def _is_spdx3(sbom_data: bytes) -> bool:
-        """Check if raw SBOM data is SPDX 3.x format.
+        """Whether raw SBOM bytes hold an SPDX 3.x document — parsing here,
+        detection delegated to the one shared detector."""
+        from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
 
-        Detection criteria:
-            - @context contains "spdx.org/rdf/3.0" (string, list, or dict), or
-            - root-level spdxVersion starts with "SPDX-3.".
-        """
         try:
-            content = json.loads(sbom_data.decode("utf-8"))
-            context = content.get("@context")
-            if context is not None and "spdx.org/rdf/3.0" in str(context):
-                return True
-
-            spdx_version = content.get("spdxVersion")
-            if isinstance(spdx_version, str) and spdx_version.startswith("SPDX-3."):
-                return True
+            return is_spdx3(json.loads(sbom_data.decode("utf-8")))
         except (json.JSONDecodeError, UnicodeDecodeError):
-            pass
-        return False
+            return False
 
     def _create_unsupported_format_result(self) -> AssessmentResult:
         """SPDX 3.0, which osv-scanner cannot read at all, reported as skipped.
@@ -393,8 +383,8 @@ class OSVPlugin(AssessmentPlugin):
             title="SPDX 3.0 Not Supported",
             description=(
                 "osv-scanner does not read SPDX 3.0 yet, so this SBOM was not scanned "
-                "for vulnerabilities. Upload it as SPDX 2.x or CycloneDX to have it "
-                "scanned now."
+                "for vulnerabilities. To scan it now, convert it with `syft convert` "
+                "(v1.46.0+, emits SPDX 2.3 or CycloneDX, lossily) and upload the result."
             ),
             unsupported_input=True,
             extra_metadata={
