@@ -110,13 +110,17 @@ class CreateAdvisorySchema(Schema):
     cvss_score: float | None = None
     cvss_vector: str = ""
     product_ids: list[str] = Field(default_factory=list)
+    affected_release_ids: list[str] = Field(
+        default_factory=list,
+        description="Releases of the named products that carry the vulnerability; each becomes an affected version.",
+    )
 
 
 class UpdateAdvisorySchema(Schema):
     """A partial update: a field left out keeps its stored value.
 
-    ``cvss_score`` and ``cvss_vector`` are one entry and are written together;
-    sending ``cvss_score`` as null clears both.
+    ``cvss_score`` and ``cvss_vector`` are one entry: sending ``cvss_score``
+    as null clears both, and a vector without a score is refused.
     """
 
     title: str | None = Field(None, min_length=1, max_length=255)
@@ -131,6 +135,16 @@ class PublishAdvisorySchema(Schema):
     published advisory with the visibility asked for here."""
 
     visibility: str = Field(description="The visibility to disclose at.")
+
+
+class AdvisoryUpdateSchema(Schema):
+    """One timeline entry: a note, or a remediation status move with commentary."""
+
+    kind: str = Field(
+        description="'update' for a note that moves nothing, or a remediation status: "
+        "identified, investigating, fix_in_progress, resolved, wont_fix."
+    )
+    note: str = ""
 
 
 class WithdrawAdvisorySchema(Schema):

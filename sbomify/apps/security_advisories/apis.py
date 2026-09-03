@@ -39,6 +39,7 @@ from sbomify.apps.security_advisories.csaf import render_csaf
 from sbomify.apps.security_advisories.schemas import (
     AdvisoryDetailSchema,
     AdvisorySchema,
+    AdvisoryUpdateSchema,
     CreateAdvisorySchema,
     PublicAdvisoryDetailSchema,
     PublicAdvisoryListSchema,
@@ -177,7 +178,7 @@ def list_advisories(request: HttpRequest, search: str = "") -> tuple[int, Any]:
     summary="Create an advisory",
 )
 def create_advisory(request: HttpRequest, payload: CreateAdvisorySchema) -> tuple[int, Any]:
-    from sbomify.apps.core.models import Product
+    from sbomify.apps.core.models import Product, Release
 
     team, error = _workspace(request)
     if error:
@@ -187,8 +188,14 @@ def create_advisory(request: HttpRequest, payload: CreateAdvisorySchema) -> tupl
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
     # Scoped to the workspace: an id from elsewhere names no product here
-    # rather than attaching one the caller cannot see.
+    # rather than attaching one the caller cannot see. Releases are scoped the
+    # same way; the service then holds them to the products actually named.
     products = list(Product.objects.filter(id__in=payload.product_ids, team=team)) if payload.product_ids else []
+    releases = (
+        list(Release.objects.filter(id__in=payload.affected_release_ids, product__team=team))
+        if payload.affected_release_ids
+        else []
+    )
 
     created = advisory_service.create_advisory(
         team,
@@ -201,6 +208,7 @@ def create_advisory(request: HttpRequest, payload: CreateAdvisorySchema) -> tupl
         cvss_score=payload.cvss_score,
         cvss_vector=payload.cvss_vector,
         products=products,
+        affected_releases=releases,
     )
     if not created.ok:
         return _failed(created)
@@ -255,13 +263,15 @@ def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvis
     cvss_vector = None
     if "cvss_score" in sent or "cvss_vector" in sent:
         score = sent.get("cvss_score", stored.get("cvss_score"))
-        if score is None:
-            # A vector without a score is not an entry; clearing the score
-            # clears the pair, whatever the body said about the vector.
-            cvss_score, cvss_vector = "", ""
+        cvss_score = "" if score is None else str(score)
+        if "cvss_vector" in sent:
+            # Sent vectors always reach the service, so a vector with no
+            # score to attach to is refused there rather than dropped here.
+            cvss_vector = sent["cvss_vector"] or ""
         else:
-            cvss_score = str(score)
-            cvss_vector = sent.get("cvss_vector", stored.get("cvss_vector")) or ""
+            # Clearing the score clears the stored vector with it; changing
+            # the score alone keeps it.
+            cvss_vector = (stored.get("cvss_vector") or "") if score is not None else ""
 
     updated = advisory_service.update_advisory(
         team,
@@ -275,6 +285,28 @@ def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvis
     )
     if not updated.ok:
         return _failed(updated)
+
+    return _fetched(team, advisory_id)
+
+
+@router.post(
+    "/{advisory_id}/updates",
+    response={200: AdvisoryDetailSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=AUTH,
+    summary="Post a timeline update or move the remediation status",
+    description="kind is 'update' for a note, or a remediation status to move to, with the note as commentary.",
+)
+def post_advisory_update(request: HttpRequest, advisory_id: str, payload: AdvisoryUpdateSchema) -> tuple[int, Any]:
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:manage", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    posted = advisory_service.post_update(team, request.user, advisory_id, kind=payload.kind, note=payload.note)
+    if not posted.ok:
+        return _failed(posted)
 
     return _fetched(team, advisory_id)
 

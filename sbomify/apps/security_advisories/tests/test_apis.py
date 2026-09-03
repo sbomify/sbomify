@@ -591,3 +591,163 @@ class TestThePublicSide:
 
         assert response.status_code == 200, response.content
         assert response.json()["tracking_id"] == advisory.tracking_id
+
+
+class TestCvssPairs:
+    def test_a_vector_without_a_score_is_refused(self, client_and_headers, advisory) -> None:
+        """Not silently dropped: the service's own rule reaches the client."""
+        client, headers = client_and_headers
+
+        response = client.patch(
+            _detail(advisory.id),
+            data={"cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 400, response.content
+        assert "score" in response.json()["detail"].lower()
+
+    def test_changing_the_score_alone_keeps_the_vector(self, client_and_headers, advisory) -> None:
+        client, headers = client_and_headers
+        vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+        client.patch(
+            _detail(advisory.id),
+            data={"cvss_score": 9.8, "cvss_vector": vector},
+            content_type="application/json",
+            **headers,
+        )
+
+        response = client.patch(
+            _detail(advisory.id), data={"cvss_score": 9.1}, content_type="application/json", **headers
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["cvss_score"] == 9.1
+        assert response.json()["cvss_vector"] == vector
+
+
+class TestAffectedReleases:
+    @pytest.fixture
+    def release(self, product):
+        from sbomify.apps.core.models import Release
+
+        return Release.objects.create(product=product, name="1.2.0", version="1.2.0")
+
+    def test_a_release_becomes_an_affected_version(self, client_and_headers, product, release) -> None:
+        client, headers = client_and_headers
+
+        response = client.post(
+            LIST,
+            data={"title": "Scoped to 1.2.0", "product_ids": [product.id], "affected_release_ids": [release.id]},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 201, response.content
+        [named] = response.json()["products"]
+        assert named["id"] == product.id
+        assert any("1.2.0" in affected for affected in named["affected_ranges"]), named
+
+    def test_a_release_of_an_unnamed_product_is_refused(self, client_and_headers, product, release, team) -> None:
+        """The service holds releases to the products the advisory names; nothing half-built survives."""
+        from sbomify.apps.core.models import Product
+
+        client, headers = client_and_headers
+        other = Product.objects.create(name="Acme Vault", team=team)
+
+        response = client.post(
+            LIST,
+            data={"title": "Mismatched", "product_ids": [other.id], "affected_release_ids": [release.id]},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 400, response.content
+        assert not SecurityAdvisory.objects.filter(title="Mismatched").exists()
+
+    def test_a_release_from_another_workspace_is_not_seen(self, client_and_headers, product, other_team) -> None:
+        from sbomify.apps.core.models import Product, Release
+
+        client, headers = client_and_headers
+        theirs = Release.objects.create(
+            product=Product.objects.create(name="Their product", team=other_team), name="9.9.9", version="9.9.9"
+        )
+
+        response = client.post(
+            LIST,
+            data={"title": "Blind", "product_ids": [product.id], "affected_release_ids": [theirs.id]},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 201, response.content
+        assert response.json()["products"][0]["affected_ranges"] == []
+
+
+class TestTimelineUpdates:
+    def test_a_note_lands_on_the_timeline(self, client_and_headers, advisory) -> None:
+        client, headers = client_and_headers
+
+        response = client.post(
+            f"{_detail(advisory.id)}/updates",
+            data={"kind": "update", "note": "Patch under test on staging."},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 200, response.content
+        body = response.json()
+        assert body["remediation_status"] == advisory.remediation_status
+        assert [e for e in body["timeline"] if e["kind"] == "update"][0]["body"] == "Patch under test on staging."
+
+    def test_a_status_kind_moves_the_remediation_status(self, client_and_headers, advisory) -> None:
+        client, headers = client_and_headers
+
+        response = client.post(
+            f"{_detail(advisory.id)}/updates",
+            data={"kind": "fix_in_progress", "note": "Fix branch opened."},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 200, response.content
+        body = response.json()
+        assert body["remediation_status"] == SecurityAdvisory.RemediationStatus.FIX_IN_PROGRESS
+        assert body["is_open"] is True
+        moved = [e for e in body["timeline"] if e["kind"] == "status_change"][0]
+        assert (moved["from_status"], moved["to_status"]) == (advisory.remediation_status, "fix_in_progress")
+        advisory.refresh_from_db()
+        assert advisory.remediation_status == SecurityAdvisory.RemediationStatus.FIX_IN_PROGRESS
+
+    def test_an_unknown_kind_and_an_empty_note_are_refused(self, client_and_headers, advisory) -> None:
+        client, headers = client_and_headers
+
+        unknown = client.post(
+            f"{_detail(advisory.id)}/updates", data={"kind": "shipped"}, content_type="application/json", **headers
+        )
+        empty = client.post(
+            f"{_detail(advisory.id)}/updates",
+            data={"kind": "update", "note": " "},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert unknown.status_code == 400
+        assert empty.status_code == 400
+
+    def test_a_member_may_not_post(self, client_and_headers, sample_team_with_owner_member, advisory) -> None:
+        client, headers = client_and_headers
+        sample_team_with_owner_member.role = "member"
+        sample_team_with_owner_member.save()
+
+        response = client.post(
+            f"{_detail(advisory.id)}/updates",
+            data={"kind": "resolved", "note": "Done."},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 403
+        advisory.refresh_from_db()
+        assert advisory.remediation_status != SecurityAdvisory.RemediationStatus.RESOLVED

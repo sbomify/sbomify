@@ -801,8 +801,8 @@ def withdraw_advisory(team: Any, user: Any, advisory_id: str, *, reason: str) ->
     The row keeps its tracking id, its publication date and its visibility: a
     reader who cited the advisory can still resolve it, and the trust center
     goes on listing it, marked withdrawn and carrying the reason. Only a
-    published advisory can be withdrawn; a draft has disclosed nothing and is
-    deleted instead.
+    published advisory can be withdrawn: a draft has disclosed nothing, so the
+    answer for one is a conflict that points the caller at delete.
     """
     reason = (reason or "").strip()
     if not reason:
