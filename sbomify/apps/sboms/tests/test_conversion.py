@@ -258,6 +258,16 @@ class TestTheCpeSurvives:
             {"referenceCategory": "SECURITY", "referenceType": "cpe23Type", "referenceLocator": CPE}
         ]
 
+    @pytest.mark.parametrize("junk", [5, "packages", {"a": 1}, None])
+    def test_a_non_list_where_a_list_belongs_does_not_crash(self, tmp_path: Path, junk: Any) -> None:
+        """Both documents are third-party, so neither is trusted to hold a list."""
+        source = json.dumps({"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": junk}).encode()
+        binary = self._converter_emitting(tmp_path, {"spdxVersion": "SPDX-2.3", "packages": junk, "components": junk})
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(source, "spdx-json"))
+
+        assert converted["packages"] == junk
+
     def test_a_source_with_no_cpe_changes_nothing(self, tmp_path: Path) -> None:
         emitted = {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]}
         binary = self._converter_emitting(tmp_path, emitted)

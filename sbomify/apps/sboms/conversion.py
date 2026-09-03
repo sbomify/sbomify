@@ -140,6 +140,20 @@ def _spdx_reference_type(cpe: str) -> str | None:
     return None
 
 
+def _entries(container: Any, key: str) -> list[Any]:
+    """The list at ``key``, or nothing.
+
+    Both documents here are third-party: one came from an uploader, the other
+    from the converter. A non-list where the spec says list is not something
+    to iterate. An int raises TypeError and a string iterates its characters,
+    so ``or []`` guards neither.
+    """
+    if not isinstance(container, dict):
+        return []
+    value = container.get(key)
+    return value if isinstance(value, list) else []
+
+
 def _package_key(name: Any, version: Any) -> tuple[str, str] | None:
     """What a package is called, as the two documents can agree on it.
 
@@ -175,8 +189,7 @@ def _cpes_in_source(document: Any) -> dict[tuple[str, str], list[str]]:
         return values
 
     # SPDX 3: elements in the graph.
-    graph = document.get("@graph")
-    for element in graph if isinstance(graph, list) else []:
+    for element in _entries(document, "@graph"):
         if not isinstance(element, dict):
             continue
         record(
@@ -186,7 +199,7 @@ def _cpes_in_source(document: Any) -> dict[tuple[str, str], list[str]]:
         )
 
     # SPDX 2.x: packages with external refs.
-    for package in document.get("packages") or []:
+    for package in _entries(document, "packages"):
         if isinstance(package, dict):
             record(
                 package.get("name"),
@@ -209,7 +222,7 @@ def _restore_cpes(source: Any, converted: dict[str, Any]) -> bool:
         return False
     changed = False
 
-    for package in converted.get("packages") or []:
+    for package in _entries(converted, "packages"):
         if not isinstance(package, dict):
             continue
         key = _package_key(package.get("name"), package.get("versionInfo"))
@@ -230,7 +243,7 @@ def _restore_cpes(source: Any, converted: dict[str, Any]) -> bool:
                 refs.append({"referenceCategory": "SECURITY", "referenceType": reference_type, "referenceLocator": cpe})
                 changed = True
 
-    for component in converted.get("components") or []:
+    for component in _entries(converted, "components"):
         if not isinstance(component, dict) or component.get("cpe"):
             continue
         key = _package_key(component.get("name"), component.get("version"))
