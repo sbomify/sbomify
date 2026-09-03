@@ -209,7 +209,11 @@ def _cpes_in_source(document: Any) -> dict[tuple[str, str], list[str]]:
                 continue
             kind = str(entry.get(type_field) or "").rsplit("/", 1)[-1].rsplit("_", 1)[-1]
             value = entry.get(value_field)
-            if kind in _CPE_IDENTIFIER_TYPES and isinstance(value, str) and value.startswith("cpe:"):
+            # A recognised CPE form, not merely the prefix. Both output
+            # formats read this list, and CycloneDX takes the value as it
+            # stands, so a "cpe:not-a-cpe" accepted here would be copied into
+            # a component and travel on to whatever reads the copy.
+            if kind in _CPE_IDENTIFIER_TYPES and isinstance(value, str) and _spdx_reference_type(value):
                 values.append(value)
         return values
 
