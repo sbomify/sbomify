@@ -7,6 +7,7 @@ document while still exiting 0, and only a real process reproduces that.
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 from pathlib import Path
@@ -15,6 +16,8 @@ import pytest
 from django.test import override_settings
 
 from sbomify.apps.sboms.conversion import (
+    CYCLONEDX_1_6_JSON,
+    SPDX_2_3_JSON,
     ConversionFailed,
     ConversionUnavailable,
     convert_sbom,
@@ -68,10 +71,16 @@ class TestConversion:
             assert b"CycloneDX" in convert_sbom(DOCUMENT, "cyclonedx-json@1.6")
 
     def test_the_source_document_reaches_the_converter(self, tmp_path: Path) -> None:
-        """It is passed as a file, so the stub proves the file holds our bytes."""
+        """It is passed as a file, so the stub proves the file holds our bytes.
+
+        The source here is already SPDX 2.3, because the stub echoes it back
+        as the conversion's output and the output has to be the format the
+        caller asked for.
+        """
+        source = b'{"spdxVersion": "SPDX-2.3", "name": "echoed"}'
         binary = _stub_converter(tmp_path, 'cat "$2"\n')  # argv: convert <source> -o <format>
         with override_settings(SBOM_CONVERTER_PATH=binary):
-            assert convert_sbom(DOCUMENT, "spdx-json") == DOCUMENT
+            assert convert_sbom(source, SPDX_2_3_JSON) == source
 
     def test_a_refusal_that_still_exits_zero_is_a_failure(self, tmp_path: Path) -> None:
         """How the real converter reports a document it cannot read."""
@@ -99,6 +108,23 @@ class TestConversion:
             with pytest.raises(ConversionFailed, match="no usable document"):
                 convert_sbom(DOCUMENT, "spdx-json")
 
+    @pytest.mark.parametrize("output", ["{}", "[]", '{"error": "cannot read this"}', '"a string"', "null"])
+    def test_valid_json_that_is_not_an_sbom_is_a_failure(self, tmp_path: Path, output: str) -> None:
+        """A scanner handed an error object would report our failure as its own."""
+        binary = _stub_converter(tmp_path, f"cat <<'JSON'\n{output}\nJSON\n")
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            with pytest.raises(ConversionFailed, match="no usable document"):
+                convert_sbom(b"{}", SPDX_2_3_JSON)
+
+    def test_the_output_must_be_the_format_that_was_asked_for(self, tmp_path: Path) -> None:
+        """SPDX output where CycloneDX was requested is a conversion failure, not a scan."""
+        binary = _stub_converter(tmp_path, 'cat <<\'JSON\'\n{"spdxVersion": "SPDX-2.3"}\nJSON\n')
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            with pytest.raises(ConversionFailed, match="no bomFormat"):
+                convert_sbom(b"{}", CYCLONEDX_1_6_JSON)
+
+            assert json.loads(convert_sbom(b"{}", SPDX_2_3_JSON))["spdxVersion"] == "SPDX-2.3"
+
     def test_a_hanging_converter_is_killed(self, tmp_path: Path) -> None:
         binary = _stub_converter(tmp_path, "sleep 30\n")
         with override_settings(SBOM_CONVERTER_PATH=binary):
@@ -108,7 +134,7 @@ class TestConversion:
     def test_the_temporary_source_file_does_not_survive(self, tmp_path: Path) -> None:
         """The derived copy is for one scan; nothing it touches should linger."""
         leaked = tmp_path / "leaked-path"
-        binary = _stub_converter(tmp_path, f'printf "%s" "$2" > {leaked}\necho "{{}}"\n')
+        binary = _stub_converter(tmp_path, f'printf "%s" "$2" > {leaked}\necho \'{{"spdxVersion": "SPDX-2.3"}}\'\n')
         with override_settings(SBOM_CONVERTER_PATH=binary):
             convert_sbom(DOCUMENT, "spdx-json")
         assert not Path(leaked.read_text()).exists()

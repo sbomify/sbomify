@@ -22,6 +22,7 @@ import shutil
 import subprocess  # nosec B404 - fixed argv, no shell, input is a temp file we wrote
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 
@@ -34,6 +35,15 @@ SPDX_2_3_JSON = "spdx-json"
 CYCLONEDX_1_6_JSON = "cyclonedx-json@1.6"
 
 DEFAULT_TIMEOUT_SECONDS = 120
+
+#: What a document of each target format must say about itself. A converter
+#: that writes an error object, an empty object or a bare list has produced
+#: valid JSON and no SBOM, and handing that to a scanner would report a
+#: conversion failure as a scanner fault.
+_TARGET_MARKERS: dict[str, tuple[str, str | None]] = {
+    SPDX_2_3_JSON: ("spdxVersion", None),
+    CYCLONEDX_1_6_JSON: ("bomFormat", "CycloneDX"),
+}
 
 
 class ConversionUnavailable(RuntimeError):
@@ -104,9 +114,32 @@ def convert_sbom(data: bytes, target_format: str, *, timeout: int = DEFAULT_TIME
     # into what looks like a scanner fault.
     if completed.returncode == 0 and stdout.strip():
         try:
-            json.loads(stdout)
+            document = json.loads(stdout)
         except ValueError as exc:
             raise ConversionFailed(f"converter produced no usable document: {exc}") from exc
+        _require_target_shape(document, target_format)
         return stdout
     detail = (completed.stderr or b"").decode("utf-8", "replace").strip().splitlines()
     raise ConversionFailed(detail[-1] if detail else f"converter exited {completed.returncode}")
+
+
+def _require_target_shape(document: Any, target_format: str) -> None:
+    """Raise unless the document says it is the format we asked for.
+
+    Syntax is not enough: valid JSON that is not an SBOM would travel on to a
+    scanner, which would then report the conversion's failure as its own. The
+    check is the one field the format states about itself, not a schema
+    validation, because this is a converter's own output rather than an
+    upload and the strict validation already runs at the upload boundary.
+    """
+    marker = _TARGET_MARKERS.get(target_format)
+    if marker is None:
+        return
+    field, expected = marker
+    if not isinstance(document, dict):
+        raise ConversionFailed(
+            f"converter produced no usable document: expected an object, got {type(document).__name__}"
+        )
+    value = document.get(field)
+    if not value or (expected is not None and value != expected):
+        raise ConversionFailed(f"converter produced no usable document: no {field} in the output")
