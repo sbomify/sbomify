@@ -4,7 +4,9 @@
   of 3.0.1" and nothing else — one patch digit short, with no hint that
   cdxgen or a Yocto upgrade emits 3.0.1.
 - OSV's skip finding said scanning "requires SPDX 2.x or CycloneDX" without
-  naming the one-command conversion that gets a user there.
+  saying why nothing was scanned. It now names the missing piece: the server
+  derives a scannable copy itself, so this path means no converter is
+  available on the deployment.
 
 And the single detector: ``is_spdx3`` now also recognises a bare ``@graph``
 document and any 3.x context, so every caller shares one answer.
@@ -39,11 +41,19 @@ class TestBsiFloorMessage:
 
 
 class TestOsvSkipMessage:
-    def test_names_the_conversion_workaround(self) -> None:
+    def test_says_the_converter_is_missing_rather_than_asking_for_a_manual_one(self) -> None:
+        """This path now means the deployment has no converter, not that the reader needs one.
+
+        The message used to name ``syft convert`` as the workaround. The
+        server derives that copy itself now, so reaching this result says no
+        converter is available here, and telling a reader to convert the
+        document by hand would point them at the wrong problem.
+        """
         result = OSVPlugin()._create_unsupported_format_result()
 
         description = result.findings[0].description
-        assert "syft convert" in description
+        assert "no working converter is available" in description
+        assert "syft convert" not in description
 
 
 class TestOneDetector:
