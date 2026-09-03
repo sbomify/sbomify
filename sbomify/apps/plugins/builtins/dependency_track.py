@@ -14,6 +14,7 @@ Reference:
 """
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -486,11 +487,18 @@ class DependencyTrackPlugin(AssessmentPlugin):
         declared = content.get("spdxVersion")
         if isinstance(declared, str) and declared:
             return declared
-        # SPDX 3 moved the version into CreationInfo, so the context is what
-        # identifies the document without walking the graph.
-        if "spdx.org/rdf/3.0" in str(content.get("@context", "")):
-            return "SPDX-3.0"
-        return "unknown"
+        # SPDX 3 moved the version into CreationInfo, so the document is
+        # recognised by the shared detector rather than a string test here.
+        # Matching "3.0" alone sent a 3.1 document to the unconvertible skip
+        # at the gate above, though the converter would have read it.
+        from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+        if not is_spdx3(content):
+            return "unknown"
+        # The context carries the line, so a 3.1 document is labelled 3.1
+        # rather than flattened onto 3.0 in the provenance we record.
+        match = re.search(r"spdx\.org/rdf/(3\.\d+)", str(content.get("@context", "")))
+        return f"SPDX-{match.group(1)}" if match else "SPDX-3.0"
 
     def _create_unconvertible_result(self, reason: str) -> AssessmentResult:
         """A document Dependency Track cannot read and we cannot convert either.

@@ -78,6 +78,30 @@ def plugin() -> DependencyTrackPlugin:
     return DependencyTrackPlugin()
 
 
+class TestRecognisingSpdx3Lines:
+    """A 3.1 document is convertible, and the label says which line it came from."""
+
+    @pytest.mark.parametrize(
+        ("context", "expected"),
+        [
+            ("https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "SPDX-3.0"),
+            ("https://spdx.org/rdf/3.1.0/spdx-context.jsonld", "SPDX-3.1"),
+            ("https://spdx.org/rdf/3.2/spdx-context.jsonld", "SPDX-3.2"),
+        ],
+    )
+    def test_any_3x_line_is_spdx3(self, plugin: DependencyTrackPlugin, context: str, expected: str) -> None:
+        document = json.dumps({"@context": context, "@graph": []}).encode()
+
+        assert plugin._source_format_label(document) == expected
+
+    def test_a_bare_graph_is_still_spdx3(self, plugin: DependencyTrackPlugin) -> None:
+        """No context, so the graph is the only signal, and the label falls back to 3.0."""
+        assert plugin._source_format_label(json.dumps({"@graph": []}).encode()) == "SPDX-3.0"
+
+    def test_something_that_is_neither_is_unknown(self, plugin: DependencyTrackPlugin) -> None:
+        assert plugin._source_format_label(json.dumps({"hello": "world"}).encode()) == "unknown"
+
+
 class TestNamingTheSourceFormat:
     @pytest.mark.parametrize(
         ("document", "expected"),
