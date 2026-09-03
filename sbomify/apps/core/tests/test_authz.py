@@ -289,30 +289,30 @@ class TestScopePermits:
     """
 
     def test_none_scope_permits_everything(self):
-        assert authz._scope_permits(None, "component:manage") is True
-        assert authz._scope_permits(None, "workspace:delete") is True
+        assert authz.scope_permits(None, "component:manage") is True
+        assert authz.scope_permits(None, "workspace:delete") is True
 
     def test_wildcard_permits_everything(self):
-        assert authz._scope_permits(["*"], "component:manage") is True
-        assert authz._scope_permits(["*"], "billing:manage") is True
+        assert authz.scope_permits(["*"], "component:manage") is True
+        assert authz.scope_permits(["*"], "billing:manage") is True
 
     def test_exact_action_scope(self):
-        assert authz._scope_permits(["sbom:read"], "sbom:read") is True
-        assert authz._scope_permits(["sbom:read"], "sbom:manage") is False
-        assert authz._scope_permits(["sbom:read"], "component:manage") is False
+        assert authz.scope_permits(["sbom:read"], "sbom:read") is True
+        assert authz.scope_permits(["sbom:read"], "sbom:manage") is False
+        assert authz.scope_permits(["sbom:read"], "component:manage") is False
 
     def test_resource_bundle_scope(self):
-        assert authz._scope_permits(["component:*"], "component:manage") is True
-        assert authz._scope_permits(["component:*"], "component:read_internal") is True
-        assert authz._scope_permits(["component:*"], "sbom:manage") is False
+        assert authz.scope_permits(["component:*"], "component:manage") is True
+        assert authz.scope_permits(["component:*"], "component:read_internal") is True
+        assert authz.scope_permits(["component:*"], "sbom:manage") is False
 
     def test_empty_scope_permits_nothing(self):
-        assert authz._scope_permits([], "sbom:read") is False
+        assert authz.scope_permits([], "sbom:read") is False
 
     def test_publish_only_token(self):
         scopes = ["artifact:publish"]
-        assert authz._scope_permits(scopes, "artifact:publish") is True
-        assert authz._scope_permits(scopes, "component:manage") is False
+        assert authz.scope_permits(scopes, "artifact:publish") is True
+        assert authz.scope_permits(scopes, "component:manage") is False
 
     def test_is_valid_scope(self):
         assert authz.is_valid_scope("*") is True

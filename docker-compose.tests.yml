@@ -15,7 +15,7 @@ services:
       retries: 10
     networks:
       testnet:
-        ipv4_address: 172.25.0.10
+        ipv4_address: ${TEST_SUBNET_PREFIX:-172.25.0}.10
 
   redis:
     image: redis:8-alpine
@@ -26,7 +26,7 @@ services:
       retries: 10
     networks:
       testnet:
-        ipv4_address: 172.25.0.13
+        ipv4_address: ${TEST_SUBNET_PREFIX:-172.25.0}.13
 
   chromium:
     build:
@@ -41,7 +41,7 @@ services:
       timeout: 2s
     networks:
       testnet:
-        ipv4_address: 172.25.0.11
+        ipv4_address: ${TEST_SUBNET_PREFIX:-172.25.0}.11
 
   tests:
     build:
@@ -51,13 +51,13 @@ services:
         BUILD_ENV: tests
     command: ["tail", "-f", "/dev/null"]
     environment:
-      TEST_DATABASE_HOST: 172.25.0.10
+      TEST_DATABASE_HOST: ${TEST_SUBNET_PREFIX:-172.25.0}.10
       TEST_DATABASE_PORT: 5432
       TEST_DATABASE_USER: sbomify_test
       TEST_DATABASE_PASSWORD: sbomify_test
       TEST_DATABASE_NAME: sbomify_test
-      PLAYWRIGHT_DJANGO_HOST: 172.25.0.12
-      PLAYWRIGHT_CDP_ENDPOINT: http://172.25.0.11:9222
+      PLAYWRIGHT_DJANGO_HOST: ${TEST_SUBNET_PREFIX:-172.25.0}.12
+      PLAYWRIGHT_CDP_ENDPOINT: http://${TEST_SUBNET_PREFIX:-172.25.0}.11:9222
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       REDIS_URL: redis://redis:6379
     volumes:
@@ -74,14 +74,24 @@ services:
         condition: service_healthy
     networks:
       testnet:
-        ipv4_address: 172.25.0.12
+        ipv4_address: ${TEST_SUBNET_PREFIX:-172.25.0}.12
 
 volumes:
   sbomify_test_postgres_data:
 
 networks:
+  # Static IPs because the Playwright/CDP wiring needs addresses known before
+  # the containers start. TEST_SUBNET_PREFIX lets a second checkout (a git
+  # worktree, or a parallel CI job on the same host) claim a different subnet —
+  # Docker refuses to create two networks over the same address space, so
+  # without it a second test stack fails with "Pool overlaps with other one on
+  # this address space". Example: TEST_SUBNET_PREFIX=172.30.5 docker compose ...
+  #
+  # /24, not /16: the prefix is three octets, and Docker rejects a CIDR whose
+  # host bits are set — with /16 every prefix except x.y.0 would fail at
+  # network creation with "invalid subnet".
   testnet:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.25.0.0/16
+        - subnet: ${TEST_SUBNET_PREFIX:-172.25.0}.0/24

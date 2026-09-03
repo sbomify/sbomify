@@ -212,6 +212,7 @@ INSTALLED_APPS = [
     "sbomify.apps.controls",
     "sbomify.apps.oidc",
     "sbomify.apps.security_advisories",
+    "sbomify.apps.mcp",
 ]
 
 
@@ -958,6 +959,20 @@ LOGIN_URL = "/login"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
+
+# Extra Host header values accepted by the MCP endpoint (comma-separated), on
+# top of APP_BASE_URL's hostname and loopback. The MCP app bypasses Django's
+# middleware, so DynamicHostValidationMiddleware does not guard /mcp; the MCP
+# SDK's own DNS-rebinding check does, and it needs to know the real hostname.
+# See sbomify/apps/mcp/server.py.
+MCP_ALLOWED_HOSTS = os.environ.get("MCP_ALLOWED_HOSTS", "")
+
+# Resource caps for the MCP endpoint. The caller there is an LLM whose inputs are
+# frequently attacker-influenced, so these bound what a coerced agent can consume.
+# See sbomify/apps/mcp/limits.py.
+MCP_MAX_UPLOAD_BYTES = int(os.environ.get("MCP_MAX_UPLOAD_BYTES", DATA_UPLOAD_MAX_MEMORY_SIZE))
+MCP_MAX_ARTIFACT_PARSE_BYTES = int(os.environ.get("MCP_MAX_ARTIFACT_PARSE_BYTES", 50 * 1024 * 1024))
+MCP_MAX_RESPONSE_BYTES = int(os.environ.get("MCP_MAX_RESPONSE_BYTES", 1024 * 1024))
 _trust_center_raw = os.environ.get("TRUST_CENTER_DOMAIN", "").strip()
 TRUST_CENTER_DOMAIN = ""
 if _trust_center_raw:

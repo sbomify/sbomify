@@ -206,8 +206,11 @@ def _get_user_team_id(request: HttpRequest) -> str | None:
         if default_team_id:
             return str(default_team_id)
 
-        # If no default workspace is set, fall back to first workspace
-        first_membership = Member.objects.filter(user=request.user).select_related("team").first()
+        # If no default workspace is set, fall back to first workspace.
+        # Ordered so the fallback is deterministic: an unordered .first() could
+        # hand two requests from the same user different workspaces (and let
+        # REST and MCP resolve the same legacy token to different workspaces).
+        first_membership = Member.objects.filter(user=request.user).select_related("team").order_by("pk").first()
         if first_membership:
             return str(first_membership.team.id)
 

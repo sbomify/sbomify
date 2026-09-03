@@ -33,7 +33,10 @@ Always run tests in Docker:
 # Start test services
 docker compose -f docker-compose.tests.yml up -d
 
-# All tests (parallel — requires pytest-xdist installed in container)
+# All tests (parallel). pytest-xdist lives in the `test` dependency group, but the
+# container installs dependencies at image build time and only `sbomify/` is mounted —
+# so after any dependency change, rebuild before `-n` works:
+#   docker compose -f docker-compose.tests.yml build tests
 docker compose -f docker-compose.tests.yml exec tests uv run pytest -n auto --ignore=sbomify/apps/core/tests/e2e
 
 # All tests (sequential)
@@ -48,6 +51,18 @@ docker compose -f docker-compose.tests.yml exec tests uv run pytest --pdb -x -s 
 # Coverage report (must be >= 80%)
 docker compose -f docker-compose.tests.yml exec tests uv run coverage run -m pytest
 docker compose -f docker-compose.tests.yml exec tests uv run coverage report
+```
+
+Notes on the test environment:
+
+- **Frontend assets are optional.** Template-rendering tests resolve Vite assets through `sbomify/static/dist/manifest.json`, a gitignored `bun run build` artifact. `sbomify/test_settings.py` falls back to Vite dev mode when it is absent, so the suite is green straight from a clone. Run `bun run build` first if you want tests to exercise the built-asset path production actually serves (CI does).
+- **Never run two pytest sessions against the same test database.** They share `test_sbomify_test` and will corrupt each other's schema mid-run, producing failures that look like real regressions. Give the second run its own database with `-e TEST_DATABASE_NAME=<other>`.
+- **Two checkouts can run tests concurrently** by giving each stack its own network and compose project — Docker refuses to create two networks on the same subnet:
+
+```bash
+TEST_SUBNET_PREFIX=172.30.0 docker compose -f docker-compose.tests.yml -p myworktree up -d
+TEST_SUBNET_PREFIX=172.30.0 docker compose -f docker-compose.tests.yml -p myworktree \
+  exec -e TEST_DATABASE_NAME=sbomify_myworktree tests uv run pytest
 ```
 
 If tests fail with `database "test_sbomify_test" already exists` or `is being accessed by other users` (stale DB from killed parallel runs), clean up:
@@ -392,6 +407,23 @@ Plugins analyze SBOMs without modifying them:
 
 `PluginOrchestrator` (`sbomify/apps/plugins/orchestrator.py`) manages execution, dependency checking, config hashing, and retry logic (`RetryLaterError`).
 
+### MCP Server (ADR-008)
+
+`sbomify/apps/mcp/` serves a Model Context Protocol endpoint at `/mcp`, dispatched from `sbomify/asgi.py`. Curated task-oriented tools, not a generated wrapper over the REST API.
+
+Rules when touching it:
+
+- **Every tool must be `async`.** In mcp 1.28 a sync tool function runs directly on the event loop, where Django ORM access raises `SynchronousOnlyOperation`. Wrap DB work in `run_db()` (`tools/_base.py`).
+- **Register tools via `mcp_tool(mcp, name, action, writes=...)`.** It supplies authentication, the token-scope gate, the audit event, and the response-size cap. The `action` must be a member of `authz.ALL_ACTIONS`.
+- **Destructive and administrative actions cannot be exposed.** `registry.register` rejects any `*:delete` or `*:administer` action by design — deletion is not an agent-reachable operation.
+- **Treat artifact content as untrusted.** Anything read out of an uploaded SBOM or document is attacker-influenced; pass free text through `limits.untrusted()` and never widen a tool's authority based on it.
+- **Reuse existing REST view functions for writes.** Ninja's decorators return the undecorated function, so `apis.sbom_upload_cyclonedx(request, component_id)` is a plain call — do not reimplement upload validation.
+- Session state is impossible: production runs four worker processes with no affinity, so the server is `stateless_http=True`.
+
+Tests live in `sbomify/apps/mcp/tests/`; extend `test_security.py` whenever a tool is added.
+
+User-facing setup docs live on the website ([content/guides/mcp.md](https://github.com/sbomify/sbomify.com/blob/master/content/guides/mcp.md)); `docs/mcp.md` here is the operator reference. A change to the tool surface needs both.
+
 ### WebSockets
 
 Django Channels with Redis for real-time broadcasting. Routing in `sbomify/apps/core/routing.py`, consumers in `consumers.py`. Service functions call `broadcast_to_workspace()` to push updates that trigger HTMX refreshes.
@@ -570,6 +602,9 @@ words people actually type in `keywords` — including the ones the UI does not 
 - **ADR-003**: Plugin-based assessment system for SBOM analysis
 - **ADR-004**: Immutable artifacts — sbomify never modifies uploaded SBOMs/documents
 - **ADR-005**: Tailwind CSS + Alpine.js + HTMX frontend architecture (replacing Bootstrap)
+- **ADR-006**: Generalized BOM model
+- **ADR-007**: Removal of the Project layer from the hierarchy
+- **ADR-008**: MCP server mounted in the Django app, authorized by scoped access tokens
 
 ## API Documentation
 

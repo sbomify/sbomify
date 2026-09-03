@@ -184,6 +184,16 @@
       "roles": ["owner", "admin"]
     },
     {
+      "title": "MCP server (AI agents)",
+      "url_name": "teams:team_settings",
+      "section": "settings",
+      "icon": "fa-robot",
+      "keywords": ["mcp", "model context protocol", "ai agent", "agent", "claude", "cursor", "llm"],
+      "args": ["team_key"],
+      "fragment": "tokens",
+      "roles": ["owner", "admin"]
+    },
+    {
       "title": "Contacts",
       "url_name": "teams:team_settings",
       "section": "settings",
