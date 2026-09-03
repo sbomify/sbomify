@@ -40,28 +40,37 @@ _SPDX_ORGANIZATION_AGENT = {"type": "Organization", "name": "SPDX"}
 # "Agent" matches.
 _AGENT_TYPES = frozenset({"Person", "Organization", "SoftwareAgent", "Agent"})
 
-_UNIQUE_ID_TYPES = frozenset({"packageUrl", "packageURL", "purl", "cpe22", "cpe23", "swid"})
+_UNIQUE_ID_TYPES = frozenset({"packageUrl", "packageURL", "purl", "cpe22", "cpe23", "swid", "gitoid", "swhid"})
 _PURL_ID_TYPES = frozenset({"packageUrl", "packageURL", "purl"})
 
 
 def is_spdx3(sbom_data: dict[str, Any]) -> bool:
-    """Check if SBOM is SPDX 3.0 format.
+    """Check if SBOM is SPDX 3.x format — the one detector every caller shares.
 
-    Detection is based primarily on @context containing "spdx.org/rdf/3.0",
-    with a fallback to legacy documents where spdxVersion starts with
-    "SPDX-3.".
+    Three signals, any of which decides it:
+      - @context containing "spdx.org/rdf/3." (any 3.x line, so a 3.1
+        document reaches the code that can reject it by name);
+      - a root-level @graph, the JSON-LD element array no other supported
+        format carries;
+      - a legacy root spdxVersion starting with "SPDX-3.".
     """
+    if not isinstance(sbom_data, dict):
+        return False
+
     context = sbom_data.get("@context", "")
     if isinstance(context, str):
-        if "spdx.org/rdf/3.0" in context:
+        if "spdx.org/rdf/3." in context:
             return True
     elif isinstance(context, list):
         for entry in context:
-            if "spdx.org/rdf/3.0" in str(entry):
+            if "spdx.org/rdf/3." in str(entry):
                 return True
     elif isinstance(context, dict):
-        if "spdx.org/rdf/3.0" in str(context):
+        if "spdx.org/rdf/3." in str(context):
             return True
+
+    if isinstance(sbom_data.get("@graph"), list):
+        return True
 
     spdx_version = sbom_data.get("spdxVersion") or ""
     if isinstance(spdx_version, str) and spdx_version.startswith("SPDX-3."):
@@ -286,8 +295,19 @@ def get_spdx3_package_fields(
     # type variants are a subset of _UNIQUE_ID_TYPES, so no second pass.
     external_identifiers = iter_spdx3_external_identifiers(package)
     direct_purl = package.get("software_packageUrl")
-    has_unique_id = bool(isinstance(direct_purl, str) and direct_purl) or any(
-        ext_id.get("externalIdentifierType", "") in _UNIQUE_ID_TYPES for ext_id in external_identifiers
+    # The first-class content-addressable identifiers (gitoid/swhid) live on
+    # software_contentIdentifier, distinct from externalIdentifier.
+    content_identifiers = package.get("software_contentIdentifier")
+    has_content_identifier = isinstance(content_identifiers, list) and any(
+        isinstance(ci, dict)
+        and isinstance(ci.get("software_contentIdentifierValue"), str)
+        and ci["software_contentIdentifierValue"].strip()
+        for ci in content_identifiers
+    )
+    has_unique_id = (
+        bool(isinstance(direct_purl, str) and direct_purl)
+        or has_content_identifier
+        or any(ext_id.get("externalIdentifierType", "") in _UNIQUE_ID_TYPES for ext_id in external_identifiers)
     )
 
     # Check for hash values in verifiedUsing
