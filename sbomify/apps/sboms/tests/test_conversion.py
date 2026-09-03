@@ -353,6 +353,39 @@ class TestTheCpeSurvives:
         assert _package_key("openssl", None) == ("openssl", "")
         assert _package_key(" OpenSSL ", " 3.0.11 ") == ("openssl", "3.0.11")
 
+    def test_a_cpe_on_a_non_package_element_is_not_borrowed(self, tmp_path: Path) -> None:
+        """A graph carries documents and relationships too, and their names are not package names."""
+        other = "cpe:2.3:a:someone:else:1.0:*:*:*:*:*:*:*"
+        source = json.dumps(
+            {
+                "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                "@graph": [
+                    {
+                        "type": "SpdxDocument",
+                        "spdxId": "urn:doc",
+                        "name": "openssl",
+                        "software_packageVersion": "3.0.11",
+                        "externalIdentifier": [{"externalIdentifierType": "cpe23", "identifier": other}],
+                    },
+                    {
+                        "type": "software_Package",
+                        "spdxId": "urn:pkg",
+                        "name": "openssl",
+                        "software_packageVersion": "3.0.11",
+                        "externalIdentifier": [{"externalIdentifierType": "cpe23", "identifier": CPE}],
+                    },
+                ],
+            }
+        ).encode()
+        binary = self._converter_emitting(
+            tmp_path,
+            {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]},
+        )
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(source, SPDX_2_3_JSON))
+
+        assert [r["referenceLocator"] for r in converted["packages"][0]["externalRefs"]] == [CPE]
+
     def test_a_source_with_no_cpe_changes_nothing(self, tmp_path: Path) -> None:
         emitted = {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]}
         binary = self._converter_emitting(tmp_path, emitted)

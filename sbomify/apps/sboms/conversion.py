@@ -215,7 +215,11 @@ def _cpes_in_source(document: Any) -> dict[tuple[str, str], list[str]]:
 
     # SPDX 3: elements in the graph.
     for element in _entries(document, "@graph"):
-        if not isinstance(element, dict):
+        # Packages only. A graph carries SpdxDocument, Relationship and Agent
+        # elements too, and one of those sharing a name with a package would
+        # otherwise hand it a CPE that was never about it. Same test the rest
+        # of the SPDX 3 readers use.
+        if not isinstance(element, dict) or element.get("type") != "software_Package":
             continue
         record(
             element.get("name"),
