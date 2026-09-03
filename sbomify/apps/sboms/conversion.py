@@ -183,9 +183,15 @@ def _cpes_in_source(document: Any) -> dict[tuple[str, str], list[str]]:
     found: dict[tuple[str, str], list[str]] = {}
 
     def record(name: Any, version: Any, values: list[str]) -> None:
+        # Deduplicated, order preserved: a document may state the same CPE
+        # under both external-identifier spellings, and a package is not more
+        # identified for having said it twice. The SPDX side would otherwise
+        # write the ref twice and the CycloneDX side picks the first.
         key = _package_key(name, version)
-        if key and values:
-            found.setdefault(key, []).extend(values)
+        if not (key and values):
+            return
+        seen = found.setdefault(key, [])
+        seen.extend(cpe for cpe in values if cpe not in seen)
 
     def cpes_from(entries: Any, type_field: str, value_field: str) -> list[str]:
         values = []
@@ -251,6 +257,7 @@ def _restore_cpes(source: Any, converted: dict[str, Any]) -> bool:
             reference_type = _spdx_reference_type(cpe)
             if reference_type and cpe not in present:
                 refs.append({"referenceCategory": "SECURITY", "referenceType": reference_type, "referenceLocator": cpe})
+                present.add(cpe)
                 changed = True
 
     for component in _entries(converted, "components"):

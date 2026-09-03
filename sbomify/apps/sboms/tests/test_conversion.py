@@ -293,6 +293,34 @@ class TestTheCpeSurvives:
 
         assert converted["packages"] == junk
 
+    def test_a_cpe_the_source_states_twice_is_written_once(self, tmp_path: Path) -> None:
+        """A package is no more identified for having said the same thing twice."""
+        source = json.dumps(
+            {
+                "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                "@graph": [
+                    {
+                        "type": "software_Package",
+                        "spdxId": "urn:pkg",
+                        "name": "openssl",
+                        "software_packageVersion": "3.0.11",
+                        "externalIdentifier": [
+                            {"externalIdentifierType": "cpe23", "identifier": CPE},
+                            {"externalIdentifierType": "cpe23", "identifier": CPE},
+                        ],
+                    }
+                ],
+            }
+        ).encode()
+        binary = self._converter_emitting(
+            tmp_path,
+            {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]},
+        )
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(source, SPDX_2_3_JSON))
+
+        assert [r["referenceLocator"] for r in converted["packages"][0]["externalRefs"]] == [CPE]
+
     def test_a_source_with_no_cpe_changes_nothing(self, tmp_path: Path) -> None:
         emitted = {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]}
         binary = self._converter_emitting(tmp_path, emitted)
