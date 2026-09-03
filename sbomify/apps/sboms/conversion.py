@@ -213,9 +213,18 @@ def _restore_cpes(source: Any, converted: dict[str, Any]) -> bool:
         if not isinstance(package, dict):
             continue
         key = _package_key(package.get("name"), package.get("versionInfo"))
-        refs = package.setdefault("externalRefs", []) if key and cpes.get(key) else []
+        if not (key and cpes.get(key)):
+            continue
+        # A converter is a third party, so what it wrote where a list belongs
+        # is not this function's to trust: anything else is replaced rather
+        # than iterated. Losing a malformed value costs nothing, since a CPE
+        # cannot be hiding in one.
+        refs = package.get("externalRefs")
+        if not isinstance(refs, list):
+            refs = []
+            package["externalRefs"] = refs
         present = {r.get("referenceLocator") for r in refs if isinstance(r, dict)}
-        for cpe in cpes.get(key, []) if key else []:
+        for cpe in cpes[key]:
             reference_type = _spdx_reference_type(cpe)
             if reference_type and cpe not in present:
                 refs.append({"referenceCategory": "SECURITY", "referenceType": reference_type, "referenceLocator": cpe})

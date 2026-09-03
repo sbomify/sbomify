@@ -242,6 +242,22 @@ class TestTheCpeSurvives:
             }
         ]
 
+    def test_a_malformed_external_refs_field_is_replaced_not_iterated(self, tmp_path: Path) -> None:
+        """A converter is a third party; what it wrote where a list belongs is not ours to trust."""
+        binary = self._converter_emitting(
+            tmp_path,
+            {
+                "spdxVersion": "SPDX-2.3",
+                "packages": [{"name": "openssl", "versionInfo": "3.0.11", "externalRefs": None}],
+            },
+        )
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(self.SPDX3_WITH_CPE, "spdx-json"))
+
+        assert converted["packages"][0]["externalRefs"] == [
+            {"referenceCategory": "SECURITY", "referenceType": "cpe23Type", "referenceLocator": CPE}
+        ]
+
     def test_a_source_with_no_cpe_changes_nothing(self, tmp_path: Path) -> None:
         emitted = {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]}
         binary = self._converter_emitting(tmp_path, emitted)
