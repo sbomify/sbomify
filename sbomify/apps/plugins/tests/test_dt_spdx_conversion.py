@@ -32,6 +32,22 @@ def _as_dict(result: Any) -> dict[str, Any]:
     return result.model_dump() if hasattr(result, "model_dump") else dataclasses.asdict(result)
 
 
+def _document_version(document: str) -> str:
+    """The version the document declares, so the row matches its own bytes.
+
+    A hardcoded "1.6" put a CycloneDX spec version on SPDX rows, which is
+    data no upload could produce and would mask a bug the day anything
+    branches on ``sbom.format_version``.
+    """
+    data = json.loads(document)
+    if spdx2 := data.get("spdxVersion"):
+        return str(spdx2).removeprefix("SPDX-")
+    context = data.get("@context")
+    if isinstance(context, str) and "spdx-context" in context:
+        return context.rsplit("/spdx-context", 1)[0].rsplit("/", 1)[-1]
+    return str(data.get("specVersion", ""))
+
+
 def _records(tmp_path, document: str, fmt: str, key: str, filename: str):
     """Real rows, so assess() gets past the lookup and reaches the upload."""
     from sbomify.apps.core.models import Component, Product
@@ -50,7 +66,7 @@ def _records(tmp_path, document: str, fmt: str, key: str, filename: str):
     component = Component.objects.create(name=f"Component {key}", team=team)
     product = Product.objects.create(name=f"Product {key}", team=team)
     product.components.add(component)
-    sbom = SBOM.objects.create(name="s", component=component, format=fmt, format_version="1.6")
+    sbom = SBOM.objects.create(name="s", component=component, format=fmt, format_version=_document_version(document))
 
     path = tmp_path / filename
     path.write_text(document)
