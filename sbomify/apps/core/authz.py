@@ -173,6 +173,13 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # carved out of MANAGE the way DELETE is: a member maintains a component but
     # does not decide the world can see it.
     "product:set_visibility": ADMINISTER,
+    # Advisories are outward-facing from the first draft: the pages already
+    # hold every advisory write at ADMINISTER (core/views/security_advisories),
+    # and the API is the same door. Publishing and withdrawing move an
+    # advisory in and out of the trust center, the same act as setting a
+    # product's visibility, so they share this tier rather than MANAGE.
+    "advisory:manage": ADMINISTER,
+    "advisory:publish": ADMINISTER,
     "component:set_visibility": ADMINISTER,
     # An OIDC trusted-publisher binding is a standing, non-expiring publish grant
     # to an external repo — unlike a PAT, which is scoped, expiring and tied to
@@ -188,14 +195,6 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "component:manage": MANAGE,
     "release:manage": MANAGE,
     "sbom:manage": MANAGE,
-    # Advisories sit at MANAGE, matching what the workspace pages already
-    # allow: any member who is not a guest can write one. Publishing is its
-    # own action so the tier can move without touching the call sites, and it
-    # arguably belongs at ADMINISTER with the other outward-facing writes; the
-    # pages would have to move with it, so that is a decision rather than a
-    # detail.
-    "advisory:manage": MANAGE,
-    "advisory:publish": MANAGE,
     "document:manage": MANAGE,
     # release publishing — the CI/OIDC bot's job (create a release, tag artifacts
     # to it), alongside owners and admins.

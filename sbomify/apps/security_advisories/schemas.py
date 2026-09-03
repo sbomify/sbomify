@@ -6,6 +6,11 @@ pre-formatted date), and none of that belongs in a contract a client writes
 against. The names here follow the model rather than the templates, so
 ``status`` is the publication state the model calls ``status`` and the fix's
 progress is ``remediation_status``.
+
+Two families. The workspace shapes carry the record as its owners see it,
+drafts and internal history included. The public shapes carry what a
+trust-center reader may be told, which the trust-center service has already
+decided before anything here is built.
 """
 
 from __future__ import annotations
@@ -15,6 +20,8 @@ from typing import Any
 
 from ninja import Schema
 from pydantic import Field
+
+from sbomify.apps.core.schemas import PaginationMeta
 
 
 class AdvisoryProductSchema(Schema):
@@ -26,7 +33,7 @@ class AdvisoryProductSchema(Schema):
 
     id: str | None = None
     name: str
-    affected_ranges: list[str] = []
+    affected_ranges: list[str] = Field(default_factory=list)
 
 
 class AdvisoryVulnerabilitySchema(Schema):
@@ -35,8 +42,8 @@ class AdvisoryVulnerabilitySchema(Schema):
     title: str = ""
     description: str = ""
     severity: str = ""
-    cwe_ids: list[str] = []
-    cvss_scores: list[dict[str, Any]] = []
+    cwe_ids: list[str] = Field(default_factory=list)
+    cvss_scores: list[dict[str, Any]] = Field(default_factory=list)
     exploitation_status: str = ""
     recommendation: str = ""
 
@@ -64,7 +71,9 @@ class AdvisoryEventSchema(Schema):
 
 class AdvisorySchema(Schema):
     id: str
-    tracking_id: str = Field(description="The workspace's own identifier, allocated at publication.")
+    tracking_id: str = Field(
+        "", description="The workspace's own identifier, allocated at publication. Empty while a draft."
+    )
     title: str
     summary: str = ""
     description: str = ""
@@ -78,16 +87,18 @@ class AdvisorySchema(Schema):
     visibility: str
     vulnerability_count: int = 0
     vulnerability_id: str = Field("", description="The first CVE the advisory cites, when it cites one.")
-    products: list[AdvisoryProductSchema] = []
+    products: list[AdvisoryProductSchema] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     published_at: datetime | None = None
+    withdrawn_at: datetime | None = None
+    withdrawal_reason: str = ""
 
 
 class AdvisoryDetailSchema(AdvisorySchema):
-    vulnerabilities: list[AdvisoryVulnerabilitySchema] = []
-    references: list[AdvisoryReferenceSchema] = []
-    timeline: list[AdvisoryEventSchema] = []
+    vulnerabilities: list[AdvisoryVulnerabilitySchema] = Field(default_factory=list)
+    references: list[AdvisoryReferenceSchema] = Field(default_factory=list)
+    timeline: list[AdvisoryEventSchema] = Field(default_factory=list)
 
 
 class CreateAdvisorySchema(Schema):
@@ -98,13 +109,19 @@ class CreateAdvisorySchema(Schema):
     remediation_status: str = ""
     cvss_score: float | None = None
     cvss_vector: str = ""
-    product_ids: list[str] = []
+    product_ids: list[str] = Field(default_factory=list)
 
 
 class UpdateAdvisorySchema(Schema):
-    title: str = Field(min_length=1, max_length=255)
+    """A partial update: a field left out keeps its stored value.
+
+    ``cvss_score`` and ``cvss_vector`` are one entry and are written together;
+    sending ``cvss_score`` as null clears both.
+    """
+
+    title: str | None = Field(None, min_length=1, max_length=255)
     severity: str | None = None
-    description: str = ""
+    description: str | None = None
     cvss_score: float | None = None
     cvss_vector: str | None = None
 
@@ -114,3 +131,77 @@ class PublishAdvisorySchema(Schema):
     published advisory with the visibility asked for here."""
 
     visibility: str = Field(description="The visibility to disclose at.")
+
+
+class WithdrawAdvisorySchema(Schema):
+    reason: str = Field(min_length=1, description="Why the advisory is withdrawn. Shown to readers.")
+
+
+class PublicAdvisoryProductSchema(Schema):
+    """A product the reader is allowed to see named."""
+
+    id: str | None = None
+    name: str
+
+
+class PublicAdvisoryStatusSchema(Schema):
+    """What one vulnerability means for one product, as a reader may see it."""
+
+    id: str
+    vulnerability: str
+    product: str
+    product_id: str | None = None
+    status: str
+    justification: str = ""
+    impact_statement: str = ""
+    action_statement: str = ""
+    response: str = ""
+    recommended_version: str = ""
+    affected: str = Field("", description="Affected versions as a comparison, e.g. '>= 1.0, < 1.4.3'.")
+    unaffected: str = Field("", description="Versions that are not affected, e.g. '>= 1.4.3'.")
+    version_ranges: list[str] = Field(default_factory=list)
+
+
+class PublicAdvisoryEventSchema(Schema):
+    id: str
+    kind: str
+    note: str = ""
+    created_at: datetime
+
+
+class PublicAdvisorySchema(Schema):
+    id: str
+    tracking_id: str = ""
+    title: str
+    summary: str = ""
+    severity: str = ""
+    cvss_score: float | None = None
+    status: str = Field(description="Publication state: published or withdrawn.")
+    remediation_status: str
+    is_open: bool
+    visibility: str
+    is_withdrawn: bool = False
+    withdrawal_reason: str = ""
+    products: list[PublicAdvisoryProductSchema] = Field(default_factory=list)
+    withheld_product_count: int = Field(0, description="Products the advisory names that this reader may not see.")
+    vulnerability_count: int = 0
+    cve_ids: list[str] = Field(default_factory=list)
+    published_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class PublicAdvisoryDetailSchema(PublicAdvisorySchema):
+    description: str = ""
+    vulnerabilities: list[AdvisoryVulnerabilitySchema] = Field(default_factory=list)
+    references: list[AdvisoryReferenceSchema] = Field(default_factory=list)
+    statuses: list[PublicAdvisoryStatusSchema] = Field(default_factory=list)
+    timeline: list[PublicAdvisoryEventSchema] = Field(default_factory=list)
+    acknowledgments: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class PublicAdvisoryListSchema(Schema):
+    items: list[PublicAdvisorySchema]
+    pagination: PaginationMeta
+    hidden_count: int = Field(0, description="Advisories this reader may not see. Signing in may change it.")
+    viewer_is_authenticated: bool = False
+    viewer_has_gated_grant: bool = False
