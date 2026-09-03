@@ -126,6 +126,20 @@ def convert_sbom(data: bytes, target_format: str, *, timeout: int = DEFAULT_TIME
 _CPE_IDENTIFIER_TYPES = frozenset({"cpe22", "cpe23", "cpe22Type", "cpe23Type"})
 
 
+def _spdx_reference_type(cpe: str) -> str | None:
+    """The SPDX 2.x reference type a CPE value belongs under, read off the value.
+
+    The value decides, not the type the source labelled it with: a 2.3 string
+    filed as ``cpe22`` is still a 2.3 string, and an SPDX reader checks the
+    locator against the type it is filed under.
+    """
+    if cpe.startswith("cpe:2.3:"):
+        return "cpe23Type"
+    if cpe.startswith("cpe:/"):
+        return "cpe22Type"
+    return None
+
+
 def _package_key(name: Any, version: Any) -> tuple[str, str] | None:
     """What a package is called, as the two documents can agree on it.
 
@@ -202,8 +216,9 @@ def _restore_cpes(source: Any, converted: dict[str, Any]) -> bool:
         refs = package.setdefault("externalRefs", []) if key and cpes.get(key) else []
         present = {r.get("referenceLocator") for r in refs if isinstance(r, dict)}
         for cpe in cpes.get(key, []) if key else []:
-            if cpe not in present:
-                refs.append({"referenceCategory": "SECURITY", "referenceType": "cpe23Type", "referenceLocator": cpe})
+            reference_type = _spdx_reference_type(cpe)
+            if reference_type and cpe not in present:
+                refs.append({"referenceCategory": "SECURITY", "referenceType": reference_type, "referenceLocator": cpe})
                 changed = True
 
     for component in converted.get("components") or []:

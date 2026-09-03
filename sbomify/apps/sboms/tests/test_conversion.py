@@ -208,6 +208,40 @@ class TestTheCpeSurvives:
 
         assert len(converted["packages"][0]["externalRefs"]) == 1
 
+    def test_a_cpe_in_the_2_2_form_is_filed_under_its_own_type(self, tmp_path: Path) -> None:
+        """The value decides the reference type, not the label the source gave it."""
+        source = json.dumps(
+            {
+                "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                "@graph": [
+                    {
+                        "type": "software_Package",
+                        "spdxId": "urn:pkg",
+                        "name": "openssl",
+                        "software_packageVersion": "3.0.11",
+                        "externalIdentifier": [
+                            {"externalIdentifierType": "cpe22", "identifier": "cpe:/a:openssl:openssl:3.0.11"},
+                            {"externalIdentifierType": "cpe23", "identifier": "cpe:not-a-cpe"},
+                        ],
+                    }
+                ],
+            }
+        ).encode()
+        binary = self._converter_emitting(
+            tmp_path,
+            {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]},
+        )
+        with override_settings(SBOM_CONVERTER_PATH=binary):
+            converted = json.loads(convert_sbom(source, "spdx-json"))
+
+        assert converted["packages"][0]["externalRefs"] == [
+            {
+                "referenceCategory": "SECURITY",
+                "referenceType": "cpe22Type",
+                "referenceLocator": "cpe:/a:openssl:openssl:3.0.11",
+            }
+        ]
+
     def test_a_source_with_no_cpe_changes_nothing(self, tmp_path: Path) -> None:
         emitted = {"spdxVersion": "SPDX-2.3", "packages": [{"name": "openssl", "versionInfo": "3.0.11"}]}
         binary = self._converter_emitting(tmp_path, emitted)
