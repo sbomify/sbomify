@@ -171,8 +171,12 @@ class PublicAdvisoryStatusSchema(Schema):
     action_statement: str = ""
     response: str = ""
     recommended_version: str = ""
-    affected: str = Field("", description="Affected versions as a comparison, e.g. '>= 1.0, < 1.4.3'.")
-    unaffected: str = Field("", description="Versions that are not affected, e.g. '>= 1.4.3'.")
+    affected: str = Field(
+        "",
+        description="Affected versions as a comparison, e.g. '>= 1.0, < 1.4.3'. Empty when no versions were "
+        "recorded, or when status says the product is not affected at all.",
+    )
+    unaffected: str = Field("", description="Versions that are not affected, e.g. '>= 1.4.3'. Empty on the same terms.")
     version_ranges: list[str] = Field(default_factory=list)
 
 

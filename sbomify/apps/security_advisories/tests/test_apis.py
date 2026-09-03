@@ -543,6 +543,26 @@ class TestThePublicSide:
         assert "status_variant" not in row
         assert body["timeline"] == []
 
+    def test_a_not_affected_row_carries_no_version_placeholders(self, client_and_headers, team, public_product) -> None:
+        """The table prints "None" and "All" there; the contract says nothing and lets status speak."""
+        from sbomify.apps.security_advisories.models import AdvisoryProductStatus, AdvisoryVulnerability
+
+        client, _ = client_and_headers
+        advisory = _publish_for(team, [public_product], visibility=SecurityAdvisory.Visibility.PUBLIC)
+        vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2021-44228")
+        AdvisoryProductStatus.objects.create(
+            vulnerability=vulnerability,
+            advisory_product=advisory.products.get(),
+            status=AdvisoryProductStatus.Status.NOT_AFFECTED,
+            justification=AdvisoryProductStatus.Justification.CODE_NOT_REACHABLE,
+        )
+
+        [row] = client.get(_public(team.key, advisory.tracking_id)).json()["statuses"]
+
+        assert row["status"] == AdvisoryProductStatus.Status.NOT_AFFECTED
+        assert row["justification"] == "code_not_reachable"
+        assert (row["affected"], row["unaffected"]) == ("", "")
+
     def test_search_narrows_the_list_like_the_page(self, client_and_headers, team, public_product) -> None:
         client, _ = client_and_headers
         _publish_for(team, [public_product], visibility=SecurityAdvisory.Visibility.PUBLIC, title="Log4Shell")

@@ -55,8 +55,10 @@ router = Router(tags=["Security Advisories"])
 
 AUTH = (PersonalAccessTokenAuth(), django_auth)
 
-# The placeholder _version_expressions prints for "no versions recorded".
-_NO_VERSIONS = "—"
+# What _version_expressions prints for the table when it has nothing to say:
+# a dash for "no versions recorded", and "None"/"All" for a product the
+# advisory says is not affected. Copy, not data; the contract sends nothing.
+_PLACEHOLDER_VERSIONS = frozenset({"—", "None", "All"})
 
 
 def _workspace(request: HttpRequest) -> tuple[Team | None, tuple[int, ErrorResponse] | None]:
@@ -384,7 +386,7 @@ def _not_found(detail: str) -> tuple[int, ErrorResponse]:
 
 
 def _versions(value: str) -> str:
-    return "" if value == _NO_VERSIONS else value
+    return "" if value in _PLACEHOLDER_VERSIONS else value
 
 
 def _public_shape(projection: dict[str, Any]) -> dict[str, Any]:
