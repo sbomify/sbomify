@@ -1143,6 +1143,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._document_finding(
                 "sbom_tool_version",
                 stated=any(self._spdx3_tool_version(tool) for tool in tool_elements),
+                unknown=any(self._spdx3_tool_version_unknown(tool) for tool in tool_elements),
                 details="The tool element states no version.",
                 remediation="Carry the tool version in software_packageVersion, in the tool's name, "
                 "or as an external identifier.",
@@ -1266,6 +1267,16 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         if _looks_versioned(_text(tool.get("name"))):
             return True
         return any(_stated(ext.get("identifier")) for ext in iter_spdx3_external_identifiers(tool))
+
+    @staticmethod
+    def _spdx3_tool_version_unknown(tool: dict[str, Any]) -> bool:
+        """Whether the tool element states its version is unknown rather than omitting it.
+
+        The other two formats already report this, and an element that
+        warns on one format and fails on another for the same document is
+        the inconsistency the three-outcome design exists to avoid.
+        """
+        return any(_is_unknown(tool.get(key)) for key in ("software_packageVersion", "version"))
 
     @staticmethod
     def _spdx3_has_document_identity(data: dict[str, Any]) -> bool:
@@ -1417,6 +1428,9 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 "standard_name": self.STANDARD_NAME,
                 "standard_version": self.STANDARD_VERSION,
                 "standard_url": self.STANDARD_URL,
+                # Same keys as a scored run, so a consumer reading the
+                # metadata does not have to branch on which path produced it.
+                "sbom_format": "unknown",
                 "error": message,
             },
         )
