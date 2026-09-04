@@ -1438,6 +1438,8 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 # Same keys as a scored run, so a consumer reading the
                 # metadata does not have to branch on which path produced it.
                 "sbom_format": "unknown",
-                "error": message,
+                # A flag, as the other plugins set it. The message the view
+                # shows comes from the finding.
+                "error": True,
             },
         )

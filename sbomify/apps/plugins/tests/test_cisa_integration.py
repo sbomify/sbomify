@@ -11,6 +11,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
 from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 from sbomify.apps.plugins.tasks import run_assessment_task
@@ -377,14 +378,14 @@ class TestCISAPluginAPIIntegration(TestCase):
         AssessmentRun.objects.create(
             sbom=sbom,
             plugin_name="cisa-minimum-elements-2026",
-            plugin_version="1.0.0",
+            plugin_version=CISAMinimumElementsPlugin.VERSION,
             category="compliance",
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
             completed_at=timezone.now(),
             result={
                 "plugin_name": "cisa-minimum-elements-2026",
-                "plugin_version": "1.0.0",
+                "plugin_version": CISAMinimumElementsPlugin.VERSION,
                 "category": "compliance",
                 "assessed_at": timezone.now().isoformat(),
                 "summary": {
@@ -428,7 +429,7 @@ class TestCISAPluginAPIIntegration(TestCase):
         AssessmentRun.objects.create(
             sbom=sbom,
             plugin_name="cisa-minimum-elements-2026",
-            plugin_version="1.0.0",
+            plugin_version=CISAMinimumElementsPlugin.VERSION,
             category="compliance",
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
@@ -480,14 +481,14 @@ class TestCISAPluginAPIIntegration(TestCase):
         AssessmentRun.objects.create(
             sbom=sbom,
             plugin_name="cisa-minimum-elements-2026",
-            plugin_version="1.0.0",
+            plugin_version=CISAMinimumElementsPlugin.VERSION,
             category="compliance",
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
             completed_at=timezone.now(),
             result={
                 "plugin_name": "cisa-minimum-elements-2026",
-                "plugin_version": "1.0.0",
+                "plugin_version": CISAMinimumElementsPlugin.VERSION,
                 "category": "compliance",
                 "assessed_at": timezone.now().isoformat(),
                 "summary": {

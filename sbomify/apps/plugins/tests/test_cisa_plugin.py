@@ -768,6 +768,18 @@ class TestMalformedInput:
         assert result.summary.error_count == 1
         assert result.findings[0].status == "error"
 
+    def test_the_error_metadata_is_the_flag_every_other_plugin_sets(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """The component page reads the flag and takes the message off the finding."""
+        path = tmp_path / "sbom.json"
+        path.write_text("{not json")
+
+        result = plugin.assess("s", path)
+
+        assert result.metadata["error"] is True
+        assert result.findings[0].description
+
     def test_json_that_is_not_an_object_is_an_error(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path) -> None:
         path = tmp_path / "sbom.json"
         path.write_text("[]")
