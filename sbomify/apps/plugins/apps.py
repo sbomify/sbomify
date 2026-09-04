@@ -90,6 +90,32 @@ class PluginsConfig(AppConfig):
             },
         )
 
+        # CISA 2026 Minimum Elements Plugin
+        _register(
+            "cisa-minimum-elements-2026",
+            {
+                "display_name": "CISA Minimum Elements (2026)",
+                "description": (
+                    "Scores SBOMs against the 2026 Minimum Elements for a Software Bill of "
+                    "Materials, published by CISA with the NSA, the FBI and fifteen "
+                    "international partners, which replaced the 2021 NTIA elements. Checks "
+                    "the seventeen data fields: nine about the document, including its "
+                    "author, signature, format, generation context, tool and version, and "
+                    "eight about each component, including producer, identifiers, hash "
+                    "value and algorithm, licence and dependencies. Where the standard "
+                    "allows an author to state that a value is unknown, saying so reads as "
+                    "a warning rather than a miss."
+                ),
+                "category": "compliance",
+                "version": "2.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
         # OpenChain Telco SBOM Guide v1.1 Plugin
         _register(
             "openchain-telco-1.1",

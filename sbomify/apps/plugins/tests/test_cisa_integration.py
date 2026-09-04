@@ -1,4 +1,4 @@
-"""Integration tests for CISA 2025 compliance plugin workflow.
+"""Integration tests for the CISA 2026 compliance plugin workflow.
 
 Tests the complete workflow from SBOM creation through plugin assessment.
 """
@@ -11,6 +11,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
 from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 from sbomify.apps.plugins.tasks import run_assessment_task
@@ -21,7 +22,7 @@ from sbomify.apps.teams.models import Team
 
 @pytest.mark.django_db
 class TestCISAPluginIntegration:
-    """Integration tests for CISA 2025 plugin workflow."""
+    """Integration tests for the CISA 2026 plugin workflow."""
 
     @pytest.fixture
     def team(self) -> Team:
@@ -50,12 +51,12 @@ class TestCISAPluginIntegration:
     def cisa_plugin(self) -> RegisteredPlugin:
         """Register the CISA plugin."""
         plugin, _ = RegisteredPlugin.objects.update_or_create(
-            name="cisa-minimum-elements-2025",
+            name="cisa-minimum-elements-2026",
             defaults={
-                "display_name": "CISA Minimum Elements (2025)",
-                "description": "CISA 2025 SBOM compliance checking",
+                "display_name": "CISA Minimum Elements (2026)",
+                "description": "CISA 2026 SBOM compliance checking",
                 "category": "compliance",
-                "version": "1.0.0",
+                "version": "2.0.0",
                 "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
                 "is_enabled": True,
             },
@@ -64,10 +65,14 @@ class TestCISAPluginIntegration:
 
     @pytest.fixture
     def compliant_cyclonedx_sbom(self) -> dict:
-        """Sample compliant CycloneDX SBOM with all CISA 2025 elements."""
+        """Sample compliant CycloneDX SBOM with every CISA 2026 element."""
         return {
             "bomFormat": "CycloneDX",
             "specVersion": "1.5",
+            # The 2026 update added the document's own version and a
+            # signature attributable to its author.
+            "version": 1,
+            "signature": {"algorithm": "RS512", "value": "signed"},
             "components": [
                 {
                     "name": "example-component",
@@ -89,7 +94,7 @@ class TestCISAPluginIntegration:
 
     @pytest.fixture
     def non_compliant_cyclonedx_sbom(self) -> dict:
-        """Sample non-compliant CycloneDX SBOM missing CISA 2025 elements."""
+        """Sample CycloneDX SBOM missing most CISA 2026 elements."""
         return {
             "bomFormat": "CycloneDX",
             "specVersion": "1.5",
@@ -114,7 +119,7 @@ class TestCISAPluginIntegration:
         # Enable the CISA plugin for this team
         TeamPluginSettings.objects.create(
             team=team,
-            enabled_plugins=["cisa-minimum-elements-2025"],
+            enabled_plugins=["cisa-minimum-elements-2026"],
         )
 
         sbom = SBOM.objects.create(
@@ -165,17 +170,17 @@ class TestCISAPluginIntegration:
         ):
             run_assessment_task(
                 sbom_id=str(sbom.id),
-                plugin_name="cisa-minimum-elements-2025",
+                plugin_name="cisa-minimum-elements-2026",
                 run_reason=RunReason.ON_UPLOAD.value,
             )
 
         # Verify assessment completed successfully
-        assessment_run = AssessmentRun.objects.filter(sbom=sbom, plugin_name="cisa-minimum-elements-2025").first()
+        assessment_run = AssessmentRun.objects.filter(sbom=sbom, plugin_name="cisa-minimum-elements-2026").first()
         assert assessment_run is not None
         assert assessment_run.status == RunStatus.COMPLETED.value
         assert assessment_run.result is not None
         assert assessment_run.result["summary"]["fail_count"] == 0
-        assert assessment_run.result["summary"]["pass_count"] == 11  # All 11 CISA elements
+        assert assessment_run.result["summary"]["pass_count"] == 17  # every 2026 data field
         assert assessment_run.completed_at is not None
 
     def test_full_assessment_workflow_non_compliant(
@@ -204,12 +209,12 @@ class TestCISAPluginIntegration:
         ):
             run_assessment_task(
                 sbom_id=str(sbom.id),
-                plugin_name="cisa-minimum-elements-2025",
+                plugin_name="cisa-minimum-elements-2026",
                 run_reason=RunReason.ON_UPLOAD.value,
             )
 
         # Verify assessment completed with failures
-        assessment_run = AssessmentRun.objects.filter(sbom=sbom, plugin_name="cisa-minimum-elements-2025").first()
+        assessment_run = AssessmentRun.objects.filter(sbom=sbom, plugin_name="cisa-minimum-elements-2026").first()
         assert assessment_run is not None
         assert assessment_run.status == RunStatus.COMPLETED.value
         assert assessment_run.result is not None
@@ -241,19 +246,19 @@ class TestCISAPluginIntegration:
             # Run first assessment
             run_assessment_task(
                 sbom_id=str(sbom.id),
-                plugin_name="cisa-minimum-elements-2025",
+                plugin_name="cisa-minimum-elements-2026",
                 run_reason=RunReason.ON_UPLOAD.value,
             )
 
             # Run second assessment (manual re-run)
             run_assessment_task(
                 sbom_id=str(sbom.id),
-                plugin_name="cisa-minimum-elements-2025",
+                plugin_name="cisa-minimum-elements-2026",
                 run_reason=RunReason.MANUAL.value,
             )
 
         # Verify both runs exist
-        runs = AssessmentRun.objects.filter(sbom=sbom, plugin_name="cisa-minimum-elements-2025")
+        runs = AssessmentRun.objects.filter(sbom=sbom, plugin_name="cisa-minimum-elements-2026")
         assert runs.count() == 2
 
         # Both should be completed
@@ -267,7 +272,7 @@ class TestCISAPluginIntegration:
         cisa_plugin: RegisteredPlugin,
     ) -> None:
         """Test that CISA plugin validates the 4 new elements (hash, license, tool, context)."""
-        # Create SBOM missing only the new CISA 2025 elements
+        # A document missing the elements the 2026 update added
         sbom_missing_new_elements = {
             "bomFormat": "CycloneDX",
             "specVersion": "1.5",
@@ -305,22 +310,23 @@ class TestCISAPluginIntegration:
         ):
             run_assessment_task(
                 sbom_id=str(sbom.id),
-                plugin_name="cisa-minimum-elements-2025",
+                plugin_name="cisa-minimum-elements-2026",
                 run_reason=RunReason.ON_UPLOAD.value,
             )
 
-        assessment_run = AssessmentRun.objects.filter(sbom=sbom, plugin_name="cisa-minimum-elements-2025").first()
+        assessment_run = AssessmentRun.objects.filter(sbom=sbom, plugin_name="cisa-minimum-elements-2026").first()
         assert assessment_run is not None
 
         # Check that the new elements failed
         findings = assessment_run.result["findings"]
         failed_ids = [f["id"] for f in findings if f.get("status") == "fail"]
 
-        # Should fail on: component_hash, license, tool_name, generation_context
-        assert "cisa-2025:component-hash" in failed_ids
-        assert "cisa-2025:license" in failed_ids
-        assert "cisa-2025:tool-name" in failed_ids
-        assert "cisa-2025:generation-context" in failed_ids
+        # The elements the 2026 update added, and the hash split in two
+        assert "cisa-2026:component-hash-value" in failed_ids
+        assert "cisa-2026:component-hash-algorithm" in failed_ids
+        assert "cisa-2026:component-license" in failed_ids
+        assert "cisa-2026:sbom-tool-name" in failed_ids
+        assert "cisa-2026:sbom-generation-context" in failed_ids
 
 
 class TestCISAPluginAPIIntegration(TestCase):
@@ -344,12 +350,12 @@ class TestCISAPluginAPIIntegration(TestCase):
             visibility=Component.Visibility.PUBLIC,
         )
         RegisteredPlugin.objects.update_or_create(
-            name="cisa-minimum-elements-2025",
+            name="cisa-minimum-elements-2026",
             defaults={
-                "display_name": "CISA Minimum Elements (2025)",
-                "description": "CISA 2025 compliance checking",
+                "display_name": "CISA Minimum Elements (2026)",
+                "description": "CISA 2026 compliance checking",
                 "category": "compliance",
-                "version": "1.0.0",
+                "version": "2.0.0",
                 "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
                 "is_enabled": True,
             },
@@ -371,28 +377,28 @@ class TestCISAPluginAPIIntegration(TestCase):
         # Create completed assessment run with all required fields
         AssessmentRun.objects.create(
             sbom=sbom,
-            plugin_name="cisa-minimum-elements-2025",
-            plugin_version="1.0.0",
+            plugin_name="cisa-minimum-elements-2026",
+            plugin_version=CISAMinimumElementsPlugin.VERSION,
             category="compliance",
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
             completed_at=timezone.now(),
             result={
-                "plugin_name": "cisa-minimum-elements-2025",
-                "plugin_version": "1.0.0",
+                "plugin_name": "cisa-minimum-elements-2026",
+                "plugin_version": CISAMinimumElementsPlugin.VERSION,
                 "category": "compliance",
                 "assessed_at": timezone.now().isoformat(),
                 "summary": {
-                    "total_findings": 11,
-                    "pass_count": 11,
+                    "total_findings": 17,
+                    "pass_count": 17,
                     "fail_count": 0,
                     "error_count": 0,
                     "info_count": 0,
                 },
                 "findings": [],
                 "metadata": {
-                    "standard_name": "CISA 2025 Minimum Elements",
-                    "standard_version": "2025-08",
+                    "standard_name": "CISA 2026 Minimum Elements",
+                    "standard_version": "2026-07",
                 },
             },
         )
@@ -404,7 +410,7 @@ class TestCISAPluginAPIIntegration(TestCase):
 
         assert response.status_summary.overall_status == "all_pass"
         assert len(response.latest_runs) == 1
-        assert response.latest_runs[0].plugin_name == "cisa-minimum-elements-2025"
+        assert response.latest_runs[0].plugin_name == "cisa-minimum-elements-2026"
 
     def test_badge_api_returns_status_summary(self) -> None:
         """Test that badge API returns correct status summary for CISA plugin."""
@@ -422,17 +428,17 @@ class TestCISAPluginAPIIntegration(TestCase):
         # Create completed assessment with failures
         AssessmentRun.objects.create(
             sbom=sbom,
-            plugin_name="cisa-minimum-elements-2025",
-            plugin_version="1.0.0",
+            plugin_name="cisa-minimum-elements-2026",
+            plugin_version=CISAMinimumElementsPlugin.VERSION,
             category="compliance",
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
             completed_at=timezone.now(),
             result={
                 "summary": {
-                    "total_findings": 11,
-                    "pass_count": 7,
-                    "fail_count": 4,  # 4 new CISA elements failing
+                    "total_findings": 17,
+                    "pass_count": 12,
+                    "fail_count": 5,  # the elements the 2026 update added
                     "error_count": 0,
                     "info_count": 0,
                 },
@@ -474,21 +480,21 @@ class TestCISAPluginAPIIntegration(TestCase):
         # Create CISA assessment
         AssessmentRun.objects.create(
             sbom=sbom,
-            plugin_name="cisa-minimum-elements-2025",
-            plugin_version="1.0.0",
+            plugin_name="cisa-minimum-elements-2026",
+            plugin_version=CISAMinimumElementsPlugin.VERSION,
             category="compliance",
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
             completed_at=timezone.now(),
             result={
-                "plugin_name": "cisa-minimum-elements-2025",
-                "plugin_version": "1.0.0",
+                "plugin_name": "cisa-minimum-elements-2026",
+                "plugin_version": CISAMinimumElementsPlugin.VERSION,
                 "category": "compliance",
                 "assessed_at": timezone.now().isoformat(),
                 "summary": {
-                    "total_findings": 11,
-                    "pass_count": 7,
-                    "fail_count": 4,
+                    "total_findings": 17,
+                    "pass_count": 12,
+                    "fail_count": 5,
                 },
                 "findings": [],
             },
@@ -523,5 +529,5 @@ class TestCISAPluginAPIIntegration(TestCase):
         # Should have both plugins in results
         assert len(response.latest_runs) == 2
         plugin_names = {run.plugin_name for run in response.latest_runs}
-        assert "cisa-minimum-elements-2025" in plugin_names
+        assert "cisa-minimum-elements-2026" in plugin_names
         assert "ntia-minimum-elements-2021" in plugin_names
