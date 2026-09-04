@@ -397,14 +397,48 @@ class TestTheTimestampIsRfc9557:
 class TestTheIdentifiersCisaNames:
     """CISA adds the intrinsic identifiers OmniBOR and SWHID to CPE and PURL."""
 
-    @pytest.mark.parametrize("field_name", ["purl", "cpe", "swid", "omniborId", "swhid"])
-    def test_cyclonedx_accepts_each(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path, field_name: str) -> None:
+    @pytest.mark.parametrize(
+        ("field_name", "value"),
+        [
+            ("purl", "pkg:generic/openssl@3.0.11"),
+            ("cpe", "cpe:2.3:a:openssl:openssl:3.0.11:*:*:*:*:*:*:*"),
+            ("swid", {"tagId": "acme.openssl-3.0.11", "name": "openssl"}),
+            ("omniborId", ["gitoid:blob:sha1:" + "a" * 40]),
+            ("swhid", ["swh:1:cnt:" + "b" * 40]),
+        ],
+    )
+    def test_cyclonedx_accepts_each_in_the_shape_the_schema_gives_it(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path, field_name: str, value: Any
+    ) -> None:
+        """swid is an object and the two intrinsic ones are arrays, so a string tests nothing."""
+        document = cyclonedx()
+        for component in document["components"]:
+            component.pop("purl")
+            component[field_name] = value
+
+        assert assess(plugin, tmp_path, document)["component_identifiers"] == "pass"
+
+    @pytest.mark.parametrize("field_name", ["swid", "omniborId", "swhid"])
+    def test_cyclonedx_still_reads_a_producer_that_writes_a_bare_string(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path, field_name: str
+    ) -> None:
         document = cyclonedx()
         for component in document["components"]:
             component.pop("purl")
             component[field_name] = "identifier-value"
 
         assert assess(plugin, tmp_path, document)["component_identifiers"] == "pass"
+
+    @pytest.mark.parametrize("value", [{}, {"tagId": ""}, [], [""]])
+    def test_cyclonedx_an_empty_identifier_is_no_identifier(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path, value: Any
+    ) -> None:
+        document = cyclonedx()
+        for component in document["components"]:
+            component.pop("purl")
+            component["swid" if isinstance(value, dict) else "omniborId"] = value
+
+        assert assess(plugin, tmp_path, document)["component_identifiers"] == "fail"
 
     @pytest.mark.parametrize("reference_type", ["purl", "cpe23Type", "cpe22Type", "swid", "gitoid", "swhid"])
     def test_spdx2_accepts_each(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path, reference_type: str) -> None:
