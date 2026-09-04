@@ -546,6 +546,31 @@ class TestWhatAReaderIsTold:
         assert "without a version" not in told
 
 
+class TestEveryFormatAgreesOnAnUnknown:
+    def test_spdx3_tool_version_warns_like_the_other_two(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """An element that warns on one format and fails on another for the same document is a bug."""
+        document = spdx3()
+        for element in document["@graph"]:
+            if element.get("type") == "Tool":
+                element["software_packageVersion"] = "NOASSERTION"
+
+        assert assess(plugin, tmp_path, document)["sbom_tool_version"] == "warning"
+
+    def test_an_unreadable_document_still_reports_the_format_key(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """The error path carries the same metadata keys, so a consumer need not branch."""
+        path = tmp_path / "sbom.json"
+        path.write_text(json.dumps({"hello": "world"}))
+
+        result = plugin.assess("s", path)
+
+        assert result.metadata["sbom_format"] == "unknown"
+        assert set(result.metadata) >= {"standard_name", "standard_version", "standard_url", "sbom_format"}
+
+
 class TestTheSignature:
     def test_cyclonedx_carries_its_own(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path) -> None:
         assert assess(plugin, tmp_path, cyclonedx())["sbom_author_signature"] == "pass"
