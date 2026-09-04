@@ -927,6 +927,13 @@ ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 ACCOUNT_ADAPTER = "sbomify.apps.core.adapters.CustomAccountAdapter"
 
+# The SBOM converter used to derive a scanner-readable copy of a document the
+# scanners cannot read (SPDX 3 for osv-scanner, SPDX at all for Dependency
+# Track). A bare name is looked up on PATH; an absolute path is used as given.
+# Nothing is converted when it is absent, so a deployment without it keeps the
+# old skip behaviour.
+SBOM_CONVERTER_PATH = os.environ.get("SBOM_CONVERTER_PATH", "syft")
+
 # Keycloak settings
 KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:8080/")
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
