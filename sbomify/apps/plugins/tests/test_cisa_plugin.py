@@ -336,6 +336,28 @@ class TestTheProducerIsWhoeverIsNamed:
         statuses = assess(plugin, tmp_path, document)
         assert statuses["component_producer"] == "fail"
 
+    def test_spdx3_a_dangling_reference_names_nobody(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """originatedBy pointing at an element that is not in the graph is not a name."""
+        document = spdx3()
+        for element in document["@graph"]:
+            if element["type"] == "software_Package":
+                element["originatedBy"] = ["urn:org:missing"]
+
+        assert assess(plugin, tmp_path, document)["component_producer"] == "fail"
+
+    def test_spdx3_noassertion_still_reaches_the_unknown_outcome(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """It arrives as a bare string, on the same path a dangling reference takes."""
+        document = spdx3()
+        for element in document["@graph"]:
+            if element["type"] == "software_Package":
+                element["originatedBy"] = ["NOASSERTION"]
+
+        assert assess(plugin, tmp_path, document)["component_producer"] == "warning"
+
 
 class TestTheTimestampIsRfc9557:
     @pytest.mark.parametrize(
@@ -711,6 +733,27 @@ class TestDependencyRelationships:
         document["relationships"] = [
             {"spdxElementId": "SPDXRef-openssl", "relationshipType": "CONTAINS", "relatedSpdxElement": "SPDXRef-zlib"}
         ]
+
+        assert assess(plugin, tmp_path, document)["component_dependency_relationship"] == "pass"
+
+    def test_file_entries_do_not_make_an_edge_necessary(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """One shipped component plus a lockfile still has nothing to relate."""
+        document = cyclonedx()
+        document["components"] = document["components"][:1]
+        document["components"].append({"name": "uv.lock", "type": "file"})
+        document["dependencies"] = []
+
+        assert assess(plugin, tmp_path, document)["component_dependency_relationship"] == "pass"
+
+    def test_spdx2_file_packages_do_not_make_an_edge_necessary(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        document = spdx2()
+        document["packages"] = document["packages"][:1]
+        document["packages"].append({"name": "uv.lock", "SPDXID": "SPDXRef-File-uv-lock"})
+        document["relationships"] = []
 
         assert assess(plugin, tmp_path, document)["component_dependency_relationship"] == "pass"
 

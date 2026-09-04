@@ -676,7 +676,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         findings.append(
             self._document_finding(
                 "component_dependency_relationship",
-                stated=self._cyclonedx_has_dependencies(data, len(components)),
+                stated=self._cyclonedx_has_dependencies(data, assessed),
                 details="No dependencies[] entry states what a component depends on.",
                 remediation=remediations["component_dependency_relationship"],
             )
@@ -856,9 +856,11 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
     def _cyclonedx_has_dependencies(data: dict[str, Any], component_count: int) -> bool:
         """Whether the document states a dependency edge.
 
-        A document describing fewer than two components has no relationship
-        to state, so the element is satisfied rather than failed on a
-        document that could not carry one.
+        The count is of components the standard's Component Data elements
+        apply to, so file entries are already out of it. A document
+        describing fewer than two such components has no relationship to
+        state, and the element is satisfied rather than failed on a document
+        that could not carry one.
         """
         if component_count < 2:
             return True
@@ -1015,7 +1017,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         findings.append(
             self._document_finding(
                 "component_dependency_relationship",
-                stated=self._spdx2_has_dependencies(data, len(packages)),
+                stated=self._spdx2_has_dependencies(data, assessed),
                 details="No relationship states that one component is necessary to another.",
                 remediation=remediations["component_dependency_relationship"],
             )
@@ -1037,7 +1039,11 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
 
     @staticmethod
     def _spdx2_has_dependencies(data: dict[str, Any], package_count: int) -> bool:
-        """Whether the document states a dependency relationship."""
+        """Whether the document states a dependency relationship.
+
+        ``package_count`` excludes file packages, for the reason given on the
+        CycloneDX counterpart.
+        """
         if package_count < 2:
             return True
         relationships = data.get("relationships")
@@ -1330,9 +1336,10 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 entity = agents.get(ref) if isinstance(ref, str) else (ref if isinstance(ref, dict) else None)
                 if isinstance(entity, dict):
                     values.append(entity.get("name"))
-                elif isinstance(ref, str):
-                    # An unresolvable reference still says the document tried
-                    # to name someone, and NOASSERTION arrives this way.
+                elif isinstance(ref, str) and _is_unknown(ref):
+                    # NOASSERTION arrives as a bare string rather than a
+                    # reference to an element. A reference that resolves to
+                    # nothing names nobody, so it is not counted as one.
                     values.append(ref)
         return values
 
