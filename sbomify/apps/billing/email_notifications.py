@@ -56,7 +56,24 @@ def _get_base_context(team: Team, member: Member) -> dict[str, Any]:
 def send_billing_email(
     team: Team, member: Member, subject: str, template_name: str, extra_context: dict[str, Any]
 ) -> None:
-    """Send a billing-related email using a template."""
+    """Queue a billing email. The rendering and the SMTP round trip happen in a
+    worker, so a webhook is not held open for them."""
+    from sbomify.apps.billing.tasks import deliver_billing_email
+
+    if not team:
+        logger.error("Cannot send billing email: team is None")
+        return
+    if not member:
+        logger.error("Cannot send billing email: member is None")
+        return
+
+    deliver_billing_email.send(team.pk, member.pk, subject, template_name, extra_context)
+
+
+def render_and_send_billing_email(
+    team: Team, member: Member, subject: str, template_name: str, extra_context: dict[str, Any]
+) -> None:
+    """Render a billing email from its template and send it. Called by the worker."""
     if not team:
         logger.error("Cannot send billing email: team is None")
         return
@@ -126,7 +143,13 @@ def notify_payment_succeeded(team: Team, member: Member) -> None:
 
 def notify_trial_ending(team: Team, member: Member, days_remaining: int) -> None:
     """Notify team owner that trial period is ending soon."""
-    subject = f"Your sbomify trial ends in {days_remaining} days"
+    if days_remaining <= 0:
+        # Under a day left, which may still be tomorrow by the clock.
+        subject = "Your sbomify trial ends soon"
+    elif days_remaining == 1:
+        subject = "Your sbomify trial ends tomorrow"
+    else:
+        subject = f"Your sbomify trial ends in {days_remaining} days"
     send_billing_email(team, member, subject, "trial_ending", {"days_remaining": days_remaining})
 
 

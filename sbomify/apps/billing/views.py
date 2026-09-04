@@ -42,7 +42,7 @@ from .billing_helpers import (
 )
 from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
-from .stripe_client import BillingRetryableError, StripeError, get_stripe_client
+from .stripe_client import BillingRetryableError, StripeError, WorkspaceGoneError, get_stripe_client
 from .stripe_pricing_service import StripePricingService
 from .stripe_sync import sync_subscription_from_stripe
 from .tasks import send_enterprise_inquiry_email
@@ -742,7 +742,12 @@ class StripeWebhookView(View):
             if event.type == "checkout.session.completed":
                 session = event.data.object
                 billing_processing.handle_checkout_completed(session)
-            elif event.type == "customer.subscription.updated":
+            elif event.type in ("customer.subscription.updated", "customer.subscription.trial_will_end"):
+                # trial_will_end is the only notice Stripe sends as a trial runs
+                # down, three days out. Nothing else generates an update in that
+                # window, so without it the trial-ending email only went out if
+                # some unrelated change happened to land first. The event carries
+                # the subscription, so the same handler reads it.
                 subscription = event.data.object
                 billing_processing.handle_subscription_updated(subscription, event=event)
             elif event.type == "customer.subscription.deleted":
@@ -754,6 +759,9 @@ class StripeWebhookView(View):
             elif event.type == "invoice.payment_failed":
                 invoice = event.data.object
                 billing_processing.handle_payment_failed(invoice, event=event)
+            elif event.type in ("price.updated", "price.created"):
+                price = event.data.object
+                billing_processing.handle_price_updated(price, event=event)
             else:
                 logger.info("Unhandled event type: %s", event.type)
 
@@ -767,6 +775,13 @@ class StripeWebhookView(View):
             # exc_info captures the chained root cause (these are raised `from e`).
             logger.error("Retryable webhook error (Stripe will retry): %s", e, exc_info=True)
             return HttpResponse(status=503)
+        except WorkspaceGoneError as e:
+            # Caught before StripeError, as BillingRetryableError is: terminal and
+            # acknowledged the same way, but nothing here is broken. The workspace
+            # was deleted, which cancels its subscription, and this is Stripe saying
+            # so after the row has gone.
+            logger.warning("Webhook for a workspace that no longer exists (acknowledged): %s", e)
+            return HttpResponse(status=200)
         except StripeError as e:
             logger.error("Stripe business logic error (acknowledged): %s", e)
             return HttpResponse(status=200)

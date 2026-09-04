@@ -117,13 +117,30 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     "Cannot delete the default workspace. Please set another workspace as default first.",
                 )
             else:
+                # Read the billing ids before the row goes. Without this the
+                # subscription outlives the workspace and keeps charging. The
+                # cancelling itself is queued: it is two calls to Stripe, and
+                # holding a web worker open for them after the row has already
+                # been deleted risks a timeout with nothing left to retry.
+                from sbomify.apps.billing.tasks import cleanup_stripe_for_deleted_workspace
+
+                limits = team.billing_plan_limits or {}
+                subscription_id = limits.get("stripe_subscription_id")
+                customer_id = limits.get("stripe_customer_id")
+                # key is nullable on the model, and this string only exists to
+                # name the workspace in an alert after the row has gone.
+                workspace_key = team.key or f"pk={team.pk}"
+                workspace_name = team.name
+
                 with transaction.atomic():
                     team.delete()
+
+                cleanup_stripe_for_deleted_workspace.send(subscription_id, customer_id, workspace_key)
 
                 messages.add_message(
                     request,
                     messages.INFO,
-                    f"Workspace {team.name} has been deleted",
+                    f"Workspace {workspace_name} has been deleted",
                 )
                 update_user_teams_session(request, user)
         except Member.DoesNotExist:

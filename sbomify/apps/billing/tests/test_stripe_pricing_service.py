@@ -130,8 +130,13 @@ class TestCreateCheckoutSession:
         )
 
         call_args = mock_stripe_client.create_checkout_session_raw.call_args[0][0]
-        assert call_args["subscription_data"] == {"trial_period_days": 14}
+        assert call_args["subscription_data"]["trial_period_days"] == 14
         assert call_args["payment_method_collection"] == "always"
+        # A card collected at checkout can still be detached before the trial
+        # ends, and Stripe's default then raises an invoice nobody can pay.
+        assert call_args["subscription_data"]["trial_settings"] == {
+            "end_behavior": {"missing_payment_method": "cancel"}
+        }
 
     def test_trial_period_omitted_when_none(self, service, mock_stripe_client, mock_team, mock_plan):
         mock_customer = MagicMock()

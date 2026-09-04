@@ -17,6 +17,64 @@ logger = getLogger(__name__)
 
 
 @dramatiq.actor(queue_name="default", max_retries=3)
+def cleanup_stripe_for_deleted_workspace(
+    subscription_id: str | None,
+    customer_id: str | None,
+    workspace_key: str,
+) -> None:
+    """Cancel a deleted workspace's subscription and remove its Stripe customer.
+
+    Runs here rather than in the request that deleted the workspace: the row is
+    already gone by then, so a slow or failing Stripe call could only hold a web
+    worker open, and a proxy timing the request out would leave the subscription
+    live with nothing left to retry it.
+
+    A permanent failure logs CRITICAL and stops, because retrying cannot help
+    and the subscription needs a person. Anything else is left to raise so
+    dramatiq retries it.
+    """
+    from sbomify.apps.core.services.account_deletion import cleanup_stripe_for_workspace
+
+    # raise_retryable: an outage must come back here, not stop at one CRITICAL.
+    if cleanup_stripe_for_workspace(subscription_id, customer_id, raise_retryable=True):
+        return
+    logger.critical(
+        "Stripe cleanup failed for deleted workspace %s; its subscription may still bill",
+        workspace_key,
+    )
+
+
+@dramatiq.actor(queue_name="default", max_retries=3)
+def deliver_billing_email(
+    team_id: int,
+    member_id: int,
+    subject: str,
+    template_name: str,
+    extra_context: dict[str, Any],
+) -> None:
+    """Render and send one billing email off the request that triggered it.
+
+    Stripe asks for a webhook to be answered before slow work, and an SMTP
+    round trip per recipient is the slowest thing these handlers do. Only
+    delivery moves here: the database work that decides the webhook's 200 or
+    5xx still runs inline, so that contract is unchanged.
+    """
+    from sbomify.apps.billing.email_notifications import render_and_send_billing_email
+    from sbomify.apps.teams.models import Member, Team
+
+    team = Team.objects.filter(pk=team_id).first()
+    # Scoped to the workspace, so mismatched ids cannot address the right person
+    # with another workspace's name and billing links in the body.
+    member = Member.objects.filter(pk=member_id, team_id=team_id).select_related("user").first()
+    if team is None or member is None:
+        # The workspace or the membership went away between queueing and now.
+        logger.info("Skipping billing email %s: the workspace or member no longer exists", template_name)
+        return
+
+    render_and_send_billing_email(team, member, subject, template_name, extra_context)
+
+
+@dramatiq.actor(queue_name="default", max_retries=3)
 def send_enterprise_inquiry_email(
     form_data: dict[str, Any],
     user_email: str | None = None,

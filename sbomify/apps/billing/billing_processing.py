@@ -29,7 +29,13 @@ from .billing_helpers import (
 from .config import get_unlimited_plan_limits, is_billing_enabled
 from .models import BillingPlan
 from .stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
-from .stripe_client import BillingRetryableError, StripeError, get_stripe_client, handle_stripe_errors
+from .stripe_client import (
+    BillingRetryableError,
+    StripeError,
+    WorkspaceGoneError,
+    get_stripe_client,
+    handle_stripe_errors,
+)
 
 logger = getLogger(__name__)
 
@@ -61,17 +67,20 @@ def _raise_classified_webhook_error(exc: Exception) -> NoReturn:
     * ``BillingRetryableError`` (incl. transient Stripe failures surfaced by the
       ``handle_stripe_errors`` decorator) -> propagate so the view returns 5xx and
       Stripe retries.
-    * ``Team.DoesNotExist`` / an explicit terminal ``StripeError`` (e.g. an invalid
-      subscription status, or a terminal Stripe failure such as a missing customer)
-      -> terminal: the view acknowledges with 200.
+    * ``Team.DoesNotExist`` -> ``WorkspaceGoneError``, terminal: the view
+      acknowledges with 200 and reports it as an event with nowhere to land
+      rather than as a fault.
+    * An explicit terminal ``StripeError`` (e.g. an invalid subscription status,
+      or a terminal Stripe failure such as a missing customer) -> terminal: the
+      view acknowledges with 200.
     * Anything else (unexpected) -> retryable, so a transient bug/outage is not
       silently dropped.
     """
     if isinstance(exc, BillingRetryableError):
         raise exc
     if isinstance(exc, Team.DoesNotExist):
-        # Terminal: a genuinely nonexistent team cannot be conjured by a retry.
-        raise StripeError(str(exc) or "No team found for webhook event") from exc
+        # Terminal: a genuinely nonexistent workspace cannot be conjured by a retry.
+        raise WorkspaceGoneError(str(exc) or "No workspace found for webhook event") from exc
     if isinstance(exc, StripeError):
         # Explicit terminal business error or a terminal Stripe failure — preserve it.
         raise exc
@@ -259,6 +268,12 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             logger.warning(f"Could not convert trial_end to datetime: {e}")
             return False
 
+        # Whether the trial is over is read from the timestamp, not from the day
+        # count. timedelta.days floors, so anything under 24 hours counts as 0,
+        # and expiring on that published every private component in the
+        # workspace up to a day before the trial actually ended.
+        trial_has_ended = trial_end <= timezone.now()
+
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
@@ -272,7 +287,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             notify_billing_managers(team, email_notifications.notify_trial_ending, days_remaining)
             logger.info("Trial ending notification sent")
 
-        if days_remaining <= 0:
+        if trial_has_ended:
             # See ``TrialExpiryEmissionGuard`` for the two-marker state machine
             # that makes the side effects below crash-tolerant and idempotent
             # across concurrent / redelivered webhooks.
@@ -416,6 +431,7 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
     # Stripe outage here must be retried (BillingRetryableError); a *permanent* failure
     # (e.g. no such customer) cannot be resolved by retrying, so fall through to the
     # terminal "no team" path rather than amplifying futile retries.
+    customer_unreadable = False
     try:
         customer = stripe_client.get_customer(subscription.customer)
     except BillingRetryableError:
@@ -423,9 +439,10 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
     except StripeError:
         # Don't log the Stripe customer/subscription identifiers here (flagged as
         # sensitive by code scanning); the subscription id is still carried in the
-        # terminal Team.DoesNotExist raised below.
+        # terminal error raised below.
         logger.warning("Permanent failure fetching Stripe customer during team resolution; treating as no team")
         customer = None
+        customer_unreadable = True
 
     if customer is not None and customer.metadata and "team_key" in customer.metadata:
         try:
@@ -436,9 +453,15 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
             logger.warning("Found team by customer metadata")
             return team, team.billing_plan_limits or {}
 
-    # Definitively unresolved after every strategy → terminal "no team". Keep the
+    if customer_unreadable:
+        # No workspace holds these ids, and the customer that could have named one
+        # would not load. Terminal either way, but whether the workspace still
+        # exists is unknown, so this is not the quiet kind.
+        raise StripeError("No workspace holds this subscription and its Stripe customer could not be read")
+
+    # Definitively unresolved after every strategy → the workspace is gone. Keep the
     # message free of the Stripe subscription id (re-logged by the webhook view).
-    raise Team.DoesNotExist("No team found for the subscription in this webhook event")
+    raise Team.DoesNotExist("No workspace holds the subscription in this webhook event")
 
 
 def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id: str) -> dict[str, Any]:
