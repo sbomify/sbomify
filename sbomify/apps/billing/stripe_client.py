@@ -223,6 +223,13 @@ class StripeClient:
 
         if trial_days:
             subscription_data["trial_period_days"] = trial_days
+            # A trial started this way carries no card, so say what happens when
+            # it ends without one. Stripe otherwise raises an invoice nobody can
+            # pay, which reaches the customer as a failed-payment notice for a
+            # trial they simply let lapse, and leaves the workspace past_due.
+            # Cancelling ends it cleanly, on the path the deleted-subscription
+            # handler already downgrades from.
+            subscription_data["trial_settings"] = {"end_behavior": {"missing_payment_method": "cancel"}}
 
         subscription = stripe.Subscription.create(**subscription_data)
 
