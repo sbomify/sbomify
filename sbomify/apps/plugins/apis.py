@@ -539,7 +539,6 @@ def _get_plugin_plan_requirement(plugin_name: str) -> str | None:
         "fda-medical-device-2025": "has_fda_compliance",
         "dependency-track": "has_dependency_track_access",
         # Future plugins can be added here
-        # "cisa-minimum-elements-2025": "has_cisa_compliance",
     }
     return plan_requirements.get(plugin_name)
 

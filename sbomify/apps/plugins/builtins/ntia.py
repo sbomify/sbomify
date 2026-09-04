@@ -21,9 +21,10 @@ The seven NTIA minimum data fields are:
     6. Author of SBOM Data - Name of entity that creates the SBOM data
     7. Timestamp - Record of date and time of SBOM data assembly
 
-Note: CISA released an updated draft in August 2025 with additional elements
-(Component Hash, License, Tool Name, Generation Context). When finalized,
-that will be implemented as a separate CISAMinimumElementsPlugin.
+Note: CISA replaced these elements in July 2026 with the 2026 Minimum
+Elements, which sbomify scores separately in ``cisa.py``. This plugin stays
+because buyers still ask for the 2021 elements by name, and because the two
+answer different questions about the same document.
 """
 
 import json

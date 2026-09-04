@@ -31,7 +31,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 | Plugin                                  | Type        | Standard                                                                                                                                         |
 | --------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | NTIA Minimum Elements (2021)            | Compliance  | [NTIA Minimum Elements for SBOM](https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom)                                 |
-| CISA Minimum Elements (2025 Draft)      | Compliance  | [CISA 2025 SBOM Minimum Elements](https://www.cisa.gov/sites/default/files/2025-08/2025_CISA_SBOM_Minimum_Elements.pdf) _(Public Comment Draft)_ |
+| CISA Minimum Elements (2026)            | Compliance  | [2026 Minimum Elements for an SBOM](https://www.cisa.gov/resources-tools/resources/2026-minimum-elements-software-bill-materials-sbom)                    |
 | BSI TR-03183-2 v2.1 (EU CRA)            | Compliance  | [BSI TR-03183-2: Cyber Resilience Requirements](https://bsi.bund.de/dok/TR-03183-en)                                                             |
 | FDA Medical Device Cybersecurity (2025) | Compliance  | [FDA Cybersecurity in Medical Devices](https://www.fda.gov/media/119933/download)                                                                |
 | GitHub Artifact Attestation             | Attestation | [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations)                       |
