@@ -529,6 +529,23 @@ class TestDeclaredUnknownIsItsOwnOutcome:
         assert "openssl" in detail(plugin, tmp_path, document, "component_version")
 
 
+class TestWhatAReaderIsTold:
+    def test_a_declared_unknown_does_not_borrow_the_absence_wording(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """ "Named without a version" describes the wrong document when it said unknown."""
+        document = spdx2(
+            creationInfo={"created": "2026-07-29T10:00:00Z", "creators": ["Tool: NOASSERTION"]},
+        )
+
+        statuses = assess(plugin, tmp_path, document)
+        told = detail(plugin, tmp_path, document, "sbom_tool_version")
+
+        assert statuses["sbom_tool_version"] == "warning"
+        assert "states this is unknown" in told
+        assert "without a version" not in told
+
+
 class TestTheSignature:
     def test_cyclonedx_carries_its_own(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path) -> None:
         assert assess(plugin, tmp_path, cyclonedx())["sbom_author_signature"] == "pass"

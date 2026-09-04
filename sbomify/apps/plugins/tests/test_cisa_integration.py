@@ -55,7 +55,7 @@ class TestCISAPluginIntegration:
                 "display_name": "CISA Minimum Elements (2026)",
                 "description": "CISA 2026 SBOM compliance checking",
                 "category": "compliance",
-                "version": "1.0.0",
+                "version": "2.0.0",
                 "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
                 "is_enabled": True,
             },
@@ -354,7 +354,7 @@ class TestCISAPluginAPIIntegration(TestCase):
                 "display_name": "CISA Minimum Elements (2026)",
                 "description": "CISA 2026 compliance checking",
                 "category": "compliance",
-                "version": "1.0.0",
+                "version": "2.0.0",
                 "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
                 "is_enabled": True,
             },
@@ -397,7 +397,7 @@ class TestCISAPluginAPIIntegration(TestCase):
                 "findings": [],
                 "metadata": {
                     "standard_name": "CISA 2026 Minimum Elements",
-                    "standard_version": "2025-08",
+                    "standard_version": "2026-07",
                 },
             },
         )
