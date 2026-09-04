@@ -1043,7 +1043,15 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
 
     @staticmethod
     def _spdx2_has_identifier(package: dict[str, Any]) -> bool:
-        """Whether the package carries a look-up key in its external references."""
+        """Whether the package carries a look-up key.
+
+        SPDX 2.3 puts these in ``externalRefs``, and that is what a conforming
+        document uses. A bare ``purl`` on the package is not in the spec, but
+        producers write it and the NTIA and FDA plugins already read it, so it
+        is read here too rather than letting one document score two ways.
+        """
+        if _stated(package.get("purl")):
+            return True
         refs = package.get("externalRefs")
         if not isinstance(refs, list):
             return False

@@ -450,6 +450,17 @@ class TestTheIdentifiersCisaNames:
 
         assert assess(plugin, tmp_path, document)["component_identifiers"] == "pass"
 
+    def test_spdx2_a_bare_purl_on_the_package_counts(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """Not in the spec, but producers write it and the other plugins read it."""
+        document = spdx2()
+        for package in document["packages"]:
+            package.pop("externalRefs")
+            package["purl"] = "pkg:generic/openssl@3.0.11"
+
+        assert assess(plugin, tmp_path, document)["component_identifiers"] == "pass"
+
     def test_a_reference_that_is_not_an_identifier_does_not_count(
         self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
     ) -> None:
