@@ -161,7 +161,7 @@ def test_deleting_a_workspace_cancels_its_subscription(client, paid_owner, paid_
     stripe.delete_customer.assert_called_once_with("cus_test123")
 
 
-def test_deleting_a_free_workspace_calls_stripe_at_all(client, paid_owner, paid_team, settings, mocker):
+def test_deleting_a_free_workspace_does_not_call_stripe_at_all(client, paid_owner, paid_team, settings, mocker):
     paid_team.billing_plan_limits = {}
     paid_team.save(update_fields=["billing_plan_limits"])
 
@@ -170,6 +170,7 @@ def test_deleting_a_free_workspace_calls_stripe_at_all(client, paid_owner, paid_
     assert response.status_code == 302
     assert not Team.objects.filter(pk=paid_team.pk).exists()
     stripe.cancel_subscription.assert_not_called()
+    stripe.delete_customer.assert_not_called()
 
 
 def test_a_stripe_failure_does_not_block_the_delete(client, paid_owner, paid_team, settings, mocker):

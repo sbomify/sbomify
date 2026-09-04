@@ -455,7 +455,7 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
 
     # Definitively unresolved after every strategy → the workspace is gone. Keep the
     # message free of the Stripe subscription id (re-logged by the webhook view).
-    raise Team.DoesNotExist("No team found for the subscription in this webhook event")
+    raise Team.DoesNotExist("No workspace holds the subscription in this webhook event")
 
 
 def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id: str) -> dict[str, Any]:

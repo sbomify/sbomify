@@ -634,3 +634,16 @@ class TestNotificationsLeaveTheRequest:
         deliver_billing_email(999999, sample_team_with_owner_member.pk, "Subject", "trial_ending", {})
 
         send.assert_not_called()
+
+    def test_a_member_of_another_workspace_is_not_emailed(self, mocker, sample_team_with_owner_member):
+        """Mismatched ids would name the wrong workspace at the right person."""
+        from sbomify.apps.billing.tasks import deliver_billing_email
+        from sbomify.apps.teams.models import Team
+
+        send = mocker.patch("sbomify.apps.billing.email_notifications.render_and_send_billing_email")
+        member = sample_team_with_owner_member
+        other = Team.objects.create(name="Another workspace", key="another-ws-key")
+
+        deliver_billing_email(other.pk, member.pk, "Subject", "trial_ending", {})
+
+        send.assert_not_called()

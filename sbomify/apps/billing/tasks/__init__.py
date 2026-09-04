@@ -35,7 +35,9 @@ def deliver_billing_email(
     from sbomify.apps.teams.models import Member, Team
 
     team = Team.objects.filter(pk=team_id).first()
-    member = Member.objects.filter(pk=member_id).select_related("user").first()
+    # Scoped to the workspace, so mismatched ids cannot address the right person
+    # with another workspace's name and billing links in the body.
+    member = Member.objects.filter(pk=member_id, team_id=team_id).select_related("user").first()
     if team is None or member is None:
         # The workspace or the membership went away between queueing and now.
         logger.info("Skipping billing email %s: the workspace or member no longer exists", template_name)
