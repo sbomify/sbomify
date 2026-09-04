@@ -16,9 +16,6 @@ from sbomify.apps.teams.forms import AddTeamForm, DeleteTeamForm, UpdateTeamForm
 from sbomify.apps.teams.models import Member, Team
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.utils import update_user_teams_session
-from sbomify.logging import getLogger
-
-logger = getLogger(__name__)
 
 
 class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
@@ -108,8 +105,6 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             messages.error(request, form.errors.as_text())
             return redirect("teams:teams_dashboard")
 
-        from sbomify.apps.core.services.account_deletion import cleanup_stripe_for_workspace
-
         try:
             team = Team.objects.get(key=form.cleaned_data["key"])
             # TODO move it to permissions
@@ -122,24 +117,25 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     "Cannot delete the default workspace. Please set another workspace as default first.",
                 )
             else:
-                # Read the billing ids before the row goes, and cancel outside the
-                # transaction so no DB lock is held across an HTTP call. Without this
-                # the subscription outlives the workspace and keeps charging.
+                # Read the billing ids before the row goes. Without this the
+                # subscription outlives the workspace and keeps charging. The
+                # cancelling itself is queued: it is two calls to Stripe, and
+                # holding a web worker open for them after the row has already
+                # been deleted risks a timeout with nothing left to retry.
+                from sbomify.apps.billing.tasks import cleanup_stripe_for_deleted_workspace
+
                 limits = team.billing_plan_limits or {}
                 subscription_id = limits.get("stripe_subscription_id")
                 customer_id = limits.get("stripe_customer_id")
-                workspace_key, workspace_name = team.key, team.name
+                # key is nullable on the model, and this string only exists to
+                # name the workspace in an alert after the row has gone.
+                workspace_key = team.key or f"pk={team.pk}"
+                workspace_name = team.name
 
                 with transaction.atomic():
                     team.delete()
 
-                if not cleanup_stripe_for_workspace(subscription_id, customer_id):
-                    # The workspace is already gone, so this cannot be rolled back.
-                    # Loud enough to be finished by hand in the Stripe dashboard.
-                    logger.critical(
-                        "Stripe cleanup failed deleting workspace %s; its subscription may still bill",
-                        workspace_key,
-                    )
+                cleanup_stripe_for_deleted_workspace.send(subscription_id, customer_id, workspace_key)
 
                 messages.add_message(
                     request,

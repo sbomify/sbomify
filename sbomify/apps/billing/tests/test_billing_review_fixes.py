@@ -647,3 +647,46 @@ class TestNotificationsLeaveTheRequest:
         deliver_billing_email(other.pk, member.pk, "Subject", "trial_ending", {})
 
         send.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestATrialRunsItsFullLength:
+    """timedelta.days floors, so under 24 hours read as 0 and the expiry branch
+    ran while the trial was still going, publishing every private component."""
+
+    def _subscription(self, hours_left):
+        import datetime
+
+        from django.utils import timezone
+
+        end = timezone.now() + datetime.timedelta(hours=hours_left)
+        sub = MagicMock()
+        sub.status = "trialing"
+        sub.trial_end = int(end.timestamp())
+        return sub
+
+    def test_a_trial_with_hours_left_has_not_expired(self, mocker, sample_team_with_owner_member):
+        from sbomify.apps.billing import billing_processing
+
+        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")
+        mocker.patch("sbomify.apps.billing.billing_processing.notify_billing_managers")
+        team = sample_team_with_owner_member.team
+
+        billing_processing.handle_trial_period(self._subscription(20), team)
+
+        team.refresh_from_db()
+        downgrade.assert_not_called()
+        assert team.billing_plan != "community"
+
+    def test_a_trial_past_its_end_expires(self, mocker, sample_team_with_owner_member):
+        from sbomify.apps.billing import billing_processing
+
+        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")
+        mocker.patch("sbomify.apps.billing.billing_processing.notify_billing_managers")
+        team = sample_team_with_owner_member.team
+
+        billing_processing.handle_trial_period(self._subscription(-1), team)
+
+        team.refresh_from_db()
+        downgrade.assert_called_once()
+        assert team.billing_plan == "community"

@@ -144,7 +144,8 @@ def notify_payment_succeeded(team: Team, member: Member) -> None:
 def notify_trial_ending(team: Team, member: Member, days_remaining: int) -> None:
     """Notify team owner that trial period is ending soon."""
     if days_remaining <= 0:
-        subject = "Your sbomify trial ends today"
+        # Under a day left, which may still be tomorrow by the clock.
+        subject = "Your sbomify trial ends soon"
     elif days_remaining == 1:
         subject = "Your sbomify trial ends tomorrow"
     else:

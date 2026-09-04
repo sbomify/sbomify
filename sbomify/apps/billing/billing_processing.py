@@ -268,6 +268,12 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             logger.warning(f"Could not convert trial_end to datetime: {e}")
             return False
 
+        # Whether the trial is over is read from the timestamp, not from the day
+        # count. timedelta.days floors, so anything under 24 hours counts as 0,
+        # and expiring on that published every private component in the
+        # workspace up to a day before the trial actually ended.
+        trial_has_ended = trial_end <= timezone.now()
+
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
@@ -281,7 +287,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             notify_billing_managers(team, email_notifications.notify_trial_ending, days_remaining)
             logger.info("Trial ending notification sent")
 
-        if days_remaining <= 0:
+        if trial_has_ended:
             # See ``TrialExpiryEmissionGuard`` for the two-marker state machine
             # that makes the side effects below crash-tolerant and idempotent
             # across concurrent / redelivered webhooks.

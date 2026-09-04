@@ -17,6 +17,33 @@ logger = getLogger(__name__)
 
 
 @dramatiq.actor(queue_name="default", max_retries=3)
+def cleanup_stripe_for_deleted_workspace(
+    subscription_id: str | None,
+    customer_id: str | None,
+    workspace_key: str,
+) -> None:
+    """Cancel a deleted workspace's subscription and remove its Stripe customer.
+
+    Runs here rather than in the request that deleted the workspace: the row is
+    already gone by then, so a slow or failing Stripe call could only hold a web
+    worker open, and a proxy timing the request out would leave the subscription
+    live with nothing left to retry it.
+
+    A permanent failure logs CRITICAL and stops, because retrying cannot help
+    and the subscription needs a person. Anything else is left to raise so
+    dramatiq retries it.
+    """
+    from sbomify.apps.core.services.account_deletion import cleanup_stripe_for_workspace
+
+    if cleanup_stripe_for_workspace(subscription_id, customer_id):
+        return
+    logger.critical(
+        "Stripe cleanup failed for deleted workspace %s; its subscription may still bill",
+        workspace_key,
+    )
+
+
+@dramatiq.actor(queue_name="default", max_retries=3)
 def deliver_billing_email(
     team_id: int,
     member_id: int,
