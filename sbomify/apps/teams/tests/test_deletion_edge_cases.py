@@ -110,3 +110,82 @@ def test_self_removal_fallback_when_pending_invites_exist(client, user_with_one_
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) > 0
     assert "Please accept a pending invitation or contact support" in str(messages[0])
+
+
+@pytest.fixture
+def paid_team(db):
+    from sbomify.apps.billing.models import BillingPlan
+
+    BillingPlan.objects.get_or_create(
+        key="business",
+        defaults={"name": "Business", "description": "Business Plan", "max_users": 10},
+    )
+    return Team.objects.create(
+        name="Paid Workspace",
+        key="paid-workspace-key",
+        billing_plan="business",
+        billing_plan_limits={
+            "stripe_subscription_id": "sub_test123",
+            "stripe_customer_id": "cus_test123",
+        },
+    )
+
+
+@pytest.fixture
+def paid_owner(db, django_user_model, paid_team, team):
+    u = django_user_model.objects.create_user(username="paidowner", email="paid@test.com", password="password")
+    Member.objects.create(user=u, team=team, role="owner", is_default_team=True)
+    Member.objects.create(user=u, team=paid_team, role="owner", is_default_team=False)
+    return u
+
+
+def _delete_workspace(client, user, workspace, settings, mocker):
+    settings.BILLING = True
+    stripe = mocker.patch("sbomify.apps.billing.stripe_client.StripeClient")
+    client.force_login(user)
+    _setup_session(client, workspace, "owner")
+    response = client.post(
+        reverse("teams:teams_dashboard"),
+        {"_method": "DELETE", "key": workspace.key},
+    )
+    return response, stripe.return_value
+
+
+def test_deleting_a_workspace_cancels_its_subscription(client, paid_owner, paid_team, settings, mocker):
+    """The subscription outlived the workspace and kept charging."""
+    response, stripe = _delete_workspace(client, paid_owner, paid_team, settings, mocker)
+
+    assert response.status_code == 302
+    assert not Team.objects.filter(pk=paid_team.pk).exists()
+    stripe.cancel_subscription.assert_called_once_with("sub_test123", prorate=True)
+    stripe.delete_customer.assert_called_once_with("cus_test123")
+
+
+def test_deleting_a_free_workspace_calls_stripe_at_all(client, paid_owner, paid_team, settings, mocker):
+    paid_team.billing_plan_limits = {}
+    paid_team.save(update_fields=["billing_plan_limits"])
+
+    response, stripe = _delete_workspace(client, paid_owner, paid_team, settings, mocker)
+
+    assert response.status_code == 302
+    assert not Team.objects.filter(pk=paid_team.pk).exists()
+    stripe.cancel_subscription.assert_not_called()
+
+
+def test_a_stripe_failure_does_not_block_the_delete(client, paid_owner, paid_team, settings, mocker):
+    """The row is already gone, so the cancellation is logged for a human instead."""
+    from sbomify.apps.billing.stripe_client import StripeError
+
+    settings.BILLING = True
+    stripe = mocker.patch("sbomify.apps.billing.stripe_client.StripeClient")
+    stripe.return_value.cancel_subscription.side_effect = StripeError("stripe is down")
+    client.force_login(paid_owner)
+    _setup_session(client, paid_team, "owner")
+
+    response = client.post(
+        reverse("teams:teams_dashboard"),
+        {"_method": "DELETE", "key": paid_team.key},
+    )
+
+    assert response.status_code == 302
+    assert not Team.objects.filter(pk=paid_team.pk).exists()

@@ -64,6 +64,20 @@ class BillingRetryableError(StripeError):
     pass
 
 
+class WorkspaceGoneError(StripeError):
+    """The workspace this event belongs to no longer exists.
+
+    Terminal like its parent, and acknowledged the same way, but separated so
+    the webhook view can report it for what it is. Every lookup strategy missed,
+    which means no workspace holds the subscription, the customer, or the key the
+    customer's own metadata names. Deleting a workspace cancels its subscription,
+    and Stripe reports that cancellation back here after the row has gone, so an
+    event with nowhere to land is an expected end state rather than a fault.
+    """
+
+    pass
+
+
 def handle_stripe_errors(func: F) -> F:
     """Decorator to handle Stripe errors consistently.
 

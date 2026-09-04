@@ -80,11 +80,12 @@ def _get_orphaned_workspaces(user: User) -> Any:
     return [m.team for m in owner_memberships if m.member_count == 1]
 
 
-def _cleanup_stripe_for_workspace_by_ids(subscription_id: str | None, customer_id: str | None) -> bool:
+def cleanup_stripe_for_workspace(subscription_id: str | None, customer_id: str | None) -> bool:
     """Cancel Stripe subscription and delete customer using pre-collected IDs.
 
-    Called outside transaction.atomic() to avoid holding DB locks during HTTP calls.
-    Returns True if cleanup succeeded or was not needed, False on error.
+    Called outside transaction.atomic() to avoid holding DB locks during HTTP calls,
+    by both paths that remove a workspace: deleting an account and deleting a single
+    workspace. Returns True if cleanup succeeded or was not needed, False on error.
     """
     from sbomify.apps.billing.config import is_billing_enabled
     from sbomify.apps.billing.stripe_client import StripeClient, StripeError
@@ -223,7 +224,7 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
     # deleted, so we must not roll back. Orphaned subscriptions surface via CRITICAL log alerts
     # and can be resolved manually in the Stripe dashboard using the team_key.
     for info in orphaned_stripe_info:
-        if not _cleanup_stripe_for_workspace_by_ids(info["subscription_id"], info["customer_id"]):
+        if not cleanup_stripe_for_workspace(info["subscription_id"], info["customer_id"]):
             logger.critical(
                 "Stripe cleanup failed for team %s during account deletion — subscription may be orphaned",
                 info["team_key"],
