@@ -1227,6 +1227,11 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # Pin the version our requests are made against, so a library upgrade cannot
 # quietly move it. Event payloads follow the account's own version, which is a
 # dashboard setting; this pins the half we control.
+#
+# The value is the installed stripe library's own current version, so it is one
+# Stripe accepts rather than a string somebody typed. test_stripe_api_version.py
+# compares the two, so bumping the library fails there until a person decides
+# whether to move the pin with it.
 STRIPE_API_VERSION = os.environ.get("STRIPE_API_VERSION", "2025-11-17.clover")
 
 # Trial period settings

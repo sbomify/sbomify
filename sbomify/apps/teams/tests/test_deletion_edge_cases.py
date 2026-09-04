@@ -243,6 +243,23 @@ def test_account_deletion_stays_best_effort_on_a_transient_failure(mocker, setti
     assert cleanup_stripe_for_workspace("sub_test123", "cus_test123") is False
 
 
+def test_a_customer_only_cleanup_does_not_claim_a_cancellation(mocker, settings):
+    """With no subscription there was nothing to cancel, and the log must not imply there was."""
+    from sbomify.apps.billing.stripe_client import StripeError
+    from sbomify.apps.core.services import account_deletion
+
+    settings.BILLING = True
+    stripe = mocker.patch("sbomify.apps.billing.stripe_client.StripeClient")
+    stripe.return_value.delete_customer.side_effect = StripeError("gone wrong")
+    log = mocker.patch.object(account_deletion, "logger")
+
+    assert account_deletion.cleanup_stripe_for_workspace(None, "cus_test123") is False
+
+    said = log.warning.call_args[0][0]
+    assert "no subscription" in said
+    assert "was cancelled" not in said
+
+
 def test_stripe_is_left_alone_when_billing_is_disabled(settings, mocker):
     from sbomify.apps.billing.tasks import cleanup_stripe_for_deleted_workspace
 

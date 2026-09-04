@@ -588,16 +588,6 @@ class TestTheWebhookRoutesEveryEventWeNeed:
         handler.assert_called_once()
 
 
-class TestTheApiVersionIsPinned:
-    def test_the_library_is_told_which_version_we_wrote_against(self):
-        """Otherwise a library upgrade moves it without a diff."""
-        import stripe
-        from django.conf import settings
-
-        assert settings.STRIPE_API_VERSION
-        assert stripe.api_version == settings.STRIPE_API_VERSION
-
-
 @pytest.mark.django_db
 class TestNotificationsLeaveTheRequest:
     """An SMTP round trip per recipient is the slowest thing a webhook does."""

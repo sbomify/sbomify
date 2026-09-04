@@ -107,7 +107,7 @@ def cleanup_stripe_for_workspace(
     if not subscription_id and not customer_id:
         return True
 
-    cancelled = not subscription_id
+    cancelled = False
     try:
         client = StripeClient()
         if subscription_id:
@@ -127,8 +127,11 @@ def cleanup_stripe_for_workspace(
     except StripeError as e:
         # Callers warn that the subscription may still bill, so say which half
         # failed: a customer that would not delete leaves a record to tidy, not
-        # a subscription still charging someone.
-        if cancelled:
+        # a subscription still charging someone. Three states, because "no
+        # subscription to cancel" must not read as "cancelled".
+        if not subscription_id:
+            logger.warning("Stripe customer cleanup failed, and there was no subscription: %s", e)
+        elif cancelled:
             logger.warning("Stripe customer cleanup failed after the subscription was cancelled: %s", e)
         else:
             logger.warning("Stripe subscription cleanup failed: %s", e)
