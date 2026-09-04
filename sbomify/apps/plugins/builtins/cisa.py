@@ -824,9 +824,26 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         """Whether the component carries a look-up key.
 
         CISA names CPE and PURL as the common identifiers and adds the
-        intrinsic ones, which CycloneDX 1.6 carries as first-class fields.
+        intrinsic ones. CycloneDX 1.6 carries the five in three shapes: purl
+        and cpe are strings, swid is an object keyed by tagId, and omniborId
+        and swhid are arrays. A producer that writes one of the last three as
+        a bare string is read too, because that was accepted before and the
+        element is about whether a key is there.
         """
-        return any(_stated(component.get(key)) for key in ("purl", "cpe", "swid", "omniborId", "swhid"))
+        if any(_stated(component.get(key)) for key in ("purl", "cpe")):
+            return True
+        swid = component.get("swid")
+        if isinstance(swid, dict):
+            if _stated(swid.get("tagId")) or _stated(swid.get("name")):
+                return True
+        elif _stated(swid):
+            return True
+        for key in ("omniborId", "swhid"):
+            value = component.get(key)
+            entries = value if isinstance(value, list) else [value]
+            if any(_stated(entry) for entry in entries):
+                return True
+        return False
 
     @staticmethod
     def _cyclonedx_licenses(component: dict[str, Any]) -> list[dict[str, Any]]:
