@@ -17,6 +17,34 @@ logger = getLogger(__name__)
 
 
 @dramatiq.actor(queue_name="default", max_retries=3)
+def deliver_billing_email(
+    team_id: int,
+    member_id: int,
+    subject: str,
+    template_name: str,
+    extra_context: dict[str, Any],
+) -> None:
+    """Render and send one billing email off the request that triggered it.
+
+    Stripe asks for a webhook to be answered before slow work, and an SMTP
+    round trip per recipient is the slowest thing these handlers do. Only
+    delivery moves here: the database work that decides the webhook's 200 or
+    5xx still runs inline, so that contract is unchanged.
+    """
+    from sbomify.apps.billing.email_notifications import render_and_send_billing_email
+    from sbomify.apps.teams.models import Member, Team
+
+    team = Team.objects.filter(pk=team_id).first()
+    member = Member.objects.filter(pk=member_id).select_related("user").first()
+    if team is None or member is None:
+        # The workspace or the membership went away between queueing and now.
+        logger.info("Skipping billing email %s: the workspace or member no longer exists", template_name)
+        return
+
+    render_and_send_billing_email(team, member, subject, template_name, extra_context)
+
+
+@dramatiq.actor(queue_name="default", max_retries=3)
 def send_enterprise_inquiry_email(
     form_data: dict[str, Any],
     user_email: str | None = None,

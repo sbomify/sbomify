@@ -1224,6 +1224,10 @@ STRIPE_SECRET_KEY = STRIPE_API_KEY
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_BILLING_URL = os.environ.get("STRIPE_BILLING_URL", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+# Pin the version our requests are made against, so a library upgrade cannot
+# quietly move it. Event payloads follow the account's own version, which is a
+# dashboard setting; this pins the half we control.
+STRIPE_API_VERSION = os.environ.get("STRIPE_API_VERSION", "2025-11-17.clover")
 
 # Trial period settings
 TRIAL_PERIOD_DAYS = int(os.environ.get("TRIAL_PERIOD_DAYS", "14"))

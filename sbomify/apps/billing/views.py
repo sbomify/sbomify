@@ -742,7 +742,12 @@ class StripeWebhookView(View):
             if event.type == "checkout.session.completed":
                 session = event.data.object
                 billing_processing.handle_checkout_completed(session)
-            elif event.type == "customer.subscription.updated":
+            elif event.type in ("customer.subscription.updated", "customer.subscription.trial_will_end"):
+                # trial_will_end is the only notice Stripe sends as a trial runs
+                # down, three days out. Nothing else generates an update in that
+                # window, so without it the trial-ending email only went out if
+                # some unrelated change happened to land first. The event carries
+                # the subscription, so the same handler reads it.
                 subscription = event.data.object
                 billing_processing.handle_subscription_updated(subscription, event=event)
             elif event.type == "customer.subscription.deleted":
@@ -754,6 +759,9 @@ class StripeWebhookView(View):
             elif event.type == "invoice.payment_failed":
                 invoice = event.data.object
                 billing_processing.handle_payment_failed(invoice, event=event)
+            elif event.type in ("price.updated", "price.created"):
+                price = event.data.object
+                billing_processing.handle_price_updated(price, event=event)
             else:
                 logger.info("Unhandled event type: %s", event.type)
 
