@@ -114,13 +114,179 @@ def convert_sbom(data: bytes, target_format: str, *, timeout: int = DEFAULT_TIME
     # into what looks like a scanner fault.
     if completed.returncode == 0 and stdout.strip():
         try:
-            document = json.loads(stdout)
+            converted = json.loads(stdout)
         except ValueError as exc:
             raise ConversionFailed(f"converter produced no usable document: {exc}") from exc
-        _require_target_shape(document, target_format)
+        _require_target_shape(converted, target_format)
+        try:
+            source = json.loads(data)
+        except ValueError:
+            # The converter read it, so this only means we cannot, and the
+            # conversion itself still stands.
+            return stdout
+        if isinstance(converted, dict) and _restore_cpes(source, converted):
+            return json.dumps(converted).encode()
         return stdout
     detail = (completed.stderr or b"").decode("utf-8", "replace").strip().splitlines()
     raise ConversionFailed(detail[-1] if detail else f"converter exited {completed.returncode}")
+
+
+#: Where a CPE hides, by format. SPDX 3 writes external identifiers, SPDX 2.x
+#: writes external refs, and both spell the type more than one way.
+_CPE_IDENTIFIER_TYPES = frozenset({"cpe22", "cpe23", "cpe22Type", "cpe23Type"})
+
+
+def _spdx_reference_type(cpe: str) -> str | None:
+    """The SPDX 2.x reference type a CPE value belongs under, read off the value.
+
+    The value decides, not the type the source labelled it with: a 2.3 string
+    filed as ``cpe22`` is still a 2.3 string, and an SPDX reader checks the
+    locator against the type it is filed under.
+    """
+    if cpe.startswith("cpe:2.3:"):
+        return "cpe23Type"
+    if cpe.startswith("cpe:/"):
+        return "cpe22Type"
+    return None
+
+
+def _entries(container: Any, key: str) -> list[Any]:
+    """The list at ``key``, or nothing.
+
+    Both documents here are third-party: one came from an uploader, the other
+    from the converter. A non-list where the spec says list is not something
+    to iterate. An int raises TypeError and a string iterates its characters,
+    so ``or []`` guards neither.
+    """
+    if not isinstance(container, dict):
+        return []
+    value = container.get(key)
+    return value if isinstance(value, list) else []
+
+
+def _package_key(name: Any, version: Any) -> tuple[str, str] | None:
+    """What a package is called, as the two documents can agree on it.
+
+    Name and version rather than the purl: the purl is exactly what a
+    document lacking a usable one does not have, which is the case this
+    exists for.
+
+    Only ``None`` counts as no version. A numeric ``0`` is a version a
+    document can state, and folding it to the empty string stopped it
+    matching the ``"0"`` the converter writes, which lost the CPE for that
+    package. A name that is only whitespace is no name, rather than a key
+    every such package would share.
+    """
+    if not isinstance(name, str):
+        return None
+    cleaned = name.strip()
+    if not cleaned:
+        return None
+    return cleaned.lower(), "" if version is None else str(version).strip()
+
+
+def _cpes_in_source(document: Any) -> dict[tuple[str, str], list[str]]:
+    """Every CPE the source document states, keyed by package."""
+    if not isinstance(document, dict):
+        return {}
+    found: dict[tuple[str, str], list[str]] = {}
+
+    def record(name: Any, version: Any, values: list[str]) -> None:
+        # Deduplicated, order preserved: a document may state the same CPE
+        # under both external-identifier spellings, and a package is not more
+        # identified for having said it twice. The SPDX side would otherwise
+        # write the ref twice and the CycloneDX side picks the first.
+        key = _package_key(name, version)
+        if not (key and values):
+            return
+        seen = found.setdefault(key, [])
+        seen.extend(cpe for cpe in values if cpe not in seen)
+
+    def cpes_from(entries: Any, type_field: str, value_field: str) -> list[str]:
+        values = []
+        for entry in entries if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            kind = str(entry.get(type_field) or "").rsplit("/", 1)[-1].rsplit("_", 1)[-1]
+            value = entry.get(value_field)
+            # A recognised CPE form, not merely the prefix. Both output
+            # formats read this list, and CycloneDX takes the value as it
+            # stands, so a "cpe:not-a-cpe" accepted here would be copied into
+            # a component and travel on to whatever reads the copy.
+            if kind in _CPE_IDENTIFIER_TYPES and isinstance(value, str) and _spdx_reference_type(value):
+                values.append(value)
+        return values
+
+    # SPDX 3: elements in the graph.
+    for element in _entries(document, "@graph"):
+        # Packages only. A graph carries SpdxDocument, Relationship and Agent
+        # elements too, and one of those sharing a name with a package would
+        # otherwise hand it a CPE that was never about it. Same test the rest
+        # of the SPDX 3 readers use.
+        if not isinstance(element, dict) or element.get("type") != "software_Package":
+            continue
+        record(
+            element.get("name"),
+            element.get("software_packageVersion"),
+            cpes_from(element.get("externalIdentifier"), "externalIdentifierType", "identifier"),
+        )
+
+    # SPDX 2.x: packages with external refs.
+    for package in _entries(document, "packages"):
+        if isinstance(package, dict):
+            record(
+                package.get("name"),
+                package.get("versionInfo"),
+                cpes_from(package.get("externalRefs"), "referenceType", "referenceLocator"),
+            )
+    return found
+
+
+def _restore_cpes(source: Any, converted: dict[str, Any]) -> bool:
+    """Put back the CPEs the converter dropped. True when anything changed.
+
+    A converter carries purls across and loses the CPE, and for a build
+    system that names its packages with a purl type no scanner maps, such as
+    Yocto's ``pkg:yocto``, the CPE is the only identifier a scanner can match
+    on. Losing it in a copy made for scanning is losing the scan.
+    """
+    cpes = _cpes_in_source(source)
+    if not cpes:
+        return False
+    changed = False
+
+    for package in _entries(converted, "packages"):
+        if not isinstance(package, dict):
+            continue
+        key = _package_key(package.get("name"), package.get("versionInfo"))
+        if not (key and cpes.get(key)):
+            continue
+        # A converter is a third party, so what it wrote where a list belongs
+        # is not this function's to trust: anything else is replaced rather
+        # than iterated. Losing a malformed value costs nothing, since a CPE
+        # cannot be hiding in one.
+        refs = package.get("externalRefs")
+        if not isinstance(refs, list):
+            refs = []
+            package["externalRefs"] = refs
+        present = {r.get("referenceLocator") for r in refs if isinstance(r, dict)}
+        for cpe in cpes[key]:
+            reference_type = _spdx_reference_type(cpe)
+            if reference_type and cpe not in present:
+                refs.append({"referenceCategory": "SECURITY", "referenceType": reference_type, "referenceLocator": cpe})
+                present.add(cpe)
+                changed = True
+
+    for component in _entries(converted, "components"):
+        if not isinstance(component, dict) or component.get("cpe"):
+            continue
+        key = _package_key(component.get("name"), component.get("version"))
+        # CycloneDX carries one cpe per component, so the first is the one.
+        for cpe in cpes.get(key, []) if key else []:
+            component["cpe"] = cpe
+            changed = True
+            break
+    return changed
 
 
 def _require_target_shape(document: Any, target_format: str) -> None:
