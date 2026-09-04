@@ -63,8 +63,10 @@ from typing import Any
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
+    extract_spdx3_licenses,
     get_spdx3_creation_info_fields,
     get_spdx3_package_fields,
+    get_spdx3_package_license,
     has_spdx3_supplier,
     is_spdx3,
 )
@@ -584,6 +586,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         """
         findings: list[Finding] = []
         creation_info, packages, relationships, persons_orgs, tools = extract_spdx3_elements(data)
+        licenses = extract_spdx3_licenses(data)
         ci_fields = get_spdx3_creation_info_fields(creation_info, persons_orgs, tools)
 
         # Track element-level failures across all packages
@@ -618,13 +621,9 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             if not pkg_fields["has_hash"]:
                 hash_failures.append(pkg_name)
 
-            # 7. License (hasConcludedLicense relationship)
-            pkg_id = package.get("spdxId", package.get("@id", ""))
-            has_license = any(
-                rel.get("from") == pkg_id and rel.get("relationshipType") == "hasConcludedLicense"
-                for rel in relationships
-            )
-            if not has_license:
+            # 7. License — the relationship must resolve to a licensing
+            # element; a dangling hasConcludedLicense carries no licence.
+            if get_spdx3_package_license(package, relationships, licenses, "hasConcludedLicense") is None:
                 license_failures.append(pkg_name)
 
         # 2. Software Producer
