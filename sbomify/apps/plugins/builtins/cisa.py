@@ -461,11 +461,17 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         details: str | None = None,
         remediation: str | None = None,
     ) -> Finding:
-        """A document-level element, which is stated, declared unknown, or absent."""
+        """A document-level element, which is stated, declared unknown, or absent.
+
+        ``details`` describes the absence, so it is not reused for the
+        declared unknown: telling a reader the tool "is named without a
+        version" when the document said the version is unknown describes the
+        wrong document.
+        """
         if stated:
             return self._finding(element, "pass")
         if unknown:
-            return self._finding(element, "warning", details or "The document states this is unknown.", remediation)
+            return self._finding(element, "warning", "The document states this is unknown.", remediation)
         return self._finding(element, "fail", details, remediation)
 
     def _component_finding(
