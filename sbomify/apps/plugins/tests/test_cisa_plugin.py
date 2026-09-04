@@ -848,6 +848,18 @@ class TestMalformedInput:
 
         assert set(statuses) == set(ALL_ELEMENTS)
 
+    @pytest.mark.parametrize("junk", [None, 5, "text", {"a": 1}])
+    def test_a_malformed_spdx2_document_does_not_crash_the_run(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path, junk: Any
+    ) -> None:
+        """A key present holding null defeats a default argument, and uploads are untrusted."""
+        document = spdx2(packages=junk)
+        document["creationInfo"] = {"created": "2026-07-29T10:00:00Z", "creators": junk}
+
+        statuses = assess(plugin, tmp_path, document)
+
+        assert set(statuses) == set(ALL_ELEMENTS)
+
     @pytest.mark.parametrize("junk", [None, 5, "text"])
     def test_a_malformed_spdx3_graph_does_not_crash_the_run(
         self, plugin: CISAMinimumElementsPlugin, tmp_path: Path, junk: Any

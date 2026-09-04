@@ -900,8 +900,13 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         """Score an SPDX 2.x document."""
         creation_info = data.get("creationInfo")
         creation_info = creation_info if isinstance(creation_info, dict) else {}
-        creators = [_text(c) for c in creation_info.get("creators", []) if isinstance(c, str)]
-        packages = [p for p in data.get("packages", []) if isinstance(p, dict)]
+        # Uploads are untrusted, and a default argument does not help when the
+        # key is present holding null. Check the shape, so a malformed document
+        # is scored rather than raising out of the run.
+        raw_creators = creation_info.get("creators")
+        creators = [_text(c) for c in raw_creators if isinstance(c, str)] if isinstance(raw_creators, list) else []
+        raw_packages = data.get("packages")
+        packages = [p for p in raw_packages if isinstance(p, dict)] if isinstance(raw_packages, list) else []
 
         # The author is a Person or an Organization. A Tool: entry names the
         # tool, which the standard says is not the author.
