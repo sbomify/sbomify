@@ -68,6 +68,7 @@ class TestBuiltinReconciliation:
         builtins = RegisteredPlugin.objects.filter(is_builtin=True)
         expected_names = {
             "ntia-minimum-elements-2021",
+            "cisa-minimum-elements-2026",
             "openchain-telco-1.1",
             "fda-medical-device-2025",
             "bsi-tr03183-v2.1-compliance",

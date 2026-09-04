@@ -844,17 +844,23 @@ class TestSPDXTestFixtures:
         from pathlib import Path
 
         from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+        from sbomify.apps.plugins.sdk.base import SBOMContext
 
         plugin = CISAMinimumElementsPlugin()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(spdx_sbom_cisa_compliant, f)
             f.flush()
-            result = plugin.assess("test-sbom-id", Path(f.name))
+            # SPDX has no in-document signature, so the stored one is the only
+            # way this document can satisfy SBOM Author Signature.
+            result = plugin.assess(
+                "test-sbom-id",
+                Path(f.name),
+                context=SBOMContext(signature_blob_key="signatures/test.sig", signature_type="cosign-bundle"),
+            )
 
-        # All 11 CISA elements should pass
         assert result.summary.fail_count == 0, f"Failed findings: {[f.id for f in result.findings if f.status == 'fail']}"
-        assert result.summary.pass_count == 11  # 11 CISA 2025 elements
+        assert result.summary.pass_count == 17  # every CISA 2026 data field
 
     def test_spdx_minimal_fixture_fails_ntia_plugin(self, spdx_sbom_minimal):
         """Test minimal fixture correctly fails NTIA plugin validation."""

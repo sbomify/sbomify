@@ -148,7 +148,14 @@ def inline_agents() -> dict[str, Any]:
 
 
 def software_agent_supplier() -> dict[str, Any]:
-    """Supplier typed SoftwareAgent — routed to the wrong bucket before."""
+    """Supplier typed SoftwareAgent, routed to the wrong bucket before.
+
+    The author stays the default Person so the supplier is the only thing
+    that moves between this document and ``inline_agents``. It used to be the
+    bot as well, which conflated two variables: CISA 2026 separates the tool
+    from the author, so an author typed SoftwareAgent is a different document
+    rather than the same one written another way.
+    """
     agent = {
         "type": "SoftwareAgent",
         "spdxId": "urn:acme:bot",
@@ -159,7 +166,8 @@ def software_agent_supplier() -> dict[str, Any]:
         ],
     }
     return _doc(
-        _creation_info(created_by=["urn:acme:bot"]),
+        _creation_info(),
+        _person(),
         agent,
         _document(["urn:acme:pkg1"]),
         _package(supplier="urn:acme:bot", software_packageUrl="pkg:pypi/my-app@1.2.3"),
