@@ -80,15 +80,26 @@ def _get_orphaned_workspaces(user: User) -> Any:
     return [m.team for m in owner_memberships if m.member_count == 1]
 
 
-def cleanup_stripe_for_workspace(subscription_id: str | None, customer_id: str | None) -> bool:
+def cleanup_stripe_for_workspace(
+    subscription_id: str | None,
+    customer_id: str | None,
+    raise_retryable: bool = False,
+) -> bool:
     """Cancel Stripe subscription and delete customer using pre-collected IDs.
 
     Called outside transaction.atomic() to avoid holding DB locks during HTTP calls,
     by both paths that remove a workspace: deleting an account and deleting a single
     workspace. Returns True if cleanup succeeded or was not needed, False on error.
+
+    ``raise_retryable`` lets a caller that can try again say so. A rate limit, a
+    connection failure or a Stripe 5xx arrives here as ``BillingRetryableError``,
+    which is a ``StripeError`` and would otherwise be reported as permanent, so a
+    background worker would give up on an outage that clears in a minute. The
+    account-deletion path leaves it off and stays best-effort, because it runs
+    inline with nothing to retry it.
     """
     from sbomify.apps.billing.config import is_billing_enabled
-    from sbomify.apps.billing.stripe_client import StripeClient, StripeError
+    from sbomify.apps.billing.stripe_client import BillingRetryableError, StripeClient, StripeError
 
     if not is_billing_enabled():
         return True
@@ -107,6 +118,12 @@ def cleanup_stripe_for_workspace(subscription_id: str | None, customer_id: str |
             client.delete_customer(customer_id)
             logger.info("Deleted Stripe customer")
         return True
+    except BillingRetryableError:
+        # Transient. Caught before its parent, as the webhook view does it.
+        if raise_retryable:
+            raise
+        logger.warning("Stripe cleanup hit a transient failure and there is nothing to retry it")
+        return False
     except StripeError as e:
         # Callers warn that the subscription may still bill, so say which half
         # failed: a customer that would not delete leaves a record to tidy, not

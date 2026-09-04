@@ -35,7 +35,8 @@ def cleanup_stripe_for_deleted_workspace(
     """
     from sbomify.apps.core.services.account_deletion import cleanup_stripe_for_workspace
 
-    if cleanup_stripe_for_workspace(subscription_id, customer_id):
+    # raise_retryable: an outage must come back here, not stop at one CRITICAL.
+    if cleanup_stripe_for_workspace(subscription_id, customer_id, raise_retryable=True):
         return
     logger.critical(
         "Stripe cleanup failed for deleted workspace %s; its subscription may still bill",

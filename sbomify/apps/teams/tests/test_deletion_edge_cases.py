@@ -160,8 +160,8 @@ def test_deleting_a_workspace_cancels_its_subscription(client, paid_owner, paid_
     queued.assert_called_once_with("sub_test123", "cus_test123", paid_team.key)
 
 
-def test_deleting_a_free_workspace_queues_nothing_to_cancel(client, paid_owner, paid_team, settings, mocker):
-    """A workspace that never had a subscription has nothing for Stripe to do."""
+def test_deleting_a_free_workspace_queues_no_ids_to_cancel(client, paid_owner, paid_team, settings, mocker):
+    """The task is still queued, and finds nothing for Stripe to do."""
     paid_team.billing_plan = "community"
     paid_team.billing_plan_limits = {}
     paid_team.save(update_fields=["billing_plan", "billing_plan_limits"])
@@ -210,6 +210,37 @@ def test_the_worker_cancels_and_removes_the_customer(settings, mocker):
 
     stripe.return_value.cancel_subscription.assert_called_once_with("sub_test123", prorate=True)
     stripe.return_value.delete_customer.assert_called_once_with("cus_test123")
+
+
+def test_a_transient_stripe_failure_is_retried_not_alerted(settings, mocker):
+    """An outage must come back to the queue, not stop at one CRITICAL with the
+    subscription still billing."""
+    import pytest as _pytest
+
+    from sbomify.apps.billing.stripe_client import BillingRetryableError
+    from sbomify.apps.billing.tasks import cleanup_stripe_for_deleted_workspace
+
+    settings.BILLING = True
+    stripe = mocker.patch("sbomify.apps.billing.stripe_client.StripeClient")
+    stripe.return_value.cancel_subscription.side_effect = BillingRetryableError("stripe is unreachable")
+    log = mocker.patch("sbomify.apps.billing.tasks.logger")
+
+    with _pytest.raises(BillingRetryableError):
+        cleanup_stripe_for_deleted_workspace("sub_test123", "cus_test123", "ws-key")
+
+    log.critical.assert_not_called()
+
+
+def test_account_deletion_stays_best_effort_on_a_transient_failure(mocker, settings):
+    """It runs inline with nothing to retry it, so it must not raise into the flow."""
+    from sbomify.apps.billing.stripe_client import BillingRetryableError
+    from sbomify.apps.core.services.account_deletion import cleanup_stripe_for_workspace
+
+    settings.BILLING = True
+    stripe = mocker.patch("sbomify.apps.billing.stripe_client.StripeClient")
+    stripe.return_value.cancel_subscription.side_effect = BillingRetryableError("stripe is unreachable")
+
+    assert cleanup_stripe_for_workspace("sub_test123", "cus_test123") is False
 
 
 def test_stripe_is_left_alone_when_billing_is_disabled(settings, mocker):
