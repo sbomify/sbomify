@@ -18,6 +18,7 @@ from sbomify.apps.teams.models import ContactProfile, Member
 from ..models import SBOM, Component, Product
 from .fixtures import (  # noqa: F401
     create_spdx3_test_sbom,
+    load_sample_cyclonedx_vex,
     sample_access_token,
     sample_component,
     sample_sbom,
@@ -3882,6 +3883,121 @@ def test_cyclonedx_upload_autodetects_cbom_bom_type(
     sbom = SBOM.objects.get(id=resp.json()["id"])
     assert sbom.bom_type == "cbom"
     assert sbom.has_crypto_assets is True
+
+
+@pytest.mark.django_db
+def test_cyclonedx_upload_rejects_a_vex_declared_as_sbom(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """A VEX validates as CycloneDX, because the spec makes both components and
+    vulnerabilities optional. Stored as bom_type=sbom it was scanned and then
+    scored against NTIA, BSI and FDA as though its empty inventory were real."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url,
+        data=json.dumps(load_sample_cyclonedx_vex()),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert resp.status_code == 400
+    assert "VEX" in resp.json()["detail"]
+    assert SBOM.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_cyclonedx_upload_keeps_accepting_a_vex_declared_as_vex(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """The guard is about the declared type disagreeing with the document, so
+    the same document goes in fine when it is declared for what it is."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url + "?bom_type=vex",
+        data=json.dumps(load_sample_cyclonedx_vex()),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert resp.status_code == 201, resp.content
+    assert SBOM.objects.get(id=resp.json()["id"]).bom_type == "vex"
+
+
+@pytest.mark.django_db
+def test_cyclonedx_upload_document_carrying_both_stays_an_sbom(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """An inventory that also carries vulnerability statements is a VDR. Its
+    components are real, so every assessment that reads them still runs."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    document = load_sample_cyclonedx_vex()
+    document["components"] = [{"type": "library", "name": "lodash", "version": "4.17.15"}]
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url,
+        data=json.dumps(document),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert resp.status_code == 201, resp.content
+    assert SBOM.objects.get(id=resp.json()["id"]).bom_type == "sbom"
+
+
+@pytest.mark.django_db
+def test_vex_artifact_upload_rejects_a_plain_sbom(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """The inverse of the same confusion: detect_vex_format answers which
+    format a document is written in, not whether it is a VEX, so an inventory
+    posted here was stored as one and rewrote the component's posture."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    document = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {"component": {"type": "application", "name": "app", "version": "1.0.0"}},
+        "components": [{"type": "library", "name": "lodash", "version": "4.17.15"}],
+    }
+
+    client = Client()
+    url = reverse("api-1:vex_artifact_upload", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url,
+        data=json.dumps(document),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert resp.status_code == 400
+    assert "SBOM" in resp.json()["detail"]
+    assert SBOM.objects.count() == 0
 
 
 @pytest.mark.django_db

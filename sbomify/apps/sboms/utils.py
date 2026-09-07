@@ -2281,6 +2281,28 @@ def _contains_crypto_assets(sbom_data: dict[str, Any]) -> bool:
     return isinstance(metadata, dict) and is_crypto_asset(metadata.get("component"))
 
 
+def _is_vex(sbom_data: dict[str, Any]) -> bool:
+    """True when a CycloneDX document is a *pure* VEX: it carries vulnerability
+    statements and no inventory of its own.
+
+    A VEX and an SBOM are the same Pydantic model, because CycloneDX makes both
+    ``components`` and ``vulnerabilities`` optional, so nothing in schema
+    validation separates them. The subject of a VEX is named in
+    ``metadata.component``, which an SBOM fills in too, and that is why a VEX
+    uploaded as an SBOM was accepted, scanned, and then scored against NTIA,
+    BSI and FDA as though it were an inventory.
+
+    Mixed documents stay SBOMs, on the same reasoning as ``_is_cbom``: an
+    inventory that also carries vulnerability statements is a VDR, its
+    components are real, and every assessment that reads them should still run.
+    """
+    vulnerabilities = sbom_data.get("vulnerabilities")
+    if not (isinstance(vulnerabilities, list) and vulnerabilities):
+        return False
+    components = sbom_data.get("components")
+    return not (isinstance(components, list) and components)
+
+
 def _is_cbom(sbom_data: dict[str, Any]) -> bool:
     """True when a CycloneDX document is a *pure* CBOM: its
     ``metadata.component`` is a crypto asset, or every entry in a non-empty
