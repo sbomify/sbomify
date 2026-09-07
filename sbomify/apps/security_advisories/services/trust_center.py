@@ -598,8 +598,10 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
                     "vulnerability": vulnerability.cve_id or vulnerability.title,
                     "product": scope_label,
                     "product_id": product.id if product else None,
-                    # The version expressions the index shows, so a machine
-                    # reader gets the same answer as the table.
+                    # The version expressions the index shows, placeholders and
+                    # all. This projection is what the page renders; the API
+                    # strips the placeholders before sending them, so the two
+                    # are deliberately not the same string.
                     "affected": affected,
                     "unaffected": unaffected,
                     "status": status.status,

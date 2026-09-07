@@ -771,3 +771,35 @@ class TestTimelineUpdates:
         assert response.status_code == 403
         advisory.refresh_from_db()
         assert advisory.remediation_status != SecurityAdvisory.RemediationStatus.RESOLVED
+
+
+class TestTheCsafSelfReferenceIsAbsolute:
+    """CSAF declares this field ``format: uri``, so a path alone fails the schema."""
+
+    def test_it_is_absolute_when_app_base_url_is_set(self, client_and_headers, team, public_product) -> None:
+        from django.test import override_settings
+
+        client, _ = client_and_headers
+        advisory = _publish_for(team, [public_product], visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+        with override_settings(APP_BASE_URL="https://app.sbomify.com"):
+            body = client.get(_public(team.key, advisory.tracking_id, csaf=True)).json()
+
+        self_urls = [r["url"] for r in body["document"]["references"] if r.get("category") == "self"]
+        assert self_urls and self_urls[0].startswith("https://app.sbomify.com/")
+
+    def test_it_is_still_absolute_when_app_base_url_is_not_set(
+        self, client_and_headers, team, public_product
+    ) -> None:
+        """An unset APP_BASE_URL used to leave a relative path in the document."""
+        from django.test import override_settings
+
+        client, _ = client_and_headers
+        advisory = _publish_for(team, [public_product], visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+        with override_settings(APP_BASE_URL=""):
+            body = client.get(_public(team.key, advisory.tracking_id, csaf=True)).json()
+
+        self_urls = [r["url"] for r in body["document"]["references"] if r.get("category") == "self"]
+        assert self_urls, "the document names no self reference"
+        assert self_urls[0].startswith(("http://", "https://")), f"relative self reference: {self_urls[0]}"

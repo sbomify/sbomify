@@ -504,10 +504,19 @@ def get_public_advisory(request: HttpRequest, workspace_key: str, advisory_id: s
 def _advisory_url(request: HttpRequest, team: Team, advisory_id: str) -> str:
     """Where a reader would find this advisory in a browser: the workspace's own domain when it has one."""
     path = f"/advisories/{quote(advisory_id, safe='')}/"
-    return build_custom_domain_url(team, path, request.is_secure()) or (
-        get_base_url()
-        + reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory_id})
-    )
+    custom = build_custom_domain_url(team, path, request.is_secure())
+    if custom:
+        return custom
+
+    canonical = reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory_id})
+    base = get_base_url()
+    if base:
+        return base + canonical
+    # CSAF wants an absolute URI here, and APP_BASE_URL is not guaranteed to be
+    # set. Falling through to the reversed path alone would put a relative
+    # reference in the document and fail the schema, so the request's own host
+    # is the last resort.
+    return request.build_absolute_uri(canonical)
 
 
 @router.get(
