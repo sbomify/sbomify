@@ -365,6 +365,9 @@ def export_csv(request: HttpRequest, catalog_id: str, product_id: str | None = N
     filename = f"{safe_name}-controls.csv"
     response = HttpResponse(result.value, content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    # Workspace-scoped, so it must not sit in a shared cache; see the note on
+    # core.apis._csv_response.
+    response["Cache-Control"] = "private, no-store"
     return response
 
 
@@ -398,6 +401,8 @@ def export_summary_csv(request: HttpRequest, catalog_id: str) -> HttpResponse | 
 
     response = HttpResponse(result.value, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="controls-summary.csv"'
+    # Workspace-scoped; see the note on core.apis._csv_response.
+    response["Cache-Control"] = "private, no-store"
     return response
 
 

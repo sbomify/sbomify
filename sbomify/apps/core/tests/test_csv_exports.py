@@ -265,6 +265,40 @@ class TestEndpoints:
             assert response.status_code == 200, url
             assert response["Cache-Control"] == "private, no-store", url
 
+    def test_every_csv_response_in_the_tree_refuses_a_shared_cache(self):
+        """The list above is hand-written, which is how three CSV endpoints were
+        missed: the crypto cipher-suite export and both controls exports built
+        their own HttpResponse and set no directive at all.
+
+        A CDN caches .csv by extension and ignores Vary: Cookie, so an
+        authorised body with no directive is handed to the next caller,
+        authorised or not. That was reproduced against a gated component: the
+        origin answered 403 while the edge answered 200 from cache.
+
+        This walks the source instead of a list, so the next CSV endpoint is
+        covered the day it is written rather than the day it leaks.
+        """
+        import pathlib
+
+        root = pathlib.Path(__file__).resolve().parents[3]
+        offenders = []
+        for path in root.rglob("apis.py"):
+            if "/tests/" in str(path):
+                continue
+            lines = path.read_text(encoding="utf-8").splitlines()
+            for index, line in enumerate(lines):
+                if 'content_type="text/csv' not in line:
+                    continue
+                # The directive belongs with the response it is set on, so look
+                # only at the few lines that build and return this one.
+                window = "\n".join(lines[index : index + 12])
+                if "Cache-Control" not in window:
+                    offenders.append(f"{path.relative_to(root)}:{index + 1}")
+
+        assert offenders == [], (
+            f"CSV responses with no Cache-Control, reachable through a CDN that caches by extension: {offenders}"
+        )
+
     def test_another_user_sees_none_of_this_workspaces_data(self, inventory, stub_sbom_bytes, guest_user, client):
         """Signup gives every user their own workspace, so the export succeeds —
         against their workspace, never this one."""
