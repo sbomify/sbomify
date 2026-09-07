@@ -871,3 +871,54 @@ class TestMalformedInput:
         result = plugin.assess("s", path)
 
         assert result.summary.error_count in (0, 1)
+
+
+class TestTheFormatClaimMustNameTheFormat:
+    """spdxVersion is the whole of an SPDX 2.x document's format claim."""
+
+    @pytest.mark.parametrize(
+        ("version", "name", "number"),
+        [
+            ("SPDX-2.3", "pass", "pass"),
+            ("SPDX-2.2", "pass", "pass"),
+            ("SPDX", "pass", "fail"),
+            ("hello", "fail", "fail"),
+            ("banana7", "fail", "fail"),
+            ("CycloneDX-1.6", "fail", "fail"),
+        ],
+    )
+    def test_only_a_value_naming_spdx_counts(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path, version: str, name: str, number: str
+    ) -> None:
+        """A digit anywhere used to satisfy the version, and any string at all
+        the name, so a document declaring CycloneDX passed both."""
+        statuses = assess(plugin, tmp_path, spdx2(spdxVersion=version))
+
+        assert statuses["sbom_data_format_name"] == name
+        assert statuses["sbom_data_format_version"] == number
+
+
+class TestAPhaseIsAWordNotASubstring:
+    """"build" was found inside "rebuild", and a comment mentioning one scored
+    as a stated build phase."""
+
+    @pytest.mark.parametrize(
+        ("comment", "expected"),
+        [
+            ("Generated after build.", "pass"),
+            ("Built during build.", "pass"),
+            ("phase: post-build", "pass"),
+            ("Ran debuild on this.", "fail"),
+            ("This was a rebuild of the image.", "fail"),
+            ("Uses a shared resource.", "fail"),
+            ("Our cooperations team produced it.", "fail"),
+            ("No phase here.", "fail"),
+        ],
+    )
+    def test_a_phase_must_stand_on_its_own(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path, comment: str, expected: str
+    ) -> None:
+        document = spdx2()
+        document["creationInfo"] = {**document["creationInfo"], "comment": comment}
+
+        assert assess(plugin, tmp_path, document)["sbom_generation_context"] == expected

@@ -81,6 +81,14 @@ logger = getLogger(__name__)
 #: vocabulary are. Both spacing and underscore spellings of CISA's own words
 #: are accepted, because the standard writes them with spaces and tooling
 #: writes them with underscores.
+#: What ``spdxVersion`` looks like when a document is naming its own format.
+#: The field is the whole of the SPDX 2.x format claim, so a value that does
+#: not name SPDX is not a document naming its format, whatever else it says.
+#: Anchored rather than searched: "CycloneDX-1.6" mentions no SPDX, and a
+#: version buried somewhere in free text is not a declaration either.
+_SPDX_DECLARED = re.compile(r"\s*SPDX", re.IGNORECASE)
+_SPDX_DECLARED_VERSION = re.compile(r"\s*SPDX\D*\d", re.IGNORECASE)
+
 GENERATION_CONTEXT_VALUES = frozenset(
     {
         # CISA's own wording, in both spellings tools use.
@@ -171,6 +179,19 @@ _GENERATION_CONTEXT_PROP = "internal:sbom:generationContext"
 #: The taxonomy reserves the "cdx" namespace for registered names, so this
 #: one was never valid there and new documents should not use it.
 _LEGACY_GENERATION_CONTEXT_PROP = "cdx:sbom:generationContext"
+
+
+def _states_generation_context(text: str) -> bool:
+    """Whether the text names a lifecycle phase as a phrase rather than inside a word.
+
+    Matched as substrings, "build" was found in "rebuild" and "debuild",
+    "source" in "resource" and "operations" in "cooperations", so a comment
+    mentioning any of them scored as a stated phase. The lookarounds are on
+    word characters rather than ``\b`` because several of the phrases end in a
+    hyphen-joined word of their own.
+    """
+    lowered = text.lower()
+    return any(re.search(rf"(?<!\w){re.escape(value)}(?!\w)", lowered) for value in GENERATION_CONTEXT_VALUES)
 
 
 def _text(value: Any) -> str:
@@ -928,13 +949,13 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             ),
             self._document_finding(
                 "sbom_data_format_name",
-                stated=bool(_text(data.get("spdxVersion"))),
-                details="spdxVersion is absent, so the document does not name its format.",
+                stated=bool(_SPDX_DECLARED.match(_text(data.get("spdxVersion")))),
+                details="spdxVersion is absent or does not name SPDX, so the document does not name its format.",
                 remediation='Set spdxVersion, such as "SPDX-2.3".',
             ),
             self._document_finding(
                 "sbom_data_format_version",
-                stated=bool(re.search(r"\d", _text(data.get("spdxVersion")))),
+                stated=bool(_SPDX_DECLARED_VERSION.match(_text(data.get("spdxVersion")))),
                 details="spdxVersion states no version.",
                 remediation='Set spdxVersion to the version the document is written in, such as "SPDX-2.3".',
             ),
@@ -1094,12 +1115,10 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         """
         creation_info = data.get("creationInfo")
         if isinstance(creation_info, dict):
-            comment = _text(creation_info.get("comment")).lower()
-            if any(value in comment for value in GENERATION_CONTEXT_VALUES):
+            if _states_generation_context(_text(creation_info.get("comment"))):
                 return True
 
-        document_comment = _text(data.get("comment")).lower()
-        if any(value in document_comment for value in GENERATION_CONTEXT_VALUES):
+        if _states_generation_context(_text(data.get("comment"))):
             return True
 
         root_spdxid = spdx2_root_spdxid(data)
