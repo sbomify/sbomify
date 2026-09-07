@@ -422,6 +422,23 @@ class TestAdvisoryProse:
     def test_emphasis_markers_come_off(self) -> None:
         assert advisory_prose("**Critical** and _urgent_ and *both*") == "Critical and urgent and both"
 
+    def test_a_dunder_survives_being_bold_shaped(self) -> None:
+        """__init__ and __reduce__ are the shape of underscore bold. An advisory
+        about pickle or prototype pollution is written almost entirely in them,
+        and the identifier is the thing the reader came for."""
+        assert advisory_prose("calls `__init__` then `__reduce__`") == "calls __init__ then __reduce__"
+        assert advisory_prose("pollutes __proto__ on every merge") == "pollutes __proto__ on every merge"
+        assert advisory_prose("the __init__ method") == "the __init__ method"
+
+    def test_underscore_bold_around_words_still_comes_off(self) -> None:
+        assert advisory_prose("__Impact__ is high") == "Impact is high"
+
+    def test_a_code_span_keeps_whatever_it_holds(self) -> None:
+        """Backticks mean literal, so nothing inside one is read as markup."""
+        assert advisory_prose("the `*` wildcard") == "the * wildcard"
+        assert advisory_prose("send `#include <x>` first") == "send #include <x> first"
+        assert advisory_prose("read `a_b_c` from disk") == "read a_b_c from disk"
+
     def test_a_bare_underscore_inside_a_name_survives(self) -> None:
         """Package and symbol names carry underscores, and they are not emphasis."""
         assert advisory_prose("calls parse_uri_string on every request") == "calls parse_uri_string on every request"

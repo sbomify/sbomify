@@ -150,8 +150,12 @@ def test_the_advisory_body_reaches_the_page_as_prose(sample_sbom: SBOM):  # noqa
     team = sample_sbom.component.team
     setup_test_session(client, team, team.members.first())
 
-    html = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id})).content.decode()
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
+    # Asserted before the strings below, so a redirect or an error page cannot
+    # pass this test by simply not containing the markup it is looking for.
+    assert response.status_code == 200
+    html = response.content.decode()
     assert "### Impact" not in html
     assert "`fast-uri`" not in html
     assert "Impact fast-uri decodes percent-encoded characters" in html
