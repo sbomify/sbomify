@@ -271,7 +271,8 @@ class TestCISAPluginIntegration:
         component: Component,
         cisa_plugin: RegisteredPlugin,
     ) -> None:
-        """Test that CISA plugin validates the 4 new elements (hash, license, tool, context)."""
+        """The five elements the 2026 update added: hash value, hash algorithm,
+        licence, tool name and generation context."""
         # A document missing the elements the 2026 update added
         sbom_missing_new_elements = {
             "bomFormat": "CycloneDX",

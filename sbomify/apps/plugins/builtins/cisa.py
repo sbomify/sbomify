@@ -56,6 +56,8 @@ from urllib.parse import urlparse
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
+    extract_spdx3_licenses,
+    get_spdx3_package_license,
     is_spdx3,
     iter_spdx3_external_identifiers,
 )
@@ -1228,7 +1230,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             )
         )
 
-        licence_subjects = self._spdx3_license_subjects(relationships)
+        licence_subjects = self._spdx3_licensed_packages(packages, relationships, extract_spdx3_licenses(data))
         tallies = {element: _Tally() for element in self.COMPONENT_ELEMENTS}
         for index, package in enumerate(packages):
             name = _text(package.get("name")) or f"package at index {index}"
@@ -1449,23 +1451,30 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         return [entry for entry in verified if isinstance(entry, dict)]
 
     @staticmethod
-    def _spdx3_license_subjects(relationships: list[dict[str, Any]]) -> set[str]:
-        """Packages that a licence relationship speaks about.
+    def _spdx3_licensed_packages(
+        packages: list[dict[str, Any]],
+        relationships: list[dict[str, Any]],
+        licenses: dict[str, dict[str, Any]],
+    ) -> set[str]:
+        """Packages whose licence relationship resolves to a licensing element.
 
         Both relationship types count. ``hasDeclaredLicense`` is what the
         producer declares, which is what the standard asks for, and
         ``hasConcludedLicense`` is the SBOM author's own determination.
+
+        The relationship has to land somewhere: an edge pointing at an id no
+        element in the document carries states no licence, and reading the
+        edge alone scored those documents as licensed.
         """
         subjects: set[str] = set()
-        for relationship in relationships:
-            if not isinstance(relationship, dict):
+        for package in packages:
+            package_id = _text(package.get("spdxId")) or _text(package.get("@id"))
+            if not package_id:
                 continue
-            kind = _text(relationship.get("relationshipType")).rsplit("/", 1)[-1]
-            if kind not in {"hasDeclaredLicense", "hasConcludedLicense"}:
-                continue
-            source = relationship.get("from")
-            if _text(source):
-                subjects.add(_text(source))
+            for kind in ("hasDeclaredLicense", "hasConcludedLicense"):
+                if get_spdx3_package_license(package, relationships, licenses, kind) is not None:
+                    subjects.add(package_id)
+                    break
         return subjects
 
     @staticmethod

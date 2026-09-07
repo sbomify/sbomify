@@ -57,14 +57,17 @@ Generation Context recognition:
 """
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
+    extract_spdx3_licenses,
     get_spdx3_creation_info_fields,
     get_spdx3_package_fields,
+    get_spdx3_package_license,
     has_spdx3_supplier,
     is_spdx3,
 )
@@ -111,6 +114,19 @@ GENERATION_CONTEXT_VALUES = {
     "source",  # equivalent to before_build/pre-build
     "analyzed",  # equivalent to post_build/post-build
 }
+
+
+def _states_generation_context(text: str) -> bool:
+    """Whether the text names a lifecycle phase as a phrase rather than inside a word.
+
+    Matched as substrings, "build" was found in "rebuild" and "debuild",
+    "source" in "resource" and "operations" in "cooperations", so a comment
+    mentioning any of them scored as a stated phase. The lookarounds are on
+    word characters rather than ``\b`` because several of the phrases end in a
+    hyphen-joined word of their own.
+    """
+    lowered = text.lower()
+    return any(re.search(rf"(?<!\w){re.escape(value)}(?!\w)", lowered) for value in GENERATION_CONTEXT_VALUES)
 
 
 class CISA2025MinimumElementsPlugin(AssessmentPlugin):
@@ -531,15 +547,13 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
         if isinstance(creation_info, dict):
             creator_comment_raw = creation_info.get("comment", "")
             if isinstance(creator_comment_raw, str):
-                creator_comment = creator_comment_raw.lower()
-                if any(ctx in creator_comment for ctx in GENERATION_CONTEXT_VALUES):
+                if _states_generation_context(creator_comment_raw):
                     return True
 
         # Check DocumentComment (document-level comment)
         document_comment_raw = data.get("comment", "")
         if isinstance(document_comment_raw, str):
-            document_comment = document_comment_raw.lower()
-            if any(ctx in document_comment for ctx in GENERATION_CONTEXT_VALUES):
+            if _states_generation_context(document_comment_raw):
                 return True
 
         # Document-level annotations with explicit cisa:generationContext.
@@ -584,6 +598,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
         """
         findings: list[Finding] = []
         creation_info, packages, relationships, persons_orgs, tools = extract_spdx3_elements(data)
+        licenses = extract_spdx3_licenses(data)
         ci_fields = get_spdx3_creation_info_fields(creation_info, persons_orgs, tools)
 
         # Track element-level failures across all packages
@@ -618,13 +633,9 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
             if not pkg_fields["has_hash"]:
                 hash_failures.append(pkg_name)
 
-            # 7. License (hasConcludedLicense relationship)
-            pkg_id = package.get("spdxId", package.get("@id", ""))
-            has_license = any(
-                rel.get("from") == pkg_id and rel.get("relationshipType") == "hasConcludedLicense"
-                for rel in relationships
-            )
-            if not has_license:
+            # 7. License — the relationship must resolve to a licensing
+            # element; a dangling hasConcludedLicense carries no licence.
+            if get_spdx3_package_license(package, relationships, licenses, "hasConcludedLicense") is None:
                 license_failures.append(pkg_name)
 
         # 2. Software Producer
@@ -797,16 +808,14 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
             if bare_type == "SpdxDocument":
                 comment_raw = element.get("comment", "")
                 if isinstance(comment_raw, str):
-                    comment = comment_raw.lower()
-                    if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                    if _states_generation_context(comment_raw):
                         return True
 
             # Check CreationInfo comment
             if "CreationInfo" in elem_type:
                 comment_raw = element.get("comment", "")
                 if isinstance(comment_raw, str):
-                    comment = comment_raw.lower()
-                    if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                    if _states_generation_context(comment_raw):
                         return True
 
             # Check Annotation elements via the shared subject filter.
@@ -817,7 +826,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
                 if not isinstance(raw_comment, str):
                     continue
                 comment = raw_comment.lower()
-                if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                if _states_generation_context(raw_comment):
                     return True
                 # Check for explicit cisa:generationContext
                 if "cisa:generationcontext=" in comment:
@@ -1032,7 +1041,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
                     "discovery, or decommission. Alternatively, add property "
                     "'internal:sbom:generationContext' in metadata.properties. Note: "
                     "the legacy 'cdx:sbom:generationContext' name is still recognised "
-                    "for backward compatibility but is deprecated — unofficial names "
+                    "for backward compatibility but is deprecated. Unofficial names "
                     "must not be used under the cdx: namespace."
                 ),
             )

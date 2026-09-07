@@ -165,6 +165,16 @@ def spdx3(**overrides: Any) -> dict:
             "verifiedUsing": [{"type": "Hash", "algorithm": "sha256", "hashValue": "b" * 64}],
         },
         {
+            "type": "simplelicensing_LicenseExpression",
+            "spdxId": "urn:lic:apache",
+            "simplelicensing_licenseExpression": "Apache-2.0",
+        },
+        {
+            "type": "simplelicensing_LicenseExpression",
+            "spdxId": "urn:lic:zlib",
+            "simplelicensing_licenseExpression": "Zlib",
+        },
+        {
             "type": "Relationship",
             "spdxId": "urn:rel:lic1",
             "from": "urn:pkg:openssl",
@@ -336,9 +346,7 @@ class TestTheProducerIsWhoeverIsNamed:
         statuses = assess(plugin, tmp_path, document)
         assert statuses["component_producer"] == "fail"
 
-    def test_spdx3_a_dangling_reference_names_nobody(
-        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
-    ) -> None:
+    def test_spdx3_a_dangling_reference_names_nobody(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path) -> None:
         """originatedBy pointing at an element that is not in the graph is not a name."""
         document = spdx3()
         for element in document["@graph"]:
@@ -450,9 +458,7 @@ class TestTheIdentifiersCisaNames:
 
         assert assess(plugin, tmp_path, document)["component_identifiers"] == "pass"
 
-    def test_spdx2_a_bare_purl_on_the_package_counts(
-        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
-    ) -> None:
+    def test_spdx2_a_bare_purl_on_the_package_counts(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path) -> None:
         """Not in the spec, but producers write it and the other plugins read it."""
         document = spdx2()
         for package in document["packages"]:
@@ -899,7 +905,7 @@ class TestTheFormatClaimMustNameTheFormat:
 
 
 class TestAPhaseIsAWordNotASubstring:
-    """"build" was found inside "rebuild", and a comment mentioning one scored
+    """ "build" was found inside "rebuild", and a comment mentioning one scored
     as a stated build phase."""
 
     @pytest.mark.parametrize(
@@ -934,9 +940,7 @@ class TestSpdx3MustNameSpdxToo:
         document.update(overrides)
         return document
 
-    def test_the_spdx_context_names_the_format(
-        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
-    ) -> None:
+    def test_the_spdx_context_names_the_format(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path) -> None:
         assert assess(plugin, tmp_path, spdx3())["sbom_data_format_name"] == "pass"
 
     def test_a_context_list_counts(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path) -> None:
