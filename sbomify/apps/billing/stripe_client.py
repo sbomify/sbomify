@@ -64,6 +64,20 @@ class BillingRetryableError(StripeError):
     pass
 
 
+class WorkspaceGoneError(StripeError):
+    """The workspace this event belongs to no longer exists.
+
+    Terminal like its parent, and acknowledged the same way, but separated so
+    the webhook view can report it for what it is. Every lookup strategy missed,
+    which means no workspace holds the subscription, the customer, or the key the
+    customer's own metadata names. Deleting a workspace cancels its subscription,
+    and Stripe reports that cancellation back here after the row has gone, so an
+    event with nowhere to land is an expected end state rather than a fault.
+    """
+
+    pass
+
+
 def handle_stripe_errors(func: F) -> F:
     """Decorator to handle Stripe errors consistently.
 
@@ -209,6 +223,13 @@ class StripeClient:
 
         if trial_days:
             subscription_data["trial_period_days"] = trial_days
+            # A trial started this way carries no card, so say what happens when
+            # it ends without one. Stripe otherwise raises an invoice nobody can
+            # pay, which reaches the customer as a failed-payment notice for a
+            # trial they simply let lapse, and leaves the workspace past_due.
+            # Cancelling ends it cleanly, on the path the deleted-subscription
+            # handler already downgrades from.
+            subscription_data["trial_settings"] = {"end_behavior": {"missing_payment_method": "cancel"}}
 
         subscription = stripe.Subscription.create(**subscription_data)
 

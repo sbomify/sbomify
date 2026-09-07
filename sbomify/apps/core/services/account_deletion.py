@@ -80,14 +80,26 @@ def _get_orphaned_workspaces(user: User) -> Any:
     return [m.team for m in owner_memberships if m.member_count == 1]
 
 
-def _cleanup_stripe_for_workspace_by_ids(subscription_id: str | None, customer_id: str | None) -> bool:
+def cleanup_stripe_for_workspace(
+    subscription_id: str | None,
+    customer_id: str | None,
+    raise_retryable: bool = False,
+) -> bool:
     """Cancel Stripe subscription and delete customer using pre-collected IDs.
 
-    Called outside transaction.atomic() to avoid holding DB locks during HTTP calls.
-    Returns True if cleanup succeeded or was not needed, False on error.
+    Called outside transaction.atomic() to avoid holding DB locks during HTTP calls,
+    by both paths that remove a workspace: deleting an account and deleting a single
+    workspace. Returns True if cleanup succeeded or was not needed, False on error.
+
+    ``raise_retryable`` lets a caller that can try again say so. A rate limit, a
+    connection failure or a Stripe 5xx arrives here as ``BillingRetryableError``,
+    which is a ``StripeError`` and would otherwise be reported as permanent, so a
+    background worker would give up on an outage that clears in a minute. The
+    account-deletion path leaves it off and stays best-effort, because it runs
+    inline with nothing to retry it.
     """
     from sbomify.apps.billing.config import is_billing_enabled
-    from sbomify.apps.billing.stripe_client import StripeClient, StripeError
+    from sbomify.apps.billing.stripe_client import BillingRetryableError, StripeClient, StripeError
 
     if not is_billing_enabled():
         return True
@@ -95,17 +107,34 @@ def _cleanup_stripe_for_workspace_by_ids(subscription_id: str | None, customer_i
     if not subscription_id and not customer_id:
         return True
 
+    cancelled = False
     try:
         client = StripeClient()
         if subscription_id:
             client.cancel_subscription(subscription_id, prorate=True)
+            cancelled = True
             logger.info("Cancelled Stripe subscription")
         if customer_id:
             client.delete_customer(customer_id)
             logger.info("Deleted Stripe customer")
         return True
+    except BillingRetryableError:
+        # Transient. Caught before its parent, as the webhook view does it.
+        if raise_retryable:
+            raise
+        logger.warning("Stripe cleanup hit a transient failure and there is nothing to retry it")
+        return False
     except StripeError as e:
-        logger.warning("Stripe cleanup failed: %s", e)
+        # Callers warn that the subscription may still bill, so say which half
+        # failed: a customer that would not delete leaves a record to tidy, not
+        # a subscription still charging someone. Three states, because "no
+        # subscription to cancel" must not read as "cancelled".
+        if not subscription_id:
+            logger.warning("Stripe customer cleanup failed, and there was no subscription: %s", e)
+        elif cancelled:
+            logger.warning("Stripe customer cleanup failed after the subscription was cancelled: %s", e)
+        else:
+            logger.warning("Stripe subscription cleanup failed: %s", e)
         return False
 
 
@@ -223,7 +252,7 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
     # deleted, so we must not roll back. Orphaned subscriptions surface via CRITICAL log alerts
     # and can be resolved manually in the Stripe dashboard using the team_key.
     for info in orphaned_stripe_info:
-        if not _cleanup_stripe_for_workspace_by_ids(info["subscription_id"], info["customer_id"]):
+        if not cleanup_stripe_for_workspace(info["subscription_id"], info["customer_id"]):
             logger.critical(
                 "Stripe cleanup failed for team %s during account deletion — subscription may be orphaned",
                 info["team_key"],

@@ -213,6 +213,7 @@ class TestPlanKeyInCheckoutMetadata:
                 assert "plan_key" in metadata
                 assert metadata["plan_key"] == "business"
 
+
 # ============================================================================
 # Task #48: Turnstile remoteip Parameter Tests
 # ============================================================================
@@ -523,3 +524,159 @@ class TestCheckoutLockInViews:
     def setup_method(self):
         cache.clear()
 
+
+class TestTheWebhookRoutesEveryEventWeNeed:
+    """Gaps found reading the integration against Stripe's own subscription
+    webhook guide."""
+
+    def _event(self, kind, obj=None):
+        from unittest.mock import MagicMock
+
+        event = MagicMock()
+        event.type = kind
+        event.id = f"evt_{kind}"
+        event.data.object = obj or MagicMock()
+        return event
+
+    def _dispatch(self, event):
+        """Run just the routing block the view runs."""
+        from sbomify.apps.billing import billing_processing
+
+        return billing_processing, event
+
+    def test_trial_will_end_reaches_the_subscription_handler(self, mocker):
+        """It is the only notice Stripe sends as a trial runs down."""
+        from django.test import Client
+
+        handler = mocker.patch("sbomify.apps.billing.billing_processing.handle_subscription_updated")
+        mocker.patch(
+            "sbomify.apps.billing.views.stripe_client.construct_webhook_event",
+            return_value=self._event("customer.subscription.trial_will_end"),
+        )
+        mocker.patch("django.conf.settings.STRIPE_WEBHOOK_SECRET", "whsec_x", create=True)
+
+        resp = Client().post(
+            "/billing/webhook/",
+            data="{}",
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="t=1,v1=x",
+        )
+
+        assert resp.status_code == 200
+        handler.assert_called_once()
+
+    @pytest.mark.parametrize("kind", ["price.updated", "price.created"])
+    def test_price_events_reach_the_price_handler(self, mocker, kind):
+        """The handler existed and nothing called it, so plan prices went stale."""
+        from django.test import Client
+
+        handler = mocker.patch("sbomify.apps.billing.billing_processing.handle_price_updated")
+        mocker.patch(
+            "sbomify.apps.billing.views.stripe_client.construct_webhook_event",
+            return_value=self._event(kind),
+        )
+        mocker.patch("django.conf.settings.STRIPE_WEBHOOK_SECRET", "whsec_x", create=True)
+
+        resp = Client().post(
+            "/billing/webhook/",
+            data="{}",
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="t=1,v1=x",
+        )
+
+        assert resp.status_code == 200
+        handler.assert_called_once()
+
+
+@pytest.mark.django_db
+class TestNotificationsLeaveTheRequest:
+    """An SMTP round trip per recipient is the slowest thing a webhook does."""
+
+    def test_send_billing_email_queues_instead_of_sending(self, mocker, sample_team_with_owner_member):
+        from sbomify.apps.billing import email_notifications
+
+        queued = mocker.patch("sbomify.apps.billing.tasks.deliver_billing_email.send")
+        rendered = mocker.patch("sbomify.apps.billing.email_notifications.render_to_string")
+        member = sample_team_with_owner_member
+
+        email_notifications.send_billing_email(member.team, member, "Subject", "trial_ending", {"days_remaining": 3})
+
+        rendered.assert_not_called()
+        queued.assert_called_once_with(member.team.pk, member.pk, "Subject", "trial_ending", {"days_remaining": 3})
+
+    def test_the_worker_renders_and_sends_it(self, mocker, sample_team_with_owner_member):
+        from sbomify.apps.billing.tasks import deliver_billing_email
+
+        send = mocker.patch("sbomify.apps.billing.email_notifications.render_and_send_billing_email")
+        member = sample_team_with_owner_member
+
+        deliver_billing_email(member.team.pk, member.pk, "Subject", "trial_ending", {"days_remaining": 3})
+
+        send.assert_called_once()
+        assert send.call_args[0][0].pk == member.team.pk
+        assert send.call_args[0][1].pk == member.pk
+
+    def test_a_workspace_deleted_before_delivery_is_skipped(self, mocker, sample_team_with_owner_member):
+        from sbomify.apps.billing.tasks import deliver_billing_email
+
+        send = mocker.patch("sbomify.apps.billing.email_notifications.render_and_send_billing_email")
+
+        deliver_billing_email(999999, sample_team_with_owner_member.pk, "Subject", "trial_ending", {})
+
+        send.assert_not_called()
+
+    def test_a_member_of_another_workspace_is_not_emailed(self, mocker, sample_team_with_owner_member):
+        """Mismatched ids would name the wrong workspace at the right person."""
+        from sbomify.apps.billing.tasks import deliver_billing_email
+        from sbomify.apps.teams.models import Team
+
+        send = mocker.patch("sbomify.apps.billing.email_notifications.render_and_send_billing_email")
+        member = sample_team_with_owner_member
+        other = Team.objects.create(name="Another workspace", key="another-ws-key")
+
+        deliver_billing_email(other.pk, member.pk, "Subject", "trial_ending", {})
+
+        send.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestATrialRunsItsFullLength:
+    """timedelta.days floors, so under 24 hours read as 0 and the expiry branch
+    ran while the trial was still going, publishing every private component."""
+
+    def _subscription(self, hours_left):
+        import datetime
+
+        from django.utils import timezone
+
+        end = timezone.now() + datetime.timedelta(hours=hours_left)
+        sub = MagicMock()
+        sub.status = "trialing"
+        sub.trial_end = int(end.timestamp())
+        return sub
+
+    def test_a_trial_with_hours_left_has_not_expired(self, mocker, sample_team_with_owner_member):
+        from sbomify.apps.billing import billing_processing
+
+        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")
+        mocker.patch("sbomify.apps.billing.billing_processing.notify_billing_managers")
+        team = sample_team_with_owner_member.team
+
+        billing_processing.handle_trial_period(self._subscription(20), team)
+
+        team.refresh_from_db()
+        downgrade.assert_not_called()
+        assert team.billing_plan != "community"
+
+    def test_a_trial_past_its_end_expires(self, mocker, sample_team_with_owner_member):
+        from sbomify.apps.billing import billing_processing
+
+        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")
+        mocker.patch("sbomify.apps.billing.billing_processing.notify_billing_managers")
+        team = sample_team_with_owner_member.team
+
+        billing_processing.handle_trial_period(self._subscription(-1), team)
+
+        team.refresh_from_db()
+        downgrade.assert_called_once()
+        assert team.billing_plan == "community"

@@ -362,7 +362,14 @@ class StripePricingService:
         if trial_period_days and trial_period_days > 0:
             if trial_period_days > max_trial_days:
                 raise StripeError(f"Trial period {trial_period_days} days exceeds maximum allowed {max_trial_days}")
-            session_data["subscription_data"] = {"trial_period_days": trial_period_days}
+            session_data["subscription_data"] = {
+                "trial_period_days": trial_period_days,
+                # Collecting a card at checkout does not keep one there: it can be
+                # detached or expire in the portal before the trial ends. Say what
+                # happens then, rather than taking Stripe's default of raising an
+                # invoice nobody can pay.
+                "trial_settings": {"end_behavior": {"missing_payment_method": "cancel"}},
+            }
             # Ensure card details are always collected during trial checkout
             session_data["payment_method_collection"] = "always"
 
