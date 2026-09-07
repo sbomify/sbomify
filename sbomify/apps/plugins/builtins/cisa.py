@@ -1161,8 +1161,10 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             ),
             self._document_finding(
                 "sbom_data_format_name",
-                stated=True,
-                remediation=None,
+                stated=self._spdx3_declares_spdx(data),
+                details="Nothing in the document names SPDX as its format.",
+                remediation="Set @context to the SPDX 3 context, such as "
+                '"https://spdx.org/rdf/3.0.1/spdx-context.jsonld".',
             ),
             self._document_finding(
                 "sbom_data_format_version",
@@ -1332,6 +1334,26 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         the inconsistency the three-outcome design exists to avoid.
         """
         return any(_is_unknown(tool.get(key)) for key in ("software_packageVersion", "version"))
+
+    @staticmethod
+    def _spdx3_declares_spdx(data: dict[str, Any]) -> bool:
+        """Whether the document names SPDX as its format.
+
+        The detector that routed the document here is looser on purpose: it
+        takes a bare ``@graph`` of SPDX-shaped elements, because builders emit
+        exactly that. Routing is a guess about what a document is. This element
+        is the document saying so, and a JSON-LD file that never mentions SPDX
+        has not said it, whatever its elements look like.
+        """
+        contexts = data.get("@context")
+        for entry in contexts if isinstance(contexts, list) else [contexts]:
+            if isinstance(entry, str) and "spdx.org" in entry.lower():
+                return True
+            if isinstance(entry, dict) and any(
+                isinstance(value, str) and "spdx.org" in value.lower() for value in entry.values()
+            ):
+                return True
+        return bool(_SPDX_DECLARED.match(_text(data.get("spdxVersion"))))
 
     @staticmethod
     def _spdx3_has_document_identity(data: dict[str, Any]) -> bool:

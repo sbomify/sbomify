@@ -922,3 +922,49 @@ class TestAPhaseIsAWordNotASubstring:
         document["creationInfo"] = {**document["creationInfo"], "comment": comment}
 
         assert assess(plugin, tmp_path, document)["sbom_generation_context"] == expected
+
+
+class TestSpdx3MustNameSpdxToo:
+    """The detector routes a bare @graph here because builders emit exactly
+    that. Routing is a guess about what a document is; this element is the
+    document saying so."""
+
+    def _doc(self, **overrides):
+        document = spdx3()
+        document.update(overrides)
+        return document
+
+    def test_the_spdx_context_names_the_format(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        assert assess(plugin, tmp_path, spdx3())["sbom_data_format_name"] == "pass"
+
+    def test_a_context_list_counts(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path) -> None:
+        document = self._doc(
+            **{"@context": ["https://spdx.org/rdf/3.0.1/spdx-context.jsonld", {"@vocab": "http://example.com/"}]}
+        )
+
+        assert assess(plugin, tmp_path, document)["sbom_data_format_name"] == "pass"
+
+    def test_an_spdx_version_counts(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path) -> None:
+        document = self._doc(spdxVersion="SPDX-3.0")
+        document.pop("@context")
+
+        assert assess(plugin, tmp_path, document)["sbom_data_format_name"] == "pass"
+
+    def test_a_document_that_names_nothing_does_not_pass(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """It used to be hard-coded to pass, so this could not fail."""
+        document = self._doc()
+        document.pop("@context")
+
+        assert assess(plugin, tmp_path, document)["sbom_data_format_name"] == "fail"
+
+    def test_json_ld_that_is_not_spdx_at_all_does_not_pass(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """A schema.org document has an @graph and passed this element."""
+        document = {"@context": "https://schema.org", "@graph": [{"type": "Person", "name": "Ada"}]}
+
+        assert assess(plugin, tmp_path, document)["sbom_data_format_name"] == "fail"
