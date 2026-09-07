@@ -104,6 +104,11 @@ class TestEmittedPurls:
                 assert not re.search(r"/v\d+$", module), f"{module} at {version} should carry no major suffix"
 
     def test_covers_both_binaries(self) -> None:
-        modules = [PURL_RE.match(line).group("module") for line in _run_script()]  # type: ignore[union-attr]
+        modules = []
+        for line in _run_script():
+            match = PURL_RE.match(line)
+            assert match, line
+            modules.append(match.group("module"))
+
         assert any("osv-scanner" in m for m in modules), modules
         assert any("cosign" in m for m in modules), modules
