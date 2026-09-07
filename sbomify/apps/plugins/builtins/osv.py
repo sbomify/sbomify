@@ -267,7 +267,7 @@ class OSVPlugin(AssessmentPlugin):
             # cleanly. Reported as a pass, that renders a green "no known
             # vulnerabilities" badge over a build nothing was ever matched
             # against — the worst answer a security product can give.
-            if not findings and self._scanned_package_count(stderr) == 0:
+            if not findings and self._matchable_package_count(stderr) == 0:
                 logger.warning(
                     f"[OSV] Scan of SBOM {sbom_id} recognised no packages; reporting as skipped rather than clean"
                 )
@@ -699,6 +699,30 @@ class OSVPlugin(AssessmentPlugin):
         """
         match = self._SCANNED_PACKAGES.search(stderr or "")
         return int(match.group(1)) if match else None
+
+    # No digits and no newline between the count and the noun, so this cannot
+    # reach across lines and pair a count with a different sentence's package.
+    _FILTERED_PACKAGES = re.compile(r"filtered (\d+)[^\d\n]*package", re.IGNORECASE)
+
+    def _matchable_package_count(self, stderr: str) -> int | None:
+        """How many packages osv-scanner had left to match, or None if it did not say.
+
+        "found N packages" counts what it parsed, not what it could look up. A
+        package it parses and then cannot match is reported separately as
+        filtered, and a scan where every package was filtered matched nothing
+        against any advisory source however many it counted.
+
+        A Yocto document is the case that makes the difference visible. Its
+        purls are a type osv-scanner rejects, so with nothing else on the
+        component it counts zero. Carry the CPE, which Dependency Track needs,
+        and the same component is counted and then filtered, so the count alone
+        would report a build nothing matched as a clean scan.
+        """
+        scanned = self._scanned_package_count(stderr)
+        if scanned is None:
+            return None
+        filtered = self._FILTERED_PACKAGES.search(stderr or "")
+        return max(scanned - (int(filtered.group(1)) if filtered else 0), 0)
 
     def _create_no_packages_result(self, converted_from: str | None = None) -> AssessmentResult:
         """A scan that recognised nothing, reported as skipped rather than clean.

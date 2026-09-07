@@ -172,3 +172,67 @@ class TestFormatsTheScannerAlreadyReads:
             plugin.assess("sbom-1", path)
 
         convert.assert_not_called()
+
+
+class TestCarryingTheCpeMustNotReadAsAcleanScan:
+    """Preserving CPEs changed what osv-scanner counts, and nearly cost the guard.
+
+    A Yocto document's purls are a type osv-scanner rejects. With nothing else
+    on the component it counts zero packages and the "recognised nothing" skip
+    fires. Carry the CPE, which Dependency Track needs to match at all, and the
+    same component is counted and then filtered as unscannable, so a count of
+    what was parsed says one package and the run reads as a clean scan over a
+    build nothing was matched against.
+    """
+
+    SCANNED_THEN_FILTERED = (
+        "Scanned /tmp/x.cdx.json file and found 1 package\n"
+        "Filtered 1 local/unscannable package/s from the scan.\n"
+    )
+
+    def test_a_package_that_was_filtered_did_not_get_matched(self, plugin: OSVPlugin) -> None:
+        assert plugin._matchable_package_count(self.SCANNED_THEN_FILTERED) == 0
+
+    def test_a_real_scan_is_not_turned_into_a_skip(self, plugin: OSVPlugin) -> None:
+        assert plugin._matchable_package_count("found 500 packages") == 500
+        assert plugin._matchable_package_count("found 10 packages\nFiltered 3 local package/s") == 7
+
+    def test_a_scanner_that_says_nothing_is_not_guessed_at(self, plugin: OSVPlugin) -> None:
+        """None rather than 0, so a differently phrased scanner does not turn
+        every clean scan into a skip."""
+        assert plugin._matchable_package_count("some other output") is None
+
+    def test_the_whole_path_reports_a_yocto_document_as_skipped(
+        self, plugin: OSVPlugin, tmp_path: Path
+    ) -> None:
+        """The outcome that matters: no green badge over an unmatched build."""
+        path = tmp_path / "yocto.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                    "@graph": [
+                        {
+                            "type": "software_Package",
+                            "spdxId": "urn:p",
+                            "name": "openssl",
+                            "software_packageVersion": "3.0.11",
+                            "software_packageUrl": "pkg:yocto/meta/openssl@3.0.11",
+                            "externalIdentifier": [
+                                {
+                                    "externalIdentifierType": "cpe23",
+                                    "identifier": "cpe:2.3:a:openssl:openssl:3.0.11:*:*:*:*:*:*:*",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+        )
+
+        with patch.object(plugin, "_execute_scanner", return_value=("{}", self.SCANNED_THEN_FILTERED, 0)):
+            result = _as_dict(plugin.assess("sbom-1", path))
+
+        assert result["findings"][0]["id"] == "osv:no-packages"
+        assert result["metadata"]["skipped"] is True
+        assert result["metadata"]["converted_from"] == "SPDX-3.0"
