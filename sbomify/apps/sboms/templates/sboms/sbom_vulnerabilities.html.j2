@@ -3,6 +3,7 @@
 {% load static %}
 {% load django_vite %}
 {% load advisory_tags %}
+{% load plugins_extras %}
 {% block title %}sbomify SBOM Vulnerabilities{% endblock %}
 {% block content %}
     <c-layout.page-header title="Vulnerabilities" icon="fas fa-shield-alt" mark="avatar" :breadcrumbs="breadcrumb_items" style="--avatar-accent: var(--color-warning)">
@@ -155,11 +156,15 @@
                                                         {% endif %}
                                                     </div>
                                                 </div>
-                                                {# Summary. Truncate from the FULL description when present — the scanner's own title can be pre-cut mid-word — so truncatewords always ends on a whole word. #}
+                                                {# Summary. Truncate from the FULL description when present — the scanner's own title can be pre-cut mid-word — so truncatewords always ends on a whole word. The body is CommonMark, so it is flattened before it is cut. #}
                                                 {% if vuln.details and ' ' in vuln.details %}
-                                                    <p class="text-sm text-text-muted leading-relaxed mb-2 break-words">{{ vuln.details|truncatewords:20 }}</p>
+                                                    <p class="text-sm text-text-muted leading-relaxed mb-2 break-words">
+                                                        {{ vuln.details|advisory_prose|truncatewords:20 }}
+                                                    </p>
                                                 {% elif vuln.summary and ' ' in vuln.summary %}
-                                                    <p class="text-sm text-text-muted leading-relaxed mb-2 break-words">{{ vuln.summary|truncatewords:20 }}</p>
+                                                    <p class="text-sm text-text-muted leading-relaxed mb-2 break-words">
+                                                        {{ vuln.summary|advisory_prose|truncatewords:20 }}
+                                                    </p>
                                                 {% else %}
                                                     <p class="text-sm text-text-muted mb-2 italic"
                                                        title="No summary provided by the scanner">

@@ -14,6 +14,42 @@ register = template.Library()
 # Number of packages to show before collapsing with "Show all" toggle
 VISIBLE_PACKAGE_COUNT = 5
 
+# The CommonMark an advisory body arrives in. OSV serves GHSA's `details`
+# verbatim, so "### Impact", backticked package names and reference links all
+# reach us as markup. Images come before links, because an image is a link with
+# a bang in front of it. Code spans are not here at all: they are lifted out
+# before any of this runs and put back afterwards, so nothing below can read
+# their contents as markup.
+_MARKDOWN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^\s*(?:```|~~~).*$", re.MULTILINE), ""),  # code fences
+    (re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE), ""),  # ATX headings
+    (re.compile(r"^\s{0,3}>\s?", re.MULTILINE), ""),  # block quotes
+    # GitHub's alert syntax, which rides inside a block quote and so is left
+    # behind once the quote marker goes. GHSA advisories open with it.
+    (re.compile(r"\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*", re.IGNORECASE), ""),
+    (re.compile(r"^\s{0,3}(?:[-*_]\s*){3,}$", re.MULTILINE), ""),  # thematic breaks
+    (re.compile(r"^\s{0,3}(?:[-*+]|\d+[.)])\s+", re.MULTILINE), ""),  # list markers
+    (re.compile(r"!\[([^\]]*)\]\([^)]*\)"), r"\1"),  # images, kept as their alt text
+    (re.compile(r"\[([^\]]+)\]\([^)]*\)"), r"\1"),  # links, kept as their text
+    (re.compile(r"\*\*(.+?)\*\*", re.DOTALL), r"\1"),  # bold
+    # Underscore bold is guarded where asterisk bold is not: __init__ and
+    # __reduce__ are the shape of a dunder, and an advisory about pickle or
+    # prototype pollution is full of them. CommonMark would read those as
+    # emphasis; a reader would not, and the identifier is what they came for.
+    (re.compile(r"(?<![\w_])__(?!\s)(?![a-z]+__(?![\w_]))(.+?)(?<!\s)__(?![\w_])", re.DOTALL), r"\1"),
+    # Italic, guarded against a doubled marker on either side so __proto__ does
+    # not come out as _proto_ once the bold rule above has declined it.
+    (re.compile(r"(?<![\w*_])(\*|_)(?![\s*_])(.+?)(?<![\s*_])\1(?![\w*_])", re.DOTALL), r"\2"),
+)
+
+#: Lifted out before the patterns above run, and restored after.
+#: One line only, so a fenced block stays the fence pattern's business.
+_CODE_SPAN_RE = re.compile(r"`+([^`\n]+)`+")
+
+# Same ceiling as format_finding_description: a pathological advisory body must
+# not be handed to a dozen regexes.
+MAX_DESCRIPTION_CHARS = 100_000
+
 
 @register.filter
 def format_run_reason(reason: str) -> str:
@@ -199,6 +235,42 @@ def _build_package_span_args(packages: list[str]) -> list[tuple[str, str, str]]:
         hidden_class = " pkg-hidden" if i >= VISIBLE_PACKAGE_COUNT else ""
         args.append((hidden_class, pkg, pkg))
     return args
+
+
+@register.filter
+def advisory_prose(text: object) -> str:
+    """An advisory body as one line of plain prose.
+
+    The pages that show a description show the opening words of it, so the
+    markup is removed rather than rendered: a heading is not structure inside a
+    twenty-word summary, and flattening first means the truncation that follows
+    can only ever cut prose, never leave a code span or a link half-open.
+
+    Whitespace collapses too. The source is written as paragraphs and lists,
+    and every newline in it would otherwise arrive as a space in a sentence
+    that reads as though a word is missing.
+    """
+    if not isinstance(text, str) or not text:
+        return ""
+    if len(text) > MAX_DESCRIPTION_CHARS:
+        logger.debug("Skipping markdown flattening: length %d exceeds limit", len(text))
+        return text
+
+    # A code span is literal by definition, so its contents are set aside while
+    # the rest runs. Everything an advisory puts in backticks is the thing a
+    # reader is looking for: a package called *star, a header field with a #
+    # in it, a path with an underscore.
+    spans: list[str] = []
+
+    def _stash(match: re.Match[str]) -> str:
+        spans.append(match.group(1))
+        return f"\x00{len(spans) - 1}\x00"
+
+    text = _CODE_SPAN_RE.sub(_stash, text)
+    for pattern, replacement in _MARKDOWN_PATTERNS:
+        text = pattern.sub(replacement, text)
+    text = re.sub(r"\x00(\d+)\x00", lambda m: spans[int(m.group(1))], text)
+    return " ".join(text.split())
 
 
 @register.filter

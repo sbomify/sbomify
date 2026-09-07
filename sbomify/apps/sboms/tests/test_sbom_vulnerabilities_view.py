@@ -134,3 +134,28 @@ def test_scanner_status_markers_are_not_vulnerability_rows(sample_sbom: SBOM):  
     names = [p["package"]["name"] for p in packages]
     assert "django" in names
     assert len(packages) == 1
+
+
+@pytest.mark.django_db
+def test_the_advisory_body_reaches_the_page_as_prose(sample_sbom: SBOM):  # noqa: F811
+    """OSV serves GHSA's CommonMark verbatim, and the card showed it raw: the
+    page carried the literal text "### Impact" and backticked package names."""
+    finding = _finding("GHSA-5jgf-p345-68v8", "fast-uri", version="3.1.5")
+    finding["description"] = (
+        "### Impact\n`fast-uri` decodes percent-encoded characters in the scheme "
+        "component with the legacy global `unescape()` and serializes the result back."
+    )
+    _run(sample_sbom, "osv", [finding])
+    client = Client()
+    team = sample_sbom.component.team
+    setup_test_session(client, team, team.members.first())
+
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
+
+    # Asserted before the strings below, so a redirect or an error page cannot
+    # pass this test by simply not containing the markup it is looking for.
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "### Impact" not in html
+    assert "`fast-uri`" not in html
+    assert "Impact fast-uri decodes percent-encoded characters" in html
