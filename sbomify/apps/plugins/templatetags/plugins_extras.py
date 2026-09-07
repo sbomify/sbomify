@@ -23,6 +23,9 @@ _MARKDOWN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^\s*(?:```|~~~).*$", re.MULTILINE), ""),  # code fences
     (re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE), ""),  # ATX headings
     (re.compile(r"^\s{0,3}>\s?", re.MULTILINE), ""),  # block quotes
+    # GitHub's alert syntax, which rides inside a block quote and so is left
+    # behind once the quote marker goes. GHSA advisories open with it.
+    (re.compile(r"\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*", re.IGNORECASE), ""),
     (re.compile(r"^\s{0,3}(?:[-*_]\s*){3,}$", re.MULTILINE), ""),  # thematic breaks
     (re.compile(r"^\s{0,3}(?:[-*+]|\d+[.)])\s+", re.MULTILINE), ""),  # list markers
     (re.compile(r"!\[([^\]]*)\]\([^)]*\)"), r"\1"),  # images, kept as their alt text

@@ -431,6 +431,13 @@ class TestAdvisoryProse:
 
         assert advisory_prose(body) == "Note first second one code()"
 
+    def test_a_github_alert_marker_comes_off_with_its_quote(self) -> None:
+        """GHSA advisories open with one, and it rides inside a block quote, so
+        removing the quote marker alone left the marker sitting in the prose."""
+        body = "> [!NOTE]\n> Scored assuming a deployment where policy is a boundary."
+
+        assert advisory_prose(body) == "Scored assuming a deployment where policy is a boundary."
+
     def test_a_thematic_break_leaves_nothing_behind(self) -> None:
         assert advisory_prose("Before\n\n---\n\nAfter") == "Before After"
 
