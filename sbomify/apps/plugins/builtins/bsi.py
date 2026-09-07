@@ -60,7 +60,9 @@ from packaging import version as pkg_version
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
+    extract_spdx3_licenses,
     get_spdx3_package_fields,
+    get_spdx3_package_license,
     iter_spdx3_external_identifiers,
     resolve_spdx3_agent,
 )
@@ -909,6 +911,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         # in BSI than everywhere else. Files are BSI-specific, so that pass
         # stays local.
         creation_info, packages, relationships, persons_orgs, _ = extract_spdx3_elements({"@graph": elements})
+        licenses = extract_spdx3_licenses({"@graph": elements})
         # Same normalization as the shared extractor: the bare tail of a
         # compact or IRI type, matched exactly, so a type merely containing
         # the word File cannot classify as one.
@@ -1018,7 +1021,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                         structured_failures.append(pkg_name)
 
             # Licence
-            has_licence = self._has_spdx3_licence(package, relationships)
+            has_licence = self._has_spdx3_licence(package, relationships, licenses)
             if not has_licence:
                 licence_failures.append(pkg_name)
 
@@ -1032,7 +1035,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                 source_code_uri_warnings.append(pkg_name)
             if not self._spdx3_has_deployable_uri(package):
                 uri_deployable_form_warnings.append(pkg_name)
-            if not self._spdx3_has_original_licence(package, relationships):
+            if not self._spdx3_has_original_licence(package, relationships, licenses):
                 original_licences_warnings.append(pkg_name)
 
         # Create findings (same pattern as CycloneDX)
@@ -1777,13 +1780,20 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         return "other" if has_other_hash else "none"
 
-    def _has_spdx3_licence(self, package: dict[str, Any], relationships: list[dict[str, Any]]) -> bool:
-        """Check if SPDX 3.x package has concluded licence via relationship."""
-        pkg_id = package.get("spdxId", package.get("@id"))
-        for rel in relationships:
-            if rel.get("from") == pkg_id and rel.get("relationshipType") == "hasConcludedLicense":
-                return True
-        return False
+    def _has_spdx3_licence(
+        self,
+        package: dict[str, Any],
+        relationships: list[dict[str, Any]],
+        licenses: dict[str, dict[str, Any]],
+    ) -> bool:
+        """A concluded licence the document can actually resolve.
+
+        Existence of the relationship alone is not enough: a
+        hasConcludedLicense pointing at nothing resolvable carries no licence
+        information, and scoring it as one would grade a dangling reference
+        the same as a real expression.
+        """
+        return get_spdx3_package_license(package, relationships, licenses, "hasConcludedLicense") is not None
 
     def _has_spdx3_identifier(self, package: dict[str, Any]) -> bool:
         """Check if SPDX 3.x package has unique identifier."""
@@ -1841,17 +1851,17 @@ class BSICompliancePlugin(AssessmentPlugin):
         value = package.get("software_downloadLocation")
         return isinstance(value, str) and bool(value.strip())
 
-    def _spdx3_has_original_licence(self, package: dict[str, Any], relationships: list[dict[str, Any]]) -> bool:
+    def _spdx3_has_original_licence(
+        self,
+        package: dict[str, Any],
+        relationships: list[dict[str, Any]],
+        licenses: dict[str, dict[str, Any]],
+    ) -> bool:
         """Per BSI §5.2.4, recognise an original/declared licence via the
-        hasDeclaredLicense relationship on the package.
+        hasDeclaredLicense relationship — resolved to an actual licensing
+        element, for the same reason as the concluded check.
         """
-        pkg_id = package.get("spdxId", package.get("@id"))
-        for rel in relationships:
-            if not isinstance(rel, dict):
-                continue
-            if rel.get("from") == pkg_id and rel.get("relationshipType") == "hasDeclaredLicense":
-                return True
-        return False
+        return get_spdx3_package_license(package, relationships, licenses, "hasDeclaredLicense") is not None
 
     def _check_spdx3_dependencies(self, relationships: list[dict[str, Any]]) -> tuple[bool, bool]:
         """Check SPDX 3.x dependencies and completeness indicator.
