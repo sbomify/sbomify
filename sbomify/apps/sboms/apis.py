@@ -36,6 +36,7 @@ from sbomify.apps.sboms.utils import (
     _is_cbom,
     _is_duplicate_integrity_error,
     _is_vex,
+    _states_vulnerabilities,
     verify_download_token,
 )
 from sbomify.apps.teams.models import ContactProfile
@@ -635,11 +636,11 @@ def vex_artifact_upload(request: HttpRequest, component_id: str) -> tuple[int, d
             # bomFormat marker it keys on. So an inventory posted here would be
             # stored as a VEX and would rewrite the component's posture from a
             # document that states nothing about any vulnerability.
-            if isinstance(document, dict) and not _is_vex(document):
+            if isinstance(document, dict) and not _states_vulnerabilities(document):
                 return 400, {
                     "detail": (
-                        "This looks like an SBOM: it carries components and no vulnerability "
-                        "statements. Upload it as an SBOM rather than as a VEX."
+                        "This document makes no vulnerability statement, so it is not a VEX. "
+                        "Upload it as an SBOM rather than as a VEX."
                     ),
                     "error_code": ErrorCode.VALIDATION_ERROR,
                 }
@@ -1401,6 +1402,18 @@ def sbom_upload_file(
 
             sbom_version = sbom_dict.get("version", "")
             sbom_format = "cyclonedx"
+
+            # The type comes from a dropdown here, so the mismatch runs both
+            # ways: picking VEX for an inventory stores a document that states
+            # nothing about any vulnerability as the component's VEX.
+            if bom_type == SBOM.BomType.VEX.value and not _states_vulnerabilities(sbom_data):
+                return 400, {
+                    "detail": (
+                        "This document makes no vulnerability statement, so it is not a VEX. "
+                        "Choose SBOM as the artifact type rather than VEX."
+                    ),
+                    "error_code": ErrorCode.VALIDATION_ERROR,
+                }
 
             # A VEX is not an inventory; see the same guard on the CycloneDX
             # API endpoint. Stored as bom_type=sbom it is scanned and scored

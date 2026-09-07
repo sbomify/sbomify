@@ -3966,6 +3966,83 @@ def test_cyclonedx_upload_document_carrying_both_stays_an_sbom(
 
 
 @pytest.mark.django_db
+def test_vex_artifact_upload_accepts_a_vex_that_lists_components(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """The ordinary shape: a VEX lists the components its affects entries point
+    at. Requiring an empty inventory of a VEX would refuse most real ones."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    document = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {"component": {"type": "application", "name": "app", "version": "1.0.0"}},
+        "components": [
+            {"type": "library", "bom-ref": "pkg:npm/lodash@4.17.15", "name": "lodash", "version": "4.17.15"}
+        ],
+        "vulnerabilities": [
+            {
+                "id": "CVE-2021-23337",
+                "analysis": {"state": "not_affected", "justification": "code_not_reachable"},
+                "affects": [{"ref": "pkg:npm/lodash@4.17.15"}],
+            }
+        ],
+    }
+
+    client = Client()
+    url = reverse("api-1:vex_artifact_upload", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url,
+        data=json.dumps(document),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert resp.status_code == 201, resp.content
+    assert SBOM.objects.get(id=resp.json()["id"]).bom_type == "vex"
+
+
+@pytest.mark.django_db
+def test_upload_file_rejects_an_inventory_declared_as_vex(
+    sample_user,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """The session upload takes the type from a dropdown, so the mismatch runs
+    both ways and this path needs the guard the API route has."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    document = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {"component": {"type": "application", "name": "app", "version": "1.0.0"}},
+        "components": [{"type": "library", "name": "lodash", "version": "4.17.15"}],
+    }
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    client = Client()
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+    upload = SimpleUploadedFile("doc.json", json.dumps(document).encode(), content_type="application/json")
+    resp = client.post(
+        f"/api/v1/sboms/upload-file/{sample_component.id}?bom_type=vex",
+        {"sbom_file": upload},
+    )
+
+    assert resp.status_code == 400
+    assert "not a VEX" in resp.json()["detail"]
+    assert SBOM.objects.count() == 0
+
+
+@pytest.mark.django_db
 def test_vex_artifact_upload_rejects_a_plain_sbom(
     sample_access_token: AccessToken,  # noqa: F811
     sample_component: Component,  # noqa: F811

@@ -2281,6 +2281,18 @@ def _contains_crypto_assets(sbom_data: dict[str, Any]) -> bool:
     return isinstance(metadata, dict) and is_crypto_asset(metadata.get("component"))
 
 
+def _states_vulnerabilities(sbom_data: dict[str, Any]) -> bool:
+    """Whether a CycloneDX document makes any vulnerability statement.
+
+    This is the whole of what a VEX has to carry. It is deliberately not
+    ``_is_vex``: a VEX routinely lists the components its ``affects`` entries
+    point at, so requiring an empty inventory would refuse the ordinary shape.
+    What no VEX can be is a document that says nothing about any vulnerability.
+    """
+    vulnerabilities = sbom_data.get("vulnerabilities")
+    return isinstance(vulnerabilities, list) and bool(vulnerabilities)
+
+
 def _is_vex(sbom_data: dict[str, Any]) -> bool:
     """True when a CycloneDX document is a *pure* VEX: it carries vulnerability
     statements and no inventory of its own.
