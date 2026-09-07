@@ -961,6 +961,28 @@ class TestSpdx3MustNameSpdxToo:
 
         assert assess(plugin, tmp_path, document)["sbom_data_format_name"] == "fail"
 
+    @pytest.mark.parametrize(
+        "context",
+        [
+            "https://schema.org/?ref=spdx.org",
+            "https://spdx.org.attacker.example/evil.jsonld",
+            "https://evil.example/spdx.org/context.jsonld",
+        ],
+    )
+    def test_a_url_that_only_mentions_spdx_does_not_count(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path, context: str
+    ) -> None:
+        """The host decides, not a substring. Read as a substring, every one of
+        these claimed to be SPDX."""
+        document = self._doc(**{"@context": context})
+
+        assert assess(plugin, tmp_path, document)["sbom_data_format_name"] == "fail"
+
+    def test_a_subdomain_of_spdx_counts(self, plugin: CISAMinimumElementsPlugin, tmp_path: Path) -> None:
+        document = self._doc(**{"@context": "https://raw.spdx.org/rdf/3.0.1/spdx-context.jsonld"})
+
+        assert assess(plugin, tmp_path, document)["sbom_data_format_name"] == "pass"
+
     def test_json_ld_that_is_not_spdx_at_all_does_not_pass(
         self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
     ) -> None:

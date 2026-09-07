@@ -52,6 +52,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
@@ -179,6 +180,18 @@ _GENERATION_CONTEXT_PROP = "internal:sbom:generationContext"
 #: The taxonomy reserves the "cdx" namespace for registered names, so this
 #: one was never valid there and new documents should not use it.
 _LEGACY_GENERATION_CONTEXT_PROP = "cdx:sbom:generationContext"
+
+
+def _is_spdx_context(value: str) -> bool:
+    """Whether a JSON-LD context URL is one SPDX publishes.
+
+    The host, not a substring of the URL. "https://schema.org/?ref=spdx.org"
+    mentions SPDX without being SPDX, which is the same mistake as finding
+    "build" inside "rebuild", and it is what a document would use to claim a
+    format it is not written in.
+    """
+    host = (urlparse(value.strip()).hostname or "").lower()
+    return host == "spdx.org" or host.endswith(".spdx.org")
 
 
 def _states_generation_context(text: str) -> bool:
@@ -1347,10 +1360,10 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         """
         contexts = data.get("@context")
         for entry in contexts if isinstance(contexts, list) else [contexts]:
-            if isinstance(entry, str) and "spdx.org" in entry.lower():
+            if isinstance(entry, str) and _is_spdx_context(entry):
                 return True
             if isinstance(entry, dict) and any(
-                isinstance(value, str) and "spdx.org" in value.lower() for value in entry.values()
+                isinstance(value, str) and _is_spdx_context(value) for value in entry.values()
             ):
                 return True
         return bool(_SPDX_DECLARED.match(_text(data.get("spdxVersion"))))
