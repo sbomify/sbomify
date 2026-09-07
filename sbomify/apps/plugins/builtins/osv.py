@@ -31,10 +31,9 @@ from sbomify.apps.plugins.sdk.results import (
     PluginMetadata,
 )
 from sbomify.apps.sboms.conversion import (
-    SPDX_2_3_JSON,
+    CYCLONEDX_1_6,
     ConversionFailed,
-    ConversionUnavailable,
-    convert_sbom,
+    to_cyclonedx,
 )
 from sbomify.logging import getLogger
 
@@ -193,15 +192,12 @@ class OSVPlugin(AssessmentPlugin):
         if self._is_spdx3(sbom_bytes):
             source_format = "spdx3"
             try:
-                sbom_bytes = convert_sbom(sbom_bytes, SPDX_2_3_JSON, timeout=timeout)
-            except ConversionUnavailable as exc:
-                logger.warning(f"[OSV] No usable SBOM converter, so SBOM {sbom_id} stays unscanned: {exc}")
-                return self._create_unsupported_format_result(str(exc))
+                sbom_bytes = to_cyclonedx(sbom_bytes)
             except ConversionFailed as exc:
                 logger.warning(f"[OSV] SPDX 3.0 SBOM {sbom_id} could not be converted for scanning: {exc}")
                 return self._create_conversion_failed_result(str(exc))
             converted_from = "SPDX-3.0"
-            logger.info(f"[OSV] Scanning SBOM {sbom_id} through a derived SPDX 2.3 copy")
+            logger.info(f"[OSV] Scanning SBOM {sbom_id} through a derived CycloneDX copy")
 
         # Determine correct file suffix and create temp copy if needed
         suffix = self._determine_file_suffix(sbom_bytes)
@@ -312,7 +308,7 @@ class OSVPlugin(AssessmentPlugin):
                     "sbom_format": source_format,
                     # Says the scan read a derived copy, so a surprising result
                     # is traceable to the conversion rather than to the scanner.
-                    **({"converted_from": converted_from, "converted_to": "SPDX-2.3"} if converted_from else {}),
+                    **({"converted_from": converted_from, "converted_to": CYCLONEDX_1_6} if converted_from else {}),
                 },
             )
 
@@ -782,7 +778,7 @@ class OSVPlugin(AssessmentPlugin):
                 "scanner": "osv-scanner",
                 "skipped": True,
                 "no_packages": True,
-                **({"converted_from": converted_from, "converted_to": "SPDX-2.3"} if converted_from else {}),
+                **({"converted_from": converted_from, "converted_to": CYCLONEDX_1_6} if converted_from else {}),
             },
         )
 

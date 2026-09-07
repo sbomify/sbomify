@@ -1,188 +1,214 @@
-"""The derived-copy path, exercised against a real subprocess.
+"""The scanner-readable copy, and what it is allowed to lose.
 
-The converter is an external binary, so these run one rather than mocking the
-call: the failure this module has to get right is a converter that refuses a
-document while still exiting 0, and only a real process reproduces that.
+The copy exists so a scanner that cannot read the stored format still sees the
+packages. What it must carry is therefore exactly what a scanner matches on:
+the package, its version, its purl and its CPE. What it may drop is everything
+read from the stored original instead.
 """
 
 from __future__ import annotations
 
 import json
-import os
-import stat
+import subprocess
 from pathlib import Path
 
 import pytest
-from django.test import override_settings
 
-from sbomify.apps.sboms.conversion import (
-    CYCLONEDX_1_6_JSON,
-    SPDX_2_3_JSON,
-    ConversionFailed,
-    ConversionUnavailable,
-    convert_sbom,
-    converter_path,
-)
+from sbomify.apps.sboms.conversion import CYCLONEDX_1_6, ConversionFailed, to_cyclonedx
 
-DOCUMENT = b'{"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": []}'
+OSV_SCANNER = Path("/usr/local/bin/osv-scanner")
 
 
-def _stub_converter(tmp_path: Path, body: str) -> str:
-    script = tmp_path / "stub-converter"
-    script.write_text("#!/bin/sh\n" + body)
-    script.chmod(script.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-    return str(script)
+def spdx3(*packages: dict) -> bytes:
+    return json.dumps(
+        {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [
+                {"type": "SpdxDocument", "spdxId": "urn:doc", "name": "doc"},
+                {"type": "software_Sbom", "spdxId": "urn:sbom", "software_sbomType": "build"},
+                *packages,
+            ],
+        }
+    ).encode()
 
 
-class TestConverterAvailability:
-    def test_a_missing_converter_is_not_a_failed_conversion(self, tmp_path: Path) -> None:
-        """The caller degrades to its old behaviour, so the two must not merge."""
-        with override_settings(SBOM_CONVERTER_PATH=str(tmp_path / "nothing-here")):
-            assert converter_path() is None
-            with pytest.raises(ConversionUnavailable):
-                convert_sbom(DOCUMENT, "spdx-json")
-
-    def test_an_absolute_path_to_a_real_file_is_used(self, tmp_path: Path) -> None:
-        binary = _stub_converter(tmp_path, 'echo "{}"\n')
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            assert converter_path() == binary
-
-    def test_a_file_that_is_not_executable_is_not_the_converter(self, tmp_path: Path) -> None:
-        not_a_binary = tmp_path / "syft"
-        not_a_binary.write_text("this is not a program")
-        with override_settings(SBOM_CONVERTER_PATH=str(not_a_binary)):
-            assert converter_path() is None
-
-    def test_the_bare_default_does_not_pick_up_a_local_file(self, tmp_path: Path, monkeypatch) -> None:
-        """A syft in the working directory must not answer for a name on PATH."""
-        _stub_converter(tmp_path, 'echo "{}"\n')  # tmp_path/stub-converter
-        (tmp_path / "syft").write_text("#!/bin/sh\necho '{}'\n")
-        (tmp_path / "syft").chmod(0o755)
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("PATH", "/nonexistent-for-this-test")
-        with override_settings(SBOM_CONVERTER_PATH="syft"):
-            assert converter_path() is None
+def spdx2(*packages: dict) -> bytes:
+    return json.dumps(
+        {
+            "spdxVersion": "SPDX-2.3",
+            "SPDXID": "SPDXRef-DOCUMENT",
+            "documentNamespace": "https://acme.example/1",
+            "creationInfo": {"created": "2026-09-07T00:00:00Z", "creators": ["Organization: Acme"]},
+            "packages": list(packages),
+        }
+    ).encode()
 
 
-class TestConversion:
-    def test_the_converted_document_comes_back(self, tmp_path: Path) -> None:
-        binary = _stub_converter(tmp_path, 'echo \'{"bomFormat":"CycloneDX"}\'\n')
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            assert b"CycloneDX" in convert_sbom(DOCUMENT, "cyclonedx-json@1.6")
-
-    def test_the_source_document_reaches_the_converter(self, tmp_path: Path) -> None:
-        """It is passed as a file, so the stub proves the file holds our bytes.
-
-        The source here is already SPDX 2.3, because the stub echoes it back
-        as the conversion's output and the output has to be the format the
-        caller asked for.
-        """
-        source = b'{"spdxVersion": "SPDX-2.3", "name": "echoed"}'
-        binary = _stub_converter(tmp_path, 'cat "$2"\n')  # argv: convert <source> -o <format>
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            assert convert_sbom(source, SPDX_2_3_JSON) == source
-
-    def test_a_refusal_that_still_exits_zero_is_a_failure(self, tmp_path: Path) -> None:
-        """How the real converter reports a document it cannot read."""
-        binary = _stub_converter(tmp_path, 'echo "failed to decode SBOM: not recognized" >&2\nexit 0\n')
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            with pytest.raises(ConversionFailed, match="not recognized"):
-                convert_sbom(DOCUMENT, "spdx-json")
-
-    def test_a_non_zero_exit_is_a_failure(self, tmp_path: Path) -> None:
-        binary = _stub_converter(tmp_path, 'echo "boom" >&2\nexit 3\n')
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            with pytest.raises(ConversionFailed):
-                convert_sbom(DOCUMENT, "spdx-json")
-
-    def test_output_that_is_not_a_document_is_a_failure(self, tmp_path: Path) -> None:
-        binary = _stub_converter(tmp_path, 'echo "syft-table output, not json"\n')
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            with pytest.raises(ConversionFailed):
-                convert_sbom(DOCUMENT, "spdx-json")
-
-    def test_output_that_only_starts_like_a_document_is_a_failure(self, tmp_path: Path) -> None:
-        """Truncated output would otherwise reach a scanner and read as its fault."""
-        binary = _stub_converter(tmp_path, 'printf \'{"bomFormat": "Cyclone\'\n')
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            with pytest.raises(ConversionFailed, match="no usable document"):
-                convert_sbom(DOCUMENT, "spdx-json")
-
-    @pytest.mark.parametrize("output", ["{}", "[]", '{"error": "cannot read this"}', '"a string"', "null"])
-    def test_valid_json_that_is_not_an_sbom_is_a_failure(self, tmp_path: Path, output: str) -> None:
-        """A scanner handed an error object would report our failure as its own."""
-        binary = _stub_converter(tmp_path, f"cat <<'JSON'\n{output}\nJSON\n")
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            with pytest.raises(ConversionFailed, match="no usable document"):
-                convert_sbom(b"{}", SPDX_2_3_JSON)
-
-    def test_the_output_must_be_the_format_that_was_asked_for(self, tmp_path: Path) -> None:
-        """SPDX output where CycloneDX was requested is a conversion failure, not a scan."""
-        binary = _stub_converter(tmp_path, 'cat <<\'JSON\'\n{"spdxVersion": "SPDX-2.3"}\nJSON\n')
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            with pytest.raises(ConversionFailed, match="no bomFormat"):
-                convert_sbom(b"{}", CYCLONEDX_1_6_JSON)
-
-            assert json.loads(convert_sbom(b"{}", SPDX_2_3_JSON))["spdxVersion"] == "SPDX-2.3"
-
-    def test_a_hanging_converter_is_killed(self, tmp_path: Path) -> None:
-        binary = _stub_converter(tmp_path, "sleep 30\n")
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            with pytest.raises(ConversionFailed, match="timed out"):
-                convert_sbom(DOCUMENT, "spdx-json", timeout=1)
-
-    def test_the_temporary_source_file_does_not_survive(self, tmp_path: Path) -> None:
-        """The derived copy is for one scan; nothing it touches should linger."""
-        leaked = tmp_path / "leaked-path"
-        binary = _stub_converter(tmp_path, f'printf "%s" "$2" > {leaked}\necho \'{{"spdxVersion": "SPDX-2.3"}}\'\n')
-        with override_settings(SBOM_CONVERTER_PATH=binary):
-            convert_sbom(DOCUMENT, "spdx-json")
-        assert not Path(leaked.read_text()).exists()
+def components(data: bytes) -> list[dict]:
+    return json.loads(to_cyclonedx(data))["components"]
 
 
-@pytest.mark.skipif(not os.environ.get("SBOM_CONVERTER_E2E"), reason="needs a real converter installed")
-class TestAgainstTheRealConverter:
-    def test_spdx3_converts_and_keeps_its_purls(self) -> None:
-        """Purl survival is what lets findings line up with the stored original."""
-        import json
+class TestTheCopyIsCycloneDX:
+    def test_it_declares_the_version_dependency_track_reads(self) -> None:
+        out = json.loads(to_cyclonedx(spdx3({"type": "software_Package", "spdxId": "urn:p", "name": "openssl"})))
 
-        document = json.dumps(
+        assert out["bomFormat"] == "CycloneDX"
+        assert out["specVersion"] == "1.6"
+        assert CYCLONEDX_1_6.endswith(out["specVersion"])
+
+    def test_it_says_what_it_was_derived_from(self) -> None:
+        """A copy that outlives its scan directory must not read as an upload."""
+        out = json.loads(to_cyclonedx(spdx3({"type": "software_Package", "spdxId": "urn:p", "name": "openssl"})))
+
+        properties = {p["name"]: p["value"] for p in out["metadata"]["properties"]}
+        assert properties["sbomify:derived_from"] == "SPDX-3.0"
+
+
+class TestWhatTheScannerMatchesOnSurvives:
+    def test_spdx3_carries_the_purl(self) -> None:
+        got = components(
+            spdx3(
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:p",
+                    "name": "jinja2",
+                    "software_packageVersion": "2.11.2",
+                    "software_packageUrl": "pkg:pypi/jinja2@2.11.2",
+                }
+            )
+        )
+
+        assert got == [
             {
-                "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
-                "@graph": [
-                    {
-                        "type": "CreationInfo",
-                        "@id": "_:ci",
-                        "specVersion": "3.0.1",
-                        "created": "2026-01-01T00:00:00Z",
-                        "createdBy": ["urn:agent"],
-                    },
-                    {"type": "SoftwareAgent", "spdxId": "urn:agent", "creationInfo": "_:ci", "name": "builder"},
-                    {
-                        # The converter needs the document element to recognise
-                        # the graph as SPDX at all.
-                        "type": "SpdxDocument",
-                        "spdxId": "urn:doc",
-                        "creationInfo": "_:ci",
-                        "name": "image",
-                        "rootElement": ["urn:pkg"],
-                    },
-                    {
-                        "type": "software_Package",
-                        "spdxId": "urn:pkg",
-                        "creationInfo": "_:ci",
-                        "name": "openssl",
-                        "software_packageVersion": "3.0.11",
-                        "software_packageUrl": "pkg:generic/openssl@3.0.11",
-                    },
-                ],
+                "type": "library",
+                "name": "jinja2",
+                "bom-ref": "urn:p",
+                "version": "2.11.2",
+                "purl": "pkg:pypi/jinja2@2.11.2",
             }
-        ).encode()
-
-        converted = json.loads(convert_sbom(document, "spdx-json"))
-
-        assert converted["spdxVersion"] == "SPDX-2.3"
-        locators = [
-            ref["referenceLocator"] for package in converted["packages"] for ref in package.get("externalRefs") or []
         ]
-        assert "pkg:generic/openssl@3.0.11" in locators
+
+    def test_spdx3_carries_the_cpe_a_converter_would_drop(self) -> None:
+        """The whole of the CPE-preservation problem, solved by emitting it."""
+        got = components(
+            spdx3(
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:p",
+                    "name": "openssl",
+                    "software_packageVersion": "3.0.11",
+                    "externalIdentifier": [
+                        {
+                            "externalIdentifierType": "cpe23",
+                            "identifier": "cpe:2.3:a:openssl:openssl:3.0.11:*:*:*:*:*:*:*",
+                        }
+                    ],
+                }
+            )
+        )
+
+        assert got[0]["cpe"] == "cpe:2.3:a:openssl:openssl:3.0.11:*:*:*:*:*:*:*"
+
+    def test_spdx2_carries_both_from_external_refs(self) -> None:
+        got = components(
+            spdx2(
+                {
+                    "name": "openssl",
+                    "SPDXID": "SPDXRef-a",
+                    "versionInfo": "3.0.11",
+                    "externalRefs": [
+                        {"referenceType": "purl", "referenceLocator": "pkg:generic/openssl@3.0.11"},
+                        {
+                            "referenceType": "cpe23Type",
+                            "referenceLocator": "cpe:2.3:a:openssl:openssl:3.0.11:*:*:*:*:*:*:*",
+                        },
+                    ],
+                }
+            )
+        )
+
+        assert got[0]["purl"] == "pkg:generic/openssl@3.0.11"
+        assert got[0]["cpe"].startswith("cpe:2.3:a:openssl")
+
+    def test_a_bare_purl_on_an_spdx2_package_counts(self) -> None:
+        """Not in the spec, but producers write it and the plugins read it."""
+        got = components(spdx2({"name": "jinja2", "SPDXID": "SPDXRef-a", "purl": "pkg:pypi/jinja2@2.11.2"}))
+
+        assert got[0]["purl"] == "pkg:pypi/jinja2@2.11.2"
+
+    @pytest.mark.parametrize("spelling", ["software_Package", "Package", "software:Package"])
+    def test_every_spelling_of_the_type_is_read(self, spelling: str) -> None:
+        got = components(spdx3({"type": spelling, "spdxId": "urn:p", "name": "openssl"}))
+
+        assert len(got) == 1
+
+
+class TestWhatIsRefused:
+    @pytest.mark.parametrize("junk", [b"", b"not json", b"[]", b'"text"', b"\xff\xfe"])
+    def test_a_document_that_is_not_an_object_is_refused(self, junk: bytes) -> None:
+        with pytest.raises(ConversionFailed):
+            to_cyclonedx(junk)
+
+    def test_a_format_that_is_not_spdx_is_refused(self) -> None:
+        with pytest.raises(ConversionFailed, match="not an SPDX document"):
+            to_cyclonedx(json.dumps({"bomFormat": "CycloneDX", "specVersion": "1.6"}).encode())
+
+    def test_a_document_naming_no_package_is_refused(self) -> None:
+        """An empty bill would report as a clean scan."""
+        with pytest.raises(ConversionFailed, match="names no package"):
+            to_cyclonedx(spdx3())
+
+    def test_a_package_without_a_name_is_not_a_component(self) -> None:
+        got = components(
+            spdx3(
+                {"type": "software_Package", "spdxId": "urn:a", "name": "  "},
+                {"type": "software_Package", "spdxId": "urn:b", "name": "real"},
+            )
+        )
+
+        assert [c["name"] for c in got] == ["real"]
+
+    @pytest.mark.parametrize("junk", [None, 5, "text", {"a": 1}])
+    def test_a_malformed_package_list_does_not_raise_out(self, junk) -> None:
+        """Uploads are untrusted, so a wrong type is a refusal, not a traceback."""
+        document = json.loads(spdx2())
+        document["packages"] = junk
+
+        with pytest.raises(ConversionFailed):
+            to_cyclonedx(json.dumps(document).encode())
+
+
+@pytest.mark.skipif(not OSV_SCANNER.exists(), reason="osv-scanner is not installed here")
+class TestTheRealScannerReadsIt:
+    """The claim this whole approach rests on, checked against the binary."""
+
+    def _scan(self, data: bytes, tmp_path: Path) -> dict:
+        path = tmp_path / "derived.cdx.json"
+        path.write_bytes(data)
+        proc = subprocess.run(
+            [str(OSV_SCANNER), "--format", "json", "--sbom", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        return json.loads(proc.stdout) if proc.stdout.strip().startswith("{") else {}
+
+    def test_osv_scanner_finds_vulnerabilities_in_a_derived_copy(self, tmp_path: Path) -> None:
+        derived = to_cyclonedx(
+            spdx3(
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:p",
+                    "name": "jinja2",
+                    "software_packageVersion": "2.11.2",
+                    "software_packageUrl": "pkg:pypi/jinja2@2.11.2",
+                }
+            )
+        )
+
+        found = self._scan(derived, tmp_path)
+
+        matched = [pkg for res in found.get("results", []) for pkg in res.get("packages", [])]
+        assert matched, "osv-scanner matched nothing in the derived copy"
+        assert matched[0]["package"]["name"] == "jinja2"
+        assert len(matched[0].get("vulnerabilities", [])) > 0

@@ -5,8 +5,8 @@ skip telling the uploader to convert the file themselves. The scan path now
 does that conversion, scans the copy, and reports the findings against the
 stored artifact, which is never touched (ADR-004).
 
-The two skips that remain are the honest ones: a deployment with no converter
-installed, and a document no converter will read.
+The one skip that remains is the honest one: a document that names no package
+to scan, which no conversion can rescue.
 """
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ from unittest.mock import patch
 import pytest
 
 from sbomify.apps.plugins.builtins.osv import OSVPlugin
-from sbomify.apps.sboms.conversion import ConversionFailed, ConversionUnavailable
+from sbomify.apps.sboms.conversion import CYCLONEDX_1_6, ConversionFailed
 
 SPDX3 = json.dumps({"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": []})
-CONVERTED = b'{"spdxVersion": "SPDX-2.3", "packages": []}'
+CONVERTED = b'{"bomFormat": "CycloneDX", "specVersion": "1.6", "components": []}'
 CLEAN_SCAN = ('{"results": []}', "", 0)
 
 
@@ -53,7 +53,7 @@ class TestTheScannerReadsTheDerivedCopy:
             return CLEAN_SCAN
 
         with (
-            patch("sbomify.apps.plugins.builtins.osv.convert_sbom", return_value=CONVERTED),
+            patch("sbomify.apps.plugins.builtins.osv.to_cyclonedx", return_value=CONVERTED),
             patch.object(plugin, "_execute_scanner", side_effect=fake_scanner),
         ):
             plugin.assess("sbom-1", spdx3_file)
@@ -63,7 +63,7 @@ class TestTheScannerReadsTheDerivedCopy:
 
     def test_the_stored_document_is_left_alone(self, plugin: OSVPlugin, spdx3_file: Path) -> None:
         with (
-            patch("sbomify.apps.plugins.builtins.osv.convert_sbom", return_value=CONVERTED),
+            patch("sbomify.apps.plugins.builtins.osv.to_cyclonedx", return_value=CONVERTED),
             patch.object(plugin, "_execute_scanner", return_value=CLEAN_SCAN),
         ):
             plugin.assess("sbom-1", spdx3_file)
@@ -73,19 +73,19 @@ class TestTheScannerReadsTheDerivedCopy:
     def test_the_result_says_it_scanned_a_conversion(self, plugin: OSVPlugin, spdx3_file: Path) -> None:
         """A surprising finding has to be traceable to the derivation."""
         with (
-            patch("sbomify.apps.plugins.builtins.osv.convert_sbom", return_value=CONVERTED),
+            patch("sbomify.apps.plugins.builtins.osv.to_cyclonedx", return_value=CONVERTED),
             patch.object(plugin, "_execute_scanner", return_value=CLEAN_SCAN),
         ):
             result = _as_dict(plugin.assess("sbom-1", spdx3_file))
 
         metadata = result["metadata"]
         assert metadata["converted_from"] == "SPDX-3.0"
-        assert metadata["converted_to"] == "SPDX-2.3"
+        assert metadata["converted_to"] == CYCLONEDX_1_6
         assert metadata["sbom_format"] == "spdx3", "the format reported is the one the user uploaded"
 
     def test_the_derived_copy_does_not_outlive_the_scan(self, plugin: OSVPlugin, spdx3_file: Path) -> None:
         with (
-            patch("sbomify.apps.plugins.builtins.osv.convert_sbom", return_value=CONVERTED),
+            patch("sbomify.apps.plugins.builtins.osv.to_cyclonedx", return_value=CONVERTED),
             patch.object(plugin, "_execute_scanner", return_value=CLEAN_SCAN),
         ):
             plugin.assess("sbom-1", spdx3_file)
@@ -99,7 +99,7 @@ class TestTheYoctoOutcomeIsTraceable:
     ) -> None:
         """The path a Yocto document takes, and the one most needing an explanation."""
         with (
-            patch("sbomify.apps.plugins.builtins.osv.convert_sbom", return_value=CONVERTED),
+            patch("sbomify.apps.plugins.builtins.osv.to_cyclonedx", return_value=CONVERTED),
             patch.object(
                 plugin,
                 "_execute_scanner",
@@ -110,45 +110,32 @@ class TestTheYoctoOutcomeIsTraceable:
 
         assert result["findings"][0]["id"] == "osv:no-packages"
         assert result["metadata"]["converted_from"] == "SPDX-3.0"
-        assert result["metadata"]["converted_to"] == "SPDX-2.3"
+        assert result["metadata"]["converted_to"] == CYCLONEDX_1_6
 
 
 class TestWhatStillSkips:
-    def test_no_converter_installed_keeps_the_old_skip(self, plugin: OSVPlugin, spdx3_file: Path) -> None:
-        """A deployment without the binary behaves exactly as it did before."""
-        with (
-            patch("sbomify.apps.plugins.builtins.osv.convert_sbom", side_effect=ConversionUnavailable("none")),
-            patch.object(plugin, "_execute_scanner") as scanner,
-        ):
-            result = _as_dict(plugin.assess("sbom-1", spdx3_file))
+    def test_a_document_naming_no_package_is_its_own_skip(self, plugin: OSVPlugin, tmp_path: Path) -> None:
+        """No binary to be missing any more, so this is the only skip left.
 
-        scanner.assert_not_called()
-        assert result["findings"][0]["id"] == "osv:unsupported-format"
-        assert result["metadata"]["skipped"] is True
-
-    def test_a_converter_that_will_not_run_says_which_problem_it_is(self, plugin: OSVPlugin, spdx3_file: Path) -> None:
-        """Installed but unrunnable is not the same as absent.
-
-        An operator told "no converter installed" would go looking for a
-        missing binary rather than a wrong architecture.
+        It runs through the real emitter rather than a patched one: an SPDX 3
+        document with an empty graph is exactly the case that used to reach the
+        scanner as an empty bill and report back as a clean scan.
         """
-        with (
-            patch(
-                "sbomify.apps.plugins.builtins.osv.convert_sbom",
-                side_effect=ConversionUnavailable("converter could not be run: [Errno 8] Exec format error"),
-            ),
-            patch.object(plugin, "_execute_scanner") as scanner,
-        ):
-            result = _as_dict(plugin.assess("sbom-1", spdx3_file))
+        path = tmp_path / "empty.json"
+        path.write_text(SPDX3)
+
+        with patch.object(plugin, "_execute_scanner") as scanner:
+            result = _as_dict(plugin.assess("sbom-1", path))
 
         scanner.assert_not_called()
-        assert result["findings"][0]["id"] == "osv:unsupported-format"
-        assert "Exec format error" in result["metadata"]["conversion_error"]
+        assert result["findings"][0]["id"] == "osv:conversion-failed"
+        assert result["metadata"]["skipped"] is True
+        assert "names no package" in result["metadata"]["conversion_error"]
 
     def test_a_document_the_converter_refuses_is_its_own_skip(self, plugin: OSVPlugin, spdx3_file: Path) -> None:
         with (
             patch(
-                "sbomify.apps.plugins.builtins.osv.convert_sbom",
+                "sbomify.apps.plugins.builtins.osv.to_cyclonedx",
                 side_effect=ConversionFailed("no SPDX document found"),
             ),
             patch.object(plugin, "_execute_scanner") as scanner,
@@ -167,7 +154,7 @@ class TestFormatsTheScannerAlreadyReads:
         path.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6", "components": []}')
 
         with (
-            patch("sbomify.apps.plugins.builtins.osv.convert_sbom") as convert,
+            patch("sbomify.apps.plugins.builtins.osv.to_cyclonedx") as convert,
             patch.object(plugin, "_execute_scanner", return_value=CLEAN_SCAN),
         ):
             plugin.assess("sbom-1", path)
@@ -179,7 +166,7 @@ class TestFormatsTheScannerAlreadyReads:
         path.write_text('{"spdxVersion": "SPDX-2.3", "packages": []}')
 
         with (
-            patch("sbomify.apps.plugins.builtins.osv.convert_sbom") as convert,
+            patch("sbomify.apps.plugins.builtins.osv.to_cyclonedx") as convert,
             patch.object(plugin, "_execute_scanner", return_value=CLEAN_SCAN),
         ):
             plugin.assess("sbom-1", path)

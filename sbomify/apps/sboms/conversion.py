@@ -7,139 +7,169 @@ hand is the workaround this module exists to stop shipping, so the scan path
 derives a copy in a format the scanner knows, scans that, and reports the
 findings against the original.
 
-The conversion is lossy by construction, and that is survivable because of
-what the scanners actually read. They match on package identity, so a copy
-carrying the packages and their purls is enough for the scan; the profile data
-a converter drops, SPDX 3 security statements among it, is read from the
-stored original instead.
+The copy carries what a scanner matches on and nothing else: a component per
+package, with the purl and the CPE it was identified by. Everything else a
+full converter would carry, files, relationships, licences, and the SPDX 3
+security profile among it, is read from the stored original instead, which is
+where it is accurate.
+
+Written here rather than shelled out to a converter because nothing
+off-the-shelf reads the format that is the problem. SPDX 3 is what the
+scanners refuse, and protobom and cyclonedx-cli both stop at SPDX 2.3, while
+the Python spdx-tools can write SPDX 3 and not read it. sbomify already reads
+SPDX 3 in five plugins, so the copy is emitted from the same parse rather than
+from a second toolchain with its own losses to patch up.
 """
 
 from __future__ import annotations
 
 import json
-import logging
-import shutil
-import subprocess  # nosec B404 - fixed argv, no shell, input is a temp file we wrote
-import tempfile
-from pathlib import Path
 from typing import Any
 
-from django.conf import settings
+#: What the derived copy declares itself to be. Pinned rather than latest:
+#: Dependency Track is the other consumer and reads 1.6.
+CYCLONEDX_SPEC_VERSION = "1.6"
+CYCLONEDX_1_6 = "CycloneDX-1.6"
 
-logger = logging.getLogger(__name__)
+#: External-reference types that name a package in SPDX 2.x, mapped to the
+#: CycloneDX field that carries the same identifier.
+_SPDX2_IDENTIFIERS = {
+    "purl": "purl",
+    "cpe22Type": "cpe",
+    "cpe23Type": "cpe",
+}
 
-#: Target formats, spelled the way the converter names them on its command line.
-#: The CycloneDX target is pinned to 1.6: the converter emits 1.7 by default and
-#: Dependency Track is the consumer.
-SPDX_2_3_JSON = "spdx-json"
-CYCLONEDX_1_6_JSON = "cyclonedx-json@1.6"
-
-DEFAULT_TIMEOUT_SECONDS = 120
-
-#: What a document of each target format must say about itself. A converter
-#: that writes an error object, an empty object or a bare list has produced
-#: valid JSON and no SBOM, and handing that to a scanner would report a
-#: conversion failure as a scanner fault.
-_TARGET_MARKERS: dict[str, tuple[str, str | None]] = {
-    SPDX_2_3_JSON: ("spdxVersion", None),
-    CYCLONEDX_1_6_JSON: ("bomFormat", "CycloneDX"),
+#: The same, for SPDX 3 external identifiers.
+_SPDX3_IDENTIFIERS = {
+    "packageUrl": "purl",
+    "packageURL": "purl",
+    "purl": "purl",
+    "cpe22": "cpe",
+    "cpe23": "cpe",
 }
 
 
-class ConversionUnavailable(RuntimeError):
-    """No converter is installed, so the caller keeps whatever it did before."""
-
-
 class ConversionFailed(RuntimeError):
-    """The converter ran and would not read the document."""
+    """The document is not one this can express as CycloneDX."""
 
 
-def converter_path() -> str | None:
-    """The converter binary, or ``None`` when it is not installed.
+def to_cyclonedx(data: bytes) -> bytes:
+    """Return ``data`` re-expressed as a CycloneDX 1.6 document.
 
-    Separated from :func:`convert_sbom` so a caller can decide what to do about
-    a missing converter before it has a document in hand.
+    Accepts SPDX 2.x and SPDX 3 JSON. Raises :class:`ConversionFailed` for
+    anything else, and for a document that yields no component at all, because
+    handing a scanner an empty bill would report as a clean scan.
     """
-    configured = getattr(settings, "SBOM_CONVERTER_PATH", "") or "syft"
-    # which() alone, deliberately. It resolves a bare name on PATH and takes a
-    # path as given, and it checks the file is executable. Falling back to "is
-    # there a file by this name" would let a syft sitting in the working
-    # directory answer for the bare default.
-    return shutil.which(configured)
-
-
-def convert_sbom(data: bytes, target_format: str, *, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> bytes:
-    """Return ``data`` re-encoded as ``target_format``.
-
-    Raises :class:`ConversionUnavailable` when no converter is installed and
-    :class:`ConversionFailed` when one is but will not read this document.
-    Callers distinguish the two: the first is a deployment that cannot convert
-    and should degrade to its old behaviour, the second is a document nothing
-    can do anything with.
-    """
-    binary = converter_path()
-    if binary is None:
-        raise ConversionUnavailable("no SBOM converter is installed")
-
-    with tempfile.TemporaryDirectory(prefix="sbom-convert-") as workdir:
-        # Written to a file rather than piped: the converter reads stdin only
-        # when told to, and a real path keeps its error messages legible.
-        source = Path(workdir) / "source.json"
-        source.write_bytes(data)
-        argv = [binary, "convert", str(source), "-o", target_format]
-        try:
-            # The scanner flags every subprocess call and asks for an audit,
-            # and its inline suppression is not honoured in this repo, so the
-            # audit is written here instead: argv is a fixed list run with
-            # shell=False, so nothing in it is interpreted as a command.
-            # The binary is an operator setting rather than anything a request
-            # supplies, the source is a path this function just created, and
-            # the format is one of the module constants above.
-            completed = subprocess.run(  # nosec B603
-                argv,
-                capture_output=True,
-                timeout=timeout,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise ConversionFailed(f"conversion timed out after {timeout}s") from exc
-        except OSError as exc:
-            raise ConversionUnavailable(f"converter could not be run: {exc}") from exc
-
-    stdout = completed.stdout or b""
-    # The converter reports a document it cannot read on stderr and still exits
-    # 0, so the body is the reliable failure signal rather than the return code.
-    # Parsed rather than sniffed: output that merely starts like JSON can still
-    # be truncated, and handing that to a scanner turns a conversion failure
-    # into what looks like a scanner fault.
-    if completed.returncode == 0 and stdout.strip():
-        try:
-            document = json.loads(stdout)
-        except ValueError as exc:
-            raise ConversionFailed(f"converter produced no usable document: {exc}") from exc
-        _require_target_shape(document, target_format)
-        return stdout
-    detail = (completed.stderr or b"").decode("utf-8", "replace").strip().splitlines()
-    raise ConversionFailed(detail[-1] if detail else f"converter exited {completed.returncode}")
-
-
-def _require_target_shape(document: Any, target_format: str) -> None:
-    """Raise unless the document says it is the format we asked for.
-
-    Syntax is not enough: valid JSON that is not an SBOM would travel on to a
-    scanner, which would then report the conversion's failure as its own. The
-    check is the one field the format states about itself, not a schema
-    validation, because this is a converter's own output rather than an
-    upload and the strict validation already runs at the upload boundary.
-    """
-    marker = _TARGET_MARKERS.get(target_format)
-    if marker is None:
-        return
-    field, expected = marker
+    try:
+        document = json.loads(data.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ConversionFailed(f"not a JSON document: {exc}") from exc
     if not isinstance(document, dict):
-        raise ConversionFailed(
-            f"converter produced no usable document: expected an object, got {type(document).__name__}"
+        raise ConversionFailed(f"expected an object, got {type(document).__name__}")
+
+    from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+    if is_spdx3(document):
+        components = _components_from_spdx3(document)
+        source = "SPDX-3.0"
+    elif document.get("spdxVersion"):
+        components = _components_from_spdx2(document)
+        source = str(document.get("spdxVersion"))
+    else:
+        raise ConversionFailed("not an SPDX document")
+
+    if not components:
+        raise ConversionFailed(f"{source} document names no package to scan")
+
+    return json.dumps(
+        {
+            "bomFormat": "CycloneDX",
+            "specVersion": CYCLONEDX_SPEC_VERSION,
+            "version": 1,
+            "metadata": {
+                # Says what this is, so a copy that outlives its scan directory
+                # cannot be mistaken for something a customer uploaded.
+                "tools": {"components": [{"type": "application", "name": "sbomify", "group": "derived-for-scan"}]},
+                "properties": [{"name": "sbomify:derived_from", "value": source}],
+            },
+            "components": components,
+        }
+    ).encode("utf-8")
+
+
+def _component(ref: Any, name: Any, version: Any) -> dict[str, Any] | None:
+    """The shared shape, or ``None`` for an entry that names nothing."""
+    if not isinstance(name, str) or not name.strip():
+        return None
+    component: dict[str, Any] = {"type": "library", "name": name.strip()}
+    if isinstance(ref, str) and ref:
+        component["bom-ref"] = ref
+    if isinstance(version, str) and version.strip():
+        component["version"] = version.strip()
+    return component
+
+
+def _components_from_spdx3(document: dict[str, Any]) -> list[dict[str, Any]]:
+    """A component per ``software_Package`` in the graph."""
+    from sbomify.apps.plugins.builtins._spdx3_helpers import (
+        iter_spdx3_external_identifiers,
+        spdx3_package_purl,
+    )
+    from sbomify.apps.plugins.builtins._spdx_shared import iter_spdx3_elements
+
+    components: list[dict[str, Any]] = []
+    for element in iter_spdx3_elements(document):
+        if not isinstance(element, dict):
+            continue
+        # The tail alone: a type arrives as a full IRI, as security:Foo, or in
+        # the underscore form, and only the class name is stable across them.
+        tail = str(element.get("type") or element.get("@type") or "").rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+        if tail not in ("software_Package", "Package"):
+            continue
+        component = _component(
+            element.get("spdxId") or element.get("@id"),
+            element.get("name"),
+            element.get("software_packageVersion"),
         )
-    value = document.get(field)
-    if not value or (expected is not None and value != expected):
-        raise ConversionFailed(f"converter produced no usable document: no {field} in the output")
+        if component is None:
+            continue
+        purl = spdx3_package_purl(element)
+        if purl:
+            component["purl"] = purl
+        for ext in iter_spdx3_external_identifiers(element):
+            field = _SPDX3_IDENTIFIERS.get(str(ext.get("externalIdentifierType") or "").rsplit("/", 1)[-1])
+            identifier = ext.get("identifier")
+            if field and field not in component and isinstance(identifier, str) and identifier:
+                component[field] = identifier
+        components.append(component)
+    return components
+
+
+def _components_from_spdx2(document: dict[str, Any]) -> list[dict[str, Any]]:
+    """A component per package, with the identifiers its external refs name."""
+    packages = document.get("packages")
+    if not isinstance(packages, list):
+        return []
+
+    components: list[dict[str, Any]] = []
+    for package in packages:
+        if not isinstance(package, dict):
+            continue
+        component = _component(package.get("SPDXID"), package.get("name"), package.get("versionInfo"))
+        if component is None:
+            continue
+        # Not in the spec, which puts identifiers in externalRefs, but
+        # producers write it and the plugins here already read it.
+        purl = package.get("purl")
+        if isinstance(purl, str) and purl:
+            component["purl"] = purl
+        refs = package.get("externalRefs")
+        for ref in refs if isinstance(refs, list) else []:
+            if not isinstance(ref, dict):
+                continue
+            field = _SPDX2_IDENTIFIERS.get(str(ref.get("referenceType") or ""))
+            locator = ref.get("referenceLocator")
+            if field and field not in component and isinstance(locator, str) and locator:
+                component[field] = locator
+        components.append(component)
+    return components
