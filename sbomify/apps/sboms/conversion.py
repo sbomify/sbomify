@@ -9,9 +9,9 @@ findings against the original.
 
 The copy carries what a scanner matches on and nothing else: a component per
 package, with the purl and the CPE it was identified by. Everything else a
-full converter would carry, files, relationships, licences, and the SPDX 3
-security profile among it, is read from the stored original instead, which is
-where it is accurate.
+full converter would carry, among them files, relationships, licences and
+the SPDX 3 security profile, is read from the stored original instead, which
+is where it is accurate.
 
 Written here rather than shelled out to a converter because nothing
 off-the-shelf reads the format that is the problem. SPDX 3 is what the

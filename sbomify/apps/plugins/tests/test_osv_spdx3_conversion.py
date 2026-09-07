@@ -174,7 +174,7 @@ class TestFormatsTheScannerAlreadyReads:
         convert.assert_not_called()
 
 
-class TestCarryingTheCpeMustNotReadAsAcleanScan:
+class TestCarryingTheCpeMustNotReadAsACleanScan:
     """Preserving CPEs changed what osv-scanner counts, and nearly cost the guard.
 
     A Yocto document's purls are a type osv-scanner rejects. With nothing else

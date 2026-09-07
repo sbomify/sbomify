@@ -204,18 +204,28 @@ class OSVPlugin(AssessmentPlugin):
         scan_path = sbom_path
         temp_copy: Path | None = None
 
-        if converted_from is not None:
-            # The file on disk still holds the original, so the derived bytes
-            # need a file of their own for the scanner to read.
-            temp_copy = sbom_path.parent / f"{sbom_path.stem}.converted{suffix}"
-            temp_copy.write_bytes(sbom_bytes)
-            scan_path = temp_copy
-            logger.debug(f"[OSV] Wrote derived copy for scanning: {temp_copy}")
-        elif not str(sbom_path).endswith(suffix):
-            temp_copy = sbom_path.parent / f"{sbom_path.stem}{suffix}"
-            shutil.copy2(sbom_path, temp_copy)
-            scan_path = temp_copy
-            logger.debug(f"[OSV] Created temp copy with suffix {suffix}: {temp_copy}")
+        # The cleanup below runs in the scan's own finally, which this write
+        # precedes, so a failure here has to clear up after itself: a full
+        # disk would otherwise raise out of assess() where every other read
+        # failure returns a result, and leave a half-written file behind.
+        try:
+            if converted_from is not None:
+                # The file on disk still holds the original, so the derived bytes
+                # need a file of their own for the scanner to read.
+                temp_copy = sbom_path.parent / f"{sbom_path.stem}.converted{suffix}"
+                temp_copy.write_bytes(sbom_bytes)
+                scan_path = temp_copy
+                logger.debug(f"[OSV] Wrote derived copy for scanning: {temp_copy}")
+            elif not str(sbom_path).endswith(suffix):
+                temp_copy = sbom_path.parent / f"{sbom_path.stem}{suffix}"
+                shutil.copy2(sbom_path, temp_copy)
+                scan_path = temp_copy
+                logger.debug(f"[OSV] Created temp copy with suffix {suffix}: {temp_copy}")
+        except OSError as exc:
+            logger.error(f"[OSV] Could not stage SBOM {sbom_id} for scanning: {exc}")
+            if temp_copy is not None:
+                temp_copy.unlink(missing_ok=True)
+            return self._create_error_result(f"Failed to prepare SBOM for scanning: {exc}")
 
         try:
             # Execute osv-scanner

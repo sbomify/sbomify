@@ -186,7 +186,10 @@ class TestTheRealScannerReadsIt:
         path = tmp_path / "derived.cdx.json"
         path.write_bytes(data)
         proc = subprocess.run(
-            [str(OSV_SCANNER), "--format", "json", "--sbom", str(path)],
+            # The plugin's own invocation, so a flag the scanner stops
+            # accepting fails here rather than passing under a form the
+            # plugin does not use.
+            [str(OSV_SCANNER), "scan", "source", "--lockfile", str(path), "--format", "json"],
             capture_output=True,
             text=True,
             timeout=300,
