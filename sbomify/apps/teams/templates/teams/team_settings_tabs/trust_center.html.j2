@@ -95,6 +95,36 @@
             </form>
         </section>
     {% endif %}
+    {# Vulnerability posture - team_obj is the Django model; team is a Pydantic schema #}
+    {% if team.is_public %}
+        <section class="mt-8 pt-8 border-t border-border">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <h3 class="text-sm font-semibold text-text m-0">Publish vulnerability posture</h3>
+                <div class="flex items-center gap-3">
+                    {% if team_obj.publish_vulnerability_posture %}
+                        <c-badges.success>Enabled</c-badges.success>
+                    {% else %}
+                        <c-badges.secondary>Disabled</c-badges.secondary>
+                    {% endif %}
+                    <form method="post"
+                          action="{% url 'teams:team_settings' team.key %}"
+                          class="flex-shrink-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="vulnerability_posture_action" value="update">
+                        <input type="hidden" name="publish_vulnerability_posture" value="false">
+                        <input type="hidden" name="active_tab" value="trust-center">
+                        <c-forms.toggle id="vuln-posture-toggle" name="publish_vulnerability_posture" value="true" aria-label="Publish vulnerability posture on the Trust Center" checked="{{ team_obj.publish_vulnerability_posture|yesno:'1,' }}" disabled="{{ can_administer|yesno:',1' }}" onchange="this.form.submit()" />
+                        <button type="submit" class="sr-only">Save vulnerability posture setting</button>
+                    </form>
+                </div>
+            </div>
+            <p class="text-sm text-text-muted mt-2 m-0">
+                Show the vulnerability counts and findings for each release on your public release pages.
+                Anyone with the link can read them, so this is off until you turn it on. Only public
+                components are ever counted, and VEX statements are applied first.
+            </p>
+        </section>
+    {% endif %}
     {# TEA - uses team_obj (Django model) for tea_enabled since team is a Pydantic schema #}
     {% if team.is_public %}
         <section class="mt-8 pt-8 border-t border-border">
