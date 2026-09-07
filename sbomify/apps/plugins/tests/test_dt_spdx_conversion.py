@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
-from sbomify.apps.sboms.conversion import ConversionFailed, ConversionUnavailable
+from sbomify.apps.sboms.conversion import ConversionFailed
 
 SPDX_2_3 = json.dumps({"spdxVersion": "SPDX-2.3", "name": "image", "packages": []})
 SPDX_3 = json.dumps({"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": []})
@@ -165,7 +165,7 @@ class TestTheUploadCarriesTheConversion:
 
     def test_the_upload_gets_cyclonedx_not_the_spdx(self, plugin: DependencyTrackPlugin, scannable) -> None:
         convert = patch(
-            "sbomify.apps.plugins.builtins.dependency_track.convert_sbom",
+            "sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx",
             return_value=CONVERTED,
         )
         captured, _ = self._assess_capturing_upload(plugin, scannable, convert)
@@ -176,25 +176,28 @@ class TestTheUploadCarriesTheConversion:
     def test_the_stored_document_is_left_alone(self, plugin: DependencyTrackPlugin, scannable) -> None:
         _, path, _ = scannable
         convert = patch(
-            "sbomify.apps.plugins.builtins.dependency_track.convert_sbom",
+            "sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx",
             return_value=CONVERTED,
         )
         self._assess_capturing_upload(plugin, scannable, convert)
 
         assert path.read_text() == SPDX_2_3
 
-    def test_no_converter_installed_is_a_skip_that_says_so(self, plugin: DependencyTrackPlugin, scannable) -> None:
-        """A deployment without the binary behaves as it always did."""
+    def test_a_document_that_cannot_be_expressed_is_a_skip_that_says_so(
+        self, plugin: DependencyTrackPlugin, scannable
+    ) -> None:
+        """No binary to be missing any more, so the only skip left is a document
+        the emitter cannot express as CycloneDX."""
         convert = patch(
-            "sbomify.apps.plugins.builtins.dependency_track.convert_sbom",
-            side_effect=ConversionUnavailable("no SBOM converter is installed"),
+            "sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx",
+            side_effect=ConversionFailed("SPDX-3.0 document names no package to scan"),
         )
         _, result = self._assess_capturing_upload(plugin, scannable, convert)
 
         assert result["metadata"].get("skipped") is True
-        assert "no SBOM converter is installed" in result["metadata"]["conversion_error"]
-        # The longer sweep backoff, so a converter that is not there is not
-        # re-attempted on every pass.
+        assert "names no package to scan" in result["metadata"]["conversion_error"]
+        # The longer sweep backoff, so a document nothing can do anything with
+        # is not re-attempted on every pass.
         assert result["metadata"]["unsupported_input"] is True
 
     def test_a_poll_neither_converts_nor_needs_a_converter(self, plugin: DependencyTrackPlugin, scannable) -> None:
@@ -220,7 +223,7 @@ class TestTheUploadCarriesTheConversion:
             patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
             patch.object(DependencyTrackPlugin, "_select_dt_server", return_value=server),
             patch.object(DependencyTrackPlugin, "_resolve_release_context", return_value=[]),
-            patch("sbomify.apps.plugins.builtins.dependency_track.convert_sbom") as convert,
+            patch("sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx") as convert,
             patch.object(DependencyTrackPlugin, "_poll_results", side_effect=fake_poll),
         ):
             plugin.assess(str(sbom.id), path)
@@ -230,7 +233,7 @@ class TestTheUploadCarriesTheConversion:
 
     def test_a_document_no_converter_reads_is_a_skip(self, plugin: DependencyTrackPlugin, scannable) -> None:
         convert = patch(
-            "sbomify.apps.plugins.builtins.dependency_track.convert_sbom",
+            "sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx",
             side_effect=ConversionFailed("no SPDX document found"),
         )
         _, result = self._assess_capturing_upload(plugin, scannable, convert)
@@ -253,7 +256,7 @@ class TestWhatIsNotConverted:
             raise RuntimeError("stop after the upload was handed its bytes")
 
         with (
-            patch("sbomify.apps.plugins.builtins.dependency_track.convert_sbom") as convert,
+            patch("sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx") as convert,
             patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
             patch.object(DependencyTrackPlugin, "_select_dt_server", return_value=server),
             patch.object(DependencyTrackPlugin, "_resolve_release_context", return_value=[]),
@@ -273,7 +276,7 @@ class TestWhatIsNotConverted:
         sbom, path, _ = _records(tmp_path, SPDX_2_3, "spdx", "dtgateteam", "sbom.json")
 
         with (
-            patch("sbomify.apps.plugins.builtins.dependency_track.convert_sbom") as convert,
+            patch("sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx") as convert,
             patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=False),
         ):
             plugin.assess(str(sbom.id), path)

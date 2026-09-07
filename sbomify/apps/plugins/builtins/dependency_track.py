@@ -31,10 +31,8 @@ from sbomify.apps.plugins.sdk.results import (
     PluginMetadata,
 )
 from sbomify.apps.sboms.conversion import (
-    CYCLONEDX_1_6_JSON,
     ConversionFailed,
-    ConversionUnavailable,
-    convert_sbom,
+    to_cyclonedx,
 )
 from sbomify.logging import getLogger
 
@@ -227,8 +225,8 @@ class DependencyTrackPlugin(AssessmentPlugin):
             # the initial tag set, then raise RetryLater to poll for results.
             if needs_conversion:
                 try:
-                    sbom_bytes = convert_sbom(sbom_bytes, CYCLONEDX_1_6_JSON)
-                except (ConversionUnavailable, ConversionFailed) as exc:
+                    sbom_bytes = to_cyclonedx(sbom_bytes)
+                except ConversionFailed as exc:
                     logger.warning(f"[DT] SBOM {sbom_id} could not be converted to CycloneDX: {exc}")
                     return self._create_unconvertible_result(str(exc))
                 logger.info(f"[DT] Uploading SBOM {sbom_id} as a derived CycloneDX copy")
