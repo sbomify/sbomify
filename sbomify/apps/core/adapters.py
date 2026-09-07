@@ -2,15 +2,47 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import parse_qsl, quote, urlencode
 
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from allauth.socialaccount.models import SocialLogin
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from django.contrib.auth import get_user_model
 from django.http import HttpRequest
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+class SpaceEncodedOAuth2Client(OAuth2Client):  # type: ignore[misc]
+    """An authorize URL whose spaces are ``%20``, not ``+``.
+
+    ``urlencode`` writes a space as ``+``, which reads back as a space only
+    under form-urlencoding rules. A generic URI reader follows RFC 3986,
+    where ``+`` is a literal character, so any hop that decodes this query
+    and re-encodes it conservatively escapes the scope separators to
+    ``%2B``. Keycloak then reads all three scopes as one unknown scope
+    named ``openid+email+profile`` and refuses the login.
+
+    That is the shape of the failures: the value is correct when it leaves
+    here, most logins work, and a minority arrive escaped. ``%20`` means a
+    space to both readers and comes back unchanged from a decode/encode
+    round trip, so the ambiguity the mangling relies on is gone.
+
+    Nothing else about the URL moves. A literal ``+``, which a PKCE
+    challenge can contain, is ``%2B`` either way.
+    """
+
+    def get_redirect_url(self, authorization_url: str, scope: Any, extra_params: dict[str, Any]) -> str:
+        url: str = super().get_redirect_url(authorization_url, scope, extra_params)
+        base, separator, query = url.partition("?")
+        if not separator:
+            return url
+        # Re-encode what the base class built rather than rebuilding the
+        # parameters here, so a parameter allauth adds later still travels.
+        pairs = parse_qsl(query, keep_blank_values=True)
+        return f"{base}?{urlencode(pairs, quote_via=quote)}"
 
 
 class CustomAccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]

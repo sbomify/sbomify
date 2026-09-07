@@ -20,3 +20,14 @@ class CoreConfig(AppConfig):
         from sbomify.apps.core.posthog_service import shutdown
 
         atexit.register(shutdown)
+
+        # allauth builds the OpenID Connect provider's URLs from a fixed
+        # adapter class, so client_class is the seam it leaves for choosing a
+        # client. Pointing it at ours is what stops the authorize URL spelling
+        # its scope separators with a character that only means a space under
+        # form-urlencoding rules.
+        from allauth.socialaccount.providers.openid_connect.views import OpenIDConnectOAuth2Adapter
+
+        from sbomify.apps.core.adapters import SpaceEncodedOAuth2Client
+
+        OpenIDConnectOAuth2Adapter.client_class = SpaceEncodedOAuth2Client
