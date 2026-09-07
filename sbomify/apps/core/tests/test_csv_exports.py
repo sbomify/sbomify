@@ -286,10 +286,18 @@ class TestEndpoints:
         import re
 
         root = pathlib.Path(__file__).resolve().parents[3]
+        # The invariant core.apis._csv_response established is both directives
+        # together, so accept nothing weaker: "private" alone still lets a
+        # browser keep a copy, and a guard that accepts half the rule stops
+        # describing the rule.
         assigns_uncacheable = re.compile(
-            r"""\[["']Cache-Control["']\]\s*=\s*["'][^"']*\b(?:no-store|private)\b""",
+            r"""\[["']Cache-Control["']\]\s*=\s*(["'])(?=[^"']*\bprivate\b)(?=[^"']*\bno-store\b)[^"']*\1""",
             re.IGNORECASE,
         )
+        # Quoting and spacing around the content type are the author's choice,
+        # and a detector that misses one is worse than a checker that does: the
+        # endpoint would never be looked at.
+        builds_csv = re.compile(r"""content_type\s*=\s*["']text/csv""", re.IGNORECASE)
         offenders = []
         for path in root.rglob("*.py"):
             parts = path.parts
@@ -297,7 +305,7 @@ class TestEndpoints:
                 continue
             lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
             for index, line in enumerate(lines):
-                if 'content_type="text/csv' not in line:
+                if not builds_csv.search(line):
                     continue
                 # The directive belongs with the response it is set on, so look
                 # only at the few lines that build and return this one.
