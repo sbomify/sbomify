@@ -70,8 +70,16 @@ class TestCompoundShapes:
     document declared its licence exactly as the 3.0.1 model prescribes.
     """
 
-    APACHE = {"type": "expandedlicensing_ListedLicense", "spdxId": "https://spdx.org/licenses/Apache-2.0", "name": "Apache-2.0"}
-    GPL = {"type": "expandedlicensing_ListedLicense", "spdxId": "https://spdx.org/licenses/GPL-2.0-only", "name": "GPL-2.0-only"}
+    APACHE = {
+        "type": "expandedlicensing_ListedLicense",
+        "spdxId": "https://spdx.org/licenses/Apache-2.0",
+        "name": "Apache-2.0",
+    }
+    GPL = {
+        "type": "expandedlicensing_ListedLicense",
+        "spdxId": "https://spdx.org/licenses/GPL-2.0-only",
+        "name": "GPL-2.0-only",
+    }
     EXCEPTION = {
         "type": "expandedlicensing_ListedLicenseException",
         "spdxId": "urn:acme:classpath",
@@ -239,3 +247,34 @@ class TestPluginsFailOnDanglingLicence:
         for plugin in (BSICompliancePlugin(), CISAMinimumElementsPlugin()):
             statuses = self._licence_statuses(plugin._validate_spdx3(doc))
             assert "fail" not in statuses
+
+
+class TestThePackageIdIsReadHonestly:
+    """The relationship's ``from`` is a string, so anything else can only fail
+    to match, and a miss reads back as "no licence" rather than as a bad id."""
+
+    def _graph(self, package):
+        return (
+            [
+                {
+                    "from": "urn:pkg",
+                    "relationshipType": "hasDeclaredLicense",
+                    "to": ["urn:lic"],
+                }
+            ],
+            {"urn:lic": {"type": "expandedlicensing_ListedLicense", "spdxId": "https://spdx.org/licenses/MIT"}},
+            package,
+        )
+
+    def test_an_id_given_only_as_at_id_resolves(self):
+        rels, lics, package = self._graph({"@id": "urn:pkg"})
+        assert get_spdx3_package_license(package, rels, lics, "hasDeclaredLicense") == "MIT"
+
+    def test_a_null_spdx_id_falls_back_to_at_id(self):
+        """A default argument does not fire when the key is there holding null."""
+        rels, lics, package = self._graph({"spdxId": None, "@id": "urn:pkg"})
+        assert get_spdx3_package_license(package, rels, lics, "hasDeclaredLicense") == "MIT"
+
+    def test_an_id_that_is_not_a_string_resolves_to_nothing(self):
+        rels, lics, package = self._graph({"spdxId": {"nested": "urn:pkg"}})
+        assert get_spdx3_package_license(package, rels, lics, "hasDeclaredLicense") is None

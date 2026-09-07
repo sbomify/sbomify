@@ -543,8 +543,12 @@ def get_spdx3_package_license(
     ``None`` when no relationship exists or every target is unresolvable —
     the callers treat both as the same failure, deliberately.
     """
-    pkg_id = package.get("spdxId", package.get("@id", ""))
-    if not pkg_id:
+    # ``or`` rather than a default argument: a package carrying spdxId as null
+    # would otherwise take the null over the @id beside it. The relationship's
+    # ``from`` is a string, so anything else here can only fail to match and
+    # would read back as "no licence" rather than as the malformed id it is.
+    pkg_id = package.get("spdxId") or package.get("@id")
+    if not isinstance(pkg_id, str) or not pkg_id:
         return None
     for rel in relationships:
         if not isinstance(rel, dict):
