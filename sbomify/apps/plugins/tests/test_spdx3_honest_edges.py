@@ -41,19 +41,19 @@ class TestBsiFloorMessage:
 
 
 class TestOsvSkipMessage:
-    def test_says_the_converter_is_missing_rather_than_asking_for_a_manual_one(self) -> None:
-        """This path now means the deployment has no converter, not that the reader needs one.
+    def test_does_not_ask_the_reader_to_convert_the_document_themselves(self) -> None:
+        """The message used to name ``syft convert`` as the workaround.
 
-        The message used to name ``syft convert`` as the workaround. The
-        server derives that copy itself now, so reaching this result says no
-        converter is available here, and telling a reader to convert the
-        document by hand would point them at the wrong problem.
+        The server derives that copy itself now, and it derives it in process,
+        so the only way a reader sees a skip is a document that names nothing
+        to scan. Telling them to run a converter would point at a problem that
+        no longer exists, and at a binary that is no longer shipped.
         """
-        result = OSVPlugin()._create_unsupported_format_result()
+        result = OSVPlugin()._create_conversion_failed_result("names no package to scan")
 
         description = result.findings[0].description
-        assert "no working converter is available" in description
-        assert "syft convert" not in description
+        assert "syft" not in description.lower()
+        assert "convert" in description.lower(), "it should still say a conversion was involved"
 
 
 class TestOneDetector:

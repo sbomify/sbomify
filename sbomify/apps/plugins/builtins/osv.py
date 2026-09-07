@@ -412,43 +412,6 @@ class OSVPlugin(AssessmentPlugin):
             },
         )
 
-    def _create_unsupported_format_result(self, reason: str = "") -> AssessmentResult:
-        """SPDX 3.0 on a deployment with no usable converter, reported as skipped.
-
-        "Unusable" rather than "absent" on purpose: a converter can also be
-        installed and refuse to run, for the wrong architecture or without the
-        permission to execute, and an operator reading "not installed" would go
-        looking for the wrong thing. The reason travels in the metadata.
-
-        This returns before the scanner is invoked, so it is the earliest of the
-        plugin's "nothing was examined" paths and was the last one still missing
-        the marker that says so. Without ``skipped`` the run read as a clean
-        scan: ``_is_run_passing`` put a green "no known vulnerabilities" badge on
-        an artifact nothing opened, and ``lifecycle.run_scanned`` took the empty
-        findings array as evidence and resolved everything a previous, real scan
-        had found. ``unsupported_format`` was in the metadata but nothing reads
-        it, and the sibling skips had moved on without this one.
-
-        Carries ``unsupported_input`` for the same reason the spec-version skip
-        does: re-running buys nothing until osv-scanner learns the format.
-        """
-        return self.create_skipped_result(
-            finding_id="osv:unsupported-format",
-            title="SPDX 3.0 Not Supported",
-            description=(
-                "osv-scanner does not read SPDX 3.0, and no working converter is available "
-                "here to derive a copy it can read, so this SBOM was not scanned for "
-                "vulnerabilities."
-            ),
-            unsupported_input=True,
-            extra_metadata={
-                "scanner": "osv-scanner",
-                "sbom_format": "spdx3",
-                "unsupported_format": True,
-                **({"conversion_error": reason[:500]} if reason else {}),
-            },
-        )
-
     def _execute_scanner(
         self,
         scanner_path: str,
