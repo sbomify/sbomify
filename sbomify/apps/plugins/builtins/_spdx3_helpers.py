@@ -504,11 +504,19 @@ def _resolve_compound_license(
             members = [members]
         if not isinstance(members, list):
             return None
+        # Every member is resolved before any of them is judged, so the walk
+        # visits the same elements whatever the outcome, and the cycle guard
+        # sees the same ids either way.
         resolved_members = [_operand(m) for m in members]
-        if len(resolved_members) < 2 or any(m is None for m in resolved_members):
-            return None  # a set with an unresolvable member must not half-score
+        if len(resolved_members) < 2:
+            return None
+        operands: list[str] = []
+        for resolved in resolved_members:
+            if resolved is None:
+                return None  # a set with an unresolvable member must not half-score
+            operands.append(resolved)
         joiner = " AND " if bare_type.endswith("ConjunctiveLicenseSet") else " OR "
-        return joiner.join(resolved_members)  # type: ignore[arg-type]
+        return joiner.join(operands)
 
     if bare_type.endswith("OrLaterOperator"):
         subject = _operand(_field(element, "subjectLicense"))
