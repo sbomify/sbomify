@@ -271,9 +271,12 @@ class TestCISAPluginIntegration:
         component: Component,
         cisa_plugin: RegisteredPlugin,
     ) -> None:
-        """The five elements the 2026 update added: hash value, hash algorithm,
-        licence, tool name and generation context."""
-        # A document missing the elements the 2026 update added
+        """A document missing the component elements fails each of them.
+
+        Covers hash value, hash algorithm, licence, tool name and generation
+        context, which is a subset of the seventeen the standard defines.
+        """
+        # A document missing the elements this test covers
         sbom_missing_new_elements = {
             "bomFormat": "CycloneDX",
             "specVersion": "1.5",

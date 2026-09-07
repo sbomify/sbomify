@@ -99,9 +99,17 @@ logger = getLogger(__name__)
 #   - "source" = before_build (source code analysis)
 #   - "analyzed" = post_build (binary analysis)
 GENERATION_CONTEXT_VALUES = {
-    # CISA terminology (underscore format)
+    # CISA's own words, in the spellings documents use for them. The draft
+    # writes "before build, build, after build"; tooling writes the same
+    # phases with underscores, and "post build" for the last one.
+    "before build",
     "before_build",
+    "during build",
+    "during_build",
     "build",
+    "after build",
+    "after_build",
+    "post build",
     "post_build",
     # CycloneDX lifecycle phases (hyphen format)
     "design",
@@ -471,7 +479,11 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
         )
 
         # 1. SBOM Author (document-level)
-        creators = creation_info.get("creators", [])
+        # A malformed document must be scored, not crashed on: a bare string
+        # here iterates as characters, and a non-string entry has no
+        # ``startswith`` for the tool check below to call.
+        raw_creators = creation_info.get("creators", [])
+        creators = [entry for entry in raw_creators if isinstance(entry, str)] if isinstance(raw_creators, list) else []
         findings.append(
             self._create_finding(
                 "sbom_author",
@@ -633,9 +645,15 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
             if not pkg_fields["has_hash"]:
                 hash_failures.append(pkg_name)
 
-            # 7. License — the relationship must resolve to a licensing
-            # element; a dangling hasConcludedLicense carries no licence.
-            if get_spdx3_package_license(package, relationships, licenses, "hasConcludedLicense") is None:
+            # 7. License. Either relationship states one: hasDeclaredLicense
+            # is the producer's own declaration, which is what the element
+            # asks for, and hasConcludedLicense is the author's determination.
+            # The relationship must also resolve to a licensing element, since
+            # an edge pointing at nothing carries no licence.
+            if all(
+                get_spdx3_package_license(package, relationships, licenses, kind) is None
+                for kind in ("hasDeclaredLicense", "hasConcludedLicense")
+            ):
                 license_failures.append(pkg_name)
 
         # 2. Software Producer
@@ -694,7 +712,8 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
                 "license",
                 status="fail" if license_failures else "pass",
                 details=f"Missing for: {', '.join(license_failures)}" if license_failures else None,
-                remediation="Add hasConcludedLicense Relationship to LicenseExpression element.",
+                remediation="Add a hasDeclaredLicense or hasConcludedLicense Relationship "
+                "pointing at a LicenseExpression element.",
             )
         )
 
