@@ -242,7 +242,7 @@ submit button applies the same filters, and the URL is the same either way.
                                                         <i class="fas fa-lock" aria-hidden="true"></i>Restricted
                                                     </span>
                                                 {% endif %}
-                                                {% if advisory.is_withdrawn %}<c-branded.badge tone="medium">Withdrawn</c-branded.badge>{% endif %}
+                                                {% if advisory.is_withdrawn %}<span class="tw-badge tw-badge-warning">Withdrawn</span>{% endif %}
                                                 {% comment %}
                                                 Resolved is the one status worth
                                                 seeing without reading, so it is
