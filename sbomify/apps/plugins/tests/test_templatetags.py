@@ -1,6 +1,7 @@
 """Tests for plugins template tags and filters."""
 
 from sbomify.apps.plugins.templatetags.plugins_extras import (
+    advisory_prose,
     format_finding_description,
     format_run_reason,
     has_compliance_failures,
@@ -386,3 +387,62 @@ class TestVulnerabilityTotal:
         from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_total
 
         assert vulnerability_total({"by_severity": {"critical": True, "high": 2}}) == 2
+
+
+class TestAdvisoryProse:
+    """OSV serves GHSA's CommonMark verbatim, and the cards show the opening
+    words of it, so the markup has to come off before the text is cut."""
+
+    def test_the_advisory_that_was_rendering_its_own_markup(self) -> None:
+        """The fast-uri body, as it reached the page on production."""
+        body = (
+            "### Impact\n"
+            "`fast-uri` decodes percent-encoded characters in the scheme component "
+            "with the legacy global `unescape()` and serializes the result back.\n"
+        )
+
+        assert advisory_prose(body) == (
+            "Impact fast-uri decodes percent-encoded characters in the scheme component "
+            "with the legacy global unescape() and serializes the result back."
+        )
+
+    def test_headings_of_every_depth_lose_their_markers(self) -> None:
+        assert advisory_prose("# One\n## Two\n###### Six") == "One Two Six"
+
+    def test_a_hash_that_is_not_a_heading_is_left_alone(self) -> None:
+        """C# is a language and #1 is an issue number; neither opens a heading."""
+        assert advisory_prose("Affects C# and issue #1") == "Affects C# and issue #1"
+
+    def test_links_keep_their_text_and_lose_their_target(self) -> None:
+        assert advisory_prose("See [the advisory](https://example.test/a) for more") == ("See the advisory for more")
+
+    def test_an_image_keeps_its_alt_text(self) -> None:
+        assert advisory_prose("![a diagram](https://example.test/d.png) shows it") == "a diagram shows it"
+
+    def test_emphasis_markers_come_off(self) -> None:
+        assert advisory_prose("**Critical** and _urgent_ and *both*") == "Critical and urgent and both"
+
+    def test_a_bare_underscore_inside_a_name_survives(self) -> None:
+        """Package and symbol names carry underscores, and they are not emphasis."""
+        assert advisory_prose("calls parse_uri_string on every request") == "calls parse_uri_string on every request"
+
+    def test_lists_quotes_and_fences_flatten_to_a_sentence(self) -> None:
+        body = "> Note\n\n- first\n- second\n\n1. one\n\n```py\ncode()\n```"
+
+        assert advisory_prose(body) == "Note first second one code()"
+
+    def test_a_thematic_break_leaves_nothing_behind(self) -> None:
+        assert advisory_prose("Before\n\n---\n\nAfter") == "Before After"
+
+    def test_empty_and_non_string_input(self) -> None:
+        assert advisory_prose("") == ""
+        assert advisory_prose(None) == ""
+        assert advisory_prose(3) == ""
+
+    def test_an_oversized_body_is_returned_rather_than_scanned(self) -> None:
+        body = "#" * 200_001
+
+        assert advisory_prose(body) == body
+
+    def test_plain_prose_is_unchanged(self) -> None:
+        assert advisory_prose("A plain sentence about a package.") == "A plain sentence about a package."

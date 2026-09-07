@@ -14,6 +14,28 @@ register = template.Library()
 # Number of packages to show before collapsing with "Show all" toggle
 VISIBLE_PACKAGE_COUNT = 5
 
+# The CommonMark an advisory body arrives in. OSV serves GHSA's `details`
+# verbatim, so "### Impact", backticked package names and reference links all
+# reach us as markup. Applied in this order: images before links, because an
+# image is a link with a bang in front of it, and emphasis last, because its
+# markers are the ones that also appear inside code spans.
+_MARKDOWN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^\s*(?:```|~~~).*$", re.MULTILINE), ""),  # code fences
+    (re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE), ""),  # ATX headings
+    (re.compile(r"^\s{0,3}>\s?", re.MULTILINE), ""),  # block quotes
+    (re.compile(r"^\s{0,3}(?:[-*_]\s*){3,}$", re.MULTILINE), ""),  # thematic breaks
+    (re.compile(r"^\s{0,3}(?:[-*+]|\d+[.)])\s+", re.MULTILINE), ""),  # list markers
+    (re.compile(r"!\[([^\]]*)\]\([^)]*\)"), r"\1"),  # images, kept as their alt text
+    (re.compile(r"\[([^\]]+)\]\([^)]*\)"), r"\1"),  # links, kept as their text
+    (re.compile(r"`+([^`]+)`+"), r"\1"),  # code spans
+    (re.compile(r"(\*\*|__)(.+?)\1", re.DOTALL), r"\2"),  # bold
+    (re.compile(r"(?<![\w*])(\*|_)(?!\s)(.+?)(?<!\s)\1(?![\w*])", re.DOTALL), r"\2"),  # italic
+)
+
+# Same ceiling as format_finding_description: a pathological advisory body must
+# not be handed to a dozen regexes.
+MAX_DESCRIPTION_CHARS = 100_000
+
 
 @register.filter
 def format_run_reason(reason: str) -> str:
@@ -199,6 +221,29 @@ def _build_package_span_args(packages: list[str]) -> list[tuple[str, str, str]]:
         hidden_class = " pkg-hidden" if i >= VISIBLE_PACKAGE_COUNT else ""
         args.append((hidden_class, pkg, pkg))
     return args
+
+
+@register.filter
+def advisory_prose(text: object) -> str:
+    """An advisory body as one line of plain prose.
+
+    The pages that show a description show the opening words of it, so the
+    markup is removed rather than rendered: a heading is not structure inside a
+    twenty-word summary, and flattening first means the truncation that follows
+    can only ever cut prose, never leave a code span or a link half-open.
+
+    Whitespace collapses too. The source is written as paragraphs and lists,
+    and every newline in it would otherwise arrive as a space in a sentence
+    that reads as though a word is missing.
+    """
+    if not isinstance(text, str) or not text:
+        return ""
+    if len(text) > MAX_DESCRIPTION_CHARS:
+        logger.debug("Skipping markdown flattening: length %d exceeds limit", len(text))
+        return text
+    for pattern, replacement in _MARKDOWN_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return " ".join(text.split())
 
 
 @register.filter
