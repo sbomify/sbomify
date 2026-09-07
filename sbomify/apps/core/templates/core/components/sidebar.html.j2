@@ -16,6 +16,7 @@
      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
      aria-hidden="true"></div>
 <aside id="sidebar"
+       x-cloak
        @toggle-sidebar.window="sidebarMobileOpen = !sidebarMobileOpen"
        class="fixed top-0 left-0 z-50 h-screen transition-all duration-300 ease-in-out bg-surface border-r border-border flex flex-col"
        :class="[ sidebarCollapsed ? 'w-16' : 'w-64', sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0' ]"
