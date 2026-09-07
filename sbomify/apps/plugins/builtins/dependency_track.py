@@ -31,6 +31,7 @@ from sbomify.apps.plugins.sdk.results import (
     PluginMetadata,
 )
 from sbomify.apps.sboms.conversion import (
+    CYCLONEDX_1_6,
     ConversionFailed,
     to_cyclonedx,
 )
@@ -511,8 +512,8 @@ class DependencyTrackPlugin(AssessmentPlugin):
             finding_id="dependency-track:unsupported-format",
             title="Format Not Supported",
             description=(
-                "Dependency Track only supports CycloneDX format, and this SBOM could not be "
-                "converted to CycloneDX, so vulnerability scanning was skipped."
+                "Dependency Track reads CycloneDX only. This SBOM is not CycloneDX, and only "
+                "SPDX documents can be converted into it, so vulnerability scanning was skipped."
             ),
             unsupported_input=True,
             extra_metadata={"conversion_error": reason[:500]},
@@ -682,7 +683,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "metrics": metrics,
                 # Says the scan read a derived copy, so a surprising result is
                 # traceable to the conversion rather than to the scanner.
-                **({"converted_from": converted_from, "converted_to": "CycloneDX-1.6"} if converted_from else {}),
+                **({"converted_from": converted_from, "converted_to": CYCLONEDX_1_6} if converted_from else {}),
             },
         )
 
