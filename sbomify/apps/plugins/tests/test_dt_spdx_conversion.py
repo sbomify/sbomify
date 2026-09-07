@@ -5,8 +5,8 @@ The upload now carries a converted copy instead. The stored artifact is never
 modified and the findings come back against it (ADR-004).
 
 The conversion is deliberately not done at the format gate. That gate runs on
-every poll of an in-flight scan, so converting there would spend a subprocess
-each time to learn what the previous pass already knew.
+every poll of an in-flight scan, so converting there would derive the same
+copy each time to learn what the previous pass already knew.
 """
 
 from __future__ import annotations
@@ -203,9 +203,9 @@ class TestTheUploadCarriesTheConversion:
     def test_a_poll_neither_converts_nor_needs_a_converter(self, plugin: DependencyTrackPlugin, scannable) -> None:
         """The upload already happened, and a poll must return its findings.
 
-        Workers are not guaranteed to be identical, so one without the binary
-        has to be able to poll a scan another worker uploaded. It also records
-        the provenance, which is only known from the stored document.
+        A poll answers from what the upload already settled, so it never
+        derives another CycloneDX copy. It also records the provenance,
+        which is only known from the stored document.
         """
         from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
 

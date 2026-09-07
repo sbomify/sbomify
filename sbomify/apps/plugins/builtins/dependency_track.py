@@ -145,14 +145,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # Dependency Track reads CycloneDX only, so a document in any other
         # format is uploaded as a derived CycloneDX copy rather than skipped.
         # The stored artifact is never modified and the findings come back
-        # against it (ADR-004). The conversion itself happens at the upload
-        # below, not here: this runs again on every poll, and converting each
-        # time would spend a subprocess to learn what it already knew.
-        # Whether a converter exists is deliberately not asked here. This runs
-        # again on every poll of a scan already in flight, and a worker without
-        # the binary would answer a poll with a skip instead of the findings the
-        # upload is waiting for. Availability is settled where it is acted on,
-        # at the upload below, which runs once.
+        # against it (ADR-004). The conversion itself happens in-process at the
+        # upload below, not here: this runs again on every poll of a scan
+        # already in flight, and deriving the copy each time would redo work
+        # whose outcome the upload already recorded.
         needs_conversion = not self._validate_cyclonedx(sbom_bytes)
         if needs_conversion and self._source_format_label(sbom_bytes) == "unknown":
             # Neither CycloneDX nor SPDX, so there is nothing to convert from,
