@@ -33,6 +33,68 @@ def client_and_headers(authenticated_api_client, sample_team_with_owner_member):
     return client, get_api_headers(token)
 
 
+class TestDeletingThem:
+    """The API had every verb except this one, and said so out loud: withdrawing
+    a draft answers "delete drafts instead", which an API client could not do."""
+
+    def test_a_draft_is_deleted(self, client_and_headers, advisory) -> None:
+        client, headers = client_and_headers
+
+        response = client.delete(_detail(advisory.id), **headers)
+
+        assert response.status_code == 204, response.content
+        assert not SecurityAdvisory.objects.filter(id=advisory.id).exists()
+
+    def test_the_instruction_the_withdraw_route_gives_can_now_be_followed(self, client_and_headers, advisory) -> None:
+        """Withdraw refuses a draft and names delete as the way out. Follow it."""
+        client, headers = client_and_headers
+
+        refused = client.post(
+            f"{_detail(advisory.id)}/withdraw",
+            data={"reason": "no"},
+            content_type="application/json",
+            **headers,
+        )
+        assert refused.status_code == 409
+        assert "delete drafts instead" in refused.json()["detail"]
+
+        assert client.delete(_detail(advisory.id), **headers).status_code == 204
+
+    def test_a_published_advisory_is_deletable_too(self, client_and_headers, make_publishable) -> None:
+        """Deleting a published advisory takes its tracking id with it, which is
+        why withdraw exists; the route does not second-guess the caller."""
+        client, headers = client_and_headers
+        advisory = publish(make_publishable)
+
+        assert client.delete(_detail(advisory.id), **headers).status_code == 204
+        assert not SecurityAdvisory.objects.filter(id=advisory.id).exists()
+
+    def test_another_workspace_advisory_is_not_deletable(self, client_and_headers, other_team) -> None:
+        """404 rather than 403, so the answer does not confirm it exists."""
+        client, headers = client_and_headers
+        theirs = SecurityAdvisory.objects.create(team=other_team, title="Not yours")
+
+        response = client.delete(_detail(theirs.id), **headers)
+
+        assert response.status_code == 404
+        assert SecurityAdvisory.objects.filter(id=theirs.id).exists()
+
+    def test_a_member_may_not_delete(self, client_and_headers, sample_team_with_owner_member, advisory) -> None:
+        client, headers = client_and_headers
+        sample_team_with_owner_member.role = "member"
+        sample_team_with_owner_member.save()
+
+        response = client.delete(_detail(advisory.id), **headers)
+
+        assert response.status_code == 403
+        assert SecurityAdvisory.objects.filter(id=advisory.id).exists()
+
+    def test_a_missing_advisory_is_a_404(self, client_and_headers) -> None:
+        client, headers = client_and_headers
+
+        assert client.delete(_detail("NOPE_NOT_REAL"), **headers).status_code == 404
+
+
 class TestReadingThem:
     def test_the_workspace_sees_its_own(self, client_and_headers, advisory) -> None:
         client, headers = client_and_headers
@@ -788,9 +850,7 @@ class TestTheCsafSelfReferenceIsAbsolute:
         self_urls = [r["url"] for r in body["document"]["references"] if r.get("category") == "self"]
         assert self_urls and self_urls[0].startswith("https://app.sbomify.com/")
 
-    def test_it_is_still_absolute_when_app_base_url_is_not_set(
-        self, client_and_headers, team, public_product
-    ) -> None:
+    def test_it_is_still_absolute_when_app_base_url_is_not_set(self, client_and_headers, team, public_product) -> None:
         """An unset APP_BASE_URL used to leave a relative path in the document."""
         from django.test import override_settings
 
