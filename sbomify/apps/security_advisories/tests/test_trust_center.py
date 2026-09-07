@@ -255,6 +255,29 @@ def test_internal_comments_never_reach_the_timeline(team, public_product, sample
     assert "Do not tell customers yet" not in notes
 
 
+def test_a_withdrawn_advisory_is_marked_withdrawn_on_the_browse_list(team, public_product, client):
+    """The list is the surface a reader scans, and it has two row variants.
+
+    An advisory naming affected product rows lands on one, an advisory naming
+    none lands on the other, and only the first carried the badge. A retracted
+    advisory that reads as current on the list is worse than one that is
+    missing, so both variants have to say so.
+    """
+    from django.urls import reverse
+
+    naming_no_product = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryProduct.objects.filter(advisory=naming_no_product).delete()
+    naming_no_product.status = SecurityAdvisory.Status.WITHDRAWN
+    naming_no_product.withdrawn_at = timezone.now()
+    naming_no_product.withdrawal_reason = "Reissued."
+    naming_no_product.save()
+
+    response = client.get(reverse("core:workspace_advisories_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    assert "Withdrawn" in response.content.decode()
+
+
 def test_withdrawn_advisories_stay_readable(team, public_product):
     """Retracting a disclosure means saying so, not deleting the page."""
     advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)

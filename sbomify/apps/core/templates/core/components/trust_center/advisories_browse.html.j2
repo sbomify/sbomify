@@ -242,7 +242,7 @@ submit button applies the same filters, and the URL is the same either way.
                                                         <i class="fas fa-lock" aria-hidden="true"></i>Restricted
                                                     </span>
                                                 {% endif %}
-                                                {% if advisory.is_withdrawn %}<span class="tw-badge tw-badge-warning">Withdrawn</span>{% endif %}
+                                                {% if advisory.is_withdrawn %}<c-branded.badge tone="medium">Withdrawn</c-branded.badge>{% endif %}
                                                 {% comment %}
                                                 Resolved is the one status worth
                                                 seeing without reading, so it is
@@ -302,6 +302,16 @@ submit button applies the same filters, and the URL is the same either way.
                                                     <i class="fas fa-lock" aria-hidden="true"></i>Restricted
                                                 </span>
                                             {% endif %}
+                                            {% comment %}
+                                            Withdrawn belongs on the row for the
+                                            same reason it belongs on the row
+                                            above: a retracted advisory that
+                                            reads as current is worse than one
+                                            that is missing, and this variant is
+                                            the one an advisory naming no
+                                            product lands on.
+                                            {% endcomment %}
+                                            {% if advisory.is_withdrawn %}<c-branded.badge tone="medium">Withdrawn</c-branded.badge>{% endif %}
                                             {% comment %}
                                             A notice naming no products carries
                                             no status line, so resolved would be
