@@ -450,8 +450,8 @@ def test_detail_cvss_chips_label_their_version_or_fall_back_to_plain_cvss(team, 
 
     detail = get_public_advisory(make_request(), team, advisory.id).value
     assert detail["vulnerabilities"][0]["cvss_scores"] == [
-        {"label": "CVSS 3.1", "base_score": 9.8},
-        {"label": "CVSS", "base_score": 7.5},
+        {"label": "CVSS 3.1", "base_score": 9.8, "version": "3.1", "vector": "CVSS:3.1/AV:N"},
+        {"label": "CVSS", "base_score": 7.5, "version": "", "vector": ""},
     ]
 
 
