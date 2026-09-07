@@ -275,28 +275,39 @@ class TestEndpoints:
         authorised or not. That was reproduced against a gated component: the
         origin answered 403 while the edge answered 200 from cache.
 
-        This walks the source instead of a list, so the next CSV endpoint is
-        covered the day it is written rather than the day it leaks.
+        This walks the source rather than a list, so the next CSV endpoint is
+        covered the day it is written. It scans every module, not just apis.py,
+        because one app already routes from api.py, and it looks for the header
+        being *assigned* an uncacheable value rather than merely mentioned: a
+        comment about Cache-Control sitting near a response would otherwise
+        pass a check that only searched for the words.
         """
         import pathlib
+        import re
 
         root = pathlib.Path(__file__).resolve().parents[3]
+        assigns_uncacheable = re.compile(
+            r"""\[["']Cache-Control["']\]\s*=\s*["'][^"']*\b(?:no-store|private)\b""",
+            re.IGNORECASE,
+        )
         offenders = []
-        for path in root.rglob("apis.py"):
-            if "/tests/" in str(path):
+        for path in root.rglob("*.py"):
+            parts = path.parts
+            if "tests" in parts or "migrations" in parts or ".venv" in parts:
                 continue
-            lines = path.read_text(encoding="utf-8").splitlines()
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
             for index, line in enumerate(lines):
                 if 'content_type="text/csv' not in line:
                     continue
                 # The directive belongs with the response it is set on, so look
                 # only at the few lines that build and return this one.
                 window = "\n".join(lines[index : index + 12])
-                if "Cache-Control" not in window:
+                if not assigns_uncacheable.search(window):
                     offenders.append(f"{path.relative_to(root)}:{index + 1}")
 
         assert offenders == [], (
-            f"CSV responses with no Cache-Control, reachable through a CDN that caches by extension: {offenders}"
+            "CSV responses that never assign an uncacheable Cache-Control, "
+            f"reachable through a CDN that caches by extension: {offenders}"
         )
 
     def test_another_user_sees_none_of_this_workspaces_data(self, inventory, stub_sbom_bytes, guest_user, client):
