@@ -562,15 +562,11 @@ def test_workspace_public_stat_labels_agree_with_their_counts():
     A new Trust Center usually has one of each, so the singular is the common
     case rather than the edge.
     """
-    client = Client()
-    team = Team.objects.create(name="Singular Workspace", is_public=True)
-    product = Product.objects.create(name="Only Product", team=team, is_public=True)
-    component = Component.objects.create(
-        name="Only Component",
-        team=team,
-        visibility=Component.Visibility.PUBLIC,
-    )
-    ProductComponent.objects.create(product=product, component=component)
+    from django.utils import timezone
+
+    from sbomify.apps.security_advisories.models import SecurityAdvisory
+
+    team = _public_workspace("Singular Workspace")
     Component.objects.create(
         name="Only Artifact",
         team=team,
@@ -578,26 +574,36 @@ def test_workspace_public_stat_labels_agree_with_their_counts():
         is_global=True,
         component_type=Component.ComponentType.DOCUMENT,
     )
+    SecurityAdvisory.objects.create(
+        team=team,
+        title="Only Advisory",
+        tracking_id="QA-SA-2026-0001",
+        status=SecurityAdvisory.Status.PUBLISHED,
+        visibility=SecurityAdvisory.Visibility.PUBLIC,
+        published_at=timezone.now(),
+        made_public_at=timezone.now(),
+    )
 
-    content = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key})).content.decode()
-
-    # Zero advisories, one of everything else. Zero takes the plural.
-    assert _stat_labels(content) == ["Advisories", "Product", "Compliance artifact", "Latest advisory"]
+    assert _stat_labels(_visit(team)) == ["Advisory", "Product", "Compliance artifact", "Latest advisory"]
 
 
 @pytest.mark.django_db
 def test_workspace_public_stat_labels_stay_plural_above_one():
-    client = Client()
-    team = Team.objects.create(name="Plural Workspace", is_public=True)
-    for index in range(2):
-        product = Product.objects.create(name=f"Product {index}", team=team, is_public=True)
-        component = Component.objects.create(
-            name=f"Component {index}",
+    team = _public_workspace("Plural Workspace")
+    second = Product.objects.create(name="Second Product", team=team, is_public=True)
+    ProductComponent.objects.create(
+        product=second,
+        component=Component.objects.create(
+            name="Second Component",
             team=team,
             visibility=Component.Visibility.PUBLIC,
-        )
-        ProductComponent.objects.create(product=product, component=component)
+        ),
+    )
 
-    content = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key})).content.decode()
+    assert "Products" in _stat_labels(_visit(team))
 
-    assert "Products" in _stat_labels(content)
+
+@pytest.mark.django_db
+def test_workspace_public_stat_labels_use_the_plural_for_zero():
+    """Zero takes the plural, so "0 Advisories" still reads correctly."""
+    assert "Advisories" in _stat_labels(_visit(_public_workspace("Empty Workspace")))
