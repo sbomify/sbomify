@@ -19,6 +19,7 @@ from sbomify.apps.teams.forms import TeamGeneralSettingsForm
 from sbomify.apps.teams.models import Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.utils import (
+    delete_workspace_with_billing_cleanup,
     refresh_current_team_session,
     switch_active_workspace,
     update_user_teams_session,
@@ -158,8 +159,7 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             team = membership.team
             team_name = team.name
 
-            with transaction.atomic():
-                team.delete()
+            delete_workspace_with_billing_cleanup(team)
 
             # Update user teams session after deletion
             user_teams = update_user_teams_session(request, user)

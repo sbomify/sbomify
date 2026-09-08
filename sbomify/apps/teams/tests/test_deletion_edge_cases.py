@@ -13,7 +13,7 @@ def team(db):
 @pytest.fixture
 def other_team(db):
     from sbomify.apps.billing.models import BillingPlan
-    
+
     # Ensure plan exists for test
     BillingPlan.objects.get_or_create(
         key="business",
@@ -21,7 +21,7 @@ def other_team(db):
             "name": "Business",
             "description": "Business Plan",
             "max_users": 10,
-        }
+        },
     )
     return Team.objects.create(name="Team B", key="team-b-key", billing_plan="business")
 
@@ -269,3 +269,30 @@ def test_stripe_is_left_alone_when_billing_is_disabled(settings, mocker):
     cleanup_stripe_for_deleted_workspace("sub_test123", "cus_test123", "ws-key")
 
     stripe.assert_not_called()
+
+
+def _delete_workspace_from_settings(client, user, workspace, mocker, settings=None):
+    """The Danger Zone button, which posts to team_general rather than the dashboard."""
+    settings.BILLING = True
+    queued = mocker.patch("sbomify.apps.billing.tasks.cleanup_stripe_for_deleted_workspace.send")
+    client.force_login(user)
+    _setup_session(client, workspace, "owner")
+    response = client.post(
+        reverse("teams:team_general", kwargs={"team_key": workspace.key}),
+        {"action": "delete"},
+    )
+    return response, queued
+
+
+def test_deleting_a_workspace_from_settings_cancels_its_subscription(client, paid_owner, paid_team, settings, mocker):
+    """The Danger Zone is the delete a user actually reaches.
+
+    Its form posts to teams:team_general, not to the dashboard, so the
+    cancellation the dashboard path performs has to happen here too or the
+    subscription outlives the workspace and keeps charging.
+    """
+    response, queued = _delete_workspace_from_settings(client, paid_owner, paid_team, mocker, settings=settings)
+
+    assert response.status_code in (200, 302)
+    assert not Team.objects.filter(pk=paid_team.pk).exists()
+    queued.assert_called_once_with("sub_test123", "cus_test123", paid_team.key)
