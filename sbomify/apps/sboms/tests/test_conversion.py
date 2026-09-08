@@ -130,6 +130,31 @@ class TestWhatTheScannerMatchesOnSurvives:
         assert got[0]["purl"] == "pkg:generic/openssl@3.0.11"
         assert got[0]["cpe"].startswith("cpe:2.3:a:openssl")
 
+    @pytest.mark.parametrize(
+        "reference_type",
+        ["cpe23Type", "http://spdx.org/rdf/references/cpe23Type"],
+    )
+    def test_the_type_is_read_whether_or_not_it_is_written_as_an_iri(self, reference_type: str) -> None:
+        """Yocto writes the IRI form for every reference in every document it emits."""
+        got = components(
+            spdx2(
+                {
+                    "name": "openssl",
+                    "SPDXID": "SPDXRef-Recipe-openssl",
+                    "versionInfo": "3.2.3",
+                    "externalRefs": [
+                        {
+                            "referenceCategory": "SECURITY",
+                            "referenceType": reference_type,
+                            "referenceLocator": "cpe:2.3:*:openssl:openssl:3.2.3:*:*:*:*:*:*:*",
+                        }
+                    ],
+                }
+            )
+        )
+
+        assert got[0]["cpe"] == "cpe:2.3:*:openssl:openssl:3.2.3:*:*:*:*:*:*:*"
+
     def test_a_bare_purl_on_an_spdx2_package_counts(self) -> None:
         """Not in the spec, but producers write it and the plugins read it."""
         got = components(spdx2({"name": "jinja2", "SPDXID": "SPDXRef-a", "purl": "pkg:pypi/jinja2@2.11.2"}))

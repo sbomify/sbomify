@@ -145,6 +145,19 @@ def _components_from_spdx3(document: dict[str, Any]) -> list[dict[str, Any]]:
     return components
 
 
+def _reference_type(value: Any) -> str:
+    """The external-reference type, with the vocabulary URI stripped off.
+
+    SPDX 2.x lets a referenceType be written as the bare term or as the full
+    IRI it abbreviates. Yocto writes the IRI for every reference it emits, so
+    a lookup against the bare terms alone finds none of them and the CPE that
+    is the only identifier a Yocto package carries is dropped on the way
+    through.
+    """
+    text = str(value or "")
+    return text.rsplit("/", 1)[-1]
+
+
 def _components_from_spdx2(document: dict[str, Any]) -> list[dict[str, Any]]:
     """A component per package, with the identifiers its external refs name."""
     packages = document.get("packages")
@@ -167,7 +180,7 @@ def _components_from_spdx2(document: dict[str, Any]) -> list[dict[str, Any]]:
         for ref in refs if isinstance(refs, list) else []:
             if not isinstance(ref, dict):
                 continue
-            field = _SPDX2_IDENTIFIERS.get(str(ref.get("referenceType") or ""))
+            field = _SPDX2_IDENTIFIERS.get(_reference_type(ref.get("referenceType")))
             locator = ref.get("referenceLocator")
             if field and field not in component and isinstance(locator, str) and locator:
                 component[field] = locator
