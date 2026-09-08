@@ -814,6 +814,13 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
         return 201, {"id": sbom.id}
 
     except Exception:
+        # Logged for the same reason the CycloneDX and VEX handlers beside this
+        # one log: everything reaching here becomes one opaque "Invalid
+        # request", and without a record there is nothing to tell a malformed
+        # document apart from a fault on our side. A missing jsonschema in the
+        # SPDX 3 validator surfaced as exactly that 400, with no trace of the
+        # ImportError anywhere.
+        log.exception("Error processing SPDX BOM upload")
         return 400, {"detail": "Invalid request"}
 
 
