@@ -131,6 +131,22 @@ class TestTheScanCard:
 
         assert self._summary(client, component, sbom) is None
 
+    def test_a_row_whose_skipped_column_never_got_written_is_still_read(
+        self, signed_in: tuple[Client, Component]
+    ) -> None:
+        """result_skipped is tri-state, and null means unknown.
+
+        The database filter cannot exclude those, so the result itself still
+        has to be read for them. A row predating the column must not slip
+        through as a scan.
+        """
+        client, component = signed_in
+        sbom = self._sbom(component)
+        run = _run(sbom, "osv", SKIPPED_RESULT)
+        AssessmentRun.objects.filter(pk=run.pk).update(result_skipped=None)
+
+        assert self._summary(client, component, sbom) is None
+
     def test_a_real_clean_scan_still_reports_zero(self, signed_in: tuple[Client, Component]) -> None:
         """Zero findings is a fact when something was actually examined."""
         client, component = signed_in

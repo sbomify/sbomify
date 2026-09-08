@@ -251,6 +251,13 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     .distinct("plugin_name")
                     .values_list("id", flat=True)
                 )
+                # Excluded in the database, not in Python: result can be
+                # multi-megabyte and TOASTed, and result_skipped exists as a
+                # denormalised copy so a reader can tell a skip apart without
+                # fetching the blob. Filtering here would have pulled every
+                # blob only to discard it, which is worst in exactly the case
+                # this fixes, where every run is a skip.
+                #
                 # A skipped run contributes no vulnerabilities and zero
                 # severity counts for the opposite reason a clean one does:
                 # nothing was examined. It is not an empty result. It carries
@@ -264,9 +271,14 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 # summarise.
                 provider_runs = [
                     (name, result, created_at)
-                    for name, result, created_at in AssessmentRun.objects.filter(id__in=winner_ids).values_list(
-                        "plugin_name", "result", "created_at"
-                    )
+                    for name, result, created_at in AssessmentRun.objects.filter(id__in=winner_ids)
+                    .exclude(result_skipped=True)
+                    .values_list("plugin_name", "result", "created_at")
+                    # result_skipped is tri-state and null means "unknown", so
+                    # a row written before the column existed still gets read
+                    # properly here. Only rows the database kept reach this,
+                    # and their result is needed for the counts regardless, so
+                    # the second check costs nothing.
                     if not result_scanned_nothing(result)
                 ]
                 merged = merge_findings_by_alias([result for _, result, _ in provider_runs])
