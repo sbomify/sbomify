@@ -41,9 +41,21 @@ def paid_workspace(db, django_user_model):
 
 
 def _visit(client, team, user, tab, mocker, settings):
+    """Render one tab and report how many times each sync path was taken.
+
+    Pricing is stubbed as well, and deliberately: suppressing the subscription
+    sync does not make get_plan_pricing Stripe-free, since it still fetches an
+    invoice amount when the cached fields are missing, and this fixture has
+    none. A test about how often we call Stripe should not be able to call
+    Stripe by a path it is not measuring.
+    """
     settings.BILLING = True
     synced = mocker.patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe")
     service_synced = mocker.patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
+    mocker.patch(
+        "sbomify.apps.billing.team_pricing_service.TeamPricingService.get_plan_pricing",
+        return_value={"amount": "$0", "period": "forever", "billing_period": None},
+    )
     setup_authenticated_client_session(client, team, user)
     response = client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": tab}))
     return response, synced, service_synced
