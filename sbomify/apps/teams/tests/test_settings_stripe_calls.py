@@ -18,6 +18,13 @@ from django.urls import reverse
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.settings_tabs import SETTINGS_TABS
+
+
+#: Every section an owner can open apart from billing. Derived from the
+#: registry rather than listed, so a tab added later is covered without anyone
+#: remembering to add it here.
+NON_BILLING_TABS = [tab.key for tab in SETTINGS_TABS if tab.key != "billing" and "owner" in tab.roles]
 
 
 @pytest.fixture
@@ -93,7 +100,7 @@ def _visit(client, team, user, tab, mocker, settings, *, stub_pricing=True):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("tab", ["general", "members", "tokens", "trust-center", "branding"])
+@pytest.mark.parametrize("tab", NON_BILLING_TABS)
 def test_a_tab_that_shows_no_billing_does_not_reach_stripe(client, paid_workspace, mocker, settings, tab):
     team, user = paid_workspace
 
@@ -135,7 +142,7 @@ def test_billing_disabled_reaches_stripe_from_no_tab(client, paid_workspace, moc
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("tab", ["general", "members", "trust-center"])
+@pytest.mark.parametrize("tab", NON_BILLING_TABS)
 def test_a_tab_that_shows_no_billing_builds_no_pricing(client, paid_workspace, mocker, settings, tab):
     """The sync flag is not enough on its own.
 
@@ -206,3 +213,38 @@ def test_the_billing_tab_prices_what_the_sync_just_fetched(client, paid_workspac
 
     priced_team = priced.call_args.args[0]
     assert priced_team.billing_plan_limits["subscription_status"] == "past_due", "pricing was handed the pre-sync copy"
+
+
+@pytest.mark.django_db
+def test_the_billing_page_shows_the_status_the_sync_just_wrote(client, paid_workspace, mocker, settings):
+    """Pricing and status must not disagree on one page.
+
+    The template reads subscription_status off the context, which is built
+    from the schema get_team() made before the sync ran. Pricing reads the
+    refreshed row. Fixing only pricing left the page able to show fresh
+    figures beside a status the sync had already replaced, which is worse than
+    showing stale ones consistently.
+    """
+    team, user = paid_workspace
+    settings.BILLING = True
+
+    def _sync(team_obj, *args, **kwargs):
+        team_obj.billing_plan_limits = {
+            **(team_obj.billing_plan_limits or {}),
+            "subscription_status": "past_due",
+        }
+        team_obj.save()
+        return True
+
+    mocker.patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe", side_effect=_sync)
+    mocker.patch(
+        "sbomify.apps.billing.team_pricing_service.TeamPricingService.get_plan_pricing",
+        return_value={"amount": "$0", "period": "forever", "billing_period": None},
+    )
+    setup_authenticated_client_session(client, team, user)
+
+    response = client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "billing"}))
+
+    shown = response.context["team"]
+    limits = shown["billing_plan_limits"] if isinstance(shown, dict) else shown.billing_plan_limits
+    assert limits["subscription_status"] == "past_due", "the page showed the pre-sync status"

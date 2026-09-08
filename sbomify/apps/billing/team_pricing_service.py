@@ -34,7 +34,9 @@ class TeamPricingService:
 
         Args:
             team: Team instance
-            billing_plan_obj: Optional BillingPlan instance (will be fetched if not provided)
+            billing_plan_obj: Optional BillingPlan instance. When omitted this only
+                checks that a plan with the key exists, and does not fetch one for
+                use, so pass it if you want the object's own fields consulted.
             sync_from_stripe: Whether to refresh the subscription from Stripe before
                 pricing it. Pass False when the caller has already synced, or has
                 decided not to. Note this suppresses only the subscription sync:

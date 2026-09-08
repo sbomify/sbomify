@@ -239,6 +239,16 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Inject properties used by global banners
             team_data["is_in_grace_period"] = team_obj.is_in_grace_period
             team_data["is_payment_restricted"] = team_obj.is_payment_restricted
+            # The billing fields come from the row, which the sync above may
+            # just have rewritten. get_team() built this schema before that ran,
+            # and the billing template reads subscription_status and
+            # cancel_at_period_end straight off it, so leaving the schema's copy
+            # would put a stale status beside freshly priced figures on one
+            # page. The pricing service used to overwrite the schema as a side
+            # effect of syncing; it no longer syncs here, so the copy is done
+            # where it can be seen.
+            team_data["billing_plan"] = team_obj.billing_plan
+            team_data["billing_plan_limits"] = team_obj.billing_plan_limits
         else:
             # Fallback if team_obj not found
             team_data = team  # Use schema as-is
