@@ -289,7 +289,13 @@ def _spdx2_described_ids(payload: SPDXSchema) -> list[str]:
     back at it, states the same thing. Yocto writes the relationship form and
     never the shorthand, so a reader that only knows ``documentDescribes``
     sees no subject at all.
+
+    The document's own identifier comes from the document rather than from the
+    convention: ``SPDXRef-DOCUMENT`` is what every producer writes and what the
+    fallback assumes, but the schema types the field as a free string, so a
+    document that names itself otherwise still has its relationships read.
     """
+    document_id = getattr(payload, "spdx_id", None) or "SPDXRef-DOCUMENT"
     described: list[str] = []
     # SPDXSchema is the lenient parser: it declares six fields and keeps the
     # rest of the document as raw extras, so relationships arrive as dicts.
@@ -299,9 +305,9 @@ def _spdx2_described_ids(payload: SPDXSchema) -> list[str]:
         rel_type = rel.get("relationshipType")
         source = rel.get("spdxElementId")
         target = rel.get("relatedSpdxElement")
-        if rel_type == "DESCRIBES" and source == "SPDXRef-DOCUMENT" and target:
+        if rel_type == "DESCRIBES" and source == document_id and target:
             described.append(target)
-        elif rel_type == "DESCRIBED_BY" and target == "SPDXRef-DOCUMENT" and source:
+        elif rel_type == "DESCRIBED_BY" and target == document_id and source:
             described.append(source)
     return described
 

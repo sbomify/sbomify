@@ -141,6 +141,44 @@ class TestTheDocumentSubject:
         assert response.status_code == 201, response.json()
         assert SBOM.objects.get(id=response.json()["id"]).version == "3.2.3"
 
+    def test_the_document_id_is_read_from_the_document(
+        self,
+        sample_access_token: AccessToken,
+        sample_component: Component,
+    ) -> None:
+        """SPDXRef-DOCUMENT is the convention, not a constraint the schema imposes."""
+        document = _document(
+            SPDXID="SPDXRef-recipe-openssl-doc",
+            relationships=[
+                {
+                    "spdxElementId": "SPDXRef-recipe-openssl-doc",
+                    "relationshipType": "DESCRIBES",
+                    "relatedSpdxElement": "SPDXRef-Recipe-openssl",
+                }
+            ],
+            packages=[
+                {
+                    "SPDXID": "SPDXRef-Download-openssl-1",
+                    "name": "openssl-source-1",
+                    "versionInfo": "0.0.0",
+                    "downloadLocation": "https://example.test/openssl-3.2.3.tar.gz",
+                    "filesAnalyzed": False,
+                },
+                {
+                    "SPDXID": "SPDXRef-Recipe-openssl",
+                    "name": "openssl",
+                    "versionInfo": "3.2.3",
+                    "downloadLocation": "NOASSERTION",
+                    "filesAnalyzed": False,
+                },
+            ],
+        )
+
+        response = _upload(Client(), sample_component, sample_access_token, document)
+
+        assert response.status_code == 201, response.json()
+        assert SBOM.objects.get(id=response.json()["id"]).version == "3.2.3"
+
     def test_a_document_that_names_no_subject_is_still_accepted(
         self,
         sample_access_token: AccessToken,
