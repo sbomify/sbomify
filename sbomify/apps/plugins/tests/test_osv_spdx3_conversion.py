@@ -83,6 +83,31 @@ class TestTheScannerReadsTheDerivedCopy:
         assert metadata["converted_to"] == CYCLONEDX_1_6
         assert metadata["sbom_format"] == "spdx3", "the format reported is the one the user uploaded"
 
+    def test_the_derived_name_carries_no_trace_of_the_original_suffix(self, plugin: OSVPlugin, tmp_path: Path) -> None:
+        """osv-scanner picks its extractor by suffix, and matches more than one.
+
+        A name built from the original's stem keeps ``.spdx`` in the middle of
+        ``x.spdx.converted.cdx.json``. The SPDX extractor then runs against
+        CycloneDX content, fails, and takes the whole run down with exit 127.
+        """
+        source = tmp_path / "core-image-minimal.spdx.json"
+        source.write_text(SPDX3)
+        scanned: list[Path] = []
+
+        def fake_scanner(scanner_path: str, scan_path: Path, timeout: int) -> tuple[str, str, int]:
+            scanned.append(scan_path)
+            return CLEAN_SCAN
+
+        with (
+            patch("sbomify.apps.plugins.builtins.osv.to_cyclonedx", return_value=CONVERTED),
+            patch.object(plugin, "_execute_scanner", side_effect=fake_scanner),
+        ):
+            plugin.assess("sbom-1", source)
+
+        assert scanned, "the scanner was never called"
+        assert ".spdx" not in scanned[0].name
+        assert scanned[0].name.endswith(".cdx.json")
+
     def test_the_derived_copy_does_not_outlive_the_scan(self, plugin: OSVPlugin, spdx3_file: Path) -> None:
         with (
             patch("sbomify.apps.plugins.builtins.osv.to_cyclonedx", return_value=CONVERTED),
@@ -186,8 +211,7 @@ class TestCarryingTheCpeMustNotReadAsACleanScan:
     """
 
     SCANNED_THEN_FILTERED = (
-        "Scanned /tmp/x.cdx.json file and found 1 package\n"
-        "Filtered 1 local/unscannable package/s from the scan.\n"
+        "Scanned /tmp/x.cdx.json file and found 1 package\nFiltered 1 local/unscannable package/s from the scan.\n"
     )
 
     def test_a_package_that_was_filtered_did_not_get_matched(self, plugin: OSVPlugin) -> None:
@@ -202,9 +226,7 @@ class TestCarryingTheCpeMustNotReadAsACleanScan:
         every clean scan into a skip."""
         assert plugin._matchable_package_count("some other output") is None
 
-    def test_the_whole_path_reports_a_yocto_document_as_skipped(
-        self, plugin: OSVPlugin, tmp_path: Path
-    ) -> None:
+    def test_the_whole_path_reports_a_yocto_document_as_skipped(self, plugin: OSVPlugin, tmp_path: Path) -> None:
         """The outcome that matters: no green badge over an unmatched build."""
         path = tmp_path / "yocto.json"
         path.write_text(
