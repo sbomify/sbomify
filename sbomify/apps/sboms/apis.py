@@ -316,6 +316,31 @@ def _extract_spdx2_primary_package(
     return package, ""
 
 
+def _spdx3_bom_roots(graph: Any, root_element_ids: set[str]) -> set[str]:
+    """The rootElements of any Sbom the document roots itself on.
+
+    One hop only. An Sbom's rootElement names what the BOM is about, so
+    resolving it is reading the document as written rather than guessing;
+    following further would be walking a graph the caller has not asked about.
+    """
+    roots: set[str] = set()
+    for element in graph if isinstance(graph, list) else []:
+        if not isinstance(element, dict):
+            continue
+        elem_type = element.get("type", element.get("@type", ""))
+        if not isinstance(elem_type, str) or "Sbom" not in elem_type:
+            continue
+        if element.get("spdxId", element.get("@id", "")) not in root_element_ids:
+            continue
+        nested = element.get("rootElement") or []
+        if isinstance(nested, str):
+            nested = [nested]
+        if not isinstance(nested, list):
+            continue
+        roots.update(r for r in nested if isinstance(r, str) and r)
+    return roots
+
+
 def _extract_spdx3_primary_package(
     payload: SPDX3Schema,
 ) -> tuple[SPDX3Package, str] | tuple[None, str]:
@@ -323,7 +348,8 @@ def _extract_spdx3_primary_package(
 
     Strategy:
     1. Follow the SpdxDocument's rootElement — how SPDX 3 declares the BOM
-       subject
+       subject — and, where that names a BOM rather than a package, the
+       rootElement of that BOM
     2. Find a 'describes' relationship and use its target package (SPDX 2
        idiom some producers still write)
     3. Fall back to matching package name with document name
@@ -340,6 +366,13 @@ def _extract_spdx3_primary_package(
     from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
 
     _, root_element_ids = spdx3_document_subjects({"@graph": payload.graph})
+    # A document is free to root itself on its Sbom rather than straight onto
+    # the thing the Sbom is about, and Yocto does: SpdxDocument.rootElement
+    # names a software_Sbom, and that element's own rootElement names the
+    # image. Stopping at the first hop found no package and dropped through to
+    # the last resort, which labelled a whole image with the version of
+    # whichever package happened to serialise first.
+    root_element_ids |= _spdx3_bom_roots(payload.graph, root_element_ids)
     for pkg in packages:
         if pkg.spdx_id and pkg.spdx_id in root_element_ids:
             package = pkg
