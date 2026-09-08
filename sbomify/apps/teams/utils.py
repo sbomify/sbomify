@@ -827,3 +827,38 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     else:
         messages.info(request, f"Member {removed_user.username} removed from workspace.")
         return redirect_to_team_settings(removed_team_key, active_tab)
+
+
+def delete_workspace_with_billing_cleanup(team: Team) -> None:
+    """Delete a workspace and cancel whatever it was paying for.
+
+    Both delete paths route through here because the billing half is easy to
+    leave out and expensive when it is: the settings page's Danger Zone deleted
+    the row without it, so the subscription outlived the workspace and kept
+    charging. Keeping it in one place is what stops the next caller repeating
+    that.
+
+    The ids are read before the row goes, since they live on it. Cancelling is
+    queued rather than awaited: it is two calls to Stripe, and holding a web
+    worker open for them after the row has already been deleted risks a proxy
+    timing the request out with nothing left to retry.
+
+    Queued ``on_commit`` rather than straight away, so a caller that wraps this
+    in its own transaction cannot cancel a subscription whose workspace then
+    fails to delete. Outside a transaction the hook runs immediately, so the
+    two call sites here behave as before.
+    """
+    from sbomify.apps.billing.tasks import cleanup_stripe_for_deleted_workspace
+
+    limits = team.billing_plan_limits or {}
+    subscription_id = limits.get("stripe_subscription_id")
+    customer_id = limits.get("stripe_customer_id")
+    # key is nullable on the model, and this string only names the workspace in
+    # an alert after the row has gone.
+    workspace_key = team.key or f"pk={team.pk}"
+
+    with transaction.atomic():
+        team.delete()
+        transaction.on_commit(
+            lambda: cleanup_stripe_for_deleted_workspace.send(subscription_id, customer_id, workspace_key)
+        )
