@@ -35,6 +35,13 @@ class TeamPricingService:
         Args:
             team: Team instance
             billing_plan_obj: Optional BillingPlan instance (will be fetched if not provided)
+            sync_from_stripe: Whether to refresh the subscription from Stripe before
+                pricing it. Pass False when the caller has already synced, or has
+                decided not to. Note this suppresses only the subscription sync:
+                this method can still reach Stripe to list a customer's
+                subscriptions when none is stored, and to fetch an invoice amount
+                when the cached fields are missing. A caller that must not touch
+                Stripe at all should not call this method.
 
         Returns:
             Dictionary with pricing information:

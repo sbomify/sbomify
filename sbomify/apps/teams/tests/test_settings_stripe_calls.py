@@ -83,3 +83,41 @@ def test_billing_disabled_reaches_stripe_from_no_tab(client, paid_workspace, moc
     client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "general"}))
 
     synced.assert_not_called()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("tab", ["general", "members", "trust-center"])
+def test_a_tab_that_shows_no_billing_builds_no_pricing(client, paid_workspace, mocker, settings, tab):
+    """The sync flag is not enough on its own.
+
+    get_plan_pricing reaches Stripe by two further paths that no sync flag
+    covers: listing a customer's subscriptions when none is stored, and
+    fetching an invoice amount when the cached fields are missing. Not calling
+    it is the only way a tab with no billing on it can be sure of not
+    depending on Stripe.
+    """
+    team, user = paid_workspace
+    settings.BILLING = True
+    priced = mocker.patch("sbomify.apps.billing.team_pricing_service.TeamPricingService.get_plan_pricing")
+    setup_authenticated_client_session(client, team, user)
+
+    response = client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": tab}))
+
+    assert response.status_code == 200
+    priced.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_the_billing_tab_still_builds_its_pricing(client, paid_workspace, mocker, settings):
+    team, user = paid_workspace
+    settings.BILLING = True
+    priced = mocker.patch(
+        "sbomify.apps.billing.team_pricing_service.TeamPricingService.get_plan_pricing",
+        return_value={"amount": "$0", "period": "forever", "billing_period": None},
+    )
+    setup_authenticated_client_session(client, team, user)
+
+    response = client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "billing"}))
+
+    assert response.status_code == 200
+    priced.assert_called_once()
