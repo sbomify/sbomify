@@ -35,6 +35,8 @@ from sbomify.apps.sboms.utils import (
     _contains_crypto_assets,
     _is_cbom,
     _is_duplicate_integrity_error,
+    _is_vex,
+    _states_vulnerabilities,
     verify_download_token,
 )
 from sbomify.apps.teams.models import ContactProfile
@@ -490,6 +492,20 @@ def sbom_upload_cyclonedx(
         sbom_version = sbom_dict.get("version", "")
         sbom_format = "cyclonedx"
 
+        # A VEX is not an inventory. It validates as CycloneDX because the spec
+        # makes both components and vulnerabilities optional, so nothing before
+        # this point can tell the two apart, and one stored as bom_type=sbom is
+        # scanned and then scored against NTIA, BSI and FDA as though its empty
+        # component list were the truth. Say so instead of accepting it.
+        if bom_type == SBOM.BomType.SBOM.value and _is_vex(sbom_data):
+            return 400, {
+                "detail": (
+                    "This looks like a VEX document: it carries vulnerability statements and no "
+                    "components. Upload it as a VEX rather than as an SBOM."
+                ),
+                "error_code": ErrorCode.VALIDATION_ERROR,
+            }
+
         # Auto-detect CBOM content: an action-published CBOM arrives with the
         # default bom_type; tag it cbom so the cbom-gated PQC plugin runs. Only
         # when the caller left the type as the default — an explicit bom_type
@@ -615,6 +631,19 @@ def vex_artifact_upload(request: HttpRequest, component_id: str) -> tuple[int, d
             }
         is_xml = looks_like_xml(request.body)
         if vex_format == VEX_FORMAT_CYCLONEDX and not is_xml:
+            # detect_vex_format answers which format a document is written in,
+            # not whether it is a VEX: every CycloneDX document carries the
+            # bomFormat marker it keys on. So an inventory posted here would be
+            # stored as a VEX and would rewrite the component's posture from a
+            # document that states nothing about any vulnerability.
+            if isinstance(document, dict) and not _states_vulnerabilities(document):
+                return 400, {
+                    "detail": (
+                        "This document makes no vulnerability statement, so it is not a VEX. "
+                        "Upload it as an SBOM rather than as a VEX."
+                    ),
+                    "error_code": ErrorCode.VALIDATION_ERROR,
+                }
             return sbom_upload_cyclonedx(request, component_id, bom_type=SBOM.BomType.VEX.value)
 
         component = Component.objects.filter(id=component_id).first()
@@ -1373,6 +1402,30 @@ def sbom_upload_file(
 
             sbom_version = sbom_dict.get("version", "")
             sbom_format = "cyclonedx"
+
+            # The type comes from a dropdown here, so the mismatch runs both
+            # ways: picking VEX for an inventory stores a document that states
+            # nothing about any vulnerability as the component's VEX.
+            if bom_type == SBOM.BomType.VEX.value and not _states_vulnerabilities(sbom_data):
+                return 400, {
+                    "detail": (
+                        "This document makes no vulnerability statement, so it is not a VEX. "
+                        "Choose SBOM as the artifact type rather than VEX."
+                    ),
+                    "error_code": ErrorCode.VALIDATION_ERROR,
+                }
+
+            # A VEX is not an inventory; see the same guard on the CycloneDX
+            # API endpoint. Stored as bom_type=sbom it is scanned and scored
+            # against the SBOM compliance plugins as though it were one.
+            if bom_type == SBOM.BomType.SBOM.value and _is_vex(sbom_data):
+                return 400, {
+                    "detail": (
+                        "This looks like a VEX document: it carries vulnerability statements and no "
+                        "components. Choose VEX as the artifact type rather than SBOM."
+                    ),
+                    "error_code": ErrorCode.VALIDATION_ERROR,
+                }
 
             # Auto-detect CBOM content: tag a crypto BOM uploaded with the
             # default bom_type as cbom so the cbom-gated PQC plugin runs. Only when
