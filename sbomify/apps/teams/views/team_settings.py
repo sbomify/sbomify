@@ -205,10 +205,16 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 billing_plan_obj = BillingPlan.objects.get(key=billing_plan)
             except BillingPlan.DoesNotExist:
                 billing_plan_obj = None
+            # Priced from the refreshed model, not the schema. `team` was built
+            # by get_team() before the sync above, so its billing_plan_limits
+            # still hold the pre-sync status, next billing date and amounts.
+            # The service used to hide this by syncing and refreshing again
+            # itself; now that it is told not to, the stale copy would show.
+            priced_from = team_obj or team
             # The sync decision was made above, once, so this must not quietly
             # make it again.
-            plan_pricing = pricing_service.get_plan_pricing(team, billing_plan_obj, sync_from_stripe=False)
-            plan_limits = pricing_service.get_plan_limits(team, billing_plan_obj)
+            plan_pricing = pricing_service.get_plan_pricing(priced_from, billing_plan_obj, sync_from_stripe=False)
+            plan_limits = pricing_service.get_plan_limits(priced_from, billing_plan_obj)
 
         # Get actual Team model instance to access helper properties and enrich context
         # (The 'team' from get_team is a Pydantic schema which lacks these properties)

@@ -121,3 +121,39 @@ def test_the_billing_tab_still_builds_its_pricing(client, paid_workspace, mocker
 
     assert response.status_code == 200
     priced.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_the_billing_tab_prices_what_the_sync_just_fetched(client, paid_workspace, mocker, settings):
+    """Pricing must read the refreshed row, not the schema built before the sync.
+
+    get_team() builds its schema at the top of the request, before the sync
+    runs, so its billing_plan_limits hold the pre-sync status and dates. The
+    pricing service used to hide this by syncing and refreshing again itself.
+    Now that it is told not to, pricing the schema would show a subscription
+    status the sync had already replaced.
+    """
+    team, user = paid_workspace
+    settings.BILLING = True
+
+    def _sync(team_obj, *args, **kwargs):
+        # What a real sync does: write the fresh state to the row.
+        team_obj.billing_plan_limits = {
+            **(team_obj.billing_plan_limits or {}),
+            "subscription_status": "past_due",
+            "billing_period": "annual",
+        }
+        team_obj.save()
+        return True
+
+    mocker.patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe", side_effect=_sync)
+    priced = mocker.patch(
+        "sbomify.apps.billing.team_pricing_service.TeamPricingService.get_plan_pricing",
+        return_value={"amount": "$0", "period": "forever", "billing_period": None},
+    )
+    setup_authenticated_client_session(client, team, user)
+
+    client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "billing"}))
+
+    priced_team = priced.call_args.args[0]
+    assert priced_team.billing_plan_limits["subscription_status"] == "past_due", "pricing was handed the pre-sync copy"
