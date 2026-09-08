@@ -21,6 +21,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -29,6 +30,11 @@ from sbomify.apps.plugins.sdk.results import (
     AssessmentSummary,
     Finding,
     PluginMetadata,
+)
+from sbomify.apps.sboms.conversion import (
+    CYCLONEDX_1_6,
+    ConversionFailed,
+    to_cyclonedx,
 )
 from sbomify.logging import getLogger
 
@@ -179,21 +185,55 @@ class OSVPlugin(AssessmentPlugin):
             logger.error(f"[OSV] Failed to read SBOM file: {e}")
             return self._create_error_result(f"Failed to read SBOM: {e}")
 
-        # Check for unsupported SPDX 3.0 format
+        # osv-scanner has no SPDX 3 reader, so the scan runs against a copy
+        # derived in a format it does know. The stored artifact is untouched
+        # and the findings are reported against it (ADR-004).
+        source_format = self._detect_format_name(sbom_bytes)
+        converted_from: str | None = None
         if self._is_spdx3(sbom_bytes):
-            logger.warning(f"[OSV] SPDX 3.0 format not supported by osv-scanner for SBOM {sbom_id}")
-            return self._create_unsupported_format_result()
+            source_format = "spdx3"
+            try:
+                sbom_bytes = to_cyclonedx(sbom_bytes)
+            except ConversionFailed as exc:
+                logger.warning(f"[OSV] SPDX 3.0 SBOM {sbom_id} could not be converted for scanning: {exc}")
+                return self._create_conversion_failed_result(str(exc))
+            converted_from = "SPDX-3.0"
+            logger.info(f"[OSV] Scanning SBOM {sbom_id} through a derived CycloneDX copy")
 
         # Determine correct file suffix and create temp copy if needed
         suffix = self._determine_file_suffix(sbom_bytes)
         scan_path = sbom_path
         temp_copy: Path | None = None
 
-        if not str(sbom_path).endswith(suffix):
-            temp_copy = sbom_path.parent / f"{sbom_path.stem}{suffix}"
-            shutil.copy2(sbom_path, temp_copy)
-            scan_path = temp_copy
-            logger.debug(f"[OSV] Created temp copy with suffix {suffix}: {temp_copy}")
+        # The cleanup below runs in the scan's own finally, which this write
+        # precedes, so a failure here has to clear up after itself: a full
+        # disk would otherwise raise out of assess() where every other read
+        # failure returns a result, and leave a half-written file behind.
+        try:
+            if converted_from is not None:
+                # The file on disk still holds the original, so the derived bytes
+                # need a file of their own for the scanner to read.
+                #
+                # The name is built fresh rather than from the original's stem.
+                # osv-scanner picks its extractor by suffix, and "x.spdx.json"
+                # has a stem of "x.spdx", so a derived "x.spdx.converted.cdx.json"
+                # matches the SPDX extractor as well as the CycloneDX one. The
+                # SPDX pass then fails on CycloneDX content and takes the whole
+                # run down with exit 127.
+                temp_copy = sbom_path.parent / f"converted-{uuid4().hex}{suffix}"
+                temp_copy.write_bytes(sbom_bytes)
+                scan_path = temp_copy
+                logger.debug(f"[OSV] Wrote derived copy for scanning: {temp_copy}")
+            elif not str(sbom_path).endswith(suffix):
+                temp_copy = sbom_path.parent / f"{sbom_path.stem}{suffix}"
+                shutil.copy2(sbom_path, temp_copy)
+                scan_path = temp_copy
+                logger.debug(f"[OSV] Created temp copy with suffix {suffix}: {temp_copy}")
+        except OSError as exc:
+            logger.error(f"[OSV] Could not stage SBOM {sbom_id} for scanning: {exc}")
+            if temp_copy is not None:
+                temp_copy.unlink(missing_ok=True)
+            return self._create_error_result(f"Failed to prepare SBOM for scanning: {exc}")
 
         try:
             # Execute osv-scanner
@@ -207,7 +247,7 @@ class OSVPlugin(AssessmentPlugin):
                 logger.warning(
                     f"[OSV] Scan of SBOM {sbom_id} found no package sources; reporting as skipped rather than clean"
                 )
-                return self._create_no_packages_result()
+                return self._create_no_packages_result(converted_from)
 
             # A spec version the bundled scanner does not know is a capability
             # gap, not a fault: the scan never ran, but the artifact is fine and
@@ -245,11 +285,11 @@ class OSVPlugin(AssessmentPlugin):
             # cleanly. Reported as a pass, that renders a green "no known
             # vulnerabilities" badge over a build nothing was ever matched
             # against — the worst answer a security product can give.
-            if not findings and self._scanned_package_count(stderr) == 0:
+            if not findings and self._matchable_package_count(stderr) == 0:
                 logger.warning(
                     f"[OSV] Scan of SBOM {sbom_id} recognised no packages; reporting as skipped rather than clean"
                 )
-                return self._create_no_packages_result()
+                return self._create_no_packages_result(converted_from)
 
             # Build severity summary
             by_severity: dict[str, int] = {
@@ -283,7 +323,10 @@ class OSVPlugin(AssessmentPlugin):
                 findings=findings,
                 metadata={
                     "scanner": "osv-scanner",
-                    "sbom_format": self._detect_format_name(sbom_bytes),
+                    "sbom_format": source_format,
+                    # Says the scan read a derived copy, so a surprising result
+                    # is traceable to the conversion rather than to the scanner.
+                    **({"converted_from": converted_from, "converted_to": CYCLONEDX_1_6} if converted_from else {}),
                 },
             )
 
@@ -363,34 +406,27 @@ class OSVPlugin(AssessmentPlugin):
         except (json.JSONDecodeError, UnicodeDecodeError):
             return False
 
-    def _create_unsupported_format_result(self) -> AssessmentResult:
-        """SPDX 3.0, which osv-scanner cannot read at all, reported as skipped.
+    def _create_conversion_failed_result(self, detail: str) -> AssessmentResult:
+        """A document the converter would not read, reported as skipped.
 
-        This returns before the scanner is invoked, so it is the earliest of the
-        plugin's "nothing was examined" paths and was the last one still missing
-        the marker that says so. Without ``skipped`` the run read as a clean
-        scan: ``_is_run_passing`` put a green "no known vulnerabilities" badge on
-        an artifact nothing opened, and ``lifecycle.run_scanned`` took the empty
-        findings array as evidence and resolved everything a previous, real scan
-        had found. ``unsupported_format`` was in the metadata but nothing reads
-        it, and the sibling skips had moved on without this one.
-
-        Carries ``unsupported_input`` for the same reason the spec-version skip
-        does: re-running buys nothing until osv-scanner learns the format.
+        The scan never ran, and re-running changes nothing until the document
+        or the converter does, so this carries ``unsupported_input`` like the
+        sibling skips rather than presenting as a scan error on an artifact
+        that may be perfectly valid.
         """
         return self.create_skipped_result(
-            finding_id="osv:unsupported-format",
-            title="SPDX 3.0 Not Supported",
+            finding_id="osv:conversion-failed",
+            title="SBOM Could Not Be Converted For Scanning",
             description=(
-                "osv-scanner does not read SPDX 3.0 yet, so this SBOM was not scanned "
-                "for vulnerabilities. To scan it now, convert it with `syft convert` "
-                "(v1.46.0+, emits SPDX 2.3 or CycloneDX, lossily) and upload the result."
+                "osv-scanner does not read SPDX 3.0, and this document could not be converted "
+                "to a format it does read, so it was not scanned for vulnerabilities."
             ),
             unsupported_input=True,
             extra_metadata={
                 "scanner": "osv-scanner",
                 "sbom_format": "spdx3",
-                "unsupported_format": True,
+                "conversion_failed": True,
+                "conversion_error": detail[:500],
             },
         )
 
@@ -682,21 +718,50 @@ class OSVPlugin(AssessmentPlugin):
         match = self._SCANNED_PACKAGES.search(stderr or "")
         return int(match.group(1)) if match else None
 
-    def _create_no_packages_result(self) -> AssessmentResult:
+    # No digits and no newline between the count and the noun, so this cannot
+    # reach across lines and pair a count with a different sentence's package.
+    _FILTERED_PACKAGES = re.compile(r"filtered (\d+)[^\d\n]*package", re.IGNORECASE)
+
+    def _matchable_package_count(self, stderr: str) -> int | None:
+        """How many packages osv-scanner had left to match, or None if it did not say.
+
+        "found N packages" counts what it parsed, not what it could look up. A
+        package it parses and then cannot match is reported separately as
+        filtered, and a scan where every package was filtered matched nothing
+        against any advisory source however many it counted.
+
+        A Yocto document is the case that makes the difference visible. Its
+        purls are a type osv-scanner rejects, so with nothing else on the
+        component it counts zero. Carry the CPE, which Dependency Track needs,
+        and the same component is counted and then filtered, so the count alone
+        would report a build nothing matched as a clean scan.
+        """
+        scanned = self._scanned_package_count(stderr)
+        if scanned is None:
+            return None
+        filtered = self._FILTERED_PACKAGES.search(stderr or "")
+        return max(scanned - (int(filtered.group(1)) if filtered else 0), 0)
+
+    def _create_no_packages_result(self, converted_from: str | None = None) -> AssessmentResult:
         """A scan that recognised nothing, reported as skipped rather than clean.
 
         Skipped is the shape that already means "the plugin never scanned
         anything" — ``public_assessment_utils._is_run_skipped`` reads it and
         withholds the public pass, which is the whole point here.
+
+        Carries the conversion provenance when there was one. This is the path
+        a Yocto document takes, so without it the one outcome most likely to
+        need explaining would be the one that does not say a copy was scanned.
         """
         finding = Finding(
             id="osv:no-packages",
             title="No Packages Recognised",
             description=(
-                "osv-scanner did not recognise any packages in this SBOM, so it was not "
-                "matched against any advisory source. This usually means the package URLs "
-                "use a type osv-scanner does not know, such as pkg:yocto. No vulnerability "
-                "result can be inferred from this scan."
+                "None of the packages in this SBOM could be matched against an advisory "
+                "source, so it was not scanned. OSV matches on package URL (purl). SBOMs "
+                "from embedded builds such as Yocto identify their packages by CPE instead, "
+                "and OSV cannot look those up. No vulnerability result can be inferred from "
+                "this scan."
             ),
             status="warning",
             severity="info",
@@ -715,7 +780,12 @@ class OSVPlugin(AssessmentPlugin):
             assessed_at=datetime.now(timezone.utc).isoformat(),
             summary=summary,
             findings=[finding],
-            metadata={"scanner": "osv-scanner", "skipped": True, "no_packages": True},
+            metadata={
+                "scanner": "osv-scanner",
+                "skipped": True,
+                "no_packages": True,
+                **({"converted_from": converted_from, "converted_to": CYCLONEDX_1_6} if converted_from else {}),
+            },
         )
 
     def _create_unsupported_spec_version_result(self) -> AssessmentResult:
