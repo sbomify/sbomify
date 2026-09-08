@@ -140,36 +140,81 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 request, HttpResponse(status=status_code, content=team.get("detail", "Unknown error"))
             )
 
-        # Sync subscription data from Stripe before displaying billing info
         from sbomify.apps.billing.config import is_billing_enabled
+        from sbomify.apps.teams.settings_tabs import resolve_tab
+
+        # Resolved before any billing work, because it decides whether that work
+        # is wanted at all. Live Member row rather than the session cache: this
+        # picks which sections are rendered, so a demoted user reading a stale
+        # role would be shown sections they can no longer act on.
+        role = get_member_role_by_key(request.user, team_key)
+        billing_enabled_flag = is_billing_enabled()
+        active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
+        if active_tab is None:
+            # Defence in depth: get_team() above already refuses non-members and
+            # guests, so nobody who reaches here should have an empty tab list.
+            # Kept because the two gates answer different questions — that one is
+            # about the workspace, this one about what the role opens — and a
+            # future tier that opens no section should be denied, not shown a
+            # blank page. The typed domain error rather than a hand-built
+            # HttpResponse: error_response understands it, it carries its own 403,
+            # and it keeps this on the same path as every other permission failure.
+            return error_response(request, PermissionDeniedError("No settings available for this role"))
+        # A stale or renamed slug resolves to the first section instead of 404ing;
+        # send the browser to the URL that actually rendered so the address bar,
+        # the highlighted tab and the content all agree. Returning here also
+        # means a redirect costs no billing work.
+        if tab is not None and tab != active_tab.key:
+            return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab.key)
+
+        # Stripe is reached only where its answer is on screen. Eight sections
+        # render from this view and one of them shows billing, so syncing on
+        # every tab made a page load depend on a third party with nothing to say
+        # to it, and the subscription sync bypasses its cache whenever the
+        # stored copy is over a minute old. The other tabs read the stored
+        # billing_plan_limits, which is what they showed between syncs anyway.
+        wants_fresh_billing = billing_enabled_flag and active_tab.key == "billing"
 
         try:
             team_obj = Team.objects.get(key=team_key)
-            if is_billing_enabled():
+            if wants_fresh_billing:
                 sync_subscription_from_stripe(team_obj)
                 # Refresh team data after sync
                 team_obj.refresh_from_db()
         except Team.DoesNotExist:
             team_obj = None
 
-        # Get plan features and pricing based on billing plan
+        # Built only for the tab that renders it. billing.html.j2 is the sole
+        # consumer of these three: the site-wide payment banner reads
+        # team.billing_plan_limits off the model, and select_plan belongs to
+        # another view. Building them everywhere is not merely wasted work,
+        # because get_plan_pricing reaches Stripe by two paths that no sync flag
+        # covers: list_subscriptions when a customer has no stored subscription
+        # id, and _fetch_invoice_amount when the cached invoice fields are
+        # missing. Skipping the call is the only way to be sure a tab with no
+        # billing on it does not depend on Stripe.
         billing_plan = team.billing_plan or Team.Plan.COMMUNITY
-        plan_features = PLAN_FEATURES.get(billing_plan, [])
+        plan_features: list[Any] = []
+        plan_pricing: dict[str, Any] = {}
+        plan_limits: list[dict[str, str]] = []
 
-        # Use pricing service to calculate plan pricing and limits
-        pricing_service = TeamPricingService()
-
-        # Fetch billing plan object once for reuse
-        try:
-            billing_plan_obj = BillingPlan.objects.get(key=billing_plan)
-        except BillingPlan.DoesNotExist:
-            billing_plan_obj = None
-
-        # Get pricing information
-        plan_pricing = pricing_service.get_plan_pricing(team, billing_plan_obj)
-
-        # Get plan limits
-        plan_limits = pricing_service.get_plan_limits(team, billing_plan_obj)
+        if wants_fresh_billing:
+            plan_features = PLAN_FEATURES.get(billing_plan, [])
+            pricing_service = TeamPricingService()
+            try:
+                billing_plan_obj = BillingPlan.objects.get(key=billing_plan)
+            except BillingPlan.DoesNotExist:
+                billing_plan_obj = None
+            # Priced from the refreshed model, not the schema. `team` was built
+            # by get_team() before the sync above, so its billing_plan_limits
+            # still hold the pre-sync status, next billing date and amounts.
+            # The service used to hide this by syncing and refreshing again
+            # itself; now that it is told not to, the stale copy would show.
+            priced_from = team_obj or team
+            # The sync decision was made above, once, so this must not quietly
+            # make it again.
+            plan_pricing = pricing_service.get_plan_pricing(priced_from, billing_plan_obj, sync_from_stripe=False)
+            plan_limits = pricing_service.get_plan_limits(priced_from, billing_plan_obj)
 
         # Get actual Team model instance to access helper properties and enrich context
         # (The 'team' from get_team is a Pydantic schema which lacks these properties)
@@ -194,6 +239,16 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Inject properties used by global banners
             team_data["is_in_grace_period"] = team_obj.is_in_grace_period
             team_data["is_payment_restricted"] = team_obj.is_payment_restricted
+            # The billing fields come from the row, which the sync above may
+            # just have rewritten. get_team() built this schema before that ran,
+            # and the billing template reads subscription_status and
+            # cancel_at_period_end straight off it, so leaving the schema's copy
+            # would put a stale status beside freshly priced figures on one
+            # page. The pricing service used to overwrite the schema as a side
+            # effect of syncing; it no longer syncs here, so the copy is done
+            # where it can be seen.
+            team_data["billing_plan"] = team_obj.billing_plan
+            team_data["billing_plan_limits"] = team_obj.billing_plan_limits
         else:
             # Fallback if team_obj not found
             team_data = team  # Use schema as-is
@@ -255,33 +310,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         # Which section is on screen, and which the nav offers. Resolved from
         # the registry so the two cannot disagree — a tab the member may not
-        # open is neither linked nor rendered.
-        from sbomify.apps.teams.settings_tabs import resolve_tab, visible_tabs
-
-        # Live Member row, not the session cache. This decides which settings
-        # sections are linked AND rendered, so a demoted user reading a stale
-        # cached role would be shown sections they can no longer act on — and
-        # this view was just widened to MANAGE so members can reach their own
-        # tabs, which makes an accurate role here load-bearing rather than
-        # cosmetic.
-        role = get_member_role_by_key(request.user, team_key)
-        billing_enabled_flag = is_billing_enabled()
-        active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
-        if active_tab is None:
-            # Defence in depth: get_team() above already refuses non-members and
-            # guests, so nobody who reaches here should have an empty tab list.
-            # Kept because the two gates answer different questions — that one is
-            # about the workspace, this one about what the role opens — and a
-            # future tier that opens no section should be denied, not shown a
-            # blank page. The typed domain error rather than a hand-built
-            # HttpResponse: error_response understands it, it carries its own 403,
-            # and it keeps this on the same path as every other permission failure.
-            return error_response(request, PermissionDeniedError("No settings available for this role"))
-        # A stale or renamed slug resolves to the first section instead of 404ing;
-        # send the browser to the URL that actually rendered so the address bar,
-        # the highlighted tab and the content all agree.
-        if tab is not None and tab != active_tab.key:
-            return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab.key)
+        # open is neither linked nor rendered. Resolved at the top of this
+        # method, because it also decides whether Stripe is called.
+        from sbomify.apps.teams.settings_tabs import visible_tabs
 
         return render(
             request,
