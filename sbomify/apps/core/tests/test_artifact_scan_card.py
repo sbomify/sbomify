@@ -1,9 +1,11 @@
 """The artifact page's vulnerability card, when every scanner declined.
 
 A skipped run contributes no vulnerabilities and zero severity counts, exactly
-as a clean scan does. It is not empty: it stores one status finding saying why
-it skipped, but that is a warning rather than a vulnerability, so it never
-reaches the numbers on the card. The internal tables already tell the two apart.
+as a clean scan does. The stored result is not empty: it carries bookkeeping of
+its own, a status finding naming the reason and the counts that go with it, and
+``metadata.skipped`` is what marks it. None of that bookkeeping is a
+vulnerability, so none of it reaches the numbers on the card. The internal
+tables already tell the two apart.
 The card at the top of the artifact page did not: it read the latest completed
 security runs whatever they were, so an SPDX 3 document that OSV and Dependency
 Track had both refused rendered as

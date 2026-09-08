@@ -253,8 +253,10 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 )
                 # A skipped run contributes no vulnerabilities and zero
                 # severity counts for the opposite reason a clean one does:
-                # nothing was examined. The status finding it stores saying why
-                # is a warning, so it never reaches these numbers either.
+                # nothing was examined. It is not an empty result. It carries
+                # bookkeeping of its own, a status finding naming the reason
+                # and the counts that go with it, but none of that is a
+                # vulnerability and none of it reaches these numbers.
                 # Counting such a run here put "0 total findings" and a scan
                 # date above a Yocto SBOM whose two scanners had both declined
                 # it, which reads as a clean bill of health on a build nothing
