@@ -15,13 +15,24 @@ from __future__ import annotations
 import pytest
 from django.urls import reverse
 
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.teams.models import Member, Team
 
 
 @pytest.fixture
 def paid_workspace(db, django_user_model):
-    """A workspace with a subscription, so a sync has something to fetch."""
+    """A workspace with a subscription, so a sync has something to fetch.
+
+    The BillingPlan row matters more than it looks. Without it
+    get_plan_pricing returns at its first branch, before the block that syncs,
+    so a test asserting the service does not sync would pass without ever
+    reaching the code it names.
+    """
+    BillingPlan.objects.get_or_create(
+        key="business",
+        defaults={"name": "Business", "description": "test", "max_products": 10, "max_components": 100},
+    )
     user = django_user_model.objects.create_user(
         username="settings-owner", email="settings@test.com", password="password"
     )
@@ -34,28 +45,48 @@ def paid_workspace(db, django_user_model):
             "subscription_status": "active",
             "max_products": 10,
             "max_components": 100,
+            # Seeded so get_plan_pricing needs no invoice fetch: it reaches
+            # Stripe when either of these is missing, and a test that wants to
+            # run the real method needs it to have nothing to fetch.
+            "last_payment_amount": 1500,
+            "last_payment_currency": "usd",
+            "next_billing_date": "2026-10-01T00:00:00Z",
+            "billing_period": "monthly",
         },
     )
     Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
     return team, user
 
 
-def _visit(client, team, user, tab, mocker, settings):
+def _visit(client, team, user, tab, mocker, settings, *, stub_pricing=True):
     """Render one tab and report how many times each sync path was taken.
 
-    Pricing is stubbed as well, and deliberately: suppressing the subscription
-    sync does not make get_plan_pricing Stripe-free, since it still fetches an
-    invoice amount when the cached fields are missing, and this fixture has
-    none. A test about how often we call Stripe should not be able to call
-    Stripe by a path it is not measuring.
+    Pricing is stubbed by default, because suppressing the subscription sync
+    does not make get_plan_pricing Stripe-free: it still fetches an invoice
+    amount when the cached fields are missing.
+
+    ``stub_pricing=False`` runs the real method instead, which is what makes an
+    assertion about the service's own sync mean anything. The fixture seeds the
+    cached invoice fields so that is safe: with them present there is nothing
+    for it to fetch.
     """
     settings.BILLING = True
     synced = mocker.patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe")
     service_synced = mocker.patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
-    mocker.patch(
-        "sbomify.apps.billing.team_pricing_service.TeamPricingService.get_plan_pricing",
-        return_value={"amount": "$0", "period": "forever", "billing_period": None},
-    )
+    if stub_pricing:
+        mocker.patch(
+            "sbomify.apps.billing.team_pricing_service.TeamPricingService.get_plan_pricing",
+            return_value={"amount": "$0", "period": "forever", "billing_period": None},
+        )
+    else:
+        # Running the real method reaches Stripe once more, for the product
+        # catalogue, which is a different call from the one under test. Held
+        # to the database copy so the test exercises the sync path without
+        # depending on a network it is not measuring.
+        mocker.patch(
+            "sbomify.apps.billing.stripe_pricing_service.StripePricingService._refresh_pricing_from_stripe",
+            side_effect=lambda db_plans: {},
+        )
     setup_authenticated_client_session(client, team, user)
     response = client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": tab}))
     return response, synced, service_synced
@@ -75,10 +106,16 @@ def test_a_tab_that_shows_no_billing_does_not_reach_stripe(client, paid_workspac
 
 @pytest.mark.django_db
 def test_the_billing_tab_syncs_exactly_once(client, paid_workspace, mocker, settings):
-    """Once, not twice: the view synced and the pricing service synced again."""
+    """Once, not twice: the view synced and the pricing service synced again.
+
+    Runs the real get_plan_pricing rather than a stub. Stubbing it would make
+    the second assertion vacuous, since a method that never runs cannot sync.
+    Safe because the fixture seeds the cached invoice fields, so the real path
+    has nothing to fetch.
+    """
     team, user = paid_workspace
 
-    response, synced, service_synced = _visit(client, team, user, "billing", mocker, settings)
+    response, synced, service_synced = _visit(client, team, user, "billing", mocker, settings, stub_pricing=False)
 
     assert response.status_code == 200
     assert synced.call_count == 1
