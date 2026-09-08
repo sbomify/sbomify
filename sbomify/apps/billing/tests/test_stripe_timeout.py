@@ -76,3 +76,36 @@ class TestTimeoutFromTheEnvironment:
         assert self._parse("inf") == 10.0
         assert self._parse("-inf") == 10.0
         assert self._parse("nan") == 10.0
+
+
+class TestUsableTimeout:
+    """What may reach the Stripe client when a settings module sets the value
+    directly, rather than through the environment."""
+
+    @staticmethod
+    def _usable(value):
+        from sbomify.apps.billing.apps import usable_timeout
+
+        return usable_timeout(value)
+
+    def test_a_number_is_returned_as_a_float(self):
+        assert self._usable(10) == 10.0
+        assert self._usable(2.5) == 2.5
+
+    def test_a_bool_is_rejected(self):
+        """bool subclasses int, so True would install a one second timeout."""
+        assert self._usable(True) is None
+        assert self._usable(False) is None
+
+    def test_a_non_number_is_rejected(self):
+        assert self._usable("10") is None
+        assert self._usable(None) is None
+
+    def test_a_non_positive_value_is_rejected(self):
+        assert self._usable(0) is None
+        assert self._usable(-1) is None
+
+    def test_infinity_and_nan_are_rejected(self):
+        assert self._usable(float("inf")) is None
+        assert self._usable(float("-inf")) is None
+        assert self._usable(float("nan")) is None

@@ -3,6 +3,23 @@ from __future__ import annotations
 from django.apps import AppConfig
 
 
+def usable_timeout(value: object) -> float | None:
+    """``value`` as a timeout in seconds, or None when it cannot be one.
+
+    Rejects bool before number, because bool is a subclass of int and ``True``
+    would otherwise install a one second timeout without saying so. Rejects
+    anything not positive and finite as well: requests raises on a negative
+    timeout, and an infinite one is the unbounded wait the caller is trying to
+    remove.
+    """
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    # NaN fails every comparison, so this rejects it too.
+    if not (0 < value < float("inf")):
+        return None
+    return float(value)
+
+
 class BillingConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "sbomify.apps.billing"
@@ -31,10 +48,10 @@ class BillingConfig(AppConfig):
         # and returned 504 instead of rendering from stored billing data.
         # The client keeps one requests session per thread, so a single shared
         # instance is safe here.
-        # Compared rather than tested for truth: a negative timeout raises
-        # inside requests and an infinite one is the unbounded wait again, so
-        # neither may reach the client. Settings already screens the
-        # environment; this keeps an override honest too.
-        timeout = getattr(settings, "STRIPE_TIMEOUT_SECONDS", 0)
-        if isinstance(timeout, int | float) and 0 < timeout < float("inf"):
+        # Screened rather than trusted: settings already filters the
+        # environment, but STRIPE_TIMEOUT_SECONDS can also be set directly by
+        # another settings module, and a value that is not a positive finite
+        # number must not reach the client.
+        timeout = usable_timeout(getattr(settings, "STRIPE_TIMEOUT_SECONDS", None))
+        if timeout is not None:
             stripe.default_http_client = stripe.new_default_http_client(timeout=timeout)
