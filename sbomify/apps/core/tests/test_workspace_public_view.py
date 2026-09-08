@@ -605,5 +605,11 @@ def test_workspace_public_stat_labels_stay_plural_above_one():
 
 @pytest.mark.django_db
 def test_workspace_public_stat_labels_use_the_plural_for_zero():
-    """Zero takes the plural, so "0 Advisories" still reads correctly."""
-    assert "Advisories" in _stat_labels(_visit(_public_workspace("Empty Workspace")))
+    """Zero takes the plural, so "0 Advisories" still reads correctly.
+
+    The workspace has no advisories and no global components, and the one
+    product the fixture creates holds the singular end of the same strip.
+    """
+    labels = _stat_labels(_visit(_public_workspace("Empty Workspace")))
+
+    assert labels == ["Advisories", "Product", "Compliance artifacts", "Latest advisory"]
