@@ -1234,6 +1234,14 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # whether to move the pin with it.
 STRIPE_API_VERSION = os.environ.get("STRIPE_API_VERSION", "2025-11-17.clover")
 
+# How long any one Stripe request may take. The library's own default is 80
+# seconds, and workspace settings reaches Stripe while rendering, twice: once
+# in TeamSettingsView and again through TeamPricingService. Unreachable Stripe
+# therefore held the page for longer than the edge would wait, and every tab of
+# the section answered 504 rather than rendering without fresh billing data.
+# Sync already fails soft, so a bounded wait degrades to slightly stale limits.
+STRIPE_TIMEOUT_SECONDS = float(os.environ.get("STRIPE_TIMEOUT_SECONDS", "10"))
+
 # Trial period settings
 TRIAL_PERIOD_DAYS = int(os.environ.get("TRIAL_PERIOD_DAYS", "14"))
 TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_DAYS", "3"))

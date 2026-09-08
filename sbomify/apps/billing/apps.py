@@ -23,3 +23,14 @@ class BillingConfig(AppConfig):
         # cannot change request or response shapes underneath us.
         if getattr(settings, "STRIPE_API_VERSION", ""):
             stripe.api_version = settings.STRIPE_API_VERSION
+
+        # Bound every Stripe request. The library defaults to 80 seconds, which
+        # is longer than a page render can afford: workspace settings syncs the
+        # subscription while rendering, on every tab and twice per tab, so an
+        # unreachable Stripe took the whole section past the edge's own limit
+        # and returned 504 instead of rendering from stored billing data.
+        # The client keeps one requests session per thread, so a single shared
+        # instance is safe here.
+        timeout = getattr(settings, "STRIPE_TIMEOUT_SECONDS", 0)
+        if timeout:
+            stripe.default_http_client = stripe.new_default_http_client(timeout=timeout)
