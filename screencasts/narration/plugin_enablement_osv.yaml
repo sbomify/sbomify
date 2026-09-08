@@ -1,0 +1,23 @@
+# Narration for the plugin_enablement_osv clip.
+#
+# Every plugin clip defines the same three beat keys; only the copy differs.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      OSV is the open source vulnerability database, and it's the one to start
+      with, because it costs nothing on any plan.
+
+  what_it_does:
+    text: >-
+      Switching it on tells sbomify to match every SBOM you've uploaded against
+      OSV's data. [pause] It runs against what is already stored, so nothing
+      needs re-uploading, and it keeps running as new SBOMs arrive.
+
+  outro:
+    text: >-
+      Findings land against the component that introduced them, so you're told
+      which repository to go and fix, rather than handed a flat list of package
+      names with no owner.

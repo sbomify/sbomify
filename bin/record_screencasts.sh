@@ -69,6 +69,28 @@ run_screencast() {
         -s
 }
 
+transcode() {
+    # VP8 -> VP9. Playwright writes VP8, which bands on the app's flat
+    # gradients. Timestamps pass through untouched, so this must run *before*
+    # mux_narration lays the audio on.
+    echo "Transcoding to VP9..."
+    compose exec tests uv run python screencasts/transcode.py "$@"
+}
+
+mux_narration() {
+    # Lays the narration clips back onto the recordings at the offsets the run
+    # captured, and cuts the matching .vtt subtitles from the same timings.
+    # A no-op for screencasts with no narration script.
+    echo "Muxing narration and building subtitles..."
+    compose exec tests uv run python screencasts/mux_narration.py "$@"
+}
+
+narration_tool() {
+    # warm / audition / try / verify / proof — see
+    # .claude/skills/narrated-screencast/SKILL.md
+    compose exec tests uv run python screencasts/narrator.py "$@"
+}
+
 clean_temp_videos() {
     # Playwright writes temp files named as 32-char hex hashes before the
     # fixture renames them to the test-name filename.  Drop only those.
@@ -96,9 +118,24 @@ Commands:
   list                  List available screencast scripts
   clean                 Remove all recorded videos and temp files
 
+Narration (spoken voiceover + .vtt subtitles):
+  warm <name>           Synthesize a screencast's narration without recording
+  warm-all              Synthesize every narration script
+  prune [--dry-run]     Delete cached audio no narration script refers to
+  lint                  Check every narrate() key against its narration file
+  audition "<line>"     Speak one line in each shortlisted voice, to pick by ear
+  try <term> <spelling>...  Compare pronunciations of one term, by evidence
+  verify                Audit every entry in the pronunciation map
+  proof <name>          Transcribe a screencast's real audio back, line by line
+
+Synthesis needs XAI_API_KEY exported, but only for lines that are not already
+in screencasts/narration/audio/, which is committed.
+
 Examples:
   $0 all
   $0 workspace_deletion.py
+  $0 warm release_creation
+  $0 proof release_creation
   $0 list
   $0 clean
 EOF
@@ -115,12 +152,18 @@ case "${1:-}" in
             run_screencast "$file"
         done
         clean_temp_videos
+        transcode
+        mux_narration
         echo "Done. Recordings in $OUTPUT_DIR/"
         ls -lh "$OUTPUT_DIR"/*.webm 2>/dev/null
         ;;
     list)
         echo "Available screencasts:"
         list_screencasts
+        ;;
+    warm|warm-all|prune|lint|audition|try|verify|proof)
+        ensure_services
+        narration_tool "$@"
         ;;
     clean)
         echo "Removing all videos from $OUTPUT_DIR/"
@@ -141,6 +184,8 @@ case "${1:-}" in
         ensure_ffmpeg
         run_screencast "$file"
         clean_temp_videos
+        transcode "${1%.py}"
+        mux_narration "${1%.py}"
         echo "Done. Recording at $OUTPUT_DIR/${1%.py}.webm"
         ;;
     ""|help|--help|-h)

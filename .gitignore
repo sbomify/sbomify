@@ -206,11 +206,20 @@ keycloak-postgres-data/
 # E2E test diff images
 **/tests/e2e/__diffs__/*.jpg
 
-# Screencast recordings
-screencasts/output/*.webm
-screencasts/output/*.txt
-screencasts/output/*.md
-screencasts/output/screenshots/
+# Screencast recordings.
+#
+# The whole output tree, rather than a list of extensions: that list had to be
+# extended for every new artifact the pipeline learned to write, and a stale
+# `.retimed.json` marker from a since-deleted script got staged because of it.
+screencasts/output/
+screencasts/narration/audition/
+
+# Synthesized narration and the index that keys it. Generated audio, not
+# source: the scripts are the source, and `narrator.py warm-all` rebuilds this
+# from them. Committing it put megabytes of binary in every clone and every
+# diff, and re-keyed the whole cache on any edit to the pronunciation map.
+screencasts/narration/audio/
+screencasts/narration/index.json
 
 # VSCode settings
 .vscode/

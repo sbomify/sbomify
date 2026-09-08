@@ -194,6 +194,15 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
         uv sync --locked; \
     fi
 
+# Screencast narration (screencasts/mux_narration.py) muxes an Opus audio track
+# into the recorded WebM.  Playwright ships its own stripped ffmpeg for video
+# capture only, so the tests image needs a real one.  Tests-only — production
+# builds from a separate base and never records screencasts.
+RUN if [ "${BUILD_ENV}" = "tests" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 ### Stage 5: Download pre-built binaries for OSV-Scanner and Cosign
 FROM alpine:3.24 AS binary-downloader
 ARG OSV_SCANNER_VERSION

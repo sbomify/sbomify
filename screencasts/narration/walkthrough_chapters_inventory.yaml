@@ -1,0 +1,63 @@
+# Narration for chapter 2 of the marketplace walkthrough — "Every artifact,
+# versioned". Also included by marketplace_walkthrough.yaml.
+# Carina, measured at 6.14 semitones of pitch variation against ara's 3.36 —
+# nearly double. Ara is one of the flattest voices xAI offers, and a flat
+# delivery is the part no words-per-minute figure captures.
+voice: carina
+# Delivery speed. This family used to run at 0.85, on guidance for dense
+# technical *teaching* (110-130 wpm), where comprehension is the goal. This is
+# a persuasive video shown to somebody who has not agreed to anything yet, and
+# that is a different problem:
+#
+#   - screencast narration lands at 130-150 wpm, 140 measuring most credible
+#   - Miller et al. (1976): 195 wpm persuaded better than 102
+#   - Smith & Shaffer (1991): speed helps most when the audience does not
+#     already agree, which is exactly a cold marketplace viewer
+#
+# At 0.85 the opening line measured 103 wpm — Miller's least-persuasive
+# condition almost exactly, on the first thing anyone hears. 1.0 puts it at
+# 139 wpm, and the corpus near 155.
+#
+# This value MUST match across the long cut and the four chapter scripts.
+# `include` merges beats only — voice and speed come from the *including*
+# file — so a mismatch synthesizes the same beat twice at two speeds and the
+# long cut drifts from the short cuts.
+speed: 1.0
+
+beats:
+  inv_component:
+    text: >-
+      Each component carries its own artifacts. SBOMs, VEX documents, and the
+      compliance paperwork that goes with them.
+
+  inv_immutable:
+    text: >-
+      And they're stored exactly as received. sbomify never rewrites what you
+      uploaded.  Analysis lands beside the artifact, never inside it, so
+      the file you can hand to an auditor is the file your build produced.
+
+  # Plays over the component's full artifact list, not the "Latest artifacts"
+  # card, which shows a single row. The numbers are the ones on screen: four
+  # versions from conftest.PIED_PIPER_SBOM_VERSIONS, spanning CycloneDX 1.5 and
+  # 1.6, the oldest a bit over six months back.
+  inv_versions:
+    text: >-
+      Four versions of this one library, going back six months. [long-pause]
+      Nothing was overwritten to get there. Each upload is kept as its own
+      record, with the spec it was written against.
+
+  # Long enough to cover its own visual. At 4.7s this line finished on the
+  # products list while the tour still had to open the product, scroll to the
+  # releases card and reach for the tagged release, leaving 5.4s of silence
+  # before the next beat could start.
+  inv_releases:
+    text: >-
+      A release pins an exact set of those artifacts to a version you actually
+      shipped. Every product keeps its own, and the tagged ones are the record
+      somebody comes back to you about.
+
+  inv_frozen:
+    text: >-
+      Which means years later it still resolves. [long-pause] Not the latest of
+      everything, but precisely what went out of the door in that build, which
+      is the question you'll be asked.

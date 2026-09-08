@@ -1,0 +1,44 @@
+# Narration for screencasts/tea_enabling.py
+#
+# Thesis: TEA is the machine-readable half of the trust center. A human reads
+# the page; a customer's tooling discovers the same artifacts over a standard
+# endpoint, with no bespoke integration on either side.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      A trust center is for people. TEA, the Transparency Exchange API, is the
+      same thing for their tooling.
+
+  why:
+    text: >-
+      Instead of a customer downloading your SBOMs by hand every quarter, their
+      systems discover and pull them automatically, using a standard neither of
+      you had to invent.
+
+  prerequisites:
+    text: >-
+      It builds on the trust center, so that comes first, along with a domain
+      of your own.
+
+  domain_validated:
+    text: >-
+      Once the domain is verified, sbomify can serve the discovery endpoint
+      from your own name rather than ours.
+
+  enable_tea:
+    text: >-
+      Then TEA is a single switch.
+
+  discovery:
+    text: >-
+      And there's the discovery URL. [pause] A well-known path on your domain
+      that lists what you publish and where to fetch it.
+
+  outro:
+    text: >-
+      Hand that one address to a customer and their tooling takes it from
+      there. No portal logins, no spreadsheets, and nothing to rebuild the next
+      time you ship.

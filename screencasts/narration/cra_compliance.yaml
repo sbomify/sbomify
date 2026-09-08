@@ -1,0 +1,123 @@
+# Narration for screencasts/cra_compliance.py
+#
+# Thesis: the Cyber Resilience Act asks a manufacturer to demonstrate scope,
+# SBOM quality, vulnerability handling and user information, and to keep a
+# technical file proving it. The wizard turns that into a sequence of questions
+# whose answers sbomify already mostly holds.
+#
+# Long recording with slow, deliberate scrolling — the lines are generous.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      The Cyber Resilience Act applies to almost anything with digital elements
+      sold into the European Union, and it arrives with real deadlines.
+
+  what_it_asks:
+    text: >-
+      What it actually asks for is evidence. That you knew what was in your
+      product, that you handled vulnerabilities, and that you told your users
+      what they needed to know.
+
+  product:
+    text: >-
+      Compliance is assessed per product, which is why the wizard starts here
+      rather than at the workspace.
+
+  card:
+    text: >-
+      The first question is the one people skip, and it's whether the
+      regulation applies to you at all.
+
+  start_screening:
+    text: >-
+      So it begins with scope screening rather than paperwork.
+
+  scope_questions:
+    text: >-
+      Five questions drawn from Articles 2 and 3. [pause] They establish
+      whether this is a product with digital elements, whether you place it on
+      the European market, and whether you're the manufacturer rather than a
+      distributor.
+
+  data_connection:
+    text: >-
+      The data connection question is the one that catches people out. If it
+      connects to anything, directly or indirectly, it's almost certainly in
+      scope.
+
+  verdict:
+    text: >-
+      And there's the verdict, with the reasoning attached rather than a bare
+      yes. [pause] If the answer had been no, you would have that recorded too,
+      which is worth having when somebody asks why you didn't comply.
+
+  wizard_start:
+    text: >-
+      From here it's a wizard, in five steps, and most of the answers are
+      already in your workspace.
+
+  step_one:
+    text: >-
+      Step one is the product profile. Who makes it, what it is, and how long
+      you intend to support it.
+
+  step_one_detail:
+    text: >-
+      The support period is the part with teeth. Under the CRA you're expected
+      to state it, and to actually honour it for the lifetime you claimed.
+
+  step_two:
+    text: >-
+      Step two is the SBOM itself, and this is where the earlier work pays off.
+
+  step_two_detail:
+    text: >-
+      The regulation requires a bill of materials for the top level
+      dependencies at minimum. [pause] sbomify already has yours, so this step
+      reports what you have rather than asking you to produce it.
+
+  step_three:
+    text: >-
+      Step three is the biggest, because it covers everything you do after
+      shipping.
+
+  step_three_checklist:
+    text: >-
+      A security checklist first. Secure by default configuration, protection
+      of stored data, and reducing the attack surface.
+
+  step_three_vuln:
+    text: >-
+      Then vulnerability handling, which the Act treats as an ongoing
+      obligation rather than a one-off audit. You need a coordinated disclosure
+      policy and a way for a researcher to reach you.
+
+  step_three_incident:
+    text: >-
+      And incident reporting, under Article 14. [pause] An actively exploited
+      vulnerability has to be reported within twenty four hours, so knowing
+      that in advance matters rather more than reading it afterwards.
+
+  step_four:
+    text: >-
+      Step four is what you tell your users. Installation, secure
+      configuration, and how you'll notify them when something changes.
+
+  step_five:
+    text: >-
+      Step five reviews the whole thing and shows you where the gaps are.
+
+  export:
+    text: >-
+      Then it exports a compliance bundle. The declaration of conformity, the
+      SBOMs, the vulnerability disclosure policy, and the risk assessment, as
+      one file.
+
+  outro:
+    text: >-
+      That's the technical documentation the regulation expects you to keep.
+      [pause] Not assembled the week before an audit, but generated from the
+      artifacts you were maintaining all along.

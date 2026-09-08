@@ -1,0 +1,69 @@
+# Narration for screencasts/trust_center_setup.py
+#
+# Thesis: the trust center is the public face of everything already in the
+# workspace — one URL you hand a customer instead of answering the same
+# questionnaire by email, with per-component control over what they see.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Sooner or later a customer asks for your SBOMs, your audit report, and
+      your security contact. Usually as a spreadsheet, usually on a deadline.
+
+  what_it_is:
+    text: >-
+      A trust center answers that in advance. It's a public page backed by the
+      artifacts already in your workspace, so nothing has to be assembled by
+      hand.
+
+  enable:
+    text: >-
+      Turning it on publishes the page. [pause] Nothing becomes visible yet,
+      though. Every component is still private until you say otherwise.
+
+  security_txt:
+    text: >-
+      security dot txt is worth enabling while you're here. It's the standard
+      file a researcher looks for when they need to report something, and
+      sbomify keeps it in sync with your contact profile.
+
+  nda:
+    text: >-
+      You can also attach a company NDA. That's what makes gated access
+      possible later, where somebody signs before they see the detail.
+
+  domain:
+    text: >-
+      A custom domain puts the page on your own name rather than ours, which
+      matters when the link goes into a procurement document.
+
+  domain_save:
+    text: >-
+      Save it, and sbomify gives you the DNS record to point at us.
+
+  component:
+    text: >-
+      Now the part that decides what a visitor actually sees. Visibility is set
+      per component, not once for the whole workspace.
+
+  visibility_public:
+    text: >-
+      Public means anyone with the link can see it, and it's the right setting
+      for the SBOM of something you already ship openly.
+
+  visibility_gated:
+    text: >-
+      Gated is the middle ground. The component is listed, but a visitor has to
+      request access and sign your NDA before the artifacts open up.
+
+  visibility_private:
+    text: >-
+      And private keeps it out of the trust center entirely.
+
+  outro:
+    text: >-
+      That's the whole trade. [pause] One link you can put in a sales
+      conversation, and per component control over exactly how much of it a
+      stranger gets to read.

@@ -1,0 +1,39 @@
+# Narration for screencasts/account_deletion.py
+#
+# Thesis: deleting your user account is separate from deleting a workspace,
+# and the distinction is the thing viewers most often get wrong.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Deleting your account is not the same as deleting a workspace. This
+      removes you, the person, rather than the data your team relies on.
+
+  account_tab:
+    text: >-
+      It sits under the Account tab in settings, which is about you rather
+      than the workspace you happen to be looking at.
+
+  danger_zone:
+    text: >-
+      Same collapsed danger zone as everywhere else, and the same reason for
+      it. Nothing destructive is one stray click away.
+
+  consequences:
+    text: >-
+      Read what it tells you here. [pause] If you're the last owner of a
+      workspace, that workspace goes with you, so hand ownership over first if
+      anyone else still needs it.
+
+  confirm:
+    text: >-
+      Type delete to confirm. This is the point of no return, and support
+      cannot reverse it afterwards.
+
+  outro:
+    text: >-
+      Confirm, and you're signed out for good. [pause] Your artifacts stay with
+      any workspace that still has another owner, because they belong to the
+      workspace and not to you.

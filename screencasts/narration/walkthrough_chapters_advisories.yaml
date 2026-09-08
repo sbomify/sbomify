@@ -1,0 +1,75 @@
+# Narration for chapter 5 of the marketplace walkthrough — "Tell customers
+# what you found". Also included by marketplace_walkthrough.yaml.
+#
+# The chapter that closes the loop: the first four chapters are about knowing
+# what you ship and what is wrong with it. This one is about the disclosure a
+# customer actually receives, which is the part that gets asked for in
+# procurement and the part teams currently do by email.
+#
+# Runs after the trust centre chapter on purpose — the advisory has to be
+# published to somewhere public for the second half to mean anything.
+# Carina, measured at 6.14 semitones of pitch variation against ara's 3.36 —
+# nearly double. Ara is one of the flattest voices xAI offers, and a flat
+# delivery is the part no words-per-minute figure captures.
+voice: carina
+# Delivery speed. This family used to run at 0.85, on guidance for dense
+# technical *teaching* (110-130 wpm), where comprehension is the goal. This is
+# a persuasive video shown to somebody who has not agreed to anything yet, and
+# that is a different problem:
+#
+#   - screencast narration lands at 130-150 wpm, 140 measuring most credible
+#   - Miller et al. (1976): 195 wpm persuaded better than 102
+#   - Smith & Shaffer (1991): speed helps most when the audience does not
+#     already agree, which is exactly a cold marketplace viewer
+#
+# At 0.85 the opening line measured 103 wpm — Miller's least-persuasive
+# condition almost exactly, on the first thing anyone hears. 1.0 puts it at
+# 139 wpm, and the corpus near 155.
+#
+# This value MUST match across the long cut and the chapter scripts.
+# `include` merges beats only — voice and speed come from the *including*
+# file — so a mismatch synthesizes the same beat twice at two speeds and the
+# long cut drifts from the short cuts.
+speed: 1.0
+
+beats:
+  # Two jobs, not one. This used to frame advisories purely as "you found
+  # something in your own code", which is the narrower half: an advisory is
+  # also the readable companion to a VEX statement, the same judgement written
+  # for a person rather than a matcher, and the two are published together.
+  # Naming that also ties this chapter back to the VEX in chapter 3 instead of
+  # opening a new subject.
+  adv_why:
+    text: >-
+      An advisory is the human half of a VEX statement, the same judgement in
+      words a customer can act on. And when the vulnerability is your own, it's
+      how you disclose it.
+
+  adv_list:
+    text: >-
+      So advisories are a first-class thing here rather than a wiki page
+      somebody forgets to update. Draft, severity, affected products, and the
+      remediation state all live together.
+
+  adv_detail:
+    text: >-
+      This one is a path traversal in archive extraction, medium severity, and
+      already resolved.  The timeline is the part auditors care
+      about. Who knew what, and when.
+
+  # Describes the record on screen, not an action. The advisory is seeded
+  # already published, so "nothing reaches a customer until you publish it"
+  # played over a timeline reading "Published" and a status of "Resolved" —
+  # promising a step the tour never performs. The timeline entry is the thing
+  # actually in frame, so the line names that instead.
+  adv_publish:
+    text: >-
+      The timeline records when it went out, and nothing reached a customer
+      before that moment. You choose it, which matters while a fix is still
+      rolling out.
+
+  adv_public:
+    text: >-
+      And once you do, it's on the trust centre next to everything else you
+      publish. No mailing list to maintain, no PDF to attach, and the same page
+      your customers already have a link to.

@@ -1,0 +1,75 @@
+# Narration for screencasts/release_creation.py
+#
+# Thesis (from /faq/how-do-i-create-a-software-release/): a named release is an
+# immutable snapshot of exactly what shipped, and that is what you hand to a
+# customer or an auditor.
+#
+# Written as continuous voiceover — read the `text` values top to bottom and
+# they should sound like one person talking without stopping.  Each line plays
+# *over* the clicking and typing it describes, so sentences run into each
+# other rather than bracketing silent gaps.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      When you ship a version of your software, you need a record of exactly
+      what went into it. That's what a release is.
+
+  product:
+    text: >-
+      Everything hangs off a product. This one has four components, and each
+      of them carries its own SBOM.
+
+  latest_release:
+    text: >-
+      Scroll down and there's already a release here, called Latest. sbomify
+      maintains that one for you, and it always points at the newest SBOM for
+      every component.
+
+  why_named:
+    text: >-
+      That's handy day to day, but it moves. When you actually ship something,
+      you want it frozen, and that's a named release.
+
+  create_modal:
+    text: >-
+      So let's cut one for the middle out rewrite. It takes a name, and the
+      name is for humans, so make it the one your team already says out loud.
+
+  version:
+    text: >-
+      The version is the part that matters later. It's what you'll quote when
+      somebody asks what was actually in this build, so it should match
+      whatever you tag in your own release process.
+
+  description:
+    text: >-
+      The description is worth writing properly. A year from now this release
+      is evidence, and this is the only context anyone gets.
+
+  created:
+    text: >-
+      Create it, and the release exists. [pause] But it's empty. Nothing is
+      pinned to it yet, which is worth knowing, because an empty release still
+      looks perfectly valid from the outside.
+
+  open_release:
+    text: >-
+      So open it up and start attaching artifacts to it.
+
+  artifact_picker:
+    text: >-
+      Everything in the workspace shows up here. Every component SBOM, and any
+      compliance documents you've uploaded alongside them.
+
+  select_all:
+    text: >-
+      This build ships all four components, so take all four.
+
+  outro:
+    text: >-
+      And that's the snapshot. The components will keep moving and their
+      versions will keep changing, but this release will always say exactly
+      what shipped.
