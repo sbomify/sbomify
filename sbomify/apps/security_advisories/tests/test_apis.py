@@ -374,6 +374,40 @@ class TestWhoMayWrite:
         assert advisory.status == SecurityAdvisory.Status.DRAFT
         assert advisory.title == "Log4Shell in Acme Gateway"
 
+    def test_a_guest_cannot_even_read(self, client_and_headers, sample_team_with_owner_member, advisory) -> None:
+        """advisory:read is READ_INTERNAL, which stops at member.
+
+        A guest is an external party the trust-center machinery anchors an ACL
+        to, not a contributor, so the refusal is on the read rather than only on
+        the writes.
+        """
+        client, headers = client_and_headers
+        sample_team_with_owner_member.role = "guest"
+        sample_team_with_owner_member.save()
+
+        listed = client.get(LIST, **headers)
+        detail = client.get(_detail(advisory.id), **headers)
+
+        assert (listed.status_code, detail.status_code) == (403, 403)
+        # The draft's title must not leak through the refusal body either.
+        assert advisory.title not in detail.content.decode()
+
+    def test_bot_cannot_be_handed_to_an_ordinary_member(self, sample_team_with_owner_member) -> None:
+        """The tier table puts bot outside advisory:read, but the stronger
+        guarantee is upstream: a human Member cannot be given the role at all.
+
+        Reaching this API as a bot would first require becoming one, and that is
+        refused outside the OIDC provisioning flow. Written as a test because
+        the reverse, a role assignable by anyone who can edit a Member, is the
+        privilege escalation the guard exists to stop.
+        """
+        from django.core.exceptions import ValidationError
+
+        sample_team_with_owner_member.role = "bot"
+
+        with pytest.raises(ValidationError, match="reserved for synthetic OIDC binding identities"):
+            sample_team_with_owner_member.save()
+
     def test_an_admin_may_write(self, client_and_headers, sample_team_with_owner_member) -> None:
         client, headers = client_and_headers
         sample_team_with_owner_member.role = "admin"
