@@ -238,6 +238,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 from sbomify.apps.vulnerability_scanning.utils import (
                     extract_finding_rows,
                     merge_findings_by_alias,
+                    result_scanned_nothing,
                 )
                 from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
@@ -250,9 +251,19 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     .distinct("plugin_name")
                     .values_list("id", flat=True)
                 )
-                provider_runs = list(
-                    AssessmentRun.objects.filter(id__in=winner_ids).values_list("plugin_name", "result")
-                )
+                # A skipped run completes with no findings for the opposite
+                # reason a clean one does: nothing was examined. Counting it
+                # here put "0 total findings" and a scan date above a Yocto
+                # SBOM whose two scanners had both declined it, which reads as
+                # a clean bill of health on a build nothing looked at. Every
+                # run skipped means there is no scan to summarise.
+                provider_runs = [
+                    (name, result)
+                    for name, result in AssessmentRun.objects.filter(id__in=winner_ids).values_list(
+                        "plugin_name", "result"
+                    )
+                    if not result_scanned_nothing(result)
+                ]
                 merged = merge_findings_by_alias([result for _, result in provider_runs])
                 rows = extract_finding_rows(merged, load_vex_suppressions(component_id_from_item))
                 if rows:
@@ -272,11 +283,12 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                         key=lambda c: c["total"],
                         default={"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
                     )
-                vulnerability_summary = {
-                    **counts,
-                    "provider": ", ".join(sorted({name for name, _ in provider_runs})),
-                    "scan_date": latest_scan.created_at,
-                }
+                if provider_runs:
+                    vulnerability_summary = {
+                        **counts,
+                        "provider": ", ".join(sorted({name for name, _ in provider_runs})),
+                        "scan_date": latest_scan.created_at,
+                    }
 
             # Get assessment runs for this SBOM
             try:
