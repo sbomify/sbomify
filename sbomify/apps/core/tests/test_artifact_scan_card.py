@@ -33,11 +33,31 @@ from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member
 
-SKIPPED_RESULT: dict[str, Any] = {
-    "summary": {"total_findings": 1, "warning_count": 1},
-    "findings": [{"id": "osv:no-packages", "title": "No Packages Recognised", "severity": "info"}],
-    "metadata": {"scanner": "osv-scanner", "skipped": True, "no_packages": True},
-}
+
+def _skipped(total_findings: int) -> dict[str, Any]:
+    """A skipped result as the plugins actually store one.
+
+    Two shapes are in production and the count is what differs.
+    ``build_single_finding_result`` in the SDK sets total_findings to 0 on
+    purpose, so a skip does not read as "1 finding"; OSV's no-packages skip
+    builds its own summary and sets 1. Both carry the status finding and
+    metadata.skipped, which is what this card reads, so both belong here.
+    """
+    return {
+        "summary": {"total_findings": total_findings, "warning_count": 1},
+        "findings": [
+            {
+                "id": "osv:no-packages",
+                "title": "No Packages Recognised",
+                "status": "warning",
+                "severity": "info",
+            }
+        ],
+        "metadata": {"scanner": "osv-scanner", "skipped": True, "no_packages": True},
+    }
+
+
+SKIPPED_RESULT: dict[str, Any] = _skipped(0)
 CLEAN_RESULT: dict[str, Any] = {
     "summary": {"total_findings": 0, "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0}},
     "findings": [],
@@ -98,11 +118,16 @@ class TestTheScanCard:
         assert response.status_code == 200
         return response.context["vulnerability_summary"]
 
-    def test_every_scanner_skipping_leaves_no_scan_to_summarise(self, signed_in: tuple[Client, Component]) -> None:
+    @pytest.mark.parametrize("total_findings", [0, 1], ids=["sdk-shape", "osv-shape"])
+    def test_every_scanner_skipping_leaves_no_scan_to_summarise(
+        self, signed_in: tuple[Client, Component], total_findings: int
+    ) -> None:
+        """Both counts a skip is stored with. metadata.skipped is the marker,
+        and neither shape may reach the card."""
         client, component = signed_in
         sbom = self._sbom(component)
-        _run(sbom, "osv", SKIPPED_RESULT)
-        _run(sbom, "dependency-track", SKIPPED_RESULT)
+        _run(sbom, "osv", _skipped(total_findings))
+        _run(sbom, "dependency-track", _skipped(total_findings))
 
         assert self._summary(client, component, sbom) is None
 
