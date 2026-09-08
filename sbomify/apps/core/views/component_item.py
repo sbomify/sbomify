@@ -251,12 +251,15 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     .distinct("plugin_name")
                     .values_list("id", flat=True)
                 )
-                # A skipped run completes with no findings for the opposite
-                # reason a clean one does: nothing was examined. Counting it
-                # here put "0 total findings" and a scan date above a Yocto
-                # SBOM whose two scanners had both declined it, which reads as
-                # a clean bill of health on a build nothing looked at. Every
-                # run skipped means there is no scan to summarise.
+                # A skipped run contributes no vulnerabilities and zero
+                # severity counts for the opposite reason a clean one does:
+                # nothing was examined. The status finding it stores saying why
+                # is a warning, so it never reaches these numbers either.
+                # Counting such a run here put "0 total findings" and a scan
+                # date above a Yocto SBOM whose two scanners had both declined
+                # it, which reads as a clean bill of health on a build nothing
+                # looked at. Every run skipped means there is no scan to
+                # summarise.
                 provider_runs = [
                     (name, result, created_at)
                     for name, result, created_at in AssessmentRun.objects.filter(id__in=winner_ids).values_list(
