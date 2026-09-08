@@ -21,6 +21,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -212,7 +213,14 @@ class OSVPlugin(AssessmentPlugin):
             if converted_from is not None:
                 # The file on disk still holds the original, so the derived bytes
                 # need a file of their own for the scanner to read.
-                temp_copy = sbom_path.parent / f"{sbom_path.stem}.converted{suffix}"
+                #
+                # The name is built fresh rather than from the original's stem.
+                # osv-scanner picks its extractor by suffix, and "x.spdx.json"
+                # has a stem of "x.spdx", so a derived "x.spdx.converted.cdx.json"
+                # matches the SPDX extractor as well as the CycloneDX one. The
+                # SPDX pass then fails on CycloneDX content and takes the whole
+                # run down with exit 127.
+                temp_copy = sbom_path.parent / f"converted-{uuid4().hex}{suffix}"
                 temp_copy.write_bytes(sbom_bytes)
                 scan_path = temp_copy
                 logger.debug(f"[OSV] Wrote derived copy for scanning: {temp_copy}")
@@ -749,10 +757,11 @@ class OSVPlugin(AssessmentPlugin):
             id="osv:no-packages",
             title="No Packages Recognised",
             description=(
-                "osv-scanner did not recognise any packages in this SBOM, so it was not "
-                "matched against any advisory source. This usually means the package URLs "
-                "use a type osv-scanner does not know, such as pkg:yocto. No vulnerability "
-                "result can be inferred from this scan."
+                "None of the packages in this SBOM could be matched against an advisory "
+                "source, so it was not scanned. OSV matches on package URL (purl). SBOMs "
+                "from embedded builds such as Yocto identify their packages by CPE instead, "
+                "and OSV cannot look those up. No vulnerability result can be inferred from "
+                "this scan."
             ),
             status="warning",
             severity="info",
