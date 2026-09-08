@@ -141,7 +141,7 @@ def paid_owner(db, django_user_model, paid_team, team):
     return u
 
 
-def _delete_workspace(client, user, workspace, mocker, capture, billing=True, settings=None):
+def _delete_workspace(client, user, workspace, mocker, capture, settings, billing=True):
     """Delete from the dashboard.
 
     The cancellation is queued ``on_commit``, and the test transaction never
