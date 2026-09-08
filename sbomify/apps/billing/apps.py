@@ -31,6 +31,10 @@ class BillingConfig(AppConfig):
         # and returned 504 instead of rendering from stored billing data.
         # The client keeps one requests session per thread, so a single shared
         # instance is safe here.
+        # Compared rather than tested for truth: a negative timeout raises
+        # inside requests and an infinite one is the unbounded wait again, so
+        # neither may reach the client. Settings already screens the
+        # environment; this keeps an override honest too.
         timeout = getattr(settings, "STRIPE_TIMEOUT_SECONDS", 0)
-        if timeout:
+        if isinstance(timeout, int | float) and 0 < timeout < float("inf"):
             stripe.default_http_client = stripe.new_default_http_client(timeout=timeout)

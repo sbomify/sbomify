@@ -44,3 +44,35 @@ def test_the_library_is_given_a_bounded_client():
 def test_the_client_does_not_pin_one_session_across_threads():
     """A shared client is only safe while each thread gets its own session."""
     assert stripe.default_http_client._session is None
+
+
+class TestTimeoutFromTheEnvironment:
+    """A typo in deployment config must not crash startup or remove the bound."""
+
+    @staticmethod
+    def _parse(value):
+        from sbomify.settings import _env_positive_float
+
+        return _env_positive_float(value, 10.0)
+
+    def test_a_normal_value_is_used(self):
+        assert self._parse("2.5") == 2.5
+
+    def test_an_unset_value_takes_the_default(self):
+        assert self._parse(None) == 10.0
+
+    def test_a_malformed_value_takes_the_default(self):
+        """float("abc") would raise at import and take the process down."""
+        assert self._parse("abc") == 10.0
+        assert self._parse("") == 10.0
+
+    def test_a_non_positive_value_takes_the_default(self):
+        """requests raises on a negative timeout, and zero would mean no wait."""
+        assert self._parse("-1") == 10.0
+        assert self._parse("0") == 10.0
+
+    def test_infinity_and_nan_take_the_default(self):
+        """Infinity is the unbounded wait this setting exists to remove."""
+        assert self._parse("inf") == 10.0
+        assert self._parse("-inf") == 10.0
+        assert self._parse("nan") == 10.0
