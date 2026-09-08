@@ -835,13 +835,18 @@ def delete_workspace_with_billing_cleanup(team: Team) -> None:
     Both delete paths route through here because the billing half is easy to
     leave out and expensive when it is: the settings page's Danger Zone deleted
     the row without it, so the subscription outlived the workspace and kept
-    charging. A third caller now inherits the cleanup rather than having to
-    remember it.
+    charging. Keeping it in one place is what stops the next caller repeating
+    that.
 
     The ids are read before the row goes, since they live on it. Cancelling is
     queued rather than awaited: it is two calls to Stripe, and holding a web
     worker open for them after the row has already been deleted risks a proxy
     timing the request out with nothing left to retry.
+
+    Queued ``on_commit`` rather than straight away, so a caller that wraps this
+    in its own transaction cannot cancel a subscription whose workspace then
+    fails to delete. Outside a transaction the hook runs immediately, so the
+    two call sites here behave as before.
     """
     from sbomify.apps.billing.tasks import cleanup_stripe_for_deleted_workspace
 
@@ -854,5 +859,6 @@ def delete_workspace_with_billing_cleanup(team: Team) -> None:
 
     with transaction.atomic():
         team.delete()
-
-    cleanup_stripe_for_deleted_workspace.send(subscription_id, customer_id, workspace_key)
+        transaction.on_commit(
+            lambda: cleanup_stripe_for_deleted_workspace.send(subscription_id, customer_id, workspace_key)
+        )
