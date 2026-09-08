@@ -427,8 +427,14 @@ class TestWhoMayWrite:
         # Accepted only because the binding above names this user.
         Member.objects.create(user=bot, team=team, role="bot")
 
+        # Scoped to the workspace, as an OIDC-issued bot token is. An unscoped
+        # token would let request scoping fall back to the user's memberships,
+        # so the refusal could come from a path production never takes.
         token = AccessToken.objects.create(
-            user=bot, encoded_token=create_personal_access_token(bot), description="bot token"
+            user=bot,
+            team=team,
+            encoded_token=create_personal_access_token(bot),
+            description="bot token",
         )
         client = Client()
         headers = get_api_headers(token)
