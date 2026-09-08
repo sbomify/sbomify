@@ -395,6 +395,51 @@ class TestWhoMayWrite:
         assert advisory.title not in listed.content.decode()
         assert advisory.title not in detail.content.decode()
 
+    def test_a_real_bot_cannot_read_either(self, sample_team_with_owner_member, advisory, django_user_model) -> None:
+        """The tier says bot is outside advisory:read. Proven with a real one.
+
+        A bot only exists as the synthetic identity of an OIDC binding, so
+        reaching this API as one means building that identity: the binding, a
+        Member row the binding permits, and the bot's own token. Worth the
+        setup rather than trusting the tier table, because a bot is a
+        publishing identity a workspace hands to an external repository, and
+        unpublished advisories are not part of that grant.
+        """
+        from django.test import Client
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.oidc.models import OIDCBinding
+        from sbomify.apps.teams.models import Member
+
+        team = sample_team_with_owner_member.team
+        bot = django_user_model.objects.create_user(username="oidc-bot", email="bot@test.com")
+        OIDCBinding.objects.create(
+            component=Component.objects.create(name="published-by-ci", team=team),
+            provider=OIDCBinding.PROVIDER_GITHUB,
+            repository="acme/widget",
+            repository_id=12345,
+            repository_owner_id=67890,
+            bot_user=bot,
+            created_by=sample_team_with_owner_member.user,
+        )
+        # Accepted only because the binding above names this user.
+        Member.objects.create(user=bot, team=team, role="bot")
+
+        token = AccessToken.objects.create(
+            user=bot, encoded_token=create_personal_access_token(bot), description="bot token"
+        )
+        client = Client()
+        headers = get_api_headers(token)
+
+        listed = client.get(LIST, **headers)
+        detail = client.get(_detail(advisory.id), **headers)
+
+        assert (listed.status_code, detail.status_code) == (403, 403)
+        assert advisory.title not in listed.content.decode()
+        assert advisory.title not in detail.content.decode()
+
     def test_bot_cannot_be_handed_to_an_ordinary_member(self, sample_team_with_owner_member) -> None:
         """The tier table puts bot outside advisory:read, but the stronger
         guarantee is upstream: a human Member cannot be given the role at all.
