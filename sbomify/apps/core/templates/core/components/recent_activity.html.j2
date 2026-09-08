@@ -77,7 +77,7 @@ Parameters:
                             {% if activity.type == 'scan' and activity.scan_details %}
                                 {# Enhanced scan display with severity badges #}
                                 <div class="flex flex-wrap items-center gap-1 mt-1">
-                                    <span class="text-xs text-text-muted">{{ activity.scan_details.total }} vulns:</span>
+                                    <span class="text-xs text-text-muted">{{ activity.scan_details.total }} vulnerabilit{{ activity.scan_details.total|pluralize:"y,ies" }}:</span>
                                     {% if activity.scan_details.critical > 0 %}
                                         <c-badges.severity level="critical">{{ activity.scan_details.critical }}C</c-badges.severity>
                                     {% endif %}
