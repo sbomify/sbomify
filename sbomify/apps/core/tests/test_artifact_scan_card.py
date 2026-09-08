@@ -13,6 +13,7 @@ which is what a clean scan looks like.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -37,8 +38,8 @@ CLEAN_RESULT: dict[str, Any] = {
 }
 
 
-def _run(sbom: SBOM, plugin_name: str, result: dict[str, Any]) -> AssessmentRun:
-    return AssessmentRun.objects.create(
+def _run(sbom: SBOM, plugin_name: str, result: dict[str, Any], created_at: datetime | None = None) -> AssessmentRun:
+    run = AssessmentRun.objects.create(
         sbom=sbom,
         plugin_name=plugin_name,
         plugin_version="1.0.0",
@@ -46,6 +47,11 @@ def _run(sbom: SBOM, plugin_name: str, result: dict[str, Any]) -> AssessmentRun:
         status="completed",
         result=result,
     )
+    if created_at is not None:
+        # created_at is auto_now_add, so it has to be written back.
+        AssessmentRun.objects.filter(pk=run.pk).update(created_at=created_at)
+        run.refresh_from_db()
+    return run
 
 
 @pytest.mark.django_db
@@ -101,6 +107,21 @@ class TestTheScanCard:
         assert summary is not None
         assert summary["total"] == 0
         assert summary["provider"] == "osv"
+
+    def test_the_date_comes_from_the_scan_it_reports_not_from_a_later_skip(
+        self, signed_in: tuple[Client, Component]
+    ) -> None:
+        """A skip that lands after a real scan must not lend it its timestamp."""
+        client, component = signed_in
+        sbom = self._sbom(component)
+        scanned_at = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+        _run(sbom, "osv", CLEAN_RESULT, created_at=scanned_at)
+        _run(sbom, "dependency-track", SKIPPED_RESULT, created_at=scanned_at + timedelta(days=3))
+
+        summary = self._summary(client, component, sbom)
+        assert summary is not None
+        assert summary["provider"] == "osv"
+        assert summary["scan_date"] == scanned_at
 
     def test_a_scanner_that_ran_is_not_hidden_by_one_that_skipped(self, signed_in: tuple[Client, Component]) -> None:
         client, component = signed_in

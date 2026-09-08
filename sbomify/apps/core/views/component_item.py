@@ -258,13 +258,13 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 # a clean bill of health on a build nothing looked at. Every
                 # run skipped means there is no scan to summarise.
                 provider_runs = [
-                    (name, result)
-                    for name, result in AssessmentRun.objects.filter(id__in=winner_ids).values_list(
-                        "plugin_name", "result"
+                    (name, result, created_at)
+                    for name, result, created_at in AssessmentRun.objects.filter(id__in=winner_ids).values_list(
+                        "plugin_name", "result", "created_at"
                     )
                     if not result_scanned_nothing(result)
                 ]
-                merged = merge_findings_by_alias([result for _, result in provider_runs])
+                merged = merge_findings_by_alias([result for _, result, _ in provider_runs])
                 rows = extract_finding_rows(merged, load_vex_suppressions(component_id_from_item))
                 if rows:
                     counts = {
@@ -279,15 +279,20 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     from sbomify.apps.vulnerability_scanning.utils import extract_severity_counts
 
                     counts = max(
-                        (extract_severity_counts(result) for _, result in provider_runs),
+                        (extract_severity_counts(result) for _, result, _ in provider_runs),
                         key=lambda c: c["total"],
                         default={"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
                     )
                 if provider_runs:
+                    # Dated from the runs the card is actually reporting. Taking
+                    # latest_scan here would stamp a provider that scanned with
+                    # the time a later provider declined, so the card would read
+                    # as "scanned then, found nothing" for a moment when nothing
+                    # was scanned.
                     vulnerability_summary = {
                         **counts,
-                        "provider": ", ".join(sorted({name for name, _ in provider_runs})),
-                        "scan_date": latest_scan.created_at,
+                        "provider": ", ".join(sorted({name for name, _, _ in provider_runs})),
+                        "scan_date": max(created_at for _, _, created_at in provider_runs),
                     }
 
             # Get assessment runs for this SBOM
