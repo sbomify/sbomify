@@ -151,7 +151,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # already in flight, and deriving the copy each time would redo work
         # whose outcome the upload already recorded.
         needs_conversion = not self._validate_cyclonedx(sbom_bytes)
-        if needs_conversion and self._source_format_label(sbom_bytes) == "unknown":
+        # Labelled once. assess() runs again on every poll of a scan already in
+        # flight, and the label is read twice per call, so deriving it here
+        # keeps the JSON decoding for provenance to one pass over the bytes
+        # rather than one per read.
+        source_label = self._source_format_label(sbom_bytes) if needs_conversion else None
+        if source_label == "unknown":
             # Neither CycloneDX nor SPDX, so there is nothing to convert from,
             # and that is knowable without a database round trip.
             return self._create_unconvertible_result("the document is neither CycloneDX nor SPDX")
@@ -295,7 +300,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 sbom_id=sbom_id,
                 project_name=project_name,
                 current_release_names=current_release_names,
-                converted_from=self._source_format_label(sbom_bytes) if needs_conversion else None,
+                converted_from=source_label,
             )
         except RetryLaterError:
             raise
@@ -512,8 +517,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
             finding_id="dependency-track:unsupported-format",
             title="Format Not Supported",
             description=(
-                "Dependency Track reads CycloneDX only. This SBOM is not CycloneDX, and only "
-                "SPDX documents can be converted into it, so vulnerability scanning was skipped."
+                "Dependency Track reads CycloneDX only, and this SBOM could not be turned into "
+                "CycloneDX, so vulnerability scanning was skipped. Either the document is not a "
+                "format we can convert from, or it is SPDX and the conversion did not produce "
+                "anything to scan."
             ),
             unsupported_input=True,
             extra_metadata={"conversion_error": reason[:500]},
