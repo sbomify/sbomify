@@ -203,6 +203,49 @@ class TestTheDocumentSubject:
         assert response.status_code == 201, response.json()
         assert SBOM.objects.get(id=response.json()["id"]).version == "1.0"
 
+    @pytest.mark.parametrize(
+        "relationships",
+        [
+            pytest.param([{"spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES"}], id="no-target"),
+            pytest.param(
+                [
+                    {
+                        "spdxElementId": "SPDXRef-DOCUMENT",
+                        "relationshipType": "DESCRIBES",
+                        "relatedSpdxElement": 42,
+                    }
+                ],
+                id="numeric-target",
+            ),
+            pytest.param(
+                [
+                    {
+                        "spdxElementId": "SPDXRef-DOCUMENT",
+                        "relationshipType": "DESCRIBES",
+                        "relatedSpdxElement": {"nested": "object"},
+                    }
+                ],
+                id="object-target",
+            ),
+            pytest.param(["not a relationship"], id="not-an-object"),
+        ],
+    )
+    def test_a_relationship_that_names_nothing_usable_falls_through(
+        self,
+        sample_access_token: AccessToken,
+        sample_component: Component,
+        relationships: list,
+    ) -> None:
+        """Relationships come off the lenient parser as raw dicts, so their
+        values are whatever the uploader wrote. None of these is an ID, and
+        none of them should reach the ID comparison."""
+        document = _document(name="openssl", relationships=relationships)
+
+        response = _upload(Client(), sample_component, sample_access_token, document)
+
+        assert response.status_code == 201, response.json()
+        assert SBOM.objects.get(id=response.json()["id"]).version == "3.2.3"
+
     def test_a_document_with_no_packages_is_still_rejected(
         self,
         sample_access_token: AccessToken,

@@ -298,16 +298,20 @@ def _spdx2_described_ids(payload: SPDXSchema) -> list[str]:
     document_id = getattr(payload, "spdx_id", None) or "SPDXRef-DOCUMENT"
     described: list[str] = []
     # SPDXSchema is the lenient parser: it declares six fields and keeps the
-    # rest of the document as raw extras, so relationships arrive as dicts.
+    # rest of the document as raw extras, so relationships arrive as raw dicts
+    # holding whatever the uploader put there. Every value read out of one is
+    # checked before it is used as an ID: this list is compared against
+    # package.SPDXID, and a number or a nested object reaching that comparison
+    # would be a silent no-match rather than an error.
     for rel in getattr(payload, "relationships", None) or []:
         if not isinstance(rel, dict):
             continue
         rel_type = rel.get("relationshipType")
         source = rel.get("spdxElementId")
         target = rel.get("relatedSpdxElement")
-        if rel_type == "DESCRIBES" and source == document_id and target:
+        if rel_type == "DESCRIBES" and source == document_id and isinstance(target, str) and target:
             described.append(target)
-        elif rel_type == "DESCRIBED_BY" and target == document_id and source:
+        elif rel_type == "DESCRIBED_BY" and target == document_id and isinstance(source, str) and source:
             described.append(source)
     return described
 
@@ -328,14 +332,16 @@ def _extract_spdx2_primary_package(
 
     package: SPDXPackage | None = None
 
-    # Strategy 1: the documentDescribes shorthand
+    # Strategy 1: the documentDescribes shorthand. Read off the raw extras for
+    # the same reason as the relationships above, so its shape is checked too.
     document_describes = getattr(payload, "documentDescribes", None)
-    if document_describes:
-        described_ref: str = document_describes[0]
-        for pkg in payload.packages:
-            if getattr(pkg, "SPDXID", None) == described_ref:
-                package = pkg
-                break
+    if isinstance(document_describes, list) and document_describes:
+        described_ref = document_describes[0]
+        if isinstance(described_ref, str):
+            for pkg in payload.packages:
+                if getattr(pkg, "SPDXID", None) == described_ref:
+                    package = pkg
+                    break
 
     # Strategy 2: the relationship form of the same statement
     if not package:
