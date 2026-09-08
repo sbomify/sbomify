@@ -1017,6 +1017,12 @@ def download_cipher_suite_inventory_csv(request: HttpRequest, sbom_id: str) -> A
             )
     response = HttpResponse(buffer.getvalue(), content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="cipher-suite-inventory-{sbom_id}.csv"'
+    # This route answers for public SBOMs and refuses the rest, so the same URL
+    # serves an authorised body to one caller and a 403 to the next. Without an
+    # explicit directive the 200 is publicly cacheable, and a CDN caches .csv by
+    # extension while ignoring Vary: Cookie, so the edge hands an authorised
+    # export to anyone who asks for it next.
+    response["Cache-Control"] = "private, no-store"
     return response
 
 
