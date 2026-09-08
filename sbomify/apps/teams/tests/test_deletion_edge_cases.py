@@ -318,7 +318,9 @@ def test_deleting_a_workspace_from_settings_cancels_its_subscription(
         client, paid_owner, paid_team, mocker, django_capture_on_commit_callbacks, settings=settings
     )
 
-    assert response.status_code in (200, 302)
+    # 302 exactly: the success path redirects to the workspace that is left.
+    # Accepting 200 would let a delete that fell into the error handler pass.
+    assert response.status_code == 302
     assert not Team.objects.filter(pk=paid_team.pk).exists()
     queued.assert_called_once_with("sub_test123", "cus_test123", paid_team.key)
 
