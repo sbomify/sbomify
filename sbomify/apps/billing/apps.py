@@ -1,6 +1,15 @@
 from __future__ import annotations
 
+import logging
+
 from django.apps import AppConfig
+
+logger = logging.getLogger(__name__)
+
+# Used when the configured value cannot be a timeout. Falling back to the
+# library's own default instead would be an 80 second wait, which is the wait
+# this whole mechanism exists to remove.
+DEFAULT_STRIPE_TIMEOUT_SECONDS = 10.0
 
 
 def usable_timeout(value: object) -> float | None:
@@ -18,6 +27,32 @@ def usable_timeout(value: object) -> float | None:
     if not (0 < value < float("inf")):
         return None
     return float(value)
+
+
+def install_bounded_http_client(configured: object) -> float:
+    """Give Stripe an HTTP client that cannot wait forever, and say how long.
+
+    Always installs one. Skipping the install when the configured value is
+    unusable would leave the library's own 80 second default in place, which
+    is the unbounded wait this exists to remove, and it would do so silently.
+    Settings already screens the environment, so reaching the fallback means
+    another settings module set the value directly.
+
+    The client keeps one requests session per thread, so a single shared
+    instance is safe under concurrent requests.
+    """
+    import stripe
+
+    timeout = usable_timeout(configured)
+    if timeout is None:
+        logger.warning(
+            "STRIPE_TIMEOUT_SECONDS is not a positive finite number (%r); using %s seconds instead.",
+            configured,
+            DEFAULT_STRIPE_TIMEOUT_SECONDS,
+        )
+        timeout = DEFAULT_STRIPE_TIMEOUT_SECONDS
+    stripe.default_http_client = stripe.new_default_http_client(timeout=timeout)
+    return timeout
 
 
 class BillingConfig(AppConfig):
@@ -46,12 +81,4 @@ class BillingConfig(AppConfig):
         # subscription while rendering, on every tab and twice per tab, so an
         # unreachable Stripe took the whole section past the edge's own limit
         # and returned 504 instead of rendering from stored billing data.
-        # The client keeps one requests session per thread, so a single shared
-        # instance is safe here.
-        # Screened rather than trusted: settings already filters the
-        # environment, but STRIPE_TIMEOUT_SECONDS can also be set directly by
-        # another settings module, and a value that is not a positive finite
-        # number must not reach the client.
-        timeout = usable_timeout(getattr(settings, "STRIPE_TIMEOUT_SECONDS", None))
-        if timeout is not None:
-            stripe.default_http_client = stripe.new_default_http_client(timeout=timeout)
+        install_bounded_http_client(getattr(settings, "STRIPE_TIMEOUT_SECONDS", None))

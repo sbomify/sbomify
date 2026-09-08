@@ -109,3 +109,54 @@ class TestUsableTimeout:
         assert self._usable(float("inf")) is None
         assert self._usable(float("-inf")) is None
         assert self._usable(float("nan")) is None
+
+
+class TestInstallBoundedHttpClient:
+    """A bounded client goes in whatever the setting says, because the
+    alternative to a bad value is the library's 80 second wait."""
+
+    @staticmethod
+    def _install(value):
+        import stripe
+
+        from sbomify.apps.billing.apps import install_bounded_http_client
+
+        previous = stripe.default_http_client
+        try:
+            applied = install_bounded_http_client(value)
+            return applied, stripe.default_http_client._timeout
+        finally:
+            stripe.default_http_client = previous
+
+    def test_a_usable_value_is_applied(self):
+        assert self._install(4) == (4.0, 4.0)
+
+    def test_an_unusable_value_falls_back_rather_than_installing_nothing(self):
+        """Installing nothing would leave the 80 second default in place."""
+        from sbomify.apps.billing.apps import DEFAULT_STRIPE_TIMEOUT_SECONDS
+
+        for bad in (None, True, 0, -1, "10", float("inf"), float("nan")):
+            applied, on_client = self._install(bad)
+            assert applied == DEFAULT_STRIPE_TIMEOUT_SECONDS, bad
+            assert on_client == DEFAULT_STRIPE_TIMEOUT_SECONDS, bad
+
+    def test_the_fallback_is_shorter_than_the_library_default(self):
+        from sbomify.apps.billing.apps import DEFAULT_STRIPE_TIMEOUT_SECONDS
+
+        assert DEFAULT_STRIPE_TIMEOUT_SECONDS < _library_default_timeout()
+
+    def test_an_unusable_value_is_logged(self):
+        """Silence would hide a misconfiguration that changes request timing.
+
+        The call is asserted rather than the captured text: this logger does
+        not propagate to root, so caplog sees nothing.
+        """
+        from unittest.mock import patch
+
+        from sbomify.apps.billing import apps as billing_apps
+
+        with patch.object(billing_apps.logger, "warning") as warned:
+            self._install(True)
+
+        assert warned.call_count == 1
+        assert "STRIPE_TIMEOUT_SECONDS" in warned.call_args.args[0]
