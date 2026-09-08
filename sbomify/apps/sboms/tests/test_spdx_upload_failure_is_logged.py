@@ -45,7 +45,6 @@ def test_a_failure_inside_the_handler_is_logged(
     sample_access_token: AccessToken,
     sample_component: Component,
     mocker,
-    caplog,
 ) -> None:
     mocker.patch("boto3.resource")
     mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
@@ -69,4 +68,6 @@ def test_a_failure_inside_the_handler_is_logged(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid request"
-    logger.exception.assert_called_once()
+    # The message too, not just the call: a handler that logs something else
+    # while still reaching .exception() would leave the same gap this closes.
+    logger.exception.assert_called_once_with("Error processing SPDX BOM upload")
