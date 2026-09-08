@@ -19,6 +19,7 @@ which is what a clean scan looks like.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 from typing import Any
 
 import pytest
@@ -28,6 +29,7 @@ from django.urls import reverse
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.plugins.models import AssessmentRun
+from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member
 
@@ -48,7 +50,9 @@ def _run(sbom: SBOM, plugin_name: str, result: dict[str, Any], created_at: datet
         sbom=sbom,
         plugin_name=plugin_name,
         plugin_version="1.0.0",
+        plugin_config_hash=sha256(plugin_name.encode()).hexdigest(),
         category="security",
+        run_reason=RunReason.ON_UPLOAD.value,
         status="completed",
         result=result,
     )
