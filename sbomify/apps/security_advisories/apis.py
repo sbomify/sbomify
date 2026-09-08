@@ -291,6 +291,37 @@ def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvis
     return _fetched(team, advisory_id)
 
 
+@router.delete(
+    "/{advisory_id}",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    auth=AUTH,
+    summary="Delete an advisory",
+    description=(
+        "Deletes the advisory and everything hanging off it: vulnerabilities, product statuses "
+        "and the timeline. Nothing survives to say it existed, so a published advisory is "
+        "usually better withdrawn, which keeps its tracking id resolvable and records why."
+    ),
+)
+def delete_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
+    """Remove an advisory.
+
+    Withdrawing a draft answers "delete drafts instead", and until this route
+    existed an API client had nowhere to go with that: the instruction named an
+    action only the web UI could perform.
+    """
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:manage", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    result = advisory_service.delete_advisory(team, advisory_id)
+    if not result.ok:
+        return _failed(result)
+    return 204, None
+
+
 @router.post(
     "/{advisory_id}/updates",
     response={200: AdvisoryDetailSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
