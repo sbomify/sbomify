@@ -12,8 +12,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from sbomify.apps.sboms.apis import _extract_spdx_primary_package
-from sbomify.apps.sboms.schemas import validate_spdx_sbom
+from sbomify.apps.sboms.schemas import SPDX3Schema, validate_spdx_sbom
 
 DOC = "https://example.test/spdxdocs/image"
 SBOM_ID = "https://example.test/spdxdocs/image/sbom"
@@ -99,6 +101,28 @@ class TestTheDeclaredSubject:
         """The document roots on something that is neither package nor Sbom."""
         package = _primary(_document(root=AGENT))
 
+        assert package is not None
+
+    @pytest.mark.parametrize("bad_id", [[], {}, 42, None], ids=["list", "dict", "int", "null"])
+    def test_an_sbom_whose_id_is_not_a_string_does_not_crash(self, bad_id: object) -> None:
+        """A list or a dict is unhashable, and ``in`` against a set raises on one.
+
+        Parsed straight through SPDX3Schema rather than validate_spdx_sbom,
+        because the schema gate rejects a non-string spdxId on a small
+        document. It does not reject it on a large one: validation stops at
+        MAX_VALIDATED_ELEMENTS, and a Yocto graph runs to thousands of
+        elements, so anything past the cap arrives here unchecked. Falling
+        through is the designed behaviour for what this cannot read; raising
+        out of extraction is not.
+        """
+        document = _document(root=SBOM_ID, sbom_root=IMAGE)
+        for element in document["@graph"]:
+            if element.get("type") == "software_Sbom":
+                element["spdxId"] = bad_id
+
+        package, error = _extract_spdx_primary_package(SPDX3Schema.model_validate(document))
+
+        assert error == ""
         assert package is not None
 
     def test_an_sbom_the_document_does_not_root_on_is_not_followed(self) -> None:

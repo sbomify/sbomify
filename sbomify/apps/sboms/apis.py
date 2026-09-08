@@ -330,7 +330,12 @@ def _spdx3_bom_roots(graph: Any, root_element_ids: set[str]) -> set[str]:
         elem_type = element.get("type", element.get("@type", ""))
         if not isinstance(elem_type, str) or "Sbom" not in elem_type:
             continue
-        if element.get("spdxId", element.get("@id", "")) not in root_element_ids:
+        element_id = element.get("spdxId", element.get("@id", ""))
+        # Checked for str before the set lookup, not for tidiness: a list or a
+        # dict here is unhashable and `in` against a set raises TypeError, so a
+        # producer emitting `spdxId: []` would crash extraction on a path whose
+        # whole design is to fall through to the next strategy.
+        if not isinstance(element_id, str) or element_id not in root_element_ids:
             continue
         nested = element.get("rootElement") or []
         if isinstance(nested, str):
