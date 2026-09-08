@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from sbomify.apps.sboms.apis import _extract_spdx_primary_package
-from sbomify.apps.sboms.schemas import SPDX3Schema, validate_spdx_sbom
+from sbomify.apps.sboms.schemas import SPDX3Package, SPDX3Schema, validate_spdx_sbom
 
 DOC = "https://example.test/spdxdocs/image"
 SBOM_ID = "https://example.test/spdxdocs/image/sbom"
@@ -73,7 +73,18 @@ def _document(*, root: str, sbom_root: str | None = None) -> dict[str, Any]:
     return {"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": graph}
 
 
-def _primary(document: dict[str, Any]):
+def _primary_lenient(document: dict[str, Any]) -> SPDX3Package:
+    """Straight through the lenient parser, skipping the schema gate.
+
+    The gate rejects type spellings the schema has no term for, and the point
+    of these cases is what the extractor does with what reaches it.
+    """
+    package, error = _extract_spdx_primary_package(SPDX3Schema.model_validate(document))
+    assert error == "", error
+    return package
+
+
+def _primary(document: dict[str, Any]) -> SPDX3Package:
     payload, _ = validate_spdx_sbom(document)
     package, error = _extract_spdx_primary_package(payload)
     assert error == "", error
@@ -124,6 +135,28 @@ class TestTheDeclaredSubject:
 
         assert error == ""
         assert package is not None
+
+    @pytest.mark.parametrize(
+        "spelling",
+        ["software_Sbom", "Sbom", "https://spdx.org/rdf/3.0.1/terms/Software/Sbom", "software:Sbom"],
+        ids=["underscore", "bare", "full-iri", "compact-iri"],
+    )
+    def test_every_spelling_of_the_sbom_type_is_read(self, spelling: str) -> None:
+        document = _document(root=SBOM_ID, sbom_root=IMAGE)
+        for element in document["@graph"]:
+            if element.get("type") == "software_Sbom":
+                element["type"] = spelling
+
+        assert _primary_lenient(document).name == "core-image-minimal"
+
+    def test_a_type_that_merely_contains_the_word_is_not_an_sbom(self) -> None:
+        """A substring test says yes to this; matching the bare name does not."""
+        document = _document(root=SBOM_ID, sbom_root=IMAGE)
+        for element in document["@graph"]:
+            if element.get("type") == "software_Sbom":
+                element["type"] = "software_SbomType"
+
+        assert _primary_lenient(document).name != "core-image-minimal"
 
     def test_an_sbom_the_document_does_not_root_on_is_not_followed(self) -> None:
         """Only the Sbom the document points at gets resolved, not every Sbom

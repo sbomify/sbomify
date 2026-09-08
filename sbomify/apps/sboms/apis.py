@@ -316,6 +316,11 @@ def _extract_spdx2_primary_package(
     return package, ""
 
 
+#: Every spelling of the Sbom element type: the spec's underscore compact form
+#: and the bare name a full or compact IRI reduces to.
+_SBOM_TYPE_NAMES = frozenset({"software_Sbom", "Sbom"})
+
+
 def _spdx3_bom_roots(graph: Any, root_element_ids: set[str]) -> set[str]:
     """The rootElements of any Sbom the document roots itself on.
 
@@ -328,7 +333,12 @@ def _spdx3_bom_roots(graph: Any, root_element_ids: set[str]) -> set[str]:
         if not isinstance(element, dict):
             continue
         elem_type = element.get("type", element.get("@type", ""))
-        if not isinstance(elem_type, str) or "Sbom" not in elem_type:
+        if not isinstance(elem_type, str):
+            continue
+        # Matched on the bare name rather than by substring: an element type
+        # arrives as a full IRI, a compact IRI or the underscore form, and a
+        # substring test says yes to anything merely containing the word.
+        if elem_type.rsplit("/", 1)[-1].rsplit(":", 1)[-1] not in _SBOM_TYPE_NAMES:
             continue
         element_id = element.get("spdxId", element.get("@id", ""))
         # Checked for str before the set lookup, not for tidiness: a list or a
