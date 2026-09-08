@@ -389,7 +389,10 @@ class TestWhoMayWrite:
         detail = client.get(_detail(advisory.id), **headers)
 
         assert (listed.status_code, detail.status_code) == (403, 403)
-        # The draft's title must not leak through the refusal body either.
+        # The draft's title must not leak through either refusal body. Checking
+        # only the detail one would miss a list endpoint that names what it is
+        # refusing to show.
+        assert advisory.title not in listed.content.decode()
         assert advisory.title not in detail.content.decode()
 
     def test_bot_cannot_be_handed_to_an_ordinary_member(self, sample_team_with_owner_member) -> None:
