@@ -232,12 +232,14 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                         # One scanner still calling it live is the answer that
                         # matters, and the state is kept for the marking.
                         if not suppressed:
-                            # The state goes with the flag. Leaving "resolved"
-                            # on a row this just marked live would leave the
-                            # record contradicting itself for whoever reads the
-                            # state rather than the flag.
                             merged["vex_suppressed"] = False
-                            merged["vex_state"] = ""
+                            # Only a suppressing state contradicts the flag this
+                            # just cleared. A non-suppressing one (in_triage,
+                            # exploitable) says something true about a finding
+                            # that is still open, so dropping it would lose the
+                            # only place the page carries it.
+                            if merged["vex_state"] in SUPPRESSED_STATES:
+                                merged["vex_state"] = ""
                         elif merged.get("vex_suppressed") and not merged.get("vex_state"):
                             merged["vex_state"] = vex_state
 

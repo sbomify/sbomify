@@ -214,6 +214,26 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
         assert package["open_count"] == 1
         assert package["vulnerabilities"][0]["vex_suppressed"] is False
 
+    def test_a_live_fold_keeps_a_state_that_is_not_suppressing(self, signed_in: tuple[Client, Component]) -> None:
+        """Clearing the flag must not also discard a state that agrees with it.
+
+        `in_triage` says something true about a finding that is still open, and
+        this page is the only place it would be carried.
+        """
+        client, component = signed_in
+        sbom = self._scanned(
+            component,
+            [
+                _finding("PYSEC-2026-3447", ["CVE-2026-59890"], analysis_state="in_triage"),
+                _finding("CVE-2026-59890", ["PYSEC-2026-3447"]),
+            ],
+        )
+
+        advisory = self._packages(client, sbom)[0]["vulnerabilities"][0]
+
+        assert advisory["vex_suppressed"] is False
+        assert advisory["vex_state"] == "in_triage"
+
     def test_a_live_advisory_still_counts(self, signed_in: tuple[Client, Component]) -> None:
         """The guard against a fix that suppresses everything."""
         client, component = signed_in
