@@ -1079,14 +1079,16 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
         Returns:
             True if tool information found.
         """
-        tools = metadata.get("tools", [])
-        if isinstance(tools, list) and tools:
+        tools = metadata.get("tools")
+        if isinstance(tools, list):
             # CycloneDX 1.4 format: array of tool objects
-            return any(tool.get("name") or tool.get("vendor") for tool in tools)
-        elif isinstance(tools, dict):
+            return any(t.get("name") or t.get("vendor") for t in tools if isinstance(t, dict))
+        if isinstance(tools, dict):
             # CycloneDX 1.5+ format: tools.components array
-            components = tools.get("components", [])
-            return any(comp.get("name") for comp in components)
+            components = tools.get("components")
+            if not isinstance(components, list):
+                return False
+            return any(c.get("name") for c in components if isinstance(c, dict))
         return False
 
     # Sanctioned property name under the "internal" taxonomy namespace

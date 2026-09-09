@@ -913,6 +913,55 @@ class TestSPDXValidation:
         ctx_finding = next(f for f in result.findings if "generation-context" in f.id)
         assert ctx_finding.status == "fail"
 
+    def test_cyclonedx_tool_check_with_malformed_tools(self) -> None:
+        """A non-dict entry under metadata.tools must score, not raise.
+
+        The orchestrator marks a run FAILED when assess() raises, so an
+        unguarded .get() here turns a malformed upload into a failed assessment
+        rather than a finding that says the tool is missing.
+        """
+        for tools in (
+            ["syft-1.0"],  # 1.4 shape, a bare string where a tool object belongs
+            {"components": ["syft-1.0"]},  # 1.5 shape, same inside components
+            {"components": "syft-1.0"},  # components not a list
+            "syft-1.0",  # tools not a list or a dict
+        ):
+            sbom_data = {
+                "bomFormat": "CycloneDX",
+                "specVersion": "1.6",
+                "metadata": {
+                    "timestamp": "2023-01-01T00:00:00Z",
+                    "component": {"bom-ref": "root", "type": "application", "name": "app"},
+                    "tools": tools,
+                },
+                "components": [],
+            }
+
+            result = self._assess_sbom(sbom_data)
+
+            assert result.summary.error_count == 0, f"errored on tools={tools!r}"
+            tool_finding = next(f for f in result.findings if f.id == "cisa-2025:tool-name")
+            assert tool_finding.status == "fail", f"scored a tool from {tools!r}"
+
+    def test_cyclonedx_tool_check_still_reads_a_well_formed_tool(self) -> None:
+        """The guard against hardening that stops reading real tool entries."""
+        for tools in ([{"name": "syft", "version": "1.0"}], {"components": [{"name": "syft"}]}):
+            sbom_data = {
+                "bomFormat": "CycloneDX",
+                "specVersion": "1.6",
+                "metadata": {
+                    "timestamp": "2023-01-01T00:00:00Z",
+                    "component": {"bom-ref": "root", "type": "application", "name": "app"},
+                    "tools": tools,
+                },
+                "components": [],
+            }
+
+            result = self._assess_sbom(sbom_data)
+
+            tool_finding = next(f for f in result.findings if f.id == "cisa-2025:tool-name")
+            assert tool_finding.status == "pass", f"missed the tool in {tools!r}"
+
     def test_malformed_relationship_type_as_list(self) -> None:
         """Regression: relationshipType as list should not crash."""
         sbom_data = {
