@@ -19,8 +19,13 @@ def mock_s3_client():
     abstraction was asked for. The fixture pre-configures
     ``generate_presigned_url`` with a stable URL so tests that only
     care about call-args don't need to set it themselves.
+
+    ``boto3.resource`` is patched alongside it because
+    ``S3ObjectStoreClient.__init__`` builds one eagerly. Left real, every
+    test using this fixture would construct an actual resource and consult
+    whatever AWS config the machine happens to have.
     """
-    with patch("boto3.client") as mock_client_fn:
+    with patch("boto3.client") as mock_client_fn, patch("boto3.resource"):
         mock_s3 = MagicMock()
         mock_s3.generate_presigned_url.return_value = "https://s3.example.com/presigned"
         mock_client_fn.return_value = mock_s3
