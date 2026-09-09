@@ -204,6 +204,22 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
         assert advisory["vex_suppressed"] is True
         assert advisory["vex_state"] == "not_affected"
 
+    def test_a_fully_annotated_page_never_reads_the_vex(
+        self, signed_in: tuple[Client, Component], mocker: "MockerFixture"
+    ) -> None:
+        """The overlay is the fallback, so it must cost nothing when unused.
+
+        A Yocto image carries its verdict on every finding already, and loading
+        the component's VEX to answer a question nobody asked is an S3 fetch on
+        every page load.
+        """
+        client, component = signed_in
+        load = mocker.patch.object(vex, "load_vex_suppressions", return_value=[])
+        sbom = self._scanned(component, [_finding("CVE-2026-59890", [], analysis_state="resolved")])
+
+        assert self._packages(client, sbom)[0]["suppressed_count"] == 1
+        load.assert_not_called()
+
     def test_an_uploaded_vex_for_another_package_suppresses_nothing(
         self, signed_in: tuple[Client, Component], mocker: "MockerFixture"
     ) -> None:

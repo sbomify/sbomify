@@ -126,16 +126,12 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     statement_index,
                 )
 
-                # Returns [] when the artifact is absent or unreadable, so an
-                # unreadable VEX costs the after-the-scan overlay and nothing
-                # else: what the scan itself cleared is already on each finding
-                # as analysis_state. Anything genuinely unexpected belongs to
-                # this view's outer handler rather than a catch here.
-                vex_statements = load_vex_suppressions(sbom.component_id)
-                # Indexed once for the whole page: matching is O(findings +
-                # statements), and find_matching_statement would rebuild this
-                # for every finding that reaches the overlay.
-                vex_index = statement_index(vex_statements) if vex_statements else {}
+                # Loaded on the first finding that needs it and indexed once,
+                # then reused: a page whose findings all carry a stored state
+                # never reads the VEX at all, and one that does pays a single
+                # S3 fetch and O(findings + statements) matching rather than a
+                # rebuilt index per finding.
+                vex_index: dict[str, list[tuple[int, dict[str, Any]]]] | None = None
 
                 def vex_state_of(finding: dict[str, Any]) -> str:
                     """The finding's VEX state: stored first, live statements second.
@@ -143,12 +139,19 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     Same precedence as extract_finding_rows, so this page and the
                     drill-down table cannot disagree about one finding.
                     """
+                    nonlocal vex_index
                     state = finding.get("analysis_state") or ""
-                    if not state and vex_index:
-                        statement = find_in_index(finding, vex_index)
-                        if statement:
-                            state = statement.get("state") or ""
-                    return state
+                    if state:
+                        return state
+                    if vex_index is None:
+                        # [] when the artifact is absent or unreadable, so an
+                        # unreadable VEX costs the after-the-scan overlay and
+                        # nothing else: what the scan itself cleared is already
+                        # on each finding. Anything genuinely unexpected belongs
+                        # to this view's outer handler rather than a catch here.
+                        vex_index = statement_index(load_vex_suppressions(sbom.component_id))
+                    statement = find_in_index(finding, vex_index) if vex_index else None
+                    return (statement.get("state") or "") if statement else ""
 
                 identified: list[tuple[dict[str, Any], tuple[str, str, str, str, str]]] = []
                 purl_bases_by_tail: dict[str, set[str]] = {}
