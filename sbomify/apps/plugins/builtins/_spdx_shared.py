@@ -56,6 +56,32 @@ def iter_spdx3_elements(data: dict[str, Any]) -> Iterator[dict[str, Any]]:
             yield element
 
 
+#: The external-reference types that identify a package, bare. SPDX 2.x also
+#: allows each written as the full IRI it abbreviates, which is what
+#: spdx2_reference_type strips before comparing.
+SPDX2_IDENTIFIER_TYPES = frozenset({"purl", "cpe22Type", "cpe23Type", "swid"})
+
+
+def spdx2_reference_type(ref: Any) -> str:
+    """The bare external-reference type, whatever spelling the document used.
+
+    SPDX 2.x permits ``referenceType`` as the bare term or as the full IRI it
+    abbreviates, and the two mean the same thing. Yocto writes only the IRI:
+    every one of the 108 external references in the Yocto Project's 5.0.5
+    release SBOM is ``http://spdx.org/rdf/references/cpe23Type``, so comparing
+    against bare terms alone scored an entire build as carrying no identifiers.
+
+    Returns "" for anything that is not a reference with a string type, so a
+    caller can compare the result without checking the shape first.
+    """
+    if not isinstance(ref, dict):
+        return ""
+    value = ref.get("referenceType")
+    if not isinstance(value, str):
+        return ""
+    return value.rsplit("/", 1)[-1]
+
+
 def spdx2_root_spdxid(data: dict[str, Any]) -> str | None:
     """Return the SPDXID of the BOM subject for an SPDX 2.x document.
 
