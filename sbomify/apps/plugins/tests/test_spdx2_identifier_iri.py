@@ -26,12 +26,14 @@ BARE = "cpe23Type"
 IRI = "http://spdx.org/rdf/references/cpe23Type"
 CPE = "cpe:2.3:*:openssl:openssl:3.2.3:*:*:*:*:*:*:*"
 
-#: Each plugin with the finding id its identifier check reports under.
+#: Each plugin with the exact finding id its identifier check reports under, and
+#: the extra arguments its _validate_spdx takes. BSI wants the version because
+#: TR-03183-2 grades 2.x and 3.x differently; the rest take the document alone.
 PLUGINS = [
-    pytest.param(CISAMinimumElementsPlugin, "software-identifiers", id="cisa"),
-    pytest.param(NTIAMinimumElementsPlugin, "unique-identifiers", id="ntia"),
-    pytest.param(BSICompliancePlugin, "identifier", id="bsi"),
-    pytest.param(FDAMedicalDevicePlugin, "identifier", id="fda"),
+    pytest.param(CISAMinimumElementsPlugin, "cisa-2025:software-identifiers", (), id="cisa"),
+    pytest.param(NTIAMinimumElementsPlugin, "ntia-2021:unique-identifiers", (), id="ntia"),
+    pytest.param(BSICompliancePlugin, "bsi-tr03183:unique-identifiers", ("2.2",), id="bsi"),
+    pytest.param(FDAMedicalDevicePlugin, "fda-2025:ntia:unique-identifiers", (), id="fda"),
 ]
 
 
@@ -78,32 +80,27 @@ def _document(reference_type: str) -> dict[str, Any]:
     }
 
 
-def _identifier_finding(plugin_cls: type, finding_id_part: str, reference_type: str):
-    import inspect
-
-    plugin = plugin_cls()
-    document = _document(reference_type)
-    # BSI takes the version too, since TR-03183-2 grades 2.x and 3.x differently.
-    if "format_version" in inspect.signature(plugin._validate_spdx).parameters:
-        findings = plugin._validate_spdx(document, "2.2")
-    else:
-        findings = plugin._validate_spdx(document)
-    matches = [f for f in findings if finding_id_part in str(getattr(f, "id", "")).lower()]
-    assert matches, f"{plugin_cls.__name__} reported no identifier check at all"
+def _identifier_finding(plugin_cls: type, finding_id: str, extra_args: tuple, reference_type: str):
+    findings = plugin_cls()._validate_spdx(_document(reference_type), *extra_args)
+    matches = [f for f in findings if getattr(f, "id", None) == finding_id]
+    assert matches, (
+        f"{plugin_cls.__name__} reported no finding {finding_id!r}; "
+        f"it reported {[getattr(f, 'id', None) for f in findings]}"
+    )
     return matches[0]
 
 
-@pytest.mark.parametrize(("plugin_cls", "finding_id_part"), PLUGINS)
+@pytest.mark.parametrize(("plugin_cls", "finding_id", "extra_args"), PLUGINS)
 class TestTheIriSpellingIsReadAsAnIdentifier:
-    def test_the_iri_form_scores_as_an_identifier(self, plugin_cls: type, finding_id_part: str) -> None:
-        finding = _identifier_finding(plugin_cls, finding_id_part, IRI)
+    def test_the_iri_form_scores_as_an_identifier(self, plugin_cls: type, finding_id: str, extra_args: tuple) -> None:
+        finding = _identifier_finding(plugin_cls, finding_id, extra_args, IRI)
 
         assert finding.status != "fail", (
             f"{plugin_cls.__name__} scored a package carrying {CPE} as missing an identifier"
         )
 
-    def test_the_bare_form_still_scores_as_one(self, plugin_cls: type, finding_id_part: str) -> None:
+    def test_the_bare_form_still_scores_as_one(self, plugin_cls: type, finding_id: str, extra_args: tuple) -> None:
         """The guard against a fix that stops reading the spelling everyone else writes."""
-        finding = _identifier_finding(plugin_cls, finding_id_part, BARE)
+        finding = _identifier_finding(plugin_cls, finding_id, extra_args, BARE)
 
         assert finding.status != "fail"
