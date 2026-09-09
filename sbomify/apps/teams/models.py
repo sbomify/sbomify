@@ -248,6 +248,14 @@ class Team(models.Model):
         default=False,
         help_text="Enable Transparency Exchange API (TEA) for this workspace",
     )
+    publish_vulnerability_posture = models.BooleanField(
+        default=False,
+        help_text=(
+            "Publish the vulnerability posture of a release on the public Trust Center. "
+            "Off by default: which vulnerabilities a workspace is carrying is its own to "
+            "disclose, and a Trust Center is readable by anyone holding the link."
+        ),
+    )
     security_txt_config = models.JSONField(
         default=dict,
         blank=True,

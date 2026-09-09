@@ -238,6 +238,8 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 from sbomify.apps.vulnerability_scanning.utils import (
                     extract_finding_rows,
                     merge_findings_by_alias,
+                    result_scanned_nothing,
+                    severity_counts_from_rows,
                 )
                 from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
@@ -250,33 +252,60 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     .distinct("plugin_name")
                     .values_list("id", flat=True)
                 )
-                provider_runs = list(
-                    AssessmentRun.objects.filter(id__in=winner_ids).values_list("plugin_name", "result")
-                )
-                merged = merge_findings_by_alias([result for _, result in provider_runs])
+                # Excluded in the database, not in Python: result can be
+                # multi-megabyte and TOASTed, and result_skipped exists as a
+                # denormalised copy so a reader can tell a skip apart without
+                # fetching the blob. Filtering here would have pulled every
+                # blob only to discard it, which is worst in exactly the case
+                # this fixes, where every run is a skip.
+                #
+                # A skipped run contributes no vulnerabilities and zero
+                # severity counts for the opposite reason a clean one does:
+                # nothing was examined. It is not an empty result. It carries
+                # bookkeeping of its own, a status finding naming the reason
+                # and the counts that go with it, but none of that is a
+                # vulnerability and none of it reaches these numbers.
+                # Counting such a run here put "0 total findings" and a scan
+                # date above a Yocto SBOM whose two scanners had both declined
+                # it, which reads as a clean bill of health on a build nothing
+                # looked at. Every run skipped means there is no scan to
+                # summarise.
+                provider_runs = [
+                    (name, result, created_at)
+                    for name, result, created_at in AssessmentRun.objects.filter(id__in=winner_ids)
+                    .exclude(result_skipped=True)
+                    .values_list("plugin_name", "result", "created_at")
+                    # result_skipped is tri-state and null means "unknown", so
+                    # a row written before the column existed still gets read
+                    # properly here. Only rows the database kept reach this,
+                    # and their result is needed for the counts regardless, so
+                    # the second check costs nothing.
+                    if not result_scanned_nothing(result)
+                ]
+                merged = merge_findings_by_alias([result for _, result, _ in provider_runs])
                 rows = extract_finding_rows(merged, load_vex_suppressions(component_id_from_item))
                 if rows:
-                    counts = {
-                        "total": len(rows),
-                        "critical": sum(1 for row in rows if row["severity"] == "critical"),
-                        "high": sum(1 for row in rows if row["severity"] == "high"),
-                        "medium": sum(1 for row in rows if row["severity"] == "medium"),
-                        "low": sum(1 for row in rows if row["severity"] == "low"),
-                    }
+                    counts = severity_counts_from_rows(rows)
                 else:
                     # Summary-only results (no findings list) still carry counts.
                     from sbomify.apps.vulnerability_scanning.utils import extract_severity_counts
 
                     counts = max(
-                        (extract_severity_counts(result) for _, result in provider_runs),
+                        (extract_severity_counts(result) for _, result, _ in provider_runs),
                         key=lambda c: c["total"],
                         default={"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
                     )
-                vulnerability_summary = {
-                    **counts,
-                    "provider": ", ".join(sorted({name for name, _ in provider_runs})),
-                    "scan_date": latest_scan.created_at,
-                }
+                if provider_runs:
+                    # Dated from the runs the card is actually reporting. Taking
+                    # latest_scan here would stamp a provider that scanned with
+                    # the time a later provider declined, so the card would read
+                    # as "scanned then, found nothing" for a moment when nothing
+                    # was scanned.
+                    vulnerability_summary = {
+                        **counts,
+                        "provider": ", ".join(sorted({name for name, _, _ in provider_runs})),
+                        "scan_date": max(created_at for _, _, created_at in provider_runs),
+                    }
 
             # Get assessment runs for this SBOM
             try:

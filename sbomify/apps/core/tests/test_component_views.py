@@ -315,7 +315,7 @@ class TestComponentItemVexAliasEnrichment:
                 }
             ],
         }
-        mocker.patch("sbomify.apps.core.object_store.S3Client").return_value.get_sbom_data.return_value = json.dumps(
+        mocker.patch("sbomify.apps.core.object_store.StorageClient").return_value.get_sbom_data.return_value = json.dumps(
             vex_doc
         ).encode()
 
@@ -470,7 +470,7 @@ class TestComponentVulnFilterContext:
         )
         member = sample_team_with_owner_member
         component, vex_doc = self._component_with_vex(member.team)
-        mocker.patch("sbomify.apps.core.object_store.S3Client").return_value.get_sbom_data.return_value = json.dumps(
+        mocker.patch("sbomify.apps.core.object_store.StorageClient").return_value.get_sbom_data.return_value = json.dumps(
             vex_doc
         ).encode()
         client = Client()

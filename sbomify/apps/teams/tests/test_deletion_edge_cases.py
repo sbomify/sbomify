@@ -1,3 +1,5 @@
+import contextlib
+
 import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
@@ -13,7 +15,7 @@ def team(db):
 @pytest.fixture
 def other_team(db):
     from sbomify.apps.billing.models import BillingPlan
-    
+
     # Ensure plan exists for test
     BillingPlan.objects.get_or_create(
         key="business",
@@ -21,7 +23,7 @@ def other_team(db):
             "name": "Business",
             "description": "Business Plan",
             "max_users": 10,
-        }
+        },
     )
     return Team.objects.create(name="Team B", key="team-b-key", billing_plan="business")
 
@@ -139,45 +141,63 @@ def paid_owner(db, django_user_model, paid_team, team):
     return u
 
 
-def _delete_workspace(client, user, workspace, mocker, billing=True, settings=None):
+def _delete_workspace(client, user, workspace, mocker, capture, settings, billing=True):
+    """Delete from the dashboard.
+
+    The cancellation is queued ``on_commit``, and the test transaction never
+    commits, so the callbacks have to be captured or the task looks unqueued.
+    """
     settings.BILLING = billing
     queued = mocker.patch("sbomify.apps.billing.tasks.cleanup_stripe_for_deleted_workspace.send")
     client.force_login(user)
     _setup_session(client, workspace, "owner")
-    response = client.post(
-        reverse("teams:teams_dashboard"),
-        {"_method": "DELETE", "key": workspace.key},
-    )
+    with capture(execute=True):
+        response = client.post(
+            reverse("teams:teams_dashboard"),
+            {"_method": "DELETE", "key": workspace.key},
+        )
     return response, queued
 
 
-def test_deleting_a_workspace_cancels_its_subscription(client, paid_owner, paid_team, settings, mocker):
+def test_deleting_a_workspace_cancels_its_subscription(
+    client, paid_owner, paid_team, settings, mocker, django_capture_on_commit_callbacks
+):
     """The subscription outlived the workspace and kept charging."""
-    response, queued = _delete_workspace(client, paid_owner, paid_team, mocker, settings=settings)
+    response, queued = _delete_workspace(
+        client, paid_owner, paid_team, mocker, django_capture_on_commit_callbacks, settings=settings
+    )
 
     assert response.status_code == 302
     assert not Team.objects.filter(pk=paid_team.pk).exists()
     queued.assert_called_once_with("sub_test123", "cus_test123", paid_team.key)
 
 
-def test_deleting_a_free_workspace_queues_no_ids_to_cancel(client, paid_owner, paid_team, settings, mocker):
+def test_deleting_a_free_workspace_queues_no_ids_to_cancel(
+    client, paid_owner, paid_team, settings, mocker, django_capture_on_commit_callbacks
+):
     """The task is still queued, and finds nothing for Stripe to do."""
     paid_team.billing_plan = "community"
     paid_team.billing_plan_limits = {}
     paid_team.save(update_fields=["billing_plan", "billing_plan_limits"])
 
-    response, queued = _delete_workspace(client, paid_owner, paid_team, mocker, settings=settings)
+    response, queued = _delete_workspace(
+        client, paid_owner, paid_team, mocker, django_capture_on_commit_callbacks, settings=settings
+    )
 
     assert response.status_code == 302
     assert not Team.objects.filter(pk=paid_team.pk).exists()
     assert queued.call_args[0][:2] == (None, None)
 
 
-def test_the_delete_does_not_wait_on_stripe(client, paid_owner, paid_team, settings, mocker):
+def test_the_delete_does_not_wait_on_stripe(
+    client, paid_owner, paid_team, settings, mocker, django_capture_on_commit_callbacks
+):
     """The row is gone before the call, so a slow Stripe must not hold the request."""
     client_cls = mocker.patch("sbomify.apps.billing.stripe_client.StripeClient")
 
-    response, _ = _delete_workspace(client, paid_owner, paid_team, mocker, settings=settings)
+    response, _ = _delete_workspace(
+        client, paid_owner, paid_team, mocker, django_capture_on_commit_callbacks, settings=settings
+    )
 
     assert response.status_code == 302
     assert not Team.objects.filter(pk=paid_team.pk).exists()
@@ -269,3 +289,62 @@ def test_stripe_is_left_alone_when_billing_is_disabled(settings, mocker):
     cleanup_stripe_for_deleted_workspace("sub_test123", "cus_test123", "ws-key")
 
     stripe.assert_not_called()
+
+
+def _delete_workspace_from_settings(client, user, workspace, mocker, capture, settings):
+    """The Danger Zone button, which posts to team_general rather than the dashboard."""
+    settings.BILLING = True
+    queued = mocker.patch("sbomify.apps.billing.tasks.cleanup_stripe_for_deleted_workspace.send")
+    client.force_login(user)
+    _setup_session(client, workspace, "owner")
+    with capture(execute=True):
+        response = client.post(
+            reverse("teams:team_general", kwargs={"team_key": workspace.key}),
+            {"action": "delete"},
+        )
+    return response, queued
+
+
+def test_deleting_a_workspace_from_settings_cancels_its_subscription(
+    client, paid_owner, paid_team, settings, mocker, django_capture_on_commit_callbacks
+):
+    """The Danger Zone is the delete a user actually reaches.
+
+    Its form posts to teams:team_general, not to the dashboard, so the
+    cancellation the dashboard path performs has to happen here too or the
+    subscription outlives the workspace and keeps charging.
+    """
+    response, queued = _delete_workspace_from_settings(
+        client, paid_owner, paid_team, mocker, django_capture_on_commit_callbacks, settings=settings
+    )
+
+    # 302 exactly: the success path redirects to the workspace that is left.
+    # Accepting 200 would let a delete that fell into the error handler pass.
+    assert response.status_code == 302
+    assert not Team.objects.filter(pk=paid_team.pk).exists()
+    queued.assert_called_once_with("sub_test123", "cus_test123", paid_team.key)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_rolled_back_delete_cancels_nothing(paid_team, mocker):
+    """Cancelling a subscription whose workspace still exists would be worse
+    than leaving one running: the customer loses access and keeps the row.
+
+    The helper queues on_commit, so a caller that wraps it in its own
+    transaction and then fails cannot reach Stripe.
+    """
+    from django.db import transaction
+
+    from sbomify.apps.teams.utils import delete_workspace_with_billing_cleanup
+
+    queued = mocker.patch("sbomify.apps.billing.tasks.cleanup_stripe_for_deleted_workspace.send")
+    # delete() nulls the instance's pk, so keep it to look the row up after.
+    pk = paid_team.pk
+
+    with contextlib.suppress(RuntimeError):
+        with transaction.atomic():
+            delete_workspace_with_billing_cleanup(paid_team)
+            raise RuntimeError("the caller failed after deleting")
+
+    assert Team.objects.filter(pk=pk).exists(), "the rollback should have restored it"
+    queued.assert_not_called()

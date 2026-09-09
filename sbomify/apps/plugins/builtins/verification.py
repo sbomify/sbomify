@@ -125,9 +125,9 @@ class SBOMVerificationPlugin(AssessmentPlugin):
     # ------------------------------------------------------------------
 
     def _fetch_blob(self, key: str) -> bytes | None:
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         return s3.get_sbom_data(key)
 
     # ------------------------------------------------------------------

@@ -1,0 +1,32 @@
+---
+apiVersion: v2
+name: sbomify
+description: sbomify, Your Security Artifact Hub. Generate, manage and share SBOMs and compliance documents.
+type: application
+version: 0.1.0
+# The application version this chart packages. Released images are tagged with
+# a "v" prefix (ghcr.io/sbomify/sbomify:v26.7.1), which is why the default image
+# tag prepends it.
+appVersion: "26.7.1"
+# Floor set by the newest APIs used here:
+#   - Job .spec.podReplacementPolicy   (beta, on by default, 1.29)
+#   - lifecycle.preStop.sleep          (beta, on by default, 1.30)
+# On older clusters the API server silently prunes both, so the guarantees they
+# provide would disappear without any error. Fail the install instead.
+kubeVersion: ">=1.30.0-0"
+home: https://sbomify.com
+sources:
+  - https://github.com/sbomify/sbomify
+icon: https://sbomify.com/favicon.png
+keywords:
+  - sbom
+  - cyclonedx
+  - spdx
+  - security
+  - compliance
+  - vex
+maintainers:
+  - name: sbomify
+    url: https://github.com/sbomify/sbomify
+annotations:
+  artifacthub.io/license: Apache-2.0 WITH Commons-Clause-1.0

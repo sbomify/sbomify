@@ -66,7 +66,7 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     iter_spdx3_external_identifiers,
     resolve_spdx3_agent,
 )
-from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
+from sbomify.apps.plugins.builtins._spdx_shared import spdx2_reference_type, spdx3_document_subjects
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
@@ -1367,10 +1367,7 @@ class BSICompliancePlugin(AssessmentPlugin):
             if not isinstance(external_refs, list):
                 external_refs = []
             has_id = (isinstance(purl, str) and bool(purl)) or any(
-                isinstance(ref, dict)
-                and isinstance(ref.get("referenceType"), str)
-                and ref["referenceType"] in ("purl", "cpe22Type", "cpe23Type")
-                for ref in external_refs
+                spdx2_reference_type(ref) in ("purl", "cpe22Type", "cpe23Type") for ref in external_refs
             )
             if not has_id:
                 identifier_warnings.append(pkg.get("name", f"Package {i}"))

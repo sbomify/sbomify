@@ -26,13 +26,26 @@ class TeamPricingService:
         self.stripe_client = get_stripe_client()
         self.pricing_service = StripePricingService()
 
-    def get_plan_pricing(self, team: Any, billing_plan_obj: BillingPlan | None = None) -> dict[str, Any]:
+    def get_plan_pricing(
+        self, team: Any, billing_plan_obj: BillingPlan | None = None, *, sync_from_stripe: bool = True
+    ) -> dict[str, Any]:
         """
         Calculate pricing information for a team's billing plan.
 
         Args:
             team: Team instance
-            billing_plan_obj: Optional BillingPlan instance (will be fetched if not provided)
+            billing_plan_obj: Optional BillingPlan instance. Its fields are never
+                read: passing one only skips the existence lookup below, and with
+                it the early return that lookup triggers when no plan row matches
+                the team's billing_plan. So it changes whether this method runs
+                at all, not what it computes.
+            sync_from_stripe: Whether to refresh the subscription from Stripe before
+                pricing it. Pass False when the caller has already synced, or has
+                decided not to. Note this suppresses only the subscription sync:
+                this method can still reach Stripe to list a customer's
+                subscriptions when none is stored, and to fetch an invoice amount
+                when the cached fields are missing. A caller that must not touch
+                Stripe at all should not call this method.
 
         Returns:
             Dictionary with pricing information:
@@ -90,7 +103,12 @@ class TeamPricingService:
 
         # Sync subscription data from Stripe first to ensure we have latest status
         # Note: team might be a Pydantic schema, so we need to get the actual model instance
-        if is_billing_enabled() and stripe_subscription_id:
+        #
+        # ``sync_from_stripe=False`` is for a caller that has already synced, or
+        # has decided not to. The settings view is both: it renders eight tabs
+        # from this service and only one of them displays what Stripe would say,
+        # so syncing here as well meant every tab paid for the call twice.
+        if sync_from_stripe and is_billing_enabled() and stripe_subscription_id:
             try:
                 from sbomify.apps.teams.models import Team
 

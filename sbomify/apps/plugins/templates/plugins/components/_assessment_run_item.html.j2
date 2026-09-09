@@ -409,7 +409,7 @@
                                     </span>
                                     <div class="flex-1 ml-2">
                                         <div class="finding-title">{{ finding.title }}</div>
-                                        <div class="finding-description">{{ finding.description|format_finding_description }}</div>
+                                        <div class="finding-description">{{ finding.description|advisory_prose|format_finding_description }}</div>
                                         {% if finding.remediation %}
                                             <div class="finding-remediation">
                                                 <i class="fas fa-lightbulb mr-1"></i>

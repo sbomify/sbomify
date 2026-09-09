@@ -1,0 +1,145 @@
+---
+# Values for a local kind cluster (see bin/kind-up.sh).
+#
+# The chart itself deploys only sbomify. PostgreSQL, Redis, SeaweedFS and Keycloak
+# are provisioned separately by bin/kind-up.sh from
+# deploy/local/dependencies.yaml, and are referenced here by their in-cluster
+# Service names. The same shape as pointing at managed services in production.
+#
+# NOT for production: those dev dependencies are single-replica with no backups,
+# and the credentials below are published in this repository.
+
+app:
+  # kind publishes the Caddy edge on host ports 80/443, and *.localtest.me
+  # resolves to 127.0.0.1 for everyone, so no /etc/hosts entry is needed.
+  baseUrl: "https://sbomify.localtest.me"
+  debug: false
+  billing: false
+  logLevel: "INFO"
+
+image:
+  # Local dev tracks master rather than the last tagged release.
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+secrets:
+  # Fixed so a reinstall does not invalidate sessions. Local only.
+  secretKey: "django-insecure-local-kind-secret-key-do-not-use-in-production"
+  signedUrlSalt: "django-insecure-local-kind-signed-url-salt"
+
+# Provisioned by deploy/local/dependencies.yaml into the same namespace.
+database:
+  host: "sbomify-dev-postgresql"
+  port: 5432
+  database: sbomify
+  username: sbomify
+  password: sbomify
+  sslMode: ""  # the dev instance speaks plaintext
+
+redis:
+  host: "sbomify-dev-redis"
+  port: 6379
+
+objectStorage:
+  endpointUrl: "http://sbomify-dev-s3:9000"
+  region: auto
+  media:
+    bucket: sbomify-media
+    accessKeyId: minioadmin
+    secretAccessKey: minioadmin
+  sboms:
+    bucket: sbomify-sboms
+    accessKeyId: minioadmin
+    secretAccessKey: minioadmin
+
+auth:
+  keycloak:
+    realm: sbomify
+    clientId: sbomify
+    clientSecret: "dev-client-secret"
+    # Deliberately the PUBLIC url, on plain HTTP. OIDC discovery gives the
+    # browser whatever endpoints this URL advertises, so the app pods and the
+    # browser have to agree on it. bin/kind-up.sh adds a CoreDNS rewrite so the
+    # name also resolves in-cluster, and HTTP avoids having to trust Caddy's
+    # local CA from inside the app.
+    serverUrl: "http://keycloak.localtest.me/"
+
+web:
+  replicaCount: 2
+  workers: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      memory: 1Gi
+  podDisruptionBudget:
+    enabled: false
+
+worker:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      memory: 1Gi
+  podDisruptionBudget:
+    enabled: false
+  # A laptop-sized cluster cannot honour a long drain.
+  terminationGracePeriodSeconds: 60
+
+scheduler:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+migrations:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      memory: 1Gi
+
+caddy:
+  replicaCount: 1
+  # kind has no load balancer. A NodePort with fixed ports lets
+  # deploy/local/kind-cluster.yaml map host :80/:443 onto the node.
+  service:
+    type: NodePort
+    # NodePort cannot preserve the source IP the way a real LB does, and Local
+    # would black-hole traffic on nodes with no Caddy pod.
+    externalTrafficPolicy: Cluster
+    nodePorts:
+      http: 30080
+      https: 30443
+  # Caddy's internal CA instead of Let's Encrypt. No public CA can validate
+  # localtest.me. Browsers will warn, which is expected locally.
+  localCerts: true
+  onDemandTLS:
+    enabled: true
+  # Route the dev Keycloak through this same edge, so its issuer URL resolves
+  # identically for the browser and for the app pods.
+  extraRoutes:
+    - host: keycloak.localtest.me
+      upstream: sbomify-dev-keycloak:8080
+      scheme: http
+  persistence:
+    enabled: true
+    size: 256Mi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+# kindnet does not enforce NetworkPolicy, so leave these off locally rather
+# than create a false sense of isolation.
+networkPolicy:
+  enabled: false

@@ -18,6 +18,7 @@ from sbomify.apps.teams.models import ContactProfile, Member
 from ..models import SBOM, Component, Product
 from .fixtures import (  # noqa: F401
     create_spdx3_test_sbom,
+    load_sample_cyclonedx_vex,
     sample_access_token,
     sample_component,
     sample_sbom,
@@ -65,7 +66,7 @@ def test_sbom_upload_api_spdx(
     mocker: MockerFixture,  # noqa: F811
 ):
     mocker.patch("boto3.resource")
-    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.spdx.json"
@@ -101,7 +102,7 @@ def test_sbom_upload_api_cyclonedx(
     mocker: MockerFixture,  # noqa: F811
 ):
     mocker.patch("boto3.resource")
-    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -144,7 +145,7 @@ def test_vex_reissues_coexist_latest_by_created_at(
     (even byte-identical ones) all succeed and coexist as separate rows; the latest is by
     created_at. SBOM/CBOM keep the duplicate guard (covered elsewhere)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     client = Client()
@@ -189,7 +190,7 @@ def test_guest_cannot_upload_any_artifact(
     from sbomify.apps.teams.models import Member
 
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     client, guest_token = guest_api_client
     Member.objects.create(user=guest_token.user, team=sample_component.team, role="guest")
     headers = get_api_headers(guest_token)
@@ -241,7 +242,7 @@ def test_publish_scoped_token_can_upload_sbom_but_not_vex(
     from sbomify.apps.core.authz import SCOPE_PRESETS
 
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     sample_access_token.scopes = SCOPE_PRESETS["publish"]
     sample_access_token.save(update_fields=["scopes"])
@@ -284,7 +285,7 @@ def test_vex_delete_enqueues_reapply_sbom_delete_does_not(
     re-annotated so the deleted document's suppressions are lifted. Deleting a
     plain SBOM must not enqueue a re-apply."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object")
     send = mocker.patch("sbomify.apps.vulnerability_scanning.tasks.reapply_vex_to_component_scans.send")
 
     vex = SBOM.objects.create(
@@ -332,8 +333,8 @@ def test_web_upload_vex_reissue_allowed_and_enqueues_reapply(
     import io
 
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_sbom", return_value="stored.json")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_sbom", return_value="stored.json")
     send = mocker.patch("sbomify.apps.vulnerability_scanning.tasks.reapply_vex_to_component_scans.send")
     SBOM.objects.all().delete()
 
@@ -373,7 +374,7 @@ def test_vex_upload_enqueues_async_reapply_sbom_does_not(
     """A VEX upload enqueues the re-apply task after commit (async, not sync in the request); a
     plain SBOM upload does not."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
     send = mocker.patch("sbomify.apps.vulnerability_scanning.tasks.reapply_vex_to_component_scans.send")
 
@@ -422,7 +423,7 @@ def test_sbom_upload_api_cyclonedx_1_6_with_manufacturer(
 ):
     """Test that CycloneDX 1.6 SBOMs with manufacturer field are accepted."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -473,7 +474,7 @@ def test_sbom_upload_api_cyclonedx_1_5(
 ):
     """Test that CycloneDX 1.5 SBOMs are still accepted."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -512,7 +513,7 @@ def test_sbom_upload_api_cyclonedx_unsupported_version(
 ):
     """Test that unsupported CycloneDX versions are rejected."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -543,7 +544,7 @@ def test_sbom_upload_api_cyclonedx_invalid_json(
 ):
     """Test that invalid JSON is rejected."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -569,7 +570,7 @@ def test_sbom_upload_api_cyclonedx_without_metadata_component(
 ):
     """CycloneDX SBOMs without metadata.component should succeed, falling back to component name."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -616,7 +617,7 @@ def test_sbom_upload_api_spdx3_without_spdxdocument_name(
     fallback so both format-3 specs behave the same way on optional fields.
     """
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -686,7 +687,7 @@ def test_sbom_upload_api_spdx3_with_spdxdocument_name_is_preserved(
     """Backward-compat guard: SPDX 3.0.1 SBOMs that DO carry a SpdxDocument.name
     must still use it; the fallback only fires when the name is absent."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -754,7 +755,7 @@ def test_cyclonedx_1_6_manufacturer_field(
 ):
     """Test CycloneDX 1.6 specific feature: 'manufacturer' field (vs 1.5's 'manufacture')."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -791,7 +792,7 @@ def test_cyclonedx_1_5_manufacture_field(
 ):
     """Test CycloneDX 1.5 specific feature: 'manufacture' field (typo, fixed in 1.6)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -828,7 +829,7 @@ def test_cyclonedx_1_6_declarations_field(
 ):
     """Test CycloneDX 1.6 new feature: declarations field for conformance/attestations."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -873,7 +874,7 @@ def test_cyclonedx_1_7_citations_field(
 ):
     """Test CycloneDX 1.7 new feature: citations for data attribution tracking."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -918,7 +919,7 @@ def test_cyclonedx_1_7_distribution_constraints(
 ):
     """Test CycloneDX 1.7 new feature: distributionConstraints with TLP classification."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -957,7 +958,7 @@ def test_cyclonedx_1_7_patents_in_definitions(
 ):
     """Test CycloneDX 1.7 enhancement: patents field added to definitions (not in 1.6)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -996,7 +997,7 @@ def test_cyclonedx_1_6_rejects_citations_field(
 ):
     """Test that CycloneDX 1.6 rejects 'citations' field (only in 1.7+)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1040,7 +1041,7 @@ def test_cyclonedx_1_6_definitions_rejects_patents(
 ):
     """Test that CycloneDX 1.6 definitions field rejects 'patents' (added in 1.7)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1081,7 +1082,7 @@ def test_cyclonedx_1_6_rejects_distribution_constraints(
 ):
     """Test that CycloneDX 1.6 rejects 'distributionConstraints' field (only in 1.7+)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1119,7 +1120,7 @@ def test_cyclonedx_1_5_rejects_declarations_field(
 ):
     """Test that CycloneDX 1.5 rejects 'declarations' field (only in 1.6+)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1159,7 +1160,7 @@ def test_spdx_2_2_with_document_describes(
 ):
     """Test SPDX 2.2 with documentDescribes field (deprecated in 2.3, use relationships instead)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1209,7 +1210,7 @@ def test_spdx_2_3_with_relationships(
 ):
     """Test SPDX 2.3 using relationships (preferred over deprecated documentDescribes)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1265,7 +1266,7 @@ def test_spdx_2_3_enhanced_external_ref_types(
 ):
     """Test SPDX 2.3 enhanced external reference types (PERSISTENT_ID, PACKAGE_MANAGER)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1320,7 +1321,7 @@ def test_spdx_unsupported_version(
 ):
     """Test that unsupported SPDX versions are rejected."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1358,7 +1359,7 @@ def test_spdx_invalid_version_format(
 ):
     """Test that invalid SPDX version format is rejected."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1395,7 +1396,7 @@ def test_spdx3_upload_api(
 ):
     """Test uploading an SPDX 3.0 SBOM via the API endpoint."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1429,7 +1430,7 @@ def test_spdx3_upload_file(
 ):
     """Test uploading an SPDX 3.0 SBOM via the file upload endpoint."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1472,7 +1473,7 @@ def test_spdx3_version_extraction(
 ):
     """Test that SPDX 3.0 correctly extracts package version from software_packageVersion."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1503,7 +1504,7 @@ def test_spdx3_patch_version_accepted(
 ):
     """Test that SPDX 3.0.x patch versions (e.g. SPDX-3.0.1) are accepted."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1536,7 +1537,7 @@ def test_spdx3_no_packages_error(
 ):
     """Test that SPDX 3.0 SBOM with no packages returns an error."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1590,7 +1591,7 @@ def test_spdx3_duplicate_check(
 ):
     """Test that duplicate SPDX 3.0 SBOM uploads are rejected."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -1630,7 +1631,7 @@ def test_spdx3_legacy_format_accepted(
 ):
     """Test that legacy SPDX 3.0 format (spdxVersion/elements) is still accepted."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -3119,7 +3120,7 @@ def test_sbom_upload_file_cyclonedx(
     mocker: MockerFixture,  # noqa: F811
 ):
     mocker.patch("boto3.resource")
-    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.cdx.json"
@@ -3153,7 +3154,7 @@ def test_sbom_upload_file_cyclonedx_without_metadata_component(
 ):
     """File upload of CycloneDX without metadata.component should succeed."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     sbom_data = json.dumps(
@@ -3197,7 +3198,7 @@ def test_sbom_upload_file_spdx(
     mocker: MockerFixture,  # noqa: F811
 ):
     mocker.patch("boto3.resource")
-    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.spdx.json"
@@ -3299,7 +3300,7 @@ def test_delete_sbom_api(
 ):
     """Test SBOM deletion via API endpoint."""
     mocker.patch("boto3.resource")
-    mock_delete_object = mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
+    mock_delete_object = mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object")
 
     client = Client()
 
@@ -3628,7 +3629,7 @@ def test_download_sbom_public_success(
     )
 
     # Mock S3 client
-    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data")
     mock_get_sbom_data.return_value = b'{"name": "public sbom content"}'
 
     response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": public_sbom.id}))
@@ -3663,7 +3664,7 @@ def test_download_sbom_public_by_uuid(
         format_version="1.6",
     )
 
-    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data")
     mock_get_sbom_data.return_value = b'{"name": "public sbom content"}'
 
     response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": str(public_sbom.uuid)}))
@@ -3683,7 +3684,7 @@ def test_download_sbom_private_success(
 ):
     """Test successful private SBOM download with authentication."""
     # Mock S3 client
-    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data")
     mock_get_sbom_data.return_value = b'{"name": "private sbom content"}'
 
     # Set up session with team access
@@ -3771,7 +3772,7 @@ def test_download_sbom_s3_file_not_found(
 ):
     """Test download when S3 file doesn't exist."""
     # Mock S3 client to return None (file not found)
-    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data")
     mock_get_sbom_data.return_value = None
 
     # Set up session with team access
@@ -3793,7 +3794,7 @@ def test_download_sbom_s3_error(
 ):
     """Test download handling when S3 raises an error."""
     # Mock S3 client to raise an exception
-    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data")
     mock_get_sbom_data.side_effect = Exception("S3 download failed")
 
     # Set up session with team access
@@ -3815,7 +3816,7 @@ def test_download_sbom_with_fallback_filename(
 ):
     """Test download with SBOM that has no name (fallback to sbom UUID)."""
     # Mock S3 client
-    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data")
     mock_get_sbom_data.return_value = b'{"name": "test sbom content"}'
 
     # Create SBOM with empty name
@@ -3866,7 +3867,7 @@ def test_cyclonedx_upload_autodetects_cbom_bom_type(
 ):
     """A pure CycloneDX CBOM (every component a crypto asset) is auto-tagged bom_type=cbom."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     cbom_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.7.cdx.json"
@@ -3885,6 +3886,198 @@ def test_cyclonedx_upload_autodetects_cbom_bom_type(
 
 
 @pytest.mark.django_db
+def test_cyclonedx_upload_rejects_a_vex_declared_as_sbom(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """A VEX validates as CycloneDX, because the spec makes both components and
+    vulnerabilities optional. Stored as bom_type=sbom it was scanned and then
+    scored against NTIA, BSI and FDA as though its empty inventory were real."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url,
+        data=json.dumps(load_sample_cyclonedx_vex()),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert resp.status_code == 400
+    assert "VEX" in resp.json()["detail"]
+    assert SBOM.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_cyclonedx_upload_keeps_accepting_a_vex_declared_as_vex(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """The guard is about the declared type disagreeing with the document, so
+    the same document goes in fine when it is declared for what it is."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url + "?bom_type=vex",
+        data=json.dumps(load_sample_cyclonedx_vex()),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert resp.status_code == 201, resp.content
+    assert SBOM.objects.get(id=resp.json()["id"]).bom_type == "vex"
+
+
+@pytest.mark.django_db
+def test_cyclonedx_upload_document_carrying_both_stays_an_sbom(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """An inventory that also carries vulnerability statements is a VDR. Its
+    components are real, so every assessment that reads them still runs."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    document = load_sample_cyclonedx_vex()
+    document["components"] = [{"type": "library", "name": "lodash", "version": "4.17.15"}]
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url,
+        data=json.dumps(document),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert resp.status_code == 201, resp.content
+    assert SBOM.objects.get(id=resp.json()["id"]).bom_type == "sbom"
+
+
+@pytest.mark.django_db
+def test_vex_artifact_upload_accepts_a_vex_that_lists_components(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """The ordinary shape: a VEX lists the components its affects entries point
+    at. Requiring an empty inventory of a VEX would refuse most real ones."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    document = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {"component": {"type": "application", "name": "app", "version": "1.0.0"}},
+        "components": [
+            {"type": "library", "bom-ref": "pkg:npm/lodash@4.17.15", "name": "lodash", "version": "4.17.15"}
+        ],
+        "vulnerabilities": [
+            {
+                "id": "CVE-2021-23337",
+                "analysis": {"state": "not_affected", "justification": "code_not_reachable"},
+                "affects": [{"ref": "pkg:npm/lodash@4.17.15"}],
+            }
+        ],
+    }
+
+    client = Client()
+    url = reverse("api-1:vex_artifact_upload", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url,
+        data=json.dumps(document),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert resp.status_code == 201, resp.content
+    assert SBOM.objects.get(id=resp.json()["id"]).bom_type == "vex"
+
+
+@pytest.mark.django_db
+def test_upload_file_rejects_an_inventory_declared_as_vex(
+    sample_user,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """The session upload takes the type from a dropdown, so the mismatch runs
+    both ways and this path needs the guard the API route has."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    document = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {"component": {"type": "application", "name": "app", "version": "1.0.0"}},
+        "components": [{"type": "library", "name": "lodash", "version": "4.17.15"}],
+    }
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    client = Client()
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+    upload = SimpleUploadedFile("doc.json", json.dumps(document).encode(), content_type="application/json")
+    resp = client.post(
+        f"/api/v1/sboms/upload-file/{sample_component.id}?bom_type=vex",
+        {"sbom_file": upload},
+    )
+
+    assert resp.status_code == 400
+    assert "not a VEX" in resp.json()["detail"]
+    assert SBOM.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_vex_artifact_upload_rejects_a_plain_sbom(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """The inverse of the same confusion: detect_vex_format answers which
+    format a document is written in, not whether it is a VEX, so an inventory
+    posted here was stored as one and rewrote the component's posture."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    document = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {"component": {"type": "application", "name": "app", "version": "1.0.0"}},
+        "components": [{"type": "library", "name": "lodash", "version": "4.17.15"}],
+    }
+
+    client = Client()
+    url = reverse("api-1:vex_artifact_upload", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url,
+        data=json.dumps(document),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert resp.status_code == 400
+    assert "SBOM" in resp.json()["detail"]
+    assert SBOM.objects.count() == 0
+
+
+@pytest.mark.django_db
 def test_cyclonedx_upload_mixed_document_stays_sbom(
     sample_access_token: AccessToken,  # noqa: F811
     sample_component: Component,  # noqa: F811
@@ -3892,7 +4085,7 @@ def test_cyclonedx_upload_mixed_document_stays_sbom(
 ):
     """A software SBOM with embedded crypto assets keeps bom_type=sbom (both pipelines run on it)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     mixed_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.6.cdx.json"
@@ -3918,7 +4111,7 @@ def test_cyclonedx_upload_non_crypto_stays_sbom(
 ):
     """A plain CycloneDX SBOM is not reclassified by CBOM auto-detection (#1042)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.cdx.json"
@@ -3944,7 +4137,7 @@ def test_sbom_upload_file_autodetects_cbom(
 ):
     """File-uploading a pure CycloneDX CBOM with the default bom_type tags it cbom."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     cbom_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.7.cdx.json"
@@ -3967,7 +4160,7 @@ def test_cyclonedx_upload_explicit_sbom_not_reclassified(
 ):
     """An explicit ?bom_type=sbom is honored even for pure crypto content."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     cbom_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.7.cdx.json"
@@ -3992,7 +4185,7 @@ def test_cyclonedx_upload_autodetects_cbom_from_metadata_component(
 ):
     """CBOM detection fires when only metadata.component is a crypto asset (#1042)."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     doc = {

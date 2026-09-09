@@ -369,6 +369,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
+      # The Dockerfile ends in `COPY . .`, so .dockerignore is the only thing
+      # keeping the chart and the docs out of the image. Probe the real context
+      # rather than grepping .dockerignore, so the check reflects what Docker
+      # actually copies. busybox is pinned: a floating tag would let the probe
+      # change under CI without a commit.
+      - name: Build context excludes non-application files
+        run: |
+          set -e
+          printf 'FROM busybox:1.37.0\nCOPY . /code\n' > /tmp/probe.Dockerfile
+          docker build -q -f /tmp/probe.Dockerfile -t probe:ci . >/dev/null
+          docker run --rm probe:ci ls -1A /code > context.txt
+          grep -qx sbomify context.txt || { echo "::error::probe is broken, the app is missing"; exit 1; }
+          ! grep -qxE 'charts|deploy|\.github|docs' context.txt ||
+            { echo "::error::deployment files are in the build context, add them to .dockerignore"; exit 1; }
+
       - name: Log in to GitHub Container Registry
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0

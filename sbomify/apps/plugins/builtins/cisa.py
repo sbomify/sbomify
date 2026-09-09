@@ -63,6 +63,7 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
 )
 from sbomify.apps.plugins.builtins._spdx_shared import (
     spdx2_annotation_targets_document,
+    spdx2_reference_type,
     spdx2_root_spdxid,
 )
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
@@ -155,6 +156,9 @@ HASH_ALGORITHMS = frozenset(
 #: Identifier types that serve as a look-up key. CISA names CPE and PURL as
 #: the common ones and adds UUIDs, organisation-specific identifiers, commit
 #: hashes and the intrinsic identifiers OmniBOR and SWHID.
+# Wider than the shared set in _spdx_shared: the 2026 elements name omniborId
+# and swhid alongside purl, CPE and SWID, so a package carrying only a gitoid
+# is identified for this standard even though the older ones do not say so.
 SPDX2_IDENTIFIER_TYPES = frozenset({"purl", "cpe22Type", "cpe23Type", "swid", "gitoid", "swhid"})
 SPDX3_IDENTIFIER_TYPES = frozenset({"packageUrl", "packageURL", "purl", "cpe22", "cpe23", "swid", "gitoid", "swhid"})
 
@@ -1099,7 +1103,9 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         for ref in refs:
             if not isinstance(ref, dict):
                 continue
-            if _text(ref.get("referenceType")) in SPDX2_IDENTIFIER_TYPES and _stated(ref.get("referenceLocator")):
+            # The type is read bare, so the full IRI that SPDX 2.x also allows
+            # counts as the same identifier. Yocto writes only the IRI.
+            if spdx2_reference_type(ref) in SPDX2_IDENTIFIER_TYPES and _stated(ref.get("referenceLocator")):
                 return True
         return False
 

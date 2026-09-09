@@ -14,6 +14,7 @@ Reference:
 """
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,11 @@ from sbomify.apps.plugins.sdk.results import (
     AssessmentSummary,
     Finding,
     PluginMetadata,
+)
+from sbomify.apps.sboms.conversion import (
+    CYCLONEDX_1_6,
+    ConversionFailed,
+    to_cyclonedx,
 )
 from sbomify.logging import getLogger
 
@@ -137,20 +143,23 @@ class DependencyTrackPlugin(AssessmentPlugin):
             logger.error(f"[DT] Failed to read SBOM file: {e}")
             return self._create_error_result(f"Failed to read SBOM: {e}")
 
-        # Validate CycloneDX format (DT does not support SPDX).
-        # Non-CycloneDX SBOMs aren't an error — DT simply can't process them.
-        # Return a skipped result so the UI shows "not applicable" rather than
-        # a hard error finding for a format choice the user made deliberately.
-        if not self._validate_cyclonedx(sbom_bytes):
-            return self.create_skipped_result(
-                finding_id="dependency-track:unsupported-format",
-                title="Format Not Supported",
-                description=(
-                    "Dependency Track only supports CycloneDX format. "
-                    "This SBOM appears to be SPDX or an unrecognized format — "
-                    "vulnerability scanning was skipped."
-                ),
-            )
+        # Dependency Track reads CycloneDX only, so a document in any other
+        # format is uploaded as a derived CycloneDX copy rather than skipped.
+        # The stored artifact is never modified and the findings come back
+        # against it (ADR-004). The conversion itself happens in-process at the
+        # upload below, not here: this runs again on every poll of a scan
+        # already in flight, and deriving the copy each time would redo work
+        # whose outcome the upload already recorded.
+        needs_conversion = not self._validate_cyclonedx(sbom_bytes)
+        # Labelled once. assess() runs again on every poll of a scan already in
+        # flight, and the label is read twice per call, so deriving it here
+        # keeps the JSON decoding for provenance to one pass over the bytes
+        # rather than one per read.
+        source_label = self._source_format_label(sbom_bytes) if needs_conversion else None
+        if source_label == "unknown":
+            # Neither CycloneDX nor SPDX, so there is nothing to convert from,
+            # and that is knowable without a database round trip.
+            return self._create_unconvertible_result("the document is neither CycloneDX nor SPDX")
 
         # Look up SBOM → Component → Team
         try:
@@ -216,6 +225,14 @@ class DependencyTrackPlugin(AssessmentPlugin):
             # First scan for this SBOM against this DT server. Upload bytes,
             # discover the new DT project version UUID, persist the row, set
             # the initial tag set, then raise RetryLater to poll for results.
+            if needs_conversion:
+                try:
+                    sbom_bytes = to_cyclonedx(sbom_bytes)
+                except ConversionFailed as exc:
+                    logger.warning(f"[DT] SBOM {sbom_id} could not be converted to CycloneDX: {exc}")
+                    return self._create_unconvertible_result(str(exc))
+                logger.info(f"[DT] Uploading SBOM {sbom_id} as a derived CycloneDX copy")
+
             try:
                 version_row = self._upload_new_sbom_version(
                     sbom=sbom,
@@ -283,6 +300,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 sbom_id=sbom_id,
                 project_name=project_name,
                 current_release_names=current_release_names,
+                converted_from=source_label,
             )
         except RetryLaterError:
             raise
@@ -449,10 +467,64 @@ class DependencyTrackPlugin(AssessmentPlugin):
         """
         try:
             content = json.loads(sbom_bytes.decode("utf-8"))
+            if not isinstance(content, dict):
+                # Valid JSON that is not an object, an array say, is not
+                # CycloneDX and must not raise on the way to saying so.
+                return False
             is_cyclonedx: bool = content.get("bomFormat") == "CycloneDX"
             return is_cyclonedx
         except (json.JSONDecodeError, UnicodeDecodeError):
             return False
+
+    def _source_format_label(self, sbom_bytes: bytes) -> str:
+        """What the stored document calls itself, recorded on a converted scan."""
+        try:
+            content = json.loads(sbom_bytes.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return "unknown"
+        if not isinstance(content, dict):
+            return "unknown"
+        declared = content.get("spdxVersion")
+        if isinstance(declared, str) and declared:
+            return declared
+        # SPDX 3 moved the version into CreationInfo, so the document is
+        # recognised by the shared detector rather than a string test here.
+        # Matching "3.0" alone sent a 3.1 document to the unconvertible skip
+        # at the gate above, though the converter would have read it.
+        from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+        if not is_spdx3(content):
+            return "unknown"
+        # The context carries the line, so a 3.1 document is labelled 3.1
+        # rather than flattened onto 3.0 in the provenance we record.
+        match = re.search(r"spdx\.org/rdf/(3\.\d+)", str(content.get("@context", "")))
+        return f"SPDX-{match.group(1)}" if match else "SPDX-3.0"
+
+    def _create_unconvertible_result(self, reason: str) -> AssessmentResult:
+        """A document Dependency Track cannot read and we cannot convert either.
+
+        Still not an error. The format is a choice the uploader made and the
+        artifact may be perfectly valid, so this stays the skip it has always
+        been, now carrying why no conversion happened.
+
+        ``unsupported_input`` puts it on the longer backoff the scheduled sweep
+        keeps for capability gaps. That matters more than it did before this
+        plugin could convert: without it, every sweep would re-attempt a
+        conversion that has no reason to succeed until the document or the
+        deployment changes.
+        """
+        return self.create_skipped_result(
+            finding_id="dependency-track:unsupported-format",
+            title="Format Not Supported",
+            description=(
+                "Dependency Track reads CycloneDX only, and this SBOM could not be turned into "
+                "CycloneDX, so vulnerability scanning was skipped. Either the document is not a "
+                "format we can convert from, or it is SPDX and the conversion did not produce "
+                "anything to scan."
+            ),
+            unsupported_input=True,
+            extra_metadata={"conversion_error": reason[:500]},
+        )
 
     def _team_has_dt_enabled(self, team: Any) -> bool:
         """Check if team has the dependency-track plugin enabled.
@@ -523,6 +595,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         sbom_id: str,
         project_name: str,
         current_release_names: list[str],
+        converted_from: str | None = None,
     ) -> AssessmentResult:
         """Poll DT for vulnerability results using the stored per-SBOM version UUID.
 
@@ -615,6 +688,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "dt_project_version": version_row.dt_project_version,
                 "dt_project_release_tags": sorted(set(current_release_names)),
                 "metrics": metrics,
+                # Says the scan read a derived copy, so a surprising result is
+                # traceable to the conversion rather than to the scanner.
+                **({"converted_from": converted_from, "converted_to": CYCLONEDX_1_6} if converted_from else {}),
             },
         )
 
@@ -689,13 +765,13 @@ class DependencyTrackPlugin(AssessmentPlugin):
         if not decided:
             return
 
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
         from sbomify.apps.sboms.models import SBOM as SBOMModel
         from sbomify.apps.sboms.services.sboms import schedule_vex_reapply
 
         component = version_row.sbom.component
         normalized = self._normalized_vex(doc)
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
 
         newest = (
             SBOMModel.objects.filter(component=component, bom_type=SBOMModel.BomType.VEX.value)

@@ -72,8 +72,10 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     is_spdx3,
 )
 from sbomify.apps.plugins.builtins._spdx_shared import (
+    SPDX2_IDENTIFIER_TYPES,
     iter_spdx3_elements,
     spdx2_annotation_targets_document,
+    spdx2_reference_type,
     spdx2_root_spdxid,
     spdx3_annotation_subject_matches,
     spdx3_document_subjects,
@@ -370,17 +372,14 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
                 version_failures.append(package_name)
 
             # 5. Software Identifiers (at least one required)
-            # Only accept externalRefs with valid identifier types (purl, cpe22Type, cpe23Type, swid)
-            valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
+            # The type is read bare, so the full IRI that SPDX 2.x also allows
+            # counts as the same identifier. Yocto writes only the IRI.
             purl = package.get("purl")
             external_refs = package.get("externalRefs")
             if not isinstance(external_refs, list):
                 external_refs = []
             has_identifier = (isinstance(purl, str) and bool(purl)) or any(
-                isinstance(ref, dict)
-                and isinstance(ref.get("referenceType"), str)
-                and ref["referenceType"] in valid_identifier_types
-                for ref in external_refs
+                spdx2_reference_type(ref) in SPDX2_IDENTIFIER_TYPES for ref in external_refs
             )
             if not has_identifier:
                 identifier_failures.append(package_name)
