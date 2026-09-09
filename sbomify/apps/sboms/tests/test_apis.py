@@ -3895,7 +3895,7 @@ def test_cyclonedx_upload_rejects_a_vex_declared_as_sbom(
     vulnerabilities optional. Stored as bom_type=sbom it was scanned and then
     scored against NTIA, BSI and FDA as though its empty inventory were real."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     client = Client()
@@ -3921,7 +3921,7 @@ def test_cyclonedx_upload_keeps_accepting_a_vex_declared_as_vex(
     """The guard is about the declared type disagreeing with the document, so
     the same document goes in fine when it is declared for what it is."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     client = Client()
@@ -3946,7 +3946,7 @@ def test_cyclonedx_upload_document_carrying_both_stays_an_sbom(
     """An inventory that also carries vulnerability statements is a VDR. Its
     components are real, so every assessment that reads them still runs."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     document = load_sample_cyclonedx_vex()
@@ -3974,7 +3974,7 @@ def test_vex_artifact_upload_accepts_a_vex_that_lists_components(
     """The ordinary shape: a VEX lists the components its affects entries point
     at. Requiring an empty inventory of a VEX would refuse most real ones."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     document = {
@@ -4016,7 +4016,7 @@ def test_upload_file_rejects_an_inventory_declared_as_vex(
     """The session upload takes the type from a dropdown, so the mismatch runs
     both ways and this path needs the guard the API route has."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     document = {
@@ -4052,7 +4052,7 @@ def test_vex_artifact_upload_rejects_a_plain_sbom(
     format a document is written in, not whether it is a VEX, so an inventory
     posted here was stored as one and rewrote the component's posture."""
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     document = {
