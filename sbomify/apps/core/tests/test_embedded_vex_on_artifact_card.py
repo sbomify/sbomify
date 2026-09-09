@@ -141,3 +141,83 @@ class TestTheCardCountsOnlyLiveFindings:
         assert summary is not None
         assert summary["total"] == 1
         assert summary["high"] == 1
+
+
+@pytest.mark.django_db
+class TestTheOtherTwoSurfacesThatTallyRows:
+    """The artifacts table and the product page count the same rows the card does.
+
+    Fixing one and leaving them would put three answers on three pages for one
+    scan, which is the shape of the bug rather than an improvement on it.
+    """
+
+    def test_the_artifacts_table_does_not_count_a_suppressed_finding(
+        self, sample_team_with_owner_member: Member
+    ) -> None:
+        from sbomify.apps.sboms.services.sboms_table import _attach_vulnerability_counts
+
+        component = Component.objects.create(
+            team=sample_team_with_owner_member.team,
+            name="yocto-image-table",
+            component_type=Component.ComponentType.BOM,
+        )
+        sbom = SBOM.objects.create(
+            component=component,
+            name="core-image-minimal",
+            format="spdx",
+            format_version="3.0.1",
+            version="",
+            sbom_filename="x.json",
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            plugin_config_hash="0" * 64,
+            category="security",
+            run_reason=RunReason.ON_UPLOAD.value,
+            status="completed",
+            result=SUPPRESSED_RESULT,
+        )
+
+        items = [{"sbom": {"id": sbom.id}}]
+        _attach_vulnerability_counts(items, component.id)
+
+        assert items[0]["vuln"]["total"] == 0, "the table counted a suppressed finding"
+        assert items[0]["vuln"]["high"] == 0
+
+    def test_the_product_page_does_not_count_a_suppressed_finding(self, sample_team_with_owner_member: Member) -> None:
+        from sbomify.apps.core.models import Product
+        from sbomify.apps.core.services.product_page import build_product_components_rows
+        from sbomify.apps.sboms.models import ProductComponent
+
+        team = sample_team_with_owner_member.team
+        product = Product.objects.create(team=team, name="yocto-product")
+        component = Component.objects.create(
+            team=team, name="yocto-image-product", component_type=Component.ComponentType.BOM
+        )
+        ProductComponent.objects.create(product=product, component=component)
+        sbom = SBOM.objects.create(
+            component=component,
+            name="core-image-minimal",
+            format="spdx",
+            format_version="3.0.1",
+            version="",
+            sbom_filename="x.json",
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            plugin_config_hash="0" * 64,
+            category="security",
+            run_reason=RunReason.ON_UPLOAD.value,
+            status="completed",
+            result=SUPPRESSED_RESULT,
+        )
+
+        rows = build_product_components_rows(product.id)["rows"]
+        row = next(r for r in rows if r["id"] == component.id)
+
+        assert row["vuln"]["total"] == 0, "the product page counted a suppressed finding"
+        assert row["vuln"]["high"] == 0
