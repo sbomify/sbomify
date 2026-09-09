@@ -191,12 +191,20 @@ def prune_dt_project_versions(
 
     batch_size = max(1, batch_size)
     removed = 0
+    # One client per server, not per row: each holds a requests.Session, and a
+    # backlog on one server is the case this sweep exists for, so rebuilding it
+    # per row throws away every connection.
+    clients: dict[Any, DependencyTrackClient] = {}
     for start in range(0, len(doomed), batch_size):
         batch = doomed[start : start + batch_size]
         rows = SbomDependencyTrackProjectVersion.objects.filter(id__in=batch).select_related("dt_server")
         for row in rows:
             try:
-                client = DependencyTrackClient(row.dt_server.url, row.dt_server.api_key)
+                # Built inside the try so a bad server config costs its own
+                # rows rather than the whole sweep.
+                client = clients.get(row.dt_server_id)
+                if client is None:
+                    client = clients[row.dt_server_id] = DependencyTrackClient(row.dt_server.url, row.dt_server.api_key)
                 client.delete_project(str(row.dt_project_version_uuid))
             except DependencyTrackAPIError as exc:
                 if exc.status_code != 404:

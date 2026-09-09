@@ -281,6 +281,40 @@ class TestDependencyTrackVersionRetention:
         ]
         assert len(selects) == 3
 
+    def test_one_client_per_server_not_one_per_row(self, sample_sbom, mocker):
+        """Each client holds a requests.Session, so building one per row throws
+        away every connection on exactly the backlog this sweep is for."""
+        from sbomify.apps.sboms.models import SBOM
+
+        for index in range(4):
+            sbom = SBOM.objects.create(
+                name=f"pooled-{index}",
+                version=f"1.0.{index}",
+                format=sample_sbom.format,
+                format_version=sample_sbom.format_version,
+                component=sample_sbom.component,
+                sbom_filename=f"pooled-{index}.json",
+                source="test",
+            )
+            self._version(sbom, days_ago=90)
+            SBOM.objects.create(
+                name=sbom.name,
+                version=f"99.0.{index}",
+                format=sbom.format,
+                format_version=sbom.format_version,
+                component=sbom.component,
+                sbom_filename=f"newer-pooled-{index}.json",
+                source="test",
+            )
+        client = mocker.patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient")
+
+        assert prune_dt_project_versions(batch_size=2) == 4
+
+        # All four rows share one server, and the batch boundary must not
+        # reset the pool either.
+        assert client.call_count == 1
+        assert client.return_value.delete_project.call_count == 4
+
     def test_dry_run_touches_nothing(self, sample_sbom, mocker):
         from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
 
