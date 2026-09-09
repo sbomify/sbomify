@@ -13,7 +13,8 @@ this page's whole job. What changes is that they no longer count as open.
 
 from __future__ import annotations
 
-from typing import Any
+import json
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from django.test import Client
@@ -25,6 +26,9 @@ from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member
+
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
 
 SETUPTOOLS = {"name": "setuptools", "version": "82.0.1", "ecosystem": "PyPI", "purl": "pkg:pypi/setuptools@82.0.1"}
 
@@ -138,6 +142,77 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
 
         assert advisory["vex_suppressed"] is False
         assert advisory["vex_state"] == "", "the state contradicted the flag"
+
+    @staticmethod
+    def _uploaded_vex(component: Component, mocker: "MockerFixture", *, purl: str, advisory_id: str) -> None:
+        """A component's own uploaded VEX, which the view reads when a finding
+        carries no stored state.
+
+        Patches the reader method rather than S3Client itself: replacing the
+        class rebinds the name in object_store, and a module importing it later
+        keeps the mock past teardown.
+        """
+        SBOM.objects.create(
+            component=component,
+            name="vex",
+            version="1",
+            format="cyclonedx",
+            bom_type=SBOM.BomType.VEX,
+            sbom_filename="vex.json",
+            source="manual",
+        )
+        document = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "vulnerabilities": [
+                {
+                    "id": advisory_id,
+                    "analysis": {"state": "not_affected", "justification": "code_not_reachable"},
+                    "affects": [{"ref": purl}],
+                }
+            ],
+        }
+        mocker.patch(
+            "sbomify.apps.core.object_store.S3Client.get_sbom_data",
+            return_value=json.dumps(document).encode(),
+        )
+
+    def test_an_uploaded_vex_suppresses_a_finding_with_no_stored_state(
+        self, signed_in: tuple[Client, Component], mocker: "MockerFixture"
+    ) -> None:
+        """The second half of the precedence: stored state first, the component's
+        own uploaded VEX second.
+
+        A scanner that never annotated the finding leaves analysis_state empty,
+        which is every finding stored before the annotation existed. Without
+        this path the page reports as live an advisory the workspace has already
+        cleared by hand.
+        """
+        client, component = signed_in
+        self._uploaded_vex(component, mocker, purl=SETUPTOOLS["purl"], advisory_id="CVE-2026-59890")
+        sbom = self._scanned(component, [_finding("CVE-2026-59890", [])])
+
+        package = self._packages(client, sbom)[0]
+
+        assert package["open_count"] == 0, "an uploaded VEX did not clear the advisory it names"
+        assert package["suppressed_count"] == 1
+        advisory = package["vulnerabilities"][0]
+        assert advisory["vex_suppressed"] is True
+        assert advisory["vex_state"] == "not_affected"
+
+    def test_an_uploaded_vex_for_another_package_suppresses_nothing(
+        self, signed_in: tuple[Client, Component], mocker: "MockerFixture"
+    ) -> None:
+        """The guard on the overlay path: reading a VEX must not clear the list."""
+        client, component = signed_in
+        self._uploaded_vex(component, mocker, purl="pkg:pypi/requests@2.32.0", advisory_id="CVE-2026-59890")
+        sbom = self._scanned(component, [_finding("CVE-2026-59890", [])])
+
+        package = self._packages(client, sbom)[0]
+
+        assert package["open_count"] == 1
+        assert package["vulnerabilities"][0]["vex_suppressed"] is False
 
     def test_a_live_advisory_still_counts(self, signed_in: tuple[Client, Component]) -> None:
         """The guard against a fix that suppresses everything."""
