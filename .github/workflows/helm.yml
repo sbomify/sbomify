@@ -80,6 +80,23 @@ jobs:
           PY
           sed -i 's/^          //' /tmp/extract_caddyfile.py
 
+          # The image the chart actually deploys, so the validator and the
+          # deployment can never drift apart on a Caddy version.
+          cat > /tmp/extract_caddy_image.py <<'PY'
+          import sys, yaml
+          for doc in yaml.safe_load_all(sys.stdin):
+              if doc and doc.get("kind") == "Deployment":
+                  for container in doc["spec"]["template"]["spec"]["containers"]:
+                      if container["name"] == "caddy":
+                          print(container["image"])
+          PY
+          sed -i 's/^          //' /tmp/extract_caddy_image.py
+
+          CADDY_IMAGE="$(helm template sbomify "$CHART" --values "$CHART/values-local.yaml" \
+            | python3 /tmp/extract_caddy_image.py)"
+          test -n "$CADDY_IMAGE" || { echo "::error::no caddy image rendered by the chart"; exit 1; }
+          echo "validating against $CADDY_IMAGE"
+
           extract() {
             helm template sbomify "$CHART" "$@" | python3 /tmp/extract_caddyfile.py
           }
@@ -87,7 +104,7 @@ jobs:
             local label="$1"; shift
             extract "$@" > /tmp/Caddyfile
             test -s /tmp/Caddyfile || { echo "::error::no Caddyfile rendered: $label"; exit 1; }
-            docker run --rm -v /tmp/Caddyfile:/etc/caddy/Caddyfile:ro caddy:2-alpine \
+            docker run --rm -v /tmp/Caddyfile:/etc/caddy/Caddyfile:ro "$CADDY_IMAGE" \
               caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
               || { echo "::error::invalid Caddyfile: $label"; exit 1; }
             echo "ok - $label"
