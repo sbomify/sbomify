@@ -1,0 +1,62 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "sbomify.fullname" . }}-test-health
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "test") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    # Deliberately not hook-succeeded: the Pod has to outlive the test for
+    # `helm test --logs` to be able to read anything off it. The next run
+    # replaces it.
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: health
+      image: {{ include "sbomify.image" . | quote }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+      # Reuses the app image (distroless, no curl/wget) and drives the check
+      # from Python. The explicit Host header satisfies the app's host
+      # validation middleware, which would otherwise 400 a Service-DNS request.
+      command:
+        - python
+        - -c
+        - |
+          import sys, urllib.request
+          url = "http://{{ include "sbomify.fullname" . }}-web:{{ .Values.service.port }}/UuPha8mu/"
+          req = urllib.request.Request(url, headers={"Host": "localhost"})
+          with urllib.request.urlopen(req, timeout=15) as r:
+              body = r.read().decode("utf-8", "replace")
+              print(f"status={r.status}")
+              print(body[:2000])
+              sys.exit(0 if r.status == 200 else 1)
+      env:
+        - name: HOME
+          value: /tmp
+      volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
+  volumes:
+    - name: tmp
+      emptyDir: {}
