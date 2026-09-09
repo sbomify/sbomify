@@ -13,7 +13,6 @@ this page's whole job. What changes is that they no longer count as open.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -26,6 +25,7 @@ from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member
+from sbomify.apps.vulnerability_scanning import vex
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
@@ -148,9 +148,15 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
         """A component's own uploaded VEX, which the view reads when a finding
         carries no stored state.
 
-        Patches the reader method rather than S3Client itself: replacing the
-        class rebinds the name in object_store, and a module importing it later
-        keeps the mock past teardown.
+        Stands in for the stored document, which is the only thing here that
+        needs storage. Everything the case is actually about stays real:
+        derive_vex_suppressions, the statement index and the purl match all run
+        on this document.
+
+        Patching S3Client is what this did first, and it failed in CI while
+        passing locally, resolving the dotted target to a module that no longer
+        carried the attribute. Reading it through the loader's own seam does
+        not depend on that resolution.
         """
         SBOM.objects.create(
             component=component,
@@ -173,10 +179,7 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
                 }
             ],
         }
-        mocker.patch(
-            "sbomify.apps.core.object_store.S3Client.get_sbom_data",
-            return_value=json.dumps(document).encode(),
-        )
+        mocker.patch.object(vex, "_document_from_vex_sbom", return_value=document)
 
     def test_an_uploaded_vex_suppresses_a_finding_with_no_stored_state(
         self, signed_in: tuple[Client, Component], mocker: "MockerFixture"
