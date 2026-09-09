@@ -145,7 +145,7 @@ class TestOrchestratorVexHook:
             component=sbom.component,
             bom_type=SBOM.BomType.VEX,
         )
-        s3 = mocker.patch("sbomify.apps.core.object_store.S3Client")
+        s3 = mocker.patch("sbomify.apps.core.object_store.StorageClient")
         s3.return_value.get_sbom_data.return_value = _vex_doc("CVE-2026-1111", "pkg:npm/foo@1.0.0")
 
         run = self._run(sbom, scan_sbom_bytes, mocker)
@@ -167,7 +167,7 @@ class TestOrchestratorVexHook:
             component=sbom.component,
             bom_type=SBOM.BomType.VEX,
         )
-        s3 = mocker.patch("sbomify.apps.core.object_store.S3Client")
+        s3 = mocker.patch("sbomify.apps.core.object_store.StorageClient")
         s3.return_value.get_sbom_data.side_effect = RuntimeError("S3 unavailable")
 
         run = self._run(sbom, scan_sbom_bytes, mocker)
@@ -206,7 +206,7 @@ class TestOrchestratorVexHook:
                 return _vex_doc("CVE-2026-1111", "pkg:npm/foo@1.0.0")
             return _vex_doc("CVE-2026-2222", "pkg:npm/bar@2.0.0")
 
-        s3 = mocker.patch("sbomify.apps.core.object_store.S3Client")
+        s3 = mocker.patch("sbomify.apps.core.object_store.StorageClient")
         s3.return_value.get_sbom_data.side_effect = by_filename
 
         run = self._run(sbom, scan_sbom_bytes, mocker)

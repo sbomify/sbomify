@@ -184,7 +184,7 @@ class TestNDAReSigning:
         old_hash = old_signature.nda_content_hash
 
         mocker.patch(
-            "sbomify.apps.core.object_store.S3Client.get_document_data",
+            "sbomify.apps.core.object_store.StorageClient.get_document_data",
             return_value=b"Updated NDA Content v2.0",
         )
         client.force_login(guest_user)

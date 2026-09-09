@@ -18,7 +18,7 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_au
 from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
 from sbomify.apps.core.apis import get_component_metadata, patch_component_metadata
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.purl import extract_purl_qualifiers
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.access_control import check_component_access, check_component_access_for_user
@@ -127,7 +127,7 @@ def _store_external_vex(
     # Explicit None-check: a falsy-but-present version (e.g. 0) is still a version.
     version = "" if raw_version is None else str(raw_version)
 
-    s3 = S3Client("SBOMS")
+    s3 = StorageClient("SBOMS")
     filename = s3.upload_sbom(file_content)
 
     sbom = SBOM(
@@ -638,7 +638,7 @@ def sbom_upload_cyclonedx(
                 "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
 
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         filename = s3.upload_sbom(request.body)
 
         sbom_dict["format"] = sbom_format
@@ -883,7 +883,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
                 "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
 
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         filename = s3.upload_sbom(request.body)
 
         sbom_dict["version"] = sbom_version
@@ -1179,7 +1179,7 @@ def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, An
         return 404, {"detail": "SBOM file not found"}
 
     try:
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         sbom_data = s3.get_sbom_data(sbom.sbom_filename)
 
         if sbom_data:
@@ -1288,7 +1288,7 @@ def download_sbom_signed(
         return 404, {"detail": "SBOM file not found"}
 
     try:
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         sbom_data = s3.get_sbom_data(sbom.sbom_filename)
 
         if sbom_data:
@@ -1455,7 +1455,7 @@ def sbom_upload_file(
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
 
-            s3 = S3Client("SBOMS")
+            s3 = StorageClient("SBOMS")
             filename = s3.upload_sbom(file_content)
 
             sbom_dict["version"] = sbom_version
@@ -1570,7 +1570,7 @@ def sbom_upload_file(
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
 
-            s3 = S3Client("SBOMS")
+            s3 = StorageClient("SBOMS")
             filename = s3.upload_sbom(file_content)
 
             sbom_dict["format"] = sbom_format
@@ -1704,7 +1704,7 @@ def _download_blob(
 ) -> tuple[int, dict[str, Any]] | HttpResponse:
     """Download a blob from S3 and return as HttpResponse."""
     try:
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         data = s3.get_sbom_data(blob_key)
         if data is None:
             return 404, {"detail": "File not found in storage", "error_code": ErrorCode.NOT_FOUND}
@@ -1764,7 +1764,7 @@ def upload_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str,
 
     try:
         # Upload to S3 first (outside lock to avoid holding DB lock during I/O)
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         blob_key = s3.upload_sbom_signature(str(sbom.id), sbom.sha256_hash, data)
         # Then lock row and atomically claim the slot
         with transaction.atomic():
@@ -1889,7 +1889,7 @@ def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str
 
     try:
         # Upload to S3 first (outside lock to avoid holding DB lock during I/O)
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         blob_key = s3.upload_sbom_provenance(str(sbom.id), sbom.sha256_hash, raw_body)
         # Then lock row and atomically claim the slot
         with transaction.atomic():

@@ -75,6 +75,20 @@ See [docs/deployment.md](docs/deployment.md).
 
 For full production deployment instructions, see [the deployment guide](docs/deployment.md).
 
+### Kubernetes
+
+A Helm chart lives in [`charts/sbomify`](charts/sbomify/README.md). It deploys
+the application only. You provide PostgreSQL, Redis, S3-compatible storage and
+Keycloak.
+
+To try the whole stack on a local [kind](https://kind.sigs.k8s.io/) cluster
+(which also provisions throwaway versions of those four):
+
+```bash
+./bin/kind-up.sh          # create the cluster and deploy
+./bin/kind-up.sh --down   # tear it down
+```
+
 ## Local Development
 
 ### Authentication During Development
@@ -280,7 +294,7 @@ Persistent storage for Keycloak is managed by Docker using a named volume (`keyc
 
 ##### Keycloak Bootstrapping
 
-Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**—just set the appropriate environment variables in your Docker Compose configuration to control the bootstrap process.
+Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**. Just set the appropriate environment variables in your Docker Compose configuration to control the bootstrap process.
 
 When running in development mode (using `docker-compose.dev.yml`), the bootstrap script automatically:
 

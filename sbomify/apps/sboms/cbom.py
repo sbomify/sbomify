@@ -31,12 +31,12 @@ def _document_from_cbom_sbom(cbom: Any) -> dict[str, Any] | None:
     """Load a CBOM SBOM row's document from S3. ``None`` when absent or unreadable."""
     from botocore.exceptions import BotoCoreError, ClientError
 
-    from sbomify.apps.core.object_store import S3Client
+    from sbomify.apps.core.object_store import StorageClient
 
     if cbom is None or not cbom.sbom_filename:
         return None
     try:
-        raw = S3Client("SBOMS").get_sbom_data(cbom.sbom_filename)
+        raw = StorageClient("SBOMS").get_sbom_data(cbom.sbom_filename)
     except (ClientError, BotoCoreError) as exc:
         # A missing/unreadable object must not 500 the merge — skip this CBOM, but
         # log so a genuinely misconfigured/unreachable bucket stays diagnosable.

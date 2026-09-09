@@ -60,7 +60,7 @@ class TestTheDocumentSubject:
     @pytest.fixture(autouse=True)
     def _clean(self, mocker):
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
         SBOM.objects.all().delete()
 
     def test_a_describes_relationship_names_the_subject(

@@ -47,7 +47,7 @@ def test_a_failure_inside_the_handler_is_logged(
     mocker,
 ) -> None:
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
     SBOM.objects.all().delete()
 
     url = reverse("api-1:sbom_upload_spdx", kwargs={"component_id": sample_component.id})
