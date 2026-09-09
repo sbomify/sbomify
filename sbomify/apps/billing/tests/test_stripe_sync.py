@@ -327,9 +327,7 @@ class TestSyncIntegration:
         from sbomify.apps.billing.tasks import sync_active_subscriptions_task
 
         mocker.patch("sbomify.apps.billing.tasks.is_billing_enabled", return_value=True)
-        mock_sync = mocker.patch(
-            "sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe", return_value=True
-        )
+        mock_sync = mocker.patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe", return_value=True)
 
         sync_active_subscriptions_task()
 
@@ -349,13 +347,19 @@ class TestSyncIntegration:
 
     @patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe")
     def test_team_settings_calls_sync(self, mock_sync, client, sample_user, team_with_subscription):
-        """Test that team settings view calls sync before displaying billing info."""
+        """The settings view syncs before displaying billing info.
+
+        Asked of the billing tab rather than the settings index. The index
+        resolves to the first section the role can open, which is General, and
+        General displays no billing info: syncing there reached Stripe on a page
+        that had nothing to show for it.
+        """
         client.force_login(sample_user)
         mock_sync.return_value = True
 
         from django.urls import reverse
 
-        url = reverse("teams:team_settings", kwargs={"team_key": team_with_subscription.key})
+        url = reverse("teams:team_settings_tab", kwargs={"team_key": team_with_subscription.key, "tab": "billing"})
         response = client.get(url)
 
         assert response.status_code == 200

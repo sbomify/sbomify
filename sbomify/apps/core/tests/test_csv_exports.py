@@ -265,6 +265,59 @@ class TestEndpoints:
             assert response.status_code == 200, url
             assert response["Cache-Control"] == "private, no-store", url
 
+    def test_every_csv_response_in_the_tree_refuses_a_shared_cache(self):
+        """The list above is hand-written, which is how three CSV endpoints were
+        missed: the crypto cipher-suite export and both controls exports built
+        their own HttpResponse and set no directive at all.
+
+        A CDN caches .csv by extension and ignores Vary: Cookie, so an
+        authorised body with no directive is handed to the next caller,
+        authorised or not. That was reproduced against a gated component: the
+        origin answered 403 while the edge answered 200 from cache.
+
+        This walks the source rather than a list, so the next CSV endpoint is
+        covered the day it is written. It scans every module, not just apis.py,
+        because one app already routes from api.py, and it looks for the header
+        being *assigned* an uncacheable value rather than merely mentioned: a
+        comment about Cache-Control sitting near a response would otherwise
+        pass a check that only searched for the words.
+        """
+        import pathlib
+        import re
+
+        root = pathlib.Path(__file__).resolve().parents[3]
+        # The invariant core.apis._csv_response established is both directives
+        # together, so accept nothing weaker: "private" alone still lets a
+        # browser keep a copy, and a guard that accepts half the rule stops
+        # describing the rule.
+        assigns_uncacheable = re.compile(
+            r"""\[["']Cache-Control["']\]\s*=\s*(["'])(?=[^"']*\bprivate\b)(?=[^"']*\bno-store\b)[^"']*\1""",
+            re.IGNORECASE,
+        )
+        # Quoting and spacing around the content type are the author's choice,
+        # and a detector that misses one is worse than a checker that does: the
+        # endpoint would never be looked at.
+        builds_csv = re.compile(r"""content_type\s*=\s*["']text/csv""", re.IGNORECASE)
+        offenders = []
+        for path in root.rglob("*.py"):
+            parts = path.parts
+            if "tests" in parts or "migrations" in parts or ".venv" in parts:
+                continue
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            for index, line in enumerate(lines):
+                if not builds_csv.search(line):
+                    continue
+                # The directive belongs with the response it is set on, so look
+                # only at the few lines that build and return this one.
+                window = "\n".join(lines[index : index + 12])
+                if not assigns_uncacheable.search(window):
+                    offenders.append(f"{path.relative_to(root)}:{index + 1}")
+
+        assert offenders == [], (
+            "CSV responses that never assign an uncacheable Cache-Control, "
+            f"reachable through a CDN that caches by extension: {offenders}"
+        )
+
     def test_another_user_sees_none_of_this_workspaces_data(self, inventory, stub_sbom_bytes, guest_user, client):
         """Signup gives every user their own workspace, so the export succeeds —
         against their workspace, never this one."""

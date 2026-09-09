@@ -94,6 +94,26 @@ def _env_bool(value: str | None, default: bool) -> bool:
     return value.lower() in ("true", "1", "yes")
 
 
+def _env_positive_float(value: str | None, default: float) -> float:
+    """A positive, finite number from the environment, else the default.
+
+    Used for timeouts, where the value reaches a client library that raises on
+    a negative one and waits forever on an infinite one. A typo in deployment
+    config should fall back to the default rather than take startup down or
+    quietly disable the bound it was meant to set.
+    """
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+    # NaN fails every comparison, so this rejects it too.
+    if not (0 < parsed < float("inf")):
+        return default
+    return parsed
+
+
 # Request timing logging is disabled by default to avoid performance impact
 # Enable explicitly when needed for profiling (e.g., REQUEST_TIMING_LOGGING_ENABLED=true)
 REQUEST_TIMING_LOGGING_ENABLED = _env_bool(os.environ.get("REQUEST_TIMING_LOGGING_ENABLED"), default=False)
@@ -1236,6 +1256,14 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # compares the two, so bumping the library fails there until a person decides
 # whether to move the pin with it.
 STRIPE_API_VERSION = os.environ.get("STRIPE_API_VERSION", "2025-11-17.clover")
+
+# How long any one Stripe request may take. The library's own default is 80
+# seconds, and workspace settings reaches Stripe while rendering, twice: once
+# in TeamSettingsView and again through TeamPricingService. Unreachable Stripe
+# therefore held the page for longer than the edge would wait, and every tab of
+# the section answered 504 rather than rendering without fresh billing data.
+# Sync already fails soft, so a bounded wait degrades to slightly stale limits.
+STRIPE_TIMEOUT_SECONDS = _env_positive_float(os.environ.get("STRIPE_TIMEOUT_SECONDS"), 10.0)
 
 # Trial period settings
 TRIAL_PERIOD_DAYS = int(os.environ.get("TRIAL_PERIOD_DAYS", "14"))

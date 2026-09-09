@@ -31,9 +31,9 @@
             {% endif %}
             </c-slot>
             <c-branded.stats>
-            <c-branded.stat label="Advisories">{{ advisories.total }}</c-branded.stat>
-            <c-branded.stat label="Products">{{ products|length }}</c-branded.stat>
-            <c-branded.stat label="Compliance artifacts">{{ global_components|length }}</c-branded.stat>
+            <c-branded.stat label="Advisor{{ advisories.total|pluralize:'y,ies' }}">{{ advisories.total }}</c-branded.stat>
+            <c-branded.stat label="Product{{ products|length|pluralize }}">{{ products|length }}</c-branded.stat>
+            <c-branded.stat label="Compliance artifact{{ global_components|length|pluralize }}">{{ global_components|length }}</c-branded.stat>
             <c-branded.stat label="Latest advisory">{{ advisories.latest_display|default:"Not yet" }}</c-branded.stat>
             </c-branded.stats>
             </c-branded.page-header>
