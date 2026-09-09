@@ -11,6 +11,8 @@ import uuid
 from datetime import timedelta
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from sbomify.apps.plugins.models import AssessmentRun
@@ -230,6 +232,54 @@ class TestDependencyTrackVersionRetention:
 
         assert prune_dt_project_versions() == 1
         assert not SbomDependencyTrackProjectVersion.objects.filter(pk=row.pk).exists()
+
+    def test_batching_selects_everything_it_was_given(self, sample_sbom, mocker):
+        """A backlog that has never been swept is what this is for, so the ids
+        are selected in batches rather than as one IN list. The batch size must
+        not change the outcome."""
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        for index in range(5):
+            # The uniqueness is on (component, version, format, qualifiers,
+            # bom_type), so every SBOM here needs its own version, the newer
+            # one that supersedes it included.
+            sbom = SBOM.objects.create(
+                name=f"batched-{index}",
+                version=f"1.0.{index}",
+                format=sample_sbom.format,
+                format_version=sample_sbom.format_version,
+                component=sample_sbom.component,
+                sbom_filename=f"batched-{index}.json",
+                source="test",
+            )
+            self._version(sbom, days_ago=90)
+            SBOM.objects.create(
+                name=sbom.name,
+                version=f"99.0.{index}",
+                format=sbom.format,
+                format_version=sbom.format_version,
+                component=sbom.component,
+                sbom_filename=f"newer-{index}.json",
+                source="test",
+            )
+        client = mocker.patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient")
+
+        with CaptureQueriesContext(connection) as queries:
+            removed = prune_dt_project_versions(batch_size=2)
+
+        assert removed == 5
+        assert client.return_value.delete_project.call_count == 5
+        assert not SbomDependencyTrackProjectVersion.objects.filter(sbom__name__startswith="batched-").exists()
+        # Three selects for five rows at two a time, not one IN list of five.
+        selects = [
+            q["sql"]
+            for q in queries.captured_queries
+            if "sbom_dt_project_versions" in q["sql"]
+            and q["sql"].lstrip().upper().startswith("SELECT")
+            and " IN (" in q["sql"]
+        ]
+        assert len(selects) == 3
 
     def test_dry_run_touches_nothing(self, sample_sbom, mocker):
         from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion

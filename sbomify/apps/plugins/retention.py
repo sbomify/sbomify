@@ -165,6 +165,7 @@ def prunable_dt_project_version_ids(*, min_age_days: int = DEFAULT_DT_MIN_AGE_DA
 def prune_dt_project_versions(
     *,
     min_age_days: int = DEFAULT_DT_MIN_AGE_DAYS,
+    batch_size: int = 500,
     dry_run: bool = False,
 ) -> int:
     """Delete stale DT project versions and their local rows. Returns how many went.
@@ -174,8 +175,11 @@ def prune_dt_project_versions(
     404 counts as success: the project is already gone, and leaving the row
     behind would strand it forever.
 
-    One row at a time rather than batched, because each is a network call to a
-    server that may be unreachable, and one bad server must not abort the rest.
+    Deleted one row at a time, because each is a network call to a server that
+    may be unreachable, and one bad server must not abort the rest. Selected in
+    batches, because a backlog that has never been swept is exactly what this
+    is for and one ``IN`` list of every id would run past the parameter limit
+    before it ran slowly.
     """
     from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError, DependencyTrackClient
     from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
@@ -185,24 +189,30 @@ def prune_dt_project_versions(
         logger.info(f"[RETENTION] dry run: {len(doomed)} DT project versions would be pruned")
         return len(doomed)
 
+    batch_size = max(1, batch_size)
     removed = 0
-    rows = SbomDependencyTrackProjectVersion.objects.filter(id__in=doomed).select_related("dt_server")
-    for row in rows.iterator():
-        try:
-            client = DependencyTrackClient(row.dt_server.url, row.dt_server.api_key)
-            client.delete_project(str(row.dt_project_version_uuid))
-        except DependencyTrackAPIError as exc:
-            if exc.status_code != 404:
-                logger.warning(
-                    f"[RETENTION] leaving DT version {row.dt_project_version_uuid} on "
-                    f"{row.dt_server.name} for the next sweep: {exc}"
-                )
+    for start in range(0, len(doomed), batch_size):
+        batch = doomed[start : start + batch_size]
+        rows = SbomDependencyTrackProjectVersion.objects.filter(id__in=batch).select_related("dt_server")
+        for row in rows:
+            try:
+                client = DependencyTrackClient(row.dt_server.url, row.dt_server.api_key)
+                client.delete_project(str(row.dt_project_version_uuid))
+            except DependencyTrackAPIError as exc:
+                if exc.status_code != 404:
+                    logger.warning(
+                        f"[RETENTION] leaving DT version {row.dt_project_version_uuid} on "
+                        f"{row.dt_server.name} for the next sweep: {exc}"
+                    )
+                    continue
+            except Exception:
+                # Unexpected, so keep the traceback: an API error is already
+                # handled above, and anything reaching here is a shape we have
+                # not seen from this client.
+                logger.exception(f"[RETENTION] DT delete failed for {row.dt_project_version_uuid}")
                 continue
-        except Exception as exc:
-            logger.warning(f"[RETENTION] DT delete failed for {row.dt_project_version_uuid}: {exc}")
-            continue
-        row.delete()
-        removed += 1
+            row.delete()
+            removed += 1
     if removed:
         logger.info(f"[RETENTION] pruned {removed} DT project versions")
     return removed
