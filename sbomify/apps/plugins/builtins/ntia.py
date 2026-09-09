@@ -38,6 +38,10 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     has_spdx3_supplier,
     is_spdx3,
 )
+from sbomify.apps.plugins.builtins._spdx_shared import (
+    SPDX2_IDENTIFIER_TYPES,
+    spdx2_reference_type,
+)
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
@@ -270,12 +274,9 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             # Only accept externalRefs with valid identifier types
             # Note: hashes are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
             if not is_file_entry:
-                valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
                 purl = package.get("purl")
                 has_unique_id = (isinstance(purl, str) and bool(purl)) or any(
-                    isinstance(ref, dict)
-                    and isinstance(ref.get("referenceType"), str)
-                    and ref["referenceType"] in valid_identifier_types
+                    spdx2_reference_type(ref) in SPDX2_IDENTIFIER_TYPES
                     for ref in (_as_list(package.get("externalRefs")))
                 )
                 if not has_unique_id:
