@@ -101,9 +101,13 @@
                                     </c-tables.cell>
                                     <c-tables.cell>
                                     {% if pkg_vuln_info.vulnerabilities %}
-                                        <span class="inline-flex items-center gap-2 text-sm font-medium text-text">{{ pkg_vuln_info.vulnerabilities|length }} vulnerabilit{{ pkg_vuln_info.vulnerabilities|length|pluralize:"y,ies" }}<i class="fas fa-chevron-down text-xs text-text-muted transition-transform"
-   :class="open ? 'rotate-180' : ''"
-   aria-hidden="true"></i></span>
+                                        <span class="inline-flex items-center gap-2 text-sm font-medium text-text">{{ pkg_vuln_info.open_count }} vulnerabilit{{ pkg_vuln_info.open_count|pluralize:"y,ies" }}
+                                            {% if pkg_vuln_info.suppressed_count %}
+                                                <span class="text-xs font-normal text-text-muted">+{{ pkg_vuln_info.suppressed_count }} not affected</span>
+                                            {% endif %}
+                                            <i class="fas fa-chevron-down text-xs text-text-muted transition-transform"
+                                               :class="open ? 'rotate-180' : ''"
+                                               aria-hidden="true"></i></span>
                                     {% else %}
                                         <span class="inline-flex items-center gap-1 text-success text-sm"><i class="fas fa-shield-alt"></i>None</span>
                                     {% endif %}
@@ -144,6 +148,8 @@
                                                         {% if vuln.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ vuln.aliases|join:", " }}</div>{% endif %}
                                                     </div>
                                                     <div class="flex items-center gap-2">
+                                                        {# A finding the scan cleared stays listed and says so, rather than reading as live. #}
+                                                        {% if vuln.vex_suppressed %}<c-badges.secondary size="sm">Not affected</c-badges.secondary>{% endif %}
                                                         {# Severity Badge #}
                                                         {% if vuln.severity and vuln.severity != 'unknown' %}
                                                             <c-badges.severity level="{{ vuln.severity|lower }}">{{ vuln.severity|upper }}</c-badges.severity>

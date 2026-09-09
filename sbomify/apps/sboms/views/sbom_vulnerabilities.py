@@ -109,6 +109,44 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 # Materialize each finding's identity once; the pre-scan and
                 # the merge loop below share it instead of re-parsing every
                 # purl twice.
+                # The component's uploaded VEX, which is what the drill-down
+                # table reads. Deliberately NOT resolve_vex_statements_for_sbom:
+                # that re-derives the statements embedded in the document by
+                # fetching the document itself from S3, and a Yocto image is
+                # megabytes. It does not need re-deriving. The orchestrator
+                # already wrote the scan's verdict onto each finding as
+                # analysis_state, and that is read first below, so embedded VEX
+                # is honoured without the page paying for it. These statements
+                # only decide the case the stored state cannot: a VEX uploaded
+                # after the scan ran.
+                from sbomify.apps.vulnerability_scanning.vex import (
+                    SUPPRESSED_STATES,
+                    find_matching_statement,
+                    load_vex_suppressions,
+                )
+
+                try:
+                    vex_statements = load_vex_suppressions(sbom.component_id)
+                except Exception:
+                    # The list is the page's job; a VEX that cannot be read
+                    # must not take the advisories down with it. The stored
+                    # analysis_state still marks what the scan cleared.
+                    logger.warning("Could not load VEX for SBOM %s; listing unsuppressed", sbom_id, exc_info=True)
+                    vex_statements = []
+
+                def vex_state_of(finding: dict[str, Any]) -> str:
+                    """The finding's VEX state: stored first, live statements second.
+
+                    Same precedence as extract_finding_rows, so this page and the
+                    drill-down table cannot disagree about one finding.
+                    """
+                    state = finding.get("analysis_state") or ""
+                    if not state and vex_statements:
+                        statement = find_matching_statement(finding, vex_statements)
+                        if statement:
+                            state = statement.get("state") or ""
+                    return state
+
                 identified: list[tuple[dict[str, Any], tuple[str, str, str, str, str]]] = []
                 purl_bases_by_tail: dict[str, set[str]] = {}
                 for run in provider_runs:
@@ -161,6 +199,9 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     merged = next((entry["_by_alias"][key] for key in alias_keys if key in entry["_by_alias"]), None)
                     severity = (vuln.get("severity") or "medium").lower()
 
+                    vex_state = vex_state_of(vuln)
+                    suppressed = vex_state in SUPPRESSED_STATES
+
                     if merged is None:
                         merged = {
                             "_ids": set(),
@@ -173,6 +214,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                             "references": list(vuln.get("references") or []),
                             "source": vuln.get("source", "Unknown"),
                             "affected": vuln.get("affected", []),
+                            "vex_state": vex_state,
+                            "vex_suppressed": suppressed,
                         }
                         entry["vulnerabilities"].append(merged)
                     else:
@@ -187,6 +230,13 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                         for reference in vuln.get("references") or []:
                             if reference not in merged["references"]:
                                 merged["references"].append(reference)
+                        # Suppressed only when every provider reporting it is.
+                        # One scanner still calling it live is the answer that
+                        # matters, and the state is kept for the marking.
+                        if not suppressed:
+                            merged["vex_suppressed"] = False
+                        elif not merged.get("vex_state"):
+                            merged["vex_state"] = vex_state
 
                     merged["_ids"] |= ids
                     for key in alias_keys:
@@ -195,6 +245,12 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 if packages_dict:
                     for entry in packages_dict.values():
                         entry.pop("_by_alias", None)
+                        # The headline counts what is still open. Suppressed
+                        # advisories stay in the list, marked, because this
+                        # page's job is the advisory list; counting them as
+                        # live is what the card used to do.
+                        entry["open_count"] = sum(1 for v in entry["vulnerabilities"] if not v.get("vex_suppressed"))
+                        entry["suppressed_count"] = len(entry["vulnerabilities"]) - entry["open_count"]
                         for merged in entry["vulnerabilities"]:
                             merged_ids = sorted(merged.pop("_ids"))
                             display_id = next((i for i in merged_ids if i.lower().startswith("cve-")), None) or (
