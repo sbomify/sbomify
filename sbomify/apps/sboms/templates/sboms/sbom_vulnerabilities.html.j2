@@ -103,7 +103,7 @@
                                     {% if pkg_vuln_info.vulnerabilities %}
                                         <span class="inline-flex items-center gap-2 text-sm font-medium text-text">{{ pkg_vuln_info.open_count }} vulnerabilit{{ pkg_vuln_info.open_count|pluralize:"y,ies" }}
                                             {% if pkg_vuln_info.suppressed_count %}
-                                                <span class="text-xs font-normal text-text-muted">+{{ pkg_vuln_info.suppressed_count }} not affected</span>
+                                                <span class="text-xs font-normal text-text-muted">+{{ pkg_vuln_info.suppressed_count }} Not affected</span>
                                             {% endif %}
                                             <i class="fas fa-chevron-down text-xs text-text-muted transition-transform"
                                                :class="open ? 'rotate-180' : ''"

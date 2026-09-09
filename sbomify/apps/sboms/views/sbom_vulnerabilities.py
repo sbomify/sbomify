@@ -125,14 +125,12 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     load_vex_suppressions,
                 )
 
-                try:
-                    vex_statements = load_vex_suppressions(sbom.component_id)
-                except Exception:
-                    # The list is the page's job; a VEX that cannot be read
-                    # must not take the advisories down with it. The stored
-                    # analysis_state still marks what the scan cleared.
-                    logger.warning("Could not load VEX for SBOM %s; listing unsuppressed", sbom_id, exc_info=True)
-                    vex_statements = []
+                # Returns [] when the artifact is absent or unreadable, so an
+                # unreadable VEX costs the after-the-scan overlay and nothing
+                # else: what the scan itself cleared is already on each finding
+                # as analysis_state. Anything genuinely unexpected belongs to
+                # this view's outer handler rather than a catch here.
+                vex_statements = load_vex_suppressions(sbom.component_id)
 
                 def vex_state_of(finding: dict[str, Any]) -> str:
                     """The finding's VEX state: stored first, live statements second.
@@ -234,8 +232,13 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                         # One scanner still calling it live is the answer that
                         # matters, and the state is kept for the marking.
                         if not suppressed:
+                            # The state goes with the flag. Leaving "resolved"
+                            # on a row this just marked live would leave the
+                            # record contradicting itself for whoever reads the
+                            # state rather than the flag.
                             merged["vex_suppressed"] = False
-                        elif not merged.get("vex_state"):
+                            merged["vex_state"] = ""
+                        elif merged.get("vex_suppressed") and not merged.get("vex_state"):
                             merged["vex_state"] = vex_state
 
                     merged["_ids"] |= ids

@@ -123,6 +123,22 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
         assert len(package["vulnerabilities"]) == 1
         assert package["vulnerabilities"][0]["id"] == "CVE-2026-59890"
 
+    def test_a_live_report_clears_the_state_as_well_as_the_flag(self, signed_in: tuple[Client, Component]) -> None:
+        """The record must not say "resolved" on a row it marks live."""
+        client, component = signed_in
+        sbom = self._scanned(
+            component,
+            [
+                _finding("PYSEC-2026-3447", ["CVE-2026-59890"], analysis_state="resolved"),
+                _finding("CVE-2026-59890", ["PYSEC-2026-3447"]),
+            ],
+        )
+
+        advisory = self._packages(client, sbom)[0]["vulnerabilities"][0]
+
+        assert advisory["vex_suppressed"] is False
+        assert advisory["vex_state"] == "", "the state contradicted the flag"
+
     def test_a_live_advisory_still_counts(self, signed_in: tuple[Client, Component]) -> None:
         """The guard against a fix that suppresses everything."""
         client, component = signed_in
