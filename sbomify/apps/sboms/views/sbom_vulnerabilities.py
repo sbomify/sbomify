@@ -121,8 +121,9 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 # after the scan ran.
                 from sbomify.apps.vulnerability_scanning.vex import (
                     SUPPRESSED_STATES,
-                    find_matching_statement,
+                    find_in_index,
                     load_vex_suppressions,
+                    statement_index,
                 )
 
                 # Returns [] when the artifact is absent or unreadable, so an
@@ -131,6 +132,10 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 # as analysis_state. Anything genuinely unexpected belongs to
                 # this view's outer handler rather than a catch here.
                 vex_statements = load_vex_suppressions(sbom.component_id)
+                # Indexed once for the whole page: matching is O(findings +
+                # statements), and find_matching_statement would rebuild this
+                # for every finding that reaches the overlay.
+                vex_index = statement_index(vex_statements) if vex_statements else {}
 
                 def vex_state_of(finding: dict[str, Any]) -> str:
                     """The finding's VEX state: stored first, live statements second.
@@ -139,8 +144,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     drill-down table cannot disagree about one finding.
                     """
                     state = finding.get("analysis_state") or ""
-                    if not state and vex_statements:
-                        statement = find_matching_statement(finding, vex_statements)
+                    if not state and vex_index:
+                        statement = find_in_index(finding, vex_index)
                         if statement:
                             state = statement.get("state") or ""
                     return state
