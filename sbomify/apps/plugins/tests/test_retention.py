@@ -7,13 +7,21 @@ interaction rather than either rule alone.
 
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from sbomify.apps.plugins.models import AssessmentRun
-from sbomify.apps.plugins.retention import prunable_run_ids, prune_assessment_runs
+from sbomify.apps.plugins.retention import (
+    prunable_dt_project_version_ids,
+    prunable_run_ids,
+    prune_assessment_runs,
+    prune_dt_project_versions,
+)
 from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 
 pytestmark = pytest.mark.django_db
@@ -119,3 +127,201 @@ class TestPruning:
 
     def test_an_empty_table_is_a_no_op(self):
         assert prune_assessment_runs() == 0
+
+
+class TestDependencyTrackVersionRetention:
+    """DT project-version retention.
+
+    DT re-analyses its whole portfolio on its own schedule, so its CPU cost rises
+    with every SBOM ever uploaded and never falls, which our own sweep cadence
+    cannot lower. What makes the set non-empty is eviction: uploading a newer
+    SBOM for the same (component, format, bom_type) drops the previous one from
+    the latest release, and its DT project would otherwise live forever.
+    """
+
+    def _version(self, sbom, *, days_ago: int):
+        from sbomify.apps.vulnerability_scanning.models import (
+            DependencyTrackServer,
+            SbomDependencyTrackProjectVersion,
+        )
+
+        server, _ = DependencyTrackServer.objects.get_or_create(
+            url="https://dt.example.test", defaults={"name": "dt-1", "api_key": "k"}
+        )
+        row = SbomDependencyTrackProjectVersion.objects.create(
+            sbom=sbom,
+            dt_server=server,
+            dt_project_version=str(sbom.id),
+            dt_project_version_uuid=uuid.uuid4(),
+        )
+        SbomDependencyTrackProjectVersion.objects.filter(pk=row.pk).update(
+            created_at=timezone.now() - timedelta(days=days_ago)
+        )
+        return row
+
+    def _supersede(self, sbom):
+        """Upload a newer SBOM into the same slot, which is what evicts this one.
+
+        Goes through the real post_save signal rather than deleting the link by
+        hand, so the test breaks if eviction ever stops happening.
+        """
+        from sbomify.apps.sboms.models import SBOM
+
+        return SBOM.objects.create(
+            name=sbom.name,
+            version="99.0.0",
+            format=sbom.format,
+            format_version=sbom.format_version,
+            component=sbom.component,
+            sbom_filename="newer.json",
+            source="test",
+        )
+
+    def test_a_current_release_protects_a_version_however_old(self, sample_sbom):
+        row = self._version(sample_sbom, days_ago=900)
+
+        assert row.id not in prunable_dt_project_version_ids()
+
+    def test_a_superseded_sbom_becomes_prunable(self, sample_sbom):
+        row = self._version(sample_sbom, days_ago=90)
+        self._supersede(sample_sbom)
+
+        assert row.id in prunable_dt_project_version_ids()
+
+    def test_the_age_floor_covers_the_upload_to_tag_window(self, sample_sbom):
+        """A freshly superseded version still waits out the floor: an SBOM is
+        scanned before its release tags settle, and pruning inside that window
+        would delete the project a running scan is polling."""
+        row = self._version(sample_sbom, days_ago=1)
+        self._supersede(sample_sbom)
+
+        assert row.id not in prunable_dt_project_version_ids()
+
+    def test_prune_deletes_the_dt_project_and_the_row(self, sample_sbom, mocker):
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        row = self._version(sample_sbom, days_ago=90)
+        self._supersede(sample_sbom)
+        client = mocker.patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient")
+
+        assert prune_dt_project_versions() == 1
+        client.return_value.delete_project.assert_called_once_with(str(row.dt_project_version_uuid))
+        assert not SbomDependencyTrackProjectVersion.objects.filter(pk=row.pk).exists()
+
+    def test_a_failing_server_keeps_its_rows_for_the_next_sweep(self, sample_sbom, mocker):
+        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        row = self._version(sample_sbom, days_ago=90)
+        self._supersede(sample_sbom)
+        client = mocker.patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient")
+        client.return_value.delete_project.side_effect = DependencyTrackAPIError("down", status_code=503)
+
+        assert prune_dt_project_versions() == 0
+        assert SbomDependencyTrackProjectVersion.objects.filter(pk=row.pk).exists()
+
+    def test_an_already_gone_project_still_drops_the_row(self, sample_sbom, mocker):
+        """404 counts as success. Leaving the row behind would strand it forever."""
+        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        row = self._version(sample_sbom, days_ago=90)
+        self._supersede(sample_sbom)
+        client = mocker.patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient")
+        client.return_value.delete_project.side_effect = DependencyTrackAPIError("gone", status_code=404)
+
+        assert prune_dt_project_versions() == 1
+        assert not SbomDependencyTrackProjectVersion.objects.filter(pk=row.pk).exists()
+
+    def test_batching_selects_everything_it_was_given(self, sample_sbom, mocker):
+        """A backlog that has never been swept is what this is for, so the ids
+        are selected in batches rather than as one IN list. The batch size must
+        not change the outcome."""
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        for index in range(5):
+            # The uniqueness is on (component, version, format, qualifiers,
+            # bom_type), so every SBOM here needs its own version, the newer
+            # one that supersedes it included.
+            sbom = SBOM.objects.create(
+                name=f"batched-{index}",
+                version=f"1.0.{index}",
+                format=sample_sbom.format,
+                format_version=sample_sbom.format_version,
+                component=sample_sbom.component,
+                sbom_filename=f"batched-{index}.json",
+                source="test",
+            )
+            self._version(sbom, days_ago=90)
+            SBOM.objects.create(
+                name=sbom.name,
+                version=f"99.0.{index}",
+                format=sbom.format,
+                format_version=sbom.format_version,
+                component=sbom.component,
+                sbom_filename=f"newer-{index}.json",
+                source="test",
+            )
+        client = mocker.patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient")
+
+        with CaptureQueriesContext(connection) as queries:
+            removed = prune_dt_project_versions(batch_size=2)
+
+        assert removed == 5
+        assert client.return_value.delete_project.call_count == 5
+        assert not SbomDependencyTrackProjectVersion.objects.filter(sbom__name__startswith="batched-").exists()
+        # Three selects for five rows at two a time, not one IN list of five.
+        selects = [
+            q["sql"]
+            for q in queries.captured_queries
+            if "sbom_dt_project_versions" in q["sql"]
+            and q["sql"].lstrip().upper().startswith("SELECT")
+            and " IN (" in q["sql"]
+        ]
+        assert len(selects) == 3
+
+    def test_one_client_per_server_not_one_per_row(self, sample_sbom, mocker):
+        """Each client holds a requests.Session, so building one per row throws
+        away every connection on exactly the backlog this sweep is for."""
+        from sbomify.apps.sboms.models import SBOM
+
+        for index in range(4):
+            sbom = SBOM.objects.create(
+                name=f"pooled-{index}",
+                version=f"1.0.{index}",
+                format=sample_sbom.format,
+                format_version=sample_sbom.format_version,
+                component=sample_sbom.component,
+                sbom_filename=f"pooled-{index}.json",
+                source="test",
+            )
+            self._version(sbom, days_ago=90)
+            SBOM.objects.create(
+                name=sbom.name,
+                version=f"99.0.{index}",
+                format=sbom.format,
+                format_version=sbom.format_version,
+                component=sbom.component,
+                sbom_filename=f"newer-pooled-{index}.json",
+                source="test",
+            )
+        client = mocker.patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient")
+
+        assert prune_dt_project_versions(batch_size=2) == 4
+
+        # All four rows share one server, and the batch boundary must not
+        # reset the pool either.
+        assert client.call_count == 1
+        assert client.return_value.delete_project.call_count == 4
+
+    def test_dry_run_touches_nothing(self, sample_sbom, mocker):
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        self._version(sample_sbom, days_ago=90)
+        self._supersede(sample_sbom)
+        client = mocker.patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient")
+
+        assert prune_dt_project_versions(dry_run=True) == 1
+        client.return_value.delete_project.assert_not_called()
+        assert SbomDependencyTrackProjectVersion.objects.count() == 1
