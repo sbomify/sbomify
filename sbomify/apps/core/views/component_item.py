@@ -239,6 +239,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     extract_finding_rows,
                     merge_findings_by_alias,
                     result_scanned_nothing,
+                    severity_counts_from_rows,
                 )
                 from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
@@ -284,13 +285,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 merged = merge_findings_by_alias([result for _, result, _ in provider_runs])
                 rows = extract_finding_rows(merged, load_vex_suppressions(component_id_from_item))
                 if rows:
-                    counts = {
-                        "total": len(rows),
-                        "critical": sum(1 for row in rows if row["severity"] == "critical"),
-                        "high": sum(1 for row in rows if row["severity"] == "high"),
-                        "medium": sum(1 for row in rows if row["severity"] == "medium"),
-                        "low": sum(1 for row in rows if row["severity"] == "low"),
-                    }
+                    counts = severity_counts_from_rows(rows)
                 else:
                     # Summary-only results (no findings list) still carry counts.
                     from sbomify.apps.vulnerability_scanning.utils import extract_severity_counts

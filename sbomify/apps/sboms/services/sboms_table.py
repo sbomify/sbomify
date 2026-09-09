@@ -31,6 +31,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
         merge_findings_by_alias,
         reconstruct_result_summary,
         result_scanned_nothing,
+        severity_counts_from_rows,
     )
     from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
@@ -82,13 +83,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
         scanned_nothing = all(result_scanned_nothing(result) for result in provider_results)
         rows = extract_finding_rows(merge_findings_by_alias(provider_results), vex_statements)
         if rows:
-            item["vuln"] = {
-                "total": len(rows),
-                "critical": sum(1 for row in rows if row["severity"] == "critical"),
-                "high": sum(1 for row in rows if row["severity"] == "high"),
-                "medium": sum(1 for row in rows if row["severity"] == "medium"),
-                "low": sum(1 for row in rows if row["severity"] == "low"),
-            }
+            item["vuln"] = severity_counts_from_rows(rows)
         else:
             # A result can carry a summary but no findings list (summary-only
             # providers, legacy blobs). Fall back to the stored summary — the
