@@ -38,7 +38,7 @@ spec:
         - -c
         - |
           import sys, urllib.request
-          url = "http://{{ include "sbomify.fullname" . }}-web:{{ .Values.service.port }}/UuPha8mu/"
+          url = "http://{{ include "sbomify.fullname" . }}-web:{{ .Values.service.port }}{{ .Values.caddy.healthPath }}"
           req = urllib.request.Request(url, headers={"Host": "localhost"})
           with urllib.request.urlopen(req, timeout=15) as r:
               body = r.read().decode("utf-8", "replace")
