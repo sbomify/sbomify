@@ -194,7 +194,7 @@ class TestSignedURLs:
         token = make_download_token(self.private_sbom.id, str(self.user.id))
 
         # Mock S3 client using the proper sboms API mock
-        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.StorageClient") as mock_s3_client:
             mock_s3_instance = MagicMock()
             mock_s3_instance.get_sbom_data.return_value = b'{"test": "data"}'
             mock_s3_client.return_value = mock_s3_instance
@@ -212,7 +212,7 @@ class TestSignedURLs:
         token = make_document_download_token(self.private_document.id, str(self.user.id))
 
         # Mock S3 client using the proper documents API mock
-        with patch("sbomify.apps.documents.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.documents.apis.StorageClient") as mock_s3_client:
             mock_s3_instance = MagicMock()
             mock_s3_instance.get_document_data.return_value = b"test document content"
             mock_s3_client.return_value = mock_s3_instance
@@ -275,7 +275,7 @@ class TestSignedURLs:
         token = make_download_token(self.public_sbom.id, str(self.user.id))
 
         # Mock S3 client using the proper sboms API mock
-        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.StorageClient") as mock_s3_client:
             mock_s3_instance = MagicMock()
             mock_s3_instance.get_sbom_data.return_value = b'{"test": "data"}'
             mock_s3_client.return_value = mock_s3_instance
@@ -291,7 +291,7 @@ class TestSignedURLs:
         token = make_document_download_token(self.public_document.id, str(self.user.id))
 
         # Mock S3 client using the proper documents API mock
-        with patch("sbomify.apps.documents.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.documents.apis.StorageClient") as mock_s3_client:
             mock_s3_instance = MagicMock()
             mock_s3_instance.get_document_data.return_value = b"test document content"
             mock_s3_client.return_value = mock_s3_instance
@@ -310,7 +310,7 @@ class TestSignedURLs:
 
         token = make_download_token(self.private_sbom.id, str(self.user.id))
         url = f"/api/v1/sboms/{self.private_sbom.id}/download/signed"
-        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.StorageClient") as mock_s3_client:
             mock_s3_client.return_value.get_sbom_data.return_value = b'{"test": "data"}'
             assert self.client.get(url, {"token": token}).status_code == 200
             Member.objects.filter(team=self.team, user=self.user).delete()
@@ -322,7 +322,7 @@ class TestSignedURLs:
 
         token = make_document_download_token(self.private_document.id, str(self.user.id))
         url = f"/api/v1/documents/{self.private_document.id}/download/signed"
-        with patch("sbomify.apps.documents.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.documents.apis.StorageClient") as mock_s3_client:
             mock_s3_client.return_value.get_document_data.return_value = b"doc bytes"
             assert self.client.get(url, {"token": token}).status_code == 200
             Member.objects.filter(team=self.team, user=self.user).delete()
@@ -337,7 +337,7 @@ class TestSignedURLs:
 
         token = make_download_token(self.private_sbom.id, str(self.user.id))
         url = f"/api/v1/sboms/{self.private_sbom.id}/download/signed"
-        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.StorageClient") as mock_s3_client:
             mock_s3_client.return_value.get_sbom_data.return_value = b'{"test": "data"}'
             assert self.client.get(url, {"token": token}).status_code == 200
             get_user_model().objects.filter(id=self.user.id).update(is_active=False)
@@ -360,7 +360,7 @@ class TestSignedURLs:
 
         token = make_download_token(self.private_sbom.id, str(self.user.id))
         url = f"/api/v1/sboms/{self.private_sbom.id}/download/signed"
-        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.StorageClient") as mock_s3_client:
             mock_s3_client.return_value.get_sbom_data.return_value = b'{"test": "data"}'
             assert self.client.get(url, {"token": token}).status_code == 403
 
@@ -378,7 +378,7 @@ class TestSignedURLs:
 
         token = make_document_download_token(self.private_document.id, str(self.user.id))
         url = f"/api/v1/documents/{self.private_document.id}/download/signed"
-        with patch("sbomify.apps.documents.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.documents.apis.StorageClient") as mock_s3_client:
             mock_s3_client.return_value.get_document_data.return_value = b"doc bytes"
             assert self.client.get(url, {"token": token}).status_code == 403
 
@@ -409,7 +409,7 @@ class TestSignedURLs:
 
         token = make_document_download_token(gated_document.id, str(guest_user.id))
         url = f"/api/v1/documents/{gated_document.id}/download/signed"
-        with patch("sbomify.apps.documents.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.documents.apis.StorageClient") as mock_s3_client:
             mock_s3_client.return_value.get_document_data.return_value = b"gated bytes"
             assert self.client.get(url, {"token": token}).status_code == 200
             AccessRequest.objects.create(
@@ -442,7 +442,7 @@ class TestSignedURLs:
 
         token = make_download_token(gated_sbom.id, str(guest_user.id))
         url = f"/api/v1/sboms/{gated_sbom.id}/download/signed"
-        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.StorageClient") as mock_s3_client:
             mock_s3_client.return_value.get_sbom_data.return_value = b'{"gated": "sbom"}'
             assert self.client.get(url, {"token": token}).status_code == 200
             AccessRequest.objects.create(
@@ -530,7 +530,7 @@ class TestSignedURLIntegration:
 
     def test_product_sbom_contains_signed_urls(self):
         """Test that product SBOMs contain signed URLs for private components."""
-        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.StorageClient") as mock_s3_client:
             mock_s3_instance = MagicMock()
             mock_s3_instance.get_sbom_data.return_value = b"""{
                 "bomFormat": "CycloneDX",

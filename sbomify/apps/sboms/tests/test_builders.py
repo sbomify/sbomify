@@ -692,7 +692,7 @@ class TestReleaseAggregateMembership:
         from sbomify.apps.sboms.utils import get_release_sbom_package
 
         release = self._release_with_gated_member(sample_product, sample_component, sample_sbom)
-        s3 = mocker.patch("sbomify.apps.core.object_store.S3Client")
+        s3 = mocker.patch("sbomify.apps.core.object_store.StorageClient")
         builder = mocker.MagicMock()
         builder.return_value = mocker.MagicMock(model_dump_json=lambda **kw: "{}")
         builder.had_member_fetch_error = False
