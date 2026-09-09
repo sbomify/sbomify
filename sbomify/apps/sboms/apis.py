@@ -281,37 +281,89 @@ def _extract_spdx_primary_package(
     return _extract_spdx2_primary_package(payload)
 
 
+def _spdx2_described_ids(payload: SPDXSchema) -> list[str]:
+    """SPDX IDs the document declares as its subject, through relationships.
+
+    ``documentDescribes`` is the shorthand. The spec says a DESCRIBES
+    relationship from the document, or a DESCRIBED_BY relationship pointing
+    back at it, states the same thing. Yocto writes the relationship form and
+    never the shorthand, so a reader that only knows ``documentDescribes``
+    sees no subject at all.
+
+    The document's own identifier comes from the document rather than from the
+    convention: ``SPDXRef-DOCUMENT`` is what every producer writes and what the
+    fallback assumes, but the schema types the field as a free string, so a
+    document that names itself otherwise still has its relationships read.
+    """
+    document_id = getattr(payload, "spdx_id", None) or "SPDXRef-DOCUMENT"
+    described: list[str] = []
+    # SPDXSchema is the lenient parser: it declares six fields and keeps the
+    # rest of the document as raw extras, so relationships arrive as raw dicts
+    # holding whatever the uploader put there. Every value read out of one is
+    # checked before it is used as an ID: this list is compared against
+    # package.SPDXID, and a number or a nested object reaching that comparison
+    # would be a silent no-match rather than an error.
+    for rel in getattr(payload, "relationships", None) or []:
+        if not isinstance(rel, dict):
+            continue
+        rel_type = rel.get("relationshipType")
+        source = rel.get("spdxElementId")
+        target = rel.get("relatedSpdxElement")
+        if rel_type == "DESCRIBES" and source == document_id and isinstance(target, str) and target:
+            described.append(target)
+        elif rel_type == "DESCRIBED_BY" and target == document_id and isinstance(source, str) and source:
+            described.append(source)
+    return described
+
+
 def _extract_spdx2_primary_package(
     payload: SPDXSchema,
 ) -> tuple[SPDXPackage, str] | tuple[None, str]:
     """Extract primary package from SPDX 2.x document.
 
-    Strategy:
-    1. Look for a package referenced by documentDescribes field
-    2. Fall back to matching package name with document name
+    Strategy, the same ladder the SPDX 3.0 reader already walks:
+    1. A package referenced by the documentDescribes field
+    2. A package named by a DESCRIBES or DESCRIBED_BY relationship
+    3. A package whose name matches the document name
+    4. The first package
     """
     if not payload.packages:
         return None, "No packages found in SPDX document"
 
     package: SPDXPackage | None = None
 
-    # First check if documentDescribes is present and points to a valid package
-    if hasattr(payload, "documentDescribes") and payload.documentDescribes:
-        described_ref: str = payload.documentDescribes[0]
-        for pkg in payload.packages:
-            if hasattr(pkg, "SPDXID") and pkg.SPDXID == described_ref:
-                package = pkg
+    # Strategy 1: the documentDescribes shorthand. Read off the raw extras for
+    # the same reason as the relationships above, so its shape is checked too.
+    document_describes = getattr(payload, "documentDescribes", None)
+    if isinstance(document_describes, list) and document_describes:
+        described_ref = document_describes[0]
+        if isinstance(described_ref, str):
+            for pkg in payload.packages:
+                if getattr(pkg, "SPDXID", None) == described_ref:
+                    package = pkg
+                    break
+
+    # Strategy 2: the relationship form of the same statement
+    if not package:
+        for described_id in _spdx2_described_ids(payload):
+            for pkg in payload.packages:
+                if getattr(pkg, "SPDXID", None) == described_id:
+                    package = pkg
+                    break
+            if package:
                 break
 
-    # If not found via documentDescribes, fall back to name matching
+    # Strategy 3: name match
     if not package:
         for pkg in payload.packages:
             if pkg.name == payload.name:
                 package = pkg
                 break
 
+    # Strategy 4: first package. A document that names no subject still carries
+    # an inventory worth storing, and the SPDX 3.0 reader has always taken it.
     if not package:
-        return None, f"No package found with name '{payload.name}' in SPDX document"
+        package = payload.packages[0]
 
     return package, ""
 
