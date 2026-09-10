@@ -331,6 +331,13 @@ def register_tools(mcp: FastMCP) -> None:
 
         Each finding names the package and version it affects plus the component
         and SBOM it was found in, so it can be traced back to what ships it.
+
+        Narrow with `product_id` or `component_id` on a large workspace. Every
+        page reads every finding in scope: the sort is worst-first across SBOMs
+        and the severity and suppression filters read fields that live inside
+        each run's stored JSON, so neither can be pushed into SQL while findings
+        have no table of their own. Paging an unfiltered workspace repeats that
+        work per page.
         """
 
         def query() -> dict[str, Any]:
