@@ -91,7 +91,7 @@ def _license_label(entry: dict[str, Any]) -> str | None:
     return expression if isinstance(expression, str) else None
 
 
-def _extract_packages(payload: dict[str, Any], sbom_format: str) -> list[dict[str, Any]]:
+def _extract_packages(payload: dict[str, Any], artifact_format: str) -> list[dict[str, Any]]:
     """Normalise CycloneDX components / SPDX packages into one shape.
 
     Returns ``{name, version, purl, licenses}`` per package so an agent can
@@ -99,7 +99,7 @@ def _extract_packages(payload: dict[str, Any], sbom_format: str) -> list[dict[st
     """
     packages: list[dict[str, Any]] = []
 
-    if sbom_format.lower() == "cyclonedx":
+    if artifact_format.lower() == "cyclonedx":
         for entry in payload.get("components", []) or []:
             if not isinstance(entry, dict):
                 continue

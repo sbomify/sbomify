@@ -98,7 +98,7 @@ async def test_require_denies_action_outside_token_scope(make_token, mcp_owner):
 
     _, bound, _ = mcp_owner
     token = await _acreate(make_token, ["product:read"])
-    principal = await authenticate(fake_request(f"Bearer {token.encoded_token}"), attempted_action="upload_sbom")
+    principal = await authenticate(fake_request(f"Bearer {token.encoded_token}"), attempted_action="upload_artifact")
 
     # In scope: allowed.
     await sync_to_async(require)(principal, "product:read", bound)

@@ -68,30 +68,50 @@ def _parse_json(content: str, *, label: str) -> bytes:
 
 
 def register_tools(mcp: FastMCP) -> None:
-    @mcp_tool(mcp, "upload_sbom", "artifact:publish", writes=True)
-    async def upload_sbom(
+    @mcp_tool(mcp, "upload_artifact", "artifact:publish", writes=True)
+    async def upload_artifact(
         principal: Principal,
         component_id: str,
         content: str,
-        sbom_format: str = "cyclonedx",
+        artifact_format: str = "cyclonedx",
+        bom_type: str | None = None,
     ) -> dict[str, Any]:
-        """Upload an SBOM to a component.
+        """Upload a BOM artifact to a component.
 
-        `content` is the full SBOM document as a JSON string, stored exactly as
-        given. `sbom_format` is "cyclonedx" or "spdx"; the spec version is
+        `content` is the full document as a JSON string, stored exactly as
+        given. `artifact_format` is "cyclonedx" or "spdx"; the spec version is
         detected from the document.
 
-        Returns the new SBOM's id. Re-uploading an SBOM with the same version
-        and format fails as a duplicate — that is expected, not a transient
-        error to retry.
+        `bom_type` says which kind it is. Left out, the document is stored as an
+        SBOM unless it is recognisably a CBOM, which is detected. Name it for
+        anything else, hbom and aibom especially: stored as an SBOM they are
+        scanned and scored against NTIA and BSI as though their component list
+        were a software inventory, and the hardware pipeline never sees them.
+        Use `upload_vex` for VEX rather than this tool.
+
+        Returns the new artifact's id. Re-uploading one with the same version
+        and format fails as a duplicate, which is expected rather than a
+        transient error to retry.
         """
 
         def call() -> dict[str, Any]:
             from sbomify.apps.sboms import apis
+            from sbomify.apps.sboms.models import SBOM
 
-            normalised = sbom_format.strip().lower()
+            normalised = artifact_format.strip().lower()
             if normalised not in ("cyclonedx", "spdx"):
-                raise ToolError(f"Unsupported sbom_format {sbom_format!r}; expected 'cyclonedx' or 'spdx'.")
+                raise ToolError(f"Unsupported artifact_format {artifact_format!r}; expected 'cyclonedx' or 'spdx'.")
+
+            wanted = bom_type.strip().lower() if bom_type else None
+            if wanted == SBOM.BomType.VEX.value:
+                # The view demands artifact:publish_vex for a VEX, and this tool
+                # is advertised on artifact:publish alone. Accepting it here
+                # would advertise a call that is certain to 403.
+                raise ToolError("Use upload_vex for VEX documents; this tool cannot publish one.")
+            if wanted is not None and wanted not in set(SBOM.BomType.values):
+                raise ToolError(
+                    f"Unknown bom_type {bom_type!r}; expected one of {', '.join(sorted(SBOM.BomType.values))}."
+                )
 
             # Confine the write to the caller's workspace before delegating. The
             # REST view looks the component up globally and leans on can(); for a
@@ -99,9 +119,23 @@ def register_tools(mcp: FastMCP) -> None:
             # restriction, so an id from a sibling workspace would be writable
             # even though every read tool reports it as not found.
             _lookup_component(principal, component_id)
-            request = _with_body(principal, _parse_json(content, label="SBOM"))
+            request = _with_body(principal, _parse_json(content, label="Artifact"))
+            if wanted is not None:
+                # The view distinguishes "caller said sbom" from "caller said
+                # nothing" by looking for bom_type in the query string, and
+                # only auto-detects a CBOM in the second case. Passing the
+                # argument alone would leave an explicit "sbom" indistinguishable
+                # from the default and silently re-tag a crypto-heavy SBOM.
+                query = request.GET.copy()
+                query["bom_type"] = wanted
+                # setattr because the stub's GET is typed immutable, the same
+                # reason auth.py assigns token_team this way.
+                setattr(request, "GET", query)
             view = apis.sbom_upload_cyclonedx if normalised == "cyclonedx" else apis.sbom_upload_spdx
-            return unwrap_view(view(request, component_id), action="SBOM upload")
+            return unwrap_view(
+                view(request, component_id, bom_type=wanted) if wanted is not None else view(request, component_id),
+                action="Artifact upload",
+            )
 
         return await run_db(call)
 

@@ -18,7 +18,7 @@ from sbomify.apps.mcp.server import build_app
 build_app()
 
 WRITE_TOOLS = {
-    "upload_sbom",
+    "upload_artifact",
     "upload_vex",
     "create_release",
     "tag_artifact_to_release",
@@ -72,7 +72,7 @@ def test_publish_preset_grants_upload_and_release_but_not_vex():
     """VEX takes the stricter ``artifact:publish_vex``, which 'publish' omits."""
     allowed = registry.permitted_by(SCOPE_PRESETS["publish"])
 
-    assert {"upload_sbom", "create_release", "tag_artifact_to_release"} <= allowed
+    assert {"upload_artifact", "create_release", "tag_artifact_to_release"} <= allowed
     assert "upload_vex" not in allowed
     # 'publish' includes release:read for the check-then-create workflow.
     assert "get_release" in allowed
@@ -113,7 +113,7 @@ def test_document_scope_reaches_both_document_tools():
         ("component:read_internal", "get_component"),
         ("release:read", "get_release"),
         ("document:read", "list_documents"),
-        ("artifact:publish", "upload_sbom"),
+        ("artifact:publish", "upload_artifact"),
         ("release:create", "create_release"),
         ("release:tag", "tag_artifact_to_release"),
     ],

@@ -158,12 +158,12 @@ async def test_publish_preset_can_create_a_release(make_token, product_in_bound_
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-async def test_upload_sbom_stores_the_artifact(make_token, component_in_bound_workspace, monkeypatch):
+async def test_upload_artifact_stores_the_artifact(make_token, component_in_bound_workspace, monkeypatch):
     """Uploads reach the real REST view; S3 is stubbed so no bucket is needed."""
     from sbomify.apps.core import object_store
     from sbomify.apps.sboms.models import SBOM
 
-    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
+    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json")
 
     token = await sync_to_async(make_token)(["artifact:publish"])
 
@@ -171,7 +171,7 @@ async def test_upload_sbom_stores_the_artifact(make_token, component_in_bound_wo
         response = await call_tool(
             client,
             token,
-            "upload_sbom",
+            "upload_artifact",
             {
                 "component_id": component_in_bound_workspace.id,
                 "content": json.dumps(MINIMAL_CYCLONEDX),
@@ -187,14 +187,14 @@ async def test_upload_sbom_stores_the_artifact(make_token, component_in_bound_wo
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-async def test_upload_sbom_rejects_a_component_in_another_workspace(
+async def test_upload_artifact_rejects_a_component_in_another_workspace(
     make_token, component_in_other_workspace, monkeypatch
 ):
     """Writes must be confined to the token's workspace, as reads already are."""
     from sbomify.apps.core import object_store
     from sbomify.apps.sboms.models import SBOM
 
-    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
+    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json")
 
     token = await sync_to_async(make_token)(["artifact:publish"])
 
@@ -202,7 +202,7 @@ async def test_upload_sbom_rejects_a_component_in_another_workspace(
         response = await call_tool(
             client,
             token,
-            "upload_sbom",
+            "upload_artifact",
             {
                 "component_id": component_in_other_workspace.id,
                 "content": json.dumps(MINIMAL_CYCLONEDX),
@@ -217,14 +217,14 @@ async def test_upload_sbom_rejects_a_component_in_another_workspace(
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-async def test_upload_sbom_rejects_malformed_json(make_token, component_in_bound_workspace):
+async def test_upload_artifact_rejects_malformed_json(make_token, component_in_bound_workspace):
     token = await sync_to_async(make_token)(["artifact:publish"])
 
     async with mcp_http() as client:
         response = await call_tool(
             client,
             token,
-            "upload_sbom",
+            "upload_artifact",
             {
                 "component_id": component_in_bound_workspace.id,
                 "content": "{definitely not json",
@@ -236,22 +236,22 @@ async def test_upload_sbom_rejects_malformed_json(make_token, component_in_bound
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-async def test_upload_sbom_rejects_an_unknown_format(make_token, component_in_bound_workspace):
+async def test_upload_artifact_rejects_an_unknown_format(make_token, component_in_bound_workspace):
     token = await sync_to_async(make_token)(["artifact:publish"])
 
     async with mcp_http() as client:
         response = await call_tool(
             client,
             token,
-            "upload_sbom",
+            "upload_artifact",
             {
                 "component_id": component_in_bound_workspace.id,
                 "content": json.dumps(MINIMAL_CYCLONEDX),
-                "sbom_format": "swid",
+                "artifact_format": "swid",
             },
         )
 
-    assert "Unsupported sbom_format" in json.dumps(parse(response))
+    assert "Unsupported artifact_format" in json.dumps(parse(response))
 
 
 MINIMAL_SPDX = {
@@ -287,12 +287,12 @@ MINIMAL_VEX = {
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-async def test_upload_sbom_spdx_goes_through_the_real_view(make_token, component_in_bound_workspace, monkeypatch):
+async def test_upload_artifact_spdx_goes_through_the_real_view(make_token, component_in_bound_workspace, monkeypatch):
     """The SPDX branch delegates to a different view than CycloneDX; call it."""
     from sbomify.apps.core import object_store
     from sbomify.apps.sboms.models import SBOM
 
-    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
+    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json")
 
     token = await sync_to_async(make_token)(["artifact:publish"])
 
@@ -300,11 +300,11 @@ async def test_upload_sbom_spdx_goes_through_the_real_view(make_token, component
         response = await call_tool(
             client,
             token,
-            "upload_sbom",
+            "upload_artifact",
             {
                 "component_id": component_in_bound_workspace.id,
                 "content": json.dumps(MINIMAL_SPDX),
-                "sbom_format": "spdx",
+                "artifact_format": "spdx",
             },
         )
 
@@ -320,7 +320,7 @@ async def test_upload_vex_stores_a_vex_artifact(make_token, component_in_bound_w
     from sbomify.apps.core import object_store
     from sbomify.apps.sboms.models import SBOM
 
-    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
+    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json")
 
     token = await sync_to_async(make_token)(["artifact:publish", "artifact:publish_vex"])
 
@@ -450,3 +450,121 @@ async def test_component_private_profiles_are_hidden_and_unassignable(
     names = [p["name"] for p in structured(listed).get("profiles", [])]
     assert "[Private] tag-target" not in names
     assert "No contact profile found" in json.dumps(parse(assigned))
+
+
+CBOM_SHAPED = {
+    "bomFormat": "CycloneDX",
+    "specVersion": "1.6",
+    "version": 1,
+    "metadata": {"component": {"type": "application", "name": "widget", "version": "1.2.3"}},
+    "components": [
+        {
+            "type": "cryptographic-asset",
+            "name": "AES-256-GCM",
+            "cryptoProperties": {"assetType": "algorithm"},
+        }
+    ],
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_upload_artifact_stores_the_kind_it_is_told(make_token, component_in_bound_workspace, monkeypatch):
+    """An HBOM stored as an SBOM is scored as a software inventory and never
+    reaches the hardware pipeline, so the caller has to be able to say."""
+    from sbomify.apps.core import object_store
+    from sbomify.apps.sboms.models import SBOM
+
+    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json")
+    token = await sync_to_async(make_token)(["artifact:publish"])
+
+    async with mcp_http() as client:
+        response = await call_tool(
+            client,
+            token,
+            "upload_artifact",
+            {
+                "component_id": component_in_bound_workspace.id,
+                "content": json.dumps(MINIMAL_CYCLONEDX),
+                "bom_type": "hbom",
+            },
+        )
+
+    assert "id" in structured(response)
+    stored = await sync_to_async(list)(SBOM.objects.filter(component=component_in_bound_workspace))
+    assert [row.bom_type for row in stored] == ["hbom"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_an_explicit_sbom_is_not_re_tagged_as_a_cbom(make_token, component_in_bound_workspace, monkeypatch):
+    """The view auto-detects a CBOM only when the caller named no type.
+
+    It tells the two apart by looking for bom_type in the query string, which a
+    direct call does not set on its own. Without that, saying "sbom" and saying
+    nothing would be the same thing and this document would come back a CBOM.
+    """
+    from sbomify.apps.core import object_store
+    from sbomify.apps.sboms.models import SBOM
+
+    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json")
+    token = await sync_to_async(make_token)(["artifact:publish"])
+
+    async with mcp_http() as client:
+        await call_tool(
+            client,
+            token,
+            "upload_artifact",
+            {
+                "component_id": component_in_bound_workspace.id,
+                "content": json.dumps(CBOM_SHAPED),
+                "bom_type": "sbom",
+            },
+        )
+
+    stored = await sync_to_async(list)(SBOM.objects.filter(component=component_in_bound_workspace))
+    assert [row.bom_type for row in stored] == ["sbom"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_upload_artifact_sends_vex_to_its_own_tool(make_token, component_in_bound_workspace):
+    """The view wants artifact:publish_vex for a VEX and this tool is advertised
+    on artifact:publish, so accepting one here would guarantee a 403."""
+    token = await sync_to_async(make_token)(["artifact:publish"])
+
+    async with mcp_http() as client:
+        response = await call_tool(
+            client,
+            token,
+            "upload_artifact",
+            {
+                "component_id": component_in_bound_workspace.id,
+                "content": json.dumps(MINIMAL_CYCLONEDX),
+                "bom_type": "vex",
+            },
+        )
+
+    assert "Use upload_vex" in json.dumps(parse(response))
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_upload_artifact_names_an_unknown_bom_type(make_token, component_in_bound_workspace):
+    token = await sync_to_async(make_token)(["artifact:publish"])
+
+    async with mcp_http() as client:
+        response = await call_tool(
+            client,
+            token,
+            "upload_artifact",
+            {
+                "component_id": component_in_bound_workspace.id,
+                "content": json.dumps(MINIMAL_CYCLONEDX),
+                "bom_type": "nonsense",
+            },
+        )
+
+    body = json.dumps(parse(response))
+    assert "Unknown bom_type" in body
+    assert "hbom" in body, "the message should list what is valid"

@@ -4,7 +4,7 @@ Two things depend on this mapping:
 
 1. **Listing.** ``tools/list`` is filtered to the actions the caller's token
    scopes permit, so an agent holding a ``read_only`` token never sees
-   ``upload_sbom``. That removes a whole class of guaranteed-to-fail calls and
+   ``upload_artifact``. That removes a whole class of guaranteed-to-fail calls and
    the wasted agent turns that follow them.
 2. **Enforcement.** Every invocation still calls ``can()`` against the concrete
    resource (``auth.require``). Filtering the list is an ergonomics win, never

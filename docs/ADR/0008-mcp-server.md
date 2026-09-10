@@ -62,7 +62,7 @@ understand and can audit via `last_used_at`.
 Each tool declares the `can()` action it requires
 (`sbomify/apps/mcp/registry.py`). `tools/list` is filtered to the actions the
 caller's token permits, so an agent holding a `read_only` token never sees
-`upload_sbom`. This is an ergonomics decision, not a security boundary: every
+`upload_artifact`. This is an ergonomics decision, not a security boundary: every
 invocation is still authorized by `can()` against the concrete resource, and a
 client calling a tool it was never shown is refused exactly as the REST API
 would refuse it. Hiding impossible tools stops agents burning turns on calls
@@ -83,7 +83,7 @@ polish: nulls are omitted, lists are always paginated with explicit
 
 ### Publishing tools call the existing view functions
 
-`upload_sbom`, `upload_vex`, `create_release`, and `tag_artifact_to_release`
+`upload_artifact`, `upload_vex`, `create_release`, and `tag_artifact_to_release`
 invoke the REST view functions directly (Django Ninja's decorators return the
 undecorated function). The upload path carries multi-version schema validation,
 CBOM auto-detection, PURL qualifier extraction, the duplicate guard, S3 upload

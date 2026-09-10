@@ -183,7 +183,7 @@ async def test_scope_cannot_be_widened_by_calling_a_hidden_tool(make_token, prod
         # body (and so before the scope gate) runs, and an argument error would
         # mask the refusal this test is about.
         for name, arguments in (
-            ("upload_sbom", {"component_id": "x", "content": "{}"}),
+            ("upload_artifact", {"component_id": "x", "content": "{}"}),
             ("create_release", {"product_id": product_in_bound_workspace.id, "name": "v9"}),
             ("create_contact_profile", {"name": "Injected Supplier", "email": "injected@example.com"}),
         ):
@@ -210,7 +210,7 @@ async def test_scope_is_refused_before_the_tool_body_runs(make_token):
             client,
             "tools/call",
             token=token.encoded_token,
-            name="upload_sbom",
+            name="upload_artifact",
             arguments={"component_id": "no-such-component", "content": "{}"},
         )
 
@@ -335,7 +335,7 @@ async def test_oversized_upload_is_refused_over_the_transport(make_token, mcp_ow
             client,
             "tools/call",
             token=token.encoded_token,
-            name="upload_sbom",
+            name="upload_artifact",
             arguments={"component_id": component.id, "content": payload},
         )
 

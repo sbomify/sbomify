@@ -131,7 +131,7 @@ async def test_tools_list_is_filtered_to_a_read_only_tokens_scopes(make_token):
 
         names = {tool["name"] for tool in parse(response)["result"]["tools"]}
         assert "list_products" in names
-        assert "upload_sbom" not in names
+        assert "upload_artifact" not in names
         assert "create_release" not in names
 
 
@@ -144,7 +144,7 @@ async def test_tools_list_is_filtered_to_a_publish_tokens_scopes(make_token):
         response = await call(client, "tools/list", token=token.encoded_token)
 
         names = {tool["name"] for tool in parse(response)["result"]["tools"]}
-        assert "upload_sbom" in names
+        assert "upload_artifact" in names
         assert "list_products" not in names
         # VEX needs the stricter artifact:publish_vex, absent from this preset.
         assert "upload_vex" not in names
