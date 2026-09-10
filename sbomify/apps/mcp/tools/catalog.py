@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from .. import serializers
 from ..auth import Principal, require
-from ._base import clamp_page, mcp_tool, not_found, resolve_workspace, run_db
+from ._base import clamp_page, mcp_tool, narrow, not_found, resolve_workspace, run_db
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -99,8 +99,17 @@ def register_tools(mcp: FastMCP) -> None:
         return await run_db(query)
 
     @mcp_tool(mcp, "list_products", "product:read")
-    async def list_products(principal: Principal, page: int = 1, page_size: int = 25) -> dict[str, Any]:
-        """List the products in the current workspace, newest first."""
+    async def list_products(
+        principal: Principal,
+        search: str | None = None,
+        page: int = 1,
+        page_size: int = 25,
+    ) -> dict[str, Any]:
+        """List the products in the current workspace, newest first.
+
+        `search` matches the product name, case-insensitively. Prefer it to
+        paging when you are looking for one product you can name.
+        """
 
         def query() -> dict[str, Any]:
             from sbomify.apps.core.models import Product
@@ -108,7 +117,7 @@ def register_tools(mcp: FastMCP) -> None:
             team = resolve_workspace(principal)
             require(principal, "product:read", team)
             safe_page, safe_size = clamp_page(page, page_size)
-            queryset = Product.objects.filter(team=team).order_by("-created_at")
+            queryset = narrow(Product.objects.filter(team=team), search, "name").order_by("-created_at")
             rows, total = serializers.page_queryset(queryset, safe_page, safe_size)
             return serializers.paginated(
                 [serializers.product(row) for row in rows],
@@ -145,10 +154,15 @@ def register_tools(mcp: FastMCP) -> None:
     async def list_components(
         principal: Principal,
         product_id: str | None = None,
+        search: str | None = None,
         page: int = 1,
         page_size: int = 25,
     ) -> dict[str, Any]:
-        """List components in the workspace, optionally limited to one product."""
+        """List components in the workspace, optionally limited to one product.
+
+        `search` matches the component name, case-insensitively. Prefer it to
+        paging when you are looking for one component you can name.
+        """
 
         def query() -> dict[str, Any]:
             from sbomify.apps.core.models import Component
@@ -165,7 +179,9 @@ def register_tools(mcp: FastMCP) -> None:
                 _lookup_product(principal, product_id)
                 queryset = queryset.filter(products__id=product_id)
             safe_page, safe_size = clamp_page(page, page_size)
-            rows, total = serializers.page_queryset(queryset.order_by("name"), safe_page, safe_size)
+            rows, total = serializers.page_queryset(
+                narrow(queryset, search, "name").order_by("name"), safe_page, safe_size
+            )
             return serializers.paginated(
                 [serializers.component(row) for row in rows],
                 page=safe_page,
@@ -200,10 +216,14 @@ def register_tools(mcp: FastMCP) -> None:
     async def list_releases(
         principal: Principal,
         product_id: str | None = None,
+        search: str | None = None,
         page: int = 1,
         page_size: int = 25,
     ) -> dict[str, Any]:
-        """List releases in the workspace, newest first, optionally for one product."""
+        """List releases in the workspace, newest first, optionally for one product.
+
+        `search` matches the release name and its version, case-insensitively.
+        """
 
         def query() -> dict[str, Any]:
             from sbomify.apps.core.models import Release
@@ -218,7 +238,9 @@ def register_tools(mcp: FastMCP) -> None:
                 _lookup_product(principal, product_id)
                 queryset = queryset.filter(product_id=product_id)
             safe_page, safe_size = clamp_page(page, page_size)
-            rows, total = serializers.page_queryset(queryset.order_by("-created_at"), safe_page, safe_size)
+            rows, total = serializers.page_queryset(
+                narrow(queryset, search, "name", "version").order_by("-created_at"), safe_page, safe_size
+            )
             return serializers.paginated(
                 [serializers.release(row) for row in rows],
                 page=safe_page,

@@ -23,7 +23,7 @@ SBOM content is passed through ``limits.untrusted`` before it reaches the model.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from mcp.server.fastmcp.exceptions import ToolError
 
@@ -248,13 +248,31 @@ def _scoped_runs(
     return _security_runs(team), {"workspace": team.key}
 
 
-def _present(row: dict[str, Any]) -> dict[str, Any]:
+def _present(row: dict[str, Any], *, concise: bool = False) -> dict[str, Any]:
     """Shape one finding row for an agent.
 
     ``id``, ``package``, ``version`` and ``ecosystem`` originate in scanner
     output over supplier-supplied SBOM content, so each is truncated by
     ``untrusted``.
+
+    ``concise`` keeps what an agent needs to decide whether a finding matters
+    and drops what it needs to act on one. A page of twenty-five findings is
+    the most context-hungry response this server produces, and an agent
+    answering "is anything critical here?" pays for the identifiers of every
+    row it is about to ignore.
     """
+    if concise:
+        return serializers.compact(
+            {
+                "id": untrusted(row.get("id"), limit=128),
+                "severity": row.get("severity"),
+                "package": untrusted(row.get("package"), limit=512),
+                "version": untrusted(row.get("version"), limit=128),
+                "malicious": row.get("malicious") or None,
+                "known_exploited": row.get("kev") or None,
+                "suppressed": row.get("vex_suppressed") or None,
+            }
+        )
     return serializers.compact(
         {
             "id": untrusted(row.get("id"), limit=128),
@@ -319,6 +337,7 @@ def register_tools(mcp: FastMCP) -> None:
         release_id: str | None = None,
         severity: str | None = None,
         include_suppressed: bool = False,
+        response_format: Literal["detailed", "concise"] = "detailed",
         page: int = 1,
         page_size: int = 25,
     ) -> dict[str, Any]:
@@ -331,6 +350,10 @@ def register_tools(mcp: FastMCP) -> None:
 
         Each finding names the package and version it affects plus the component
         and SBOM it was found in, so it can be traced back to what ships it.
+        `response_format` "concise" drops the component, SBOM, provider, CVSS
+        and fix fields, keeping the advisory, severity, package and the
+        malicious and known-exploited markers. Use it when triaging what
+        matters and "detailed" when acting on one.
 
         Narrow with `product_id` or `component_id` on a large workspace. Every
         page reads every finding in scope: the sort is worst-first across SBOMs
@@ -361,7 +384,7 @@ def register_tools(mcp: FastMCP) -> None:
             safe_page, safe_size = clamp_page(page, page_size)
             start = (safe_page - 1) * safe_size
             return serializers.paginated(
-                [_present(row) for row in rows[start : start + safe_size]],
+                [_present(row, concise=response_format == "concise") for row in rows[start : start + safe_size]],
                 page=safe_page,
                 page_size=safe_size,
                 total=len(rows),

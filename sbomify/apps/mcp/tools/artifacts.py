@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
 from ..auth import Principal, require
 from ..limits import enforce_parse_size, untrusted
-from ._base import clamp_page, mcp_tool, not_found, resolve_workspace, run_db
+from ._base import clamp_page, mcp_tool, narrow, not_found, resolve_workspace, run_db
 from .catalog import _lookup_component
 
 if TYPE_CHECKING:
@@ -194,6 +194,7 @@ def register_tools(mcp: FastMCP) -> None:
         principal: Principal,
         component_id: str,
         bom_type: str | None = None,
+        search: str | None = None,
         page: int = 1,
         page_size: int = 25,
     ) -> dict[str, Any]:
@@ -201,8 +202,9 @@ def register_tools(mcp: FastMCP) -> None:
 
         Covers every BOM kind the component carries, not SBOMs alone: each row
         reports its own `bom_type`. Pass `bom_type` to narrow to one kind, one
-        of sbom, cbom, aibom, hbom, vex, saasbom, obom, mbom. Documents are the
-        other half of the artifact surface, listed by `list_documents`.
+        of sbom, cbom, aibom, hbom, vex, saasbom, obom, mbom, and `search` to
+        match the artifact name or version. Documents are the other half of the
+        artifact surface, listed by `list_documents`.
         """
 
         def query() -> dict[str, Any]:
@@ -225,6 +227,7 @@ def register_tools(mcp: FastMCP) -> None:
                         f"Unknown bom_type {bom_type!r}; expected one of {', '.join(sorted(SBOM.BomType.values))}."
                     )
                 queryset = queryset.filter(bom_type=wanted)
+            queryset = narrow(queryset, search, "name", "version")
             rows, total = serializers.page_queryset(queryset, safe_page, safe_size)
             return serializers.paginated(
                 [serializers.sbom(row) for row in rows],
@@ -257,6 +260,7 @@ def register_tools(mcp: FastMCP) -> None:
         principal: Principal,
         artifact_id: str,
         name_filter: str | None = None,
+        response_format: Literal["detailed", "concise"] = "detailed",
         page: int = 1,
         page_size: int = 50,
     ) -> dict[str, Any]:
@@ -268,7 +272,9 @@ def register_tools(mcp: FastMCP) -> None:
         everything.
 
         Works for both CycloneDX and SPDX; results are normalised to
-        `{name, version, purl, licenses}`.
+        `{name, version, purl, licenses}`. `response_format` "concise" returns
+        the name and version alone, which is what answering "do we ship X?"
+        needs and a fraction of the context.
         """
 
         def query() -> dict[str, Any]:
@@ -311,6 +317,8 @@ def register_tools(mcp: FastMCP) -> None:
             safe_page, safe_size = clamp_page(page, page_size, default_size=50)
             start = (safe_page - 1) * safe_size
             window = packages[start : start + safe_size]
+            if response_format == "concise":
+                window = [{"name": pkg.get("name"), "version": pkg.get("version")} for pkg in window]
 
             result = serializers.paginated(
                 [serializers.compact(p) for p in window],
@@ -327,10 +335,14 @@ def register_tools(mcp: FastMCP) -> None:
     async def list_documents(
         principal: Principal,
         component_id: str,
+        search: str | None = None,
         page: int = 1,
         page_size: int = 25,
     ) -> dict[str, Any]:
-        """List the documents attached to a component, newest first."""
+        """List the documents attached to a component, newest first.
+
+        `search` matches the document name and its version, case-insensitively.
+        """
 
         def query() -> dict[str, Any]:
             from sbomify.apps.documents.models import Document
@@ -338,7 +350,9 @@ def register_tools(mcp: FastMCP) -> None:
             component = _lookup_component(principal, component_id)
             require(principal, "document:read", component)
             safe_page, safe_size = clamp_page(page, page_size)
-            queryset = Document.objects.filter(component=component).order_by("-created_at")
+            queryset = narrow(Document.objects.filter(component=component), search, "name", "version").order_by(
+                "-created_at"
+            )
             rows, total = serializers.page_queryset(queryset, safe_page, safe_size)
             return serializers.paginated(
                 [serializers.document(row) for row in rows],

@@ -62,6 +62,26 @@ def _current_request(mcp: FastMCP) -> Any:
         return None
 
 
+def narrow(queryset: Any, search: str | None, *fields: str) -> Any:
+    """Filter ``queryset`` to rows matching ``search`` in any of ``fields``.
+
+    Listing everything and letting the agent read past what it did not want is
+    the expensive failure here: context is the scarce resource, not queries. A
+    blank or whitespace-only search is treated as no search rather than as a
+    filter matching everything, so an agent that passes "" gets the full list
+    instead of a silently different meaning.
+    """
+    from django.db.models import Q
+
+    term = (search or "").strip()
+    if not term:
+        return queryset
+    condition = Q()
+    for field in fields:
+        condition |= Q(**{f"{field}__icontains": term})
+    return queryset.filter(condition)
+
+
 def _annotations(*, writes: bool, idempotent: bool | None) -> ToolAnnotations:
     """The behaviour hints a client reads before deciding whether to ask first.
 

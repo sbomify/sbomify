@@ -18,10 +18,10 @@ from sbomify.apps.sboms.models import SBOM
 from .test_protocol import call, mcp_http, parse, structured
 
 
-def _artifact(component, name: str, bom_type: str) -> SBOM:
+def _artifact(component, name: str, bom_type: str, version: str = "1.0.0") -> SBOM:
     return SBOM.objects.create(
         name=name,
-        version="1.0.0",
+        version=version,
         format="cyclonedx",
         format_version="1.6",
         sbom_filename=f"{name}.json",
@@ -142,3 +142,74 @@ async def test_a_document_is_reachable_in_both_directions(mcp_owner, make_token,
 async def _call(token, name, **arguments):
     async with mcp_http() as client:
         return await call(client, "tools/call", token=token.encoded_token, name=name, arguments=arguments)
+
+
+def test_a_blank_search_is_not_a_filter():
+    """An agent passing "" means "no search", not "match the empty string".
+
+    Treating it as a filter would still match everything today, but the two
+    readings diverge the moment the helper is used with anything but icontains.
+    """
+    from sbomify.apps.core.models import Product
+    from sbomify.apps.mcp.tools._base import narrow
+
+    base = Product.objects.all()
+
+    assert narrow(base, None, "name").query.where is base.query.where
+    assert str(narrow(base, "   ", "name").query) == str(base.query)
+    assert str(narrow(base, "widget", "name").query) != str(base.query)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_search_narrows_instead_of_making_the_agent_page(mcp_owner, make_token, component_in_bound_workspace):
+    """Listing everything and letting the agent read past it spends the scarce
+    resource, which is context rather than queries."""
+    await sync_to_async(_artifact)(component_in_bound_workspace, "widget-firmware", SBOM.BomType.SBOM, "1.0.0")
+    await sync_to_async(_artifact)(component_in_bound_workspace, "gateway-image", SBOM.BomType.SBOM, "2.0.0")
+    token = await sync_to_async(make_token)(["sbom:read"])
+
+    hit = structured(
+        await _call(token, "list_artifacts", component_id=component_in_bound_workspace.id, search="WIDGET")
+    )
+    everything = structured(await _call(token, "list_artifacts", component_id=component_in_bound_workspace.id))
+
+    assert [row["name"] for row in hit["items"]] == ["widget-firmware"], "search should be case-insensitive"
+    assert hit["total"] == 1
+    assert everything["total"] == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_concise_packages_drop_what_a_yes_or_no_question_does_not_need(
+    mcp_owner, make_token, component_in_bound_workspace, monkeypatch
+):
+    from sbomify.apps.core import object_store
+
+    artifact = await sync_to_async(_artifact)(component_in_bound_workspace, "img", SBOM.BomType.SBOM)
+    document = json.dumps(
+        {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "components": [
+                {
+                    "type": "library",
+                    "name": "libexample",
+                    "version": "1.0.0",
+                    "purl": "pkg:pypi/libexample@1.0.0",
+                    "licenses": [{"license": {"id": "MIT"}}],
+                }
+            ],
+        }
+    ).encode()
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_data", lambda self, name: document)
+    token = await sync_to_async(make_token)(["sbom:read"])
+
+    detailed = structured(await _call(token, "get_artifact_packages", artifact_id=artifact.id))
+    concise = structured(
+        await _call(token, "get_artifact_packages", artifact_id=artifact.id, response_format="concise")
+    )
+
+    assert set(detailed["items"][0]) >= {"name", "version", "purl", "licenses"}
+    assert set(concise["items"][0]) == {"name", "version"}
+    assert concise["total"] == detailed["total"], "verbosity must not change what matched"
