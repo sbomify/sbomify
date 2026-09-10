@@ -26,7 +26,7 @@ from mcp.types import ToolAnnotations
 from sbomify.apps.core.authz import scope_permits
 
 from .. import registry
-from ..auth import MCPAuthError, Principal, authenticate, throttle_write
+from ..auth import WORKSPACE_ATTR, MCPAuthError, Principal, authenticate, current_request, throttle_write
 from ..limits import audit, enforce_response_size
 
 if TYPE_CHECKING:
@@ -52,14 +52,6 @@ def clamp_page(page: int, page_size: int, *, default_size: int = 25) -> tuple[in
     if page_size < 1:
         page_size = default_size
     return page, min(page_size, MAX_PAGE_SIZE)
-
-
-def _current_request(mcp: FastMCP) -> Any:
-    """The Starlette request for the in-flight tool call."""
-    try:
-        return mcp.get_context().request_context.request
-    except (LookupError, AttributeError, ValueError):
-        return None
 
 
 def narrow(queryset: Any, search: str | None, *fields: str) -> Any:
@@ -152,7 +144,7 @@ def mcp_tool(
 
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            request = _current_request(mcp)
+            request = current_request(mcp)
             if request is None:
                 raise MCPAuthError("This tool must be called over HTTP with a bearer token.")
             principal = await authenticate(request, attempted_action=name)
@@ -254,10 +246,20 @@ def resolve_workspace(principal: Principal) -> Team:
     every tool passes through, and it fails closed if a future tier or an
     attribute-based path ever hands a guest an internal read. The REST API
     keeps the same belt-and-braces in ``_is_guest_member``.
+
+    Resolved once per call. A tool that narrows by id goes through a ``_lookup_*``
+    helper, each of which resolves again, so an unmemoised lookup costs a
+    workspace's worth of ``Member`` queries two to six times over before the
+    tool reads its first row. The stub request is built fresh per call and
+    already carries the rest of the caller's identity, so it is where the
+    answer belongs: nothing can change under it mid-call.
     """
     from sbomify.apps.core.models import User
     from sbomify.apps.teams.models import Member
     from sbomify.apps.teams.utils import get_user_default_team
+
+    if (cached := principal.resolved_workspace) is not None:
+        return cast("Team", cached)
 
     user = cast("User", principal.user)
     team: Team | None = principal.token.team
@@ -289,6 +291,10 @@ def resolve_workspace(principal: Principal) -> Team:
         raise ToolError("This token's user is not a member of its workspace.")
     if membership.role == "guest":
         raise ToolError("Guest members can only access public pages; this token's workspace role is guest.")
+
+    # Only a fully checked workspace is memoised, so a refusal is re-raised on
+    # every subsequent call rather than cached away.
+    setattr(principal.request, WORKSPACE_ATTR, team)
     return team
 
 

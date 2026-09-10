@@ -65,6 +65,15 @@ TEST_SUBNET_PREFIX=172.30.0 docker compose -f docker-compose.tests.yml -p mywork
   exec -e TEST_DATABASE_NAME=sbomify_myworktree tests uv run pytest
 ```
 
+Making the subnet configurable narrowed it from `/16` to `/24`, and Docker will not re-address a
+network that already exists. A checkout that ran tests before this change fails its next `up` with a
+network config mismatch. Remove the old network once; the next `up` rebuilds it:
+
+```bash
+docker compose -f docker-compose.tests.yml down
+docker network rm sbomify_testnet
+```
+
 If tests fail with `database "test_sbomify_test" already exists` or `is being accessed by other users` (stale DB from killed parallel runs), clean up:
 
 ```bash
@@ -422,7 +431,7 @@ Rules when touching it:
 
 Tests live in `sbomify/apps/mcp/tests/`; extend `test_security.py` whenever a tool is added.
 
-User-facing setup docs live on the website ([content/guides/mcp.md](https://github.com/sbomify/sbomify.com/blob/master/content/guides/mcp.md)); `docs/mcp.md` here is the operator reference. A change to the tool surface needs both.
+`docs/mcp.md` covers both connecting a client and running the endpoint. A change to the tool surface needs a change there.
 
 ### WebSockets
 

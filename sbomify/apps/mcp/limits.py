@@ -97,6 +97,12 @@ def enforce_response_size(payload: Any, *, tool: str) -> Any:
     return payload
 
 
+def _team_id(principal: Principal) -> str | None:
+    if (team := principal.resolved_workspace) is not None:
+        return str(team.pk)
+    return str(principal.token.team_id) if principal.token.team_id is not None else None
+
+
 def audit(
     tool: str,
     principal: Principal,
@@ -116,7 +122,14 @@ def audit(
         "tool": tool,
         "token_id": str(principal.token.pk),
         "user_id": str(principal.user.pk),
-        "team_id": str(principal.token.team_id) if principal.token.team_id is not None else None,
+        # The workspace the call operated in, not the one the token names.
+        # ``AccessToken.team`` is nullable, and such a token falls back to the
+        # user's default in ``resolve_workspace`` — so recording the token's own
+        # field logged null for a legacy token's every read and write, which is
+        # the opposite of "abuse is reconstructable after the fact". Falls back
+        # to the token's field for the refusals that happen before any tool body
+        # runs, where nothing has been resolved yet.
+        "team_id": _team_id(principal),
         "scoped": principal.scopes is not None,
         "detail": detail,
         **fields,

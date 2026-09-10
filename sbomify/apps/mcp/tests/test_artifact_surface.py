@@ -213,3 +213,37 @@ async def test_concise_packages_drop_what_a_yes_or_no_question_does_not_need(
     assert set(detailed["items"][0]) >= {"name", "version", "purl", "licenses"}
     assert set(concise["items"][0]) == {"name", "version"}
     assert concise["total"] == detailed["total"], "verbosity must not change what matched"
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_the_risk_report_counts_every_bom_kind_the_release_ships(
+    mcp_owner, make_token, component_in_bound_workspace, product_in_bound_workspace
+):
+    """`get_release_risk_report` is the one-call answer, so its counts must be whole.
+
+    Scanning only ever covers `bom_type=sbom`, and the count of what the
+    release ships was reusing that filtered list. A release carrying a CBOM and
+    a VEX alongside its SBOM reported one artifact, and the tool's own
+    docstring tells the agent to prefer it over calling `get_release`.
+    """
+    from sbomify.apps.core.models import Release, ReleaseArtifact
+
+    def setup() -> str:
+        release = Release.objects.create(product=product_in_bound_workspace, name="v1", version="1")
+        for index, bom_type in enumerate((SBOM.BomType.SBOM, SBOM.BomType.CBOM, SBOM.BomType.VEX)):
+            artifact = _artifact(
+                component_in_bound_workspace, f"the-{bom_type}", bom_type, version=f"1.0.{index}"
+            )
+            ReleaseArtifact.objects.create(release=release, sbom=artifact)
+        return release.id
+
+    release_id = await sync_to_async(setup)()
+    token = await sync_to_async(make_token)(["release:read", "workspace:read"])
+
+    report = structured(await _call(token, "get_release_risk_report", release_id=release_id))
+
+    assert report["artifact_counts"]["boms"] == 3
+    # The scan fields stay SBOM-only: a VEX or CBOM row can never earn a
+    # security run, so counting one would report it forever unscanned.
+    assert report["unscanned_sboms"] == 1

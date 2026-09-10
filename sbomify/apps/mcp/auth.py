@@ -34,6 +34,8 @@ from sbomify.apps.access_tokens.throttling import (
 from sbomify.apps.access_tokens.utils import get_user_and_token_record
 from sbomify.apps.core.utils import get_client_ip
 
+from .limits import audit
+
 if TYPE_CHECKING:
     from django.contrib.auth.base_user import AbstractBaseUser
     from starlette.requests import Request
@@ -59,6 +61,13 @@ class MCPRateLimitedError(MCPAuthError):
     """
 
 
+WORKSPACE_ATTR = "mcp_workspace"
+"""Where ``resolve_workspace`` caches the workspace it resolved for this call.
+
+On the stub request, alongside ``access_token_record`` and ``token_team``,
+because that object is built fresh per call and thrown away after it."""
+
+
 @dataclass(frozen=True)
 class Principal:
     """An authenticated MCP caller.
@@ -75,6 +84,32 @@ class Principal:
     def scopes(self) -> list[str] | None:
         """The token's action scopes; ``None`` means unscoped (full capability)."""
         return self.token.scopes
+
+    @property
+    def resolved_workspace(self) -> Any:
+        """The workspace a tool resolved for this call, or ``None`` if none has.
+
+        ``resolve_workspace`` stashes its answer on the stub request, which is
+        built fresh per call. Reading it here rather than resolving again keeps
+        the audit line off the database and out of the refusals that
+        ``resolve_workspace`` itself raises.
+        """
+        return getattr(self.request, WORKSPACE_ATTR, None)
+
+
+def current_request(mcp: Any) -> Any:
+    """The Starlette request for the in-flight tool call, or ``None``.
+
+    The streamable-HTTP transport threads the request through
+    ``ServerMessageMetadata`` and the low-level server re-exposes it as
+    ``RequestContext.request``. One accessor, because the two callers that need
+    it fail differently when the SDK moves it: the tool wrapper raises, while
+    ``list_tools`` would quietly advertise everything.
+    """
+    try:
+        return mcp.get_context().request_context.request
+    except (LookupError, AttributeError, ValueError):
+        return None
 
 
 def _bearer_token(request: Request) -> str:
@@ -119,9 +154,12 @@ def _stub_request(starlette_request: Request) -> HttpRequest:
     client = starlette_request.client
     if client is not None:
         stub.META["REMOTE_ADDR"] = client.host
-    for header in ("x-real-ip", "x-forwarded-for"):
-        if (value := starlette_request.headers.get(header)) is not None:
-            stub.META[f"HTTP_{header.upper().replace('-', '_')}"] = value
+    # X-Real-IP only. get_client_ip reads REMOTE_ADDR and HTTP_X_REAL_IP and
+    # nothing else — X-Forwarded-For is deliberately never honoured anywhere in
+    # the tree, so copying it here would only make the stub look like it were
+    # trusted.
+    if (real_ip := starlette_request.headers.get("x-real-ip")) is not None:
+        stub.META["HTTP_X_REAL_IP"] = real_ip
 
     return stub
 
@@ -174,11 +212,19 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     # concurrent calls on a shared instance would write one token's window
     # under another token's key. The budget itself is unaffected — the sliding
     # window lives in the cache, keyed on the token pk.
+    principal = Principal(user=user, token=record, request=stub)
+
     throttle = AccessTokenRateThrottle()
     if not await sync_to_async(throttle.allow_request)(stub):
-        raise MCPRateLimitedError(f"Rate limit exceeded for this access token.{_retry_hint(stub)}")
+        # Audited here rather than left to the tool wrapper, which only audits
+        # what happens after this function returns. A token being hammered is
+        # exactly what the audit stream exists to surface, and it is the one
+        # refusal that reaches an authenticated, identifiable caller.
+        message = f"Rate limit exceeded for this access token.{_retry_hint(stub)}"
+        audit(attempted_action, principal, outcome="denied", detail=message)
+        raise MCPRateLimitedError(message)
 
-    return Principal(user=user, token=record, request=stub)
+    return principal
 
 
 def _retry_hint(stub: HttpRequest) -> str:
