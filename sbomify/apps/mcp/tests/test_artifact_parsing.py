@@ -121,3 +121,51 @@ class TestBounded:
         payload = {"count": 7, "ok": True, "missing": None}
 
         assert _bounded(payload) == payload
+
+
+NESTED_CYCLONEDX = {
+    "bomFormat": "CycloneDX",
+    "specVersion": "1.6",
+    "components": [
+        {
+            "type": "container",
+            "name": "app-image",
+            "version": "1.0",
+            "components": [
+                {
+                    "type": "operating-system",
+                    "name": "debian",
+                    "version": "12",
+                    "components": [
+                        {"type": "library", "name": "log4j-core", "version": "2.14.1", "purl": "pkg:maven/log4j"}
+                    ],
+                }
+            ],
+        }
+    ],
+}
+
+
+def test_a_nested_component_is_found():
+    """syft emits a container's packages nested under the image, so a flat read
+    answers "do we ship log4j?" with a confident no."""
+    from sbomify.apps.mcp.tools.artifacts import _extract_packages
+
+    names = [pkg["name"] for pkg in _extract_packages(NESTED_CYCLONEDX, "cyclonedx")]
+
+    assert "log4j-core" in names
+    assert names == ["app-image", "debian", "log4j-core"], "parents are components too"
+
+
+def test_the_component_walk_is_depth_bounded():
+    """A hostile document must not make the walk the expensive part."""
+    from sbomify.apps.mcp.tools.artifacts import _MAX_COMPONENT_DEPTH, _extract_packages
+
+    deep: dict = {"type": "library", "name": "leaf"}
+    for index in range(_MAX_COMPONENT_DEPTH + 5):
+        deep = {"type": "library", "name": f"wrap-{index}", "components": [deep]}
+
+    names = [pkg["name"] for pkg in _extract_packages({"components": [deep]}, "cyclonedx")]
+
+    assert "leaf" not in names
+    assert len(names) == _MAX_COMPONENT_DEPTH + 1

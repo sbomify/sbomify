@@ -157,7 +157,10 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
         providers = sorted({run.plugin_name for run in sbom_runs})
         # The component's live VEX suppressions, like every dashboard caller: a
         # VEX uploaded after the scan must read as suppressed without a re-scan.
-        statements = load_vex_suppressions(sbom.component_id, cache=vex_cache)
+        # Skipped entirely when the SBOM is clean, the way dashboard_page does
+        # it: VEX lives in S3, and a workspace of mostly-clean components would
+        # otherwise pay one round trip per component to overlay nothing.
+        statements = load_vex_suppressions(sbom.component_id, cache=vex_cache) if merged["findings"] else []
         for row in extract_finding_rows(merged, statements, kev_ids=kev_ids):
             row["sbom_id"] = sbom_id
             row["component_id"] = sbom.component_id
@@ -369,7 +372,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Combines the release, its tagged artifacts, vulnerability severity counts
         and compliance assessment status. Prefer this over calling `get_release`,
-        `get_vulnerability_summary` and `get_assessments` separately — it is the
+        `get_vulnerability_summary` and `get_assessments` separately. It is the
         intended answer to "how risky is this release?".
         """
 

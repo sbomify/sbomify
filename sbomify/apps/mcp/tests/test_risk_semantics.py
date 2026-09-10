@@ -8,6 +8,8 @@ the summary but not reach through the list filter.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from sbomify.apps.core.models import Component
@@ -190,3 +192,24 @@ def test_only_the_latest_sbom_per_component_counts(mcp_owner):
     assert counts["critical"] == 1
     assert counts["high"] == 0
     assert counts["total"] == 1
+
+
+@pytest.mark.django_db
+def test_a_clean_sbom_never_fetches_its_vex(mcp_owner, monkeypatch):
+    """VEX lives in S3, so a workspace of clean components must not pay a round
+    trip per component to overlay nothing. The dashboard already skips it."""
+    _, bound, _ = mcp_owner
+    sbom = _sbom(bound, "clean")
+    _run(sbom, status="completed", result={"findings": []})
+
+    calls: list[Any] = []
+    monkeypatch.setattr(
+        "sbomify.apps.vulnerability_scanning.vex.load_vex_suppressions",
+        lambda component_id, cache=None: calls.append(component_id) or [],
+    )
+
+    rows, scanned = risk._rows_for(risk._security_runs(bound))
+
+    assert scanned == {sbom.id}
+    assert rows == []
+    assert calls == [], "a clean SBOM triggered a VEX fetch"

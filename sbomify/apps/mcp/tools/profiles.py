@@ -24,7 +24,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
 from ..auth import Principal, require
-from ._base import mcp_tool, not_found, resolve_workspace, run_db, unwrap_view, workspace_key
+from ._base import clamp_page, mcp_tool, not_found, resolve_workspace, run_db, unwrap_view, workspace_key
 from .catalog import _lookup_component
 
 if TYPE_CHECKING:
@@ -69,10 +69,10 @@ def _profile_summary(payload: Any) -> dict[str, Any]:
 
 def register_tools(mcp: FastMCP) -> None:
     @mcp_tool(mcp, "list_contact_profiles", "workspace:read")
-    async def list_contact_profiles(principal: Principal) -> dict[str, Any]:
+    async def list_contact_profiles(principal: Principal, page: int = 1, page_size: int = 25) -> dict[str, Any]:
         """List the workspace's contact profiles.
 
-        Use this to find an existing profile before creating a new one — most
+        Use this to find an existing profile before creating a new one. Most
         workspaces want a handful of shared profiles, not one per component.
         """
 
@@ -85,7 +85,7 @@ def register_tools(mcp: FastMCP) -> None:
             # profiles are per-component bookkeeping rows, and the assignment
             # view refuses them — listing them here would advertise profiles
             # that assign_contact_profile is certain to 404 on.
-            profiles = (
+            queryset = (
                 ContactProfile.objects.filter(team=team, is_component_private=False)
                 .prefetch_related("entities__contacts")
                 .order_by("name")
@@ -93,10 +93,20 @@ def register_tools(mcp: FastMCP) -> None:
 
             from sbomify.apps.teams.apis import serialize_contact_profile
 
-            return {
-                "workspace": team.key,
-                "profiles": [_profile_summary(serialize_contact_profile(p).dict()) for p in profiles],
-            }
+            # Paginated like every other list. Returning the lot meant a
+            # workspace with enough profiles tripped the response cap and got a
+            # hard error telling it to narrow a query this tool took no
+            # arguments to narrow.
+            safe_page, safe_size = clamp_page(page, page_size)
+            rows, total = serializers.page_queryset(queryset, safe_page, safe_size)
+            result = serializers.paginated(
+                [_profile_summary(serialize_contact_profile(row).dict()) for row in rows],
+                page=safe_page,
+                page_size=safe_size,
+                total=total,
+            )
+            result["workspace"] = team.key
+            return result
 
         return await run_db(query)
 
@@ -137,14 +147,14 @@ def register_tools(mcp: FastMCP) -> None:
 
         `name` labels the profile inside sbomify; `supplier_name` is the
         organisation that appears in generated SBOMs (defaults to `name`).
-        `email` is the contact address published with those SBOMs — it is
+        `email` is the contact address published with those SBOMs. It is
         required, because a supplier entry with no reachable contact does not
         satisfy the NTIA minimum elements these profiles exist to fill in.
         `contact_name` names the person or team behind that address (defaults to
         `supplier_name`). Setting `is_default` makes this the profile new
         components inherit.
 
-        Check `list_contact_profiles` first — profiles are meant to be shared
+        Check `list_contact_profiles` first: profiles are meant to be shared
         across components, so a near-duplicate is usually a mistake.
         """
 
@@ -195,7 +205,7 @@ def register_tools(mcp: FastMCP) -> None:
         """Rename a contact profile or make it the workspace default.
 
         Editing the entity details (supplier name, addresses, per-contact
-        emails) is not exposed over MCP — that data ends up in published SBOMs,
+        emails) is not exposed over MCP. That data ends up in published SBOMs,
         so it stays a deliberate action in the web UI.
         """
 

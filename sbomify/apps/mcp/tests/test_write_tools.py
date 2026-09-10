@@ -96,7 +96,7 @@ async def test_create_and_list_contact_profile(make_token):
     profile = structured(created)
     assert profile["name"] == "ACME Corp"
 
-    names = [p["name"] for p in structured(listed)["profiles"]]
+    names = [p["name"] for p in structured(listed)["items"]]
     assert "ACME Corp" in names
 
 
@@ -447,7 +447,7 @@ async def test_component_private_profiles_are_hidden_and_unassignable(
             {"component_id": component_in_bound_workspace.id, "profile_id": private.id},
         )
 
-    names = [p["name"] for p in structured(listed).get("profiles", [])]
+    names = [p["name"] for p in structured(listed).get("items", [])]
     assert "[Private] tag-target" not in names
     assert "No contact profile found" in json.dumps(parse(assigned))
 

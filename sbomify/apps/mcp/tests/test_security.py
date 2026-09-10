@@ -95,8 +95,29 @@ def test_oversized_upload_is_refused_before_parsing():
 def test_oversized_stored_artifact_is_not_parsed():
     from mcp.server.fastmcp.exceptions import ToolError
 
-    with pytest.raises(ToolError, match="too large to inspect"):
+    with pytest.raises(ToolError, match="over the"):
         limits.enforce_parse_size(b"x" * (limits.MAX_ARTIFACT_PARSE_BYTES + 1), artifact_id="abc")
+
+
+@pytest.mark.parametrize(
+    ("check", "kwargs", "ceiling"),
+    [
+        (limits.enforce_upload_size, {"label": "Artifact"}, limits.MAX_UPLOAD_BYTES),
+        (limits.enforce_parse_size, {"artifact_id": "abc"}, limits.MAX_ARTIFACT_PARSE_BYTES),
+    ],
+)
+def test_a_refusal_never_reports_the_size_as_the_limit(check, kwargs, ceiling):
+    """Both figures used to be truncated to whole MB, so one byte over the
+    ceiling read "is 20 MB, over the 20 MB limit" and the agent retried it."""
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    with pytest.raises(ToolError) as raised:
+        check(b"x" * (ceiling + 1), **kwargs)
+
+    message = str(raised.value)
+    assert str(ceiling + 1) in message
+    assert str(ceiling) in message
+    assert str(ceiling + 1) != str(ceiling)
 
 
 def test_oversized_response_is_refused():

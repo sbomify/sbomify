@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp.exceptions import ToolError
@@ -91,6 +92,31 @@ def _license_label(entry: dict[str, Any]) -> str | None:
     return expression if isinstance(expression, str) else None
 
 
+#: How far down a components tree to walk. Deep enough for the nesting real
+#: generators emit, shallow enough that a hostile document cannot make the walk
+#: the expensive part of the request.
+_MAX_COMPONENT_DEPTH = 12
+
+
+def _cyclonedx_components(entries: Any, *, depth: int = 0) -> Iterator[dict[str, Any]]:
+    """Every component in a CycloneDX tree, nested ones included.
+
+    CycloneDX lets a component carry its own ``components``, and syft emits
+    exactly that for a container image: the layers hold the packages. Reading
+    only the top level answered "is log4j in here?" with a confident no for a
+    document that contains it, which is the worst shape a wrong answer can take
+    on this tool, since the server instructions send agents to name_filter
+    rather than paging.
+    """
+    if depth > _MAX_COMPONENT_DEPTH or not isinstance(entries, list):
+        return
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        yield entry
+        yield from _cyclonedx_components(entry.get("components"), depth=depth + 1)
+
+
 def _extract_packages(payload: dict[str, Any], artifact_format: str) -> list[dict[str, Any]]:
     """Normalise CycloneDX components / SPDX packages into one shape.
 
@@ -100,9 +126,7 @@ def _extract_packages(payload: dict[str, Any], artifact_format: str) -> list[dic
     packages: list[dict[str, Any]] = []
 
     if artifact_format.lower() == "cyclonedx":
-        for entry in payload.get("components", []) or []:
-            if not isinstance(entry, dict):
-                continue
+        for entry in _cyclonedx_components(payload.get("components")):
             licenses = [_license_label(lic) for lic in entry.get("licenses", []) or [] if isinstance(lic, dict)]
             packages.append(
                 {
@@ -350,7 +374,9 @@ def register_tools(mcp: FastMCP) -> None:
     async def get_assessments(principal: Principal, artifact_id: str) -> dict[str, Any]:
         """Compliance and licence assessment results for an artifact (NTIA, etc.).
 
-        Reports the latest run per plugin. Use this to answer "is this artifact
+        Reports the latest run per plugin, so the result is bounded by how many
+        compliance plugins exist rather than by the artifact, and is returned
+        whole rather than paginated. Use this to answer "is this artifact
         compliant?". Vulnerability scan results are reported separately by
         `get_vulnerability_summary` and `list_vulnerabilities`.
         """

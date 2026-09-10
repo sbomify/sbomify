@@ -58,11 +58,16 @@ response far below this; tripping it means a tool has an unbounded field."""
 
 
 def enforce_upload_size(raw: bytes, *, label: str) -> None:
-    """Reject an oversized upload before it reaches storage."""
+    """Reject an oversized upload before it reaches storage.
+
+    Sizes are reported in bytes rather than MB because both figures used to be
+    integer-truncated: a 21,000,000 byte upload against a 20 MB limit read "is
+    20 MB, over the 20 MB limit", and an agent told the size it sent is not over
+    the limit retries it unchanged.
+    """
     if len(raw) > MAX_UPLOAD_BYTES:
         raise ToolError(
-            f"{label} is {len(raw) // 1024 // 1024} MB, over the "
-            f"{MAX_UPLOAD_BYTES // 1024 // 1024} MB limit for MCP uploads. "
+            f"{label} is {len(raw)} bytes, over the {MAX_UPLOAD_BYTES} byte limit for MCP uploads. "
             "Use the REST API or the web uploader for artifacts this large."
         )
 
@@ -71,8 +76,8 @@ def enforce_parse_size(raw: bytes | None, *, artifact_id: str) -> None:
     """Refuse to parse a stored artifact that would not fit comfortably in memory."""
     if raw is not None and len(raw) > MAX_ARTIFACT_PARSE_BYTES:
         raise ToolError(
-            f"Artifact {artifact_id} is {len(raw) // 1024 // 1024} MB, too large to inspect over MCP. "
-            "Download it directly instead."
+            f"Artifact {artifact_id} is {len(raw)} bytes, over the {MAX_ARTIFACT_PARSE_BYTES} byte "
+            "limit for inspection over MCP. Download it directly instead."
         )
 
 

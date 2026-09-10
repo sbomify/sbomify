@@ -149,8 +149,8 @@ def register_tools(mcp: FastMCP) -> None:
 
         A VEX re-annotates which vulnerabilities actually affect the component,
         so uploading one changes the workspace's reported vulnerability posture.
-        Unlike SBOMs, VEX documents are not subject to the duplicate guard —
-        they are expected to be re-issued against the same release.
+        Unlike SBOMs, VEX documents are not subject to the duplicate guard. They
+        are expected to be re-issued against the same release.
         """
 
         def call() -> dict[str, Any]:
