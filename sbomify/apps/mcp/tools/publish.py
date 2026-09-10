@@ -68,7 +68,7 @@ def _parse_json(content: str, *, label: str) -> bytes:
 
 
 def register_tools(mcp: FastMCP) -> None:
-    @mcp_tool(mcp, "upload_artifact", "artifact:publish", writes=True)
+    @mcp_tool(mcp, "upload_artifact", "artifact:publish", writes=True, idempotent=False)
     async def upload_artifact(
         principal: Principal,
         component_id: str,
@@ -143,7 +143,14 @@ def register_tools(mcp: FastMCP) -> None:
     # (and the CycloneDX-JSON branch delegates into the SBOM upload view, which
     # checks it too), so a publish_vex-only token would be advertised a tool
     # that is certain to 403.
-    @mcp_tool(mcp, "upload_vex", "artifact:publish_vex", also_requires=("artifact:publish",), writes=True)
+    @mcp_tool(
+        mcp,
+        "upload_vex",
+        "artifact:publish_vex",
+        also_requires=("artifact:publish",),
+        writes=True,
+        idempotent=False,
+    )
     async def upload_vex(principal: Principal, component_id: str, content: str) -> dict[str, Any]:
         """Upload a CycloneDX VEX document to a component.
 
@@ -162,7 +169,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "create_release", "release:create", writes=True)
+    @mcp_tool(mcp, "create_release", "release:create", writes=True, idempotent=False)
     async def create_release(
         principal: Principal,
         product_id: str,
@@ -198,7 +205,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "tag_artifact_to_release", "release:tag", writes=True)
+    @mcp_tool(mcp, "tag_artifact_to_release", "release:tag", writes=True, idempotent=False)
     async def tag_artifact_to_release(
         principal: Principal,
         release_id: str,

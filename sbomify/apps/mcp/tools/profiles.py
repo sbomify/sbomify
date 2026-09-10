@@ -131,7 +131,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(query)
 
-    @mcp_tool(mcp, "create_contact_profile", "workspace:manage", writes=True)
+    @mcp_tool(mcp, "create_contact_profile", "workspace:manage", writes=True, idempotent=False)
     async def create_contact_profile(
         principal: Principal,
         name: str,
@@ -195,7 +195,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "update_contact_profile", "workspace:manage", writes=True)
+    @mcp_tool(mcp, "update_contact_profile", "workspace:manage", writes=True, idempotent=True)
     async def update_contact_profile(
         principal: Principal,
         profile_id: str,
@@ -234,7 +234,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "assign_contact_profile", "component:manage", writes=True)
+    @mcp_tool(mcp, "assign_contact_profile", "component:manage", writes=True, idempotent=True)
     async def assign_contact_profile(principal: Principal, component_id: str, profile_id: str) -> dict[str, Any]:
         """Attach a contact profile to a component.
 

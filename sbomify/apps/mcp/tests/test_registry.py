@@ -136,3 +136,50 @@ def test_upload_vex_needs_both_publish_scopes():
 def test_duplicate_registration_is_rejected():
     with pytest.raises(ValueError, match="already registered"):
         registry.register("list_products", "product:read")
+
+
+@pytest.mark.asyncio
+async def test_every_tool_publishes_its_behaviour_hints():
+    """A client reads these to decide whether to interrupt the user.
+
+    readOnlyHint lets a well-behaved client run the twenty reads without a
+    prompt, and it is derived from the same `writes` flag the write throttle
+    uses, so the two can never disagree.
+    """
+    from sbomify.apps.mcp.server import mcp
+
+    tools = await mcp.list_tools()
+    specs = registry.all_specs()
+
+    assert tools, "no tools registered"
+    for tool in tools:
+        annotations = tool.annotations
+        assert annotations is not None, tool.name
+        assert annotations.readOnlyHint is (not specs[tool.name].writes), tool.name
+        # The registry refuses destructive and outward-facing actions at
+        # registration, so this is a property of the surface, not a per-tool
+        # judgement. Every tool also stays inside one workspace's own data.
+        assert annotations.destructiveHint is False, tool.name
+        assert annotations.openWorldHint is False, tool.name
+
+
+@pytest.mark.asyncio
+async def test_idempotency_is_only_claimed_where_a_repeat_is_a_no_op():
+    """The spec says idempotentHint is meaningful only for a write, and a wrong
+    claim is worse than none: a client that believes a failed call is safe to
+    retry will re-run it."""
+    from sbomify.apps.mcp.server import mcp
+
+    hints = {t.name: t.annotations.idempotentHint for t in await mcp.list_tools()}
+
+    assert {name for name, hint in hints.items() if hint is True} == {
+        "update_contact_profile",
+        "assign_contact_profile",
+    }
+    # Every read leaves it unset rather than claiming True, which would be
+    # meaningless against readOnlyHint.
+    assert all(hints[spec.name] is None for spec in registry.all_specs().values() if not spec.writes)
+    # Uploading twice is a 409 on the duplicate guard, and tagging an artifact
+    # already in the release is a 409 too.
+    assert hints["upload_artifact"] is False
+    assert hints["tag_artifact_to_release"] is False

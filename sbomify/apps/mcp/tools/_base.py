@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from channels.db import database_sync_to_async
 from mcp.server.fastmcp.exceptions import ToolError
+from mcp.types import ToolAnnotations
 
 from sbomify.apps.core.authz import scope_permits
 
@@ -61,6 +62,33 @@ def _current_request(mcp: FastMCP) -> Any:
         return None
 
 
+def _annotations(*, writes: bool, idempotent: bool | None) -> ToolAnnotations:
+    """The behaviour hints a client reads before deciding whether to ask first.
+
+    A client that knows a tool only reads can run it without interrupting the
+    user, and one that knows a call is not repeatable will not silently retry a
+    failed write. We already hold both facts and were publishing neither.
+
+    ``destructiveHint`` is False on every tool because the registry refuses any
+    destructive or outward-facing action at registration, so this is a claim
+    about the surface rather than about one tool. ``openWorldHint`` is False for
+    the same kind of reason: every tool reads or writes inside one workspace's
+    own data and none of them reaches an open-ended external service.
+
+    The spec treats these as hints a client must not trust from an untrusted
+    server, which is why enforcement stays where it was: the scope gate, can(),
+    and the write throttle.
+    """
+    return ToolAnnotations(
+        readOnlyHint=not writes,
+        destructiveHint=False,
+        openWorldHint=False,
+        # Meaningful only for a write. Left unset rather than guessed where a
+        # repeat's behaviour is not obvious from the view it delegates to.
+        idempotentHint=idempotent if writes else None,
+    )
+
+
 def mcp_tool(
     mcp: FastMCP,
     name: str,
@@ -68,6 +96,7 @@ def mcp_tool(
     *,
     also_requires: tuple[str, ...] = (),
     writes: bool = False,
+    idempotent: bool | None = None,
 ) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
     """Register ``fn`` as an MCP tool requiring ``action``.
 
@@ -156,7 +185,12 @@ def mcp_tool(
         # detail rather than a parameter the agent is asked to supply.
         wrapper.__signature__ = signature.replace(parameters=params[1:])  # type: ignore[attr-defined]
 
-        mcp.add_tool(wrapper, name=name, description=inspect.getdoc(fn))
+        mcp.add_tool(
+            wrapper,
+            name=name,
+            description=inspect.getdoc(fn),
+            annotations=_annotations(writes=writes, idempotent=idempotent),
+        )
         # Return the wrapper, not the bare fn: if a tool is ever called by
         # name from Python, it must not silently skip authentication, the
         # scope gate, the write throttle, the audit event and the size cap.

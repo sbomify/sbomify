@@ -109,7 +109,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(query)
 
-    @mcp_tool(mcp, "create_advisory", "advisory:manage", writes=True)
+    @mcp_tool(mcp, "create_advisory", "advisory:manage", writes=True, idempotent=False)
     async def create_advisory(
         principal: Principal,
         title: str,
