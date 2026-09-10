@@ -88,6 +88,15 @@ def _package(
     return package
 
 
+def _license_expression(spdx_id: str = "urn:acme:lic1", expression: str = "MIT") -> dict[str, Any]:
+    return {
+        "type": "simplelicensing_LicenseExpression",
+        "spdxId": spdx_id,
+        "creationInfo": _CI,
+        "simplelicensing_licenseExpression": expression,
+    }
+
+
 def _relationship(rel_type: str, from_id: str, to_ids: list[str], spdx_id: str = "urn:acme:rel1") -> dict[str, Any]:
     return {
         "type": "Relationship",
@@ -111,6 +120,7 @@ def minimal_conformant() -> dict[str, Any]:
         _tool(),
         _document(["urn:acme:pkg1"]),
         _package(software_packageUrl="pkg:pypi/my-app@1.2.3"),
+        _license_expression(),
         _relationship("hasConcludedLicense", "urn:acme:pkg1", ["urn:acme:lic1"]),
         _relationship("hasDeclaredLicense", "urn:acme:pkg1", ["urn:acme:lic1"], spdx_id="urn:acme:rel2"),
     )

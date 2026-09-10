@@ -266,15 +266,15 @@ class TestBillingPlanValidation(TestCase):
             monthly_price=Decimal("100.00"),
             annual_price=Decimal("1000.00"),
         )
-        
+
         # Clear stripe IDs to test that clean() skips validation
         plan.stripe_price_monthly_id = ""
         plan.stripe_price_annual_id = ""
-        
+
         # Should not raise validation errors when clean() is called
         # (validation is skipped when stripe IDs are empty)
         plan.clean()  # Should not raise ValidationError from price validation
-        
+
         # Note: save() may still raise ValidationError for blank fields,
         # but clean() itself should not raise for price validation when IDs are empty
 
@@ -375,7 +375,7 @@ class TestTeamSettingsBillingPeriod(TestCase):
     def setUp(self):
         """Set up test data."""
         from sbomify.apps.core.utils import number_to_random_token
-        
+
         self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass")
         self.team = Team.objects.create(name="Test Team")
         # Ensure team has a valid key
@@ -411,7 +411,11 @@ class TestTeamSettingsBillingPeriod(TestCase):
         client.force_login(self.user)
         setup_test_session(client, self.team, self.user)
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": self.team.key}))
+        response = client.get(
+            # The billing tab, not the settings index: the index resolves to
+            # General, which renders no billing and so builds none.
+            reverse("teams:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
+        )
         assert response.status_code == 200
 
         # Check that billing period is in context
@@ -438,7 +442,11 @@ class TestTeamSettingsBillingPeriod(TestCase):
         client.force_login(self.user)
         setup_test_session(client, self.team, self.user)
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": self.team.key}))
+        response = client.get(
+            # The billing tab, not the settings index: the index resolves to
+            # General, which renders no billing and so builds none.
+            reverse("teams:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
+        )
         assert response.status_code == 200
 
         # Check that billing period is in context
@@ -460,7 +468,11 @@ class TestTeamSettingsBillingPeriod(TestCase):
         client.force_login(self.user)
         setup_test_session(client, self.team, self.user)
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": self.team.key}))
+        response = client.get(
+            # The billing tab, not the settings index: the index resolves to
+            # General, which renders no billing and so builds none.
+            reverse("teams:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
+        )
         assert response.status_code == 200
 
         # Check that billing period is None for community
@@ -681,7 +693,7 @@ class TestIntegrationScenarios(TestCase):
     def setUp(self):
         """Set up test data."""
         from sbomify.apps.core.utils import number_to_random_token
-        
+
         self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass")
         self.team = Team.objects.create(name="Test Team")
         # Ensure team has a valid key
@@ -729,7 +741,11 @@ class TestIntegrationScenarios(TestCase):
         client.force_login(self.user)
         setup_test_session(client, self.team, self.user)
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": self.team.key}))
+        response = client.get(
+            # The billing tab, not the settings index: the index resolves to
+            # General, which renders no billing and so builds none.
+            reverse("teams:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
+        )
         assert response.status_code == 200
         assert response.context["plan_pricing"]["billing_period"] == "annual"
 

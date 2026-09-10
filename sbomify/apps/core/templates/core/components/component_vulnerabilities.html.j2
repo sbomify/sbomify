@@ -104,6 +104,8 @@
                     <span class="text-info">
                         {% if vuln.vex_state == 'false_positive' %}
                             False positive
+                        {% elif vuln.vex_state == 'resolved' %}
+                            Fixed
                         {% else %}
                             Not affected
                         {% endif %}
@@ -119,8 +121,6 @@
                     {% endif %}
                 {% elif vuln.vex_state == 'in_triage' %}
                     <span class="text-warning">Under investigation</span>
-                {% elif vuln.vex_state == 'resolved' %}
-                    <span class="text-success">Fixed</span>
                 {% else %}
                     <span class="text-text-muted">Affected</span>
                 {% endif %}

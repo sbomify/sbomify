@@ -1,6 +1,6 @@
 {% comment %}
   Sidebar navigation link — renders both the collapsed (icon square) and
-  expanded (icon + label row) variants; Alpine toggles which one shows.
+  expanded (icon + label row) variants. CSS reads the saved sidebar state.
 
   Parameters:
   - url: href target
@@ -11,7 +11,7 @@
     links with no active state
 {% endcomment %}
 {# Collapsed #}
-<a x-show="sidebarCollapsed"
+<a data-sidebar-view="collapsed"
    href="{{ url }}"
    @click="sidebarMobileOpen = false"
    title="{{ label }}"
@@ -21,8 +21,7 @@
     <i class="fas {{ icon }} text-base" aria-hidden="true"></i>
 </a>
 {# Expanded #}
-<a x-show="!sidebarCollapsed"
-   x-cloak
+<a data-sidebar-view="expanded"
    href="{{ url }}"
    @click="sidebarMobileOpen = false"
    {% if match and match in current_view_name %}aria-current="page"{% endif %}

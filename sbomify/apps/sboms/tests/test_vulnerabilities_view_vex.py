@@ -1,0 +1,281 @@
+"""The vulnerabilities page and the scan agree about what is still open.
+
+The page built its own package-and-alias merge straight off the stored
+findings and never consulted VEX, so an advisory the scan had cleared rendered
+as live. Yocto is how it surfaced: its SBOMs carry their own VEX, a
+`security_VexFixedVulnAssessmentRelationship` stores as `analysis_state
+"resolved"`, and the 6.0.3 release SBOM listed CVE-2026-59890 as a live HIGH
+on a build that had patched it.
+
+Suppressed advisories stay in the list, marked, because listing advisories is
+this page's whole job. What changes is that they no longer count as open.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+import pytest
+from django.test import Client
+from django.urls import reverse
+
+from sbomify.apps.core.models import Component
+from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+from sbomify.apps.plugins.models import AssessmentRun
+from sbomify.apps.plugins.sdk.enums import RunReason
+from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.teams.models import Member
+from sbomify.apps.vulnerability_scanning import vex
+
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
+
+SETUPTOOLS = {"name": "setuptools", "version": "82.0.1", "ecosystem": "PyPI", "purl": "pkg:pypi/setuptools@82.0.1"}
+
+
+def _finding(advisory_id: str, aliases: list[str], *, analysis_state: str | None = None) -> dict[str, Any]:
+    finding = {
+        "id": advisory_id,
+        "title": f"{advisory_id} in setuptools",
+        "description": "…",
+        "severity": "high",
+        "aliases": aliases,
+        "component": dict(SETUPTOOLS),
+    }
+    if analysis_state:
+        finding["analysis_state"] = analysis_state
+    return finding
+
+
+def _result(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "summary": {"total_findings": len(findings), "by_severity": {"high": len(findings)}},
+        "findings": findings,
+        "metadata": {"scanner": "osv-scanner"},
+    }
+
+
+@pytest.mark.django_db
+class TestASuppressedAdvisoryIsNotListedAsLive:
+    @pytest.fixture
+    def signed_in(self, sample_team_with_owner_member: Member) -> tuple[Client, Component]:
+        component = Component.objects.create(
+            team=sample_team_with_owner_member.team,
+            name="yocto-image",
+            component_type=Component.ComponentType.BOM,
+        )
+        client = Client()
+        setup_authenticated_client_session(
+            client, sample_team_with_owner_member.team, sample_team_with_owner_member.user
+        )
+        return client, component
+
+    @staticmethod
+    def _scanned(component: Component, findings: list[dict[str, Any]]) -> SBOM:
+        sbom = SBOM.objects.create(
+            component=component,
+            name="core-image-minimal",
+            format="spdx",
+            format_version="3.0.1",
+            version="",
+            sbom_filename="x.json",
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            plugin_config_hash="0" * 64,
+            category="security",
+            run_reason=RunReason.ON_UPLOAD.value,
+            status="completed",
+            result=_result(findings),
+        )
+        return sbom
+
+    @staticmethod
+    def _packages(client: Client, sbom: SBOM):
+        response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sbom.id}))
+        assert response.status_code == 200
+        data = response.context["vulnerabilities"]
+        assert data and data.get("results"), "the page listed no packages at all"
+        return data["results"][0]["packages"]
+
+    def test_a_cleared_advisory_does_not_count_as_open(self, signed_in: tuple[Client, Component]) -> None:
+        """Both ids of one advisory, both cleared by the document's own VEX."""
+        client, component = signed_in
+        sbom = self._scanned(
+            component,
+            [
+                _finding("PYSEC-2026-3447", ["CVE-2026-59890", "GHSA-h35f-9h28-mq5c"], analysis_state="resolved"),
+                _finding("GHSA-h35f-9h28-mq5c", ["CVE-2026-59890", "PYSEC-2026-3447"], analysis_state="resolved"),
+            ],
+        )
+
+        package = self._packages(client, sbom)[0]
+
+        assert package["open_count"] == 0, "a cleared advisory was counted as open"
+        assert package["suppressed_count"] == 1
+        assert package["vulnerabilities"][0]["vex_suppressed"] is True
+
+    def test_it_is_still_listed_rather_than_hidden(self, signed_in: tuple[Client, Component]) -> None:
+        """The page's job is the advisory list, so a cleared one stays, marked."""
+        client, component = signed_in
+        sbom = self._scanned(component, [_finding("CVE-2026-59890", [], analysis_state="resolved")])
+
+        package = self._packages(client, sbom)[0]
+
+        assert len(package["vulnerabilities"]) == 1
+        assert package["vulnerabilities"][0]["id"] == "CVE-2026-59890"
+
+    def test_a_live_report_clears_the_state_as_well_as_the_flag(self, signed_in: tuple[Client, Component]) -> None:
+        """The record must not say "resolved" on a row it marks live."""
+        client, component = signed_in
+        sbom = self._scanned(
+            component,
+            [
+                _finding("PYSEC-2026-3447", ["CVE-2026-59890"], analysis_state="resolved"),
+                _finding("CVE-2026-59890", ["PYSEC-2026-3447"]),
+            ],
+        )
+
+        advisory = self._packages(client, sbom)[0]["vulnerabilities"][0]
+
+        assert advisory["vex_suppressed"] is False
+        assert advisory["vex_state"] == "", "the state contradicted the flag"
+
+    @staticmethod
+    def _uploaded_vex(component: Component, mocker: "MockerFixture", *, purl: str, advisory_id: str) -> None:
+        """A component's own uploaded VEX, which the view reads when a finding
+        carries no stored state.
+
+        Stands in for the stored document, which is the only thing here that
+        needs storage. Everything the case is actually about stays real:
+        derive_vex_suppressions, the statement index and the purl match all run
+        on this document.
+
+        Patching S3Client is what this did first, and it failed in CI while
+        passing locally, resolving the dotted target to a module that no longer
+        carried the attribute. Reading it through the loader's own seam does
+        not depend on that resolution.
+        """
+        SBOM.objects.create(
+            component=component,
+            name="vex",
+            version="1",
+            format="cyclonedx",
+            bom_type=SBOM.BomType.VEX,
+            sbom_filename="vex.json",
+            source="manual",
+        )
+        document = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "vulnerabilities": [
+                {
+                    "id": advisory_id,
+                    "analysis": {"state": "not_affected", "justification": "code_not_reachable"},
+                    "affects": [{"ref": purl}],
+                }
+            ],
+        }
+        mocker.patch.object(vex, "_document_from_vex_sbom", return_value=document)
+
+    def test_an_uploaded_vex_suppresses_a_finding_with_no_stored_state(
+        self, signed_in: tuple[Client, Component], mocker: "MockerFixture"
+    ) -> None:
+        """The second half of the precedence: stored state first, the component's
+        own uploaded VEX second.
+
+        A scanner that never annotated the finding leaves analysis_state empty,
+        which is every finding stored before the annotation existed. Without
+        this path the page reports as live an advisory the workspace has already
+        cleared by hand.
+        """
+        client, component = signed_in
+        self._uploaded_vex(component, mocker, purl=SETUPTOOLS["purl"], advisory_id="CVE-2026-59890")
+        sbom = self._scanned(component, [_finding("CVE-2026-59890", [])])
+
+        package = self._packages(client, sbom)[0]
+
+        assert package["open_count"] == 0, "an uploaded VEX did not clear the advisory it names"
+        assert package["suppressed_count"] == 1
+        advisory = package["vulnerabilities"][0]
+        assert advisory["vex_suppressed"] is True
+        assert advisory["vex_state"] == "not_affected"
+
+    def test_a_fully_annotated_page_never_reads_the_vex(
+        self, signed_in: tuple[Client, Component], mocker: "MockerFixture"
+    ) -> None:
+        """The overlay is the fallback, so it must cost nothing when unused.
+
+        A Yocto image carries its verdict on every finding already, and loading
+        the component's VEX to answer a question nobody asked is an S3 fetch on
+        every page load.
+        """
+        client, component = signed_in
+        load = mocker.patch.object(vex, "load_vex_suppressions", return_value=[])
+        sbom = self._scanned(component, [_finding("CVE-2026-59890", [], analysis_state="resolved")])
+
+        assert self._packages(client, sbom)[0]["suppressed_count"] == 1
+        load.assert_not_called()
+
+    def test_an_uploaded_vex_for_another_package_suppresses_nothing(
+        self, signed_in: tuple[Client, Component], mocker: "MockerFixture"
+    ) -> None:
+        """The guard on the overlay path: reading a VEX must not clear the list."""
+        client, component = signed_in
+        self._uploaded_vex(component, mocker, purl="pkg:pypi/requests@2.32.0", advisory_id="CVE-2026-59890")
+        sbom = self._scanned(component, [_finding("CVE-2026-59890", [])])
+
+        package = self._packages(client, sbom)[0]
+
+        assert package["open_count"] == 1
+        assert package["vulnerabilities"][0]["vex_suppressed"] is False
+
+    def test_a_live_fold_keeps_a_state_that_is_not_suppressing(self, signed_in: tuple[Client, Component]) -> None:
+        """Clearing the flag must not also discard a state that agrees with it.
+
+        `in_triage` says something true about a finding that is still open, and
+        this page is the only place it would be carried.
+        """
+        client, component = signed_in
+        sbom = self._scanned(
+            component,
+            [
+                _finding("PYSEC-2026-3447", ["CVE-2026-59890"], analysis_state="in_triage"),
+                _finding("CVE-2026-59890", ["PYSEC-2026-3447"]),
+            ],
+        )
+
+        advisory = self._packages(client, sbom)[0]["vulnerabilities"][0]
+
+        assert advisory["vex_suppressed"] is False
+        assert advisory["vex_state"] == "in_triage"
+
+    def test_a_live_advisory_still_counts(self, signed_in: tuple[Client, Component]) -> None:
+        """The guard against a fix that suppresses everything."""
+        client, component = signed_in
+        sbom = self._scanned(component, [_finding("CVE-2026-11111", [])])
+
+        package = self._packages(client, sbom)[0]
+
+        assert package["open_count"] == 1
+        assert package["suppressed_count"] == 0
+        assert package["vulnerabilities"][0]["vex_suppressed"] is False
+
+    def test_one_provider_still_calling_it_live_wins(self, signed_in: tuple[Client, Component]) -> None:
+        """Folding two reports of one advisory must not lose the live one."""
+        client, component = signed_in
+        sbom = self._scanned(
+            component,
+            [
+                _finding("PYSEC-2026-3447", ["CVE-2026-59890"], analysis_state="resolved"),
+                _finding("CVE-2026-59890", ["PYSEC-2026-3447"]),
+            ],
+        )
+
+        package = self._packages(client, sbom)[0]
+
+        assert package["open_count"] == 1, "a live report was folded away by a suppressed one"
+        assert package["vulnerabilities"][0]["vex_suppressed"] is False

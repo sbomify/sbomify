@@ -25,7 +25,7 @@ from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_
 from sbomify.apps.core.analytics import events
 from sbomify.apps.core.api.errors import CSV_RESPONSE_DOCS
 from sbomify.apps.core.authz import MANAGE, READ_INTERNAL, can
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.queries import (
     get_team_asset_count,
@@ -2112,7 +2112,7 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
     try:
         # Delete associated SBOMs from S3 storage
         sboms = component.sbom_set.all()
-        s3 = S3Client("SBOMS") if sboms.exists() else None
+        s3 = StorageClient("SBOMS") if sboms.exists() else None
 
         for sbom in sboms:
             if sbom.sbom_filename and s3:
@@ -3686,10 +3686,24 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.VEX).aggregate(
         n=Count("id"), newest=Max("sbom__created_at")
     )
-    cache_key = f"release-vex:{release.id}:{slot_state['n']}:{slot_state['newest']}"
+    # A member reading a public product's release gets the whole VEX, gated and
+    # private components included. Everyone else gets the public view, matching
+    # what the aggregate SBOM download hands the same caller: a statement names
+    # a package and a version, so publishing one for a withheld component would
+    # disclose through the side door what the inventory refuses at the front.
+    include_non_public = bool(
+        getattr(request, "user", None)
+        and request.user.is_authenticated
+        and can(request, "release:read", release.product)
+    )
+    # The flag is part of the key. Sharing one entry between the two audiences
+    # would serve whichever build landed first to both, which is the disclosure
+    # this is closing rather than a caching detail.
+    scope = "all" if include_non_public else "public"
+    cache_key = f"release-vex:{release.id}:{scope}:{slot_state['n']}:{slot_state['newest']}"
     document = cache.get(cache_key)
     if document is None:
-        document = vex_module.build_release_vex(release) or {"__absent__": True}
+        document = vex_module.build_release_vex(release, include_non_public=include_non_public) or {"__absent__": True}
         cache.set(cache_key, document, 900)
     if document.get("__absent__"):
         return 404, {"detail": "No VEX available for this release", "error_code": ErrorCode.NOT_FOUND}

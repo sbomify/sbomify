@@ -1,4 +1,5 @@
 import html
+import re
 
 import pytest
 from django.conf import settings
@@ -8,6 +9,11 @@ from django.urls import reverse
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.sboms.models import ProductComponent
 from sbomify.apps.teams.models import Member, Team
+
+
+def _stat_labels(content: str) -> list[str]:
+    """The label under each figure in the Trust Center summary strip."""
+    return [match.strip() for match in re.findall(r"<dt[^>]*>([^<]*)</dt>", content)]
 
 
 @pytest.mark.django_db
@@ -83,9 +89,7 @@ def test_workspace_public_page_prefers_logo_when_available():
 
     assert response.status_code == 200
     content = response.content.decode()
-    expected_logo_url = (
-        f"{settings.AWS_MEDIA_STORAGE_BUCKET_URL}/workspace-logo.png"
-    )
+    expected_logo_url = f"{settings.AWS_MEDIA_STORAGE_BUCKET_URL}/workspace-logo.png"
     assert expected_logo_url in content
     assert "img/sbomify.svg" not in content
 
@@ -479,9 +483,7 @@ def _public_workspace(name: str) -> Team:
     """A public workspace with one public product, so the page renders its sections."""
     team = Team.objects.create(name=name, is_public=True)
     product = Product.objects.create(name=f"{name} Product", team=team, is_public=True)
-    component = Component.objects.create(
-        name=f"{name} Component", team=team, visibility=Component.Visibility.PUBLIC
-    )
+    component = Component.objects.create(name=f"{name} Component", team=team, visibility=Component.Visibility.PUBLIC)
     ProductComponent.objects.create(product=product, component=component)
     return team
 
@@ -551,3 +553,63 @@ def test_scanning_prompt_hidden_once_a_scanner_is_enabled(sample_user):
     TeamPluginSettings.objects.create(team=team, enabled_plugins=["osv"])
 
     assert ADMIN_PROMPT not in _visit(team, sample_user)
+
+
+@pytest.mark.django_db
+def test_workspace_public_stat_labels_agree_with_their_counts():
+    """The summary strip read "1 Products" to the first person who saw it.
+
+    A new Trust Center usually has one of each, so the singular is the common
+    case rather than the edge.
+    """
+    from django.utils import timezone
+
+    from sbomify.apps.security_advisories.models import SecurityAdvisory
+
+    team = _public_workspace("Singular Workspace")
+    Component.objects.create(
+        name="Only Artifact",
+        team=team,
+        visibility=Component.Visibility.PUBLIC,
+        is_global=True,
+        component_type=Component.ComponentType.DOCUMENT,
+    )
+    SecurityAdvisory.objects.create(
+        team=team,
+        title="Only Advisory",
+        tracking_id="QA-SA-2026-0001",
+        status=SecurityAdvisory.Status.PUBLISHED,
+        visibility=SecurityAdvisory.Visibility.PUBLIC,
+        published_at=timezone.now(),
+        made_public_at=timezone.now(),
+    )
+
+    assert _stat_labels(_visit(team)) == ["Advisory", "Product", "Compliance artifact", "Latest advisory"]
+
+
+@pytest.mark.django_db
+def test_workspace_public_stat_labels_stay_plural_above_one():
+    team = _public_workspace("Plural Workspace")
+    second = Product.objects.create(name="Second Product", team=team, is_public=True)
+    ProductComponent.objects.create(
+        product=second,
+        component=Component.objects.create(
+            name="Second Component",
+            team=team,
+            visibility=Component.Visibility.PUBLIC,
+        ),
+    )
+
+    assert "Products" in _stat_labels(_visit(team))
+
+
+@pytest.mark.django_db
+def test_workspace_public_stat_labels_use_the_plural_for_zero():
+    """Zero takes the plural, so "0 Advisories" still reads correctly.
+
+    The workspace has no advisories and no global components, and the one
+    product the fixture creates holds the singular end of the same strip.
+    """
+    labels = _stat_labels(_visit(_public_workspace("Empty Workspace")))
+
+    assert labels == ["Advisories", "Product", "Compliance artifacts", "Latest advisory"]

@@ -16,15 +16,16 @@
      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
      aria-hidden="true"></div>
 <aside id="sidebar"
+       x-effect="document.documentElement.toggleAttribute('data-sidebar-collapsed', sidebarCollapsed)"
        @toggle-sidebar.window="sidebarMobileOpen = !sidebarMobileOpen"
-       class="fixed top-0 left-0 z-50 h-screen transition-all duration-300 ease-in-out bg-surface border-r border-border flex flex-col"
-       :class="[ sidebarCollapsed ? 'w-16' : 'w-64', sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0' ]"
+       class="fixed top-0 left-0 z-50 h-screen w-[var(--sidebar-width)] -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-surface border-r border-border flex flex-col"
+       :class="{ '!translate-x-0': sidebarMobileOpen }"
        role="navigation"
        aria-label="Main navigation">
     {# Logo Section #}
     <div class="h-16 flex items-center relative shrink-0">
         {# Collapsed Logo #}
-        <a x-show="sidebarCollapsed"
+        <a data-sidebar-view="collapsed"
            href="{% url 'core:dashboard' %}"
            @click="sidebarMobileOpen = false"
            class="flex items-center justify-center w-full"
@@ -32,8 +33,7 @@
             {% include "core/components/brand/emblem.html.j2" with class="w-6 h-auto text-text" %}
         </a>
         {# Expanded Logo #}
-        <a x-show="!sidebarCollapsed"
-           x-cloak
+        <a data-sidebar-view="expanded"
            href="{% url 'core:dashboard' %}"
            @click="sidebarMobileOpen = false"
            class="flex items-center pl-6"
@@ -46,7 +46,7 @@
             button sets display itself, so lg:hidden on it would lose to that.
         {% endcomment %}
         <div class="lg:hidden absolute right-3">
-            <c-buttons.icon label="Close sidebar" x-show="!sidebarCollapsed" x-cloak @click="sidebarMobileOpen = false">
+            <c-buttons.icon label="Close sidebar" data-sidebar-view="expanded" @click="sidebarMobileOpen = false">
             <i class="fas fa-times text-lg" aria-hidden="true"></i>
             </c-buttons.icon>
         </div>
@@ -60,7 +60,7 @@
                      class="relative"
                      @keydown.escape.window="open = false">
                     {# Collapsed Team Button #}
-                    <button x-show="sidebarCollapsed"
+                    <button data-sidebar-view="collapsed"
                             @click="open = !open"
                             :aria-expanded="open"
                             aria-haspopup="true"
@@ -70,8 +70,7 @@
                         <i class="fas fa-briefcase text-primary text-sm"></i>
                     </button>
                     {# Expanded Team Button #}
-                    <button x-show="!sidebarCollapsed"
-                            x-cloak
+                    <button data-sidebar-view="expanded"
                             @click="open = !open"
                             :aria-expanded="open"
                             aria-haspopup="true"
@@ -162,7 +161,7 @@
                 {% if not request.session.current_team.has_completed_wizard %}
                     <li>
                         {# Collapsed #}
-                        <a x-show="sidebarCollapsed"
+                        <a data-sidebar-view="collapsed"
                            href="{% url 'teams:onboarding_wizard' %}"
                            @click="sidebarMobileOpen = false"
                            title="Get Started"
@@ -171,8 +170,7 @@
                             <i class="fas fa-rocket text-base" aria-hidden="true"></i>
                         </a>
                         {# Expanded #}
-                        <a x-show="!sidebarCollapsed"
-                           x-cloak
+                        <a data-sidebar-view="expanded"
                            href="{% url 'teams:onboarding_wizard' %}"
                            @click="sidebarMobileOpen = false"
                            class="flex items-center gap-3 px-3 h-10 rounded-lg bg-primary text-white text-sm font-semibold shadow-sm transition-colors duration-150 hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
@@ -182,7 +180,7 @@
                             <span>Get Started</span>
                         </a>
                     </li>
-                    <li class="pt-4 pb-1" x-show="!sidebarCollapsed" x-cloak>
+                    <li class="pt-4 pb-1" data-sidebar-view="expanded">
                         <span class="px-3 text-[10px] font-semibold text-text-muted uppercase tracking-widest">Navigation</span>
                     </li>
                 {% endif %}
@@ -233,7 +231,7 @@
         {% endif %}
         {# Collapse Toggle - Hidden on mobile #}
         {# Collapsed #}
-        <button x-show="sidebarCollapsed"
+        <button data-sidebar-view="collapsed"
                 @click="sidebarCollapsed = false"
                 aria-label="Expand sidebar"
                 title="Expand sidebar"
@@ -241,8 +239,7 @@
             <i class="fas fa-chevron-right text-base" aria-hidden="true"></i>
         </button>
         {# Expanded #}
-        <button x-show="!sidebarCollapsed"
-                x-cloak
+        <button data-sidebar-view="expanded"
                 @click="sidebarCollapsed = true"
                 class="group hidden lg:flex items-center gap-3 px-3 w-full h-10 rounded-lg text-sm font-medium text-text-secondary transition-colors duration-150 sidebar-link-hover">
             <span class="w-5 flex items-center justify-center shrink-0">

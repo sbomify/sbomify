@@ -281,6 +281,34 @@ class TestBillingProcessing:
             billing_processing.handle_subscription_updated(self.subscription)
         assert not isinstance(exc.value, BillingRetryableError)
 
+    def test_a_workspace_that_no_longer_exists_says_so(self):
+        """Every strategy missing means the workspace is gone, which is not a fault.
+
+        Deleting a workspace cancels its subscription, and Stripe reports that back
+        after the row has gone, so the view needs to tell this apart from a terminal
+        error worth waking somebody for.
+        """
+        from sbomify.apps.billing.stripe_client import WorkspaceGoneError
+
+        self.subscription.id = "sub_unmapped_e2e"
+        self.subscription.customer = "cus_unmapped_e2e"
+        self.stripe_client.get_customer.return_value = MagicMock(metadata={"team_key": "no_such_team"})
+
+        with pytest.raises(WorkspaceGoneError):
+            billing_processing.handle_subscription_updated(self.subscription)
+
+    def test_a_terminal_stripe_failure_is_not_a_missing_workspace(self):
+        """The narrower class must not swallow the errors that are still worth an alert."""
+        from sbomify.apps.billing.stripe_client import WorkspaceGoneError
+
+        self.subscription.id = "sub_unmapped_e2e"
+        self.subscription.customer = "cus_unmapped_e2e"
+        self.stripe_client.get_customer.side_effect = StripeError("Invalid request to payment provider.")
+
+        with pytest.raises(StripeError) as exc:
+            billing_processing.handle_subscription_updated(self.subscription)
+        assert not isinstance(exc.value, WorkspaceGoneError)
+
     # ------------------------------------------------------------------
     # #996: retryable vs terminal classification across ALL handlers.
     # A transient/recoverable failure must raise BillingRetryableError so the

@@ -45,7 +45,7 @@ from conftest import (
     start_on_dashboard,
 )
 from sbomify.apps.core.models import Release, ReleaseArtifact
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM, Component, Product
 from sbomify.apps.teams.models import Team
@@ -193,14 +193,14 @@ def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     store: dict[tuple[str, str], bytes] = {}
 
-    def _put(self: S3Client, bucket_name: str, object_name: str, data: bytes) -> None:
+    def _put(self: StorageClient, bucket_name: str, object_name: str, data: bytes) -> None:
         store[(bucket_name, object_name)] = data
 
-    def _get(self: S3Client, bucket_name: str, file_path: str) -> bytes | None:
+    def _get(self: StorageClient, bucket_name: str, file_path: str) -> bytes | None:
         return store.get((bucket_name, file_path))
 
-    monkeypatch.setattr(S3Client, "upload_data_as_file", _put)
-    monkeypatch.setattr(S3Client, "get_file_data", _get)
+    monkeypatch.setattr(StorageClient, "upload_data_as_file", _put)
+    monkeypatch.setattr(StorageClient, "get_file_data", _get)
 
 
 def _apply_vex(component: Component, release: Release, run: AssessmentRun, document: dict) -> None:

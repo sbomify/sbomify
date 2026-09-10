@@ -1,7 +1,6 @@
 {% load static teams %}
 {# Premium Enterprise Header with Tailwind CSS #}
-<header class="fixed top-0 right-0 left-0 lg:left-64 h-16 bg-surface/95 backdrop-blur-sm border-b border-border flex items-center px-4 gap-4 z-30 transition-all duration-300"
-        :class="{ 'lg:!left-16': sidebarCollapsed }"
+<header class="fixed top-0 right-0 left-0 lg:left-[var(--sidebar-width)] h-16 bg-surface/95 backdrop-blur-sm border-b border-border flex items-center px-4 gap-4 z-30 transition-all duration-300"
         x-data="{ sidebarOpen: false, searchOpen: false }"
         role="banner">
     {# Mobile Sidebar Toggle #}

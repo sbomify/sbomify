@@ -66,9 +66,7 @@ def listed_ids(request: HttpRequest, team: object) -> list[str]:
 def public_product(team):
     """A product the trust center lists: public, with a public component."""
     product = Product.objects.create(name="Acme Gateway", team=team, is_public=True)
-    component = Component.objects.create(
-        name="gateway-core", team=team, visibility=Component.Visibility.PUBLIC
-    )
+    component = Component.objects.create(name="gateway-core", team=team, visibility=Component.Visibility.PUBLIC)
     product.components.add(component)
     return product
 
@@ -77,9 +75,7 @@ def public_product(team):
 def gated_product(team):
     """Public product whose only component is gated — NDA holders only."""
     product = Product.objects.create(name="Acme Vault", team=team, is_public=True)
-    component = Component.objects.create(
-        name="vault-core", team=team, visibility=Component.Visibility.GATED
-    )
+    component = Component.objects.create(name="vault-core", team=team, visibility=Component.Visibility.GATED)
     product.components.add(component)
     return product
 
@@ -98,9 +94,7 @@ def advisory_for(team, product, *, visibility: str, title: str = "Advisory") -> 
 
 def grant_gated_access(team, user) -> None:
     """An external customer approved for the workspace, with no NDA configured."""
-    AccessRequest.objects.create(
-        team=team, user=user, status=AccessRequest.Status.APPROVED, decided_at=timezone.now()
-    )
+    AccessRequest.objects.create(team=team, user=user, status=AccessRequest.Status.APPROVED, decided_at=timezone.now())
 
 
 # --- the three visibilities --------------------------------------------------
@@ -153,9 +147,7 @@ def test_gated_advisory_is_visible_to_a_workspace_owner(team, public_product, sa
 # --- the per-product half of the gate ----------------------------------------
 
 
-def test_gated_advisory_on_an_unlisted_product_is_hidden_from_a_customer(
-    team, unlisted_product, guest_user
-):
+def test_gated_advisory_on_an_unlisted_product_is_hidden_from_a_customer(team, unlisted_product, guest_user):
     """The grant is workspace-wide; the advisory is not.
 
     An approved customer holds access to what the trust center shows them. An
@@ -167,9 +159,7 @@ def test_gated_advisory_on_an_unlisted_product_is_hidden_from_a_customer(
     assert listed_ids(make_request(guest_user), team) == []
 
 
-def test_gated_advisory_on_an_unlisted_product_is_visible_to_an_owner(
-    team, unlisted_product, sample_user
-):
+def test_gated_advisory_on_an_unlisted_product_is_visible_to_an_owner(team, unlisted_product, sample_user):
     """The people who wrote it can still read it; nobody else can."""
     advisory = advisory_for(team, unlisted_product, visibility=SecurityAdvisory.Visibility.GATED)
     assert listed_ids(make_request(sample_user), team) == [advisory.id]
@@ -186,9 +176,7 @@ def test_one_reachable_product_is_enough(team, public_product, unlisted_product,
     assert listed_ids(make_request(guest_user), team) == [advisory.id]
 
 
-def test_products_the_reader_cannot_see_are_not_named(
-    team, public_product, unlisted_product, guest_user
-):
+def test_products_the_reader_cannot_see_are_not_named(team, public_product, unlisted_product, guest_user):
     """Passing the gate on one product does not disclose the others' names."""
     advisory = SecurityAdvisory.objects.create(team=team, title="Multi-product")
     AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
@@ -265,6 +253,29 @@ def test_internal_comments_never_reach_the_timeline(team, public_product, sample
     notes = [entry["note"] for entry in result.value["timeline"]]
     assert "Patch shipped in 1.4.3" in notes
     assert "Do not tell customers yet" not in notes
+
+
+def test_a_withdrawn_advisory_is_marked_withdrawn_on_the_browse_list(team, public_product, client):
+    """The list is the surface a reader scans, and it has two row variants.
+
+    An advisory naming affected product rows lands on one, an advisory naming
+    none lands on the other, and only the first carried the badge. A retracted
+    advisory that reads as current on the list is worse than one that is
+    missing, so both variants have to say so.
+    """
+    from django.urls import reverse
+
+    naming_no_product = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryProduct.objects.filter(advisory=naming_no_product).delete()
+    naming_no_product.status = SecurityAdvisory.Status.WITHDRAWN
+    naming_no_product.withdrawn_at = timezone.now()
+    naming_no_product.withdrawal_reason = "Reissued."
+    naming_no_product.save()
+
+    response = client.get(reverse("core:workspace_advisories_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    assert "Withdrawn" in response.content.decode()
 
 
 def test_withdrawn_advisories_stay_readable(team, public_product):
@@ -345,9 +356,7 @@ def test_summary_counts_what_it_shows_and_what_it_withholds(team, public_product
 
 def test_summary_limit_does_not_change_the_total(team, public_product):
     for index in range(5):
-        advisory_for(
-            team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC, title=f"Advisory {index}"
-        )
+        advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC, title=f"Advisory {index}")
 
     summary = public_advisory_summary(make_request(), team, limit=3)
     assert len(summary["recent"]) == 3
@@ -359,9 +368,7 @@ def test_summary_limit_does_not_change_the_total(team, public_product):
 
 def severities(team, public_product, values):
     for index, severity in enumerate(values):
-        advisory = SecurityAdvisory.objects.create(
-            team=team, title=f"Advisory {index}", severity=severity
-        )
+        advisory = SecurityAdvisory.objects.create(team=team, title=f"Advisory {index}", severity=severity)
         AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
         publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
 
@@ -450,8 +457,8 @@ def test_detail_cvss_chips_label_their_version_or_fall_back_to_plain_cvss(team, 
 
     detail = get_public_advisory(make_request(), team, advisory.id).value
     assert detail["vulnerabilities"][0]["cvss_scores"] == [
-        {"label": "CVSS 3.1", "base_score": 9.8},
-        {"label": "CVSS", "base_score": 7.5},
+        {"label": "CVSS 3.1", "base_score": 9.8, "version": "3.1", "vector": "CVSS:3.1/AV:N"},
+        {"label": "CVSS", "base_score": 7.5, "version": "", "vector": ""},
     ]
 
 
@@ -539,16 +546,12 @@ def backdate(event: AdvisoryEvent, when) -> None:
     save() nor update() can do this — the test writes the column directly.
     """
     with connection.cursor() as cursor:
-        cursor.execute(
-            "UPDATE security_advisories_events SET created_at = %s WHERE id = %s", [when, event.id]
-        )
+        cursor.execute("UPDATE security_advisories_events SET created_at = %s WHERE id = %s", [when, event.id])
 
 
 def test_each_event_kind_gets_its_own_icon(team, public_product):
     advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
-    AdvisoryEvent.objects.create(
-        advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out."
-    )
+    AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out.")
     AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched.")
 
     icons = {entry["kind"]: entry["icon"] for entry in timeline_for(team, advisory)}
@@ -575,12 +578,8 @@ def test_a_status_change_borrows_the_icon_of_the_state_it_moved_to(team, public_
 
 def test_the_gap_measures_against_the_previous_entry(team, public_product):
     advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
-    first = AdvisoryEvent.objects.create(
-        advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out."
-    )
-    second = AdvisoryEvent.objects.create(
-        advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched."
-    )
+    first = AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out.")
+    second = AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched.")
     now = timezone.now()
     backdate(first, now - timedelta(days=14))
     backdate(second, now - timedelta(days=3))
@@ -607,9 +606,7 @@ def test_a_sub_minute_gap_reads_as_words_not_as_zero(team, public_product):
 
 def test_a_timeline_entry_carries_both_absolute_and_relative_time(team, public_product):
     advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
-    event = AdvisoryEvent.objects.create(
-        advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched."
-    )
+    event = AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched.")
     backdate(event, timezone.now() - timedelta(days=2))
 
     entry = timeline_for(team, advisory)[0]
@@ -620,9 +617,7 @@ def test_a_timeline_entry_carries_both_absolute_and_relative_time(team, public_p
 
 def test_the_advisory_reports_how_stale_it_is(team, public_product):
     advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
-    event = AdvisoryEvent.objects.create(
-        advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched."
-    )
+    event = AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched.")
     backdate(event, timezone.now() - timedelta(days=11))
 
     result = get_public_advisory(make_request(), team, advisory.id)

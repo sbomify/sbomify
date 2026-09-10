@@ -83,7 +83,7 @@ def test_select_community_plan_immediate(
     # clear subscription id to simulate no active sub
     team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
     team_with_business_plan.save()
-    
+
     client.force_login(sample_user)
     response = client.post(
         reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": community_plan.key}
@@ -114,7 +114,7 @@ def test_select_community_plan_with_subscription_redirects_to_portal(
     team_with_business_plan.save()
 
     client.force_login(sample_user)
-    
+
     # Mock create_billing_portal_session on the CLASS
     with patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal:
         mock_session = MagicMock()
@@ -122,18 +122,18 @@ def test_select_community_plan_with_subscription_redirects_to_portal(
         mock_create_portal.return_value = mock_session
 
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), 
-            {"plan": community_plan.key}
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
         )
 
         assert response.status_code == 302
         # Verify redirect to create_portal_session
         assert "/billing/portal/" in response.url
         assert "subscription_cancel" in response.url
-        
+
         # Follow the redirect manually
         response = client.get(response.url)
-        
+
         assert response.status_code == 302
         assert response.url == "https://billing.stripe.com/p/session/test_portal_123"
 
@@ -156,7 +156,7 @@ def test_select_business_plan_new_checkout(
     team_with_business_plan.billing_plan = "community"
     team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
     team_with_business_plan.save()
-    
+
     client.force_login(sample_user)
 
     # Mock the checkout session creation
@@ -174,7 +174,7 @@ def test_select_business_plan_new_checkout(
         # Should redirect directly to Stripe
         assert response.status_code == 302
         assert response.url == "https://checkout.stripe.com/test-session"
-        
+
         # Verify the service was called correctly
         mock_create_session.assert_called_once()
 
@@ -191,32 +191,32 @@ def test_switch_business_plan_with_subscription_redirects_to_portal(
     team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = "sub_test_456"
     team_with_business_plan.billing_plan_limits["subscription_status"] = "active"
     team_with_business_plan.save()
-    
+
     client.force_login(sample_user)
-    
+
     # Expect create_billing_portal_session to be called instead of checkout
     with patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal:
         mock_session = MagicMock()
         mock_session.url = "https://billing.stripe.com/p/session/test_portal_456"
         mock_create_portal.return_value = mock_session
-        
+
         # Switch to annual
         response = client.post(
-             reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
-             {"plan": business_plan.key, "billing_period": "annual"},
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            {"plan": business_plan.key, "billing_period": "annual"},
         )
-        
+
         assert response.status_code == 302
         # Verify redirect to create_portal_session
         assert "/billing/portal/" in response.url
         assert "subscription_update" in response.url
-        
+
         # Follow manually
         response = client.get(response.url)
-        
+
         assert response.status_code == 302
         assert response.url == "https://billing.stripe.com/p/session/test_portal_456"
-        
+
         mock_create_portal.assert_called_once()
         args, kwargs = mock_create_portal.call_args
         assert kwargs["flow_data"]["type"] == "subscription_update"
@@ -364,7 +364,9 @@ def test_stripe_webhook_error_handling(factory):
 
     with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
         mock_stripe_client.construct_webhook_event.return_value = mock_event
-        with patch("sbomify.apps.billing.billing_processing.handle_checkout_completed", side_effect=Exception("Test error")):
+        with patch(
+            "sbomify.apps.billing.billing_processing.handle_checkout_completed", side_effect=Exception("Test error")
+        ):
             response = StripeWebhookView.as_view()(request)
             assert response.status_code == 500
 
@@ -485,4 +487,45 @@ def test_stripe_webhook_subscription_updated_real_handler(factory, team_with_bus
     assert team_with_business_plan.billing_plan == "business"
 
 
+@pytest.mark.django_db
+def test_stripe_webhook_for_a_deleted_workspace_is_acknowledged(factory):
+    """Stripe telling us a deleted workspace's subscription ended is not a fault.
 
+    Deleting a workspace cancels its subscription, so this event is the
+    expected consequence rather than a problem: the row is gone by the time it
+    arrives. Answering non-2xx would make Stripe redeliver an event that can
+    never be processed, and logging it as an error would page somebody for a
+    thing that worked.
+    """
+    from sbomify.apps.billing import views as billing_views
+    from sbomify.apps.billing.stripe_client import WorkspaceGoneError
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "customer.subscription.deleted"
+    mock_event.id = "evt_gone12345"
+    mock_event.data.object = {"id": "sub_gone123", "customer": "cus_gone123"}
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "customer.subscription.deleted"}),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
+        with patch(
+            "sbomify.apps.billing.billing_processing.handle_subscription_deleted",
+            side_effect=WorkspaceGoneError("No workspace found for webhook event"),
+        ):
+            # The view's logger does not propagate to root, so caplog sees
+            # nothing; observe the logger itself instead.
+            with patch.object(billing_views.logger, "warning") as warned:
+                with patch.object(billing_views.logger, "error") as errored:
+                    response = StripeWebhookView.as_view()(request)
+
+    assert response.status_code == 200, "a redelivery could never succeed"
+    assert warned.call_count == 1
+    assert "Webhook for a workspace that no longer exists (acknowledged)" in warned.call_args.args[0]
+    assert errored.call_count == 0, "a deleted workspace is expected, so nothing here should page anyone"
