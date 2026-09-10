@@ -10,6 +10,7 @@ scope, and that creating one yields a draft rather than a publication.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
@@ -107,3 +108,37 @@ def test_the_publication_states_match_the_model():
     from sbomify.apps.mcp.tools.advisories import PUBLICATION_STATES
 
     assert set(PUBLICATION_STATES) == set(SecurityAdvisory.Status.values)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_page_costs_one_page_of_projections(mcp_owner, make_token):
+    """Projecting the whole workspace to show one page is what this avoids.
+
+    Each projection sorts the advisory's events, computes worst severity and
+    CVSS, and walks a four-way prefetch, so the cost is per row rather than per
+    page unless the slice happens in the database.
+    """
+    _, bound, _ = mcp_owner
+    for index in range(8):
+        await sync_to_async(_advisory)(bound, f"advisory-{index:02d}")
+    token = await sync_to_async(make_token)(["advisory:read"])
+
+    projected: list[Any] = []
+    from sbomify.apps.security_advisories.services import advisories as service
+
+    original = service._advisory_projection
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(
+        service,
+        "_advisory_projection",
+        lambda advisory, **kw: projected.append(advisory.id) or original(advisory, **kw),
+    )
+    try:
+        payload = structured(await _tool(token, "list_advisories", page=1, page_size=3))
+    finally:
+        monkey.undo()
+
+    assert payload["total"] == 8
+    assert len(payload["items"]) == 3
+    assert len(projected) == 3, f"projected {len(projected)} rows to return 3"

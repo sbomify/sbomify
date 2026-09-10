@@ -2287,7 +2287,7 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
     if _is_guest_member(request):
         return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
-    log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
+    log.debug("Incoming metadata payload for component %s: %s", component_id, request.body)
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:

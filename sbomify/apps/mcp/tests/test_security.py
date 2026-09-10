@@ -62,6 +62,23 @@ def test_forbidden_actions_are_real_actions():
     assert len(registry.FORBIDDEN_ACTIONS) >= 6
 
 
+def test_every_named_forbidden_action_still_exists():
+    """The named half of the deny-list cannot be derived from a verb, so a
+    rename in authz would drop one silently. These are the outward-facing and
+    standing-grant actions: publishing to the trust center, granting a repo a
+    non-expiring publish, changing the membership, billing, and publishing an
+    advisory."""
+    assert registry._FORBIDDEN_NAMED <= ALL_ACTIONS, registry._FORBIDDEN_NAMED - ALL_ACTIONS
+
+
+@pytest.mark.parametrize("action", sorted(registry._FORBIDDEN_NAMED))
+def test_registering_an_outward_facing_tool_is_rejected(action):
+    """Not destructive by verb, but the actions a prompt-injected agent would do
+    the most damage with. A verb test caught none of them."""
+    with pytest.raises(ValueError, match="not exposable over MCP"):
+        registry.register(f"expose_{action.replace(':', '_')}", action)
+
+
 def test_read_only_preset_exposes_no_writing_tool():
     """Checked via the `writes` flag, independently of the action allow-list."""
     allowed = registry.permitted_by(SCOPE_PRESETS["read_only"])

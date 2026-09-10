@@ -48,13 +48,34 @@ class ToolSpec:
 
 _REGISTRY: dict[str, ToolSpec] = {}
 
-# Actions a tool may never require. Destructive verbs are excluded by
-# construction rather than by scope alone: an agent acting on injected
-# instructions cannot reach for a tool that was never registered, whatever its
-# token permits. Deletion stays a deliberate human action in the UI or REST API.
-FORBIDDEN_ACTIONS: frozenset[str] = frozenset(
-    action for action in ALL_ACTIONS if action.split(":", 1)[1] in ("delete", "administer")
+# Actions a tool may never require, excluded by construction rather than by
+# scope alone: an agent acting on injected instructions cannot reach for a tool
+# that was never registered, whatever its token permits.
+#
+# Named rather than matched on the verb. A verb test caught delete and
+# administer and silently missed every other action authz carves up to
+# ADMINISTER for being outward-facing: publishing to the trust center, granting
+# a repo a standing publish, changing who is in the workspace, billing. It also
+# meant renaming an action (product:delete -> product:remove) would drop it
+# from the set with nothing to notice.
+_FORBIDDEN_VERBS = ("delete", "administer")
+
+#: Outward-facing or standing-grant actions, which are not destructive by verb
+#: but are the ones a prompt-injected agent would do the most damage with.
+_FORBIDDEN_NAMED = frozenset(
+    {
+        "product:set_visibility",
+        "component:set_visibility",
+        "component:manage_publishers",
+        "member:manage",
+        "billing:manage",
+        "advisory:publish",
+    }
 )
+
+FORBIDDEN_ACTIONS: frozenset[str] = frozenset(
+    action for action in ALL_ACTIONS if action.split(":", 1)[1] in _FORBIDDEN_VERBS
+) | (_FORBIDDEN_NAMED & set(ALL_ACTIONS))
 
 
 def register(name: str, action: str, *, also_requires: tuple[str, ...] = (), writes: bool = False) -> ToolSpec:

@@ -62,21 +62,26 @@ def register_tools(mcp: FastMCP) -> None:
             # untouched, so without this there is no authorization left.
             require(principal, "advisory:read", team)
             wanted = _publication_state(publication_status)
-            result = service.list_advisories(team, search or "")
-            if not result.ok:
+            safe_page, safe_size = clamp_page(page, page_size)
+            # Filtered and sliced in the database. Projecting the whole
+            # workspace to show twenty-five rows meant a four-way prefetch and a
+            # timeline build per advisory, discarded.
+            result = service.list_advisories_page(
+                team,
+                search or "",
+                status=wanted,
+                offset=(safe_page - 1) * safe_size,
+                limit=safe_size,
+            )
+            if not result.ok or result.value is None:
                 raise ToolError(result.error or "Could not list advisories.")
 
-            rows = list(result.value or [])
-            if wanted is not None:
-                rows = [row for row in rows if row.get("publication_status") == wanted]
-
-            safe_page, safe_size = clamp_page(page, page_size)
-            start = (safe_page - 1) * safe_size
+            rows, total = result.value
             return serializers.paginated(
-                [serializers.advisory(row) for row in rows[start : start + safe_size]],
+                [serializers.advisory(row) for row in rows],
                 page=safe_page,
                 page_size=safe_size,
-                total=len(rows),
+                total=total,
             )
 
         return await run_db(query)
