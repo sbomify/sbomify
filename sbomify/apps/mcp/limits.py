@@ -114,9 +114,10 @@ def audit(
     event = {
         "outcome": outcome,
         "tool": tool,
-        "token_id": str(principal.token.pk),
+        "credential": principal.credential_kind,
+        "token_id": principal.credential_id,
         "user_id": str(principal.user.pk),
-        "team_id": str(principal.token.team_id) if principal.token.team_id is not None else None,
+        "team_id": str(principal.workspace.pk) if principal.workspace is not None else None,
         "scoped": principal.scopes is not None,
         "detail": detail,
         **fields,

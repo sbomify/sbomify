@@ -245,9 +245,10 @@ def resolve_workspace(principal: Principal) -> Team:
     the session branch, which cannot apply: the MCP stub request carries an
     empty session by construction, so a token is the only signal available.
 
-    A workspace-pinned token wins outright. Legacy tokens predating workspace
-    scoping (``team IS NULL``) fall back to the user's default workspace, which
-    keeps them working while the operator rotates them.
+    A workspace-pinned credential wins outright. Legacy tokens predating
+    workspace scoping (``team IS NULL``) fall back to the user's default
+    workspace, which keeps them working while the operator rotates them, and a
+    credential that carries no workspace at all takes the same path.
 
     Guest members are refused here, whatever the tool. ``guest`` holds no
     capability tier, so ``can()`` already refuses it; this is the choke point
@@ -260,7 +261,7 @@ def resolve_workspace(principal: Principal) -> Team:
     from sbomify.apps.teams.utils import get_user_default_team
 
     user = cast("User", principal.user)
-    team: Team | None = principal.token.team
+    team: Team | None = principal.workspace
 
     if team is None:
         team_id = get_user_default_team(user)

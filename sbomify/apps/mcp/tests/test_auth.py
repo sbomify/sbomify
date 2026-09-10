@@ -112,3 +112,54 @@ async def _acreate(make_token, scopes):
     from asgiref.sync import sync_to_async
 
     return await sync_to_async(make_token)(scopes)
+
+
+@pytest.mark.django_db
+def test_a_principal_answers_without_reaching_for_a_token_row(make_token):
+    """The four things the server needs about a caller come off the Principal.
+
+    A personal access token is not the only credential this endpoint will
+    accept (#1235), and an OAuth caller has no AccessToken row to reach
+    through. Holding the facts here rather than the row is what lets the next
+    credential fill them without teaching four consumers about it.
+    """
+    from sbomify.apps.mcp.auth import Principal
+
+    record = make_token(["sbom:read"])
+    principal = Principal(
+        user=record.user,
+        request=fake_request(""),
+        workspace=record.team,
+        scopes=record.scopes,
+        credential_id=str(record.pk),
+    )
+
+    assert principal.workspace == record.team
+    assert principal.scopes == ["sbom:read"]
+    assert principal.credential_id == str(record.pk)
+    assert principal.credential_kind == "pat"
+    # Optional, and nothing outside auth.py reads it.
+    assert principal.token is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_pat_fills_every_principal_field(make_token):
+    """The PAT path is what proves the shape, rather than a speculative one."""
+    from asgiref.sync import sync_to_async
+
+    from sbomify.apps.mcp.auth import authenticate
+
+    token = await sync_to_async(make_token)(["sbom:read"])
+
+    principal = await authenticate(fake_request(f"Bearer {token.encoded_token}"), attempted_action="tools/list")
+
+    assert principal.credential_kind == "pat"
+    assert principal.credential_id == str(token.pk)
+    assert principal.scopes == ["sbom:read"]
+    assert principal.workspace == token.team
+    # can() and the rate throttle read this off the stub rather than the
+    # Principal, so its contract is the narrower one: .scopes and .pk.
+    credential = getattr(principal.request, "access_token_record")
+    assert credential.scopes == ["sbom:read"]
+    assert credential.pk == token.pk

@@ -13,6 +13,21 @@ the token's action scopes *before* the role check
 ``token_team`` for workspace scoping. Handing it a faithful stub means MCP tools
 get byte-identical authorization to the REST API without a second permission
 model.
+
+A personal access token is not the only credential this endpoint will ever
+accept: OAuth is the next one (#1235). Two contracts carry that, and both are
+satisfied by a PAT today rather than being speculative shapes:
+
+``Principal`` holds what the server needs about a caller — a workspace, action
+scopes, and an id to throttle and audit under — instead of an ``AccessToken``
+row. Nothing outside this module reads ``principal.token`` any more, so a
+credential without a row can fill the same fields.
+
+``request.access_token_record`` is the narrower one, because ``can()`` and the
+rate throttle read it directly. Its contract is only ``.scopes`` (a list of
+action strings, or ``None`` for unscoped) and ``.pk`` (stable per credential,
+which is what the sliding window keys on). A PAT row satisfies it; so would
+anything else that can answer those two questions.
 """
 
 from __future__ import annotations
@@ -39,6 +54,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
 
     from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.teams.models import Team
 
 
 class MCPAuthError(ToolError):
@@ -61,20 +77,32 @@ class MCPRateLimitedError(MCPAuthError):
 
 @dataclass(frozen=True)
 class Principal:
-    """An authenticated MCP caller.
+    """An authenticated MCP caller, however it authenticated.
 
     ``request`` is the stub ``HttpRequest`` to pass to ``can()`` — it is not a
     real request and must never be used for rendering or redirects.
+
+    The facts below are what the rest of the server actually needs: a workspace
+    to scope to, action scopes to narrow by, and an identity to throttle and
+    audit under. They are held here rather than read off ``token`` because a
+    personal access token is not the only credential this endpoint will ever
+    accept, and the four consumers should not each learn about the next one.
+    ``token`` stays for the PAT path that has one; nothing outside this module
+    reads it.
     """
 
     user: AbstractBaseUser
-    token: AccessToken
     request: HttpRequest
-
-    @property
-    def scopes(self) -> list[str] | None:
-        """The token's action scopes; ``None`` means unscoped (full capability)."""
-        return self.token.scopes
+    workspace: Team | None
+    scopes: list[str] | None
+    #: Stable per credential, for the rate-limit window and the audit line. Two
+    #: credentials belonging to one user throttle independently, which is what
+    #: an operator expects of a token they can revoke on its own.
+    credential_id: str
+    #: What kind of credential this is, so an audit line says how someone got
+    #: in rather than only that they did.
+    credential_kind: str = "pat"
+    token: AccessToken | None = None
 
 
 def _bearer_token(request: Request) -> str:
@@ -178,7 +206,15 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     if not await sync_to_async(throttle.allow_request)(stub):
         raise MCPRateLimitedError(f"Rate limit exceeded for this access token.{_retry_hint(stub)}")
 
-    return Principal(user=user, token=record, request=stub)
+    return Principal(
+        user=user,
+        request=stub,
+        workspace=record.team,
+        scopes=record.scopes,
+        credential_id=str(record.pk),
+        credential_kind="pat",
+        token=record,
+    )
 
 
 def _retry_hint(stub: HttpRequest) -> str:
