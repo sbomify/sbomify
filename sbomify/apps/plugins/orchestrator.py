@@ -350,6 +350,13 @@ class PluginOrchestrator:
                         exc_info=True,
                     )
 
+                # Project the findings into rows, for the same reason and with
+                # the same safety: derived from the immutable run, rebuildable,
+                # and never the reason a good scan result is lost.
+                from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
+
+                sync_findings_safely(assessment_run)
+
             # Populate the releases M2M from the CURRENT ReleaseArtifact state.
             # This is the source-of-truth moment: whichever releases link to this
             # SBOM at run-completion time are the releases the result covers.
