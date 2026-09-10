@@ -165,7 +165,7 @@ is the first place to extend when a tool is added.
   `packages_licenses` fields were removed, so package data lives solely in the
   S3 artifact. Answering this per query would mean fetching and parsing every
   SBOM in the workspace. It needs an indexed package table first, which is its
-  own project. `get_sbom_packages` covers the single-SBOM case.
+  own project. `get_artifact_packages` covers the single-SBOM case.
 * **Triage, CRA compliance steps, control status, and workspace
   administration.** The initial surface is reads, artifact publishing, and
   contact-profile management.

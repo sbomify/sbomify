@@ -115,7 +115,7 @@ def sbom(obj: SBOM, *, detail: bool = False) -> dict[str, Any]:
     """SBOM *metadata* only.
 
     The document itself can hold tens of thousands of packages; it is never
-    inlined. Agents reach package data through ``get_sbom_packages``, which
+    inlined. Agents reach package data through ``get_artifact_packages``, which
     filters and paginates.
     """
     data: dict[str, Any] = {
@@ -167,7 +167,7 @@ def document(obj: Document, *, detail: bool = False) -> dict[str, Any]:
 def release_artifact(obj: ReleaseArtifact) -> dict[str, Any]:
     # No "artifact_id": obj.id is the release-artifact junction row's own pk,
     # which no tool accepts as input — emitting it under that name invites an
-    # agent to feed it to get_sbom_packages and hit a misleading not-found.
+    # agent to feed it to get_artifact_packages and hit a misleading not-found.
     # sbom_id / document_id are the real artifact identifiers.
     return compact(
         {

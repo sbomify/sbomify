@@ -1,4 +1,4 @@
-"""Artifact inspection tools: SBOMs, their packages, documents, assessments."""
+"""Artifact inspection tools: BOMs of every kind, their packages, documents, assessments."""
 
 from __future__ import annotations
 
@@ -17,13 +17,19 @@ if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
 
-def _get_sbom(principal: Principal, sbom_id: str) -> Any:
+def _get_artifact(principal: Principal, artifact_id: str) -> Any:
+    """One row of the artifact table, whatever ``bom_type`` it carries.
+
+    The table holds all eight BOM kinds, so the lookup is deliberately untyped:
+    a CBOM and an SBOM are both artifacts here, and an id that names either is
+    equally valid input to every tool below.
+    """
     from sbomify.apps.sboms.models import SBOM
 
     team = resolve_workspace(principal)
-    obj = SBOM.objects.filter(pk=sbom_id, component__team=team).select_related("component").first()
+    obj = SBOM.objects.filter(pk=artifact_id, component__team=team).select_related("component").first()
     if obj is None:
-        raise not_found("SBOM", sbom_id)
+        raise not_found("Artifact", artifact_id)
     require(principal, "sbom:read", obj.component)
     return obj
 
@@ -159,14 +165,19 @@ def _extract_packages(payload: dict[str, Any], sbom_format: str) -> list[dict[st
 
 
 def register_tools(mcp: FastMCP) -> None:
-    @mcp_tool(mcp, "list_sboms", "sbom:read")
-    async def list_sboms(
+    @mcp_tool(mcp, "list_artifacts", "sbom:read")
+    async def list_artifacts(
         principal: Principal,
         component_id: str,
         page: int = 1,
         page_size: int = 25,
     ) -> dict[str, Any]:
-        """List the SBOMs uploaded for a component, newest first."""
+        """List the BOM artifacts uploaded for a component, newest first.
+
+        Covers every BOM kind the component carries, not SBOMs alone: each row
+        reports its own `bom_type` (sbom, cbom, aibom, hbom, vex, saasbom, obom,
+        mbom). Documents are a separate kind, listed by `list_documents`.
+        """
 
         def query() -> dict[str, Any]:
             from sbomify.apps.sboms.models import SBOM
@@ -188,33 +199,34 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(query)
 
-    @mcp_tool(mcp, "get_sbom", "sbom:read")
-    async def get_sbom(principal: Principal, sbom_id: str) -> dict[str, Any]:
-        """Metadata for one SBOM: format, version, hash, signing status.
+    @mcp_tool(mcp, "get_artifact", "sbom:read")
+    async def get_artifact(principal: Principal, artifact_id: str) -> dict[str, Any]:
+        """Metadata for one BOM artifact: kind, format, version, hash, signing.
 
-        Does not return the SBOM document itself — use `get_sbom_packages` for
-        its contents.
+        Accepts any BOM kind; `bom_type` in the response says which one. Does
+        not return the document itself, use `get_artifact_packages` for its
+        contents.
         """
 
         def query() -> dict[str, Any]:
-            obj = _get_sbom(principal, sbom_id)
+            obj = _get_artifact(principal, artifact_id)
             data = serializers.sbom(obj, detail=True)
             data["component"] = {"id": obj.component.id, "name": obj.component.name}
             return serializers.compact(data)
 
         return await run_db(query)
 
-    @mcp_tool(mcp, "get_sbom_packages", "sbom:read")
-    async def get_sbom_packages(
+    @mcp_tool(mcp, "get_artifact_packages", "sbom:read")
+    async def get_artifact_packages(
         principal: Principal,
-        sbom_id: str,
+        artifact_id: str,
         name_filter: str | None = None,
         page: int = 1,
         page_size: int = 50,
     ) -> dict[str, Any]:
-        """List the packages an SBOM declares, with optional name filtering.
+        """List the packages a BOM artifact declares, with optional name filtering.
 
-        Real SBOMs routinely contain thousands of packages, so results are always
+        Real BOMs routinely contain thousands of packages, so results are always
         paginated. To check whether a specific dependency is present, pass
         `name_filter` (case-insensitive substring) rather than paging through
         everything.
@@ -228,16 +240,16 @@ def register_tools(mcp: FastMCP) -> None:
 
             from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
 
-            obj = _get_sbom(principal, sbom_id)
+            obj = _get_artifact(principal, artifact_id)
             try:
                 # Fetch as bytes so the size can be checked before parsing —
                 # a multi-hundred-MB artifact must fail with a message, not an
                 # OOM that takes the worker down with it.
-                _, raw = get_sbom_data_bytes(sbom_id)
-                enforce_parse_size(raw, sbom_id=sbom_id)
+                _, raw = get_sbom_data_bytes(artifact_id)
+                enforce_parse_size(raw, artifact_id=artifact_id)
                 payload = json.loads(raw)
             except SBOMDataError as exc:
-                raise ToolError(f"Could not read SBOM {sbom_id}: {exc}") from exc
+                raise ToolError(f"Could not read artifact {artifact_id}: {exc}") from exc
             except (ClientError, BotoCoreError) as exc:
                 # get_sbom_data_bytes wraps most failure modes in SBOMDataError,
                 # but the S3 fetch itself re-raises botocore errors. Without
@@ -245,15 +257,15 @@ def register_tools(mcp: FastMCP) -> None:
                 # no detail — the agent would see an opaque internal error for
                 # what is a retryable storage fault. Message kept generic: a
                 # botocore message can carry bucket names and key paths.
-                raise ToolError(f"Could not read SBOM {sbom_id}: artifact storage is unavailable.") from exc
+                raise ToolError(f"Could not read artifact {artifact_id}: artifact storage is unavailable.") from exc
             except json.JSONDecodeError as exc:
-                raise ToolError(f"SBOM {sbom_id} is not valid JSON: {exc}") from exc
+                raise ToolError(f"Artifact {artifact_id} is not valid JSON: {exc}") from exc
 
             if not isinstance(payload, dict):
                 # A stored artifact whose top level is a list/string/null —
                 # reachable via the non-validating upload paths. Without this,
                 # payload.get below raises and the agent sees an opaque error.
-                raise ToolError(f"SBOM {sbom_id} is not a JSON object; cannot list its packages.")
+                raise ToolError(f"Artifact {artifact_id} is not a JSON object; cannot list its packages.")
 
             packages = _extract_packages(payload, obj.format)
             if name_filter:
@@ -270,7 +282,7 @@ def register_tools(mcp: FastMCP) -> None:
                 page_size=safe_size,
                 total=len(packages),
             )
-            result["sbom_format"] = obj.format
+            result["format"] = obj.format
             return result
 
         return await run_db(query)
@@ -302,10 +314,10 @@ def register_tools(mcp: FastMCP) -> None:
         return await run_db(query)
 
     @mcp_tool(mcp, "get_assessments", "sbom:read")
-    async def get_assessments(principal: Principal, sbom_id: str) -> dict[str, Any]:
-        """Compliance and licence assessment results for an SBOM (NTIA, etc.).
+    async def get_assessments(principal: Principal, artifact_id: str) -> dict[str, Any]:
+        """Compliance and licence assessment results for an artifact (NTIA, etc.).
 
-        Reports the latest run per plugin. Use this to answer "is this SBOM
+        Reports the latest run per plugin. Use this to answer "is this artifact
         compliant?". Vulnerability scan results are reported separately by
         `get_vulnerability_summary` and `list_vulnerabilities`.
         """
@@ -314,13 +326,13 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.plugins.models import AssessmentRun
             from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 
-            _get_sbom(principal, sbom_id)
+            _get_artifact(principal, artifact_id)
             # Latest per plugin resolved in the database (DISTINCT ON), like
             # every dashboard consumer — materializing the full history would
             # de-TOAST each superseded run's result blob only to discard it.
             # `result` itself is never read, so it stays deferred.
             runs = (
-                AssessmentRun.objects.filter(sbom_id=sbom_id)
+                AssessmentRun.objects.filter(sbom_id=artifact_id)
                 .exclude(category=AssessmentCategory.SECURITY.value)
                 .order_by("plugin_name", "-created_at", "-id")
                 .distinct("plugin_name")
@@ -328,7 +340,7 @@ def register_tools(mcp: FastMCP) -> None:
             )
 
             return {
-                "sbom_id": sbom_id,
+                "artifact_id": artifact_id,
                 "assessments": [
                     serializers.compact(
                         {

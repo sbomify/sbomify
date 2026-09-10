@@ -96,7 +96,7 @@ def test_oversized_stored_artifact_is_not_parsed():
     from mcp.server.fastmcp.exceptions import ToolError
 
     with pytest.raises(ToolError, match="too large to inspect"):
-        limits.enforce_parse_size(b"x" * (limits.MAX_ARTIFACT_PARSE_BYTES + 1), sbom_id="abc")
+        limits.enforce_parse_size(b"x" * (limits.MAX_ARTIFACT_PARSE_BYTES + 1), artifact_id="abc")
 
 
 def test_oversized_response_is_refused():
@@ -376,7 +376,7 @@ async def test_a_tool_works_with_a_token_scoped_to_exactly_its_declared_action(
     release = await sync_to_async(Release.objects.create)(product=product_in_bound_workspace, name="v1", version="1")
 
     cases = [
-        ("list_sboms", "sbom:read", {"component_id": component_in_bound_workspace.id}),
+        ("list_artifacts", "sbom:read", {"component_id": component_in_bound_workspace.id}),
         ("list_documents", "document:read", {"component_id": component_in_bound_workspace.id}),
         ("tag_artifact_to_release", "release:tag", {"release_id": release.id, "sbom_id": "nope"}),
         (

@@ -84,7 +84,7 @@ def test_publish_preset_grants_upload_and_release_but_not_vex():
 def test_resource_wildcard_scope():
     allowed = registry.permitted_by(["sbom:*"])
 
-    assert {"get_sbom", "list_sboms", "get_sbom_packages", "get_assessments"} == allowed
+    assert {"get_artifact", "list_artifacts", "get_artifact_packages", "get_assessments"} == allowed
 
 
 @pytest.mark.parametrize(

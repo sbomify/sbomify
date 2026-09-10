@@ -1,6 +1,6 @@
 """Parsing of artifact content, which is supplier-controlled and often malformed.
 
-`get_sbom_packages` reads documents uploaded by third parties — frequently
+`get_artifact_packages` reads documents uploaded by third parties — frequently
 machine-generated, occasionally by tools that emit shapes the spec permits but
 nobody expects. A parser that raises on those turns one bad dependency into a
 tool that cannot answer at all, so the shapes tested here are the ones seen in

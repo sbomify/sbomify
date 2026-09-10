@@ -19,7 +19,7 @@ repository and should change alongside it.
 | `APP_BASE_URL` | Its hostname is added to the MCP `Host` allow-list |
 | `MCP_ALLOWED_HOSTS` | Comma-separated extra hostnames (staging aliases, extra CNAMEs) |
 | `MCP_MAX_UPLOAD_BYTES` | Largest artifact an MCP tool accepts (default: `DATA_UPLOAD_MAX_MEMORY_SIZE`, 20 MB) |
-| `MCP_MAX_ARTIFACT_PARSE_BYTES` | Largest stored SBOM `get_sbom_packages` will parse (default 50 MB) |
+| `MCP_MAX_ARTIFACT_PARSE_BYTES` | Largest stored SBOM `get_artifact_packages` will parse (default 50 MB) |
 | `MCP_MAX_RESPONSE_BYTES` | Ceiling on one tool's response (default 1 MB) |
 
 Per-token rate limiting is shared with the REST API (`API_TOKEN_RATE_LIMIT`), with the stricter

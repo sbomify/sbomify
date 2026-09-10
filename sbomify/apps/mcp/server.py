@@ -44,7 +44,7 @@ specific release, prefer `get_release_risk_report`: it answers in one call what
 would otherwise take four.
 
 SBOMs can contain thousands of packages. Never try to retrieve one whole; use
-`get_sbom_packages` with a `name_filter` and pagination.
+`get_artifact_packages` with a `name_filter` and pagination.
 
 The tools you can see are determined by your access token's scopes. If a tool
 you need is absent, the token needs wider scopes, and retrying will not help.

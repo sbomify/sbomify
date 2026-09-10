@@ -47,7 +47,7 @@ MAX_UPLOAD_BYTES: int = settings.MCP_MAX_UPLOAD_BYTES
 ``DATA_UPLOAD_MAX_MEMORY_SIZE`` so MCP is never the laxer of the two doors."""
 
 MAX_ARTIFACT_PARSE_BYTES: int = settings.MCP_MAX_ARTIFACT_PARSE_BYTES
-"""Largest stored artifact ``get_sbom_packages`` will pull into memory to parse.
+"""Largest stored artifact ``get_artifact_packages`` will pull into memory to parse.
 Higher than the upload cap because artifacts predating this limit — or uploaded
 through other paths — can legitimately be larger; the point is to fail with a
 clear message instead of an OOM that takes the worker down."""
@@ -67,11 +67,11 @@ def enforce_upload_size(raw: bytes, *, label: str) -> None:
         )
 
 
-def enforce_parse_size(raw: bytes | None, *, sbom_id: str) -> None:
+def enforce_parse_size(raw: bytes | None, *, artifact_id: str) -> None:
     """Refuse to parse a stored artifact that would not fit comfortably in memory."""
     if raw is not None and len(raw) > MAX_ARTIFACT_PARSE_BYTES:
         raise ToolError(
-            f"SBOM {sbom_id} is {len(raw) // 1024 // 1024} MB, too large to inspect over MCP. "
+            f"Artifact {artifact_id} is {len(raw) // 1024 // 1024} MB, too large to inspect over MCP. "
             "Download it directly instead."
         )
 
