@@ -449,7 +449,12 @@ def register_tools(mcp: FastMCP) -> None:
                     "release": serializers.release(release_obj, detail=True),
                     "product": {"id": release_obj.product.id, "name": release_obj.product.name},
                     "artifact_counts": {
-                        "sboms": len(scannable_ids),
+                        # Every BOM kind the release ships, not just the
+                        # scannable ones: this is the agent's answer to "what
+                        # is in this release", and a release carrying a CBOM
+                        # and a VEX alongside its SBOM ships three. The
+                        # SBOM-only counts are the scan fields below.
+                        "boms": len(sbom_ids),
                         "documents": sum(1 for a in artifacts if a.document_id),
                     },
                     "severity_counts": _counts(rows),

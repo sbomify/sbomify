@@ -3,14 +3,42 @@
 sbomify serves a [Model Context Protocol](https://modelcontextprotocol.io) endpoint at `/mcp` so AI
 agents can query a workspace and publish artifacts using scoped personal access tokens.
 
-**Setting it up as a user?** See the [MCP guide](https://sbomify.com/guides/mcp/) for token scoping,
-client configuration, the tool reference, and the security model.
-
 **Why it is built this way?** See [ADR-0008](ADR/0008-mcp-server.md).
 
-This page is the operator reference: the settings that govern the endpoint, and what to do when it
-misbehaves. It lives here rather than on the website because these knobs are read by code in this
+Connecting a client is below. The rest of this page is the operator reference: the settings that
+govern the endpoint, and what to do when it misbehaves. Those knobs are read by code in this
 repository and should change alongside it.
+
+## Connecting a client
+
+The endpoint is `https://<your sbomify host>/mcp` and speaks streamable HTTP. Authenticate with a
+personal access token, sent as a bearer token.
+
+1. Create a token under Settings, Access tokens. Scope it to one workspace and to the actions the
+   agent actually needs. Scopes are not advisory: a token with no write scope is never shown
+   `upload_artifact`, and would be refused if it called it anyway.
+2. Point the client at the endpoint. For a client that reads `mcpServers` configuration:
+
+   ```json
+   {
+     "mcpServers": {
+       "sbomify": {
+         "url": "https://app.sbomify.com/mcp",
+         "headers": { "Authorization": "Bearer YOUR_TOKEN" }
+       }
+     }
+   }
+   ```
+
+3. Ask the agent to list its tools. `tools/list` is filtered by the token's scopes, so what comes
+   back is the reference for that token. The tools cover the workspace and its products,
+   components, releases, artifacts, vulnerabilities, assessments, advisories and contact profiles.
+
+Give each agent its own token. Rate limits are per token, so an agent that shares one with CI shares
+its budget.
+
+No tool deletes anything. Destructive actions are refused at registration, so "delete our SBOMs" has
+nothing to call.
 
 ## Settings
 

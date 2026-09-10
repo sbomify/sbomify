@@ -248,7 +248,10 @@ def release_artifact(obj: ReleaseArtifact) -> dict[str, Any]:
     return compact(
         {
             "type": obj.artifact_type,
-            "name": obj.artifact_name,
+            # artifact_name reads through to the SBOM's or document's own name,
+            # both lifted verbatim from the upload — the same field ``sbom()``
+            # bounds, bounded the same way.
+            "name": untrusted(obj.artifact_name, limit=256),
             "sbom_id": obj.sbom_id,
             "document_id": obj.document_id,
             "auto_pinned": obj.auto_pinned,

@@ -57,7 +57,7 @@ async def test_valid_token_yields_principal_carrying_the_token_record(make_token
 
     principal = await authenticate(fake_request(f"Bearer {token.encoded_token}"), attempted_action="tools/list")
 
-    assert principal.token.pk == token.pk
+    assert principal.credential_id == str(token.pk)
     assert principal.scopes == ["product:read"]
     assert getattr(principal.request, "access_token_record", None) is not None
     assert getattr(principal.request, "token_team", None) is not None
@@ -74,7 +74,7 @@ async def test_bearer_scheme_is_case_insensitive(make_token):
 
     principal = await authenticate(fake_request(f"bearer {token.encoded_token}"), attempted_action="tools/list")
 
-    assert principal.token.pk == token.pk
+    assert principal.credential_id == str(token.pk)
 
 
 @pytest.mark.asyncio
@@ -138,8 +138,6 @@ def test_a_principal_answers_without_reaching_for_a_token_row(make_token):
     assert principal.scopes == ["sbom:read"]
     assert principal.credential_id == str(record.pk)
     assert principal.credential_kind == "pat"
-    # Optional, and nothing outside auth.py reads it.
-    assert principal.token is None
 
 
 @pytest.mark.asyncio
@@ -163,3 +161,44 @@ async def test_a_pat_fills_every_principal_field(make_token):
     credential = getattr(principal.request, "access_token_record")
     assert credential.scopes == ["sbom:read"]
     assert credential.pk == token.pk
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_the_audit_line_names_the_workspace_the_call_ran_in(make_token, mcp_owner):
+    """A legacy token has no workspace of its own, but its calls still land in one.
+
+    ``AccessToken.team`` is nullable, and ``resolve_workspace`` falls back to
+    the user's default. Auditing the token's own field recorded null for every
+    one of those reads and writes, so the stream said a workspace-less token
+    did work in no workspace at all.
+    """
+    from unittest.mock import patch
+
+    from asgiref.sync import sync_to_async
+
+    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+    from sbomify.apps.mcp import limits
+    from sbomify.apps.mcp.tools._base import resolve_workspace
+
+    user, bound, _ = mcp_owner
+
+    def legacy() -> AccessToken:
+        return AccessToken.objects.create(
+            user=user,
+            encoded_token=create_personal_access_token(user),
+            team=None,
+            scopes=["workspace:read"],
+            description="pre-workspace-scoping token",
+        )
+
+    token = await sync_to_async(legacy)()
+    principal = await authenticate(fake_request(f"Bearer {token.encoded_token}"), attempted_action="tools/list")
+
+    assert token.team_id is None
+    resolved = await sync_to_async(resolve_workspace)(principal)
+    assert resolved.pk == bound.pk
+
+    with patch.object(limits, "log") as spy:
+        await sync_to_async(limits.audit)("get_workspace_summary", principal, outcome="success")
+
+    assert spy.info.call_args.kwargs["extra"]["team_id"] == str(bound.pk)

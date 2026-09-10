@@ -97,6 +97,12 @@ def enforce_response_size(payload: Any, *, tool: str) -> Any:
     return payload
 
 
+def _team_id(principal: Principal) -> str | None:
+    if (team := principal.resolved_workspace) is not None:
+        return str(team.pk)
+    return str(principal.workspace.pk) if principal.workspace is not None else None
+
+
 def audit(
     tool: str,
     principal: Principal,
@@ -117,7 +123,14 @@ def audit(
         "credential": principal.credential_kind,
         "token_id": principal.credential_id,
         "user_id": str(principal.user.pk),
-        "team_id": str(principal.workspace.pk) if principal.workspace is not None else None,
+        # The workspace the call operated in, not the one the credential names.
+        # A PAT's workspace is nullable, and such a credential falls back to the
+        # user's default in ``resolve_workspace`` — so recording the credential's
+        # own field logged null for a legacy token's every read and write, which
+        # is the opposite of "abuse is reconstructable after the fact". Falls
+        # back to the credential's for the refusals that happen before any tool
+        # body runs, where nothing has been resolved yet.
+        "team_id": _team_id(principal),
         "scoped": principal.scopes is not None,
         "detail": detail,
         **fields,

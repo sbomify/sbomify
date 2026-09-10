@@ -20,8 +20,8 @@ satisfied by a PAT today rather than being speculative shapes:
 
 ``Principal`` holds what the server needs about a caller — a workspace, action
 scopes, and an id to throttle and audit under — instead of an ``AccessToken``
-row. Nothing outside this module reads ``principal.token`` any more, so a
-credential without a row can fill the same fields.
+row. It does not keep the row at all, so there is nothing for a credential
+without one to leave empty and nothing to disagree with the fields.
 
 ``request.access_token_record`` is the narrower one, because ``can()`` and the
 rate throttle read it directly. Its contract is only ``.scopes`` (a list of
@@ -49,11 +49,12 @@ from sbomify.apps.access_tokens.throttling import (
 from sbomify.apps.access_tokens.utils import get_user_and_token_record
 from sbomify.apps.core.utils import get_client_ip
 
+from .limits import audit
+
 if TYPE_CHECKING:
     from django.contrib.auth.base_user import AbstractBaseUser
     from starlette.requests import Request
 
-    from sbomify.apps.access_tokens.models import AccessToken
     from sbomify.apps.teams.models import Team
 
 
@@ -75,6 +76,13 @@ class MCPRateLimitedError(MCPAuthError):
     """
 
 
+WORKSPACE_ATTR = "mcp_workspace"
+"""Where ``resolve_workspace`` caches the workspace it resolved for this call.
+
+On the stub request, alongside ``access_token_record`` and ``token_team``,
+because that object is built fresh per call and thrown away after it."""
+
+
 @dataclass(frozen=True)
 class Principal:
     """An authenticated MCP caller, however it authenticated.
@@ -84,11 +92,14 @@ class Principal:
 
     The facts below are what the rest of the server actually needs: a workspace
     to scope to, action scopes to narrow by, and an identity to throttle and
-    audit under. They are held here rather than read off ``token`` because a
-    personal access token is not the only credential this endpoint will ever
-    accept, and the four consumers should not each learn about the next one.
-    ``token`` stays for the PAT path that has one; nothing outside this module
-    reads it.
+    audit under. They are held here rather than reached for through an
+    ``AccessToken`` row because a personal access token is not the only
+    credential this endpoint will ever accept, and the four consumers should
+    not each learn about the next one.
+
+    The row itself is deliberately not kept. It would be a second description
+    of the same credential with nothing holding the two in agreement, and OAuth
+    would have to fill both.
     """
 
     user: AbstractBaseUser
@@ -102,7 +113,32 @@ class Principal:
     #: What kind of credential this is, so an audit line says how someone got
     #: in rather than only that they did.
     credential_kind: str = "pat"
-    token: AccessToken | None = None
+
+    @property
+    def resolved_workspace(self) -> Any:
+        """The workspace a tool resolved for this call, or ``None`` if none has.
+
+        ``resolve_workspace`` stashes its answer on the stub request, which is
+        built fresh per call. Reading it here rather than resolving again keeps
+        the audit line off the database and out of the refusals that
+        ``resolve_workspace`` itself raises.
+        """
+        return getattr(self.request, WORKSPACE_ATTR, None)
+
+
+def current_request(mcp: Any) -> Any:
+    """The Starlette request for the in-flight tool call, or ``None``.
+
+    The streamable-HTTP transport threads the request through
+    ``ServerMessageMetadata`` and the low-level server re-exposes it as
+    ``RequestContext.request``. One accessor, because the two callers that need
+    it fail differently when the SDK moves it: the tool wrapper raises, while
+    ``list_tools`` would quietly advertise everything.
+    """
+    try:
+        return mcp.get_context().request_context.request
+    except (LookupError, AttributeError, ValueError):
+        return None
 
 
 def _bearer_token(request: Request) -> str:
@@ -147,9 +183,12 @@ def _stub_request(starlette_request: Request) -> HttpRequest:
     client = starlette_request.client
     if client is not None:
         stub.META["REMOTE_ADDR"] = client.host
-    for header in ("x-real-ip", "x-forwarded-for"):
-        if (value := starlette_request.headers.get(header)) is not None:
-            stub.META[f"HTTP_{header.upper().replace('-', '_')}"] = value
+    # X-Real-IP only. get_client_ip reads REMOTE_ADDR and HTTP_X_REAL_IP and
+    # nothing else — X-Forwarded-For is deliberately never honoured anywhere in
+    # the tree, so copying it here would only make the stub look like it were
+    # trusted.
+    if (real_ip := starlette_request.headers.get("x-real-ip")) is not None:
+        stub.META["HTTP_X_REAL_IP"] = real_ip
 
     return stub
 
@@ -202,19 +241,26 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     # concurrent calls on a shared instance would write one token's window
     # under another token's key. The budget itself is unaffected — the sliding
     # window lives in the cache, keyed on the token pk.
-    throttle = AccessTokenRateThrottle()
-    if not await sync_to_async(throttle.allow_request)(stub):
-        raise MCPRateLimitedError(f"Rate limit exceeded for this access token.{_retry_hint(stub)}")
-
-    return Principal(
+    principal = Principal(
         user=user,
         request=stub,
         workspace=record.team,
         scopes=record.scopes,
         credential_id=str(record.pk),
         credential_kind="pat",
-        token=record,
     )
+
+    throttle = AccessTokenRateThrottle()
+    if not await sync_to_async(throttle.allow_request)(stub):
+        # Audited here rather than left to the tool wrapper, which only audits
+        # what happens after this function returns. A token being hammered is
+        # exactly what the audit stream exists to surface, and it is the one
+        # refusal that reaches an authenticated, identifiable caller.
+        message = f"Rate limit exceeded for this access token.{_retry_hint(stub)}"
+        audit(attempted_action, principal, outcome="denied", detail=message)
+        raise MCPRateLimitedError(message)
+
+    return principal
 
 
 def _retry_hint(stub: HttpRequest) -> str:

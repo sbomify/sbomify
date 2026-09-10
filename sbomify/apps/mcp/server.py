@@ -26,7 +26,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import Tool as MCPTool
 
 from . import registry
-from .auth import MCPAuthError, MCPRateLimitedError, authenticate
+from .auth import MCPAuthError, MCPRateLimitedError, authenticate, current_request
 from .limits import MAX_UPLOAD_BYTES
 
 if TYPE_CHECKING:
@@ -112,16 +112,8 @@ class ScopedFastMCP(FastMCP):
         return [tool for tool in tools if registry.get(tool.name) is None or tool.name in allowed]
 
     def _current_http_request(self) -> Any:
-        """The Starlette request for the in-flight call, if there is one.
-
-        The streamable-HTTP transport threads the request through
-        ``ServerMessageMetadata`` and the low-level server re-exposes it as
-        ``RequestContext.request``.
-        """
-        try:
-            return self._mcp_server.request_context.request
-        except (LookupError, AttributeError, ValueError):
-            return None
+        """The Starlette request for the in-flight call, if there is one."""
+        return current_request(self)
 
 
 MCP_PATH_PREFIX = "/mcp"
@@ -196,9 +188,13 @@ _app: Starlette | None = None
 def build_app() -> Starlette:
     """Create the MCP ASGI app and register every tool.
 
-    Tool modules are imported here rather than at module scope so importing
-    ``server`` stays free of Django model imports until the app registry is
-    ready.
+    Tool modules are imported here rather than at module scope so that
+    registration is an explicit step with a defined order, and so a tool module
+    can import from ``server`` without a cycle. It is not an import-order
+    guard: this module already needs the app registry (``auth`` reaches the
+    ``AccessToken`` model, ``_transport_security`` reaches ``Team``), so
+    importing it before ``django.setup()`` raises ``AppRegistryNotReady``.
+    ``asgi.py`` imports it after ``get_asgi_application()`` for that reason.
 
     Idempotent: tool registration rejects duplicates, and both ``asgi.py`` and
     the test suite reach this function, so repeat calls return the app built the

@@ -82,7 +82,8 @@ def register_tools(mcp: FastMCP) -> None:
         given. `artifact_format` is "cyclonedx" or "spdx"; the spec version is
         detected from the document.
 
-        `bom_type` says which kind it is. Left out, the document is stored as an
+        `bom_type` says which kind it is, and applies to CycloneDX only: SPDX
+        uploads are always plain SBOMs. Left out, the document is stored as an
         SBOM unless it is recognisably a CBOM, which is detected. Name it for
         anything else, hbom and aibom especially: stored as an SBOM they are
         scanned and scored against NTIA and BSI as though their component list
@@ -111,6 +112,13 @@ def register_tools(mcp: FastMCP) -> None:
             if wanted is not None and wanted not in set(SBOM.BomType.values):
                 raise ToolError(
                     f"Unknown bom_type {bom_type!r}; expected one of {', '.join(sorted(SBOM.BomType.values))}."
+                )
+            if normalised == "spdx" and wanted is not None and wanted != SBOM.BomType.SBOM.value:
+                # The SPDX view rejects every other kind. Saying so here names
+                # the fix — re-export as CycloneDX — where relaying its 400
+                # would read as a transient failure worth retrying.
+                raise ToolError(
+                    f"SPDX uploads are always plain SBOMs; bom_type {bom_type!r} needs a CycloneDX document."
                 )
 
             # Confine the write to the caller's workspace before delegating. The
