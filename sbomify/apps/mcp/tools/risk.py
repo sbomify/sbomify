@@ -379,6 +379,13 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.sboms.models import SBOM
 
             release_obj = _get_release(principal, release_id)
+            # also_requires declares the scope; this is the role half of it.
+            # _get_release checks release:read, which is READ_INTERNAL_OR_BOT and
+            # so admits a bot, while the posture below is what workspace:read
+            # guards everywhere else. Without this a CI token reads the security
+            # posture that get_vulnerability_summary refuses it, which is the
+            # leak the comment on this tool's registration warns about.
+            require(principal, "workspace:read", release_obj.product.team)
             artifacts = list(release_obj.artifacts.select_related("sbom", "document").all())
             # Two scopes, split like the release surfaces split them. Security
             # scanning covers bom_type=sbom only (a tagged VEX or CBOM row can

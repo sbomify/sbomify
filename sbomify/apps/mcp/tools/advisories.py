@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
-from ..auth import Principal
+from ..auth import Principal, require
 from ._base import clamp_page, mcp_tool, not_found, resolve_workspace, run_db, unwrap_view
 
 if TYPE_CHECKING:
@@ -56,6 +56,11 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.security_advisories.services import advisories as service
 
             team = resolve_workspace(principal)
+            # A token scope only narrows; the role still has to permit the read.
+            # advisory:read is READ_INTERNAL, which excludes bot, and an
+            # unscoped token (every OIDC one) passes the registry filter
+            # untouched, so without this there is no authorization left.
+            require(principal, "advisory:read", team)
             wanted = _publication_state(publication_status)
             result = service.list_advisories(team, search or "")
             if not result.ok:
@@ -88,6 +93,7 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.security_advisories.services import advisories as service
 
             team = resolve_workspace(principal)
+            require(principal, "advisory:read", team)
             result = service.get_advisory(team, advisory_id)
             if not result.ok or result.value is None:
                 # The service scopes to the workspace and reports another
@@ -127,9 +133,10 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.security_advisories.schemas import CreateAdvisorySchema
             from sbomify.apps.security_advisories.services import advisories as service
 
-            # Resolve first so a token with no workspace fails the same way here
-            # as on every read, rather than through the view's 403.
-            resolve_workspace(principal)
+            # Resolved once and reused: the view checks advisory:manage itself,
+            # so this is here to fail a workspace-less token the way every read
+            # does rather than through the view's 403.
+            team = resolve_workspace(principal)
             payload = CreateAdvisorySchema(
                 title=title,
                 severity=severity,
@@ -147,7 +154,6 @@ def register_tools(mcp: FastMCP) -> None:
             # publication state; the projection uses that name for remediation.
             # Serializing the view's output directly would swap the two axes
             # with nothing to notice it.
-            team = resolve_workspace(principal)
             result = service.get_advisory(team, str(created.get("id", "")))
             if not result.ok or result.value is None:
                 raise ToolError("Advisory was created but could not be read back.")

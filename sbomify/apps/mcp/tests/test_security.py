@@ -400,6 +400,65 @@ async def test_a_tool_works_with_a_token_scoped_to_exactly_its_declared_action(
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    "tool",
+    ["list_advisories", "get_release_risk_report", "get_vulnerability_summary", "get_workspace_summary"],
+)
+async def test_a_bot_token_is_refused_the_internal_reads(mcp_owner, make_token, product_in_bound_workspace, tool):
+    """An OIDC bot's token is unscoped, so the role check is the only one left.
+
+    oidc/services.py mints these with no scopes, and AccessToken.scopes defaults
+    to NULL, which scope_permits reads as full capability. The registry filter
+    therefore advertises everything and the per-tool require() is all that
+    stands between a CI credential and the workspace's internal reads. bot sits
+    in READ_INTERNAL_OR_BOT and not in READ_INTERNAL, so every tool declaring a
+    READ_INTERNAL action has to refuse it, and two of them did not.
+    """
+    from sbomify.apps.core.models import Release
+    from sbomify.apps.teams.models import Member
+
+    user, bound, _ = mcp_owner
+    token = await sync_to_async(make_token)(None)
+    release = await sync_to_async(Release.objects.create)(product=product_in_bound_workspace, name="v1", version="1")
+
+    def as_bot() -> None:
+        Member.objects.filter(user=user, team=bound).update(role="bot")
+
+    await sync_to_async(as_bot)()
+
+    arguments = {"release_id": release.id} if tool == "get_release_risk_report" else {}
+    async with mcp_http() as client:
+        response = await call(client, "tools/call", token=token.encoded_token, name=tool, arguments=arguments)
+
+    assert "Not permitted" in json.dumps(parse(response)), tool
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_token_whose_user_left_the_workspace_is_refused(mcp_owner, make_token):
+    """Removal is not revocation: nothing deletes the PAT when the row goes.
+
+    The choke point used to ask only whether the role was guest, which is False
+    for someone with no membership at all.
+    """
+    from sbomify.apps.teams.models import Member
+
+    user, bound, _ = mcp_owner
+    token = await sync_to_async(make_token)(None)
+
+    def remove() -> None:
+        Member.objects.filter(user=user, team=bound).delete()
+
+    await sync_to_async(remove)()
+
+    async with mcp_http() as client:
+        response = await call(client, "tools/call", token=token.encoded_token, name="list_products", arguments={})
+
+    assert "not a member" in json.dumps(parse(response))
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_a_guest_members_token_is_refused(mcp_owner, make_token, product_in_bound_workspace):
     """REST 403s guest members on every internal read; MCP must not be the laxer door.
 

@@ -224,7 +224,16 @@ def resolve_workspace(principal: Principal) -> Team:
             raise ToolError("This token is not associated with any workspace.")
         team = membership.team
 
-    if Member.objects.filter(user=user, team=team, role="guest").exists():
+    # Membership, not just "is not a guest". The old check read False both for
+    # a member in good standing and for someone with no Member row at all, so a
+    # token belonging to a user since removed from the workspace passed the
+    # choke point this docstring calls belt-and-braces. Every tool's own can()
+    # would still refuse it, but a tool that forgets one should not be the only
+    # thing standing here.
+    membership = Member.objects.filter(user=user, team=team).only("role").first()
+    if membership is None:
+        raise ToolError("This token's user is not a member of its workspace.")
+    if membership.role == "guest":
         raise ToolError("Guest members can only access public pages; this token's workspace role is guest.")
     return team
 
