@@ -169,14 +169,16 @@ def register_tools(mcp: FastMCP) -> None:
     async def list_artifacts(
         principal: Principal,
         component_id: str,
+        bom_type: str | None = None,
         page: int = 1,
         page_size: int = 25,
     ) -> dict[str, Any]:
         """List the BOM artifacts uploaded for a component, newest first.
 
         Covers every BOM kind the component carries, not SBOMs alone: each row
-        reports its own `bom_type` (sbom, cbom, aibom, hbom, vex, saasbom, obom,
-        mbom). Documents are a separate kind, listed by `list_documents`.
+        reports its own `bom_type`. Pass `bom_type` to narrow to one kind, one
+        of sbom, cbom, aibom, hbom, vex, saasbom, obom, mbom. Documents are the
+        other half of the artifact surface, listed by `list_documents`.
         """
 
         def query() -> dict[str, Any]:
@@ -189,6 +191,16 @@ def register_tools(mcp: FastMCP) -> None:
             require(principal, "sbom:read", component)
             safe_page, safe_size = clamp_page(page, page_size)
             queryset = SBOM.objects.filter(component=component).order_by("-created_at")
+            if bom_type is not None:
+                # Named rather than silently ignored: an agent that asks for a
+                # kind and gets every kind back would report the wrong answer
+                # confidently. Listing the valid ones saves it a second guess.
+                wanted = bom_type.strip().lower()
+                if wanted not in set(SBOM.BomType.values):
+                    raise ToolError(
+                        f"Unknown bom_type {bom_type!r}; expected one of {', '.join(sorted(SBOM.BomType.values))}."
+                    )
+                queryset = queryset.filter(bom_type=wanted)
             rows, total = serializers.page_queryset(queryset, safe_page, safe_size)
             return serializers.paginated(
                 [serializers.sbom(row) for row in rows],
@@ -310,6 +322,27 @@ def register_tools(mcp: FastMCP) -> None:
                 page_size=safe_size,
                 total=total,
             )
+
+        return await run_db(query)
+
+    @mcp_tool(mcp, "get_document", "document:read")
+    async def get_document(principal: Principal, document_id: str) -> dict[str, Any]:
+        """Metadata for one document: type, version, filename, size, hash.
+
+        The document half of `get_artifact`. Does not return the file itself.
+        """
+
+        def query() -> dict[str, Any]:
+            from sbomify.apps.documents.models import Document
+
+            team = resolve_workspace(principal)
+            obj = Document.objects.filter(pk=document_id, component__team=team).select_related("component").first()
+            if obj is None:
+                raise not_found("Document", document_id)
+            require(principal, "document:read", obj.component)
+            data = serializers.document(obj, detail=True)
+            data["component"] = {"id": obj.component.id, "name": obj.component.name}
+            return serializers.compact(data)
 
         return await run_db(query)
 
