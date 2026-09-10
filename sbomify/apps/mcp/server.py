@@ -213,9 +213,9 @@ def build_app() -> Starlette:
     if _app is not None:
         return _app
 
-    from .tools import artifacts, catalog, profiles, publish, risk
+    from .tools import advisories, artifacts, catalog, profiles, publish, risk
 
-    for module in (catalog, artifacts, risk, publish, profiles):
+    for module in (catalog, artifacts, risk, publish, profiles, advisories):
         module.register_tools(mcp)
 
     registry.validate()

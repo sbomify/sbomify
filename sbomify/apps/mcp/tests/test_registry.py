@@ -25,6 +25,7 @@ WRITE_TOOLS = {
     "create_contact_profile",
     "update_contact_profile",
     "assign_contact_profile",
+    "create_advisory",
 }
 
 
@@ -40,7 +41,7 @@ def test_all_tools_are_registered():
     """Pins the surface: adding or removing a tool is a deliberate change."""
     specs = registry.all_specs()
 
-    assert len(specs) == 25
+    assert len(specs) == 28
     assert WRITE_TOOLS <= set(specs)
     assert {spec.name for spec in specs.values() if spec.writes} == WRITE_TOOLS
 
@@ -85,6 +86,17 @@ def test_resource_wildcard_scope():
     allowed = registry.permitted_by(["sbom:*"])
 
     assert {"get_artifact", "list_artifacts", "get_artifact_packages", "get_assessments"} == allowed
+
+
+def test_advisory_scope_reaches_the_reads_but_not_a_publish_tool():
+    """Publishing an advisory is a public statement, so no tool offers it.
+
+    A token carrying advisory:publish must therefore be advertised nothing
+    extra, which is the check that would fail if one were added without the
+    decision in advisories.py being revisited.
+    """
+    assert registry.permitted_by(["advisory:read"]) == {"list_advisories", "get_advisory"}
+    assert registry.permitted_by(["advisory:publish"]) == set()
 
 
 def test_document_scope_reaches_both_document_tools():

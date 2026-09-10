@@ -379,6 +379,8 @@ async def test_a_tool_works_with_a_token_scoped_to_exactly_its_declared_action(
         ("list_artifacts", "sbom:read", {"component_id": component_in_bound_workspace.id}),
         ("list_documents", "document:read", {"component_id": component_in_bound_workspace.id}),
         ("get_document", "document:read", {"document_id": "nope"}),
+        ("list_advisories", "advisory:read", {}),
+        ("get_advisory", "advisory:read", {"advisory_id": "nope"}),
         ("tag_artifact_to_release", "release:tag", {"release_id": release.id, "sbom_id": "nope"}),
         (
             "assign_contact_profile",

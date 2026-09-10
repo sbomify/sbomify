@@ -164,6 +164,82 @@ def document(obj: Document, *, detail: bool = False) -> dict[str, Any]:
     return compact(data)
 
 
+def advisory(projection: dict[str, Any], *, detail: bool = False) -> dict[str, Any]:
+    """One advisory, from the service projection the web pages already use.
+
+    The projection is shaped for a template: it carries icons, badge variants,
+    pre-formatted dates and sort ranks an agent has no use for. Only the facts
+    are kept.
+
+    Two of its keys need renaming on the way out. The projection calls the
+    remediation state ``status`` and the publication state
+    ``publication_status``, which reads backwards to anyone who has not seen
+    the comment explaining it: an agent told ``status: affected`` would
+    reasonably report the advisory as unpublished. Both axes are named in full
+    here.
+
+    The REST layer's own shape inverts those two names (``_api_shape`` puts
+    publication under ``status``, following the model), so handing this one of
+    those would swap the axes without any error. Only the projection is
+    accepted, and anything else is refused rather than quietly mis-labelled.
+    """
+    if "publication_status" not in projection:
+        raise ValueError(
+            "advisory() takes the service projection, not the REST shape: the two disagree about what 'status' means."
+        )
+    data: dict[str, Any] = {
+        "id": projection.get("id"),
+        "title": untrusted(str(projection.get("title") or ""), limit=256),
+        "summary": untrusted(str(projection.get("summary") or ""), limit=2000),
+        "advisory_type": projection.get("type") or projection.get("advisory_type"),
+        "severity": projection.get("severity"),
+        "cvss_score": projection.get("cvss_score"),
+        "cvss_vector": projection.get("cvss_vector"),
+        "remediation_status": projection.get("status"),
+        "publication_status": projection.get("publication_status"),
+        "is_open": projection.get("is_open"),
+        "visibility": projection.get("visibility"),
+        "vulnerability_count": projection.get("vulnerability_count"),
+        "vulnerability_id": projection.get("vulnerability_id"),
+        "products": [
+            compact({"id": item.get("id"), "name": untrusted(str(item.get("name") or ""), limit=256)})
+            for item in projection.get("products") or []
+        ],
+        "created_at": _stamp(projection.get("created_at")),
+        "updated_at": _stamp(projection.get("updated_at")),
+        "published_at": _stamp(projection.get("published_at")),
+        "withdrawn_at": _stamp(projection.get("withdrawn_at")),
+        "withdrawal_reason": untrusted(str(projection.get("withdrawal_reason") or ""), limit=1000),
+    }
+    if detail:
+        data |= {
+            "description": untrusted(str(projection.get("description") or ""), limit=8000),
+            # Vulnerability rows are seeded from scanner and feed output, so
+            # their text is as supplier-controlled as a package name.
+            "vulnerabilities": [
+                compact(
+                    {
+                        "cve_id": item.get("cve_id"),
+                        "severity": item.get("severity"),
+                        "cvss_score": item.get("cvss_score"),
+                        "description": untrusted(str(item.get("description") or ""), limit=2000),
+                    }
+                )
+                for item in projection.get("vulnerabilities") or []
+            ],
+            "references": [
+                compact(
+                    {
+                        "url": untrusted(str(item.get("url") or ""), limit=1024),
+                        "title": untrusted(str(item.get("title") or ""), limit=256),
+                    }
+                )
+                for item in projection.get("references") or []
+            ],
+        }
+    return compact(data)
+
+
 def release_artifact(obj: ReleaseArtifact) -> dict[str, Any]:
     # No "artifact_id": obj.id is the release-artifact junction row's own pk,
     # which no tool accepts as input — emitting it under that name invites an
