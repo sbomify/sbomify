@@ -163,7 +163,7 @@ async def test_upload_sbom_stores_the_artifact(make_token, component_in_bound_wo
     from sbomify.apps.core import object_store
     from sbomify.apps.sboms.models import SBOM
 
-    monkeypatch.setattr(object_store.S3Client, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
+    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
 
     token = await sync_to_async(make_token)(["artifact:publish"])
 
@@ -194,7 +194,7 @@ async def test_upload_sbom_rejects_a_component_in_another_workspace(
     from sbomify.apps.core import object_store
     from sbomify.apps.sboms.models import SBOM
 
-    monkeypatch.setattr(object_store.S3Client, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
+    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
 
     token = await sync_to_async(make_token)(["artifact:publish"])
 
@@ -292,7 +292,7 @@ async def test_upload_sbom_spdx_goes_through_the_real_view(make_token, component
     from sbomify.apps.core import object_store
     from sbomify.apps.sboms.models import SBOM
 
-    monkeypatch.setattr(object_store.S3Client, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
+    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
 
     token = await sync_to_async(make_token)(["artifact:publish"])
 
@@ -320,7 +320,7 @@ async def test_upload_vex_stores_a_vex_artifact(make_token, component_in_bound_w
     from sbomify.apps.core import object_store
     from sbomify.apps.sboms.models import SBOM
 
-    monkeypatch.setattr(object_store.S3Client, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
+    monkeypatch.setattr(object_store.StorageClient, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
 
     token = await sync_to_async(make_token)(["artifact:publish", "artifact:publish_vex"])
 

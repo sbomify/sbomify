@@ -195,12 +195,11 @@ def resolve_workspace(principal: Principal) -> Team:
     scoping (``team IS NULL``) fall back to the user's default workspace, which
     keeps them working while the operator rotates them.
 
-    Guest members are refused here, whatever the tool: the REST API 403s
-    guests on every internal read before ``can()`` runs (``_is_guest_member``),
-    because the READ_MEMBER role tier includes guest. Every MCP tool is an
-    internal surface, and this is the one choke point they all pass through —
-    without it, a member demoted to guest whose token was never revoked would
-    keep full read of the private workspace over MCP alone.
+    Guest members are refused here, whatever the tool. ``guest`` holds no
+    capability tier, so ``can()`` already refuses it; this is the choke point
+    every tool passes through, and it fails closed if a future tier or an
+    attribute-based path ever hands a guest an internal read. The REST API
+    keeps the same belt-and-braces in ``_is_guest_member``.
     """
     from sbomify.apps.core.models import User
     from sbomify.apps.teams.models import Member
