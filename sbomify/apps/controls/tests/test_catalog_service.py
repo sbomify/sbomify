@@ -227,3 +227,61 @@ class TestImportOscalCatalog:
         result = import_oscal_catalog(team, SAMPLE_OSCAL_CATALOG)
         assert not result.ok
         assert result.status_code == 409
+
+
+@pytest.mark.django_db
+class TestBuiltinCatalogData:
+    """The data directory is glob-registered, so a bad file ships silently.
+
+    ``_BUILTIN_CATALOGS`` picks up whatever ``*.json`` is present, and nothing
+    reads those files until a customer activates one. A malformed or empty
+    catalogue would therefore first surface as a failed activation in
+    production rather than at CI.
+    """
+
+    def test_every_builtin_catalogue_is_well_formed(self) -> None:
+        import json
+
+        from sbomify.apps.controls.services.catalog_service import _BUILTIN_CATALOGS, _DATA_DIR
+
+        assert _BUILTIN_CATALOGS, "no built-in catalogues were discovered"
+
+        for slug, filename in _BUILTIN_CATALOGS.items():
+            data = json.loads((_DATA_DIR / filename).read_text(encoding="utf-8"))
+            assert data.get("name"), f"{slug}: missing name"
+            assert data.get("version"), f"{slug}: missing version"
+            assert data.get("groups"), f"{slug}: no groups"
+
+            seen: set[str] = set()
+            for group in data["groups"]:
+                assert group.get("name"), f"{slug}: a group has no name"
+                assert group.get("controls"), f"{slug}: group {group.get('name')!r} has no controls"
+                for control in group["controls"]:
+                    control_id = control.get("control_id")
+                    assert control_id, f"{slug}: a control in {group['name']!r} has no id"
+                    assert control_id not in seen, f"{slug}: duplicate control {control_id}"
+                    seen.add(control_id)
+                    assert control.get("title"), f"{slug}: control {control_id} has no title"
+
+    def test_800_171_carries_all_110_requirements(self, sample_team_with_owner_member) -> None:
+        """Rev. 2 is 110 requirements over 14 families, and CMMC L2 is the same set.
+
+        The two catalogues are the same requirements under different
+        identifiers — ``3.1.1`` here, ``AC.L2-3.1.1`` there — so if they ever
+        stop agreeing, one of them has been edited in isolation.
+        """
+        team = sample_team_with_owner_member.team
+
+        result = activate_builtin_catalog(team, "nist-800-171-r2")
+        assert result.ok
+        catalog = result.value
+        assert catalog is not None
+        assert catalog.name == "NIST SP 800-171"
+        assert catalog.version == "Rev. 2"
+        assert catalog.controls.count() == 110
+        assert catalog.controls.values("group").distinct().count() == 14
+
+        cmmc = activate_builtin_catalog(team, "cmmc-2")
+        assert cmmc.ok and cmmc.value is not None
+        derived = {cid.split("-", 1)[1] for cid in cmmc.value.controls.values_list("control_id", flat=True)}
+        assert derived == set(catalog.controls.values_list("control_id", flat=True))
