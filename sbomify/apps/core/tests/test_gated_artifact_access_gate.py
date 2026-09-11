@@ -238,6 +238,26 @@ class TestOnACustomDomain:
         assert f"/component/{document.component.slug}/" in content
         assert "/public/component/" not in content
 
+    def test_a_slug_collision_cannot_open_a_gated_artifact(self, team):
+        """Component names are unique; the slugs derived from them are not.
+
+        "Policy Docs" and "Policy-Docs" are two components sharing one custom
+        domain URL, and since gated components now answer that URL too, a
+        collision can cross visibilities. It buys nothing: access is checked
+        against the artifact's own component, not against whichever component
+        the slug landed on, so the gated document stays withheld either way.
+        """
+        public_doc = _document(team, Component.Visibility.PUBLIC, component_name="Policy Docs")
+        gated_doc = _document(team, Component.Visibility.GATED, component_name="Policy-Docs")
+        assert public_doc.component.slug == gated_doc.component.slug
+
+        response = Client(HTTP_HOST="trust.example.com").get(
+            f"/components/{public_doc.component.slug}/documents/{gated_doc.id}/"
+        )
+
+        assert response.status_code == 403
+        assert gated_doc.name not in response.content.decode()
+
     def test_the_app_domain_redirects_before_gating(self, team):
         """A gated artifact takes the same route to the custom domain a public one does."""
         document = _document(team, Component.Visibility.GATED)
