@@ -232,6 +232,7 @@ def trust_center_product(product_factory, component_factory, sbom_factory, docum
         ("ISO 27001", Document.ComplianceSubcategory.ISO27001, "iso27001-certificate.pdf"),
         ("SOC 2 Type II", Document.ComplianceSubcategory.SOC2_TYPE2, "soc2-type2-report.pdf"),
         ("SOC 2 Type I", Document.ComplianceSubcategory.SOC2_TYPE1, "soc2-type1-report.pdf"),
+        ("CRA conformity", Document.ComplianceSubcategory.CRA, "cra-declaration-of-conformity.pdf"),
     ]:
         certification = component_factory(
             label,

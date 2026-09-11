@@ -59,6 +59,12 @@ class Document(models.Model):
         to know which one they are being shown. The undifferentiated ``soc2``
         stays for rows written before the split and for workspaces that do not
         want to say.
+
+        ``cra`` is the conformity a manufacturer declares under Regulation (EU)
+        2024/2847, which is a different kind of claim from an audit but reaches a
+        trust-center reader the same way: as a document the workspace published.
+        The wizard in the ``compliance`` app is where an assessment is worked
+        out; this is where its published outcome is filed.
         """
 
         NDA = "nda", "NDA"
@@ -66,6 +72,7 @@ class Document(models.Model):
         SOC2_TYPE1 = "soc2-type1", "SOC 2 Type I"
         SOC2_TYPE2 = "soc2-type2", "SOC 2 Type II"
         ISO27001 = "iso27001", "ISO 27001"
+        CRA = "cra", "CRA"
 
     class Meta:
         db_table = "documents_documents"

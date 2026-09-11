@@ -64,7 +64,7 @@ def test_a_published_company_wide_report_earns_its_badge(public_team: Team) -> N
 
     assert [badge["label"] for badge in badges] == ["ISO 27001"]
     assert badges[0]["component_id"] == component.id
-    assert badges[0]["image"].endswith("iso27001.svg")
+    assert badges[0]["image"].endswith("iso-27001.svg")
     assert badges[0]["note"] == ""
 
 
@@ -144,6 +144,38 @@ def test_soc2_type_i_and_type_ii_are_separate_badges(public_team: Team) -> None:
 
     # Catalogue order: the strongest assurance reads first.
     assert [badge["label"] for badge in badges] == ["SOC 2 Type II", "SOC 2 Type I"]
+
+
+@pytest.mark.django_db
+def test_cra_conformity_earns_its_badge(public_team: Team) -> None:
+    """A declared conformity is a different claim from an audit, published the same way."""
+    _document(
+        _component(public_team, name="CRA conformity"),
+        subcategory=Document.ComplianceSubcategory.CRA,
+        filename="cra-declaration-of-conformity.pdf",
+    )
+
+    badges = public_certification_badges(public_team)
+
+    assert [badge["label"] for badge in badges] == ["CRA"]
+    assert badges[0]["image"].endswith("cra.svg")
+
+
+@pytest.mark.django_db
+def test_a_certification_with_no_seal_still_badges(public_team: Team) -> None:
+    """Undifferentiated SOC 2 has no artwork; the tile draws the label instead."""
+    _document(
+        _component(public_team, name="SOC 2"),
+        subcategory=Document.ComplianceSubcategory.SOC2,
+        filename="soc2-report.pdf",
+    )
+
+    badges = public_certification_badges(public_team)
+
+    assert [badge["label"] for badge in badges] == ["SOC 2"]
+    # Empty, not the static root: "{% static %}" of an empty path renders a
+    # broken image because the root is a truthy string.
+    assert badges[0]["image"] == ""
 
 
 @pytest.mark.django_db

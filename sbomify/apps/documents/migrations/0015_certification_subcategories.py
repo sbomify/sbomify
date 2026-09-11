@@ -20,6 +20,7 @@ class Migration(migrations.Migration):
                     ("soc2-type1", "SOC 2 Type I"),
                     ("soc2-type2", "SOC 2 Type II"),
                     ("iso27001", "ISO 27001"),
+                    ("cra", "CRA"),
                 ],
                 help_text="Compliance subcategory for auto-detection and badging",
                 max_length=50,
