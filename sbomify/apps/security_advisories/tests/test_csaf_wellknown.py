@@ -14,16 +14,16 @@ from datetime import timedelta
 from urllib.parse import urlparse
 
 import pytest
+from django.db import transaction
 from django.test import RequestFactory
 from jsonschema.validators import validator_for
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT7
 
-from sbomify.apps.security_advisories import csaf_provider
 from sbomify.apps.core.models import Component
+from sbomify.apps.security_advisories import csaf_provider
 from sbomify.apps.security_advisories.models import AdvisoryEvent, SecurityAdvisory
 from sbomify.apps.security_advisories.services.advisories import cvss_entry, display_id
-from sbomify.apps.teams.models import Team
 from sbomify.apps.security_advisories.tests.test_csaf import (  # noqa: F401  (fixtures)
     SCHEMAS,
     VECTOR,
@@ -37,6 +37,7 @@ from sbomify.apps.security_advisories.wellknown import (
     WhiteDocumentView,
     WhiteFeedView,
 )
+from sbomify.apps.teams.models import Team
 
 pytestmark = pytest.mark.django_db
 
@@ -201,9 +202,7 @@ class TestWhiteDocument:
         assert WhiteDocumentView.as_view()(_request(path, team), year=year, filename=filename).status_code == 404
 
     def test_unknown_filename_is_404(self, team, rich_advisory) -> None:  # noqa: F811
-        response = WhiteDocumentView.as_view()(
-            _request("/", _public(team)), year="2026", filename="nothing-here.json"
-        )
+        response = WhiteDocumentView.as_view()(_request("/", _public(team)), year="2026", filename="nothing-here.json")
         assert response.status_code == 404
 
 
@@ -353,3 +352,219 @@ class TestDistributionMarker:
         component.save(update_fields=["visibility"])
 
         assert self._marker(team) > before
+
+    @pytest.mark.parametrize("visibility", ["gated", "private"])
+    def test_later_embargoed_writes_do_not_move_it(self, team, rich_advisory, gateway, visibility) -> None:  # noqa: F811 (shared pytest fixtures)
+        team = _public(team)
+        # Deliberately retain the child instance's cached, formerly public parent.
+        vulnerability = rich_advisory.vulnerabilities.first()
+        _ = vulnerability.advisory
+        _gate(team, rich_advisory, visibility)
+        before = self._marker(team)
+        rich_advisory.summary = "Private investigation"
+        rich_advisory.save(update_fields=["summary"])
+        vulnerability.cvss_scores = [cvss_entry(7.5, VECTOR)]
+        vulnerability.save(update_fields=["cvss_scores"])
+        gateway.name = "Private rename"
+        gateway.save(update_fields=["name"])
+        assert self._marker(team) == before
+        rich_advisory.delete()
+        assert self._marker(team) == before
+
+    @pytest.mark.parametrize("reverse", [False, True])
+    @pytest.mark.parametrize("operation", ["add", "remove", "clear"])
+    def test_m2m_changes_move_it(self, team, rich_advisory, gateway, reverse, operation) -> None:  # noqa: F811 (shared pytest fixtures)
+        team = _public(team)
+        component = gateway.components.first()
+        if operation == "add":
+            gateway.components.remove(component)
+        before = self._marker(team)
+        manager = gateway.components if reverse else component.products
+        target = component if reverse else gateway
+        if operation == "clear":
+            manager.clear()
+        else:
+            getattr(manager, operation)(target)
+        assert self._marker(team) > before
+
+    @pytest.mark.parametrize("entity", ["product", "component"])
+    def test_deletion_captures_links_before_they_disappear(self, team, rich_advisory, gateway, entity) -> None:  # noqa: F811 (shared pytest fixtures)
+        team = _public(team)
+        before = self._marker(team)
+        row = gateway if entity == "product" else gateway.components.first()
+        row.delete()
+        assert self._marker(team) > before
+
+    @pytest.mark.parametrize("entity", ["advisory", "product", "component"])
+    def test_rolled_back_deletion_does_not_move_it(self, team, rich_advisory, gateway, entity) -> None:  # noqa: F811 (shared pytest fixtures)
+        team = _public(team)
+        before = self._marker(team)
+        row = {"advisory": rich_advisory, "product": gateway, "component": gateway.components.first()}[entity]
+        with transaction.atomic():
+            row.delete()
+            transaction.set_rollback(True)
+        assert self._marker(team) == before
+
+    @pytest.mark.parametrize("change", ["cvss", "product", "publisher"])
+    def test_entry_updated_tracks_related_writes(self, team, rich_advisory, gateway, change) -> None:  # noqa: F811 (shared pytest fixtures)
+        team = _public(team)
+        team.refresh_from_db()
+        before = csaf_provider.rolie_feed(team, base_url=BASE)["feed"]["entry"][0]["updated"]
+        if change == "cvss":
+            vulnerability = rich_advisory.vulnerabilities.first()
+            vulnerability.cvss_scores = [cvss_entry(7.5, VECTOR)]
+            vulnerability.save(update_fields=["cvss_scores"])
+        elif change == "product":
+            gateway.name = "New name"
+            gateway.save(update_fields=["name"])
+        else:
+            team.name = "New publisher"
+            team.save(update_fields=["name"])
+        team.refresh_from_db()
+        feed = csaf_provider.rolie_feed(team, base_url=BASE)["feed"]
+        assert feed["entry"][0]["updated"] > before
+        assert feed["updated"] == feed["entry"][0]["updated"]
+
+    def test_renaming_an_empty_provider_moves_metadata(self, team) -> None:
+        team = _public(team)
+        before = self._marker(team)
+        team.name = "Renamed publisher"
+        team.save(update_fields=["name"])
+        assert self._marker(team) > before
+        payload = csaf_provider.provider_metadata(team, base_url=BASE)
+        assert payload["publisher"]["name"] == "Renamed publisher"
+        assert payload["last_updated"] > before
+
+    def test_unrelated_team_save_does_not_move_it(self, team, rich_advisory) -> None:  # noqa: F811 (shared pytest fixtures)
+        team = _public(team)
+        before = self._marker(team)
+        team.save(update_fields=["security_txt_config"])
+        assert self._marker(team) == before
+
+    def test_bulk_downgrade_visibility_updates_feed_and_entry(self, team, rich_advisory, gateway) -> None:  # noqa: F811 (shared pytest fixtures)
+        from sbomify.apps.billing.billing_helpers import handle_community_downgrade_visibility
+
+        team = _public(team)
+        component = gateway.components.first()
+        component.visibility = Component.Visibility.PRIVATE
+        component.save(update_fields=["visibility"])
+        before = self._marker(team)
+        handle_community_downgrade_visibility(team)
+        assert self._marker(team) > before
+        feed = csaf_provider.rolie_feed(team, base_url=BASE)["feed"]
+        assert feed["entry"][0]["updated"] == feed["updated"]
+
+    def test_bulk_downgrade_does_not_expose_embargoed_activity(self, team, rich_advisory, gateway) -> None:  # noqa: F811 (shared pytest fixtures)
+        from sbomify.apps.billing.billing_helpers import handle_community_downgrade_visibility
+
+        team = _public(team)
+        _gate(team, rich_advisory, SecurityAdvisory.Visibility.GATED)
+        component = gateway.components.first()
+        component.visibility = Component.Visibility.PRIVATE
+        component.save(update_fields=["visibility"])
+        before = self._marker(team)
+        handle_community_downgrade_visibility(team)
+        assert self._marker(team) == before
+
+    def test_direct_through_model_writes_move_it(self, team, rich_advisory, gateway) -> None:  # noqa: F811
+        from sbomify.apps.sboms.models import ProductComponent
+
+        team = _public(team)
+        component = gateway.components.first()
+        link = ProductComponent.objects.get(product=gateway, component=component)
+        before = self._marker(team)
+        link.delete()
+        assert self._marker(team) > before
+        before = self._marker(team)
+        ProductComponent.objects.create(product=gateway, component=component)
+        assert self._marker(team) > before
+
+    @pytest.mark.parametrize("hidden", ["product", "component"])
+    def test_hidden_product_edits_do_not_move_it(self, team, rich_advisory, gateway, hidden) -> None:  # noqa: F811
+        team = _public(team)
+        if hidden == "product":
+            gateway.is_public = False
+            gateway.save(update_fields=["is_public"])
+        else:
+            component = gateway.components.first()
+            component.visibility = Component.Visibility.PRIVATE
+            component.save(update_fields=["visibility"])
+        before = self._marker(team)
+        gateway.name = "Secret project name"
+        gateway.save(update_fields=["name"])
+        assert self._marker(team) == before
+
+    def test_unrendered_component_edits_do_not_move_it(self, team, rich_advisory, gateway) -> None:  # noqa: F811
+        team = _public(team)
+        before = self._marker(team)
+        component = gateway.components.first()
+        component.name = "Internal component name"
+        component.save(update_fields=["name"])
+        assert self._marker(team) == before
+
+    def test_adding_private_component_does_not_move_it(self, team, rich_advisory, gateway) -> None:  # noqa: F811
+        team = _public(team)
+        before = self._marker(team)
+        component = Component.objects.create(
+            name="Hidden component", team=team, visibility=Component.Visibility.PRIVATE
+        )
+        gateway.components.add(component)
+        assert self._marker(team) == before
+        gateway.components.remove(component)
+        assert self._marker(team) == before
+
+
+class TestDocumentLookup:
+    def test_fetch_does_not_load_other_advisories(self, team, rich_advisory) -> None:  # noqa: F811
+        from django.db.models.signals import post_init
+        from django.utils import timezone
+
+        now = timezone.now()
+        SecurityAdvisory.objects.bulk_create(
+            [
+                SecurityAdvisory(
+                    team=team,
+                    title=f"Other advisory {i}",
+                    tracking_id=f"OTHER-SA-2026-{i:04d}",
+                    status=SecurityAdvisory.Status.PUBLISHED,
+                    visibility=SecurityAdvisory.Visibility.PUBLIC,
+                    published_at=now,
+                    made_public_at=now,
+                )
+                for i in range(20)
+            ]
+        )
+        loaded = []
+
+        def record(sender, instance, **kwargs):
+            loaded.append(instance.pk)
+
+        post_init.connect(record, sender=SecurityAdvisory)
+        try:
+            path = csaf_provider.document_path(rich_advisory)
+            year, filename = path.rsplit("/", 2)[-2:]
+            document = csaf_provider.white_document(team, year, filename, base_url=BASE, generator="test")
+        finally:
+            post_init.disconnect(record, sender=SecurityAdvisory)
+        assert document is not None
+        assert loaded == [rich_advisory.pk]
+
+    @pytest.mark.parametrize("tracking_id", ["Mixed.Case/ID", "A+B-2026:1", "ACME-SA-2026-0001"])
+    def test_indexed_lookup_uses_csaf_normalization(self, team, tracking_id) -> None:
+        from django.utils import timezone
+
+        now = timezone.now()
+        advisory = SecurityAdvisory.objects.create(
+            team=team,
+            title="Imported public advisory",
+            tracking_id=tracking_id,
+            status=SecurityAdvisory.Status.PUBLISHED,
+            visibility=SecurityAdvisory.Visibility.PUBLIC,
+            published_at=now,
+            made_public_at=now,
+        )
+        filename = csaf_provider.csaf_filename(advisory)
+        document = csaf_provider.white_document(team, str(now.year), filename, base_url=BASE, generator="test")
+        assert document is not None
+        assert document["document"]["tracking"]["id"] == tracking_id
+        assert csaf_provider.white_document(team, "1999", filename, base_url=BASE, generator="test") is None

@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Any
 from django.utils import timezone
 
 from sbomify.apps.security_advisories.csaf import CSAF_VERSION, render_csaf
+from sbomify.apps.security_advisories.expressions import csaf_filename_expression
+from sbomify.apps.security_advisories.models import SecurityAdvisory
 from sbomify.apps.security_advisories.services.advisories import display_id
 from sbomify.apps.security_advisories.services.trust_center import (
     anonymous_projection,
@@ -132,7 +134,11 @@ def rolie_feed(team: Team, *, base_url: str) -> dict[str, Any]:
     entries = []
     for advisory in public_advisory_index(team):
         url = f"{base_url}{document_path(advisory)}"
-        updated = advisory.updated_at or advisory.published_at
+        # Related writes can change the document without saving the advisory.
+        # Conservatively revalidate every entry when the distribution changes.
+        updated = max(
+            moment for moment in (advisory.updated_at, advisory.published_at, team.csaf_feed_updated_at) if moment
+        )
         entries.append(
             {
                 # RFC 4287 requires an Atom id to be an absolute IRI, so the
@@ -161,26 +167,19 @@ def rolie_feed(team: Team, *, base_url: str) -> dict[str, Any]:
 
 
 def white_document(team: Team, year: str, filename: str, *, base_url: str, generator: str) -> dict[str, Any] | None:
-    """One TLP:WHITE CSAF document by its conformant filename, or None.
-
-    Matching walks the same queryset the feed is built from and compares the
-    filename each advisory would be given, rather than parsing an id back out of
-    the URL. A name that no listed advisory owns is simply not found, which is
-    also the answer for a gated or private one.
-    """
-    for row in public_advisory_index(team):
-        if _year(row) != year or csaf_filename(row) != filename:
-            continue
-        # Only now is the graph worth loading, and only for this one advisory.
-        advisory = public_advisories(team).filter(pk=row.pk).first()
-        if advisory is None:  # pragma: no cover - removed between the two queries
-            return None
-        projection = anonymous_projection(team, advisory)
-        return render_csaf(
-            projection,
-            publisher_name=team.display_name,
-            publisher_namespace=base_url,
-            self_url=f"{base_url}{document_path(advisory)}",
-            generator=generator,
-        )
-    return None
+    """Resolve one public document using the indexed CSAF filename expression."""
+    try:
+        advisory = public_advisories(team).alias(_csaf_filename=csaf_filename_expression()).get(_csaf_filename=filename)
+    except (SecurityAdvisory.DoesNotExist, SecurityAdvisory.MultipleObjectsReturned):
+        # Normalization collisions must not serve the wrong advisory.
+        return None
+    if _year(advisory) != year:
+        return None
+    projection = anonymous_projection(team, advisory)
+    return render_csaf(
+        projection,
+        publisher_name=team.display_name,
+        publisher_namespace=base_url,
+        self_url=f"{base_url}{document_path(advisory)}",
+        generator=generator,
+    )

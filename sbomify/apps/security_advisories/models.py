@@ -47,6 +47,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
+from sbomify.apps.security_advisories.expressions import csaf_filename_expression
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from sbomify.apps.teams.models import Team
@@ -192,6 +193,7 @@ class SecurityAdvisory(models.Model):
             ),
         ]
         indexes = [
+            models.Index(models.F("team"), csaf_filename_expression(), name="sec_adv_csaf_filename_idx"),
             models.Index(fields=["team", "status"], name="sec_adv_team_status_idx"),
             models.Index(fields=["team", "advisory_type"], name="sec_adv_team_type_idx"),
             models.Index(fields=["team", "-updated_at"], name="sec_adv_team_updated_idx"),
