@@ -100,6 +100,11 @@ def provider_metadata(team: Team, *, base_url: str) -> dict[str, Any]:
         "canonical_url": f"{base_url}{PROVIDER_METADATA_PATH}",
         "last_updated": distribution_marker(team),
         "metadata_version": CSAF_VERSION,
+        # Both are required by the provider schema, and both default to true
+        # there. Stated explicitly rather than left to a consumer's default: the
+        # point of publishing this is to be listed and mirrored.
+        "list_on_CSAF_aggregators": True,
+        "mirror_on_CSAF_aggregators": True,
         "publisher": {
             "category": "vendor",
             "name": team.display_name,

@@ -15,12 +15,17 @@ from urllib.parse import urlparse
 
 import pytest
 from django.test import RequestFactory
+from jsonschema.validators import validator_for
+from referencing import Registry, Resource
+from referencing.jsonschema import DRAFT7
 
 from sbomify.apps.security_advisories import csaf_provider
+from sbomify.apps.core.models import Component
 from sbomify.apps.security_advisories.models import AdvisoryEvent, SecurityAdvisory
 from sbomify.apps.security_advisories.services.advisories import cvss_entry, display_id
 from sbomify.apps.teams.models import Team
 from sbomify.apps.security_advisories.tests.test_csaf import (  # noqa: F401  (fixtures)
+    SCHEMAS,
     VECTOR,
     gateway,
     rich_advisory,
@@ -91,6 +96,19 @@ class TestGating:
 
 
 class TestProviderMetadata:
+    def test_validates_against_the_oasis_provider_schema(self, team, rich_advisory) -> None:  # noqa: F811
+        """The test that matters to a CSAF aggregator: the published schema, not our reading of it."""
+        payload = _json(ProviderMetadataView.as_view()(_request(csaf_provider.PROVIDER_METADATA_PATH, _public(team))))
+
+        schema = json.loads((SCHEMAS / "provider_json_schema.json").read_text())
+        registry = Registry().with_resource(
+            "https://docs.oasis-open.org/csaf/csaf/v2.0/csaf_json_schema.json",
+            Resource.from_contents(
+                json.loads((SCHEMAS / "csaf_json_schema.json").read_text()), default_specification=DRAFT7
+            ),
+        )
+        validator_for(schema)(schema, registry=registry).validate(payload)
+
     def test_shape_is_csaf_7_1_8(self, team, rich_advisory) -> None:  # noqa: F811
         payload = _json(ProviderMetadataView.as_view()(_request(csaf_provider.PROVIDER_METADATA_PATH, _public(team))))
 
@@ -287,3 +305,51 @@ class TestDistributionMarker:
 
         team.refresh_from_db()
         assert team.csaf_feed_updated_at >= ahead
+
+    def test_a_draft_with_public_visibility_does_not_move_it(self, team) -> None:
+        """is_externally_visible excludes a draft whatever its visibility says."""
+        team = _public(team)
+        Team.objects.filter(pk=team.pk).update(csaf_feed_updated_at=None)
+
+        SecurityAdvisory.objects.create(
+            team=team,
+            title="Drafted, not disclosed",
+            visibility=SecurityAdvisory.Visibility.PUBLIC,
+        )
+
+        team.refresh_from_db()
+        assert team.csaf_feed_updated_at is None
+
+    def test_an_internal_comment_does_not_move_it(self, team, rich_advisory) -> None:  # noqa: F811
+        """The timeline renders PUBLIC_EVENT_TYPES only, so a comment changes no document."""
+        team = _public(team)
+        before = self._marker(team)
+
+        AdvisoryEvent.objects.create(
+            advisory=rich_advisory,
+            event_type=AdvisoryEvent.EventType.COMMENT,
+            body="Internal note.",
+        )
+
+        assert self._marker(team) == before
+
+    def test_renaming_a_named_product_moves_it(self, team, rich_advisory, gateway) -> None:  # noqa: F811
+        """A product name is printed in the document, so a rename changes it."""
+        team = _public(team)
+        before = self._marker(team)
+
+        gateway.name = "Acme Gateway Pro"
+        gateway.save(update_fields=["name"])
+
+        assert self._marker(team) > before
+
+    def test_hiding_a_component_moves_it(self, team, rich_advisory, gateway) -> None:  # noqa: F811
+        """Component visibility decides whether the product is listed at all."""
+        team = _public(team)
+        before = self._marker(team)
+
+        component = gateway.components.first()
+        component.visibility = Component.Visibility.PRIVATE
+        component.save(update_fields=["visibility"])
+
+        assert self._marker(team) > before
