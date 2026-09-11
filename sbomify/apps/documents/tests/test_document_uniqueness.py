@@ -527,3 +527,32 @@ class TestNormalizeDecimalVersion:
     )
     def test_renders_without_changing_magnitude(self, value, expected):
         assert normalize_decimal_version(value) == expected
+
+
+@pytest.mark.django_db
+class TestNextFreeDocumentVersionAlwaysFits:
+    """Whatever path it takes, the result has to be insertable."""
+
+    @pytest.mark.parametrize(
+        "candidate",
+        [
+            "9" * VERSION_MAX_LENGTH,  # a decimal bump rounds up into 256 characters
+            "v" * VERSION_MAX_LENGTH,  # the suffix path, base already at the limit
+            "9" * (VERSION_MAX_LENGTH + 1),  # a candidate that never fit to begin with
+            "1.0",
+        ],
+    )
+    def test_every_result_fits_the_column(self, sample_document_component, candidate):
+        _make_document(sample_document_component, version=candidate[:VERSION_MAX_LENGTH])
+
+        result = next_free_document_version(sample_document_component.id, "foobar", candidate)
+
+        assert len(result) <= VERSION_MAX_LENGTH
+        # And it is actually insertable, which is the whole point.
+        Document.objects.create(
+            name="foobar",
+            version=result,
+            document_filename="fits.bin",
+            component=sample_document_component,
+            source="manual_upload",
+        )

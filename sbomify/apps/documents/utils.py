@@ -95,11 +95,14 @@ def next_free_document_version(component_id: str, name: str, candidate: str) -> 
     0.1 steps, anything else gets a numeric suffix.
 
     One query, then arithmetic. The walk always terminates: the decimal path stops
-    as soon as a step fails to advance, and the suffix path is bounded by the
-    number of versions actually in use.
+    as soon as a step fails to advance or outgrows the column, and the suffix path
+    is bounded by the number of versions actually in use. Every result fits
+    ``VERSION_MAX_LENGTH``, so the caller's insert cannot fail on length.
     """
     taken = set(Document.objects.filter(component_id=component_id, name=name).values_list("version", flat=True))
-    if candidate not in taken:
+    # A candidate the column cannot hold is no more usable than a taken one: the
+    # caller builds it by arithmetic on an existing version, so it can overflow.
+    if candidate not in taken and len(candidate) <= VERSION_MAX_LENGTH:
         return candidate
 
     try:
@@ -116,10 +119,11 @@ def next_free_document_version(component_id: str, name: str, candidate: str) -> 
             value += Decimal("0.1")
             bumped = normalize_decimal_version(value)
             # A finite value can still fail to move: past the context precision
-            # (28 digits by default) adding 0.1 rounds straight back. Anything
-            # that does not advance falls through to the suffix, which is bounded
-            # by the number of versions actually in use.
-            if bumped == current:
+            # (28 digits by default) adding 0.1 rounds straight back. It can also
+            # round up into a longer fixed-point string than the column holds.
+            # Either way it falls through to the suffix, which truncates and is
+            # bounded by the number of versions actually in use.
+            if bumped == current or len(bumped) > VERSION_MAX_LENGTH:
                 break
             if bumped not in taken:
                 return bumped
