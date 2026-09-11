@@ -56,7 +56,7 @@
         {% endcomment %}
         {% if certifications %}
             <section class="flex flex-col gap-4 scroll-mt-[4.5rem]" id="certifications">
-                <c-branded.section-header title="Certifications" subtitle="Independent audits and certifications we hold. Open one for the report behind it." />
+                <c-branded.section-header title="Certifications" subtitle="Audits, certifications and declared conformity. Open one for the document behind it." />
                 <div class="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]">
                     {% for certification in certifications %}
                         {% public_url 'core:component_details_public' component_id=certification.component_id component_slug=certification.component_slug as certification_url %}
