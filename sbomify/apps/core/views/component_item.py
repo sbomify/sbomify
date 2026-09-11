@@ -32,6 +32,51 @@ logger = getLogger(__name__)
 
 
 class ComponentItemPublicView(View):
+    @staticmethod
+    def _access_gate(
+        request: HttpRequest,
+        component_obj: Any,
+        resolved_id: str,
+        component_slug: str | None,
+        item_type: str,
+    ) -> HttpResponse | None:
+        """The "Request Access" page for a gated artifact, or None to render normally.
+
+        Returns a response only when the component is gated and this reader holds
+        no grant. Public components and granted readers fall through.
+        """
+        from sbomify.apps.core.services.access_control import check_component_access
+        from sbomify.apps.sboms.models import Component as SbomComponent
+
+        if component_obj.visibility != SbomComponent.Visibility.GATED:
+            return None
+        if check_component_access(request, component_obj).has_access:
+            return None
+
+        team = component_obj.team
+        is_custom_domain = getattr(request, "is_custom_domain", False)
+        item_label = {"documents": "document", "sboms": "SBOM", "vex": "VEX", "cbom": "CBOM"}.get(item_type, "artifact")
+
+        return render(
+            request,
+            "core/access_denied_message.html.j2",
+            {
+                "error_message": (
+                    f"Please request access to view this {item_label}."
+                    if not request.user.is_authenticated
+                    else "Your access request is pending approval or has been rejected."
+                ),
+                "request_access_url": (
+                    reverse("documents:request_access", kwargs={"team_key": team.key}) if team else None
+                ),
+                "back_url": get_public_path(
+                    "component", resolved_id, is_custom_domain=is_custom_domain, slug=component_slug
+                ),
+                "item_type": item_label,
+            },
+            status=403,
+        )
+
     def get(self, request: HttpRequest, component_id: str, item_type: str, item_id: str) -> HttpResponse:
         # Resolve component by slug (on custom domains) or ID (on main app)
         component_obj = resolve_component_identifier(request, component_id)
@@ -47,6 +92,16 @@ class ComponentItemPublicView(View):
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
+
+        # A gated component is published — it is listed on the Trust Center and
+        # its component page renders a "Request Access" gate. Reaching an
+        # artifact inside it without a grant is the same gate, not a dead end:
+        # the item fetch below 403s, and rendering the generic error page left a
+        # reader who had just been told to request access with "Forbidden" and
+        # nowhere to go. Same page the document download already serves.
+        gate = self._access_gate(request, component_obj, resolved_id, component_slug, item_type)
+        if gate is not None:
+            return gate
 
         if item_type in ("sboms", "vex", "cbom"):
             result = get_sbom_detail(request, item_id)

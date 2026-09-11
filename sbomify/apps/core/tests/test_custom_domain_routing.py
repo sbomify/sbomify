@@ -176,3 +176,49 @@ class TestCustomDomainSecurity:
 
         # Should be forbidden or not found
         assert response.status_code in [403, 404]
+
+
+class TestCustomDomainGatedComponents:
+    """Gated components must resolve by slug, the same as public ones.
+
+    A gated component is published: the Trust Center landing page and the
+    product page both list it, and its page carries the "Request Access" gate.
+    Resolving only PUBLIC slugs made every one of those links 404 on a custom
+    domain, so the gate was unreachable and the component read as missing.
+    """
+
+    @pytest.fixture
+    def gated_component(self, db, custom_domain_team):
+        return Component.objects.create(
+            name="Gated Policy Docs",
+            component_type=Component.ComponentType.DOCUMENT,
+            team=custom_domain_team,
+            visibility=Component.Visibility.GATED,
+            is_global=True,
+        )
+
+    def test_gated_component_resolves_by_slug(self, client, gated_component):
+        response = client.get(f"/component/{gated_component.slug}/", HTTP_HOST="trust.example.com")
+
+        assert response.status_code == 200
+        assert b"Request Access" in response.content
+
+    def test_gated_component_is_listed_on_the_landing_page_it_links_from(self, client, gated_component):
+        response = client.get("/", HTTP_HOST="trust.example.com")
+
+        assert response.status_code == 200
+        assert gated_component.name.encode() in response.content
+
+    def test_private_component_still_does_not_resolve_by_slug(self, client, custom_domain_team):
+        """Widening the slug scan to gated must not also publish private ones."""
+        private_component = Component.objects.create(
+            name="Internal Only",
+            component_type=Component.ComponentType.DOCUMENT,
+            team=custom_domain_team,
+            visibility=Component.Visibility.PRIVATE,
+            is_global=True,
+        )
+
+        response = client.get(f"/component/{private_component.slug}/", HTTP_HOST="trust.example.com")
+
+        assert response.status_code == 404

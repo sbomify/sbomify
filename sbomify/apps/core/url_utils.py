@@ -626,8 +626,17 @@ def resolve_component_identifier(
         # On custom domain: find by slug within the team
         slug = slugify(identifier, allow_unicode=True)
 
+        # Same listable predicate the rest of the public surface uses: public and
+        # gated are both published, private is not. Matching only PUBLIC here made
+        # a gated component unreachable on a custom domain — the Trust Center
+        # landing page and the product page both list it, but the slug it links to
+        # resolved to nothing and the page 404'd, so a reader never saw the
+        # "Request Access" gate the component page renders. Private stays out of
+        # the slug scan; the ID fallback below is still access-checked by callers.
+        listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for component in Component.objects.filter(team=custom_domain_team, visibility=Component.Visibility.PUBLIC):
+        for component in Component.objects.filter(team=custom_domain_team, visibility__in=listable):
             if slugify(component.name, allow_unicode=True) == slug:
                 return component
 
