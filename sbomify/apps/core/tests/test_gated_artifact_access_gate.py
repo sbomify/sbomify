@@ -12,14 +12,20 @@ first-time reader their request was rejected, is the same dead end wearing a
 friendlier face, so each state is covered here.
 """
 
+from types import SimpleNamespace
+
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
-from django.test import Client
+from django.test import Client, RequestFactory
 from django.urls import reverse
 
+from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.models import Component, User
+from sbomify.apps.core.views.component_item import ComponentItemPublicView
 from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.documents.models import Document
+from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member, Team
 
 pytestmark = pytest.mark.django_db
@@ -69,6 +75,35 @@ def _visit(document: Document, user: User | None = None):
                 "item_type": "documents",
                 "item_id": document.id,
             },
+        )
+    )
+
+
+def _sbom(team: Team, visibility: str, component_name: str = "Platform") -> SBOM:
+    component = Component.objects.create(
+        name=component_name,
+        team=team,
+        visibility=visibility,
+        component_type=Component.ComponentType.BOM,
+    )
+    return SBOM.objects.create(
+        name=f"{component_name} sbom",
+        component=component,
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename=f"{component_name}.cdx.json",
+    )
+
+
+def _visit_sbom(sbom: SBOM, user: User | None = None, item_type: str = "sboms"):
+    """The same route, for the artifact table the other half of the branch reads."""
+    client = Client()
+    if user is not None:
+        client.force_login(user)
+    return client.get(
+        reverse(
+            "core:component_item_public",
+            kwargs={"component_id": sbom.component.id, "item_type": item_type, "item_id": sbom.id},
         )
     )
 
@@ -293,6 +328,142 @@ def test_an_artifact_id_that_names_nothing_is_still_not_found(team):
 
     assert response.status_code == 404
     assert "Request Access" not in response.content.decode()
+
+
+class TestTheOtherHalfOfTheBranch:
+    """Documents are one of two artifact tables this route serves.
+
+    ``sboms``, ``vex`` and ``cbom`` all read the SBOM table through
+    ``get_sbom_detail`` and ``sbom_belongs_to_component``, so every rule the
+    document tests above pin has a second implementation behind it. Covered here
+    so a regression cannot leave gated SBOM links on the generic Forbidden page
+    while document links still pass.
+    """
+
+    def test_a_gated_sbom_is_withheld_behind_the_same_gate(self, team):
+        sbom = _sbom(team, Component.Visibility.GATED)
+
+        response = _visit_sbom(sbom)
+
+        assert response.status_code == 403
+        content = response.content.decode()
+        assert "Please request access to view this SBOM." in content
+        assert _request_access_url(team) in content
+        assert sbom.name not in content
+
+    @pytest.mark.parametrize(("item_type", "subject"), [("vex", "VEX"), ("cbom", "CBOM")])
+    def test_a_gated_bom_is_named_in_the_readers_own_words(self, team, item_type, subject):
+        """The three SBOM-backed paths differ only in what they call the artifact."""
+        sbom = _sbom(team, Component.Visibility.GATED)
+
+        response = _visit_sbom(sbom, item_type=item_type)
+
+        assert response.status_code == 403
+        assert f"Please request access to view this {subject}." in response.content.decode()
+
+    def test_an_sbom_from_another_component_keeps_that_components_answer(self, team):
+        """``sbom_belongs_to_component``, the mirror of the document check."""
+        gated = _sbom(team, Component.Visibility.GATED)
+        elsewhere = _sbom(team, Component.Visibility.PRIVATE, component_name="Internal Platform")
+
+        response = Client().get(
+            reverse(
+                "core:component_item_public",
+                kwargs={
+                    "component_id": gated.component.id,
+                    "item_type": "sboms",
+                    "item_id": elsewhere.id,
+                },
+            )
+        )
+
+        assert response.status_code == 403
+        assert "Request Access" not in response.content.decode()
+
+    def test_an_sbom_id_that_names_nothing_is_still_not_found(self, team):
+        gated = _sbom(team, Component.Visibility.GATED)
+
+        response = Client().get(
+            reverse(
+                "core:component_item_public",
+                kwargs={
+                    "component_id": gated.component.id,
+                    "item_type": "sboms",
+                    "item_id": "doesnotexist",
+                },
+            )
+        )
+
+        assert response.status_code == 404
+        assert "Request Access" not in response.content.decode()
+
+    def test_reader_with_a_grant_sees_the_sbom(self, team, sample_user):
+        sbom = _sbom(team, Component.Visibility.GATED)
+        Member.objects.create(team=team, user=sample_user, role="owner")
+
+        response = _visit_sbom(sbom, sample_user)
+
+        assert response.status_code == 200
+        assert sbom.name in response.content.decode()
+
+    def test_public_sbom_is_unaffected(self, team):
+        sbom = _sbom(team, Component.Visibility.PUBLIC)
+
+        response = _visit_sbom(sbom)
+
+        assert response.status_code == 200
+        assert sbom.name in response.content.decode()
+
+
+class TestADenialAnAccessRequestCannotLift:
+    """The gate answers for the refusal the fetch hit, not for a second opinion.
+
+    ``can`` gates a scoped API token's actions before it consults visibility at
+    all, and approving a request never widens a token's scopes, so a scope
+    refusal has to keep its own generic 403: a Request Access page there would
+    send the reader to ask for something that was never the problem.
+
+    Exercised on the helper rather than through the route, because this HTML
+    page carries no bearer auth today (``PersonalAccessTokenAuth`` is a Ninja
+    security class, and nothing in ``MIDDLEWARE`` reads a token). The check is
+    here so that stays true of the gate if it ever does.
+    """
+
+    def _reader(self, scopes: list[str] | None = None, with_token: bool = False):
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+        request.session = {}
+        if with_token:
+            request.access_token_record = SimpleNamespace(scopes=scopes)
+        return request
+
+    def test_a_token_outside_its_scope_keeps_its_own_refusal(self, team):
+        document = _document(team, Component.Visibility.GATED)
+
+        denial = ComponentItemPublicView._gated_denial(
+            self._reader(scopes=SCOPE_PRESETS["publish"], with_token=True), document.component
+        )
+
+        assert denial is None
+
+    def test_a_read_scoped_token_is_still_only_denied_by_the_gate(self, team):
+        """Narrowing to reads leaves the refusal exactly where it was."""
+        document = _document(team, Component.Visibility.GATED)
+
+        denial = ComponentItemPublicView._gated_denial(
+            self._reader(scopes=SCOPE_PRESETS["read_only"], with_token=True), document.component
+        )
+
+        assert denial is not None
+        assert denial.reason == "gated_requires_authentication"
+
+    def test_the_same_reader_carrying_no_token_gets_the_gate(self, team):
+        document = _document(team, Component.Visibility.GATED)
+
+        denial = ComponentItemPublicView._gated_denial(self._reader(), document.component)
+
+        assert denial is not None
+        assert denial.reason == "gated_requires_authentication"
 
 
 class TestOnACustomDomain:

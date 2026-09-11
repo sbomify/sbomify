@@ -53,20 +53,30 @@ class ComponentItemPublicView(View):
         """The access result when a gated component is withheld from this reader.
 
         ``None`` when the component is not gated, when this reader holds a grant,
-        or when the denial is not one an access request can lift — a token
-        denied by its workspace scope stays denied however the request is
-        answered, so offering one would send the reader somewhere pointless.
-        In each case the fetch failed for a reason of its own, and that reason is
-        the one to report.
+        or when the fetch was refused by something an access request cannot lift.
+        In each of those cases the fetch failed for a reason of its own, and that
+        reason is the one to report.
+
+        The refusal is re-read through ``can``, the same front door the artifact
+        fetch went through, so the gate speaks for that decision rather than
+        offering a second opinion on it. ``can`` gates a scoped API token's
+        actions before it consults visibility at all, and no approval widens a
+        token's scopes: when the two disagree on why, the denial was not the gate
+        and a Request Access page would be an answer to a question nobody asked.
         """
+        from sbomify.apps.core.authz import can
         from sbomify.apps.core.services.access_control import check_component_access
         from sbomify.apps.sboms.models import Component as SbomComponent
 
         if component_obj.visibility != SbomComponent.Visibility.GATED:
             return None
 
+        decision = can(request, "component:access", component_obj)
+        if decision:
+            return None
+
         result = check_component_access(request, component_obj)
-        if result.has_access or not result.requires_access_request:
+        if result.has_access or result.reason != decision.reason or not result.requires_access_request:
             return None
         return result
 
