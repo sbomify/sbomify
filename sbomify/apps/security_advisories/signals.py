@@ -32,7 +32,7 @@ when its ``visibility`` is PUBLIC, because ``is_externally_visible`` says a draf
 is not visible whatever visibility claims, and an internal ``COMMENT`` or a
 ``field_change`` is excluded because the projection only renders
 ``PUBLIC_EVENT_TYPES``. A marker anyone may poll must not move for work nobody
-may see, or it leaks the timing of an embargo through a cacheable endpoint.
+may see, or it leaks the timing of an embargo through a public endpoint.
 
 Bulk writes bypass model signals. The community-downgrade visibility update
 explicitly uses ``track_component_changes``; M2M manager operations use
@@ -115,19 +115,26 @@ def _renders_in_public_document(advisory: SecurityAdvisory, instance: Any) -> bo
     # or a field-change row changes nothing a reader can fetch.
     if isinstance(instance, AdvisoryEvent) and instance.event_type not in AdvisoryEvent.PUBLIC_EVENT_TYPES:
         return False
-    from sbomify.apps.security_advisories.services.trust_center import anonymous_viewer_scope
+    from sbomify.apps.security_advisories.services.trust_center import (
+        anonymous_viewer_scope,
+        product_link_is_readable,
+    )
 
     product_link = None
     if isinstance(instance, AdvisoryProduct):
         product_link = instance
     elif isinstance(instance, AdvisoryProductStatus):
+        if instance.advisory_component_id is not None:
+            return False
         product_link = instance.advisory_product
     elif isinstance(instance, AdvisoryVersionRange):
+        if instance.product_status.advisory_component_id is not None:
+            return False
         product_link = instance.product_status.advisory_product
     if product_link is not None:
         # Fetch the current relation: callers can retain objects across ACL changes.
-        product_id = AdvisoryProduct.objects.filter(pk=product_link.pk).values_list("product_id", flat=True).first()
-        if product_id is not None and str(product_id) not in anonymous_viewer_scope(advisory.team).product_ids:
+        current = AdvisoryProduct.objects.filter(pk=product_link.pk).first()
+        if current is None or not product_link_is_readable(current, anonymous_viewer_scope(advisory.team)):
             return False
     return True
 
@@ -181,7 +188,10 @@ def _product_signature_batch(link_ids: list[Any], scopes: dict[Any, Any]) -> dic
     links out of the signature prevents their names and unrelated component
     fields from leaking activity through the public timestamp.
     """
-    from sbomify.apps.security_advisories.services.trust_center import anonymous_viewer_scope
+    from sbomify.apps.security_advisories.services.trust_center import (
+        anonymous_viewer_scope,
+        product_link_is_readable,
+    )
     from sbomify.apps.teams.models import Team
 
     links = list(
@@ -197,7 +207,7 @@ def _product_signature_batch(link_ids: list[Any], scopes: dict[Any, Any]) -> dic
             scopes[pk] = anonymous_viewer_scope(team)
     signature: dict[Any, dict[Any, tuple[Any, str]]] = {}
     for link in links:
-        if link.product_id is not None and str(link.product_id) not in scopes[link.advisory.team_id].product_ids:
+        if not product_link_is_readable(link, scopes[link.advisory.team_id]):
             continue
         signature.setdefault(link.advisory.team_id, {})[link.pk] = (
             link.product_id,
@@ -254,7 +264,21 @@ def _after_product_write(sender: Any, instance: Any, **kwargs: Any) -> None:
 
 
 def _before_product_delete(sender: Any, instance: Any, **kwargs: Any) -> None:
+    from sbomify.apps.security_advisories.services.trust_center import anonymous_viewer_scope
+
     _before_product_write(sender, instance, **kwargs)
+    snapshot = getattr(instance, "_csaf_product_snapshot", None)
+    if snapshot and snapshot[0]:
+        # SET_NULL is about to erase the only thing holding a permission over
+        # these names, so record the answer while the product is still here to
+        # give it. Only a currently-public product leaves a public name behind,
+        # and only its current name: an older internal alias must not survive.
+        links = AdvisoryProduct.objects.filter(pk__in=snapshot[0])
+        links.update(public_name_snapshot=False)
+        if str(instance.pk) in anonymous_viewer_scope(instance.team).product_ids:
+            links.filter(advisory__team_id=instance.team_id).update(
+                public_name_snapshot=True, product_name=instance.name
+            )
     _after_product_write(sender, instance, **kwargs)
 
 
@@ -288,18 +312,30 @@ def _before_link_delete(sender: Any, instance: Any, **kwargs: Any) -> None:
     _schedule_products(_capture_products([instance.product_id]))
 
 
+# Every document carries the publisher name and absolute URLs built from the
+# workspace's preferred domain, so a rename, a slug change, a new custom domain
+# and that domain's validation all change what a poller has cached.
+_PUBLISHER_FIELDS = frozenset({"name", "is_public", "slug", "custom_domain", "custom_domain_validated"})
+
+
+def _publisher_signature(team: Any) -> tuple[str, bool, str]:
+    from sbomify.apps.core.url_utils import build_custom_domain_url
+
+    return team.display_name, team.is_public, build_custom_domain_url(team, "/")
+
+
 def _before_team_save(sender: Any, instance: Any, **kwargs: Any) -> None:
     instance._csaf_previous_publisher = None
     fields = kwargs.get("update_fields")
-    if kwargs.get("raw") or (fields is not None and not {"name", "is_public"}.intersection(fields)):
+    if kwargs.get("raw") or (fields is not None and not _PUBLISHER_FIELDS.intersection(fields)):
         return
     previous = sender.objects.filter(pk=instance.pk).first()
-    instance._csaf_previous_publisher = (previous.display_name, previous.is_public) if previous else None
+    instance._csaf_previous_publisher = _publisher_signature(previous) if previous else None
 
 
 def _on_team_save(sender: Any, instance: Any, **kwargs: Any) -> None:
     previous = instance.__dict__.pop("_csaf_previous_publisher", None)
-    if not kwargs.get("raw") and previous is not None and previous != (instance.display_name, instance.is_public):
+    if not kwargs.get("raw") and previous is not None and previous != _publisher_signature(instance):
         _schedule([instance.pk])
 
 

@@ -529,6 +529,14 @@ class AdvisoryProduct(models.Model):
         "core.Product", on_delete=models.SET_NULL, null=True, blank=True, related_name="security_advisories"
     )
     product_name = models.CharField(max_length=255, blank=True, default="")
+    # A retained name needs provenance of its own. ``product`` going NULL is how
+    # both an external name and a deleted product look, so without this flag the
+    # deletion of a private product would publish its name.
+    public_name_snapshot = models.BooleanField(
+        default=False,
+        editable=False,
+        help_text="The retained name was typed in, or its product was public when it was deleted.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -548,6 +556,10 @@ class AdvisoryProduct(models.Model):
             raise ValidationError({"product_name": "A product row needs a product or a name."})
 
     def save(self, *args: Any, **kwargs: Any) -> None:
+        # A row created without a product is a name the workspace typed in: there
+        # is no product holding a permission over it, so it is already external.
+        if self._state.adding and self.product_id is None:
+            self.public_name_snapshot = True
         # Normalise before the snapshot: a whitespace-only name would otherwise
         # skip it and persist as an unreadable row.
         self.product_name = self.product_name.strip()

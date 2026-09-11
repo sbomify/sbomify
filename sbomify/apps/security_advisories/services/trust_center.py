@@ -327,19 +327,30 @@ def _readable_queryset(team: Any) -> Any:
     )
 
 
+def product_link_is_readable(link: AdvisoryProduct, scope: ViewerScope) -> bool:
+    """Whether this reader may be shown the product this row names.
+
+    A NULL ``product`` is not proof that the name is external: it is also what a
+    deleted product leaves behind. ``public_name_snapshot`` is the difference,
+    and without it retiring a private product would publish its name.
+    """
+    if link.product_id is not None:
+        return str(link.product_id) in scope.product_ids
+    return link.public_name_snapshot or scope.is_insider
+
+
 def _visible_products(advisory: SecurityAdvisory, scope: ViewerScope) -> tuple[list[dict[str, Any]], int]:
     """Product chips the reader may see, plus a count of the ones withheld.
 
     An advisory can name several products, and passing the gate on one of them is
-    not permission to learn the names of the others. Rows with no ``product`` FK
-    are a workspace naming something it does not track in sbomify — there is no
-    product to hold a permission against, so they are shown as plain text.
+    not permission to learn the names of the others. A row with no ``product`` FK
+    needs explicit external provenance; see ``product_link_is_readable``.
     """
     chips: list[dict[str, Any]] = []
     withheld = 0
     for advisory_product in advisory.products.all():
         product = advisory_product.product
-        if product is not None and str(product.id) not in scope.product_ids:
+        if not product_link_is_readable(advisory_product, scope):
             withheld += 1
             continue
         chips.append(
@@ -522,14 +533,19 @@ def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[
     rows: list[dict[str, Any]] = []
     for vulnerability in advisory.vulnerabilities.all():
         for status in vulnerability.product_statuses.all():
+            # A component-scoped status describes one component, and this
+            # projection carries no component scope to check it against. Falling
+            # through would publish it as the portfolio-wide "All products".
+            if status.advisory_component_id is not None:
+                continue
             advisory_product = status.advisory_product
             product = advisory_product.product if advisory_product else None
-            if product is not None and str(product.id) not in scope.product_ids:
+            if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
             if advisory_product is None:
                 label = "All products"
             else:
-                label = advisory_product.product_name or (product.name if product else "")
+                label = product.name if product else advisory_product.product_name
             affected, unaffected = _version_expressions(status)
             rows.append(
                 {
@@ -640,20 +656,25 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
     """The "is my version affected" table: one row per vulnerability x product.
 
     Rows for products the reader may not see are dropped for the same reason
-    their chips are, and a portfolio-wide row (``advisory_product`` NULL) is kept
+    their chips are, and a portfolio-wide row (both subject FKs NULL) is kept
     because it names nothing.
     """
     rows: list[dict[str, Any]] = []
     for vulnerability in advisory.vulnerabilities.all():
         for status in vulnerability.product_statuses.all():
+            # A component-scoped status describes one component, and this
+            # projection carries no component scope to check it against. Falling
+            # through would publish it as the portfolio-wide "All products".
+            if status.advisory_component_id is not None:
+                continue
             advisory_product = status.advisory_product
             product = advisory_product.product if advisory_product else None
-            if product is not None and str(product.id) not in scope.product_ids:
+            if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
             if advisory_product is None:
                 scope_label = "All products"
             else:
-                scope_label = advisory_product.product_name or (product.name if product else "")
+                scope_label = product.name if product else advisory_product.product_name
             affected, unaffected = _version_expressions(status)
             rows.append(
                 {

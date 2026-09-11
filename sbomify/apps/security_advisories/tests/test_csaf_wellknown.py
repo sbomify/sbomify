@@ -15,14 +15,20 @@ from urllib.parse import urlparse
 
 import pytest
 from django.db import transaction
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 from jsonschema.validators import validator_for
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT7
 
-from sbomify.apps.core.models import Component
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.security_advisories import csaf_provider
-from sbomify.apps.security_advisories.models import AdvisoryEvent, SecurityAdvisory
+from sbomify.apps.security_advisories.models import (
+    AdvisoryComponent,
+    AdvisoryEvent,
+    AdvisoryProduct,
+    AdvisoryProductStatus,
+    SecurityAdvisory,
+)
 from sbomify.apps.security_advisories.services.advisories import cvss_entry, display_id
 from sbomify.apps.security_advisories.tests.test_csaf import (  # noqa: F401  (fixtures)
     SCHEMAS,
@@ -690,3 +696,202 @@ class TestDocumentLookup:
                 )
                 is None
             )
+
+
+def _document(team, advisory):
+    path = csaf_provider.document_path(advisory)
+    year, filename = path.rsplit("/", 2)[-2:]
+    return WhiteDocumentView.as_view()(_request(path, team), year=year, filename=filename)
+
+
+def _product_names(document) -> set[str]:
+    """Names in the rendered document. CSAF appends the version span to each."""
+    return {entry["name"] for entry in document.get("product_tree", {}).get("full_product_names", [])}
+
+
+def _named(document, prefix: str) -> bool:
+    return any(name == prefix or name.startswith(f"{prefix} ") for name in _product_names(document))
+
+
+def _chips(team, advisory) -> set[str]:
+    """Product names the anonymous projection would print, status rows or not."""
+    from sbomify.apps.security_advisories.services.trust_center import anonymous_projection
+
+    return {chip["name"] for chip in anonymous_projection(team, advisory)["products"]}
+
+
+class TestRevocationIsImmediate:
+    """Access to these URLs is revocable, so nothing here may sit in a shared cache.
+
+    A re-embargo, a deletion or a workspace going private all take effect on the
+    next request. The stored marker cannot reach a cache that never revalidates,
+    so a cache holding the feed would keep serving content we have withdrawn.
+    """
+
+    def test_every_document_forbids_storing(self, team, rich_advisory) -> None:  # noqa: F811
+        team = _public(team)
+        responses = [
+            ProviderMetadataView.as_view()(_request(csaf_provider.PROVIDER_METADATA_PATH, team)),
+            WhiteFeedView.as_view()(_request(csaf_provider.WHITE_FEED_PATH, team)),
+            _document(team, rich_advisory),
+        ]
+
+        assert [response.status_code for response in responses] == [200, 200, 200]
+        assert {response["Cache-Control"] for response in responses} == {"no-store"}
+
+    def test_a_refusal_is_not_stored_either(self, team) -> None:
+        """Otherwise a 404 cached while a workspace was private outlives it turning public."""
+        response = ProviderMetadataView.as_view()(_request("/", _public(team), is_custom_domain=False))
+
+        assert response.status_code == 404
+        assert response["Cache-Control"] == "no-store"
+
+
+class TestWhatTheDocumentMayName:
+    """The projection behind a TLP:WHITE URL, and the two ways it used to over-share."""
+
+    def test_a_component_scoped_status_is_not_published_as_all_products(self, team, rich_advisory) -> None:  # noqa: F811
+        """``advisory_product`` NULL is not proof of a portfolio-wide statement.
+
+        A status can name a component instead, and this projection carries no
+        component scope to check one against. Rendering it would both publish a
+        private component's exposure and mis-state its blast radius.
+        """
+        team = _public(team)
+        secret = Component.objects.create(
+            name="internal-crypto", team=team, visibility=Component.Visibility.PRIVATE
+        )
+        AdvisoryProductStatus.objects.create(
+            vulnerability=rich_advisory.vulnerabilities.first(),
+            advisory_component=AdvisoryComponent.objects.create(advisory=rich_advisory, component=secret),
+            status=AdvisoryProductStatus.Status.EXPLOITABLE,
+        )
+
+        document = _json(_document(team, rich_advisory))
+        validate_csaf(document)
+        names = _product_names(document)
+
+        assert not any(name.startswith("All products") for name in names)
+        assert not any("internal-crypto" in name for name in names)
+        assert any(name.startswith("Acme Gateway") for name in names)
+
+    def test_a_portfolio_wide_status_is_still_published(self, team, rich_advisory) -> None:  # noqa: F811
+        """The row that names nothing stays: dropping it would hide a real statement."""
+        team = _public(team)
+        status = rich_advisory.vulnerabilities.first().product_statuses.first()
+        status.advisory_product = None
+        status.save(update_fields=["advisory_product"])
+
+        assert _named(_json(_document(team, rich_advisory)), "All products")
+
+    def test_deleting_a_private_product_does_not_publish_its_name(self, team, rich_advisory) -> None:  # noqa: F811
+        """``product`` going NULL is what a deletion and a typed-in name look like alike."""
+        team = _public(team)
+        hidden = Product.objects.create(name="Skunkworks Relay", team=team, is_public=False)
+        AdvisoryProduct.objects.create(advisory=rich_advisory, product=hidden)
+        assert "Skunkworks Relay" not in _chips(team, rich_advisory)
+
+        Product.objects.get(pk=hidden.pk).delete()
+
+        link = rich_advisory.products.get(product__isnull=True)
+        assert link.product_name == "Skunkworks Relay"
+        assert link.public_name_snapshot is False
+        assert "Skunkworks Relay" not in _chips(team, rich_advisory)
+
+    def test_deleting_a_public_product_keeps_its_name(self, team, rich_advisory, gateway) -> None:  # noqa: F811
+        """Retiring a product must not rewrite the advisories that already named it."""
+        team = _public(team)
+        Product.objects.get(pk=gateway.pk).delete()
+
+        link = rich_advisory.products.get(product__isnull=True)
+        assert link.public_name_snapshot is True
+        assert "Acme Gateway" in _chips(team, rich_advisory)
+        assert _named(_json(_document(team, rich_advisory)), "Acme Gateway")
+
+    def test_a_hand_typed_name_is_published(self, team, rich_advisory) -> None:  # noqa: F811
+        """Nothing in sbomify holds a permission over a name the workspace typed in."""
+        team = _public(team)
+        link = AdvisoryProduct.objects.create(advisory=rich_advisory, product_name="Acme Appliance (OEM)")
+
+        assert link.public_name_snapshot is True
+        assert "Acme Appliance (OEM)" in _chips(team, rich_advisory)
+
+    def test_an_insider_still_sees_a_withheld_retained_name(self, team, rich_advisory, sample_user) -> None:  # noqa: F811
+        """The flag gates the anonymous distribution, not the workspace's own view."""
+        from types import SimpleNamespace
+
+        from sbomify.apps.security_advisories.services.trust_center import _public_projection, resolve_viewer_scope
+
+        hidden = Product.objects.create(name="Skunkworks Relay", team=team, is_public=False)
+        AdvisoryProduct.objects.create(advisory=rich_advisory, product=hidden)
+        Product.objects.get(pk=hidden.pk).delete()
+
+        scope = resolve_viewer_scope(SimpleNamespace(user=sample_user), team)
+        projection = _public_projection(rich_advisory, scope, detail=True)
+
+        assert scope.is_insider is True
+        assert "Skunkworks Relay" in {chip["name"] for chip in projection["products"]}
+
+
+@pytest.mark.django_db(transaction=True)
+class TestPublisherIdentityMovesTheMarker:
+    """Every absolute URL in the distribution comes from the workspace's domain.
+
+    ``transaction=True`` for the same reason as ``TestDistributionMarker``: the
+    marker is written from ``on_commit``.
+    """
+
+    def _marker(self, team):
+        team.refresh_from_db()
+        return team.csaf_feed_updated_at
+
+    @override_settings(TRUST_CENTER_DOMAIN="trustcenters.test")
+    def test_a_slug_change_moves_it(self, team, rich_advisory) -> None:  # noqa: F811
+        """The slug is the hostname every document, entry and self link is served from."""
+        team = _public(team)
+        before = self._marker(team)
+        assert csaf_provider.provider_metadata(team, base_url=BASE)
+
+        team.slug = "acme-renamed"
+        team.save(update_fields=["slug"])
+
+        assert self._marker(team) > before
+
+    @override_settings(TRUST_CENTER_DOMAIN="trustcenters.test")
+    def test_validating_a_custom_domain_moves_it(self, team, rich_advisory) -> None:  # noqa: F811
+        """Validation is what makes BYOD the preferred domain, so it rewrites every URL."""
+        team = _public(team)
+        team.custom_domain = "trust.acme.test"
+        team.save(update_fields=["custom_domain"])
+        before = self._marker(team)
+
+        team.custom_domain_validated = True
+        team.save(update_fields=["custom_domain_validated"])
+
+        assert self._marker(team) > before
+
+    @override_settings(TRUST_CENTER_DOMAIN="trustcenters.test")
+    def test_middleware_auto_validation_moves_it(self, team, rich_advisory) -> None:  # noqa: F811
+        """That path validates with ``queryset.update()``, which no model signal sees."""
+        from sbomify.apps.core.middleware import CustomDomainContextMiddleware
+
+        team = _public(team)
+        team.custom_domain = "trust.acme.test"
+        team.custom_domain_validated = False
+        team.save(update_fields=["custom_domain", "custom_domain_validated"])
+        before = self._marker(team)
+
+        middleware = CustomDomainContextMiddleware(lambda request: None)
+        middleware._auto_validate_domain(team, "trust.acme.test")
+
+        team.refresh_from_db()
+        assert team.custom_domain_validated is True
+        assert team.csaf_feed_updated_at > before
+
+    def test_an_unrelated_workspace_field_still_does_not_move_it(self, team, rich_advisory) -> None:  # noqa: F811
+        team = _public(team)
+        before = self._marker(team)
+
+        team.save(update_fields=["security_txt_config"])
+
+        assert self._marker(team) == before

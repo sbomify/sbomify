@@ -42,12 +42,18 @@ class _WellKnownCsafView(View):
         base = build_custom_domain_url(team, "/", request.is_secure()) or get_base_url() or ""
         return base.rstrip("/")
 
-    def _json(self, payload: dict[str, Any]) -> JsonResponse:
-        response = JsonResponse(payload)
-        # The same document for everyone is the premise of the TLP:WHITE tree,
-        # so it is safe for a shared cache to hold it.
-        response["Cache-Control"] = "public, max-age=3600"
+    def _json(self, payload: dict[str, Any], *, status: int = 200) -> JsonResponse:
+        response = JsonResponse(payload, status=status)
+        # The document is the same for everyone, but access to it is revocable:
+        # a re-embargo, a deletion or a workspace turning private has to take
+        # effect now. A shared cache holding it would keep serving withdrawn
+        # content, and the stored marker cannot reach a cache that never asks
+        # again. Every request re-evaluates the ACL instead.
+        response["Cache-Control"] = "no-store"
         return response
+
+    def _not_found(self) -> JsonResponse:
+        return self._json({"error": "Not found"}, status=404)
 
 
 class ProviderMetadataView(_WellKnownCsafView):
@@ -56,7 +62,7 @@ class ProviderMetadataView(_WellKnownCsafView):
     def get(self, request: HttpRequest) -> JsonResponse:
         team = self._team(request)
         if team is None:
-            return JsonResponse({"error": "Not found"}, status=404)
+            return self._not_found()
         return self._json(csaf_provider.provider_metadata(team, base_url=self._base_url(request, team)))
 
 
@@ -66,7 +72,7 @@ class WhiteFeedView(_WellKnownCsafView):
     def get(self, request: HttpRequest) -> JsonResponse:
         team = self._team(request)
         if team is None:
-            return JsonResponse({"error": "Not found"}, status=404)
+            return self._not_found()
         return self._json(csaf_provider.rolie_feed(team, base_url=self._base_url(request, team)))
 
 
@@ -76,7 +82,7 @@ class WhiteDocumentView(_WellKnownCsafView):
     def get(self, request: HttpRequest, year: str, filename: str) -> JsonResponse:
         team = self._team(request)
         if team is None:
-            return JsonResponse({"error": "Not found"}, status=404)
+            return self._not_found()
         document = csaf_provider.white_document(
             team,
             year,
@@ -85,5 +91,5 @@ class WhiteDocumentView(_WellKnownCsafView):
             generator=get_sbomify_version(),
         )
         if document is None:
-            return JsonResponse({"error": "Not found"}, status=404)
+            return self._not_found()
         return self._json(document)
