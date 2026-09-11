@@ -76,7 +76,7 @@ class ComponentItemPublicView(View):
         result: Any,
         component_obj: Any,
         resolved_id: str,
-        component_slug: str | None,
+        identifier: str,
         item_type: str,
     ) -> HttpResponse:
         """The "Request Access" page standing in for a gated artifact."""
@@ -85,9 +85,14 @@ class ComponentItemPublicView(View):
         team = component_obj.team
         is_custom_domain = getattr(request, "is_custom_domain", False)
         subject = {"documents": "document", "sboms": "SBOM", "vex": "VEX", "cbom": "CBOM"}.get(item_type, "artifact")
-        component_url = get_public_path(
-            "component", resolved_id, is_custom_domain=is_custom_domain, slug=component_slug
-        )
+
+        # Built from the identifier the reader arrived on rather than from the
+        # component's computed slug. Those differ for a gated component sharing
+        # its slug with a public one, where the resolver's public-wins tie-break
+        # leaves the id as the only form that comes back here: rebuilding the
+        # slug would point the way back, and the NDA action, at the other
+        # component's page.
+        component_url = get_public_path("component", resolved_id, is_custom_domain=is_custom_domain, slug=identifier)
 
         # Which position in the access flow this reader is at decides both the
         # message and the action; the service already worked that out.
@@ -182,7 +187,7 @@ class ComponentItemPublicView(View):
         # domain exactly as a public one does; a gate served from the app domain
         # would send the reader on to request access somewhere they never were.
         if denial is not None:
-            return self._render_access_gate(request, denial, component_obj, resolved_id, component_slug, item_type)
+            return self._render_access_gate(request, denial, component_obj, resolved_id, component_id, item_type)
 
         item = result.value
 

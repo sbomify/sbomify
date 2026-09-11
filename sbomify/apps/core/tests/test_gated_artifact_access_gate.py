@@ -374,6 +374,26 @@ class TestOnACustomDomain:
         assert response.status_code == 200
         assert "Request Access" in response.content.decode()
 
+    def test_a_shadowed_gated_component_points_back_at_itself(self, team):
+        """Public wins the slug, so the id is the shadowed component's only way home.
+
+        Rebuilding the component's computed slug for the gate's back link and
+        its NDA action would send the reader to the public component that owns
+        that slug, undoing the id they arrived on.
+        """
+        public_doc = _document(team, Component.Visibility.PUBLIC, component_name="Policy Docs")
+        gated_doc = _document(team, Component.Visibility.GATED, component_name="Policy-Docs")
+        assert public_doc.component.slug == gated_doc.component.slug
+
+        response = Client(HTTP_HOST="trust.example.com").get(
+            f"/components/{gated_doc.component.id}/documents/{gated_doc.id}/"
+        )
+
+        assert response.status_code == 403
+        content = response.content.decode()
+        assert f"/component/{gated_doc.component.id}/" in content
+        assert f"/component/{gated_doc.component.slug}/" not in content
+
     def test_a_slug_collision_cannot_open_a_gated_artifact(self, team):
         """Whichever component the slug lands on, the artifact keeps its own gate.
 
