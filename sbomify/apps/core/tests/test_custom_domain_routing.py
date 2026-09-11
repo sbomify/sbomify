@@ -222,3 +222,98 @@ class TestCustomDomainGatedComponents:
         response = client.get(f"/component/{private_component.slug}/", HTTP_HOST="trust.example.com")
 
         assert response.status_code == 404
+
+
+class TestCustomDomainNonPublicWorkspace:
+    """A workspace that has not published its Trust Center publishes nothing.
+
+    The middleware attaches the workspace that owns a BYOD domain whether or not
+    it is public, and only the landing page checked. Everything below it kept
+    answering, so `/` said "not found" while an artifact URL rendered the
+    workspace's branded page — the one thing a non-public workspace is asking
+    not to reveal.
+    """
+
+    @pytest.fixture
+    def private_domain_team(self, db):
+        team = Team.objects.create(
+            name="Unlisted Company",
+            billing_plan="business",
+            custom_domain="private.example.com",
+            custom_domain_validated=True,
+        )
+        team.is_public = False
+        team.save(update_fields=["is_public"])
+        return team
+
+    @pytest.fixture
+    def gated_component(self, db, private_domain_team):
+        return Component.objects.create(
+            name="Gated Policy Docs",
+            component_type=Component.ComponentType.DOCUMENT,
+            team=private_domain_team,
+            visibility=Component.Visibility.GATED,
+            is_global=True,
+        )
+
+    @pytest.fixture
+    def public_component(self, db, private_domain_team):
+        return Component.objects.create(
+            name="Public Policy Docs",
+            component_type=Component.ComponentType.DOCUMENT,
+            team=private_domain_team,
+            visibility=Component.Visibility.PUBLIC,
+            is_global=True,
+        )
+
+    def test_landing_page_is_not_found(self, client, private_domain_team):
+        response = client.get("/", HTTP_HOST="private.example.com")
+
+        assert response.status_code == 404
+
+    def test_gated_component_slug_is_not_found(self, client, gated_component):
+        response = client.get(f"/component/{gated_component.slug}/", HTTP_HOST="private.example.com")
+
+        assert response.status_code == 404
+        assert b"Request Access" not in response.content
+
+    def test_gated_component_id_is_not_found(self, client, gated_component):
+        response = client.get(f"/component/{gated_component.id}/", HTTP_HOST="private.example.com")
+
+        assert response.status_code == 404
+
+    def test_public_component_slug_is_not_found(self, client, public_component):
+        """Public artifacts are published by the workspace, not past it."""
+        response = client.get(f"/component/{public_component.slug}/", HTTP_HOST="private.example.com")
+
+        assert response.status_code == 404
+
+    def test_public_product_is_not_found(self, client, private_domain_team):
+        product = Product.objects.create(
+            name="Listed Product",
+            team=private_domain_team,
+            is_public=True,
+        )
+
+        response = client.get(f"/product/{product.slug or product.id}/", HTTP_HOST="private.example.com")
+
+        assert response.status_code == 404
+
+    def test_another_workspaces_component_is_not_found(self, client, private_domain_team):
+        """The domain resolves to one workspace or to none — never to all of them."""
+        other_team = Team.objects.create(
+            name="Other Company",
+            billing_plan="community",
+            is_public=True,
+        )
+        other_component = Component.objects.create(
+            name="Other Component",
+            component_type=Component.ComponentType.DOCUMENT,
+            team=other_team,
+            visibility=Component.Visibility.PUBLIC,
+            is_global=True,
+        )
+
+        response = client.get(f"/component/{other_component.id}/", HTTP_HOST="private.example.com")
+
+        assert response.status_code == 404
