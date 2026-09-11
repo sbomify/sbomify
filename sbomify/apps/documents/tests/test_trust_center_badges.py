@@ -7,6 +7,9 @@ center that overstates a certification is worse than one that shows none.
 
 from __future__ import annotations
 
+from importlib import import_module
+from pathlib import Path
+
 import pytest
 
 from sbomify.apps.core.models import Component
@@ -162,23 +165,6 @@ def test_cra_conformity_earns_its_badge(public_team: Team) -> None:
 
 
 @pytest.mark.django_db
-def test_a_certification_with_no_seal_still_badges(public_team: Team) -> None:
-    """Undifferentiated SOC 2 has no artwork; the tile draws the label instead."""
-    _document(
-        _component(public_team, name="SOC 2"),
-        subcategory=Document.ComplianceSubcategory.SOC2,
-        filename="soc2-report.pdf",
-    )
-
-    badges = public_certification_badges(public_team)
-
-    assert [badge["label"] for badge in badges] == ["SOC 2"]
-    # Empty, not the static root: "{% static %}" of an empty path renders a
-    # broken image because the root is a truthy string.
-    assert badges[0]["image"] == ""
-
-
-@pytest.mark.django_db
 def test_every_year_of_a_report_shows_one_badge_pointing_at_the_newest(public_team: Team) -> None:
     older = _component(public_team, name="ISO 27001 2025")
     _document(older, version="2025")
@@ -198,6 +184,53 @@ def test_another_workspace_report_does_not_leak(public_team: Team) -> None:
     _document(_component(other))
 
     assert public_certification_badges(public_team) == []
+
+
+@pytest.mark.django_db
+def test_the_migration_moves_plain_soc2_to_type_ii(public_team: Team) -> None:
+    """The data move runs under --nomigrations, where the migration never does.
+
+    Tests build a bare schema, so nothing else in the suite executes 0015. The
+    function is called directly against a real table instead, with a stub
+    registry standing in for the historical model, which is the same shape the
+    migration gets.
+    """
+    # importlib because a migration module name starts with a digit.
+    migration = import_module("sbomify.apps.documents.migrations.0015_certification_subcategories")
+
+    plain = _document(_component(public_team, name="SOC 2"), subcategory="soc2", filename="soc2-report.pdf")
+    iso = _document(_component(public_team))
+
+    class _Registry:
+        @staticmethod
+        def get_model(app_label: str, model_name: str) -> type[Document]:
+            return Document
+
+    migration.move_plain_soc2_to_type_ii(_Registry(), None)
+
+    plain.refresh_from_db()
+    iso.refresh_from_db()
+    assert plain.compliance_subcategory == Document.ComplianceSubcategory.SOC2_TYPE2
+    assert iso.compliance_subcategory == Document.ComplianceSubcategory.ISO27001
+
+
+def test_every_badge_names_a_seal_that_exists() -> None:
+    """An entry with no artwork renders a broken image, not a fallback.
+
+    ``static("")`` returns the static root, which is a truthy string, so a
+    seal-less entry would ship as a broken image on a customer's trust center.
+    Catching it here costs one assertion.
+    """
+    from django.conf import settings
+
+    from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE
+
+    static_root = Path(settings.BASE_DIR) / "sbomify" / "static"
+    missing = {
+        key: meta["image"] for key, meta in BADGE_CATALOGUE.items() if not (static_root / meta["image"]).is_file()
+    }
+
+    assert not missing, f"badge seals that do not exist: {missing}"
 
 
 @pytest.mark.django_db

@@ -53,12 +53,12 @@ class Document(models.Model):
     class ComplianceSubcategory(models.TextChoices):
         """Compliance document subcategories for auto-detection and badging.
 
-        SOC 2 splits into Type I and Type II because the two say different
-        things: Type I is the design of the controls at a point in time, Type II
-        is their operation over a period. A reader looking for assurance wants
-        to know which one they are being shown. The undifferentiated ``soc2``
-        stays for rows written before the split and for workspaces that do not
-        want to say.
+        There is no plain SOC 2. A report is Type I, the design of the controls
+        at a point in time, or Type II, their operation over a period, and a
+        reader looking for assurance wants to know which one they are being
+        shown. The undifferentiated ``soc2`` this field used to offer said
+        neither, so it is gone and its rows moved to Type II, which is what is
+        almost always meant.
 
         ``cra`` is the conformity a manufacturer declares under Regulation (EU)
         2024/2847, which is a different kind of claim from an audit but reaches a
@@ -68,7 +68,6 @@ class Document(models.Model):
         """
 
         NDA = "nda", "NDA"
-        SOC2 = "soc2", "SOC 2"
         SOC2_TYPE1 = "soc2-type1", "SOC 2 Type I"
         SOC2_TYPE2 = "soc2-type2", "SOC 2 Type II"
         ISO27001 = "iso27001", "ISO 27001"

@@ -1613,6 +1613,7 @@
                 {% for credential in branded_credentials %}
                     <c-branded.credential label="{{ credential.label }}" summary="{{ credential.summary }}" image="{{ credential.image }}" href="#branded" note="{{ credential.note }}" />
                 {% endfor %}
+                <c-branded.credential label="FedRAMP" summary="No seal supplied, so the label does the work." href="#branded" />
             </div>
             <c-branded.nav class="mt-4">
             <c-branded.nav-item href="#branded" icon="fas fa-house" current>Overview</c-branded.nav-item>
