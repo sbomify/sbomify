@@ -37,6 +37,9 @@ class ObjectStoreClient(ABC):
     def object_exists(self, bucket_name: str, key: str) -> bool: ...
 
     @abstractmethod
+    def object_size(self, bucket_name: str, key: str) -> int | None: ...
+
+    @abstractmethod
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None: ...
 
     @abstractmethod
@@ -146,6 +149,19 @@ class S3ObjectStoreClient(ObjectStoreClient):
                 return False
             raise
 
+    def object_size(self, bucket_name: str, key: str) -> int | None:
+        """The stored object's size in bytes, or ``None`` if it is not there.
+
+        A HEAD, like ``object_exists``, so a caller with a size ceiling can
+        refuse an object before paying to download it.
+        """
+        try:
+            return int(self._resource.Object(bucket_name, key).content_length)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+                return None
+            raise
+
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
         self._resource.Bucket(bucket_name).upload_file(file_path, key)
 
@@ -236,6 +252,13 @@ class StorageClient:
             raise ValueError("This method is only for SBOMS bucket")
 
         return self.get_file_data(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
+
+    def get_sbom_size(self, object_name: str) -> int | None:
+        """Size of a stored SBOM in bytes, without downloading it."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+
+        return self._store.object_size(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
 
     def get_cached_aggregate(self, object_name: str) -> bytes | None:
         """Return a cached aggregated-SBOM blob by key, or None if absent (#998).

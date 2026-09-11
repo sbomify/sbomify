@@ -144,7 +144,10 @@ is the first place to extend when a tool is added.
 * **Every tool must be `async`.** In mcp 1.28 a synchronous tool function is
   called directly on the event loop with no thread offload, where Django ORM
   access raises `SynchronousOnlyOperation`. Tools wrap ORM work in
-  `sync_to_async`.
+  `run_db`, which is Channels' `database_sync_to_async`. The plain
+  `sync_to_async` is not a substitute: `/mcp` never fires Django's
+  `request_finished`, so only the Channels wrapper recycles a connection the
+  database closed under it.
 * **Host allow-listing.** The SDK enables DNS-rebinding protection by default
   with a localhost-only allow-list, which 421s every request behind a real
   hostname. `sbomify/apps/mcp/server.py` derives the allow-list from

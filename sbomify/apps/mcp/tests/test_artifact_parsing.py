@@ -169,3 +169,23 @@ def test_the_component_walk_is_depth_bounded():
 
     assert "leaf" not in names
     assert len(names) == _MAX_COMPONENT_DEPTH + 1
+
+
+def test_an_oversized_artifact_is_refused_before_it_is_downloaded():
+    """The parse cap was advisory: it only ran on bytes already in memory.
+
+    An artifact over the ceiling still cost its full transfer and its full
+    place in memory before anything refused it, which is the OOM the cap exists
+    to prevent. The size now comes from a HEAD first.
+    """
+    import pytest
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    from sbomify.apps.mcp.limits import MAX_ARTIFACT_PARSE_BYTES, enforce_stored_size
+
+    with pytest.raises(ToolError, match="over the"):
+        enforce_stored_size(MAX_ARTIFACT_PARSE_BYTES + 1, artifact_id="abc")
+
+    # At the ceiling, and a store that could not answer, both pass through.
+    enforce_stored_size(MAX_ARTIFACT_PARSE_BYTES, artifact_id="abc")
+    enforce_stored_size(None, artifact_id="abc")
