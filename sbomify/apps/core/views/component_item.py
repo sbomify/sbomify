@@ -59,7 +59,7 @@ class ComponentItemPublicView(View):
         item_type: str,
     ) -> HttpResponse:
         """The "Request Access" page standing in for a gated artifact."""
-        from sbomify.apps.core.services.access_control import gated_denial_copy
+        from sbomify.apps.core.services.access_control import gated_denial_copy, pending_request_needs_nda
 
         team = component_obj.team
         is_custom_domain = getattr(request, "is_custom_domain", False)
@@ -70,9 +70,14 @@ class ComponentItemPublicView(View):
 
         # Which position in the access flow this reader is at decides both the
         # message and the action; the service already worked that out.
-        message, offer_action, action_is_nda = gated_denial_copy(result, subject)
+        message, offer_action, action_is_nda = gated_denial_copy(
+            result, subject, nda_outstanding=pending_request_needs_nda(request.user, team)
+        )
         action_url = None
         if offer_action:
+            # The component page resolves, and where necessary creates, the
+            # access request the signing URL needs. That is a write this read
+            # path must not do, so the NDA action routes through it.
             if action_is_nda:
                 action_url = component_url
             elif team:
@@ -82,6 +87,9 @@ class ComponentItemPublicView(View):
             request,
             "core/access_denied_message.html.j2",
             {
+                # The gate is still the workspace's own Trust Center page, so it
+                # wears their logo, title and accent rather than sbomify's.
+                "brand": build_branding_context(team),
                 "error_message": message,
                 "request_access_url": action_url,
                 "action_label": "Sign NDA" if action_is_nda else "Request Access",

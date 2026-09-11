@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest
 
 from sbomify.apps.core.authz import READ_INTERNAL, ROLE_GUEST
@@ -62,14 +63,49 @@ GATED_DENIAL_COPY: dict[str, tuple[str, bool, bool]] = {
 _GATED_DENIAL_FALLBACK = GATED_DENIAL_COPY["gated_access_required"]
 
 
-def gated_denial_copy(result: "ComponentAccessResult", subject: str) -> tuple[str, bool, bool]:
+def gated_denial_copy(
+    result: "ComponentAccessResult", subject: str, nda_outstanding: bool = False
+) -> tuple[str, bool, bool]:
     """Reader-facing copy for a denied gated component.
 
     Returns ``(message, offer_action, action_is_nda)``. ``subject`` names what is
     being withheld, in the reader's words ("document", "SBOM").
+
+    ``nda_outstanding`` overrides a pending request. Pending normally means the
+    workspace owes the reader a decision, but a workspace that requires an NDA
+    lets the signature be given while the request is still open, so there the
+    next step is the reader's after all. The component page has always offered
+    it; without this the artifact gate would be the one place that does not.
     """
-    message, offer_action, action_is_nda = GATED_DENIAL_COPY.get(result.reason, _GATED_DENIAL_FALLBACK)
+    reason = result.reason
+    if nda_outstanding and reason == "gated_access_request_pending":
+        reason = "gated_nda_re_sign_required"
+
+    message, offer_action, action_is_nda = GATED_DENIAL_COPY.get(reason, _GATED_DENIAL_FALLBACK)
     return message.format(subject=subject), offer_action, action_is_nda
+
+
+def pending_request_needs_nda(user: User | AnonymousUser, team: Team | None) -> bool:
+    """Is a pending access request waiting on this reader's NDA signature?
+
+    Mirrors the same check on the component's public page, so a deep link to one
+    of its artifacts offers the reader the step that page would.
+    """
+    if team is None or not user.is_authenticated:
+        return False
+    if not team.get_company_nda_document():
+        return False
+
+    from sbomify.apps.documents.access_models import AccessRequest, NDASignature
+
+    pending = (
+        AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.PENDING)
+        .order_by("-requested_at")
+        .first()
+    )
+    if pending is None:
+        return False
+    return not NDASignature.objects.live().filter(access_request=pending).exists()
 
 
 def _user_has_signed_current_nda(user: User, team: Team) -> bool:

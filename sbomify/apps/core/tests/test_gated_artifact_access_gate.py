@@ -157,6 +157,51 @@ def test_an_unsigned_nda_asks_for_the_signature_not_for_another_request(team, sa
     assert reverse("core:component_details_public", kwargs={"component_id": document.component.id}) in content
 
 
+def test_a_pending_request_still_asks_for_an_outstanding_nda(team, sample_user):
+    """Pending usually means waiting on the workspace, but not when an NDA is owed.
+
+    The signature can be given while the request is open, and the component page
+    has always offered it, so the artifact gate must not be the one place that
+    reports the reader has nothing to do.
+    """
+    _require_nda(team)
+    document = _document(team, Component.Visibility.GATED)
+    AccessRequest.objects.create(team=team, user=sample_user, status=AccessRequest.Status.PENDING)
+
+    response = _visit(document, sample_user)
+
+    assert response.status_code == 403
+    content = response.content.decode()
+    assert "Please sign the NDA to view this document." in content
+    assert "Sign NDA" in content
+
+
+def test_a_pending_request_with_no_nda_required_has_nothing_to_do(team, sample_user):
+    document = _document(team, Component.Visibility.GATED)
+    AccessRequest.objects.create(team=team, user=sample_user, status=AccessRequest.Status.PENDING)
+
+    response = _visit(document, sample_user)
+
+    assert response.status_code == 403
+    content = response.content.decode()
+    assert "Your access request is being reviewed." in content
+    assert "Sign NDA" not in content
+
+
+def test_the_gate_wears_the_workspace_brand(team):
+    """It is the workspace's own Trust Center page, not an sbomify error page."""
+    team.branding_info = {**(team.branding_info or {}), "brand_color": "#C2410C", "branding_enabled": True}
+    team.save(update_fields=["branding_info"])
+    document = _document(team, Component.Visibility.GATED)
+
+    response = _visit(document)
+
+    assert response.status_code == 403
+    content = response.content.decode()
+    assert "--brand-color: #C2410C" in content
+    assert "Gating Co" in content
+
+
 def test_reader_with_a_grant_sees_the_document(team, sample_user):
     document = _document(team, Component.Visibility.GATED)
     Member.objects.create(team=team, user=sample_user, role="owner")
