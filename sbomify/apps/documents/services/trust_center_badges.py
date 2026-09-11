@@ -37,10 +37,11 @@ from sbomify.apps.teams.models import Team
 # assurance stops at, and the self-declared conformity after them.
 #
 # image is a static path, and nothing outside this table names one, so new
-# artwork is a file swap. An entry may leave it empty: c-branded.credential
-# falls back to drawing the label, which is how a certification we hold but have
-# no seal for is shown rather than hidden. Undifferentiated SOC 2 is the one
-# entry in that state today.
+# artwork is a file swap. Every entry carries one, and
+# test_every_badge_names_a_seal_that_exists keeps it that way: static() of an
+# empty path returns the static root, which is a truthy string that renders as a
+# broken image, so a seal-less entry fails loudly at CI rather than quietly on a
+# customer's trust center.
 BADGE_CATALOGUE: dict[str, dict[str, str]] = {
     Document.ComplianceSubcategory.ISO27001: {
         "summary": "Certified information security management.",
@@ -54,10 +55,6 @@ BADGE_CATALOGUE: dict[str, dict[str, str]] = {
         "summary": "Controls reviewed by an independent auditor at a point in time.",
         "image": "img/trust-center/badges/soc-2-type-i.svg",
     },
-    Document.ComplianceSubcategory.SOC2: {
-        "summary": "Independently audited security controls.",
-        "image": "",
-    },
     Document.ComplianceSubcategory.CRA: {
         "summary": "Conformity with the EU Cyber Resilience Act.",
         "image": "img/trust-center/badges/cra.svg",
@@ -70,13 +67,12 @@ _PUBLISHED = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
 
 
 def badge_seal_url(subcategory: str) -> str:
-    """Resolved URL for a certification's seal, empty when we have no artwork.
+    """Resolved URL for a certification's seal.
 
-    Resolved here rather than in the page, because ``{% static "" %}`` returns
-    the static root, which is a truthy string and renders as a broken image.
+    Resolved here rather than in the page so the trust center and the component
+    gallery cannot disagree about where a seal lives.
     """
-    path = BADGE_CATALOGUE.get(subcategory, {}).get("image", "")
-    return static(path) if path else ""
+    return static(BADGE_CATALOGUE[subcategory]["image"])
 
 
 def public_certification_badges(team: Team) -> list[dict[str, Any]]:
