@@ -93,7 +93,7 @@ and links them with `externalDocumentRefs` — that multi-document shape *is* th
 output, and flattening it here would mean shipping something Yocto never
 produced.
 
-```
+```bash
 tar --zstd -xf yocto_core-image-minimal.spdx.tar.zst -C <dir>
 ```
 
