@@ -13,6 +13,7 @@ friendlier face, so each state is covered here.
 """
 
 import pytest
+from django.core.cache import cache
 from django.test import Client
 from django.urls import reverse
 
@@ -173,3 +174,86 @@ def test_public_document_is_unaffected(team):
 
     assert response.status_code == 200
     assert document.name in response.content.decode()
+
+
+def test_an_artifact_id_that_names_nothing_is_still_not_found(team):
+    """The gate stands in for a withheld artifact, never for an absent one."""
+    document = _document(team, Component.Visibility.GATED)
+
+    response = Client().get(
+        reverse(
+            "core:component_item_public",
+            kwargs={
+                "component_id": document.component.id,
+                "item_type": "documents",
+                "item_id": "doesnotexist",
+            },
+        )
+    )
+
+    assert response.status_code == 404
+    assert "Request Access" not in response.content.decode()
+
+
+class TestOnACustomDomain:
+    """The Trust Center a reader actually visits is the workspace's own domain.
+
+    That is where every link on it is a slug rather than an id, which is the
+    routing this branch fixed, so the gate has to work there too.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _app_base_url(self, settings):
+        settings.APP_BASE_URL = "http://app.sbomify.com"
+
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        cache.clear()
+        yield
+        cache.clear()
+
+    @pytest.fixture
+    def team(self):
+        workspace = Team.objects.create(
+            name="Gating Co",
+            billing_plan="business",
+            custom_domain="trust.example.com",
+            custom_domain_validated=True,
+        )
+        workspace.is_public = True
+        workspace.save(update_fields=["is_public"])
+        return workspace
+
+    def test_the_gate_is_served_from_the_slug_url(self, team):
+        document = _document(team, Component.Visibility.GATED)
+
+        response = Client(HTTP_HOST="trust.example.com").get(
+            f"/components/{document.component.slug}/documents/{document.id}/"
+        )
+
+        assert response.status_code == 403
+        content = response.content.decode()
+        assert "Please request access to view this document." in content
+        # The way back is the clean component URL, not the /public/ one.
+        assert f"/component/{document.component.slug}/" in content
+        assert "/public/component/" not in content
+
+    def test_the_app_domain_redirects_before_gating(self, team):
+        """A gated artifact takes the same route to the custom domain a public one does."""
+        document = _document(team, Component.Visibility.GATED)
+
+        response = Client().get(
+            reverse(
+                "core:component_item_public",
+                kwargs={
+                    "component_id": document.component.id,
+                    "item_type": "documents",
+                    "item_id": document.id,
+                },
+            )
+        )
+
+        assert response.status_code == 302
+        assert response["Location"] == (
+            f"http://trust.example.com/components/{document.component.slug}/documents/{document.id}/"
+        )
