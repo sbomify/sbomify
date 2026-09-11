@@ -8,7 +8,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+from sbomify.apps.plugins.builtins.cisa_2025 import CISA2025MinimumElementsPlugin
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import AssessmentResult
 
@@ -18,7 +18,7 @@ class TestCISAPluginMetadata:
 
     def test_plugin_metadata(self) -> None:
         """Test that plugin returns correct metadata."""
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         metadata = plugin.get_metadata()
 
         assert metadata.name == "cisa-minimum-elements-2025"
@@ -27,7 +27,7 @@ class TestCISAPluginMetadata:
 
     def test_plugin_standard_info(self) -> None:
         """Test that plugin has correct standard information."""
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
 
         assert (
             plugin.STANDARD_NAME
@@ -41,14 +41,14 @@ class TestCISAPluginMetadata:
 
     def test_finding_ids_match_standard(self) -> None:
         """Test that finding IDs are properly formatted with standard version."""
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
 
         for key, finding_id in plugin.FINDING_IDS.items():
             assert finding_id.startswith("cisa-2025:"), f"Finding ID {finding_id} should start with 'cisa-2025:'"
 
     def test_all_eleven_elements_have_finding_ids(self) -> None:
         """Test that all 11 CISA 2025 elements have finding IDs."""
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
 
         expected_elements = {
             "sbom_author",
@@ -391,7 +391,7 @@ class TestCycloneDXValidation:
 
     def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
         """Helper to write SBOM to temp file and assess it."""
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
@@ -913,6 +913,55 @@ class TestSPDXValidation:
         ctx_finding = next(f for f in result.findings if "generation-context" in f.id)
         assert ctx_finding.status == "fail"
 
+    def test_cyclonedx_tool_check_with_malformed_tools(self) -> None:
+        """A non-dict entry under metadata.tools must score, not raise.
+
+        The orchestrator marks a run FAILED when assess() raises, so an
+        unguarded .get() here turns a malformed upload into a failed assessment
+        rather than a finding that says the tool is missing.
+        """
+        for tools in (
+            ["syft-1.0"],  # 1.4 shape, a bare string where a tool object belongs
+            {"components": ["syft-1.0"]},  # 1.5 shape, same inside components
+            {"components": "syft-1.0"},  # components not a list
+            "syft-1.0",  # tools not a list or a dict
+        ):
+            sbom_data = {
+                "bomFormat": "CycloneDX",
+                "specVersion": "1.6",
+                "metadata": {
+                    "timestamp": "2023-01-01T00:00:00Z",
+                    "component": {"bom-ref": "root", "type": "application", "name": "app"},
+                    "tools": tools,
+                },
+                "components": [],
+            }
+
+            result = self._assess_sbom(sbom_data)
+
+            assert result.summary.error_count == 0, f"errored on tools={tools!r}"
+            tool_finding = next(f for f in result.findings if f.id == "cisa-2025:tool-name")
+            assert tool_finding.status == "fail", f"scored a tool from {tools!r}"
+
+    def test_cyclonedx_tool_check_still_reads_a_well_formed_tool(self) -> None:
+        """The guard against hardening that stops reading real tool entries."""
+        for tools in ([{"name": "syft", "version": "1.0"}], {"components": [{"name": "syft"}]}):
+            sbom_data = {
+                "bomFormat": "CycloneDX",
+                "specVersion": "1.6",
+                "metadata": {
+                    "timestamp": "2023-01-01T00:00:00Z",
+                    "component": {"bom-ref": "root", "type": "application", "name": "app"},
+                    "tools": tools,
+                },
+                "components": [],
+            }
+
+            result = self._assess_sbom(sbom_data)
+
+            tool_finding = next(f for f in result.findings if f.id == "cisa-2025:tool-name")
+            assert tool_finding.status == "pass", f"missed the tool in {tools!r}"
+
     def test_malformed_relationship_type_as_list(self) -> None:
         """Regression: relationshipType as list should not crash."""
         sbom_data = {
@@ -942,7 +991,7 @@ class TestSPDXValidation:
 
     def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
         """Helper to write SBOM to temp file and assess it."""
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
@@ -955,7 +1004,7 @@ class TestErrorHandling:
 
     def test_invalid_json(self) -> None:
         """Test handling of invalid JSON file."""
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write("{ invalid json }")
@@ -967,7 +1016,7 @@ class TestErrorHandling:
 
     def test_unknown_format(self) -> None:
         """Test handling of unknown SBOM format."""
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         sbom_data = {"some": "data", "without": "format indicators"}
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -980,7 +1029,7 @@ class TestErrorHandling:
 
     def test_empty_components(self) -> None:
         """Test handling of SBOM with empty components list."""
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         sbom_data = {
             "bomFormat": "CycloneDX",
             "specVersion": "1.5",
@@ -1017,7 +1066,7 @@ class TestFindingDetails:
             "metadata": {},
         }
 
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
             f.flush()
@@ -1051,7 +1100,7 @@ class TestFindingDetails:
             },
         }
 
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
             f.flush()
@@ -1071,7 +1120,7 @@ class TestFindingDetails:
             "metadata": {"timestamp": "2023-01-01T00:00:00Z"},
         }
 
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
             f.flush()
@@ -1104,7 +1153,7 @@ class TestMultipleComponentFailures:
             },
         }
 
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
             f.flush()
@@ -1135,7 +1184,7 @@ class TestMultipleComponentFailures:
             },
         }
 
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
             f.flush()
@@ -1159,7 +1208,7 @@ class TestFormatDetection:
             "metadata": {"timestamp": "2023-01-01T00:00:00Z"},
         }
 
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
             f.flush()
@@ -1175,7 +1224,7 @@ class TestFormatDetection:
             "metadata": {"timestamp": "2023-01-01T00:00:00Z"},
         }
 
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
             f.flush()
@@ -1191,7 +1240,7 @@ class TestFormatDetection:
             "creationInfo": {"created": "2023-01-01T00:00:00Z"},
         }
 
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
             f.flush()
@@ -1490,7 +1539,7 @@ class TestSPDX3Validation:
 
     def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
         """Helper to write SBOM to temp file and assess it."""
-        plugin = CISAMinimumElementsPlugin()
+        plugin = CISA2025MinimumElementsPlugin()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(sbom_data, f)
