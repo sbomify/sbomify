@@ -283,14 +283,48 @@ class TestOnACustomDomain:
         assert f"/component/{document.component.slug}/" in content
         assert "/public/component/" not in content
 
-    def test_a_slug_collision_cannot_open_a_gated_artifact(self, team):
+    # Both assignments of the two names, because which one the scan reaches
+    # first is the database's collation to decide, and only one of these two
+    # orderings puts the gated component there. Pinning just one would pass on
+    # whichever backend happened to sort the public name first.
+    @pytest.mark.parametrize(
+        ("public_name", "gated_name"),
+        [("Policy Docs", "Policy-Docs"), ("Policy-Docs", "Policy Docs")],
+    )
+    def test_a_slug_collision_still_resolves_to_the_public_component(self, team, public_name, gated_name):
         """Component names are unique; the slugs derived from them are not.
 
-        "Policy Docs" and "Policy-Docs" are two components sharing one custom
-        domain URL, and since gated components now answer that URL too, a
-        collision can cross visibilities. It buys nothing: access is checked
-        against the artifact's own component, not against whichever component
-        the slug landed on, so the gated document stays withheld either way.
+        "Policy Docs" and "Policy-Docs" are two components sharing one URL, so
+        letting gated components answer it puts them in a contest they were not
+        in before. The public one keeps the slug: a link that worked must not
+        start opening something else.
+        """
+        public_doc = _document(team, Component.Visibility.PUBLIC, component_name=public_name)
+        gated_doc = _document(team, Component.Visibility.GATED, component_name=gated_name)
+        assert public_doc.component.slug == gated_doc.component.slug
+
+        response = Client(HTTP_HOST="trust.example.com").get(f"/component/{public_doc.component.slug}/")
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert public_name in content
+        assert "Request Access" not in content
+
+    def test_a_gated_component_takes_a_slug_no_public_one_answers(self, team):
+        _document(team, Component.Visibility.PUBLIC, component_name="Policy Docs")
+        gated_doc = _document(team, Component.Visibility.GATED, component_name="Vendor-Reviews")
+
+        response = Client(HTTP_HOST="trust.example.com").get(f"/component/{gated_doc.component.slug}/")
+
+        assert response.status_code == 200
+        assert "Request Access" in response.content.decode()
+
+    def test_a_slug_collision_cannot_open_a_gated_artifact(self, team):
+        """Whichever component the slug lands on, the artifact keeps its own gate.
+
+        Access is checked against the artifact's own component rather than the
+        one the URL resolved to, so a collision cannot be used to read a gated
+        document through a public component's URL.
         """
         public_doc = _document(team, Component.Visibility.PUBLIC, component_name="Policy Docs")
         gated_doc = _document(team, Component.Visibility.GATED, component_name="Policy-Docs")

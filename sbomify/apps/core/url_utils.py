@@ -635,10 +635,25 @@ def resolve_component_identifier(
         # the slug scan; the ID fallback below is still access-checked by callers.
         listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
 
+        # Public wins a tie. Names are unique per workspace, the slugs derived
+        # from them are not — "Foo Bar" and "Foo-Bar" are two components sharing
+        # one URL — so widening this scan puts gated components in a contest they
+        # were not in before. A link that already resolved to the public one must
+        # keep resolving to it; the gated component takes the slug only when no
+        # public component answers to it, and is reachable by id either way.
+        gated_match = None
+
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
         for component in Component.objects.filter(team=custom_domain_team, visibility__in=listable):
-            if slugify(component.name, allow_unicode=True) == slug:
+            if slugify(component.name, allow_unicode=True) != slug:
+                continue
+            if component.visibility == Component.Visibility.PUBLIC:
                 return component
+            if gated_match is None:
+                gated_match = component
+
+        if gated_match is not None:
+            return gated_match
 
         # Fallback: try by ID within the team
         try:
