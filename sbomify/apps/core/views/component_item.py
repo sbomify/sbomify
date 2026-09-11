@@ -33,12 +33,31 @@ logger = getLogger(__name__)
 
 class ComponentItemPublicView(View):
     @staticmethod
+    def _owns_artifact(item_type: str, item_id: str, component_id: str) -> bool:
+        """Is the requested artifact one this component actually holds?
+
+        The detail services authorize the artifact's own component and never
+        check it against the one in the URL. Without this, a private artifact id
+        from elsewhere, requested under a gated component's URL, drew a Request
+        Access page for a workspace whose approval could never release it.
+        """
+        from sbomify.apps.documents.services.documents import document_belongs_to_component
+        from sbomify.apps.sboms.services.sboms import sbom_belongs_to_component
+
+        if item_type == "documents":
+            return document_belongs_to_component(item_id, component_id)
+        return sbom_belongs_to_component(item_id, component_id)
+
+    @staticmethod
     def _gated_denial(request: HttpRequest, component_obj: Any) -> Any:
         """The access result when a gated component is withheld from this reader.
 
-        ``None`` when the component is not gated, or when this reader holds a
-        grant — in both cases the artifact fetch failed for some other reason and
-        that reason is the one to report.
+        ``None`` when the component is not gated, when this reader holds a grant,
+        or when the denial is not one an access request can lift — a token
+        denied by its workspace scope stays denied however the request is
+        answered, so offering one would send the reader somewhere pointless.
+        In each case the fetch failed for a reason of its own, and that reason is
+        the one to report.
         """
         from sbomify.apps.core.services.access_control import check_component_access
         from sbomify.apps.sboms.models import Component as SbomComponent
@@ -47,7 +66,9 @@ class ComponentItemPublicView(View):
             return None
 
         result = check_component_access(request, component_obj)
-        return None if result.has_access else result
+        if result.has_access or not result.requires_access_request:
+            return None
+        return result
 
     @staticmethod
     def _render_access_gate(
@@ -128,10 +149,14 @@ class ComponentItemPublicView(View):
         # the fetch 403s, and the generic error page left a reader who had just
         # been told to request access with "Forbidden" and nowhere to go.
         #
-        # Only a 403, and only after the fetch: both services resolve the
-        # artifact before they check access, so an id that names nothing is
-        # still Not Found rather than a gate for something that was never there.
-        denial = self._gated_denial(request, component_obj) if (not result.ok and result.status_code == 403) else None
+        # Only a 403, only after the fetch, and only for an artifact this
+        # component holds: both services resolve the artifact before they check
+        # access, so an id that names nothing is still Not Found rather than a
+        # gate for something that was never there, and an id belonging to some
+        # other component is that component's answer to give, not this one's.
+        denial = None
+        if not result.ok and result.status_code == 403 and self._owns_artifact(item_type, item_id, resolved_id):
+            denial = self._gated_denial(request, component_obj)
         if not result.ok and denial is None:
             return error_response(
                 request,

@@ -58,8 +58,11 @@ GATED_DENIAL_COPY: dict[str, tuple[str, bool, bool]] = {
     ),
 }
 
-# Any reason not listed above (a workspace-scoped token, say) is still a denial,
-# so fall back to the step that is almost always right rather than saying nothing.
+# Callers reach this map only for a denial an access request can actually lift
+# (``ComponentAccessResult.requires_access_request``), which is what keeps a
+# denial like a token's workspace scope off it: approving a request would not
+# change that answer. So an unlisted reason here is a gated one this table has
+# not learned yet, and asking is still the right step.
 _GATED_DENIAL_FALLBACK = GATED_DENIAL_COPY["gated_access_required"]
 
 
@@ -93,7 +96,8 @@ def pending_request_needs_nda(user: User | AnonymousUser, team: Team | None) -> 
     """
     if team is None or not user.is_authenticated:
         return False
-    if not team.get_company_nda_document():
+    company_nda = team.get_company_nda_document()
+    if not company_nda:
         return False
 
     from sbomify.apps.documents.access_models import AccessRequest, NDASignature
@@ -105,7 +109,12 @@ def pending_request_needs_nda(user: User | AnonymousUser, team: Team | None) -> 
     )
     if pending is None:
         return False
-    return not NDASignature.objects.live().filter(access_request=pending).exists()
+
+    # Against the current NDA, not merely against a live signature: a workspace
+    # that uploads a new version leaves the old signatures live by design, so
+    # matching on liveness alone would report a reader as done when what they
+    # signed is no longer the document being asked for.
+    return not NDASignature.objects.live().filter(access_request=pending, nda_document=company_nda).exists()
 
 
 def _user_has_signed_current_nda(user: User, team: Team) -> bool:

@@ -200,7 +200,14 @@ class ComponentDetailsPublicView(View):
             if pending_access_request and team is not None:
                 company_nda = team.get_company_nda_document()
                 if company_nda:
-                    has_signed = NDASignature.objects.live().filter(access_request=pending_access_request).exists()
+                    # Scoped to the current NDA: old signatures stay live when a
+                    # workspace uploads a new version, so liveness alone read as
+                    # "already signed" for a document they had never seen.
+                    has_signed = (
+                        NDASignature.objects.live()
+                        .filter(access_request=pending_access_request, nda_document=company_nda)
+                        .exists()
+                    )
                     if not has_signed:
                         pending_request_needs_nda = True
                         pending_request_id = pending_access_request.id

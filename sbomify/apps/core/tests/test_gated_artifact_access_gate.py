@@ -188,6 +188,61 @@ def test_a_pending_request_with_no_nda_required_has_nothing_to_do(team, sample_u
     assert "Sign NDA" not in content
 
 
+def test_a_stale_signature_still_owes_the_current_nda(team, sample_user):
+    """A new NDA version leaves the old signatures live, by design.
+
+    Reading liveness alone reported the reader as done with a document they had
+    never seen, so the gate told them to wait while the signature it wanted was
+    never going to arrive.
+    """
+    from sbomify.apps.documents.access_models import NDASignature
+
+    old_nda = _document(team, Component.Visibility.PRIVATE, component_name="NDA v1")
+    document = _document(team, Component.Visibility.GATED)
+    request = AccessRequest.objects.create(team=team, user=sample_user, status=AccessRequest.Status.PENDING)
+    NDASignature.objects.create(
+        access_request=request,
+        nda_document=old_nda,
+        nda_content_hash="0" * 64,
+        signed_name="Test User",
+        ip_address="203.0.113.1",
+    )
+    # The workspace has since replaced it.
+    current_nda = _document(team, Component.Visibility.PRIVATE, component_name="NDA v2")
+    team.branding_info = {**(team.branding_info or {}), "company_nda_document_id": current_nda.id}
+    team.save(update_fields=["branding_info"])
+
+    response = _visit(document, sample_user)
+
+    assert response.status_code == 403
+    assert "Please sign the NDA to view this document." in response.content.decode()
+
+
+def test_an_artifact_from_another_component_keeps_that_components_answer(team, sample_user):
+    """Approval here could never release something this component does not hold.
+
+    The detail services authorize the artifact's own component, so a private id
+    borrowed from elsewhere used to draw a Request Access page for the gated
+    component named in the URL.
+    """
+    gated = _document(team, Component.Visibility.GATED)
+    elsewhere = _document(team, Component.Visibility.PRIVATE, component_name="Internal Only")
+
+    response = Client().get(
+        reverse(
+            "core:component_item_public",
+            kwargs={
+                "component_id": gated.component.id,
+                "item_type": "documents",
+                "item_id": elsewhere.id,
+            },
+        )
+    )
+
+    assert response.status_code == 403
+    assert "Request Access" not in response.content.decode()
+
+
 def test_the_gate_wears_the_workspace_brand(team):
     """It is the workspace's own Trust Center page, not an sbomify error page."""
     team.branding_info = {**(team.branding_info or {}), "brand_color": "#C2410C", "branding_enabled": True}
