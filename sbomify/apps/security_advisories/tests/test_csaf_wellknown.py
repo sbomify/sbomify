@@ -173,3 +173,60 @@ class TestWhiteDocument:
             _request("/", _public(team)), year="2026", filename="nothing-here.json"
         )
         assert response.status_code == 404
+
+
+class TestDistributionMarker:
+    """The marker a poller uses to decide whether to fetch again."""
+
+    def _marker(self, team):
+        team.refresh_from_db()
+        return _json(WhiteFeedView.as_view()(_request(csaf_provider.WHITE_FEED_PATH, team)))["feed"]["updated"]
+
+    def test_publishing_moves_it_forward(self, team, rich_advisory) -> None:  # noqa: F811
+        team = _public(team)
+        team.refresh_from_db()
+        assert team.csaf_feed_updated_at is not None
+
+    def test_deleting_the_newest_advisory_does_not_move_it_backwards(self, team, rich_advisory) -> None:  # noqa: F811
+        """The bug an aggregate over the surviving rows would have: a poller misses the removal."""
+        team = _public(team)
+        before = self._marker(team)
+
+        rich_advisory.delete()
+
+        after = self._marker(team)
+        assert _json(WhiteFeedView.as_view()(_request(csaf_provider.WHITE_FEED_PATH, team)))["feed"]["entry"] == []
+        assert after > before
+
+    def test_re_embargoing_does_not_move_it_backwards(self, team, rich_advisory) -> None:  # noqa: F811
+        team = _public(team)
+        before = self._marker(team)
+
+        _gate(team, rich_advisory, SecurityAdvisory.Visibility.GATED)
+
+        assert self._marker(team) > before
+
+    def test_a_never_public_advisory_does_not_move_it(self, team) -> None:
+        """A marker the world can poll must not leak the timing of embargoed work."""
+        team = _public(team)
+        team.csaf_feed_updated_at = None
+        team.save(update_fields=["csaf_feed_updated_at"])
+
+        SecurityAdvisory.objects.create(
+            team=team,
+            title="Embargoed",
+            visibility=SecurityAdvisory.Visibility.GATED,
+        )
+
+        team.refresh_from_db()
+        assert team.csaf_feed_updated_at is None
+
+    def test_provider_metadata_and_feed_agree(self, team, rich_advisory) -> None:  # noqa: F811
+        # The signal writes with queryset.update(), so the in-memory row is stale
+        # until reloaded. A request reloads it in middleware; a test must say so.
+        team = _public(team)
+        team.refresh_from_db()
+
+        metadata = _json(ProviderMetadataView.as_view()(_request(csaf_provider.PROVIDER_METADATA_PATH, team)))
+
+        assert metadata["last_updated"] == self._marker(team)

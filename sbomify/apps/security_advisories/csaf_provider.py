@@ -21,7 +21,6 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from django.db.models import Max
 from django.utils import timezone
 
 from sbomify.apps.security_advisories.csaf import CSAF_VERSION, render_csaf
@@ -29,6 +28,7 @@ from sbomify.apps.security_advisories.services.advisories import display_id
 from sbomify.apps.security_advisories.services.trust_center import (
     anonymous_projection,
     public_advisories,
+    public_advisory_index,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -71,21 +71,34 @@ def _stamp(value: Any) -> str:
     return value.isoformat() if value else timezone.now().isoformat()
 
 
+def distribution_marker(team: Team) -> str:
+    """When this workspace's TLP:WHITE distribution last changed.
+
+    Read from the workspace rather than aggregated over the advisories still
+    present, because deleting or re-embargoing a public advisory takes the row
+    holding the maximum away with it: the aggregate would move backwards and a
+    poller holding the older value would never fetch again. ``signals.py`` only
+    ever moves this forward.
+
+    Falls back to the workspace's own creation date, so a workspace that has
+    published nothing yet still returns something stable rather than a marker
+    that changes on every request.
+    """
+    return _stamp(team.csaf_feed_updated_at or team.created_at)
+
+
 def provider_metadata(team: Team, *, base_url: str) -> dict[str, Any]:
     """CSAF 2.0 section 7.1.8 provider metadata for one workspace.
 
-    ``last_updated`` tracks the newest TLP:WHITE advisory rather than "now", so
-    a polling aggregator can tell a republished document from an unchanged one.
-    An empty feed is legitimate CSAF and is what a workspace serves before its
-    first disclosure; it is how aggregators find you in advance rather than
-    after.
+    ``last_updated`` is the workspace's distribution marker, so a polling
+    aggregator can tell a changed distribution from an unchanged one without
+    refetching the feed. An empty feed is legitimate CSAF and is what a
+    workspace serves before its first disclosure; it is how aggregators find
+    you in advance rather than after.
     """
-    # Max rather than .first(): the queryset is ordered by publication date, so
-    # its first row is the newest disclosure, not the most recently revised one.
-    newest = public_advisories(team).aggregate(Max("updated_at"))["updated_at__max"]
     return {
         "canonical_url": f"{base_url}{PROVIDER_METADATA_PATH}",
-        "last_updated": _stamp(newest),
+        "last_updated": distribution_marker(team),
         "metadata_version": CSAF_VERSION,
         "publisher": {
             "category": "vendor",
@@ -112,12 +125,9 @@ def provider_metadata(team: Team, *, base_url: str) -> dict[str, Any]:
 def rolie_feed(team: Team, *, base_url: str) -> dict[str, Any]:
     """The RFC 8322 feed listing every TLP:WHITE advisory this workspace has published."""
     entries = []
-    newest = None
-    for advisory in public_advisories(team):
+    for advisory in public_advisory_index(team):
         url = f"{base_url}{document_path(advisory)}"
         updated = advisory.updated_at or advisory.published_at
-        if updated and (newest is None or updated > newest):
-            newest = updated
         entries.append(
             {
                 "id": str(display_id(advisory)),
@@ -135,7 +145,7 @@ def rolie_feed(team: Team, *, base_url: str) -> dict[str, Any]:
             "title": f"{team.display_name} security advisories (TLP:WHITE)",
             "link": [{"rel": "self", "href": f"{base_url}{WHITE_FEED_PATH}"}],
             "category": [{"scheme": ROLIE_CATEGORY_SCHEME, "term": "csaf"}],
-            "updated": _stamp(newest),
+            "updated": distribution_marker(team),
             "entry": entries,
         }
     }
@@ -149,9 +159,13 @@ def white_document(team: Team, year: str, filename: str, *, base_url: str, gener
     the URL. A name that no listed advisory owns is simply not found, which is
     also the answer for a gated or private one.
     """
-    for advisory in public_advisories(team):
-        if _year(advisory) != year or csaf_filename(advisory) != filename:
+    for row in public_advisory_index(team):
+        if _year(row) != year or csaf_filename(row) != filename:
             continue
+        # Only now is the graph worth loading, and only for this one advisory.
+        advisory = public_advisories(team).filter(pk=row.pk).first()
+        if advisory is None:  # pragma: no cover - removed between the two queries
+            return None
         projection = anonymous_projection(team, advisory)
         return render_csaf(
             projection,

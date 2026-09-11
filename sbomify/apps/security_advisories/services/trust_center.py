@@ -246,13 +246,35 @@ def anonymous_viewer_scope(team: Any) -> ViewerScope:
 
 
 def public_advisories(team: Any) -> Any:
-    """Advisories a CSAF TLP:WHITE distribution may carry.
+    """Advisories a CSAF TLP:WHITE distribution may carry, with the graph loaded.
 
     ``_readable_queryset`` already drops PRIVATE and anything not published or
     withdrawn. GATED goes too: its whole point is that a reader has to be known
     to see it, and nobody is known here.
+
+    This one prefetches the whole advisory graph, so it is for rendering a
+    document. Listing wants ``public_advisory_index``.
     """
     return _readable_queryset(team).filter(visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+
+def public_advisory_index(team: Any) -> Any:
+    """The same advisories as scalar rows, for listing and for resolving a filename.
+
+    Same three filters, none of the prefetches: a feed prints an id, a title and
+    two timestamps, so pulling vulnerabilities, product statuses, version ranges,
+    references and events for every advisory would load the entire disclosure
+    history of a workspace to render a list of links.
+    """
+    return (
+        SecurityAdvisory.objects.filter(
+            team=team,
+            status__in=_READABLE_STATUSES,
+            visibility=SecurityAdvisory.Visibility.PUBLIC,
+        )
+        .only("id", "tracking_id", "title", "published_at", "created_at", "updated_at")
+        .order_by("-published_at", "-created_at")
+    )
 
 
 def anonymous_projection(team: Any, advisory: SecurityAdvisory) -> dict[str, Any]:

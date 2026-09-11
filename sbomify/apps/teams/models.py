@@ -256,6 +256,17 @@ class Team(models.Model):
             "disclose, and a Trust Center is readable by anyone holding the link."
         ),
     )
+    csaf_feed_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=(
+            "When this workspace's CSAF TLP:WHITE distribution last changed. Bumped whenever a "
+            "public advisory is written or deleted, because a marker aggregated from the advisories "
+            "still present would move backwards when one is removed and a polling aggregator would "
+            "miss the removal."
+        ),
+    )
     security_txt_config = models.JSONField(
         default=dict,
         blank=True,
