@@ -243,6 +243,14 @@ class SecurityAdvisory(models.Model):
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # A CSAF consumer deduplicates by (tracking id, version), so a rendered
+    # change that leaves the version alone is a change it may discard. The public
+    # timeline cannot carry that on its own: a CVSS edit or a renamed product
+    # changes the document and posts no public event. ``signals.py`` advances
+    # these from every write the document is rendered from; see
+    # ``csaf._document`` for how they become the last revision entry.
+    csaf_revision = models.PositiveIntegerField(default=0, editable=False)
+    csaf_revision_at = models.DateTimeField(null=True, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

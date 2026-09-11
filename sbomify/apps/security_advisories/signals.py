@@ -34,6 +34,14 @@ is not visible whatever visibility claims, and an internal ``COMMENT`` or a
 ``PUBLIC_EVENT_TYPES``. A marker anyone may poll must not move for work nobody
 may see, or it leaks the timing of an embargo through a public endpoint.
 
+**Each document carries its own revision too.** The workspace marker says the
+distribution moved; it does not say which document did, and a CSAF consumer
+deduplicates by ``(tracking id, version)``. So every write that bumps the marker
+also advances ``csaf_revision``/``csaf_revision_at`` on the advisories it
+rendered into, and ``csaf._document`` turns those into the document's last
+revision entry. A row is counted on both sides of a foreign-key change: moving a
+vulnerability to another advisory takes content out of the first document.
+
 Bulk writes bypass model signals. The community-downgrade visibility update
 explicitly uses ``track_component_changes``; M2M manager operations use
 ``m2m_changed``. New bulk write paths must use the same invalidation helpers.
@@ -79,31 +87,50 @@ _TO_ADVISORY: dict[type, Callable[[Any], SecurityAdvisory | None]] = {
 }
 
 
-def _bump(team_ids: Iterable[Any]) -> None:
-    from sbomify.apps.teams.models import Team
-
-    team_ids = [t for t in team_ids if t is not None]
-    if not team_ids:
-        return
+def _forward_only(column: str) -> Any:
     # Greatest against the stored value, so an out-of-order commit cannot install
     # an older timestamp. Coalesce because GREATEST propagates NULL on some
-    # backends and the column starts NULL.
-    Team.objects.filter(pk__in=team_ids).update(
-        csaf_feed_updated_at=Greatest(
-            Coalesce(F("csaf_feed_updated_at"), Now(), output_field=DateTimeField()),
-            Now(),
-            output_field=DateTimeField(),
-        )
+    # backends and both columns start NULL.
+    return Greatest(
+        Coalesce(F(column), Now(), output_field=DateTimeField()),
+        Now(),
+        output_field=DateTimeField(),
     )
 
 
-def _schedule(team_ids: Iterable[Any]) -> None:
-    ids = list(team_ids)
-    if not ids:
+def _in_batches(ids: Iterable[Any]) -> Iterator[list[Any]]:
+    """A bulk write can touch thousands of rows; one ``IN`` list must not carry them all."""
+    present = [value for value in ids if value is not None]
+    for offset in range(0, len(present), 500):
+        yield present[offset : offset + 500]
+
+
+def _bump(team_ids: Iterable[Any], advisory_ids: Iterable[Any] = ()) -> None:
+    from sbomify.apps.teams.models import Team
+
+    for batch in _in_batches(team_ids):
+        Team.objects.filter(pk__in=batch).update(csaf_feed_updated_at=_forward_only("csaf_feed_updated_at"))
+    for batch in _in_batches(advisory_ids):
+        # The workspace marker tells a poller the distribution moved; this tells
+        # it which document moved, because a consumer that deduplicates by
+        # (tracking id, version) drops a refetched document whose version it has
+        # already seen. ``update`` rather than ``save``: it must not re-enter
+        # these receivers, and ``updated_at`` is the advisory's own edit time,
+        # not the distribution's.
+        SecurityAdvisory.objects.filter(pk__in=batch).update(
+            csaf_revision=F("csaf_revision") + 1,
+            csaf_revision_at=_forward_only("csaf_revision_at"),
+        )
+
+
+def _schedule(team_ids: Iterable[Any], advisory_ids: Iterable[Any] = ()) -> None:
+    teams = list(team_ids)
+    advisories = list(advisory_ids)
+    if not teams and not advisories:
         return
     # After commit, so the workspace row is never taken while an advisory row is
     # held: that ordering is what would deadlock against publish_advisory.
-    transaction.on_commit(lambda: _bump(ids))
+    transaction.on_commit(lambda: _bump(teams, advisories))
 
 
 def _renders_in_public_document(advisory: SecurityAdvisory, instance: Any) -> bool:
@@ -140,26 +167,35 @@ def _renders_in_public_document(advisory: SecurityAdvisory, instance: Any) -> bo
 
 
 def _before_advisory_save(sender: Any, instance: SecurityAdvisory, **kwargs: Any) -> None:
-    instance.__dict__["_csaf_previous_public_team"] = (
+    team_id = (
         SecurityAdvisory.objects.filter(_IN_PUBLIC_DISTRIBUTION, pk=instance.pk)
         .values_list("team_id", flat=True)
         .first()
     )
+    instance.__dict__["_csaf_previous_public"] = (team_id, instance.pk) if team_id is not None else None
 
 
 def _before_child_save(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """Record the document this row was in before the save.
+
+    Every one of these rows reaches its advisory through a foreign key, and a
+    foreign key can be repointed. Moving a vulnerability from a public advisory
+    to a gated one takes content out of the first document, and the post-save
+    receiver can only see where the row landed — so where it came from is read
+    here, while the old value is still in the table.
+    """
     previous = sender.objects.filter(pk=instance.pk).first()
-    instance._csaf_previous_public_team = None
+    instance._csaf_previous_public = None
     if previous is not None:
         advisory = _TO_ADVISORY[sender](previous)
         if advisory is not None and _renders_in_public_document(advisory, previous):
-            instance._csaf_previous_public_team = advisory.team_id
+            instance._csaf_previous_public = (advisory.team_id, advisory.pk)
 
 
 def _on_advisory_write(sender: Any, instance: Any, **kwargs: Any) -> None:
     if kwargs.get("raw"):
         return
-    team_ids = {instance.__dict__.pop("_csaf_previous_public_team", None)}
+    touched = {instance.__dict__.pop("_csaf_previous_public", None)}
     resolve = _TO_ADVISORY.get(type(instance))
     if resolve is None:
         return
@@ -168,20 +204,20 @@ def _on_advisory_write(sender: Any, instance: Any, **kwargs: Any) -> None:
         return
     advisory = resolve(persisted)
     if advisory is not None and _renders_in_public_document(advisory, persisted):
-        team_ids.add(advisory.team_id)
-    _schedule(team_ids - {None})
+        touched.add((advisory.team_id, advisory.pk))
+    touched.discard(None)
+    _schedule({team_id for team_id, _ in touched}, {advisory_id for _, advisory_id in touched})
 
 
-def _product_signature(link_ids: list[Any]) -> dict[Any, dict[Any, tuple[Any, str]]]:
-    signature: dict[Any, dict[Any, tuple[Any, str]]] = {}
+def _product_signature(link_ids: list[Any]) -> dict[Any, tuple[Any, Any, Any, str]]:
+    signature: dict[Any, tuple[Any, Any, Any, str]] = {}
     scopes: dict[Any, Any] = {}
     for offset in range(0, len(link_ids), 500):
-        for team_id, products in _product_signature_batch(link_ids[offset : offset + 500], scopes).items():
-            signature.setdefault(team_id, {}).update(products)
+        signature.update(_product_signature_batch(link_ids[offset : offset + 500], scopes))
     return signature
 
 
-def _product_signature_batch(link_ids: list[Any], scopes: dict[Any, Any]) -> dict[Any, dict[Any, tuple[Any, str]]]:
+def _product_signature_batch(link_ids: list[Any], scopes: dict[Any, Any]) -> dict[Any, tuple[Any, Any, Any, str]]:
     """Only the product identities/names visible in the anonymous projection.
 
     Read scalar product links, not the full vulnerability graph. Keeping hidden
@@ -205,18 +241,20 @@ def _product_signature_batch(link_ids: list[Any], scopes: dict[Any, Any]) -> dic
     for pk, team in teams.items():
         if pk not in scopes:
             scopes[pk] = anonymous_viewer_scope(team)
-    signature: dict[Any, dict[Any, tuple[Any, str]]] = {}
+    signature: dict[Any, tuple[Any, Any, Any, str]] = {}
     for link in links:
         if not product_link_is_readable(link, scopes[link.advisory.team_id]):
             continue
-        signature.setdefault(link.advisory.team_id, {})[link.pk] = (
+        signature[link.pk] = (
+            link.advisory.team_id,
+            link.advisory_id,
             link.product_id,
             link.product.name if link.product is not None else link.product_name,
         )
     return signature
 
 
-def _capture_products(product_ids: Iterable[Any]) -> tuple[list[Any], dict[Any, dict[Any, tuple[Any, str]]]]:
+def _capture_products(product_ids: Iterable[Any]) -> tuple[list[Any], dict[Any, tuple[Any, Any, Any, str]]]:
     link_ids = list(AdvisoryProduct.objects.filter(product_id__in=product_ids).values_list("pk", flat=True))
     return link_ids, _product_signature(link_ids)
 
@@ -230,7 +268,18 @@ def _schedule_products(snapshot: Any) -> None:
 
     def compare() -> None:
         after = _product_signature(link_ids)
-        _bump(team_id for team_id in before.keys() | after.keys() if before.get(team_id) != after.get(team_id))
+        teams: set[Any] = set()
+        advisories: set[Any] = set()
+        for link_id in before.keys() | after.keys():
+            if before.get(link_id) == after.get(link_id):
+                continue
+            # Both sides: a link that stops being readable takes its name out of
+            # the document it was in, which is the side only ``before`` knows.
+            for row in (before.get(link_id), after.get(link_id)):
+                if row is not None:
+                    teams.add(row[0])
+                    advisories.add(row[1])
+        _bump(teams, advisories)
 
     transaction.on_commit(compare)
 
@@ -357,7 +406,9 @@ def connect() -> None:
     pre_save.connect(_before_team_save, sender=Team, dispatch_uid="csaf_marker_team_before")
     post_save.connect(_on_team_save, sender=Team, dispatch_uid="csaf_marker_team_save")
 
-    for child_model in (AdvisoryProduct, AdvisoryProductStatus, AdvisoryVersionRange):
+    for child_model in _TO_ADVISORY:
+        if child_model is SecurityAdvisory:  # Has its own, reading the row's own team.
+            continue
         pre_save.connect(
             _before_child_save, sender=child_model, dispatch_uid=f"csaf_marker_child_before_{child_model.__name__}"
         )

@@ -895,3 +895,106 @@ class TestPublisherIdentityMovesTheMarker:
         team.save(update_fields=["security_txt_config"])
 
         assert self._marker(team) == before
+
+
+@pytest.mark.django_db(transaction=True)
+class TestDocumentRevision:
+    """What a consumer that deduplicates by (tracking id, version) is told.
+
+    The feed's ``updated`` says the distribution moved. On its own that is not
+    enough: a consumer holding version 3 of a document and offered version 3
+    again may discard the refetch, so every change it can read has to advance
+    the document's own revision — including the ones the public timeline never
+    records, like a CVSS correction or a renamed product.
+    """
+
+    def _tracking(self, team, advisory):
+        team.refresh_from_db()
+        advisory.refresh_from_db()
+        return _json(_document(team, advisory))["document"]["tracking"]
+
+    def test_a_cvss_edit_advances_the_version(self, team, rich_advisory) -> None:  # noqa: F811
+        team = _public(team)
+        before = self._tracking(team, rich_advisory)
+
+        vulnerability = rich_advisory.vulnerabilities.first()
+        vulnerability.cvss_scores = [cvss_entry(7.5, VECTOR)]
+        vulnerability.save(update_fields=["cvss_scores"])
+
+        after = self._tracking(team, rich_advisory)
+        assert int(after["version"]) > int(before["version"])
+        assert after["current_release_date"] > before["current_release_date"]
+
+    def test_a_renamed_product_advances_the_version(self, team, rich_advisory, gateway) -> None:  # noqa: F811
+        """The rename is on a row the advisory does not own, and posts no event."""
+        team = _public(team)
+        before = self._tracking(team, rich_advisory)
+
+        gateway.name = "Gateway Pro"
+        gateway.save(update_fields=["name"])
+
+        assert int(self._tracking(team, rich_advisory)["version"]) > int(before["version"])
+
+    def test_the_version_does_not_move_without_a_change(self, team, rich_advisory) -> None:  # noqa: F811
+        team = _public(team)
+        first = self._tracking(team, rich_advisory)
+
+        assert self._tracking(team, rich_advisory) == first
+
+    def test_an_embargoed_edit_does_not_advance_it(self, team, rich_advisory) -> None:  # noqa: F811
+        """The version is as public as the marker, so it may not leak hidden work."""
+        team = _public(team)
+        gated = SecurityAdvisory.objects.create(
+            team=team, title="Embargoed", visibility=SecurityAdvisory.Visibility.GATED
+        )
+        before = self._tracking(team, rich_advisory)
+
+        gated.summary = "Still under embargo."
+        gated.save(update_fields=["summary"])
+
+        assert self._tracking(team, rich_advisory) == before
+
+    def test_the_revision_history_stays_a_unique_sequence(self, team, rich_advisory) -> None:  # noqa: F811
+        """A document is only valid CSAF while its revision numbers stay unique."""
+        team = _public(team)
+        AdvisoryEvent.objects.create(
+            advisory=rich_advisory,
+            event_type=AdvisoryEvent.EventType.UPDATE,
+            body="Fix released.",
+        )
+        vulnerability = rich_advisory.vulnerabilities.first()
+        vulnerability.cvss_scores = [cvss_entry(7.5, VECTOR)]
+        vulnerability.save(update_fields=["cvss_scores"])
+
+        document = _json(_document(_public(team), rich_advisory))
+        validate_csaf(document)
+        numbers = [int(revision["number"]) for revision in document["document"]["tracking"]["revision_history"]]
+        assert numbers == sorted(set(numbers))
+        assert document["document"]["tracking"]["version"] == str(numbers[-1])
+
+    @pytest.mark.parametrize("relation", ["vulnerabilities", "references"])
+    def test_moving_a_child_away_updates_the_document_it_left(self, team, rich_advisory, relation) -> None:  # noqa: F811
+        """The post-save receiver only sees where the row landed.
+
+        ``advisory`` is an ordinary editable foreign key, so a row can be moved
+        out of a public advisory into an embargoed one. That removes content
+        from the first document, and nothing about the new parent says so.
+        """
+        team = _public(team)
+        destination = SecurityAdvisory.objects.create(
+            team=team, title="Embargoed", visibility=SecurityAdvisory.Visibility.GATED
+        )
+        row = getattr(rich_advisory, relation).first()
+        assert row is not None
+        before = self._tracking(team, rich_advisory)
+        marker = self._marker_of(team)
+
+        row.advisory = destination
+        row.save(update_fields=["advisory"])
+
+        assert int(self._tracking(team, rich_advisory)["version"]) > int(before["version"])
+        assert self._marker_of(team) > marker
+
+    def _marker_of(self, team):
+        team.refresh_from_db()
+        return team.csaf_feed_updated_at

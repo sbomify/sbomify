@@ -649,6 +649,11 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         ]
         projection["acknowledgments"] = advisory.acknowledgments or []
         projection["statuses"] = _public_statuses(advisory, scope)
+        # Only the CSAF renderer reads these: the trust centre shows a timeline,
+        # a machine consumer needs a version that moves for every rendered
+        # change. See ``signals.py`` for where they are advanced.
+        projection["csaf_revision"] = advisory.csaf_revision
+        projection["csaf_revision_at"] = advisory.csaf_revision_at
     return projection
 
 
