@@ -43,6 +43,29 @@
 {% block content %}
     {# Sections take their rhythm from the column, not from a margin each. #}
     <div class="flex flex-col gap-14">
+        {# ---- Certifications -------------------------------------------------- #}
+        {% comment %}
+        First on the page, because it is the question a visitor came to answer:
+        are they certified. Everything below is detail on top of that.
+
+        The whole section disappears when nothing is earned rather than showing
+        an empty state. A section reading "no certifications" at the top of a
+        trust center announces an absence that the workspace may simply not have
+        uploaded yet, and every other section here is a list that is genuinely
+        empty, not a claim about the workspace.
+        {% endcomment %}
+        {% if certifications %}
+            <section class="flex flex-col gap-4 scroll-mt-[4.5rem]" id="certifications">
+                <c-branded.section-header title="Certifications" subtitle="Independent audits and certifications we hold. Open one for the report behind it." />
+                <div class="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]">
+                    {% for certification in certifications %}
+                        {% static certification.image as certification_seal %}
+                        {% public_url 'core:component_details_public' component_id=certification.component_id component_slug=certification.component_slug as certification_url %}
+                        <c-branded.credential label="{{ certification.label }}" summary="{{ certification.summary }}" image="{{ certification_seal }}" href="{{ certification_url }}" note="{{ certification.note }}" />
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
         {# ---- Security advisories -------------------------------------------- #}
         <section class="flex flex-col gap-4 scroll-mt-[4.5rem]" id="advisories">
             <c-branded.section-header title="Security advisories" subtitle="Vulnerabilities we have disclosed, what they affect, and where the fix is.">

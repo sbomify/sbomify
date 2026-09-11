@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.models import LATEST_RELEASE_NAME, Component, Product, Release
 from sbomify.apps.core.tests.e2e.factories import *  # noqa: F403
+from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 
 
@@ -224,6 +225,28 @@ def trust_center_product(product_factory, component_factory, sbom_factory, docum
         visibility=Component.Visibility.PUBLIC,
     )
     document_factory(doc, name="soc2-report.pdf", version="2025")
+
+    # Company-wide certifications, each with a file on it, which is what earns
+    # the badges on the trust center overview.
+    for label, subcategory, filename in [
+        ("ISO 27001", Document.ComplianceSubcategory.ISO27001, "iso27001-certificate.pdf"),
+        ("SOC 2 Type II", Document.ComplianceSubcategory.SOC2_TYPE2, "soc2-type2-report.pdf"),
+        ("SOC 2 Type I", Document.ComplianceSubcategory.SOC2_TYPE1, "soc2-type1-report.pdf"),
+    ]:
+        certification = component_factory(
+            label,
+            Component.ComponentType.DOCUMENT,
+            visibility=Component.Visibility.PUBLIC,
+            is_global=True,
+        )
+        document_factory(
+            certification,
+            name=filename,
+            version="2026",
+            document_type=Document.DocumentType.COMPLIANCE,
+            compliance_subcategory=subcategory,
+            document_filename=filename,
+        )
 
     ProductIdentifier.objects.bulk_create(
         [

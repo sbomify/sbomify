@@ -6,6 +6,9 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.documents.models import Document
+from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE
+
 # The gallery's index and its section order come from here, so a component can
 # never be demoed without appearing in the index (or listed without a demo).
 GALLERY_SECTIONS: list[dict[str, str]] = [
@@ -73,6 +76,18 @@ class DesignSystemView(LoginRequiredMixin, View):
                 {"label": "Pale brand", "brand": "#FDE68A"},
                 {"label": "Mint brand", "brand": "#6EE7B7"},
                 {"label": "No brand set", "brand": ""},
+            ],
+            # Built from the real badge catalogue, so a certification added to
+            # the trust center shows up here without anybody remembering to
+            # update the gallery.
+            "branded_credentials": [
+                {
+                    "label": dict(Document.ComplianceSubcategory.choices)[key],
+                    "summary": meta["summary"],
+                    "image": meta["image"],
+                    "note": "Report available on request" if index == 0 else "",
+                }
+                for index, (key, meta) in enumerate(BADGE_CATALOGUE.items())
             ],
             "demo_tokens": [
                 "primary",

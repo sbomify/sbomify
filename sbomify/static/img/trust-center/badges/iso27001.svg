@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-hidden="true" width="120" height="120">
+  <title>ISO 27001 (placeholder)</title>
+  <circle cx="60" cy="60" r="57" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2.5"/>
+  <circle cx="60" cy="60" r="49" fill="none" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="60" y="37" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="1.8" fill="#94a3b8">CERTIFIED</text>
+  <text x="60" y="55" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="21" font-weight="700" letter-spacing="0.5" fill="#334155">ISO</text>
+  <text x="60" y="75" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="21" font-weight="700" letter-spacing="0.5" fill="#334155">27001</text>
+  <line x1="36" y1="85" x2="84" y2="85" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="60" y="98" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="8" font-weight="600" letter-spacing="1.2" fill="#94a3b8">PLACEHOLDER</text>
+</svg>
