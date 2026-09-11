@@ -258,6 +258,8 @@ def test_a_credential_sits_on_the_panel_rather_than_restating_it(rendered: str) 
     assert "rounded-xl" in tile
     assert "bg-surface" in tile
     assert "border-border" in tile
+    assert "py-6" in tile
+    assert "py-4" not in tile
 
 
 def test_a_credential_stretches_its_link_over_the_whole_tile(rendered: str) -> None:
@@ -265,6 +267,7 @@ def test_a_credential_stretches_its_link_over_the_whole_tile(rendered: str) -> N
     tile = rendered[rendered.index('data-probe="credential"') :]
     anchor = tile[tile.index("<a ") : tile.index("</a>")]
     assert "before:absolute before:inset-0" in anchor
+    assert "data-button" in anchor
     assert "ISO 27001" in anchor
     assert "relative" in _classes(rendered, "div", 'data-probe="credential"')
 
