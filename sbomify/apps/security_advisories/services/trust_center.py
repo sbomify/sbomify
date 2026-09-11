@@ -35,6 +35,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from datetime import timezone as dt_timezone
 from math import ceil
+from types import SimpleNamespace
 from typing import Any
 
 from django.db.models import Prefetch, Q
@@ -229,6 +230,39 @@ def resolve_viewer_scope(request: Any, team: Any) -> ViewerScope:
         is_authenticated=is_authenticated,
         is_insider=is_insider,
     )
+
+
+def anonymous_viewer_scope(team: Any) -> ViewerScope:
+    """The scope every anonymous reader shares: public products only.
+
+    A CSAF TLP:WHITE distribution serves one document per URL to everybody, so
+    it must not be built from the requesting reader's scope. Doing that would
+    vary a cacheable, TLP-labelled URL by identity, and an aggregator that
+    fetched it while holding a grant would republish gated content as WHITE.
+    This resolves the same three-tier rule against nobody, so the answer does
+    not depend on who is asking.
+    """
+    return resolve_viewer_scope(SimpleNamespace(), team)
+
+
+def public_advisories(team: Any) -> Any:
+    """Advisories a CSAF TLP:WHITE distribution may carry.
+
+    ``_readable_queryset`` already drops PRIVATE and anything not published or
+    withdrawn. GATED goes too: its whole point is that a reader has to be known
+    to see it, and nobody is known here.
+    """
+    return _readable_queryset(team).filter(visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+
+def anonymous_projection(team: Any, advisory: SecurityAdvisory) -> dict[str, Any]:
+    """The detail projection an anonymous reader would be given for one advisory.
+
+    The caller has already restricted itself to ``public_advisories``; this
+    supplies the matching scope so product chips and version rows are filtered
+    to what the world may see, not to what the requester may see.
+    """
+    return _public_projection(advisory, anonymous_viewer_scope(team), detail=True)
 
 
 def _readable_queryset(team: Any) -> Any:

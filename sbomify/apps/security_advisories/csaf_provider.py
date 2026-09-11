@@ -1,0 +1,163 @@
+"""CSAF 2.0 discovery: provider metadata, a ROLIE feed, and the documents it lists.
+
+The CSAF documents themselves have been served from the public API since the
+feature shipped. What was missing is the part a machine uses to *find* them:
+CSAF 2.0 section 7.1.8 defines ``provider-metadata.json`` as the entry point, and
+RFC 9116's ``CSAF`` field is how a reader gets to that from ``security.txt``.
+
+**Everything here is TLP:WHITE and only TLP:WHITE.** A distribution is one
+document per URL for every reader, so it is built from
+``trust_center.public_advisories`` and ``anonymous_viewer_scope`` rather than
+from the requesting reader's scope. Serving a gated advisory here — even to
+someone entitled to read it on the trust center — would hand an aggregator
+content labelled WHITE that is not, and would confirm the existence of an
+embargoed advisory that ``get_public_advisory`` deliberately 404s.
+
+Specs: https://docs.oasis-open.org/csaf/csaf/v2.0/csaf-v2.0.html and RFC 8322.
+"""
+
+from __future__ import annotations
+
+import re
+from typing import TYPE_CHECKING, Any
+
+from django.db.models import Max
+from django.utils import timezone
+
+from sbomify.apps.security_advisories.csaf import CSAF_VERSION, render_csaf
+from sbomify.apps.security_advisories.services.advisories import display_id
+from sbomify.apps.security_advisories.services.trust_center import (
+    anonymous_projection,
+    public_advisories,
+)
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from sbomify.apps.teams.models import Team
+
+CSAF_SCHEMA_URL = "https://docs.oasis-open.org/csaf/csaf/v2.0/csaf_json_schema.json"
+ROLIE_CATEGORY_SCHEME = "urn:ietf:params:rolie:category:information-type"
+
+PROVIDER_METADATA_PATH = "/.well-known/csaf/provider-metadata.json"
+WHITE_FEED_PATH = "/.well-known/csaf/white/feed-tlp-white.json"
+
+# CSAF 2.0 section 5.1: lowercase the tracking id and replace everything outside
+# this set with an underscore. Applied to the id the document actually carries,
+# which is display_id, so the filename and /document/tracking/id agree.
+_FILENAME_ALLOWED = re.compile(r"[^+\-a-z0-9]")
+
+# We serve over TLS, the documents are valid CSAF, TLP:WHITE is free to anyone,
+# and this module adds the provider metadata and a ROLIE distribution. We do not
+# sign documents or publish hashes, so "csaf_trusted_provider" would be a claim
+# we cannot back.
+PROVIDER_ROLE = "csaf_provider"
+
+
+def csaf_filename(advisory: Any) -> str:
+    """The filename CSAF 2.0 section 5.1 requires for this advisory."""
+    return f"{_FILENAME_ALLOWED.sub('_', str(display_id(advisory)).lower())}.json"
+
+
+def _year(advisory: Any) -> str:
+    moment = advisory.published_at or advisory.created_at
+    return str(moment.year) if moment else str(timezone.now().year)
+
+
+def document_path(advisory: Any) -> str:
+    """Where one TLP:WHITE document lives, under the year it was released."""
+    return f"/.well-known/csaf/white/{_year(advisory)}/{csaf_filename(advisory)}"
+
+
+def _stamp(value: Any) -> str:
+    return value.isoformat() if value else timezone.now().isoformat()
+
+
+def provider_metadata(team: Team, *, base_url: str) -> dict[str, Any]:
+    """CSAF 2.0 section 7.1.8 provider metadata for one workspace.
+
+    ``last_updated`` tracks the newest TLP:WHITE advisory rather than "now", so
+    a polling aggregator can tell a republished document from an unchanged one.
+    An empty feed is legitimate CSAF and is what a workspace serves before its
+    first disclosure; it is how aggregators find you in advance rather than
+    after.
+    """
+    # Max rather than .first(): the queryset is ordered by publication date, so
+    # its first row is the newest disclosure, not the most recently revised one.
+    newest = public_advisories(team).aggregate(Max("updated_at"))["updated_at__max"]
+    return {
+        "canonical_url": f"{base_url}{PROVIDER_METADATA_PATH}",
+        "last_updated": _stamp(newest),
+        "metadata_version": CSAF_VERSION,
+        "publisher": {
+            "category": "vendor",
+            "name": team.display_name,
+            "namespace": base_url,
+        },
+        "role": PROVIDER_ROLE,
+        "distributions": [
+            {
+                "rolie": {
+                    "feeds": [
+                        {
+                            "summary": f"TLP:WHITE security advisories published by {team.display_name}.",
+                            "tlp_label": "WHITE",
+                            "url": f"{base_url}{WHITE_FEED_PATH}",
+                        }
+                    ]
+                }
+            }
+        ],
+    }
+
+
+def rolie_feed(team: Team, *, base_url: str) -> dict[str, Any]:
+    """The RFC 8322 feed listing every TLP:WHITE advisory this workspace has published."""
+    entries = []
+    newest = None
+    for advisory in public_advisories(team):
+        url = f"{base_url}{document_path(advisory)}"
+        updated = advisory.updated_at or advisory.published_at
+        if updated and (newest is None or updated > newest):
+            newest = updated
+        entries.append(
+            {
+                "id": str(display_id(advisory)),
+                "title": advisory.title,
+                "published": _stamp(advisory.published_at),
+                "updated": _stamp(updated),
+                "link": [{"rel": "self", "href": url}],
+                "format": {"schema": CSAF_SCHEMA_URL, "version": CSAF_VERSION},
+                "content": {"type": "application/json", "src": url},
+            }
+        )
+    return {
+        "feed": {
+            "id": f"{team.key}-csaf-feed-tlp-white",
+            "title": f"{team.display_name} security advisories (TLP:WHITE)",
+            "link": [{"rel": "self", "href": f"{base_url}{WHITE_FEED_PATH}"}],
+            "category": [{"scheme": ROLIE_CATEGORY_SCHEME, "term": "csaf"}],
+            "updated": _stamp(newest),
+            "entry": entries,
+        }
+    }
+
+
+def white_document(team: Team, year: str, filename: str, *, base_url: str, generator: str) -> dict[str, Any] | None:
+    """One TLP:WHITE CSAF document by its conformant filename, or None.
+
+    Matching walks the same queryset the feed is built from and compares the
+    filename each advisory would be given, rather than parsing an id back out of
+    the URL. A name that no listed advisory owns is simply not found, which is
+    also the answer for a gated or private one.
+    """
+    for advisory in public_advisories(team):
+        if _year(advisory) != year or csaf_filename(advisory) != filename:
+            continue
+        projection = anonymous_projection(team, advisory)
+        return render_csaf(
+            projection,
+            publisher_name=team.display_name,
+            publisher_namespace=base_url,
+            self_url=f"{base_url}{document_path(advisory)}",
+            generator=generator,
+        )
+    return None
