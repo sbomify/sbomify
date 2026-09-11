@@ -6,6 +6,13 @@ what happens after you do. It covers the hosted platform at
 repository, and the open source projects in the
 [sbomify GitHub org](https://github.com/sbomify).
 
+**Our canonical security contact record is
+[`security.txt`](https://trust.sbomify.com/.well-known/security.txt), published
+on the [sbomify trust center](https://trust.sbomify.com) per
+[RFC 9116](https://www.rfc-editor.org/rfc/rfc9116).** Where this document and
+`security.txt` ever disagree about how to reach us, `security.txt` is
+authoritative.
+
 - [Reporting a Vulnerability](#reporting-a-vulnerability)
 - [What Happens Next](#what-happens-next)
 - [Disclosure Policy](#disclosure-policy)
@@ -21,10 +28,15 @@ contribution.
 **Report security vulnerabilities by emailing the sbomify security team at
 [security@sbomify.com](mailto:security@sbomify.com).**
 
+That address is the one published in the `Contact` field of
+[`security.txt`](https://trust.sbomify.com/.well-known/security.txt). **To
+encrypt your report, use the OpenPGP key its `Encryption` field points to** —
+we deliberately do not repeat the key URL here, so that there is one place to
+change it.
+
 Please tell us what you found, how to reproduce it, what you believe the impact
 is, and include any proof of concept you have. Timestamps in UTC help us line
-your report up against our own logs. If you would like to encrypt your report,
-send us a first message saying so and we will arrange a key.
+your report up against our own logs.
 
 Please report vulnerabilities in third-party modules to the person or team
 maintaining the module.
