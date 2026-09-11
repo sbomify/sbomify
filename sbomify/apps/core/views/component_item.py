@@ -14,6 +14,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
+    get_component_public_slug,
     get_public_path,
     get_workspace_public_url,
     resolve_component_identifier,
@@ -143,7 +144,7 @@ class ComponentItemPublicView(View):
 
         # Use the resolved component's ID for API calls
         resolved_id = component_obj.id
-        component_slug = component_obj.slug
+        component_slug = get_component_public_slug(component_obj, request)
 
         status_code, component = get_component(request, resolved_id, return_instance=True)
         if status_code != 200:
@@ -157,6 +158,9 @@ class ComponentItemPublicView(View):
             result = get_document_detail(request, item_id)
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))
+
+        if result.ok and not self._owns_artifact(item_type, item_id, resolved_id):
+            return error_response(request, HttpResponseNotFound("Artifact not found"))
 
         # A gated component is published — it is listed on the Trust Center and
         # its component page renders a "Request Access" gate. Reaching an

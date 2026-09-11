@@ -19,6 +19,7 @@ from django.utils.text import slugify
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Component, Product, Release
+    from sbomify.apps.sboms.models import Component as BaseComponent
     from sbomify.apps.teams.models import Team
 
 
@@ -222,6 +223,33 @@ def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
         return f"{protocol}://{slug}.{trust_center_domain}{path}"
 
     return ""
+
+
+def get_component_public_slug(component: BaseComponent, request: HttpRequest) -> str:
+    """Choose a collision-safe gated identifier with one scan per workspace/request."""
+    from sbomify.apps.core.models import Component
+
+    if component.visibility != Component.Visibility.GATED:
+        return component.slug
+    cache = getattr(request, "_component_slug_owners", None)
+    if cache is None:
+        cache = {}
+        setattr(request, "_component_slug_owners", cache)
+    if component.team_id not in cache:
+        owners: dict[str, str] = {}
+        public_slugs: set[str] = set()
+        for component_id, name, visibility in Component.objects.filter(
+            team_id=component.team_id,
+            visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED),
+        ).values_list("id", "name", "visibility"):
+            slug = slugify(name, allow_unicode=True)
+            if visibility == Component.Visibility.PUBLIC and slug not in public_slugs:
+                owners[slug] = component_id
+                public_slugs.add(slug)
+            elif slug not in owners:
+                owners[slug] = component_id
+        cache[component.team_id] = owners
+    return component.slug if cache[component.team_id].get(component.slug) == component.id else component.id
 
 
 def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool = False, **kwargs: Any) -> str:

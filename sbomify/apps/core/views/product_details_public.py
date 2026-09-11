@@ -15,6 +15,7 @@ from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
     get_back_url_from_referrer,
+    get_component_public_slug,
     get_public_path,
     get_workspace_public_url,
     resolve_product_identifier,
@@ -34,7 +35,9 @@ from sbomify.apps.teams.models import Team
 BARCODE_TYPES = ("gtin_12", "gtin_13", "gtin_14", "gtin_8")
 
 
-def _prepare_public_components(product_id: str, is_custom_domain: bool) -> list[Any]:
+def _prepare_public_components(
+    product_id: str, is_custom_domain: bool, request: HttpRequest | None = None
+) -> list[Any]:
     """Prepare component data for display on the public product page.
 
     Uses batch query for assessment status to avoid N+1 queries.
@@ -55,6 +58,7 @@ def _prepare_public_components(product_id: str, is_custom_domain: bool) -> list[
         .distinct()
     )
 
+    request = request or HttpRequest()
     assessments_by_component = get_components_latest_sbom_assessments_batch(components)
 
     public_components = []
@@ -64,12 +68,15 @@ def _prepare_public_components(product_id: str, is_custom_domain: bool) -> list[
             {
                 "id": component.id,
                 "name": component.name,
-                "slug": component.slug,
+                "slug": get_component_public_slug(component, request),
                 "component_type": component.component_type,
                 "component_type_display": component.get_component_type_display(),
                 "passing_assessments": passing_assessments,
                 "public_url": get_public_path(
-                    "component", component.id, is_custom_domain=is_custom_domain, slug=component.slug
+                    "component",
+                    component.id,
+                    is_custom_domain=is_custom_domain,
+                    slug=get_component_public_slug(component, request),
                 ),
             }
         )
@@ -218,7 +225,7 @@ class ProductDetailsPublicView(View):
         # Prepare server-side data for Django templates
         from sbomify.apps.core.authz import can
 
-        public_components = _prepare_public_components(resolved_id, is_custom_domain)
+        public_components = _prepare_public_components(resolved_id, is_custom_domain, request)
         public_releases = _get_public_releases(
             resolved_id,
             is_custom_domain,

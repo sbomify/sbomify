@@ -15,6 +15,7 @@ from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
     get_back_url_from_referrer,
+    get_component_public_slug,
     get_public_path,
     get_workspace_public_url,
     resolve_component_identifier,
@@ -56,7 +57,9 @@ class ComponentDetailsPublicView(View):
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain
         if team and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
-            path = get_public_path("component", resolved_id, is_custom_domain=True, slug=component_obj.slug)
+            path = get_public_path(
+                "component", resolved_id, is_custom_domain=True, slug=get_component_public_slug(component_obj, request)
+            )
             return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
 
         # Get assessment status for this component (only passing assessments)

@@ -527,7 +527,7 @@ class TestOnACustomDomain:
         """
         public_doc = _document(team, Component.Visibility.PUBLIC, component_name=public_name)
         gated_doc = _document(team, Component.Visibility.GATED, component_name=gated_name)
-        assert gated_doc.component.slug == gated_doc.component.id
+        assert public_doc.component.slug == gated_doc.component.slug
 
         response = Client(HTTP_HOST="trust.example.com").get(f"/component/{public_doc.component.slug}/")
 
@@ -554,7 +554,7 @@ class TestOnACustomDomain:
         """
         public_doc = _document(team, Component.Visibility.PUBLIC, component_name="Policy Docs")
         gated_doc = _document(team, Component.Visibility.GATED, component_name="Policy-Docs")
-        assert gated_doc.component.slug == gated_doc.component.id
+        assert public_doc.component.slug == gated_doc.component.slug
 
         response = Client(HTTP_HOST="trust.example.com").get(
             f"/components/{gated_doc.component.id}/documents/{gated_doc.id}/"
@@ -574,7 +574,7 @@ class TestOnACustomDomain:
         """
         public_doc = _document(team, Component.Visibility.PUBLIC, component_name="Policy Docs")
         gated_doc = _document(team, Component.Visibility.GATED, component_name="Policy-Docs")
-        assert gated_doc.component.slug == gated_doc.component.id
+        assert public_doc.component.slug == gated_doc.component.slug
 
         response = Client(HTTP_HOST="trust.example.com").get(
             f"/components/{public_doc.component.slug}/documents/{gated_doc.id}/"
@@ -637,3 +637,42 @@ def test_app_domain_redirect_preserves_shadowed_gated_artifact(team: Team) -> No
     response = Client(HTTP_HOST="trust.example.com").get(path)
     assert response.status_code == 403
     assert "Please request access to view this document." in response.content.decode()
+
+
+@pytest.mark.parametrize("item_type", ["documents", "sboms", "vex", "cbom"])
+def test_public_artifact_cannot_be_shown_under_another_component(team: Team, item_type: str) -> None:
+    factory = _document if item_type == "documents" else _sbom
+    target = factory(team, Component.Visibility.PUBLIC, "Target")
+    other = factory(team, Component.Visibility.PUBLIC, "Other")
+    response = Client().get(
+        reverse(
+            "core:component_item_public",
+            kwargs={
+                "component_id": target.component.id,
+                "item_type": item_type,
+                "item_id": other.id,
+            },
+        )
+    )
+    assert response.status_code == 404
+    assert other.name not in response.content.decode()
+
+
+def test_gated_slug_serialization_scans_workspace_once(team: Team, django_assert_num_queries) -> None:
+    from django.http import HttpRequest
+
+    from sbomify.apps.core.url_utils import get_component_public_slug
+
+    public = _document(team, Component.Visibility.PUBLIC, "Policy Docs").component
+    gated = [_document(team, Component.Visibility.GATED, "Policy-Docs").component]
+    gated.extend(_document(team, Component.Visibility.GATED, f"Report {i}").component for i in range(10))
+    with django_assert_num_queries(0):
+        assert gated[0].slug == public.slug
+        assert all(component.slug for component in gated)
+    request = HttpRequest()
+    with django_assert_num_queries(1):
+        identifiers = [get_component_public_slug(component, request) for component in gated]
+        assert identifiers[0] == gated[0].id
+        assert identifiers[1:] == [component.slug for component in gated[1:]]
+    with django_assert_num_queries(0):
+        assert [get_component_public_slug(component, request) for component in gated] == identifiers
