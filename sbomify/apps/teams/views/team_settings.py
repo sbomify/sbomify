@@ -596,14 +596,13 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         try:
             import hashlib
-            from decimal import Decimal, InvalidOperation
 
             from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
             from sbomify.apps.documents.models import Document
             from sbomify.apps.documents.utils import (
+                bump_decimal_version,
                 is_duplicate_document_error,
                 next_free_document_version,
-                normalize_decimal_version,
             )
 
             # Read file content
@@ -627,34 +626,24 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 compliance_subcategory=Document.ComplianceSubcategory.NDA,
             ).order_by("-created_at")
 
-            # Calculate next version number
+            # Calculate next version number: count on from the newest NDA where the
+            # version is a number we can count on from ("1.0" -> "1.1"), otherwise
+            # from the first number inside it, otherwise from how many there are.
             next_version = "1.0"
             if previous_ndas.exists():
-                # Try to parse the latest version and increment
                 latest_nda = previous_ndas.first()
                 latest_version_str = latest_nda.version if latest_nda else "1.0"
-                try:
-                    # Try to parse as decimal (e.g., "1.0", "2.5")
-                    latest_version = Decimal(latest_version_str)
-                    next_version = normalize_decimal_version(latest_version + Decimal("0.1"))
-                except (InvalidOperation, ValueError):
-                    # If version is not a number, use a simple increment
-                    # Try to extract number from version string
+
+                bumped = bump_decimal_version(latest_version_str)
+                if bumped is None:
                     import re
 
                     match = re.search(r"(\d+(?:\.\d+)?)", latest_version_str)
-                    if match:
-                        try:
-                            latest_version = Decimal(match.group(1))
-                            next_version = normalize_decimal_version(latest_version + Decimal("0.1"))
-                        except (InvalidOperation, ValueError):
-                            # Fallback: append version number
-                            version_count = previous_ndas.count()
-                            next_version = f"{version_count + 1}.0"
-                    else:
-                        # No number found, use count-based version
-                        version_count = previous_ndas.count()
-                        next_version = f"{version_count + 1}.0"
+                    bumped = bump_decimal_version(match.group(1)) if match else None
+                if bumped is None:
+                    bumped = f"{previous_ndas.count() + 1}.0"
+
+                next_version = bumped
 
             # The version above is a guess: it counts on from the newest NDA, so it
             # can name a version this component already holds (an out-of-order

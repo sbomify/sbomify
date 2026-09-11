@@ -29,6 +29,7 @@ from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.documents.models import DOCUMENT_UNIQUE_CONSTRAINT, Document
 from sbomify.apps.documents.utils import (
     VERSION_MAX_LENGTH,
+    bump_decimal_version,
     is_duplicate_document_error,
     next_free_document_version,
     normalize_decimal_version,
@@ -604,3 +605,35 @@ class TestNextFreeDocumentVersionAlwaysFits:
             component=sample_document_component,
             source="manual_upload",
         )
+
+
+class TestBumpDecimalVersion:
+    """None means "pick another way", not "invalid"."""
+
+    @pytest.mark.parametrize(
+        ("current", "expected"),
+        [
+            ("1.0", "1.1"),
+            ("2.5", "2.6"),
+            ("9", "9.1"),
+            ("1.9", "2"),
+        ],
+    )
+    def test_counts_on_from_a_workable_number(self, current, expected):
+        assert bump_decimal_version(current) == expected
+
+    @pytest.mark.parametrize(
+        "current",
+        [
+            "not-a-version",
+            "NaN",
+            "sNaN",
+            "Infinity",
+            "-Infinity",
+            "1E+999999999",  # raises decimal.Overflow on the addition
+            "1E-999999999",  # a gigabyte of zeroes in fixed point
+            "9" * (VERSION_MAX_LENGTH + 1),
+        ],
+    )
+    def test_gives_up_rather_than_raising(self, current):
+        assert bump_decimal_version(current) is None

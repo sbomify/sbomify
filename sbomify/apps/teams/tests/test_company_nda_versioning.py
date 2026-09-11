@@ -119,3 +119,23 @@ class TestCompanyNdaVersioning:
         _post_nda(client, team.key)
 
         assert len(calls) == 1, "only a duplicate is a conflict worth re-resolving"
+
+    @pytest.mark.parametrize("stored_version", ["1E+999999999", "NaN", "Infinity", "not-a-version"])
+    def test_a_version_that_cannot_be_counted_on_from_still_uploads(
+        self, mocker: MockerFixture, owner_client, stored_version
+    ):
+        """The allocator guesses by arithmetic on whatever the newest NDA holds, and
+        a user picks that. "1E+999999999" is the sharp one: it parses, it fits the
+        column, and adding to it raises decimal.Overflow."""
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+        client, team = owner_client
+
+        _post_nda(client, team.key)
+        Document.objects.filter(name="nda.pdf").update(version=stored_version)
+
+        response = _post_nda(client, team.key)
+
+        assert response.status_code == 302
+        versions = list(Document.objects.filter(name="nda.pdf").values_list("version", flat=True))
+        assert len(versions) == 2, "a second NDA was created rather than the upload failing"
+        assert len(set(versions)) == 2

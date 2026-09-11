@@ -101,6 +101,30 @@ def normalize_decimal_version(value: Decimal) -> str:
     return text
 
 
+def bump_decimal_version(current: str) -> str | None:
+    """The next 0.1 step from a version string, or ``None`` if it cannot be counted on.
+
+    Callers guess the next version this way, and every one of them has to survive
+    a version string a user chose. Non-numeric is the obvious case; the ones that
+    bite are numeric: "NaN" and "Infinity" parse but never move, and
+    "1E+999999999" parses, fits the column, and raises ``Overflow`` on the
+    addition. ``None`` means "pick another way", not "invalid".
+    """
+    try:
+        value = Decimal(current)
+    except InvalidOperation:
+        return None
+
+    if not value.is_finite() or not fits_as_fixed_point(value):
+        return None
+
+    bumped = value + Decimal("0.1")
+    if not fits_as_fixed_point(bumped):
+        return None
+
+    return normalize_decimal_version(bumped)
+
+
 def next_free_document_version(component_id: str, name: str, candidate: str) -> str:
     """``candidate``, or the next version free for this component and name.
 
