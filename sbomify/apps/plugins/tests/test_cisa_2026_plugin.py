@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+from sbomify.apps.plugins.builtins.cisa_2026 import CISAMinimumElementsPlugin
 from sbomify.apps.plugins.sdk.base import SBOMContext
 
 ALL_ELEMENTS = CISAMinimumElementsPlugin.METADATA_ELEMENTS + CISAMinimumElementsPlugin.COMPONENT_ELEMENTS

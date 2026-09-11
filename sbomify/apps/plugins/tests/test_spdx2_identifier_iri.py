@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from sbomify.apps.plugins.builtins.bsi import BSICompliancePlugin
-from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+from sbomify.apps.plugins.builtins.cisa_2026 import CISAMinimumElementsPlugin
 from sbomify.apps.plugins.builtins.cisa_2025 import CISA2025MinimumElementsPlugin
 from sbomify.apps.plugins.builtins.fda_medical_device_cybersecurity import FDAMedicalDevicePlugin
 from sbomify.apps.plugins.builtins.ntia import NTIAMinimumElementsPlugin

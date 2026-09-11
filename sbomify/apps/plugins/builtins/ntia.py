@@ -22,7 +22,7 @@ The seven NTIA minimum data fields are:
     7. Timestamp - Record of date and time of SBOM data assembly
 
 Note: CISA replaced these elements in July 2026 with the 2026 Minimum
-Elements, which sbomify scores separately in ``cisa.py``. This plugin stays
+Elements, which sbomify scores separately in ``cisa_2026.py``. This plugin stays
 because buyers still ask for the 2021 elements by name, and because the two
 answer different questions about the same document.
 """

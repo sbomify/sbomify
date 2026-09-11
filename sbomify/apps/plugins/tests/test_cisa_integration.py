@@ -11,7 +11,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+from sbomify.apps.plugins.builtins.cisa_2026 import CISAMinimumElementsPlugin
 from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 from sbomify.apps.plugins.tasks import run_assessment_task
@@ -57,7 +57,7 @@ class TestCISAPluginIntegration:
                 "description": "CISA 2026 SBOM compliance checking",
                 "category": "compliance",
                 "version": "2.0.0",
-                "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.cisa_2026.CISAMinimumElementsPlugin",
                 "is_enabled": True,
             },
         )
@@ -360,7 +360,7 @@ class TestCISAPluginAPIIntegration(TestCase):
                 "description": "CISA 2026 compliance checking",
                 "category": "compliance",
                 "version": "2.0.0",
-                "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.cisa_2026.CISAMinimumElementsPlugin",
                 "is_enabled": True,
             },
         )

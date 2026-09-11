@@ -4,7 +4,7 @@ This plugin validates SBOMs against the CISA Minimum Elements for a Software
 Bill of Materials as defined in the August 2025 public comment draft.
 
 CISA finalized the standard in July 2026 with a different element set, which
-``cisa.py`` scores. This plugin deliberately stays as the August 2025 draft:
+``cisa_2026.py`` scores. This plugin deliberately stays as the August 2025 draft:
 a regulation or an attestation can pin a specific version of the elements,
 so superseding a version does not retire it.
 
@@ -146,7 +146,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
     defined in the CISA August 2025 public comment draft. It supports both SPDX
     and CycloneDX formats.
 
-    The 2026 elements replaced this draft, and ``cisa.py`` scores those. Both
+    The 2026 elements replaced this draft, and ``cisa_2026.py`` scores those. Both
     ship, because a buyer or a regulation can ask for this version by name.
 
     Attributes:

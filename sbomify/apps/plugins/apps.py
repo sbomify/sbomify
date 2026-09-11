@@ -108,7 +108,7 @@ class PluginsConfig(AppConfig):
                 ),
                 "category": "compliance",
                 "version": "2.0.0",
-                "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.cisa_2026.CISAMinimumElementsPlugin",
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,

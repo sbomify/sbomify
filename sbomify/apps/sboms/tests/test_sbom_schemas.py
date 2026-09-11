@@ -843,7 +843,7 @@ class TestSPDXTestFixtures:
         import tempfile
         from pathlib import Path
 
-        from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+        from sbomify.apps.plugins.builtins.cisa_2026 import CISAMinimumElementsPlugin
         from sbomify.apps.plugins.sdk.base import SBOMContext
 
         plugin = CISAMinimumElementsPlugin()
