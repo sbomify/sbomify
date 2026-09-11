@@ -613,8 +613,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Find all previous NDA documents for this component to determine next version
             previous_ndas = Document.objects.filter(
                 component=company_component,
-                document_type=Document.DocumentType.COMPLIANCE,
-                compliance_subcategory=Document.ComplianceSubcategory.NDA,
+                document_type=Document.DocumentType.NDA,
             ).order_by("-created_at")
 
             # Calculate next version number
@@ -656,8 +655,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 document_filename=filename,
                 component=company_component,
                 source="manual_upload",
-                document_type=Document.DocumentType.COMPLIANCE,
-                compliance_subcategory=Document.ComplianceSubcategory.NDA,
+                document_type=Document.DocumentType.NDA,
                 content_hash=content_hash,
                 content_type=uploaded_file.content_type,
                 file_size=uploaded_file.size,

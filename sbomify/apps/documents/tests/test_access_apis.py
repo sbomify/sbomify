@@ -30,8 +30,7 @@ def company_nda_document(team_with_business_plan):
     document = Document.objects.create(
         name="Company NDA",
         component=component,
-        document_type=Document.DocumentType.COMPLIANCE,
-        compliance_subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
         document_filename="nda.pdf",
         content_type="application/pdf",
         file_size=len(content),
