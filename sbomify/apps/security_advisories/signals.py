@@ -45,7 +45,7 @@ from contextlib import contextmanager
 from typing import Any, Callable, Iterable, Iterator
 
 from django.db import transaction
-from django.db.models import DateTimeField, F, Q
+from django.db.models import DateTimeField, F, Q, QuerySet
 from django.db.models.functions import Coalesce, Greatest, Now
 from django.db.models.signals import m2m_changed, post_save, pre_delete, pre_save
 
@@ -115,6 +115,20 @@ def _renders_in_public_document(advisory: SecurityAdvisory, instance: Any) -> bo
     # or a field-change row changes nothing a reader can fetch.
     if isinstance(instance, AdvisoryEvent) and instance.event_type not in AdvisoryEvent.PUBLIC_EVENT_TYPES:
         return False
+    from sbomify.apps.security_advisories.services.trust_center import anonymous_viewer_scope
+
+    product_link = None
+    if isinstance(instance, AdvisoryProduct):
+        product_link = instance
+    elif isinstance(instance, AdvisoryProductStatus):
+        product_link = instance.advisory_product
+    elif isinstance(instance, AdvisoryVersionRange):
+        product_link = instance.product_status.advisory_product
+    if product_link is not None:
+        # Fetch the current relation: callers can retain objects across ACL changes.
+        product_id = AdvisoryProduct.objects.filter(pk=product_link.pk).values_list("product_id", flat=True).first()
+        if product_id is not None and str(product_id) not in anonymous_viewer_scope(advisory.team).product_ids:
+            return False
     return True
 
 
@@ -126,6 +140,15 @@ def _before_advisory_save(sender: Any, instance: SecurityAdvisory, **kwargs: Any
     )
 
 
+def _before_child_save(sender: Any, instance: Any, **kwargs: Any) -> None:
+    previous = sender.objects.filter(pk=instance.pk).first()
+    instance._csaf_previous_public_team = None
+    if previous is not None:
+        advisory = _TO_ADVISORY[sender](previous)
+        if advisory is not None and _renders_in_public_document(advisory, previous):
+            instance._csaf_previous_public_team = advisory.team_id
+
+
 def _on_advisory_write(sender: Any, instance: Any, **kwargs: Any) -> None:
     if kwargs.get("raw"):
         return
@@ -133,18 +156,25 @@ def _on_advisory_write(sender: Any, instance: Any, **kwargs: Any) -> None:
     resolve = _TO_ADVISORY.get(type(instance))
     if resolve is None:
         return
-    advisory = resolve(instance)
-    if advisory is None:
+    persisted = sender.objects.filter(pk=instance.pk).first()
+    if persisted is None:
         return
-    # Related instances can cache an advisory from before it was re-embargoed.
-    # Reload the visibility gate rather than trusting that cached relation.
-    advisory = SecurityAdvisory.objects.filter(pk=advisory.pk).first()
-    if advisory is not None and _renders_in_public_document(advisory, instance):
+    advisory = resolve(persisted)
+    if advisory is not None and _renders_in_public_document(advisory, persisted):
         team_ids.add(advisory.team_id)
     _schedule(team_ids - {None})
 
 
 def _product_signature(link_ids: list[Any]) -> dict[Any, dict[Any, tuple[Any, str]]]:
+    signature: dict[Any, dict[Any, tuple[Any, str]]] = {}
+    scopes: dict[Any, Any] = {}
+    for offset in range(0, len(link_ids), 500):
+        for team_id, products in _product_signature_batch(link_ids[offset : offset + 500], scopes).items():
+            signature.setdefault(team_id, {}).update(products)
+    return signature
+
+
+def _product_signature_batch(link_ids: list[Any], scopes: dict[Any, Any]) -> dict[Any, dict[Any, tuple[Any, str]]]:
     """Only the product identities/names visible in the anonymous projection.
 
     Read scalar product links, not the full vulnerability graph. Keeping hidden
@@ -162,7 +192,9 @@ def _product_signature(link_ids: list[Any]) -> dict[Any, dict[Any, tuple[Any, st
         ).select_related("product", "advisory__team")
     )
     teams: dict[Any, Team] = {link.advisory.team_id: link.advisory.team for link in links}
-    scopes = {pk: anonymous_viewer_scope(team) for pk, team in teams.items()}
+    for pk, team in teams.items():
+        if pk not in scopes:
+            scopes[pk] = anonymous_viewer_scope(team)
     signature: dict[Any, dict[Any, tuple[Any, str]]] = {}
     for link in links:
         if link.product_id is not None and str(link.product_id) not in scopes[link.advisory.team_id].product_ids:
@@ -175,11 +207,7 @@ def _product_signature(link_ids: list[Any]) -> dict[Any, dict[Any, tuple[Any, st
 
 
 def _capture_products(product_ids: Iterable[Any]) -> tuple[list[Any], dict[Any, dict[Any, tuple[Any, str]]]]:
-    link_ids = list(
-        AdvisoryProduct.objects.filter(product_id__in=[p for p in product_ids if p is not None]).values_list(
-            "pk", flat=True
-        )
-    )
+    link_ids = list(AdvisoryProduct.objects.filter(product_id__in=product_ids).values_list("pk", flat=True))
     return link_ids, _product_signature(link_ids)
 
 
@@ -197,10 +225,10 @@ def _schedule_products(snapshot: Any) -> None:
     transaction.on_commit(compare)
 
 
-def _component_products(component_ids: Iterable[Any]) -> list[Any]:
+def _component_products(component_ids: Iterable[Any]) -> QuerySet[Any, Any]:
     from sbomify.apps.sboms.models import ProductComponent
 
-    return list(ProductComponent.objects.filter(component_id__in=component_ids).values_list("product_id", flat=True))
+    return ProductComponent.objects.filter(component_id__in=component_ids).values_list("product_id", flat=True)
 
 
 @contextmanager
@@ -263,15 +291,15 @@ def _before_link_delete(sender: Any, instance: Any, **kwargs: Any) -> None:
 def _before_team_save(sender: Any, instance: Any, **kwargs: Any) -> None:
     instance._csaf_previous_publisher = None
     fields = kwargs.get("update_fields")
-    if kwargs.get("raw") or (fields is not None and "name" not in fields):
+    if kwargs.get("raw") or (fields is not None and not {"name", "is_public"}.intersection(fields)):
         return
     previous = sender.objects.filter(pk=instance.pk).first()
-    instance._csaf_previous_publisher = previous.display_name if previous else None
+    instance._csaf_previous_publisher = (previous.display_name, previous.is_public) if previous else None
 
 
 def _on_team_save(sender: Any, instance: Any, **kwargs: Any) -> None:
     previous = instance.__dict__.pop("_csaf_previous_publisher", None)
-    if not kwargs.get("raw") and previous is not None and previous != instance.display_name:
+    if not kwargs.get("raw") and previous is not None and previous != (instance.display_name, instance.is_public):
         _schedule([instance.pk])
 
 
@@ -292,6 +320,11 @@ def connect() -> None:
     pre_save.connect(_before_advisory_save, sender=SecurityAdvisory, dispatch_uid="csaf_marker_advisory_before")
     pre_save.connect(_before_team_save, sender=Team, dispatch_uid="csaf_marker_team_before")
     post_save.connect(_on_team_save, sender=Team, dispatch_uid="csaf_marker_team_save")
+
+    for child_model in (AdvisoryProduct, AdvisoryProductStatus, AdvisoryVersionRange):
+        pre_save.connect(
+            _before_child_save, sender=child_model, dispatch_uid=f"csaf_marker_child_before_{child_model.__name__}"
+        )
 
     for model in _TO_ADVISORY:
         post_save.connect(_on_advisory_write, sender=model, dispatch_uid=f"csaf_marker_save_{model.__name__}")

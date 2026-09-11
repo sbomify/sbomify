@@ -1,7 +1,9 @@
 """Database expressions shared by CSAF lookup and its index."""
 
+from datetime import UTC
+
 from django.db.models import CharField, F, Func, Value
-from django.db.models.functions import Coalesce, Concat, Lower, NullIf
+from django.db.models.functions import Coalesce, Concat, ExtractYear, Lower, NullIf
 
 
 def csaf_filename_expression() -> Concat:
@@ -18,3 +20,8 @@ def csaf_filename_expression() -> Concat:
         Value(".json"),
         output_field=CharField(),
     )
+
+
+def csaf_year_expression() -> ExtractYear:
+    """The UTC publication year used in the distribution URL."""
+    return ExtractYear(Coalesce("published_at", "created_at"), tzinfo=UTC)

@@ -128,13 +128,10 @@ def handle_community_downgrade_visibility(team: Team) -> None:
     from sbomify.apps.sboms.models import Component
     from sbomify.apps.security_advisories.signals import track_component_changes
 
-    component_ids = list(
-        Component.objects.filter(team=team).exclude(visibility=Component.Visibility.PUBLIC).values_list("pk", flat=True)
-    )
-    affected = len(component_ids)
+    components = Component.objects.filter(team=team).exclude(visibility=Component.Visibility.PUBLIC)
+    with track_component_changes(components.values_list("pk", flat=True)):
+        affected = components.update(visibility=Component.Visibility.PUBLIC)
     if affected > 0:
-        with track_component_changes(component_ids):
-            Component.objects.filter(pk__in=component_ids).update(visibility=Component.Visibility.PUBLIC)
         logger.warning(
             "Community downgrade: set %d component(s) to PUBLIC for team %s",
             affected,

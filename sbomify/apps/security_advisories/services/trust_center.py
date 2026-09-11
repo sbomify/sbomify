@@ -38,10 +38,11 @@ from math import ceil
 from types import SimpleNamespace
 from typing import Any
 
-from django.db.models import Prefetch, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils.timesince import timesince
 
 from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.security_advisories.expressions import csaf_filename_expression, csaf_year_expression
 from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
@@ -266,12 +267,18 @@ def public_advisory_index(team: Any) -> Any:
     references and events for every advisory would load the entire disclosure
     history of a workspace to render a list of links.
     """
+    public = SecurityAdvisory.objects.filter(
+        team=team,
+        status__in=_READABLE_STATUSES,
+        visibility=SecurityAdvisory.Visibility.PUBLIC,
+    ).alias(_csaf_filename=csaf_filename_expression(), _csaf_year=csaf_year_expression())
+    collisions = public.filter(_csaf_filename=OuterRef("_csaf_filename"), _csaf_year=OuterRef("_csaf_year")).exclude(
+        pk=OuterRef("pk")
+    )
+    # Imported tracking IDs can normalize to the same URL. Do not advertise
+    # either ambiguous document, matching white_document's 404 behavior.
     return (
-        SecurityAdvisory.objects.filter(
-            team=team,
-            status__in=_READABLE_STATUSES,
-            visibility=SecurityAdvisory.Visibility.PUBLIC,
-        )
+        public.filter(~Exists(collisions))
         .only("id", "tracking_id", "title", "published_at", "created_at", "updated_at")
         .order_by("-published_at", "-created_at")
     )

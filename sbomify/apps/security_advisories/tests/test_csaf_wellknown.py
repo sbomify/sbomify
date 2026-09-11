@@ -513,6 +513,94 @@ class TestDistributionMarker:
         gateway.components.remove(component)
         assert self._marker(team) == before
 
+    @pytest.mark.parametrize("kind", ["product", "status", "version"])
+    @pytest.mark.parametrize("operation", ["edit", "delete"])
+    def test_hidden_product_children_do_not_move_it(self, team, rich_advisory, gateway, kind, operation) -> None:  # noqa: F811
+        team = _public(team)
+        gateway.is_public = False
+        gateway.save(update_fields=["is_public"])
+        link = rich_advisory.products.get(product=gateway)
+        status = link.statuses.first()
+        row, field, value = {
+            "product": (link, "product_name", "Internal alias"),
+            "status": (status, "action_statement", "Internal fix plan"),
+            "version": (status.version_ranges.first(), "fixed", "2.17.2"),
+        }[kind]
+        before = self._marker(team)
+        if operation == "delete":
+            row.delete()
+        else:
+            setattr(row, field, value)
+            row.save(update_fields=[field])
+        assert self._marker(team) == before
+
+    def test_portfolio_status_changes_still_move_it(self, team, rich_advisory, gateway) -> None:  # noqa: F811
+        team = _public(team)
+        status = rich_advisory.products.get(product=gateway).statuses.first()
+        status.advisory_product = None
+        status.save(update_fields=["advisory_product"])
+        before = self._marker(team)
+        status.action_statement = "Update all installations"
+        status.save(update_fields=["action_statement"])
+        assert self._marker(team) > before
+
+    def test_workspace_visibility_transitions_move_it(self, team, rich_advisory) -> None:  # noqa: F811
+        team = _public(team)
+        before = self._marker(team)
+        team.billing_plan = "business"
+        team.is_public = False
+        team.save(update_fields=["billing_plan", "is_public"])
+        team.refresh_from_db()
+        assert team.csaf_feed_updated_at.isoformat() > before
+        assert ProviderMetadataView.as_view()(_request("/", team)).status_code == 404
+        before = team.csaf_feed_updated_at
+        team.is_public = True
+        team.save(update_fields=["is_public"])
+        team.refresh_from_db()
+        assert team.csaf_feed_updated_at > before
+        assert ProviderMetadataView.as_view()(_request("/", team)).status_code == 200
+
+    def test_large_bulk_downgrade_keeps_sql_bounded(self, team, rich_advisory, gateway) -> None:  # noqa: F811
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from sbomify.apps.billing.billing_helpers import handle_community_downgrade_visibility
+
+        Component.objects.bulk_create(
+            [
+                Component(team=team, name=f"Private component {i}", visibility=Component.Visibility.PRIVATE)
+                for i in range(1400)
+            ]
+        )
+        component = gateway.components.first()
+        component.visibility = Component.Visibility.PRIVATE
+        component.save(update_fields=["visibility"])
+        before = self._marker(team)
+        with CaptureQueriesContext(connection) as queries:
+            handle_community_downgrade_visibility(team)
+        assert self._marker(team) > before
+        assert Component.objects.filter(team=team, visibility=Component.Visibility.PRIVATE).count() == 0
+        assert max(len(query["sql"]) for query in queries) < 5000
+
+    def test_migration_initializes_populated_feeds_without_overwriting_markers(self, team, rich_advisory) -> None:  # noqa: F811
+        from importlib import import_module
+        from types import SimpleNamespace
+
+        from django.apps import apps
+        from django.db import connection
+
+        initialize = import_module(
+            "sbomify.apps.security_advisories.migrations.0007_initialize_csaf_markers"
+        ).initialize_markers
+        Team.objects.filter(pk=team.pk).update(csaf_feed_updated_at=None)
+        initialize(apps, SimpleNamespace(connection=connection))
+        team.refresh_from_db()
+        assert team.csaf_feed_updated_at >= rich_advisory.updated_at
+        marker = team.csaf_feed_updated_at
+        initialize(apps, SimpleNamespace(connection=connection))
+        team.refresh_from_db()
+        assert team.csaf_feed_updated_at == marker
+
 
 class TestDocumentLookup:
     def test_fetch_does_not_load_other_advisories(self, team, rich_advisory) -> None:  # noqa: F811
@@ -568,3 +656,37 @@ class TestDocumentLookup:
         assert document is not None
         assert document["document"]["tracking"]["id"] == tracking_id
         assert csaf_provider.white_document(team, "1999", filename, base_url=BASE, generator="test") is None
+
+    @pytest.mark.parametrize("collision", ["same_year", "different_year", "private"])
+    def test_normalized_collisions_are_consistent_in_feed_and_lookup(self, team, collision) -> None:
+        from django.utils import timezone
+
+        now = timezone.now()
+        advisories = []
+        for i, tracking in enumerate(["Mixed.Case/ID", "Mixed?Case/ID"]):
+            published = now.replace(year=now.year - i) if collision == "different_year" else now
+            advisories.append(
+                SecurityAdvisory.objects.create(
+                    team=team,
+                    title=tracking,
+                    tracking_id=tracking,
+                    status=SecurityAdvisory.Status.PUBLISHED,
+                    visibility=SecurityAdvisory.Visibility.PRIVATE
+                    if collision == "private" and i
+                    else SecurityAdvisory.Visibility.PUBLIC,
+                    published_at=published,
+                    made_public_at=published if collision != "private" or not i else None,
+                )
+            )
+        feed = csaf_provider.rolie_feed(team, base_url=BASE)["feed"]["entry"]
+        assert len(feed) == {"same_year": 0, "different_year": 2, "private": 1}[collision]
+        for entry in feed:
+            year, filename = entry["content"]["src"].rsplit("/", 2)[-2:]
+            assert csaf_provider.white_document(team, year, filename, base_url=BASE, generator="test") is not None
+        if collision == "same_year":
+            assert (
+                csaf_provider.white_document(
+                    team, str(now.year), csaf_provider.csaf_filename(advisories[0]), base_url=BASE, generator="test"
+                )
+                is None
+            )

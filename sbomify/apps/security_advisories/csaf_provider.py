@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 from django.utils import timezone
 
 from sbomify.apps.security_advisories.csaf import CSAF_VERSION, render_csaf
-from sbomify.apps.security_advisories.expressions import csaf_filename_expression
+from sbomify.apps.security_advisories.expressions import csaf_filename_expression, csaf_year_expression
 from sbomify.apps.security_advisories.models import SecurityAdvisory
 from sbomify.apps.security_advisories.services.advisories import display_id
 from sbomify.apps.security_advisories.services.trust_center import (
@@ -168,8 +168,14 @@ def rolie_feed(team: Team, *, base_url: str) -> dict[str, Any]:
 
 def white_document(team: Team, year: str, filename: str, *, base_url: str, generator: str) -> dict[str, Any] | None:
     """Resolve one public document using the indexed CSAF filename expression."""
+    if not re.fullmatch(r"[0-9]{4}", year):
+        return None
     try:
-        advisory = public_advisories(team).alias(_csaf_filename=csaf_filename_expression()).get(_csaf_filename=filename)
+        advisory = (
+            public_advisories(team)
+            .alias(_csaf_filename=csaf_filename_expression(), _csaf_year=csaf_year_expression())
+            .get(_csaf_filename=filename, _csaf_year=int(year))
+        )
     except (SecurityAdvisory.DoesNotExist, SecurityAdvisory.MultipleObjectsReturned):
         # Normalization collisions must not serve the wrong advisory.
         return None
