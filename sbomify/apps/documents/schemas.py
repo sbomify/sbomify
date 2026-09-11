@@ -22,6 +22,7 @@ class DocumentResponseSchema(BaseModel):
     component_id: str
     component_name: str
     document_type: str
+    compliance_subcategory: Optional[str] = None
     description: str
     content_type: str
     file_size: Optional[int]

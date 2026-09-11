@@ -862,6 +862,13 @@ def test_patch_compliance_subcategory(
     sample_document.refresh_from_db()
     assert sample_document.compliance_subcategory == expected
 
+    # A caller that just set the tag has to be able to see it, so the success
+    # response carries it rather than making them re-read the document.
+    if status == 200:
+        assert response.json()["compliance_subcategory"] == expected
+        detail = client.get(reverse("api-1:get_document", kwargs={"document_id": sample_document.id}))
+        assert detail.json()["compliance_subcategory"] == expected
+
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("subcategory", ["soc2", "unknown"])

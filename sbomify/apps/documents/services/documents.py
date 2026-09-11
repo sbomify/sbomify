@@ -26,6 +26,7 @@ def serialize_document(document: Document) -> dict[str, Any]:
         "component_id": document.component.id,
         "component_name": document.component.name,
         "document_type": document.document_type,
+        "compliance_subcategory": document.compliance_subcategory or None,
         "description": document.description,
         "content_type": document.content_type,
         "file_size": document.file_size,
