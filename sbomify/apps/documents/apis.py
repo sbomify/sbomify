@@ -72,6 +72,8 @@ def create_document(
             # Determine which subcategory to use based on document type
             subcategory_value = None
             if form_document_type == Document.DocumentType.COMPLIANCE and compliance_subcategory:
+                if compliance_subcategory not in Document.ComplianceSubcategory.values:
+                    return 400, {"detail": "Invalid compliance subcategory"}
                 subcategory_value = compliance_subcategory
 
             # Remove file extension if name not provided

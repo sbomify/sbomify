@@ -823,3 +823,117 @@ def test_get_document_denied_for_publish_only_token(sample_document):
     url = reverse("api-1:get_document", kwargs={"document_id": sample_document.id})
     response = Client().get(url, HTTP_AUTHORIZATION=f"Bearer {token_str}")
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("payload", "expected", "status"),
+    [
+        ({"compliance_subcategory": "soc2-type1"}, "soc2-type1", 200),
+        ({"compliance_subcategory": "soc2-type2"}, "soc2-type2", 200),
+        ({"compliance_subcategory": ""}, None, 200),
+        ({"compliance_subcategory": None}, None, 200),
+        ({"name": "Renamed"}, "iso27001", 200),
+        ({"document_type": "manual", "compliance_subcategory": "soc2-type2"}, None, 200),
+        ({"compliance_subcategory": "soc2"}, "iso27001", 400),
+        ({"compliance_subcategory": "unknown"}, "iso27001", 400),
+    ],
+)
+def test_patch_compliance_subcategory(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    sample_document: Document,
+    payload: dict[str, str | None],
+    expected: str | None,
+    status: int,
+) -> None:
+    sample_document.document_type = Document.DocumentType.COMPLIANCE
+    sample_document.compliance_subcategory = Document.ComplianceSubcategory.ISO27001
+    sample_document.save()
+    client.force_login(sample_user)
+
+    response = client.patch(
+        reverse("api-1:update_document", kwargs={"document_id": sample_document.id}),
+        json.dumps(payload),
+        content_type="application/json",
+    )
+
+    assert response.status_code == status
+    sample_document.refresh_from_db()
+    assert sample_document.compliance_subcategory == expected
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("subcategory", ["soc2", "unknown"])
+def test_upload_rejects_retired_or_unknown_compliance_subcategory(
+    mocker: MockerFixture,
+    client: Client,
+    sample_user: AbstractBaseUser,
+    sample_document_component: Component,
+    subcategory: str,
+) -> None:
+    create_documents_api_mock(mocker, scenario="success")
+    client.force_login(sample_user)
+    before = Document.objects.count()
+
+    response = client.post(
+        reverse("api-1:create_document"),
+        {
+            "document_file": SimpleUploadedFile("report.pdf", b"report", content_type="application/pdf"),
+            "component_id": sample_document_component.id,
+            "document_type": Document.DocumentType.COMPLIANCE,
+            "compliance_subcategory": subcategory,
+        },
+    )
+
+    assert response.status_code == 400
+    assert Document.objects.count() == before
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("document_type", "subcategory", "expected"),
+    [
+        ("compliance", "soc2-type1", "soc2-type1"),
+        ("compliance", "soc2-type2", "soc2-type2"),
+        ("compliance", "", None),
+        ("manual", "", None),
+    ],
+)
+def test_document_table_edit_persists_and_clears_subcategory(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    sample_document: Document,
+    document_type: str,
+    subcategory: str,
+    expected: str | None,
+) -> None:
+    sample_document.document_type = Document.DocumentType.COMPLIANCE
+    sample_document.compliance_subcategory = Document.ComplianceSubcategory.ISO27001
+    sample_document.save()
+    client.force_login(sample_user)
+    url = reverse("documents:documents_table", kwargs={"component_id": sample_document.component_id})
+
+    page = client.get(url)
+    assert page.status_code == 200
+    assert b"editForm.compliance_subcategory" in page.content
+    assert b"soc2-type1" in page.content
+    assert b"soc2-type2" in page.content
+
+    response = client.post(
+        url,
+        {
+            "_method": "PATCH",
+            "document_id": sample_document.id,
+            "name": sample_document.name,
+            "version": sample_document.version,
+            "document_type": document_type,
+            "compliance_subcategory": subcategory,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "refreshDocumentsTable" in response.headers.get("HX-Trigger", "")
+    sample_document.refresh_from_db()
+    assert sample_document.document_type == document_type
+    assert sample_document.compliance_subcategory == expected
