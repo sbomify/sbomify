@@ -44,7 +44,7 @@ from sbomify.apps.teams.models import Team
 # customer's trust center.
 BADGE_CATALOGUE: dict[str, dict[str, str]] = {
     Document.ComplianceSubcategory.ISO27001: {
-        "summary": "Certified information security management.",
+        "summary": "Certified information security management system.",
         "image": "img/trust-center/badges/iso-27001.svg",
     },
     Document.ComplianceSubcategory.SOC2_TYPE2: {
