@@ -26,39 +26,57 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.templatetags.static import static
+
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.models import Team
 
 # What a badge says, and which seal it wears. The order here is the order on the
-# page: the strongest assurance first, so a reader scanning left to right stops
-# at the best thing the workspace has.
+# page: independent audits first, because that is what a reader scanning for
+# assurance stops at, and the self-declared conformity after them.
 #
-# image is a static path. They are placeholders drawn from the design tokens
-# until the real seals land, which is a file swap and nothing else: nothing
-# outside this table names an image.
+# image is a static path, and nothing outside this table names one, so new
+# artwork is a file swap. An entry may leave it empty: c-branded.credential
+# falls back to drawing the label, which is how a certification we hold but have
+# no seal for is shown rather than hidden. Undifferentiated SOC 2 is the one
+# entry in that state today.
 BADGE_CATALOGUE: dict[str, dict[str, str]] = {
     Document.ComplianceSubcategory.ISO27001: {
         "summary": "Certified information security management.",
-        "image": "img/trust-center/badges/iso27001.svg",
+        "image": "img/trust-center/badges/iso-27001.svg",
     },
     Document.ComplianceSubcategory.SOC2_TYPE2: {
         "summary": "Controls tested over a period by an independent auditor.",
-        "image": "img/trust-center/badges/soc2-type2.svg",
+        "image": "img/trust-center/badges/soc-2-type-ii.svg",
     },
     Document.ComplianceSubcategory.SOC2_TYPE1: {
         "summary": "Controls reviewed by an independent auditor at a point in time.",
-        "image": "img/trust-center/badges/soc2-type1.svg",
+        "image": "img/trust-center/badges/soc-2-type-i.svg",
     },
     Document.ComplianceSubcategory.SOC2: {
         "summary": "Independently audited security controls.",
-        "image": "img/trust-center/badges/soc2.svg",
+        "image": "",
+    },
+    Document.ComplianceSubcategory.CRA: {
+        "summary": "Conformity with the EU Cyber Resilience Act.",
+        "image": "img/trust-center/badges/cra.svg",
     },
 }
 
 # Publishing an artifact is what puts it on the trust center at all; the gate is
 # on the download, not on the fact that it exists.
 _PUBLISHED = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+
+
+def badge_seal_url(subcategory: str) -> str:
+    """Resolved URL for a certification's seal, empty when we have no artwork.
+
+    Resolved here rather than in the page, because ``{% static "" %}`` returns
+    the static root, which is a truthy string and renders as a broken image.
+    """
+    path = BADGE_CATALOGUE.get(subcategory, {}).get("image", "")
+    return static(path) if path else ""
 
 
 def public_certification_badges(team: Team) -> list[dict[str, Any]]:
@@ -97,7 +115,7 @@ def public_certification_badges(team: Team) -> list[dict[str, Any]]:
             "key": subcategory,
             "label": document.get_compliance_badge(),
             "summary": BADGE_CATALOGUE[subcategory]["summary"],
-            "image": BADGE_CATALOGUE[subcategory]["image"],
+            "image": badge_seal_url(subcategory),
             "component_id": document.component.id,
             "component_slug": document.component.slug,
             "document_name": document.name,

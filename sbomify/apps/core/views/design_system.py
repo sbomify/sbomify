@@ -7,7 +7,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.documents.models import Document
-from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE
+from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE, badge_seal_url
 
 # The gallery's index and its section order come from here, so a component can
 # never be demoed without appearing in the index (or listed without a demo).
@@ -84,7 +84,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 {
                     "label": dict(Document.ComplianceSubcategory.choices)[key],
                     "summary": meta["summary"],
-                    "image": meta["image"],
+                    "image": badge_seal_url(key),
                     "note": "Report available on request" if index == 0 else "",
                 }
                 for index, (key, meta) in enumerate(BADGE_CATALOGUE.items())

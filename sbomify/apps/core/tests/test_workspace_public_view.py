@@ -72,7 +72,7 @@ def test_workspace_public_page_shows_a_certification_badge():
     assert response.status_code == 200
     content = response.content.decode()
     assert "Certifications" in content
-    assert "iso27001.svg" in content
+    assert "iso-27001.svg" in content
 
 
 @pytest.mark.django_db
