@@ -43,15 +43,19 @@ parlay ecosystems enrich sbomify_[...].json > sbomify_[...].json
 
 ## Yocto
 
-`yocto_core-image-minimal.spdx3.json` and `yocto_core-image-minimal.spdx.json`
-are SBOMs for `core-image-minimal` on `qemux86-64`, built from the default
-distribution (`poky`) by the Yocto Project's own autobuilder. Background:
+SBOMs for `core-image-minimal` on `qemux86-64`, built from the default
+distribution (`poky`) by the Yocto Project's own autobuilder. Both are the
+published artefacts byte for byte — only the filenames differ, to match the
+naming used in this directory. Background:
 <https://sbomify.com/2026/05/19/yocto-spdx-3-0-overview/>.
+
+Note that Yocto emits CPE external references rather than purls, so these
+samples exercise the purl-less path.
 
 ### SPDX 3.0
 
-`yocto_core-image-minimal.spdx3.json` is the published artefact, byte for byte,
-from Yocto 6.0.3 (Wrynose LTS), which emits SPDX 3.0.1 via `create-spdx-3.0`:
+`yocto_core-image-minimal.spdx3.json`, from Yocto 6.0.3 (Wrynose LTS), which
+emits SPDX 3.0.1 via `create-spdx-3.0`:
 
 ```bash
 curl -O https://downloads.yoctoproject.org/releases/yocto/yocto-6.0.3/machines/qemu/qemux86-64/core-image-minimal-qemux86-64.rootfs.spdx.json
@@ -61,47 +65,51 @@ mv core-image-minimal-qemux86-64.rootfs.spdx.json \
    sboms/tests/test_data/yocto_core-image-minimal.spdx3.json
 ```
 
+`sha256: 42fa3058205fe486bf0804fb1f5aab72bd73a2bd724ca0e267c242d9f9c1da17`
+
 A single JSON-LD document: 3049 graph elements, 259 `software_Package`s, plus
 `build_Build` provenance and `security_Vulnerability` / VEX assessments.
 
-### SPDX 2.3
+### SPDX 2.2
 
-Yocto has no SPDX 2.3 emitter — `create-spdx-2.2` is the only 2.x writer, it
-hardcodes `SPDX-2.2` in `meta/lib/oe/spdx.py`, and it was dropped entirely in
-Yocto 6.0. Its output is also not a single SBOM: it is a tarball of ~one
-document per recipe and per package, plus a thin image document that reaches
-them through `externalDocumentRefs`. Uploaded on its own that image document
-yields exactly one component.
-
-So this sample is built from the last LTS that still ships a 2.x SBOM, Yocto
-5.0.19 (Scarthgap), flattened into one document and re-declared as SPDX 2.3
-(a backwards-compatible superset of 2.2, so no field migration is required):
+`yocto_core-image-minimal.spdx.tar.zst`, from Yocto 5.0.19 (Scarthgap LTS) —
+the last LTS that still ships a 2.x SBOM. It is **2.2, not 2.3**: Yocto has no
+SPDX 2.3 emitter. `create-spdx-2.2` is the only 2.x writer, it hardcodes
+`SPDX-2.2` in `meta/lib/oe/spdx.py`, and it was dropped entirely in Yocto 6.0.
 
 ```bash
 curl -O https://downloads.yoctoproject.org/releases/yocto/yocto-5.0.19/machines/qemu/qemux86-64/core-image-minimal-qemux86-64.rootfs.spdx.tar.zst
 curl -O https://downloads.yoctoproject.org/releases/yocto/yocto-5.0.19/machines/qemu/qemux86-64/core-image-minimal-qemux86-64.rootfs.spdx.tar.zst.sha256sum
 sha256sum -c core-image-minimal-qemux86-64.rootfs.spdx.tar.zst.sha256sum
-mkdir spdx22 && tar --zstd -xf core-image-minimal-qemux86-64.rootfs.spdx.tar.zst -C spdx22
-
-./bin/flatten_yocto_spdx.py \
-    spdx22 \
-    spdx22/core-image-minimal-qemux86-64.rootfs-20260702144922.spdx.json \
-    sboms/tests/test_data/yocto_core-image-minimal.spdx.json
+mv core-image-minimal-qemux86-64.rootfs.spdx.tar.zst \
+   sboms/tests/test_data/yocto_core-image-minimal.spdx.tar.zst
 ```
 
-233 packages, 161 files, 11171 relationships, 3 extracted licenses. Package,
-file, licence and relationship data is verbatim from the Yocto build; the only
-edits are the ones flattening forces:
+`sha256: 881fb2a6c4ffc303750e480ac3eafe0dd1c4877ce5c2cb8836ba43c190e38066`
 
-- Cross-document `DocumentRef-x:SPDXRef-y` references become document-local
-  `SPDXRef-`s, prefixed with the source document name where ids would collide.
-- Cross-document `DocumentRef-x:LicenseRef-y` expressions are rewritten the same
-  way, and every `hasExtractedLicensingInfos` entry is merged into the document.
-- The 304 document-level `DESCRIBES`/`AMENDS`/`OTHER` relationships are dropped
-  — with one merged document they would be self-references — and replaced by a
-  single `DESCRIBES` pointing at the image package.
+This is kept as the tarball on purpose. SPDX 2.2 has no way to express a whole
+image in one document, so Yocto emits ~one document per recipe and per package
+and links them with `externalDocumentRefs` — that multi-document shape *is* the
+output, and flattening it here would mean shipping something Yocto never
+produced.
 
-Note that Yocto emits CPE external references rather than purls, so these
-packages exercise the purl-less path. `GENERATED_FROM NOASSERTION` relationships
-carrying a debug-source path in a comment are kept; they are most of the 11171
-and most of the file size.
+```
+tar --zstd -xf yocto_core-image-minimal.spdx.tar.zst -C <dir>
+```
+
+176 SPDX documents plus an index:
+
+- `index.json` — maps every `documentNamespace` to its filename and sha1.
+- `core-image-minimal-qemux86-64.rootfs-20260702144922.spdx.json` — the image
+  document. One package, no files, and 72 `externalDocumentRefs`; its
+  `CONTAINS` relationships are what point at the packages in the rootfs.
+- `<package>.spdx.json` — the binary packages, with licences, checksums and
+  packaged files.
+- `recipe-<name>.spdx.json` — the source recipes the packages are
+  `GENERATED_FROM`.
+- `runtime-<name>.spdx.json` — runtime dependency relationships.
+
+Across all of them: 233 packages, 161 files, 11474 relationships, and 6
+documents carrying `hasExtractedLicensingInfos`. Note that `LicenseRef-`s are
+scoped per document, so licence expressions can read
+`GPL-2.0-only AND DocumentRef-recipe-busybox:LicenseRef-bzip2-1.0.4`.
