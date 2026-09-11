@@ -69,6 +69,23 @@ def is_duplicate_document_error(exc: IntegrityError) -> bool:
     )
 
 
+def fits_as_fixed_point(value: Decimal) -> bool:
+    """Whether the value could render inside the column at all.
+
+    Read off the exponent rather than measured from the rendered string:
+    ``format(Decimal("1E-999999999"), "f")`` builds a gigabyte of zeroes before
+    anything could measure it, and ``Decimal("1E+999999999") + Decimal("0.1")``
+    raises ``Overflow`` before that. Both fit the field as written, so the guard
+    has to come before the arithmetic.
+    """
+    exponent = value.as_tuple().exponent
+    if not isinstance(exponent, int):  # "n", "N" or "F": NaN and Infinity
+        return False
+    integer_digits = max(value.adjusted() + 1, 1)
+    fractional_digits = max(-exponent, 0)
+    return integer_digits + fractional_digits <= VERSION_MAX_LENGTH
+
+
 def normalize_decimal_version(value: Decimal) -> str:
     """Render a decimal version the way the NDA allocator always has: "1.10" -> "1.1".
 
@@ -113,10 +130,12 @@ def next_free_document_version(component_id: str, name: str, candidate: str) -> 
     # Decimal parses "NaN" and "Infinity" too, and adding to either returns it
     # unchanged, so a version like that would count forever. Only a finite decimal
     # can be counted on from; everything else gets the suffix.
-    if value is not None and value.is_finite():
+    if value is not None and value.is_finite() and fits_as_fixed_point(value):
         current = candidate
         while True:
             value += Decimal("0.1")
+            if not fits_as_fixed_point(value):
+                break
             bumped = normalize_decimal_version(value)
             # A finite value can still fail to move: past the context precision
             # (28 digits by default) adding 0.1 rounds straight back. It can also

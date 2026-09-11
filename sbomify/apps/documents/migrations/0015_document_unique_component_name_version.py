@@ -36,8 +36,28 @@ def _free_version(base: str, taken: set[str], seq: int) -> tuple[str, int]:
             return candidate, seq
 
 
+def _lock_documents_table(apps, schema_editor):
+    """Hold the table for the rewrite and the constraint that follows it.
+
+    Migrations run before the rolling backend update (bin/deploy.sh), so an old
+    backend is still serving while this runs and can insert a fresh duplicate
+    between the scan and AddConstraint, which would then fail and abort the
+    deployment. The migration is one transaction, so a lock taken here is held
+    through AddConstraint. SHARE ROW EXCLUSIVE blocks writers and lets readers
+    through; AddConstraint takes a stricter lock on the same table anyway.
+    """
+    if schema_editor.connection.vendor != "postgresql":
+        return
+
+    Document = apps.get_model("documents", "Document")
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute(f'LOCK TABLE "{Document._meta.db_table}" IN SHARE ROW EXCLUSIVE MODE')
+
+
 def mark_duplicate_documents(apps, schema_editor):
     """Give duplicate documents a distinct version before adding the constraint."""
+    _lock_documents_table(apps, schema_editor)
+
     Document = apps.get_model("documents", "Document")
     ReleaseArtifact = apps.get_model("core", "ReleaseArtifact")
 

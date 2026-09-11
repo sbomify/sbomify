@@ -43,6 +43,21 @@ mark_duplicate_documents = importlib.import_module(
 ).mark_duplicate_documents
 
 
+class _SchemaEditor:
+    """Stands in for the editor Django hands a RunPython, which the data step uses
+    only to reach the connection (to take the table lock on PostgreSQL)."""
+
+    def __init__(self) -> None:
+        self.connection = connection
+
+
+def _run_migration_step() -> None:
+    """Run the data step the way a migration does: inside a transaction, which is
+    what its LOCK TABLE needs and what holds the lock until AddConstraint."""
+    with transaction.atomic():
+        mark_duplicate_documents(global_apps, _SchemaEditor())
+
+
 @pytest.fixture
 def sample_document_component(sample_team, sample_user):  # noqa: F811
     """A document component owned by the sample user."""
@@ -343,7 +358,7 @@ class TestMarkDuplicateDocuments:
         release = Release.objects.create(product=product, name="r1", version="1")
         ReleaseArtifact.objects.create(release=release, document=pinned)
 
-        mark_duplicate_documents(global_apps, None)
+        _run_migration_step()
 
         pinned.refresh_from_db()
         newer.refresh_from_db()
@@ -355,7 +370,7 @@ class TestMarkDuplicateDocuments:
         newer = _make_document(sample_document_component)
         Document.objects.filter(pk=older.pk).update(created_at=timezone.now() - timedelta(days=5))
 
-        mark_duplicate_documents(global_apps, None)
+        _run_migration_step()
 
         older.refresh_from_db()
         newer.refresh_from_db()
@@ -367,7 +382,7 @@ class TestMarkDuplicateDocuments:
         _make_document(sample_document_component, version="1.0")
         squatter = _make_document(sample_document_component, version="1.0 (duplicate 1)")
 
-        mark_duplicate_documents(global_apps, None)
+        _run_migration_step()
 
         squatter.refresh_from_db()
         assert squatter.version == "1.0 (duplicate 1)", "an existing row is never renamed out of the way"
@@ -382,7 +397,7 @@ class TestMarkDuplicateDocuments:
         _make_document(sample_document_component, version=long_version)
         _make_document(sample_document_component, version=long_version)
 
-        mark_duplicate_documents(global_apps, None)
+        _run_migration_step()
 
         versions = list(Document.objects.filter(component=sample_document_component).values_list("version", flat=True))
         assert len(versions) == len(set(versions)), "the group is now unique"
@@ -395,7 +410,7 @@ class TestMarkDuplicateDocuments:
         _make_document(sample_document_component, version="1.0")
         elsewhere = _make_document(other_document_component, version="1.0")
 
-        mark_duplicate_documents(global_apps, None)
+        _run_migration_step()
 
         elsewhere.refresh_from_db()
         assert elsewhere.version == "1.0"
@@ -407,7 +422,7 @@ class TestMarkDuplicateDocuments:
         readme = _make_document(sample_document_component, name="readme", version="1.0")
         license_doc = _make_document(sample_document_component, name="license", version="1.0")
 
-        mark_duplicate_documents(global_apps, None)
+        _run_migration_step()
 
         readme.refresh_from_db()
         license_doc.refresh_from_db()
@@ -506,6 +521,37 @@ class TestOrphanedObjectLogging:
         assert response.status_code == 400
         recorded.assert_called_once_with(storage.upload_document.return_value)
 
+    def test_losing_the_constraint_race_is_a_409_and_a_recorded_object(
+        self,
+        mocker: MockerFixture,
+        client: Client,
+        sample_user: AbstractBaseUser,
+        sample_document_component,
+    ):
+        """The pre-check cannot catch a concurrent upload, so the constraint does.
+        This is the branch that a regression in constraint-name detection would
+        silently turn into the generic 400."""
+        storage = create_documents_api_mock(mocker, scenario="success")
+        recorded = mocker.patch("sbomify.apps.documents.apis.log_orphaned_object")
+        mocker.patch.object(
+            Document,
+            "save",
+            side_effect=IntegrityError(
+                "duplicate key value violates unique constraint "
+                f'"{DOCUMENT_UNIQUE_CONSTRAINT}"'
+            ),
+        )
+        client.force_login(sample_user)
+
+        response = _upload(client, sample_document_component.id)
+
+        assert response.status_code == 409
+        body = json.loads(response.content)
+        assert body["error_code"] == "DUPLICATE_ARTIFACT"
+        assert "already exists" in body["detail"]
+        recorded.assert_called_once_with(storage.upload_document.return_value)
+        assert not Document.objects.filter(component=sample_document_component).exists()
+
     def test_the_marker_is_one_string_for_every_artifact_path(self):
         assert ORPHANED_OBJECT_MARKER == "Potential orphaned S3 object after IntegrityError"
 
@@ -539,6 +585,8 @@ class TestNextFreeDocumentVersionAlwaysFits:
             "9" * VERSION_MAX_LENGTH,  # a decimal bump rounds up into 256 characters
             "v" * VERSION_MAX_LENGTH,  # the suffix path, base already at the limit
             "9" * (VERSION_MAX_LENGTH + 1),  # a candidate that never fit to begin with
+            "1E+999999999",  # finite, fits the field, and overflows the arithmetic
+            "1E-999999999",  # finite, fits the field, a gigabyte in fixed point
             "1.0",
         ],
     )
