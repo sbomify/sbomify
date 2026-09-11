@@ -107,10 +107,19 @@ def test_a_gated_report_still_earns_the_badge(public_team: Team) -> None:
 
 @pytest.mark.django_db
 def test_an_nda_is_not_a_certification(public_team: Team) -> None:
+    """An NDA is published the same way and still earns nothing.
+
+    It is `DocumentType.NDA` rather than a compliance document now, so the
+    badge query excludes it by type instead of by a carve-out. Worth keeping as
+    a test: the NDA sits on the same company-wide published component as the
+    certifications, so a query that widened by mistake would pick it up.
+    """
     _document(
         _component(public_team, name="Company NDA"),
-        subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
+        subcategory=None,
         filename="nda.pdf",
+        name="Mutual non-disclosure agreement",
     )
 
     assert public_certification_badges(public_team) == []
@@ -236,16 +245,16 @@ def test_every_badge_names_a_seal_that_exists() -> None:
 
 @pytest.mark.django_db
 def test_the_catalogue_covers_every_badgeable_subcategory() -> None:
-    """NDA is the only compliance subcategory that is deliberately not a badge.
+    """Every compliance subcategory is a badge, with no exceptions left.
 
-    A subcategory added to the model without a catalogue entry would be silently
-    unbadgeable, which is the quiet way this feature stops working.
+    NDA used to be the one carve-out; it is its own document type now, so the
+    catalogue and the enum should agree exactly. A subcategory added to the
+    model without a catalogue entry would be silently unbadgeable, which is the
+    quiet way this feature stops working.
     """
     from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE
 
-    expected = {value for value, _ in Document.ComplianceSubcategory.choices} - {Document.ComplianceSubcategory.NDA}
-
-    assert set(BADGE_CATALOGUE) == expected
+    assert set(BADGE_CATALOGUE) == {value for value, _ in Document.ComplianceSubcategory.choices}
 
 
 def test_the_demo_seed_publishes_a_certification_that_earns_a_badge() -> None:
@@ -310,3 +319,69 @@ def test_re_seeding_tags_a_certificate_seeded_before_subcategories(public_team: 
     stale.refresh_from_db()
     assert stale.compliance_subcategory == Document.ComplianceSubcategory.ISO27001
     assert [badge["label"] for badge in public_certification_badges(public_team)] == ["ISO 27001"]
+
+
+@pytest.mark.django_db
+def test_an_nda_is_recognised_by_its_type_alone(public_team: Team) -> None:
+    """``is_nda`` is a single-field check now, and nothing else answers to it.
+
+    The gated-access path turns on this predicate, so the split is only safe if
+    a moved NDA still reports as one and a certification never does.
+    """
+    component = _component(public_team, name="Company NDA")
+    nda = _document(
+        component,
+        document_type=Document.DocumentType.NDA,
+        subcategory=None,
+        filename="nda.pdf",
+        name="Mutual non-disclosure agreement",
+    )
+    certification = _document(_component(public_team))
+
+    assert nda.is_nda()
+    assert not nda.is_compliance_document()
+    assert not certification.is_nda()
+    assert certification.is_compliance_document()
+
+
+@pytest.mark.django_db
+def test_the_migration_moves_the_nda_out_of_compliance_and_back(public_team: Team) -> None:
+    """The data move runs under ``--nomigrations``, where the migration never does.
+
+    Tests build a bare schema, so nothing else in the suite executes 0016. The
+    reverse is exercised too, because unlike 0015 this one genuinely inverts:
+    after the forward pass an ``nda`` row is exactly a row it moved.
+    """
+    migration = import_module("sbomify.apps.documents.migrations.0016_nda_document_type")
+
+    component = _component(public_team, name="Company NDA")
+    nda = Document.objects.create(
+        name="Mutual non-disclosure agreement",
+        version="2026.1",
+        component=component,
+        document_type=Document.DocumentType.COMPLIANCE,
+        compliance_subcategory="nda",
+        document_filename="nda.pdf",
+    )
+    certification = _document(_component(public_team))
+
+    class _Registry:
+        @staticmethod
+        def get_model(app_label: str, model_name: str) -> type[Document]:
+            return Document
+
+    migration.move_nda_out_of_compliance(_Registry(), None)
+
+    nda.refresh_from_db()
+    certification.refresh_from_db()
+    assert nda.document_type == Document.DocumentType.NDA
+    assert nda.compliance_subcategory is None
+    # The certification is left exactly where it was.
+    assert certification.document_type == Document.DocumentType.COMPLIANCE
+    assert certification.compliance_subcategory == Document.ComplianceSubcategory.ISO27001
+
+    migration.move_nda_back_into_compliance(_Registry(), None)
+
+    nda.refresh_from_db()
+    assert nda.document_type == Document.DocumentType.COMPLIANCE
+    assert nda.compliance_subcategory == "nda"

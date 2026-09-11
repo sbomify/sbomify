@@ -359,14 +359,7 @@ GLOBAL_COMPONENTS: tuple[ComponentSpec, ...] = (
         "Company NDA",
         DOC,
         PRIVATE,
-        documents=(
-            _doc(
-                "Mutual non-disclosure agreement",
-                Document.DocumentType.COMPLIANCE,
-                "2026.1",
-                Document.ComplianceSubcategory.NDA,
-            ),
-        ),
+        documents=(_doc("Mutual non-disclosure agreement", Document.DocumentType.NDA, "2026.1"),),
     ),
     ComponentSpec(
         "Security policies",

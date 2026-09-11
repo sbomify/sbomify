@@ -26,6 +26,7 @@ class Document(models.Model):
 
         # Legal and Compliance
         LICENSE = "license", "License"
+        NDA = "nda", "NDA"
         COMPLIANCE = "compliance", "Compliance"
         EVIDENCE = "evidence", "Evidence"
 
@@ -51,7 +52,13 @@ class Document(models.Model):
         OTHER = "other", "Other"
 
     class ComplianceSubcategory(models.TextChoices):
-        """Compliance document subcategories for auto-detection and badging.
+        """Certifications a workspace holds, for auto-detection and badging.
+
+        Every value here is a claim about the workspace that a trust-center
+        reader can be shown, which is why every one of them is badgeable. An
+        NDA used to sit here and was the one exception: it is an agreement the
+        reader signs, not an attestation about us, so it is now
+        ``DocumentType.NDA`` and this enum means what its name says.
 
         There is no plain SOC 2. A report is Type I, the design of the controls
         at a point in time, or Type II, their operation over a period, and a
@@ -67,7 +74,6 @@ class Document(models.Model):
         out; this is where its published outcome is filed.
         """
 
-        NDA = "nda", "NDA"
         SOC2_TYPE1 = "soc2-type1", "SOC 2 Type I"
         SOC2_TYPE2 = "soc2-type2", "SOC 2 Type II"
         ISO27001 = "iso27001", "ISO 27001"
@@ -167,6 +173,10 @@ class Document(models.Model):
             self.DocumentType.BUILD_INSTRUCTIONS: "build-meta",
             self.DocumentType.CONFIGURATION: "configuration",
             self.DocumentType.LICENSE: "license",
+            # CycloneDX has no type for a legal agreement, and an NDA is neither
+            # a licence nor a certification report, so it falls to "other"
+            # rather than borrowing a label that overstates it.
+            self.DocumentType.NDA: "other",
             self.DocumentType.COMPLIANCE: "certification-report",
             self.DocumentType.EVIDENCE: "evidence",
             self.DocumentType.CHANGELOG: "release-notes",
@@ -212,6 +222,7 @@ class Document(models.Model):
             self.DocumentType.BUILD_INSTRUCTIONS: "build-instructions",
             self.DocumentType.CONFIGURATION: "configuration",
             self.DocumentType.LICENSE: "license",
+            self.DocumentType.NDA: "nda",
             self.DocumentType.COMPLIANCE: "compliance",
             self.DocumentType.EVIDENCE: "evidence",
             self.DocumentType.CHANGELOG: "changelog",
@@ -240,10 +251,7 @@ class Document(models.Model):
         Returns:
             True if document is an NDA, False otherwise.
         """
-        return (
-            self.document_type == self.DocumentType.COMPLIANCE
-            and self.compliance_subcategory == self.ComplianceSubcategory.NDA
-        )
+        return self.document_type == self.DocumentType.NDA
 
     def is_compliance_document(self) -> bool:
         """Check if document is a compliance document.

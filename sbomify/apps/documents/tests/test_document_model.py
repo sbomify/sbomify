@@ -59,6 +59,7 @@ class TestDocumentModel:
 
             # Legal and Compliance
             (Document.DocumentType.LICENSE, "license"),
+            (Document.DocumentType.NDA, "other"),
             (Document.DocumentType.COMPLIANCE, "certification-report"),
             (Document.DocumentType.EVIDENCE, "evidence"),
 
@@ -156,6 +157,7 @@ class TestDocumentModel:
 
             # Legal and Compliance
             (Document.DocumentType.LICENSE, "license"),
+            (Document.DocumentType.NDA, "nda"),
             (Document.DocumentType.COMPLIANCE, "compliance"),
             (Document.DocumentType.EVIDENCE, "evidence"),
 

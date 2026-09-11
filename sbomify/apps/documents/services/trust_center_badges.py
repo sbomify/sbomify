@@ -15,8 +15,9 @@ once, and each one is the answer to a way the badge could lie:
   asserts nothing, and it is the easiest way to accidentally claim a
   certification the workspace does not hold.
 
-An NDA is a compliance document and deliberately gets no badge: signing one is
-not an attestation about the workspace's own security.
+Every compliance subcategory is badgeable, so there is no exception to carve out
+here. An NDA is ``DocumentType.NDA`` rather than a compliance document, because
+signing one is not an attestation about the workspace's own security.
 
 One badge per certification, newest document first, so a workspace that uploads
 every year's report shows one ISO 27001 badge rather than five.
