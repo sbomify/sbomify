@@ -172,12 +172,26 @@ UNKNOWN_MARKERS = frozenset({"noassertion", "unknown", "notprovided"})
 #: Written out rather than delegated to ``datetime.fromisoformat``, which
 #: accepts a bare date and a space separator that RFC 9557 does not, and
 #: rejects the bracketed suffix that it does.
+#: Possessive throughout. The quantifiers never needed to give anything back —
+#: every repetition here is delimited by a bracket or an "=" that its own
+#: character class excludes, so no iteration can overlap the next — and saying
+#: so in the pattern makes that structural rather than a property a reader has
+#: to re-derive. The input is a field lifted from an uploaded document, so the
+#: cost of matching it is attacker-influenced, and a timestamp long enough to
+#: be worth scanning is not a timestamp: ``_valid_timestamp`` rejects on length
+#: before it reaches this.
 _RFC_9557_RE = re.compile(
-    r"^(?P<stamp>\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?)"
+    r"^(?P<stamp>\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d++)?+)"
     r"(?P<offset>[Zz]|[+-]\d{2}:\d{2})"
-    r"(?:\[!?[A-Za-z0-9._+/-]+\])?"
-    r"(?:\[!?[A-Za-z0-9-]+=[A-Za-z0-9._+/-]+\])*$"
+    r"(?:\[!?[A-Za-z0-9._+/-]++\])?+"
+    r"(?:\[!?[A-Za-z0-9-]++=[A-Za-z0-9._+/-]++\])*+$"
 )
+
+#: Longest RFC 9557 string worth attempting. A date-time with an offset is 25
+#: characters; the suffixes are a time zone and a handful of key=value tags.
+#: Generous by an order of magnitude, and still small enough that no document
+#: can make timestamp validation cost anything.
+_MAX_TIMESTAMP_LEN = 512
 
 #: The sanctioned property name for a CycloneDX generation context that is
 #: not expressed as a lifecycle, under the taxonomy's "internal" namespace.
@@ -568,7 +582,10 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
     @staticmethod
     def _valid_timestamp(value: Any) -> bool:
         """Whether a timestamp is an RFC 9557 date-time, which is what the standard asks for."""
-        match = _RFC_9557_RE.match(_text(value))
+        text = _text(value)
+        if not text or len(text) > _MAX_TIMESTAMP_LEN:
+            return False
+        match = _RFC_9557_RE.match(text)
         if not match:
             return False
         # The shape is right; this rejects the impossible dates it allows.

@@ -401,6 +401,33 @@ class TestTheTimestampIsRfc9557:
 
         assert assess(plugin, tmp_path, document)["sbom_timestamp"] == "fail"
 
+    def test_a_megabyte_of_text_is_refused_on_length(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """The field comes out of an uploaded document, so its length is theirs to pick.
+
+        The pattern is linear, but matching a megabyte against a timestamp is
+        work nobody asked for. A string this long is not a timestamp, and
+        saying so before the match costs one comparison.
+        """
+        document = cyclonedx()
+        document["metadata"]["timestamp"] = "2026-07-29T10:00:00Z" + "[a=b]" * 200_000
+
+        assert assess(plugin, tmp_path, document)["sbom_timestamp"] == "fail"
+
+    def test_the_bound_is_generous_enough_for_a_real_timestamp(
+        self, plugin: CISAMinimumElementsPlugin, tmp_path: Path
+    ) -> None:
+        """Every shape RFC 9557 allows fits far inside the bound."""
+        from sbomify.apps.plugins.builtins.cisa_2026 import _MAX_TIMESTAMP_LEN
+
+        longest = "2026-07-29T10:00:00.123456789+01:00[Europe/London][u-ca=hebrew][x-foo=bar]"
+        assert len(longest) < _MAX_TIMESTAMP_LEN
+        document = cyclonedx()
+        document["metadata"]["timestamp"] = longest
+
+        assert assess(plugin, tmp_path, document)["sbom_timestamp"] == "pass"
+
 
 class TestTheIdentifiersCisaNames:
     """CISA adds the intrinsic identifiers OmniBOR and SWHID to CPE and PURL."""
