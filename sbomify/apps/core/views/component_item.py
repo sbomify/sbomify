@@ -45,34 +45,42 @@ class ComponentItemPublicView(View):
         Returns a response only when the component is gated and this reader holds
         no grant. Public components and granted readers fall through.
         """
-        from sbomify.apps.core.services.access_control import check_component_access
+        from sbomify.apps.core.services.access_control import check_component_access, gated_denial_copy
         from sbomify.apps.sboms.models import Component as SbomComponent
 
         if component_obj.visibility != SbomComponent.Visibility.GATED:
             return None
-        if check_component_access(request, component_obj).has_access:
+
+        result = check_component_access(request, component_obj)
+        if result.has_access:
             return None
 
         team = component_obj.team
         is_custom_domain = getattr(request, "is_custom_domain", False)
-        item_label = {"documents": "document", "sboms": "SBOM", "vex": "VEX", "cbom": "CBOM"}.get(item_type, "artifact")
+        subject = {"documents": "document", "sboms": "SBOM", "vex": "VEX", "cbom": "CBOM"}.get(item_type, "artifact")
+        component_url = get_public_path(
+            "component", resolved_id, is_custom_domain=is_custom_domain, slug=component_slug
+        )
+
+        # Which position in the access flow this reader is at decides both the
+        # message and the action; the service already worked that out.
+        message, offer_action, action_is_nda = gated_denial_copy(result, subject)
+        action_url = None
+        if offer_action:
+            if action_is_nda:
+                action_url = component_url
+            elif team:
+                action_url = reverse("documents:request_access", kwargs={"team_key": team.key})
 
         return render(
             request,
             "core/access_denied_message.html.j2",
             {
-                "error_message": (
-                    f"Please request access to view this {item_label}."
-                    if not request.user.is_authenticated
-                    else "Your access request is pending approval or has been rejected."
-                ),
-                "request_access_url": (
-                    reverse("documents:request_access", kwargs={"team_key": team.key}) if team else None
-                ),
-                "back_url": get_public_path(
-                    "component", resolved_id, is_custom_domain=is_custom_domain, slug=component_slug
-                ),
-                "item_type": item_label,
+                "error_message": message,
+                "request_access_url": action_url,
+                "action_label": "Sign NDA" if action_is_nda else "Request Access",
+                "action_icon": "fa-file-signature" if action_is_nda else "fa-key",
+                "back_url": component_url,
             },
             status=403,
         )

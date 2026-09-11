@@ -29,6 +29,49 @@ class ComponentAccessResult:
     access_request_status: str | None = None
 
 
+# What a reader is told when a gated component is withheld, and which step is
+# theirs to take next. Keyed on the reason ``check_component_access`` returned,
+# because every one of these is a different position in the access flow: asking
+# a reader whose request is already pending to request it again, or telling a
+# first-time reader their request was rejected, sends them nowhere.
+#
+# ``needs_nda`` routes the action to the component's public page rather than
+# straight to the NDA form: that page resolves (and where necessary creates) the
+# access request the signing URL needs, which is a write this read path must not
+# do. ``action`` False means there is genuinely nothing for them to do yet.
+GATED_DENIAL_COPY: dict[str, tuple[str, bool, bool]] = {
+    # reason: (message template, offer an action, the action is NDA signing)
+    "gated_requires_authentication": ("Please request access to view this {subject}.", True, False),
+    "gated_access_required": ("Please request access to view this {subject}.", True, False),
+    "gated_nda_re_sign_required": ("Please sign the NDA to view this {subject}.", True, True),
+    "gated_access_request_pending": ("Your access request is being reviewed.", False, False),
+    "gated_access_request_rejected": (
+        "Your access request was not approved. You can request access again.",
+        True,
+        False,
+    ),
+    "gated_access_request_revoked": (
+        "Your access to this workspace was withdrawn. You can request access again.",
+        True,
+        False,
+    ),
+}
+
+# Any reason not listed above (a workspace-scoped token, say) is still a denial,
+# so fall back to the step that is almost always right rather than saying nothing.
+_GATED_DENIAL_FALLBACK = GATED_DENIAL_COPY["gated_access_required"]
+
+
+def gated_denial_copy(result: "ComponentAccessResult", subject: str) -> tuple[str, bool, bool]:
+    """Reader-facing copy for a denied gated component.
+
+    Returns ``(message, offer_action, action_is_nda)``. ``subject`` names what is
+    being withheld, in the reader's words ("document", "SBOM").
+    """
+    message, offer_action, action_is_nda = GATED_DENIAL_COPY.get(result.reason, _GATED_DENIAL_FALLBACK)
+    return message.format(subject=subject), offer_action, action_is_nda
+
+
 def _user_has_signed_current_nda(user: User, team: Team) -> bool:
     """Check if user has signed the current company-wide NDA version.
 

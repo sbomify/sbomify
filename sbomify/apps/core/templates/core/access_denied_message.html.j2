@@ -13,9 +13,15 @@
                 <p class="text-text-muted mb-6">{{ error_message }}</p>
             </div>
             <div class="flex flex-col sm:flex-row justify-center gap-3">
+                {% comment %}
+                Not every denial is "go and ask": a request already under review
+                has no action to offer, and an unsigned NDA is a different one.
+                Callers that pass neither label nor icon keep the request-access
+                button this page has always shown.
+                {% endcomment %}
                 {% if request_access_url %}
                     <c-buttons.primary href="{{ request_access_url }}">
-                    <i class="fas fa-key mr-2"></i>Request Access
+                    <i class="fas {{ action_icon|default:"fa-key" }} mr-2"></i>{{ action_label|default:"Request Access" }}
                     </c-buttons.primary>
                 {% endif %}
                 {% if back_url %}
