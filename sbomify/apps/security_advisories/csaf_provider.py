@@ -130,7 +130,10 @@ def rolie_feed(team: Team, *, base_url: str) -> dict[str, Any]:
         updated = advisory.updated_at or advisory.published_at
         entries.append(
             {
-                "id": str(display_id(advisory)),
+                # RFC 4287 requires an Atom id to be an absolute IRI, so the
+                # document's own URL rather than the bare tracking id. The
+                # tracking id is still in /document/tracking/id and the filename.
+                "id": url,
                 "title": advisory.title,
                 "published": _stamp(advisory.published_at),
                 "updated": _stamp(updated),
@@ -141,7 +144,8 @@ def rolie_feed(team: Team, *, base_url: str) -> dict[str, Any]:
         )
     return {
         "feed": {
-            "id": f"{team.key}-csaf-feed-tlp-white",
+            # Absolute IRI here too: the feed's own canonical URL.
+            "id": f"{base_url}{WHITE_FEED_PATH}",
             "title": f"{team.display_name} security advisories (TLP:WHITE)",
             "link": [{"rel": "self", "href": f"{base_url}{WHITE_FEED_PATH}"}],
             "category": [{"scheme": ROLIE_CATEGORY_SCHEME, "term": "csaf"}],

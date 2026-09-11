@@ -7,4 +7,6 @@ class SecurityAdvisoriesConfig(AppConfig):
     label = "security_advisories"
 
     def ready(self) -> None:
-        from sbomify.apps.security_advisories import signals  # noqa: F401
+        from sbomify.apps.security_advisories import signals
+
+        signals.connect()

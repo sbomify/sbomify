@@ -10,13 +10,16 @@ reach it even when the reader holding the request could read it elsewhere.
 from __future__ import annotations
 
 import json
+from datetime import timedelta
+from urllib.parse import urlparse
 
 import pytest
 from django.test import RequestFactory
 
 from sbomify.apps.security_advisories import csaf_provider
-from sbomify.apps.security_advisories.models import SecurityAdvisory
-from sbomify.apps.security_advisories.services.advisories import display_id
+from sbomify.apps.security_advisories.models import AdvisoryEvent, SecurityAdvisory
+from sbomify.apps.security_advisories.services.advisories import cvss_entry, display_id
+from sbomify.apps.teams.models import Team
 from sbomify.apps.security_advisories.tests.test_csaf import (  # noqa: F401  (fixtures)
     VECTOR,
     gateway,
@@ -113,10 +116,21 @@ class TestWhiteFeed:
         assert feed["category"] == [{"scheme": csaf_provider.ROLIE_CATEGORY_SCHEME, "term": "csaf"}]
         assert len(feed["entry"]) == 1
         entry = feed["entry"][0]
-        assert entry["id"] == display_id(rich_advisory)
         assert entry["format"] == {"schema": csaf_provider.CSAF_SCHEMA_URL, "version": "2.0"}
         assert entry["content"]["src"] == entry["link"][0]["href"]
         assert entry["content"]["src"].endswith(csaf_provider.csaf_filename(rich_advisory))
+
+    def test_atom_ids_are_absolute_iris(self, team, rich_advisory) -> None:  # noqa: F811
+        """RFC 4287: an Atom id is an IRI, not a bare tracking id."""
+        feed = _json(WhiteFeedView.as_view()(_request(csaf_provider.WHITE_FEED_PATH, _public(team))))["feed"]
+
+        assert urlparse(feed["id"]).scheme and urlparse(feed["id"]).netloc
+        assert feed["id"].endswith(csaf_provider.WHITE_FEED_PATH)
+        entry = feed["entry"][0]
+        assert urlparse(entry["id"]).scheme and urlparse(entry["id"]).netloc
+        assert entry["id"] == entry["link"][0]["href"]
+        # The tracking id still identifies the advisory where CSAF asks for it.
+        assert display_id(rich_advisory) not in (feed["id"], entry["id"].rsplit("/", 1)[0])
 
     def test_a_gated_advisory_never_appears(self, team, rich_advisory) -> None:  # noqa: F811
         _gate(team, rich_advisory, SecurityAdvisory.Visibility.GATED)
@@ -175,8 +189,14 @@ class TestWhiteDocument:
         assert response.status_code == 404
 
 
+@pytest.mark.django_db(transaction=True)
 class TestDistributionMarker:
-    """The marker a poller uses to decide whether to fetch again."""
+    """The marker a poller uses to decide whether to fetch again.
+
+    ``transaction=True`` because the marker is written from ``on_commit``: the
+    default rolled-back test transaction never commits, so the callbacks that
+    carry the whole mechanism would never run.
+    """
 
     def _marker(self, team):
         team.refresh_from_db()
@@ -230,3 +250,40 @@ class TestDistributionMarker:
         metadata = _json(ProviderMetadataView.as_view()(_request(csaf_provider.PROVIDER_METADATA_PATH, team)))
 
         assert metadata["last_updated"] == self._marker(team)
+
+    def test_a_nested_write_moves_it(self, team, rich_advisory) -> None:  # noqa: F811
+        """A CVSS edit changes the document without touching the advisory row."""
+        team = _public(team)
+        before = self._marker(team)
+
+        vulnerability = rich_advisory.vulnerabilities.first()
+        vulnerability.cvss_scores = [cvss_entry(7.5, VECTOR)]
+        vulnerability.save(update_fields=["cvss_scores"])
+
+        assert self._marker(team) > before
+
+    def test_a_posted_update_moves_it(self, team, rich_advisory) -> None:  # noqa: F811
+        """An event is part of the rendered document's revision history."""
+        team = _public(team)
+        before = self._marker(team)
+
+        AdvisoryEvent.objects.create(
+            advisory=rich_advisory,
+            event_type=AdvisoryEvent.EventType.UPDATE,
+            body="Fix released.",
+        )
+
+        assert self._marker(team) > before
+
+    def test_the_marker_never_moves_backwards(self, team, rich_advisory) -> None:  # noqa: F811
+        """Greatest against the stored value, so a late writer cannot install an older time."""
+        team = _public(team)
+        team.refresh_from_db()
+        ahead = team.csaf_feed_updated_at + timedelta(days=1)
+        Team.objects.filter(pk=team.pk).update(csaf_feed_updated_at=ahead)
+
+        rich_advisory.title = "Retitled"
+        rich_advisory.save(update_fields=["title"])
+
+        team.refresh_from_db()
+        assert team.csaf_feed_updated_at >= ahead
