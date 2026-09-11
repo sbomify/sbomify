@@ -39,7 +39,7 @@ When we receive a security report, one person takes ownership of it and coordina
 - Confirm the problem and determine which versions and deployments are affected.
 - Audit the surrounding code for similar problems.
 - Prepare the fix. For [app.sbomify.com](https://app.sbomify.com) a fix reaches you when we deploy it; for self-hosted deployments it ships in a new container image and, where relevant, a new chart release.
-- Publish a [security advisory](https://github.com/sbomify/sbomify/security/advisories) on the affected repository once a fix is available.
+- Publish an advisory on the [sbomify trust center](https://trust.sbomify.com/advisories/) once a fix is available. We publish through sbomify's own security advisory feature rather than GitHub's, and each advisory is also retrievable as a CSAF 2.0 document for tooling.
 
 Please give us a reasonable opportunity to fix an issue before disclosing it publicly. We will credit you in the advisory unless you would rather we did not.
 
