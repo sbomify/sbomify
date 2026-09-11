@@ -139,6 +139,38 @@ def test_create_document_raw_data_success(
 
 
 @pytest.mark.django_db
+def test_create_document_raw_data_accepts_a_compliance_document(
+    mocker: MockerFixture,
+    authenticated_api_client,
+    sample_document_component,
+):
+    """A raw-body compliance upload is a valid request, so it is not a 400.
+
+    ``subcategory_value`` used to be bound only in the multipart branch, so
+    this request hit an unbound local that the blanket ``except Exception``
+    reported as "Invalid request" — a crash wearing a validation error.
+    """
+    create_documents_api_mock(mocker, scenario="success")
+
+    client, access_token = authenticated_api_client
+    url = reverse("api-1:create_document") + (
+        f"?component_id={sample_document_component.id}&name=ISO Report&version=1.0&document_type=compliance"
+    )
+    response = client.post(
+        url,
+        b"report content",
+        content_type="application/octet-stream",
+        **get_api_headers(access_token),
+    )
+
+    assert response.status_code == 201
+    document = Document.objects.get(id=json.loads(response.content)["id"])
+    assert document.document_type == Document.DocumentType.COMPLIANCE
+    # Raw-body uploads carry no subcategory field, so the tag is set later.
+    assert document.compliance_subcategory is None
+
+
+@pytest.mark.django_db
 def test_create_document_raw_data_missing_name(
     authenticated_api_client,
     sample_document_component,
