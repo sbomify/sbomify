@@ -70,7 +70,8 @@ class Finding:
         severity: Severity level for security findings. Defaults to "info".
         status: Compliance status ("pass", "fail", "warning", "error").
             None for security findings.
-        component: Component identification dict with name, version, purl, ecosystem.
+        component: Component identification dict with name, version, purl, ecosystem
+            and, where the scanner knows one, cpe.
         cvss_score: Numeric CVSS score for vulnerabilities.
         epss_score: EPSS probability of exploitation in the next 30 days (0..1).
         epss_percentile: EPSS rank against all scored CVEs (0..1).
