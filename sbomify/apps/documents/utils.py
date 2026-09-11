@@ -65,8 +65,18 @@ def is_duplicate_document_error(exc: IntegrityError) -> bool:
 
 
 def normalize_decimal_version(value: Decimal) -> str:
-    """Render a decimal version the way the NDA allocator always has: "1.10" -> "1.1"."""
-    return str(value).rstrip("0").rstrip(".")
+    """Render a decimal version the way the NDA allocator always has: "1.10" -> "1.1".
+
+    Formatted with ``f`` rather than ``str``: ``str(Decimal)`` switches to
+    scientific notation for large values, and stripping trailing zeroes from
+    "1E+30" eats the exponent and returns "1E+3", a different number. Zeroes are
+    only ever stripped from a fractional part, so an integral value keeps its
+    magnitude too ("100" stays "100").
+    """
+    text = format(value, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text
 
 
 def next_free_document_version(component_id: str, name: str, candidate: str) -> str:
@@ -79,8 +89,9 @@ def next_free_document_version(component_id: str, name: str, candidate: str) -> 
     it at a version already in use. Numeric candidates keep counting in the same
     0.1 steps, anything else gets a numeric suffix.
 
-    One query, then arithmetic: a component holds few versions of any one name,
-    and every step strictly increases, so the walk always terminates.
+    One query, then arithmetic. The walk always terminates: the decimal path stops
+    as soon as a step fails to advance, and the suffix path is bounded by the
+    number of versions actually in use.
     """
     taken = set(Document.objects.filter(component_id=component_id, name=name).values_list("version", flat=True))
     if candidate not in taken:
@@ -92,16 +103,24 @@ def next_free_document_version(component_id: str, name: str, candidate: str) -> 
         value = None
 
     # Decimal parses "NaN" and "Infinity" too, and adding to either returns it
-    # unchanged, so a version like that would loop forever. Only a finite decimal
+    # unchanged, so a version like that would count forever. Only a finite decimal
     # can be counted on from; everything else gets the suffix.
-    if value is None or not value.is_finite():
-        suffix = 2
-        while f"{candidate} ({suffix})" in taken:
-            suffix += 1
-        return f"{candidate} ({suffix})"
+    if value is not None and value.is_finite():
+        current = candidate
+        while True:
+            value += Decimal("0.1")
+            bumped = normalize_decimal_version(value)
+            # A finite value can still fail to move: past the context precision
+            # (28 digits by default) adding 0.1 rounds straight back. Anything
+            # that does not advance falls through to the suffix, which is bounded
+            # by the number of versions actually in use.
+            if bumped == current:
+                break
+            if bumped not in taken:
+                return bumped
+            current = bumped
 
-    while True:
-        value += Decimal("0.1")
-        bumped = normalize_decimal_version(value)
-        if bumped not in taken:
-            return bumped
+    suffix = 2
+    while f"{candidate} ({suffix})" in taken:
+        suffix += 1
+    return f"{candidate} ({suffix})"

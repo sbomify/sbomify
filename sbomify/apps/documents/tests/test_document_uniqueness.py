@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import json
 from datetime import timedelta
+from decimal import Decimal
 
 import pytest
 from django.apps import apps as global_apps
@@ -26,7 +27,11 @@ from sbomify.apps.core.object_store import ORPHANED_OBJECT_MARKER
 from sbomify.apps.core.tests.s3_fixtures import create_documents_api_mock
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.documents.models import DOCUMENT_UNIQUE_CONSTRAINT, Document
-from sbomify.apps.documents.utils import is_duplicate_document_error, next_free_document_version
+from sbomify.apps.documents.utils import (
+    is_duplicate_document_error,
+    next_free_document_version,
+    normalize_decimal_version,
+)
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.fixtures import sample_team  # noqa: F401
 from sbomify.apps.teams.models import Member
@@ -425,6 +430,24 @@ class TestNextFreeDocumentVersion:
 
             assert next_free_document_version(sample_document_component.id, candidate, candidate) == f"{candidate} (2)"
 
+    def test_a_candidate_that_cannot_advance_falls_back_to_a_suffix(self, sample_document_component):
+        """Past the decimal context precision, adding 0.1 rounds straight back, so
+        counting on would never reach a free version."""
+        candidate = "9" * 28
+        _make_document(sample_document_component, name=candidate, version=candidate)
+
+        assert next_free_document_version(sample_document_component.id, candidate, candidate) == f"{candidate} (2)"
+
+    def test_a_scientific_candidate_resolves_without_changing_magnitude(self, sample_document_component):
+        """ "1E+30" cannot advance either, but normalising it to plain notation is
+        already a free version, and one of the same magnitude."""
+        _make_document(sample_document_component, name="sci", version="1E+30")
+
+        result = next_free_document_version(sample_document_component.id, "sci", "1E+30")
+
+        assert result == "1" + "0" * 30
+        assert Decimal(result) == Decimal("1E+30")
+
     def test_suffixes_walk_past_taken_suffixes(self, sample_document_component):
         _make_document(sample_document_component, version="alpha")
         _make_document(sample_document_component, version="alpha (2)")
@@ -457,3 +480,22 @@ class TestOrphanedObjectLogging:
 
     def test_the_marker_is_one_string_for_every_artifact_path(self):
         assert ORPHANED_OBJECT_MARKER == "Potential orphaned S3 object after IntegrityError"
+
+
+class TestNormalizeDecimalVersion:
+    """str(Decimal) is not a safe source for this: it goes scientific for large
+    values, and stripping zeroes from "1E+30" would eat the exponent."""
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (Decimal("1.10"), "1.1"),
+            (Decimal("1.0"), "1"),
+            (Decimal("2.5"), "2.5"),
+            (Decimal("100"), "100"),
+            (Decimal("100.0"), "100"),
+            (Decimal("1E+30"), "1" + "0" * 30),
+        ],
+    )
+    def test_renders_without_changing_magnitude(self, value, expected):
+        assert normalize_decimal_version(value) == expected

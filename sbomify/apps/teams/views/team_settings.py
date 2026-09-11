@@ -598,7 +598,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             import hashlib
             from decimal import Decimal, InvalidOperation
 
-            from sbomify.apps.core.object_store import StorageClient
+            from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
             from sbomify.apps.documents.models import Document
             from sbomify.apps.documents.utils import (
                 is_duplicate_document_error,
@@ -669,27 +669,33 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # insert does not poison the surrounding transaction.
             document_name = uploaded_file.name or "NDA"
             document = None
-            for attempt in range(NDA_VERSION_ALLOCATION_ATTEMPTS):
-                next_version = next_free_document_version(company_component.id, document_name, next_version)
-                try:
-                    with transaction.atomic():
-                        # Always create a new Document record (versioning)
-                        document = Document.objects.create(
-                            name=document_name,
-                            version=next_version,
-                            document_filename=filename,
-                            component=company_component,
-                            source="manual_upload",
-                            document_type=Document.DocumentType.COMPLIANCE,
-                            compliance_subcategory=Document.ComplianceSubcategory.NDA,
-                            content_hash=content_hash,
-                            content_type=uploaded_file.content_type,
-                            file_size=uploaded_file.size,
-                        )
-                    break
-                except IntegrityError as exc:
-                    if not is_duplicate_document_error(exc) or attempt == NDA_VERSION_ALLOCATION_ATTEMPTS - 1:
-                        raise
+            try:
+                for attempt in range(NDA_VERSION_ALLOCATION_ATTEMPTS):
+                    next_version = next_free_document_version(company_component.id, document_name, next_version)
+                    try:
+                        with transaction.atomic():
+                            # Always create a new Document record (versioning)
+                            document = Document.objects.create(
+                                name=document_name,
+                                version=next_version,
+                                document_filename=filename,
+                                component=company_component,
+                                source="manual_upload",
+                                document_type=Document.DocumentType.COMPLIANCE,
+                                compliance_subcategory=Document.ComplianceSubcategory.NDA,
+                                content_hash=content_hash,
+                                content_type=uploaded_file.content_type,
+                                file_size=uploaded_file.size,
+                            )
+                        break
+                    except IntegrityError as exc:
+                        if not is_duplicate_document_error(exc) or attempt == NDA_VERSION_ALLOCATION_ATTEMPTS - 1:
+                            raise
+            except IntegrityError:
+                # The object is already stored and no row will reference it, same
+                # as the artifact upload path.
+                log_orphaned_object(filename)
+                raise
 
             if document is None:  # pragma: no cover - the loop either breaks or raises
                 raise RuntimeError("NDA version allocation did not settle")
