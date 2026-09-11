@@ -11,6 +11,7 @@ from importlib import import_module
 from pathlib import Path
 
 import pytest
+from pytest_mock import MockerFixture
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.documents.models import Document
@@ -245,3 +246,67 @@ def test_the_catalogue_covers_every_badgeable_subcategory() -> None:
     expected = {value for value, _ in Document.ComplianceSubcategory.choices} - {Document.ComplianceSubcategory.NDA}
 
     assert set(BADGE_CATALOGUE) == expected
+
+
+def test_the_demo_seed_publishes_a_certification_that_earns_a_badge() -> None:
+    """The seeded workspace is where this feature gets looked at.
+
+    Its global "Certifications" component carried an ISO 27001 document with no
+    subcategory, so the demo trust center had the component, the file and the
+    catalogue name and still showed nothing. The seed spec now names the
+    subcategory, and this fails if a later edit drops it.
+    """
+    from sbomify.apps.core.management.commands.seed_demo_data import GLOBAL_COMPONENTS
+    from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE
+
+    badgeable = {
+        subcategory
+        for spec in GLOBAL_COMPONENTS
+        if spec.visibility != Component.Visibility.PRIVATE
+        for _, doc_type, _, subcategory in spec.documents
+        if doc_type == Document.DocumentType.COMPLIANCE and subcategory in BADGE_CATALOGUE
+    }
+
+    assert Document.ComplianceSubcategory.ISO27001 in badgeable
+
+
+@pytest.mark.django_db
+def test_re_seeding_tags_a_certificate_seeded_before_subcategories(public_team: Team, mocker: MockerFixture) -> None:
+    """A demo database seeded earlier keeps its rows, so the tag has to catch up.
+
+    ``_ensure_document`` returns early on an existing name/version, which would
+    leave the ISO certificate from an older seed untagged and unbadgeable no
+    matter how often the seed is re-run.
+    """
+    from sbomify.apps.core.management.commands.seed_demo_data import Command, Counts
+
+    mocker.patch(
+        "sbomify.apps.core.management.commands.seed_demo_data.StorageClient"
+    ).return_value.upload_document.return_value = "seeded.md"
+
+    component = _component(public_team, name="Certifications")
+    stale = Document.objects.create(
+        name="ISO 27001 certificate",
+        version="2026",
+        document_filename="seeded.md",
+        component=component,
+        source="seed_demo_data",
+        content_type="text/markdown",
+        file_size=7,
+        document_type=Document.DocumentType.COMPLIANCE,
+        compliance_subcategory=None,
+    )
+
+    Command()._ensure_document(
+        public_team,
+        component,
+        "ISO 27001 certificate",
+        Document.DocumentType.COMPLIANCE,
+        "2026",
+        Document.ComplianceSubcategory.ISO27001,
+        Counts(),
+    )
+
+    stale.refresh_from_db()
+    assert stale.compliance_subcategory == Document.ComplianceSubcategory.ISO27001
+    assert [badge["label"] for badge in public_certification_badges(public_team)] == ["ISO 27001"]
