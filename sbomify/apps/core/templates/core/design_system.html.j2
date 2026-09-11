@@ -1,5 +1,5 @@
 {% extends "./dashboard_base.html.j2" %}
-{% load design_system brand_tags %}
+{% load design_system brand_tags static %}
 {% block title %}Design System - sbomify{% endblock %}
 {% comment %}
     The living inventory of the shared component library. Every demo below calls the
@@ -1609,6 +1609,13 @@
             <c-slot name="side"><c-branded.badge>None</c-branded.badge>28 Jul 2026</c-slot>
             </c-branded.list-row>
             </c-branded.surface>
+            <div class="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))] mt-4">
+                {% for credential in branded_credentials %}
+                    {% static credential.image as credential_seal %}
+                    <c-branded.credential label="{{ credential.label }}" summary="{{ credential.summary }}" image="{{ credential_seal }}" href="#branded" note="{{ credential.note }}" />
+                {% endfor %}
+                <c-branded.credential label="FedRAMP" summary="No seal supplied yet, so the label does the work." href="#branded" />
+            </div>
             <c-branded.nav class="mt-4">
             <c-branded.nav-item href="#branded" icon="fas fa-house" current>Overview</c-branded.nav-item>
             <c-branded.nav-item href="#branded" icon="fas fa-shield-halved">Advisories</c-branded.nav-item>

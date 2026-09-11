@@ -51,10 +51,20 @@ class Document(models.Model):
         OTHER = "other", "Other"
 
     class ComplianceSubcategory(models.TextChoices):
-        """Compliance document subcategories for auto-detection and badging."""
+        """Compliance document subcategories for auto-detection and badging.
+
+        SOC 2 splits into Type I and Type II because the two say different
+        things: Type I is the design of the controls at a point in time, Type II
+        is their operation over a period. A reader looking for assurance wants
+        to know which one they are being shown. The undifferentiated ``soc2``
+        stays for rows written before the split and for workspaces that do not
+        want to say.
+        """
 
         NDA = "nda", "NDA"
         SOC2 = "soc2", "SOC 2"
+        SOC2_TYPE1 = "soc2-type1", "SOC 2 Type I"
+        SOC2_TYPE2 = "soc2-type2", "SOC 2 Type II"
         ISO27001 = "iso27001", "ISO 27001"
 
     class Meta:
@@ -240,19 +250,16 @@ class Document(models.Model):
     def get_compliance_badge(self) -> str | None:
         """Get the compliance badge label for this document.
 
+        The label is the subcategory's own display name, so a subcategory added
+        to the model cannot ship with a missing badge.
+
         Returns:
-            Badge label string (e.g., "SOC 2", "ISO 27001", "NDA") or None.
+            Badge label string (e.g., "SOC 2 Type II", "ISO 27001", "NDA") or None.
         """
         if not self.compliance_subcategory:
             return None
 
-        compliance_labels: dict[str, str] = {
-            self.ComplianceSubcategory.NDA: "NDA",
-            self.ComplianceSubcategory.SOC2: "SOC 2",
-            self.ComplianceSubcategory.ISO27001: "ISO 27001",
-        }
-
-        return compliance_labels.get(self.compliance_subcategory or "")
+        return dict(self.ComplianceSubcategory.choices).get(self.compliance_subcategory or "")
 
     def verify_content_hash(self, expected_hash: str) -> bool | None:
         """Verify that the document's content hash matches the expected hash.

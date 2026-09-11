@@ -7,6 +7,7 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.models import Component, Product
+from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import ProductComponent
 from sbomify.apps.teams.models import Member, Team
 
@@ -44,6 +45,46 @@ def test_workspace_public_page_renders_products_and_global_artifacts():
     content = response.content.decode()
     assert "Public Product" in content
     assert "Global Artifact" in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_page_shows_a_certification_badge():
+    client = Client()
+    team = Team.objects.create(name="Certified Workspace", is_public=True)
+    component = Component.objects.create(
+        name="ISO 27001",
+        team=team,
+        visibility=Component.Visibility.PUBLIC,
+        is_global=True,
+        component_type=Component.ComponentType.DOCUMENT,
+    )
+    Document.objects.create(
+        name="ISO 27001 certificate",
+        version="2026",
+        component=component,
+        document_type=Document.DocumentType.COMPLIANCE,
+        compliance_subcategory=Document.ComplianceSubcategory.ISO27001,
+        document_filename="iso27001.pdf",
+    )
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Certifications" in content
+    assert "iso27001.svg" in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_page_hides_certifications_when_none_are_earned():
+    """No seals means no section, not a section announcing an absence."""
+    client = Client()
+    team = Team.objects.create(name="Uncertified Workspace", is_public=True)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    assert "Certifications" not in response.content.decode()
 
 
 @pytest.mark.django_db
