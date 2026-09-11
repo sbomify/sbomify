@@ -28,8 +28,8 @@ from typing import Any
 
 from django.templatetags.static import static
 
+from sbomify.apps.core.models import Component
 from sbomify.apps.documents.models import Document
-from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.models import Team
 
 # What a badge says, and which seal it wears. The order here is the order on the
