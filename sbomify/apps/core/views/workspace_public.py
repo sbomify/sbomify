@@ -12,6 +12,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.url_utils import (
     build_custom_domain_url,
+    get_component_public_slug,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
@@ -130,7 +131,7 @@ def _list_public_products(team: Team) -> list[dict[str, Any]]:
     return result
 
 
-def _list_public_global_components(team: Team) -> list[dict[str, Any]]:
+def _list_public_global_components(team: Team, request: HttpRequest) -> list[dict[str, Any]]:
     # Include both public and gated components (visible to public)
     components = Component.objects.filter(
         team=team, visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED), is_global=True
@@ -139,7 +140,7 @@ def _list_public_global_components(team: Team) -> list[dict[str, Any]]:
         {
             "id": component.id,
             "name": component.name,
-            "slug": component.slug,
+            "slug": get_component_public_slug(component, request),
             "component_type": component.component_type,
             "component_type_display": component.get_component_type_display(),
             "visibility": component.visibility,
@@ -166,7 +167,7 @@ class WorkspacePublicView(View):
         brand = build_branding_context(team)
 
         products_data = _list_public_products(team)
-        global_artifacts_data = _list_public_global_components(team)
+        global_artifacts_data = _list_public_global_components(team, request)
 
         # Add custom domain context for URL generation in templates
         is_custom_domain = getattr(request, "is_custom_domain", False)

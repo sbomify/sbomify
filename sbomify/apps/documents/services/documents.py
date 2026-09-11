@@ -33,6 +33,16 @@ def serialize_document(document: Document) -> dict[str, Any]:
     }
 
 
+def document_belongs_to_component(document_id: str, component_id: str) -> bool:
+    """Is this document one of that component's own artifacts?
+
+    A detail lookup authorizes the artifact's own component, not the one named
+    in the URL, so a caller that reports on the URL's component has to establish
+    the two are the same before it speaks for it.
+    """
+    return Document.objects.filter(pk=document_id, component_id=component_id).exists()
+
+
 def get_document_detail(request: HttpRequest, document_id: str) -> ServiceResult[dict[str, Any]]:
     try:
         document = Document.objects.select_related("component").get(pk=document_id)
