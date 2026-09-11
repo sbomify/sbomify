@@ -132,6 +132,7 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
         extract_finding_rows,
         is_vulnerability,
         merge_findings_by_alias,
+        result_scanned_nothing,
     )
     from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
@@ -151,7 +152,15 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
             for finding in merged.get("findings") or []
             if isinstance(finding, dict) and is_vulnerability(finding)
         ]
-        scanned.add(sbom_id)
+        # A completed run is not proof anyone looked. A plugin returns a
+        # skipped result when it could not process the artifact at all, which
+        # stores zero findings and is indistinguishable on the surface from a
+        # clean scan — so counting it would report "no known vulnerabilities"
+        # for an SBOM nobody read. Only when *every* provider skipped, matching
+        # product_page and sboms_table: one provider skipping while another
+        # scanned still leaves the SBOM scanned.
+        if not all(result_scanned_nothing(run.result) for run in sbom_runs):
+            scanned.add(sbom_id)
 
         sbom = sbom_runs[0].sbom
         providers = sorted({run.plugin_name for run in sbom_runs})

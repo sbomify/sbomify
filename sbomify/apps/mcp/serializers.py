@@ -65,7 +65,10 @@ def product(obj: Product, *, detail: bool = False) -> dict[str, Any]:
     }
     if detail:
         data |= {
-            "description": obj.description,
+            # Typed by a workspace member rather than lifted from an artifact,
+            # but it still reaches the agent as free text and the cap is what
+            # keeps one field from filling a context window.
+            "description": untrusted(obj.description, limit=8000),
             "release_date": _stamp(obj.release_date),
             "end_of_support": _stamp(obj.end_of_support),
             "end_of_life": _stamp(obj.end_of_life),
@@ -105,7 +108,7 @@ def release(obj: Release, *, detail: bool = False) -> dict[str, Any]:
     }
     if detail:
         data |= {
-            "description": obj.description,
+            "description": untrusted(obj.description, limit=8000),
             "released_at": _stamp(obj.released_at),
         }
     return compact(data)

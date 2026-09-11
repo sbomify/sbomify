@@ -137,6 +137,8 @@ def _transport_security() -> TransportSecuritySettings:
     canonical app host, so allow-listing only that (plus loopback for local
     development) keeps the endpoint off tenant domains.
     """
+    from urllib.parse import urlparse
+
     from django.conf import settings
 
     from sbomify.apps.teams.utils import get_app_hostname
@@ -144,9 +146,16 @@ def _transport_security() -> TransportSecuritySettings:
     hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*", "127.0.0.1", "localhost"]
     origins = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
 
+    # get_app_hostname drops the scheme, and the SDK validates Host and Origin
+    # independently, so hardcoding https here would 421 every client of an
+    # http:// deployment: its Origin header is the one thing that still carries
+    # the scheme. Defaulted to https to match get_app_hostname's own default
+    # for a bare hostname.
+    scheme = urlparse(settings.APP_BASE_URL.strip()).scheme or "https"
+
     if hostname := get_app_hostname():
         hosts += [hostname, f"{hostname}:*"]
-        origins += [f"https://{hostname}", f"https://{hostname}:*"]
+        origins += [f"{scheme}://{hostname}", f"{scheme}://{hostname}:*"]
 
     # Escape hatch for deployments fronted by a hostname the app does not know
     # about (extra CNAME, internal load-balancer probe, staging alias). Origins
@@ -156,7 +165,7 @@ def _transport_security() -> TransportSecuritySettings:
     extra = [h.strip() for h in settings.MCP_ALLOWED_HOSTS.split(",") if h.strip()]
     for host in extra:
         hosts += [host, f"{host}:*"]
-        origins += [f"https://{host}", f"https://{host}:*"]
+        origins += [f"{scheme}://{host}", f"{scheme}://{host}:*"]
 
     return TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
@@ -174,11 +183,16 @@ mcp: FastMCP = ScopedFastMCP(
     transport_security=_transport_security(),
     # The SDK's transport-level cap defaults to 4 MiB, which would reject an
     # upload_artifact call long before limits.MAX_UPLOAD_BYTES ever applied —
-    # container SBOMs routinely exceed it. Doubled because the artifact
-    # travels as an escaped string inside the JSON-RPC envelope, which can
-    # inflate it well past its byte size; the precise cap on the decoded
-    # artifact is still enforce_upload_size's.
-    max_request_body_size=2 * MAX_UPLOAD_BYTES,
+    # container SBOMs routinely exceed it.
+    #
+    # Tripled, not doubled: the artifact travels as an escaped string inside the
+    # JSON-RPC envelope, and Python's json.dumps escapes non-ASCII by default
+    # (ensure_ascii=True), so "é" goes from two UTF-8 bytes to the six of
+    # \u00e9. At 2x an artifact comfortably under the real cap could still be
+    # refused by the transport, as an opaque 413 rather than our own message.
+    # This is a backstop on the wire, never the product limit: the cap on the
+    # decoded artifact is still enforce_upload_size's.
+    max_request_body_size=3 * MAX_UPLOAD_BYTES,
 )
 
 

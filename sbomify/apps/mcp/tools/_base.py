@@ -27,7 +27,7 @@ from sbomify.apps.core.authz import scope_permits
 
 from .. import registry
 from ..auth import WORKSPACE_ATTR, MCPAuthError, Principal, authenticate, current_request, throttle_write
-from ..limits import audit, enforce_response_size
+from ..limits import audit, enforce_response_size, untrusted
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -39,6 +39,13 @@ T = TypeVar("T")
 MAX_PAGE_SIZE = 100
 """Hard ceiling on any tool's page size. Agents pay for every token of a
 response, and an unbounded list is the fastest way to exhaust a context window."""
+
+AUDIT_DETAIL_LIMIT = 500
+"""How much of a refusal's message reaches the audit log.
+
+Enough to tell one refusal from another, short enough that a delegated
+validation error quoting an artifact cannot spill it into the log, and that
+failing on purpose is not a way to write unbounded text there."""
 
 MAX_PAGE = 1_000_000
 """Upper bound on the page number. An unbounded page becomes a raw SQL OFFSET,
@@ -179,7 +186,16 @@ def mcp_tool(
                 # Expected refusals (denied, not found, over a limit). Recorded
                 # so a probing pattern is visible in the audit log, then
                 # re-raised unchanged for the agent.
-                audit(name, principal, outcome="denied", detail=str(exc))
+                #
+                # Bounded, because these messages are not all ours. A refusal
+                # from a delegated REST view can be a pydantic ValidationError
+                # whose text quotes the offending input_value — a slice of the
+                # uploaded artifact — and several local messages interpolate a
+                # caller-supplied id. audit()'s promise is that artifact content
+                # never reaches the log, and an unbounded detail is also free
+                # log amplification for anyone willing to fail on purpose. The
+                # agent still gets the message in full; only the log is cut.
+                audit(name, principal, outcome="denied", detail=untrusted(str(exc), limit=AUDIT_DETAIL_LIMIT))
                 raise
             except Exception:
                 # Deliberately no detail: an unexpected exception's message can

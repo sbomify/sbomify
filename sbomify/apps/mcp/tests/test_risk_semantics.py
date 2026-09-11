@@ -213,3 +213,41 @@ def test_a_clean_sbom_never_fetches_its_vex(mcp_owner, monkeypatch):
     assert scanned == {sbom.id}
     assert rows == []
     assert calls == [], "a clean SBOM triggered a VEX fetch"
+
+
+@pytest.mark.django_db
+def test_a_skipped_run_does_not_count_as_scanned(mcp_owner):
+    """A completed run is not proof anyone looked at the SBOM.
+
+    A plugin returns a skipped result when it could not process the artifact at
+    all. That stores zero findings, which is indistinguishable on the surface
+    from a scan that read every package and found nothing, so counting it makes
+    the agent report "no known vulnerabilities" for an SBOM nobody read. The
+    dashboards already split the two; this is the same rule.
+    """
+    _, bound, _ = mcp_owner
+    sbom = _sbom(bound)
+    _run(sbom, status="completed", result={"findings": [], "metadata": {"skipped": True}})
+
+    rows, scanned = risk._rows_for(risk._security_runs(bound))
+
+    assert rows == []
+    assert scanned == set(), "a skipped run reads as scanned-and-clean"
+
+
+@pytest.mark.django_db
+def test_one_provider_skipping_leaves_the_sbom_scanned(mcp_owner):
+    """Only when every provider skipped. One that ran still counts."""
+    _, bound, _ = mcp_owner
+    sbom = _sbom(bound)
+    _run(sbom, status="completed", result={"findings": [], "metadata": {"skipped": True}})
+    skipped = AssessmentRun.objects.filter(sbom=sbom).first()
+    assert skipped is not None
+    skipped.plugin_name = "dependency_track"
+    skipped.save(update_fields=["plugin_name"])
+    _run(sbom, status="completed")
+
+    rows, scanned = risk._rows_for(risk._security_runs(bound))
+
+    assert scanned == {sbom.id}
+    assert risk._counts(rows)["critical"] == 1

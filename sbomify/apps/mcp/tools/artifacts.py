@@ -10,7 +10,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
 from ..auth import Principal, require
-from ..limits import enforce_parse_size, untrusted
+from ..limits import enforce_parse_size, enforce_stored_size, untrusted
 from ._base import clamp_page, mcp_tool, narrow, not_found, resolve_workspace, run_db
 from .catalog import _lookup_component
 
@@ -118,17 +118,26 @@ def _cyclonedx_components(entries: Any, *, depth: int = 0) -> Iterator[dict[str,
 
 
 def _extract_packages(payload: dict[str, Any], artifact_format: str) -> list[dict[str, Any]]:
+    """Every package, as a list. See ``_iter_packages`` for the streaming form."""
+    return list(_iter_packages(payload, artifact_format))
+
+
+def _iter_packages(payload: dict[str, Any], artifact_format: str) -> Iterator[dict[str, Any]]:
     """Normalise CycloneDX components / SPDX packages into one shape.
 
-    Returns ``{name, version, purl, licenses}`` per package so an agent can
+    Yields ``{name, version, purl, licenses}`` per package so an agent can
     compare across formats without knowing which it is looking at.
+
+    A generator because the caller wants one page: a maximum-sized artifact
+    holds tens of thousands of packages, and building the whole list to slice
+    a hundred rows out of it is a second full copy of the document in Python
+    objects, on top of the parsed JSON.
     """
-    packages: list[dict[str, Any]] = []
 
     if artifact_format.lower() == "cyclonedx":
         for entry in _cyclonedx_components(payload.get("components")):
             licenses = [_license_label(lic) for lic in entry.get("licenses", []) or [] if isinstance(lic, dict)]
-            packages.append(
+            yield (
                 {
                     "name": _field(entry, "name"),
                     "version": _field(entry, "version"),
@@ -148,7 +157,7 @@ def _extract_packages(payload: dict[str, Any], artifact_format: str) -> list[dic
                 if isinstance(ext, dict) and ext.get("externalIdentifierType") in ("purl", "packageURL"):
                     purl = ext.get("identifier")
                     break
-            packages.append(
+            yield (
                 {
                     "name": _field(entry, "name"),
                     "version": _field(entry, "software_packageVersion"),
@@ -172,7 +181,7 @@ def _extract_packages(payload: dict[str, Any], artifact_format: str) -> list[dic
                 if isinstance(ref, dict) and ref.get("referenceType") == "purl":
                     purl = ref.get("referenceLocator")
                     break
-            packages.append(
+            yield (
                 {
                     "name": _field(entry, "name"),
                     "version": _field(entry, "versionInfo"),
@@ -184,8 +193,6 @@ def _extract_packages(payload: dict[str, Any], artifact_format: str) -> list[dic
                     ),
                 }
             )
-
-    return packages
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -280,14 +287,31 @@ def register_tools(mcp: FastMCP) -> None:
         def query() -> dict[str, Any]:
             from botocore.exceptions import BotoCoreError, ClientError
 
+            from sbomify.apps.core import object_store
             from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
 
             obj = _get_artifact(principal, artifact_id)
             try:
-                # Fetch as bytes so the size can be checked before parsing —
-                # a multi-hundred-MB artifact must fail with a message, not an
-                # OOM that takes the worker down with it.
+                # Size first, from a HEAD against the store. Checking only the
+                # downloaded bytes made the cap advisory: a multi-hundred-MB
+                # artifact still cost its full transfer and its full place in
+                # memory before anything refused it, which is the OOM the cap
+                # exists to prevent.
+                if obj.sbom_filename:
+                    try:
+                        stored_size = object_store.StorageClient("SBOMS").get_sbom_size(obj.sbom_filename)
+                    except (ClientError, BotoCoreError):
+                        # Best effort. A store that cannot answer a HEAD — a
+                        # least-privilege policy granting GetObject only, a
+                        # backend without one — must not cost the read, because
+                        # enforce_parse_size below is still the authoritative
+                        # check. Only the saving is lost, never the ceiling.
+                        stored_size = None
+                    enforce_stored_size(stored_size, artifact_id=artifact_id)
                 _, raw = get_sbom_data_bytes(artifact_id)
+                # Still checked after the fetch: the store is the authority on
+                # what it holds, but a key rewritten between the two calls, or a
+                # backend that cannot answer a HEAD, must not slip past.
                 enforce_parse_size(raw, artifact_id=artifact_id)
                 payload = json.loads(raw)
             except SBOMDataError as exc:
@@ -309,14 +333,23 @@ def register_tools(mcp: FastMCP) -> None:
                 # payload.get below raises and the agent sees an opaque error.
                 raise ToolError(f"Artifact {artifact_id} is not a JSON object; cannot list its packages.")
 
-            packages = _extract_packages(payload, obj.format)
-            if name_filter:
-                needle = name_filter.casefold()
-                packages = [p for p in packages if needle in (p.get("name") or "").casefold()]
-
             safe_page, safe_size = clamp_page(page, page_size, default_size=50)
             start = (safe_page - 1) * safe_size
-            window = packages[start : start + safe_size]
+            needle = name_filter.casefold() if name_filter else None
+
+            # Counted while streaming, keeping only the page. The total still
+            # costs a full walk — the agent needs to know what it is not seeing
+            # — but at most page_size package dicts are alive at once instead
+            # of one per package in the artifact.
+            window: list[dict[str, Any]] = []
+            total = 0
+            for pkg in _iter_packages(payload, obj.format):
+                if needle is not None and needle not in (pkg.get("name") or "").casefold():
+                    continue
+                if start <= total < start + safe_size:
+                    window.append(pkg)
+                total += 1
+
             if response_format == "concise":
                 window = [{"name": pkg.get("name"), "version": pkg.get("version")} for pkg in window]
 
@@ -324,7 +357,7 @@ def register_tools(mcp: FastMCP) -> None:
                 [serializers.compact(p) for p in window],
                 page=safe_page,
                 page_size=safe_size,
-                total=len(packages),
+                total=total,
             )
             result["format"] = obj.format
             return result

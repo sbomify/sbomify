@@ -74,9 +74,24 @@ def enforce_upload_size(raw: bytes, *, label: str) -> None:
 
 def enforce_parse_size(raw: bytes | None, *, artifact_id: str) -> None:
     """Refuse to parse a stored artifact that would not fit comfortably in memory."""
-    if raw is not None and len(raw) > MAX_ARTIFACT_PARSE_BYTES:
+    if raw is not None:
+        enforce_stored_size(len(raw), artifact_id=artifact_id)
+
+
+def enforce_stored_size(size: int | None, *, artifact_id: str) -> None:
+    """The same ceiling, from a size known before the bytes are in hand.
+
+    Checking only after the download made the cap advisory: an oversized
+    artifact still cost its full transfer and its full place in memory before
+    anything refused it, which is the outcome the cap exists to prevent. A HEAD
+    against the store answers this for the price of one round trip.
+
+    ``None`` means the store has no such object, which is the caller's
+    not-found to raise rather than an over-size refusal.
+    """
+    if size is not None and size > MAX_ARTIFACT_PARSE_BYTES:
         raise ToolError(
-            f"Artifact {artifact_id} is {len(raw)} bytes, over the {MAX_ARTIFACT_PARSE_BYTES} byte "
+            f"Artifact {artifact_id} is {size} bytes, over the {MAX_ARTIFACT_PARSE_BYTES} byte "
             "limit for inspection over MCP. Download it directly instead."
         )
 
