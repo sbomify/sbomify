@@ -22,6 +22,7 @@ from django.utils import timezone
 from pytest_mock import MockerFixture
 
 from sbomify.apps.core.models import Product, Release, ReleaseArtifact
+from sbomify.apps.core.object_store import ORPHANED_OBJECT_MARKER
 from sbomify.apps.core.tests.s3_fixtures import create_documents_api_mock
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.documents.models import DOCUMENT_UNIQUE_CONSTRAINT, Document
@@ -415,3 +416,44 @@ class TestNextFreeDocumentVersion:
         _make_document(sample_document_component, name="readme", version="1.0")
 
         assert next_free_document_version(sample_document_component.id, "license", "1.0") == "1.0"
+
+    def test_a_non_finite_candidate_does_not_loop(self, sample_document_component):
+        """Decimal parses "NaN" and "Infinity", and adding to either returns it
+        unchanged, so counting on from one would never terminate."""
+        for candidate in ("NaN", "Infinity", "-Infinity", "sNaN"):
+            _make_document(sample_document_component, name=candidate, version=candidate)
+
+            assert next_free_document_version(sample_document_component.id, candidate, candidate) == f"{candidate} (2)"
+
+    def test_suffixes_walk_past_taken_suffixes(self, sample_document_component):
+        _make_document(sample_document_component, version="alpha")
+        _make_document(sample_document_component, version="alpha (2)")
+
+        assert next_free_document_version(sample_document_component.id, "foobar", "alpha") == "alpha (3)"
+
+
+@pytest.mark.django_db
+class TestOrphanedObjectLogging:
+    """An object is stored before its row, so any failed insert strands it."""
+
+    def test_a_non_duplicate_integrity_error_is_still_recorded(
+        self,
+        mocker: MockerFixture,
+        client: Client,
+        sample_user: AbstractBaseUser,
+        sample_document_component,
+    ):
+        storage = create_documents_api_mock(mocker, scenario="success")
+        recorded = mocker.patch("sbomify.apps.documents.apis.log_orphaned_object")
+        mocker.patch.object(Document, "save", side_effect=IntegrityError('null value in column "name"'))
+        client.force_login(sample_user)
+
+        response = _upload(client, sample_document_component.id)
+
+        # The outer handler turns the re-raised error into a 400, but the object
+        # must still be recorded: it is stored with no row pointing at it.
+        assert response.status_code == 400
+        recorded.assert_called_once_with(storage.upload_document.return_value)
+
+    def test_the_marker_is_one_string_for_every_artifact_path(self):
+        assert ORPHANED_OBJECT_MARKER == "Potential orphaned S3 object after IntegrityError"

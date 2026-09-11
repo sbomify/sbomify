@@ -162,10 +162,12 @@ def create_document(
                 document = Document(**document_dict)
                 document.save()
         except IntegrityError as exc:
+            # The object is already stored and no row references it, whatever the
+            # constraint that rejected the insert, so record it before classifying.
+            log_orphaned_object(filename)
             if is_duplicate_document_error(exc):
                 # Two concurrent uploads can both clear the check above; the
                 # constraint settles it and the loser gets the same 409.
-                log_orphaned_object(filename)
                 return 409, {
                     "detail": duplicate_document_detail(document_name, version),
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,

@@ -89,6 +89,12 @@ def next_free_document_version(component_id: str, name: str, candidate: str) -> 
     try:
         value = Decimal(candidate)
     except InvalidOperation:
+        value = None
+
+    # Decimal parses "NaN" and "Infinity" too, and adding to either returns it
+    # unchanged, so a version like that would loop forever. Only a finite decimal
+    # can be counted on from; everything else gets the suffix.
+    if value is None or not value.is_finite():
         suffix = 2
         while f"{candidate} ({suffix})" in taken:
             suffix += 1
