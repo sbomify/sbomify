@@ -15,12 +15,15 @@ migration has the most rows to rewrite, and it holds the table while it runs.
 import logging
 
 from django.db import migrations, models
-from django.db.models import Count
+from django.db.models import Count, Q
 
 logger = logging.getLogger(__name__)
 
 VERSION_MAX_LENGTH = 255
 BATCH_SIZE = 500
+# How many components to scope into one sibling query. Keeps both the number of
+# round trips and the arity of the OR bounded, whichever way the duplicates skew.
+COMPONENT_CHUNK = 50
 
 
 def _free_version(base: str, taken: set[str], seq: int) -> tuple[str, int]:
@@ -47,17 +50,26 @@ def mark_duplicate_documents(apps, schema_editor):
     if not duplicate_groups:
         return
 
-    component_ids = {component_id for component_id, _, _ in duplicate_groups}
-    names = {name for _, name, _ in duplicate_groups}
+    # Exactly the (component, name) pairs that have a duplicate group, not their
+    # cross product: a workspace with many components and many names would
+    # otherwise pull unrelated rows into memory and hold the table for longer.
+    # The siblings themselves are needed regardless, to know which suffixes are
+    # already in use.
+    names_by_component: dict[str, set[str]] = {}
+    for component_id, name, _ in duplicate_groups:
+        names_by_component.setdefault(component_id, set()).add(name)
 
-    # A superset of the rows involved (every name/component pairing, not just the
-    # ones that actually collide), narrowed in Python. One query either way, and
-    # the siblings are needed anyway to know which suffixes are already in use.
-    rows = list(
-        Document.objects.filter(component_id__in=component_ids, name__in=names).only(
-            "id", "component_id", "name", "version", "created_at"
+    component_ids = set(names_by_component)
+    chunks = [sorted(component_ids)[i : i + COMPONENT_CHUNK] for i in range(0, len(component_ids), COMPONENT_CHUNK)]
+
+    rows = []
+    for chunk in chunks:
+        pairs = Q()
+        for component_id in chunk:
+            pairs |= Q(component_id=component_id, name__in=names_by_component[component_id])
+        rows.extend(
+            Document.objects.filter(pairs).only("id", "component_id", "name", "version", "created_at")
         )
-    )
 
     pinned_ids = set(
         ReleaseArtifact.objects.filter(document__component_id__in=component_ids).values_list("document_id", flat=True)

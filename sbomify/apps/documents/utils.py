@@ -7,12 +7,17 @@ django-ninja routers.
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+from typing import cast
 
 from django.db import IntegrityError
 
 from sbomify.apps.documents.models import DOCUMENT_UNIQUE_CONSTRAINT, Document
 
 DUPLICATE_DOCUMENT_DETAIL = "Document '{name}' with version '{version}' already exists for this component"
+
+# Read from the field so a column change cannot leave this behind. The cast is
+# for the type checker only: the field is a CharField and always declares one.
+VERSION_MAX_LENGTH: int = cast(int, Document._meta.get_field("version").max_length)
 
 
 def duplicate_document_detail(name: str, version: str) -> str:
@@ -120,7 +125,12 @@ def next_free_document_version(component_id: str, name: str, candidate: str) -> 
                 return bumped
             current = bumped
 
+    # Truncated to fit: a candidate can already be at max_length, and a version
+    # the column cannot hold would just fail the insert we are trying to avoid.
     suffix = 2
-    while f"{candidate} ({suffix})" in taken:
+    while True:
+        tail = f" ({suffix})"
+        suffixed = candidate[: VERSION_MAX_LENGTH - len(tail)] + tail
+        if suffixed not in taken:
+            return suffixed
         suffix += 1
-    return f"{candidate} ({suffix})"

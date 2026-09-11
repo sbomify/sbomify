@@ -28,6 +28,7 @@ from sbomify.apps.core.tests.s3_fixtures import create_documents_api_mock
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.documents.models import DOCUMENT_UNIQUE_CONSTRAINT, Document
 from sbomify.apps.documents.utils import (
+    VERSION_MAX_LENGTH,
     is_duplicate_document_error,
     next_free_document_version,
     normalize_decimal_version,
@@ -387,6 +388,21 @@ class TestMarkDuplicateDocuments:
         assert len(versions) == len(set(versions)), "the group is now unique"
         assert max(len(v) for v in versions) <= 255
 
+    def test_does_not_group_the_same_pair_across_components(self, sample_document_component, other_document_component):
+        """The sibling query is scoped to real (component, name) pairs, so a row
+        that merely shares a name and version with another component is untouched."""
+        _make_document(sample_document_component, version="1.0")
+        _make_document(sample_document_component, version="1.0")
+        elsewhere = _make_document(other_document_component, version="1.0")
+
+        mark_duplicate_documents(global_apps, None)
+
+        elsewhere.refresh_from_db()
+        assert elsewhere.version == "1.0"
+        assert sorted(
+            Document.objects.filter(component=sample_document_component).values_list("version", flat=True)
+        ) == ["1.0", "1.0 (duplicate 1)"]
+
     def test_leaves_rows_that_were_never_duplicates_alone(self, sample_document_component):
         readme = _make_document(sample_document_component, name="readme", version="1.0")
         license_doc = _make_document(sample_document_component, name="license", version="1.0")
@@ -416,6 +432,18 @@ class TestNextFreeDocumentVersion:
         _make_document(sample_document_component, version="alpha")
 
         assert next_free_document_version(sample_document_component.id, "foobar", "alpha") == "alpha (2)"
+
+    def test_a_suffixed_version_still_fits_the_column(self, sample_document_component):
+        """A candidate can already be at max_length, and a version the column
+        cannot hold would just fail the insert this is here to avoid."""
+        candidate = "v" * VERSION_MAX_LENGTH
+        _make_document(sample_document_component, version=candidate)
+
+        result = next_free_document_version(sample_document_component.id, "foobar", candidate)
+
+        assert len(result) == VERSION_MAX_LENGTH
+        assert result.endswith(" (2)")
+        assert result not in {candidate}
 
     def test_is_scoped_to_the_name(self, sample_document_component):
         _make_document(sample_document_component, name="readme", version="1.0")
