@@ -7,23 +7,33 @@ and the same name/version may exist under a different component.
 
 from __future__ import annotations
 
+import importlib
 import json
+from datetime import timedelta
 
 import pytest
+from django.apps import apps as global_apps
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
 from pytest_mock import MockerFixture
 
+from sbomify.apps.core.models import Product, Release, ReleaseArtifact
 from sbomify.apps.core.tests.s3_fixtures import create_documents_api_mock
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
-from sbomify.apps.documents.models import Document
-from sbomify.apps.documents.utils import is_duplicate_document_error
+from sbomify.apps.documents.models import DOCUMENT_UNIQUE_CONSTRAINT, Document
+from sbomify.apps.documents.utils import is_duplicate_document_error, next_free_document_version
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.fixtures import sample_team  # noqa: F401
 from sbomify.apps.teams.models import Member
+
+# The migration module name starts with a digit, so it cannot be imported directly.
+mark_duplicate_documents = importlib.import_module(
+    "sbomify.apps.documents.migrations.0015_document_unique_component_name_version"
+).mark_duplicate_documents
 
 
 @pytest.fixture
@@ -56,7 +66,8 @@ def _make_document(component, name: str = "foobar", version: str = "1.0") -> Doc
     return Document.objects.create(
         name=name,
         version=version,
-        document_filename=f"{name}-{version}.bin",
+        # Not derived from the version: these tests use versions at max_length.
+        document_filename=f"{name}.bin",
         component=component,
         source="manual_upload",
         content_type="application/pdf",
@@ -119,14 +130,19 @@ class TestDocumentUploadDuplicates:
         sample_user: AbstractBaseUser,
         sample_document_component,
     ):
-        create_documents_api_mock(mocker, scenario="success")
+        storage = create_documents_api_mock(mocker, scenario="success")
         client.force_login(sample_user)
 
         first = _upload(client, sample_document_component.id)
         assert first.status_code == 201
+        assert storage.upload_document.call_count == 1
 
         second = _upload(client, sample_document_component.id)
         assert second.status_code == 409
+
+        # The pre-check runs before the object is stored, so the rejected upload
+        # must not have written anything to S3.
+        assert storage.upload_document.call_count == 1
 
         data = json.loads(second.content)
         assert "already exists" in data["detail"]
@@ -142,7 +158,7 @@ class TestDocumentUploadDuplicates:
         authenticated_api_client,
         sample_document_component,
     ):
-        create_documents_api_mock(mocker, scenario="success")
+        storage = create_documents_api_mock(mocker, scenario="success")
         api_client, access_token = authenticated_api_client
         headers = get_api_headers(access_token)
 
@@ -156,6 +172,9 @@ class TestDocumentUploadDuplicates:
         second = api_client.post(url, b"other content", content_type="application/octet-stream", **headers)
         assert second.status_code == 409
         assert json.loads(second.content)["error_code"] == "DUPLICATE_ARTIFACT"
+
+        # Different bytes, so a stored object here would be a real orphan.
+        assert storage.upload_document.call_count == 1
 
         assert Document.objects.filter(component=sample_document_component).count() == 1
 
@@ -211,7 +230,9 @@ class TestDocumentUpdateDuplicates:
         )
 
         assert response.status_code == 409
-        assert "already exists" in json.loads(response.content)["detail"]
+        body = json.loads(response.content)
+        assert "already exists" in body["detail"]
+        assert body["error_code"] == "DUPLICATE_ARTIFACT"
 
         target.refresh_from_db()
         assert target.name == "license"
@@ -265,13 +286,132 @@ class TestDuplicateErrorDetection:
         assert not is_duplicate_document_error(IntegrityError('null value in column "name" violates not-null'))
 
     def test_constraint_name_in_message_is_a_duplicate(self):
-        message = (
-            'duplicate key value violates unique constraint '
-            '"documents_document_unique_component_name_version"'
-        )
+        message = 'duplicate key value violates unique constraint "documents_document_unique_component_name_version"'
         assert is_duplicate_document_error(IntegrityError(message))
 
     def test_sqlite_message_is_a_duplicate(self):
         table = Document._meta.db_table
         message = f"UNIQUE constraint failed: {table}.component_id, {table}.name, {table}.version"
         assert is_duplicate_document_error(IntegrityError(message))
+
+
+@pytest.fixture
+def without_unique_constraint():
+    """Drop the uniqueness constraint so a test can seed the duplicates that predate
+    it, then put it back.
+
+    Needs a transactional test: SQLite refuses to run its schema editor inside the
+    atomic block the plain ``django_db`` marker wraps around each test.
+    """
+    original = Document._meta.constraints
+    constraint = next(c for c in original if c.name == DOCUMENT_UNIQUE_CONSTRAINT)
+
+    # SQLite implements a plain UniqueConstraint as part of CREATE TABLE, so its
+    # schema editor rebuilds the table from the model. The model has to stop
+    # declaring the constraint or the rebuild just puts it back.
+    Document._meta.constraints = [c for c in original if c.name != DOCUMENT_UNIQUE_CONSTRAINT]
+    with connection.schema_editor(atomic=False) as editor:
+        editor.remove_constraint(Document, constraint)
+    try:
+        yield
+    finally:
+        Document.objects.all().delete()
+        Document._meta.constraints = original
+        with connection.schema_editor(atomic=False) as editor:
+            editor.add_constraint(Document, constraint)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("without_unique_constraint")
+class TestMarkDuplicateDocuments:
+    """The migration's data step, which only ever runs against a schema that still
+    allows duplicates."""
+
+    def test_keeps_the_release_pinned_row_and_suffixes_the_rest(self, sample_document_component, sample_team):
+        pinned = _make_document(sample_document_component, version="2.0")
+        newer = _make_document(sample_document_component, version="2.0")
+        Document.objects.filter(pk=pinned.pk).update(created_at=timezone.now() - timedelta(days=5))
+
+        product = Product.objects.create(name="Pinned product", team=sample_team)
+        release = Release.objects.create(product=product, name="r1", version="1")
+        ReleaseArtifact.objects.create(release=release, document=pinned)
+
+        mark_duplicate_documents(global_apps, None)
+
+        pinned.refresh_from_db()
+        newer.refresh_from_db()
+        assert pinned.version == "2.0", "the row a release points at keeps its version"
+        assert newer.version == "2.0 (duplicate 1)"
+
+    def test_newest_row_wins_when_nothing_is_pinned(self, sample_document_component):
+        older = _make_document(sample_document_component)
+        newer = _make_document(sample_document_component)
+        Document.objects.filter(pk=older.pk).update(created_at=timezone.now() - timedelta(days=5))
+
+        mark_duplicate_documents(global_apps, None)
+
+        older.refresh_from_db()
+        newer.refresh_from_db()
+        assert newer.version == "1.0"
+        assert older.version == "1.0 (duplicate 1)"
+
+    def test_skips_a_suffix_a_sibling_already_holds(self, sample_document_component):
+        _make_document(sample_document_component, version="1.0")
+        _make_document(sample_document_component, version="1.0")
+        squatter = _make_document(sample_document_component, version="1.0 (duplicate 1)")
+
+        mark_duplicate_documents(global_apps, None)
+
+        squatter.refresh_from_db()
+        assert squatter.version == "1.0 (duplicate 1)", "an existing row is never renamed out of the way"
+
+        versions = sorted(
+            Document.objects.filter(component=sample_document_component).values_list("version", flat=True)
+        )
+        assert versions == ["1.0", "1.0 (duplicate 1)", "1.0 (duplicate 2)"]
+
+    def test_truncates_so_the_suffixed_version_still_fits(self, sample_document_component):
+        long_version = "v" * 255
+        _make_document(sample_document_component, version=long_version)
+        _make_document(sample_document_component, version=long_version)
+
+        mark_duplicate_documents(global_apps, None)
+
+        versions = list(Document.objects.filter(component=sample_document_component).values_list("version", flat=True))
+        assert len(versions) == len(set(versions)), "the group is now unique"
+        assert max(len(v) for v in versions) <= 255
+
+    def test_leaves_rows_that_were_never_duplicates_alone(self, sample_document_component):
+        readme = _make_document(sample_document_component, name="readme", version="1.0")
+        license_doc = _make_document(sample_document_component, name="license", version="1.0")
+
+        mark_duplicate_documents(global_apps, None)
+
+        readme.refresh_from_db()
+        license_doc.refresh_from_db()
+        assert readme.version == "1.0"
+        assert license_doc.version == "1.0"
+
+
+@pytest.mark.django_db
+class TestNextFreeDocumentVersion:
+    """The allocator the company NDA upload uses to avoid the new constraint."""
+
+    def test_returns_the_candidate_when_it_is_free(self, sample_document_component):
+        assert next_free_document_version(sample_document_component.id, "foobar", "1.0") == "1.0"
+
+    def test_counts_on_past_a_taken_decimal(self, sample_document_component):
+        _make_document(sample_document_component, version="1.0")
+        _make_document(sample_document_component, version="1.1")
+
+        assert next_free_document_version(sample_document_component.id, "foobar", "1.0") == "1.2"
+
+    def test_suffixes_a_candidate_that_is_not_a_number(self, sample_document_component):
+        _make_document(sample_document_component, version="alpha")
+
+        assert next_free_document_version(sample_document_component.id, "foobar", "alpha") == "alpha (2)"
+
+    def test_is_scoped_to_the_name(self, sample_document_component):
+        _make_document(sample_document_component, name="readme", version="1.0")
+
+        assert next_free_document_version(sample_document_component.id, "license", "1.0") == "1.0"

@@ -6,6 +6,8 @@ django-ninja routers.
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 from django.db import IntegrityError
 
 from sbomify.apps.documents.models import DOCUMENT_UNIQUE_CONSTRAINT, Document
@@ -60,3 +62,40 @@ def is_duplicate_document_error(exc: IntegrityError) -> bool:
     return "unique constraint failed" in msg and all(
         f"{table}.{col}" in msg for col in ("component_id", "name", "version")
     )
+
+
+def normalize_decimal_version(value: Decimal) -> str:
+    """Render a decimal version the way the NDA allocator always has: "1.10" -> "1.1"."""
+    return str(value).rstrip("0").rstrip(".")
+
+
+def next_free_document_version(component_id: str, name: str, candidate: str) -> str:
+    """``candidate``, or the next version free for this component and name.
+
+    A version allocator that guesses can land on a pair the component already
+    holds, which the uniqueness constraint rejects. The company NDA allocator
+    does exactly that: it reads the newest NDA's version and adds 0.1, so an
+    out-of-order upload (or a version the duplicate migration suffixed) can point
+    it at a version already in use. Numeric candidates keep counting in the same
+    0.1 steps, anything else gets a numeric suffix.
+
+    One query, then arithmetic: a component holds few versions of any one name,
+    and every step strictly increases, so the walk always terminates.
+    """
+    taken = set(Document.objects.filter(component_id=component_id, name=name).values_list("version", flat=True))
+    if candidate not in taken:
+        return candidate
+
+    try:
+        value = Decimal(candidate)
+    except InvalidOperation:
+        suffix = 2
+        while f"{candidate} ({suffix})" in taken:
+            suffix += 1
+        return f"{candidate} ({suffix})"
+
+    while True:
+        value += Decimal("0.1")
+        bumped = normalize_decimal_version(value)
+        if bumped not in taken:
+            return bumped

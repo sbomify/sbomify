@@ -595,6 +595,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             from sbomify.apps.core.object_store import StorageClient
             from sbomify.apps.documents.models import Document
+            from sbomify.apps.documents.utils import next_free_document_version, normalize_decimal_version
 
             # Read file content
             file_content = uploaded_file.read()
@@ -626,9 +627,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 try:
                     # Try to parse as decimal (e.g., "1.0", "2.5")
                     latest_version = Decimal(latest_version_str)
-                    next_version = str(latest_version + Decimal("0.1"))
-                    # Remove trailing zeros and unnecessary decimal point
-                    next_version = next_version.rstrip("0").rstrip(".")
+                    next_version = normalize_decimal_version(latest_version + Decimal("0.1"))
                 except (InvalidOperation, ValueError):
                     # If version is not a number, use a simple increment
                     # Try to extract number from version string
@@ -638,8 +637,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     if match:
                         try:
                             latest_version = Decimal(match.group(1))
-                            next_version = str(latest_version + Decimal("0.1"))
-                            next_version = next_version.rstrip("0").rstrip(".")
+                            next_version = normalize_decimal_version(latest_version + Decimal("0.1"))
                         except (InvalidOperation, ValueError):
                             # Fallback: append version number
                             version_count = previous_ndas.count()
@@ -649,9 +647,17 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         version_count = previous_ndas.count()
                         next_version = f"{version_count + 1}.0"
 
+            # The version above is a guess: it counts on from the newest NDA, so it
+            # can name a version this component already holds (an out-of-order
+            # upload, or a version the duplicate migration suffixed). Documents are
+            # unique on component + name + version, so settle on a free one rather
+            # than fail the upload.
+            document_name = uploaded_file.name or "NDA"
+            next_version = next_free_document_version(company_component.id, document_name, next_version)
+
             # Always create a new Document record (versioning)
             document = Document.objects.create(
-                name=uploaded_file.name or "NDA",
+                name=document_name,
                 version=next_version,
                 document_filename=filename,
                 component=company_component,

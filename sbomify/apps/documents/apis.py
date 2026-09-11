@@ -10,7 +10,7 @@ from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.object_store import StorageClient
+from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.utils import broadcast_to_workspace, get_by_uuid_or_pk
 from sbomify.apps.oidc.permissions import is_authorised_for_component
@@ -165,7 +165,7 @@ def create_document(
             if is_duplicate_document_error(exc):
                 # Two concurrent uploads can both clear the check above; the
                 # constraint settles it and the loser gets the same 409.
-                log.warning("Potential orphaned S3 object after IntegrityError: %s", filename)
+                log_orphaned_object(filename)
                 return 409, {
                     "detail": duplicate_document_detail(document_name, version),
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
@@ -200,7 +200,13 @@ def update_document(request: HttpRequest, document_id: str, payload: DocumentUpd
     """Update document metadata."""
     result = update_document_metadata(request, document_id, payload)
     if not result.ok:
-        return result.status_code or 400, {"detail": result.error or "Invalid request"}
+        status_code = result.status_code or 400
+        error: dict[str, Any] = {"detail": result.error or "Invalid request"}
+        if status_code == 409:
+            # Same machine-readable code the upload path returns, so a client can
+            # branch on a duplicate here without matching on the message.
+            error["error_code"] = ErrorCode.DUPLICATE_ARTIFACT
+        return status_code, error
 
     return 200, result.value
 
