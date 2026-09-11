@@ -527,7 +527,7 @@ class TestOnACustomDomain:
         """
         public_doc = _document(team, Component.Visibility.PUBLIC, component_name=public_name)
         gated_doc = _document(team, Component.Visibility.GATED, component_name=gated_name)
-        assert public_doc.component.slug == gated_doc.component.slug
+        assert gated_doc.component.slug == gated_doc.component.id
 
         response = Client(HTTP_HOST="trust.example.com").get(f"/component/{public_doc.component.slug}/")
 
@@ -554,7 +554,7 @@ class TestOnACustomDomain:
         """
         public_doc = _document(team, Component.Visibility.PUBLIC, component_name="Policy Docs")
         gated_doc = _document(team, Component.Visibility.GATED, component_name="Policy-Docs")
-        assert public_doc.component.slug == gated_doc.component.slug
+        assert gated_doc.component.slug == gated_doc.component.id
 
         response = Client(HTTP_HOST="trust.example.com").get(
             f"/components/{gated_doc.component.id}/documents/{gated_doc.id}/"
@@ -563,7 +563,7 @@ class TestOnACustomDomain:
         assert response.status_code == 403
         content = response.content.decode()
         assert f"/component/{gated_doc.component.id}/" in content
-        assert f"/component/{gated_doc.component.slug}/" not in content
+        assert f"/component/{public_doc.component.slug}/" not in content
 
     def test_a_slug_collision_cannot_open_a_gated_artifact(self, team):
         """Whichever component the slug lands on, the artifact keeps its own gate.
@@ -574,7 +574,7 @@ class TestOnACustomDomain:
         """
         public_doc = _document(team, Component.Visibility.PUBLIC, component_name="Policy Docs")
         gated_doc = _document(team, Component.Visibility.GATED, component_name="Policy-Docs")
-        assert public_doc.component.slug == gated_doc.component.slug
+        assert gated_doc.component.slug == gated_doc.component.id
 
         response = Client(HTTP_HOST="trust.example.com").get(
             f"/components/{public_doc.component.slug}/documents/{gated_doc.id}/"
@@ -602,3 +602,38 @@ class TestOnACustomDomain:
         assert response["Location"] == (
             f"http://trust.example.com/components/{document.component.slug}/documents/{document.id}/"
         )
+
+
+@pytest.mark.parametrize("gated_name", ["Policy Docs", "Policy-Docs"])
+def test_generated_gated_link_survives_public_slug_collision(team: Team, gated_name: str) -> None:
+    public_name = "Policy-Docs" if gated_name == "Policy Docs" else "Policy Docs"
+    _document(team, Component.Visibility.PUBLIC, public_name)
+    document = _document(team, Component.Visibility.GATED, gated_name)
+    document.component.is_global = True
+    document.component.save()
+    team.custom_domain = "trust.example.com"
+    team.custom_domain_validated = True
+    team.save()
+    client = Client(HTTP_HOST="trust.example.com")
+    response = client.get("/")
+    link = f"/component/{document.component.id}/"
+    assert response.status_code == 200
+    assert f'href="{link}"' in response.content.decode()
+    response = client.get(link)
+    assert response.status_code == 200
+    assert "Request Access" in response.content.decode()
+
+
+def test_app_domain_redirect_preserves_shadowed_gated_artifact(team: Team) -> None:
+    _document(team, Component.Visibility.PUBLIC, "Policy Docs")
+    document = _document(team, Component.Visibility.GATED, "Policy-Docs")
+    team.custom_domain = "trust.example.com"
+    team.custom_domain_validated = True
+    team.save()
+    response = _visit(document)
+    path = f"/components/{document.component.id}/documents/{document.id}/"
+    assert response.status_code == 302
+    assert response["Location"] == f"http://trust.example.com{path}"
+    response = Client(HTTP_HOST="trust.example.com").get(path)
+    assert response.status_code == 403
+    assert "Please request access to view this document." in response.content.decode()

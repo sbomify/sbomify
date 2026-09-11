@@ -691,14 +691,25 @@ class Component(models.Model):
 
     @property
     def slug(self) -> str:
-        """Generate a URL-safe slug from the component name.
+        """Use the ID when another published component owns this gated slug."""
+        slug = slugify(self.name, allow_unicode=True)
+        if self.visibility != self.Visibility.GATED or not self.team_id:
+            return slug
 
-        Note: Computed property - see Product.slug for rationale.
-
-        Returns:
-            URL-safe slug string derived from the component name.
-        """
-        return slugify(self.name, allow_unicode=True)
+        # Match the public-wins resolver without changing established public URLs.
+        # Read names directly: consulting another component's slug would recurse.
+        gated_owner = None
+        for component_id, name, visibility in Component.objects.filter(
+            team_id=self.team_id,
+            visibility__in=(self.Visibility.PUBLIC, self.Visibility.GATED),
+        ).values_list("id", "name", "visibility"):
+            if slugify(name, allow_unicode=True) != slug:
+                continue
+            if visibility == self.Visibility.PUBLIC:
+                return self.id
+            if gated_owner is None:
+                gated_owner = component_id
+        return self.id if gated_owner is not None and gated_owner != self.id else slug
 
     @property
     def latest_sbom(self) -> "SBOM | None":
