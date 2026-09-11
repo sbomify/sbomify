@@ -129,3 +129,40 @@ class TestExternalReferenceUtils:
 
         external_refs = create_product_spdx_external_references(sample_product, user=None)
         assert len(external_refs) == 0
+
+def test_every_document_type_resolves_to_a_real_cyclonedx_type():
+    """The emitted CycloneDX type comes from the model property, and only from it.
+
+    This mapping used to exist twice — once as ``Document.cyclonedx_external_ref_type``
+    and once as a private table in ``sboms/utils.py`` — with only the second one
+    reaching the SBOM. They happened to agree, so editing the property looked
+    like it worked while changing nothing. There is one table now; this pins
+    that every document type still lands on a type CycloneDX actually defines,
+    which is what the coercion would otherwise swallow into ``other``.
+    """
+    from sbomify.apps.documents.models import Document
+    from sbomify.apps.sboms.utils import _get_cyclonedx_model, _get_cyclonedx_type_for_document_type
+
+    cdx16 = _get_cyclonedx_model()
+    valid = {member.value for member in cdx16.Type3}
+
+    for value, _label in Document.DocumentType.choices:
+        ref_type = Document(document_type=value).cyclonedx_external_ref_type
+        assert ref_type in valid, f"{value} maps to {ref_type!r}, which is not a CycloneDX external reference type"
+        assert _get_cyclonedx_type_for_document_type(value) == cdx16.Type3(ref_type)
+
+
+def test_an_nda_is_not_emitted_as_a_certification_report():
+    """The one document type where the wrong label is a false claim.
+
+    An NDA used to be a compliance document, so it went out as
+    ``certification-report`` — describing a legal agreement the reader signs as
+    an accredited certification of the vendor.
+    """
+    from sbomify.apps.documents.models import Document
+    from sbomify.apps.sboms.utils import _get_cyclonedx_model, _get_cyclonedx_type_for_document_type
+
+    cdx16 = _get_cyclonedx_model()
+
+    assert _get_cyclonedx_type_for_document_type(Document.DocumentType.NDA) == cdx16.Type3.other
+    assert Document(document_type=Document.DocumentType.NDA).spdx_reference_type == "nda"
