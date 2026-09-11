@@ -51,8 +51,14 @@ async def test_garbage_token_is_rejected():
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-async def test_valid_token_yields_principal_carrying_the_token_record(make_token):
-    """The stub request must carry the token record, or scope checks no-op."""
+async def test_the_stub_request_carries_the_token_record(make_token):
+    """The split: metadata on the Principal, the row on the stub request.
+
+    ``Principal`` deliberately holds no ``AccessToken``, so the identity
+    assertions below read its own fields. The row still has to reach the stub,
+    because ``can()`` and the throttle read it from there and scope enforcement
+    silently no-ops without it.
+    """
     token = await _acreate(make_token, ["product:read"])
 
     principal = await authenticate(fake_request(f"Bearer {token.encoded_token}"), attempted_action="tools/list")
@@ -161,6 +167,8 @@ async def test_a_pat_fills_every_principal_field(make_token):
     credential = getattr(principal.request, "access_token_record")
     assert credential.scopes == ["sbom:read"]
     assert credential.pk == token.pk
+
+
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
 async def test_the_audit_line_names_the_workspace_the_call_ran_in(make_token, mcp_owner):
@@ -201,4 +209,47 @@ async def test_the_audit_line_names_the_workspace_the_call_ran_in(make_token, mc
     with patch.object(limits, "log") as spy:
         await sync_to_async(limits.audit)("get_workspace_summary", principal, outcome="success")
 
-    assert spy.info.call_args.kwargs["extra"]["team_id"] == str(bound.pk)
+    event = spy.info.call_args.kwargs["extra"]
+    assert event["team_id"] == str(bound.pk)
+    # The rest of the identity the stream is read for. A caller is only
+    # reconstructable if all three survive together.
+    assert event["credential"] == "pat"
+    assert event["token_id"] == str(token.pk)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_trusted_publishing_bot_is_not_audited_as_a_pat(mcp_owner):
+    """An AccessToken row is not proof of a personal access token.
+
+    OIDC Trusted Publishing mints rows too, and ``get_user_and_token_record``
+    resolves both kinds, so hardcoding the kind made the field say nothing:
+    every caller read as ``pat`` and a bot's uploads were indistinguishable
+    from a human's.
+    """
+    import time
+
+    from asgiref.sync import sync_to_async
+    from django.conf import settings
+
+    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, create_personal_access_token
+
+    user, bound, _ = mcp_owner
+
+    def bot_token() -> AccessToken:
+        encoded = create_personal_access_token(user, expires_at=time.time() + 900, token_type=TOKEN_TYPE_OIDC)
+        return AccessToken.objects.create(
+            user=user,
+            encoded_token=encoded,
+            team=bound,
+            scopes=["artifact:publish"],
+            description="trusted publishing bot",
+        )
+
+    assert settings.JWT_AUDIENCE
+    token = await sync_to_async(bot_token)()
+
+    principal = await authenticate(fake_request(f"Bearer {token.encoded_token}"), attempted_action="upload_artifact")
+
+    assert principal.credential_kind == "oidc"

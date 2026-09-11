@@ -23,11 +23,22 @@ scopes, and an id to throttle and audit under — instead of an ``AccessToken``
 row. It does not keep the row at all, so there is nothing for a credential
 without one to leave empty and nothing to disagree with the fields.
 
-``request.access_token_record`` is the narrower one, because ``can()`` and the
-rate throttle read it directly. Its contract is only ``.scopes`` (a list of
-action strings, or ``None`` for unscoped) and ``.pk`` (stable per credential,
-which is what the sliding window keys on). A PAT row satisfies it; so would
-anything else that can answer those two questions.
+``request.access_token_record`` is the one still tied to a row, because
+``can()``, the rate throttle and the upload path read it directly rather than
+through the ``Principal``. What they need of it:
+
+* ``.scopes`` — action strings, or ``None`` for unscoped. Read by ``can()``.
+* ``.pk`` — stable per credential; what the rate-limit window keys on.
+* ``.encoded_token`` and ``.user_id`` — read by
+  ``oidc.permissions.request_is_oidc_authed`` on the component-scoped upload
+  endpoints ``upload_artifact`` delegates into, to decide whether the caller is
+  a Trusted Publishing bot and so confined to its bound component.
+
+The last two are why this is not yet a free-standing interface. An adapter
+supplying only the first two would raise on upload, or worse, read as "not a
+bot" and skip the binding check. Making the row replaceable means teaching
+``oidc.permissions`` to consume a credential interface first; that is phase-two
+work, and this docstring is the list of what it has to cover.
 """
 
 from __future__ import annotations
@@ -124,6 +135,25 @@ class Principal:
         ``resolve_workspace`` itself raises.
         """
         return getattr(self.request, WORKSPACE_ATTR, None)
+
+
+def _credential_kind(stub: HttpRequest) -> str:
+    """How this caller got in, for the audit line.
+
+    An ``AccessToken`` row is not always a personal access token: OIDC Trusted
+    Publishing mints rows too, and ``get_user_and_token_record`` resolves both,
+    so a bot uploading over ``/mcp`` would otherwise be recorded as a PAT and
+    the field would say nothing.
+
+    Asked through ``request_is_oidc_authed`` rather than by reading the signed
+    claim directly, so the label cannot disagree with the answer the upload
+    path's authorization uses. Its work is memoised on the request and on the
+    token row, so the binding probe happens at most once per call and the
+    upload path reuses it.
+    """
+    from sbomify.apps.oidc.permissions import request_is_oidc_authed
+
+    return "oidc" if request_is_oidc_authed(stub) else "pat"
 
 
 def current_request(mcp: Any) -> Any:
@@ -247,7 +277,7 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
         workspace=record.team,
         scopes=record.scopes,
         credential_id=str(record.pk),
-        credential_kind="pat",
+        credential_kind=await sync_to_async(_credential_kind)(stub),
     )
 
     throttle = AccessTokenRateThrottle()
