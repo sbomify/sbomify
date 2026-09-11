@@ -229,6 +229,8 @@ def get_component_public_slug(component: BaseComponent, request: HttpRequest) ->
     """Choose a collision-safe gated identifier with one scan per workspace/request."""
     from sbomify.apps.core.models import Component
 
+    if not component.slug:
+        return component.id
     if component.visibility != Component.Visibility.GATED:
         return component.slug
     cache = getattr(request, "_component_slug_owners", None)
@@ -651,6 +653,11 @@ def resolve_component_identifier(
     custom_domain_team = getattr(request, "custom_domain_team", None)
 
     if is_custom_domain and custom_domain_team:
+        # Generated ID-based links must not be shadowed by a component name.
+        component = Component.objects.filter(pk=identifier, team=custom_domain_team).first()
+        if component is not None:
+            return component
+
         # On custom domain: find by slug within the team
         slug = slugify(identifier, allow_unicode=True)
 
@@ -660,7 +667,7 @@ def resolve_component_identifier(
         # landing page and the product page both list it, but the slug it links to
         # resolved to nothing and the page 404'd, so a reader never saw the
         # "Request Access" gate the component page renders. Private stays out of
-        # the slug scan; the ID fallback below is still access-checked by callers.
+        # the slug scan; exact ID matches above are still access-checked by callers.
         listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
 
         # Public wins a tie. Names are unique per workspace, the slugs derived
@@ -682,12 +689,6 @@ def resolve_component_identifier(
 
         if gated_match is not None:
             return gated_match
-
-        # Fallback: try by ID within the team
-        try:
-            return Component.objects.get(pk=identifier, team=custom_domain_team)
-        except Component.DoesNotExist:
-            pass
 
         return None
     else:

@@ -676,3 +676,42 @@ def test_gated_slug_serialization_scans_workspace_once(team: Team, django_assert
         assert identifiers[1:] == [component.slug for component in gated[1:]]
     with django_assert_num_queries(0):
         assert [get_component_public_slug(component, request) for component in gated] == identifiers
+
+
+def test_generated_component_id_cannot_be_shadowed_by_a_slug(team: Team) -> None:
+    from django.http import HttpRequest
+
+    from sbomify.apps.core.url_utils import get_component_public_slug
+
+    document = _document(team, Component.Visibility.GATED, "Policy Docs")
+    _document(team, Component.Visibility.PUBLIC, "Policy-Docs")
+    _document(team, Component.Visibility.PUBLIC, document.component.id)
+    team.custom_domain = "trust.example.com"
+    team.custom_domain_validated = True
+    team.save()
+    identifier = get_component_public_slug(document.component, HttpRequest())
+    assert identifier == document.component.id
+    client = Client(HTTP_HOST="trust.example.com")
+    response = client.get(f"/component/{identifier}/")
+    assert response.status_code == 200
+    assert "Request Access" in response.content.decode()
+    response = client.get(f"/components/{identifier}/documents/{document.id}/")
+    assert response.status_code == 403
+    assert "Please request access to view this document." in response.content.decode()
+
+
+def test_empty_gated_slug_generates_a_working_id_link(team: Team) -> None:
+    document = _document(team, Component.Visibility.GATED, "!!!")
+    document.component.is_global = True
+    document.component.save()
+    team.custom_domain = "trust.example.com"
+    team.custom_domain_validated = True
+    team.save()
+    client = Client(HTTP_HOST="trust.example.com")
+    response = client.get("/")
+    link = f"/component/{document.component.id}/"
+    assert response.status_code == 200
+    assert f'href="{link}"' in response.content.decode()
+    response = client.get(link)
+    assert response.status_code == 200
+    assert "Request Access" in response.content.decode()
