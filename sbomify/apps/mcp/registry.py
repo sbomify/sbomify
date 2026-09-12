@@ -52,12 +52,15 @@ _REGISTRY: dict[str, ToolSpec] = {}
 # scope alone: an agent acting on injected instructions cannot reach for a tool
 # that was never registered, whatever its token permits.
 #
-# Named rather than matched on the verb. A verb test caught delete and
-# administer and silently missed every other action authz carves up to
-# ADMINISTER for being outward-facing: publishing to the trust center, granting
-# a repo a standing publish, changing who is in the workspace, billing. It also
-# meant renaming an action (product:delete -> product:remove) would drop it
-# from the set with nothing to notice.
+# Two sets, not one, because each catches what the other misses.
+#
+# The verb test is the one that survives a new action: anything named
+# *:delete or *:administer is refused the day it is added, with nobody
+# remembering to list it. What it cannot see is the rest of what authz carves
+# up to ADMINISTER for being outward-facing rather than destructive, so the
+# named set carries those. The named set in turn would quietly drop an action
+# that was renamed (product:delete -> product:remove), which the verb test
+# still catches.
 _FORBIDDEN_VERBS = ("delete", "administer")
 
 #: Outward-facing or standing-grant actions, which are not destructive by verb

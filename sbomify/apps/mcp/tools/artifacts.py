@@ -11,7 +11,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from .. import serializers
 from ..auth import Principal, require
 from ..limits import enforce_parse_size, enforce_stored_size, untrusted
-from ._base import clamp_page, mcp_tool, narrow, not_found, resolve_workspace, run_db
+from ._base import DETAIL_COLLECTION_LIMIT, clamp_page, mcp_tool, narrow, not_found, resolve_workspace, run_db
 from .catalog import _lookup_component
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ def _get_artifact(principal: Principal, artifact_id: str) -> Any:
     return obj
 
 
-def _bounded(value: Any, *, limit: int = 1024) -> Any:
+def _bounded(value: Any, *, limit: int = 1024, depth: int = 0) -> Any:
     """Recursively truncate the strings inside a plugin-produced structure.
 
     ``result_summary`` is plugin JSON derived from the uploaded SBOM, so its
@@ -46,16 +46,25 @@ def _bounded(value: Any, *, limit: int = 1024) -> Any:
     Keys are bounded as well as values: a dict keyed on something taken from the
     artifact (a package name, a licence id) would otherwise carry unbounded
     attacker text straight past the value-side cap.
+
+    Depth is bounded for the same reason ``_cyclonedx_components`` bounds it:
+    the input is supplier-controlled, and a pathologically nested summary would
+    otherwise raise ``RecursionError`` rather than ``ToolError``. That lands in
+    the wrapper's bare ``except Exception``, which audits with no detail by
+    design, so the agent would see an opaque internal error for a document the
+    server could have refused with a reason.
     """
+    if depth > _MAX_SUMMARY_DEPTH:
+        return "… [truncated by sbomify: nested too deeply]"
     if isinstance(value, str):
         return untrusted(value, limit=limit)
     if isinstance(value, dict):
         return {
-            (untrusted(key, limit=limit) if isinstance(key, str) else key): _bounded(item, limit=limit)
+            (untrusted(key, limit=limit) if isinstance(key, str) else key): _bounded(item, limit=limit, depth=depth + 1)
             for key, item in value.items()
         }
     if isinstance(value, list):
-        return [_bounded(item, limit=limit) for item in value]
+        return [_bounded(item, limit=limit, depth=depth + 1) for item in value]
     return value
 
 
@@ -96,6 +105,11 @@ def _license_label(entry: dict[str, Any]) -> str | None:
 #: generators emit, shallow enough that a hostile document cannot make the walk
 #: the expensive part of the request.
 _MAX_COMPONENT_DEPTH = 12
+
+#: The same ceiling for a plugin summary, and for the same reason: the JSON is
+#: derived from supplier-supplied SBOM content, so its nesting is theirs to
+#: choose. Real summaries are two or three deep.
+_MAX_SUMMARY_DEPTH = 12
 
 
 def _cyclonedx_components(entries: Any, *, depth: int = 0) -> Iterator[dict[str, Any]]:
@@ -445,6 +459,11 @@ def register_tools(mcp: FastMCP) -> None:
                 .defer("result")
             )
 
+            # Bounded by how many compliance plugins are registered rather than
+            # by anything in the artifact, but cut anyway: "a number we control
+            # today" is not the same as a bound, and this tool takes no page
+            # argument to narrow with if it ever stops being small.
+            rows = list(runs[: DETAIL_COLLECTION_LIMIT + 1])
             return {
                 "artifact_id": artifact_id,
                 "assessments": [
@@ -465,8 +484,9 @@ def register_tools(mcp: FastMCP) -> None:
                             "error": untrusted(run.error_message, limit=2000),
                         }
                     )
-                    for run in runs
+                    for run in rows[:DETAIL_COLLECTION_LIMIT]
                 ],
+                "assessments_truncated": len(rows) > DETAIL_COLLECTION_LIMIT,
             }
 
         return await run_db(query)

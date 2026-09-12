@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from .. import serializers
 from ..auth import Principal, require
-from ._base import clamp_page, mcp_tool, narrow, not_found, resolve_workspace, run_db
+from ._base import DETAIL_COLLECTION_LIMIT, clamp_page, mcp_tool, narrow, not_found, resolve_workspace, run_db
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -138,14 +138,31 @@ def register_tools(mcp: FastMCP) -> None:
         def query() -> dict[str, Any]:
             obj = _get_product(principal, product_id)
             data = serializers.product(obj, detail=True)
-            data["components"] = [serializers.component(c) for c in obj.components.all().order_by("name")]
-            data["identifiers"] = [
-                serializers.compact({"type": i.identifier_type, "value": i.value}) for i in obj.identifiers.all()
-            ]
-            data["links"] = [
-                serializers.compact({"type": link.link_type, "url": link.url, "title": link.title})
-                for link in obj.links.all()
-            ]
+            components = obj.components.all().order_by("name")
+            data["components"] = serializers.capped(
+                [serializers.component(c) for c in components[:DETAIL_COLLECTION_LIMIT]],
+                total=components.count(),
+                limit=DETAIL_COLLECTION_LIMIT,
+                more_with=f'list_components(product_id="{product_id}")',
+            )
+            identifiers = list(obj.identifiers.all()[: DETAIL_COLLECTION_LIMIT + 1])
+            data["identifiers"] = serializers.capped(
+                [
+                    serializers.compact({"type": i.identifier_type, "value": i.value})
+                    for i in identifiers[:DETAIL_COLLECTION_LIMIT]
+                ],
+                total=len(identifiers),
+                limit=DETAIL_COLLECTION_LIMIT,
+            )
+            links = list(obj.links.all()[: DETAIL_COLLECTION_LIMIT + 1])
+            data["links"] = serializers.capped(
+                [
+                    serializers.compact({"type": link.link_type, "url": link.url, "title": link.title})
+                    for link in links[:DETAIL_COLLECTION_LIMIT]
+                ],
+                total=len(links),
+                limit=DETAIL_COLLECTION_LIMIT,
+            )
             return serializers.compact(data)
 
         return await run_db(query)
@@ -258,9 +275,15 @@ def register_tools(mcp: FastMCP) -> None:
             obj = _get_release(principal, release_id)
             data = serializers.release(obj, detail=True)
             data["product"] = {"id": obj.product.id, "name": obj.product.name}
-            data["artifacts"] = [
-                serializers.release_artifact(a) for a in obj.artifacts.select_related("sbom", "document").all()
-            ]
+            artifacts = obj.artifacts.select_related("sbom", "document").all()
+            data["artifacts"] = serializers.capped(
+                [serializers.release_artifact(a) for a in artifacts[:DETAIL_COLLECTION_LIMIT]],
+                total=artifacts.count(),
+                limit=DETAIL_COLLECTION_LIMIT,
+                # No more_with: list_artifacts pages a component's artifacts,
+                # not a release's, so there is no tool to point at. Saying the
+                # count and that it was cut is the honest half of the answer.
+            )
             return serializers.compact(data)
 
         return await run_db(query)

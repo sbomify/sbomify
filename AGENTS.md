@@ -416,7 +416,7 @@ Plugins analyze SBOMs without modifying them:
 
 `PluginOrchestrator` (`sbomify/apps/plugins/orchestrator.py`) manages execution, dependency checking, config hashing, and retry logic (`RetryLaterError`).
 
-### MCP Server (ADR-008)
+### MCP Server (ADR-009)
 
 `sbomify/apps/mcp/` serves a Model Context Protocol endpoint at `/mcp`, dispatched from `sbomify/asgi.py`. Curated task-oriented tools, not a generated wrapper over the REST API.
 
@@ -424,7 +424,7 @@ Rules when touching it:
 
 - **Every tool must be `async`.** In mcp 1.28 a sync tool function runs directly on the event loop, where Django ORM access raises `SynchronousOnlyOperation`. Wrap DB work in `run_db()` (`tools/_base.py`).
 - **Register tools via `mcp_tool(mcp, name, action, writes=...)`.** It supplies authentication, the token-scope gate, the audit event, and the response-size cap. The `action` must be a member of `authz.ALL_ACTIONS`.
-- **Destructive and administrative actions cannot be exposed.** `registry.register` rejects any `*:delete` or `*:administer` action by design — deletion is not an agent-reachable operation.
+- **Destructive and administrative actions cannot be exposed.** `registry.register` rejects any `*:delete` or `*:administer` action, plus a named set of the outward-facing ones authz carves up to ADMINISTER: setting product or component visibility, managing publishers or members, billing, and publishing an advisory. Deletion is not an agent-reachable operation.
 - **Treat artifact content as untrusted.** Anything read out of an uploaded SBOM or document is attacker-influenced; pass free text through `limits.untrusted()` and never widen a tool's authority based on it.
 - **Reuse existing REST view functions for writes.** Ninja's decorators return the undecorated function, so `apis.sbom_upload_cyclonedx(request, component_id)` is a plain call — do not reimplement upload validation.
 - Session state is impossible: production runs four worker processes with no affinity, so the server is `stateless_http=True`.
@@ -612,8 +612,9 @@ words people actually type in `keywords` — including the ones the UI does not 
 - **ADR-004**: Immutable artifacts — sbomify never modifies uploaded SBOMs/documents
 - **ADR-005**: Tailwind CSS + Alpine.js + HTMX frontend architecture (replacing Bootstrap)
 - **ADR-006**: Generalized BOM model
-- **ADR-007**: Removal of the Project layer from the hierarchy
-- **ADR-008**: MCP server mounted in the Django app, authorized by scoped access tokens
+- **ADR-007**: GCS support and cloud workload identity, and (a second 0007) removal of the Project layer
+- **ADR-008**: Workspace roles as a linear capability ladder
+- **ADR-009**: MCP server mounted in the Django app, authorized by scoped access tokens
 
 ## API Documentation
 

@@ -9,6 +9,8 @@ real CycloneDX output rather than hypotheticals.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from sbomify.apps.mcp.tools.artifacts import _bounded, _extract_packages, _license_label
@@ -189,3 +191,56 @@ def test_an_oversized_artifact_is_refused_before_it_is_downloaded():
     # At the ceiling, and a store that could not answer, both pass through.
     enforce_stored_size(MAX_ARTIFACT_PARSE_BYTES, artifact_id="abc")
     enforce_stored_size(None, artifact_id="abc")
+
+
+def test_a_deeply_nested_summary_is_cut_rather_than_crashing():
+    """`result_summary` is plugin JSON over supplier content, so its nesting is theirs.
+
+    Unbounded, a pathological summary raised RecursionError rather than
+    ToolError, which lands in the wrapper's bare `except Exception`: audited
+    with no detail by design, and opaque to the agent. `_cyclonedx_components`
+    already bounded its walk for the same reason.
+    """
+    from sbomify.apps.mcp.tools.artifacts import _MAX_SUMMARY_DEPTH, _bounded
+
+    deep: Any = "leaf"
+    for _ in range(_MAX_SUMMARY_DEPTH + 40):
+        deep = {"nested": deep}
+
+    result = _bounded(deep)
+
+    # Walk down to whatever it returned; the point is that it returned.
+    node = result
+    levels = 0
+    while isinstance(node, dict) and "nested" in node:
+        node = node["nested"]
+        levels += 1
+    assert levels <= _MAX_SUMMARY_DEPTH + 1
+    assert "truncated by sbomify" in str(node)
+
+
+def test_a_list_nested_deeply_is_cut_too():
+    """The list branch recurses as well, so it needs the same ceiling."""
+    from sbomify.apps.mcp.tools.artifacts import _MAX_SUMMARY_DEPTH, _bounded
+
+    deep: Any = ["leaf"]
+    for _ in range(_MAX_SUMMARY_DEPTH + 40):
+        deep = [deep]
+
+    result = _bounded(deep)
+
+    node = result
+    levels = 0
+    while isinstance(node, list) and node:
+        node = node[0]
+        levels += 1
+    assert levels <= _MAX_SUMMARY_DEPTH + 1
+
+
+def test_a_shallow_summary_is_untouched():
+    """The ceiling must not reach anything a real plugin emits."""
+    from sbomify.apps.mcp.tools.artifacts import _bounded
+
+    summary = {"checks": {"ntia": {"passed": 3, "failed": ["author", "supplier"]}}}
+
+    assert _bounded(summary) == summary
