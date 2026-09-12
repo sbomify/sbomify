@@ -141,6 +141,27 @@ def _valid_url(config: dict[str, Any], key: str) -> str:
     return ""
 
 
+def _default_csaf_url(team: Team) -> str:
+    """The workspace's own CSAF provider metadata, when it serves any.
+
+    A workspace that publishes advisories already answers on
+    ``/.well-known/csaf/provider-metadata.json``, so the URL is derived rather
+    than configured: a hand-typed copy is one rename away from pointing at a
+    404, and a ``CSAF`` field nothing answers is worse than an absent one. An
+    explicit ``csaf_url`` still wins, for a workspace whose CSAF lives
+    somewhere else entirely.
+
+    Returns "" when the workspace has no public domain or is not public, which
+    are the same conditions under which the endpoint itself 404s.
+    """
+    from sbomify.apps.core.url_utils import build_custom_domain_url
+    from sbomify.apps.security_advisories.csaf_provider import PROVIDER_METADATA_PATH
+
+    if not getattr(team, "is_public", False):
+        return ""
+    return build_custom_domain_url(team, PROVIDER_METADATA_PATH) or ""
+
+
 def generate_security_txt(team: Team) -> str:
     """Generate RFC 9116 / TR-03183-3 security.txt content for a team.
 
@@ -200,7 +221,7 @@ def generate_security_txt(team: Team) -> str:
         lines.append(f"Acknowledgments: {acknowledgments_url}")
 
     # CSAF 2.0 section 7.1.8: points at the provider-metadata.json.
-    if csaf_url := _valid_url(config, "csaf_url"):
+    if csaf_url := _valid_url(config, "csaf_url") or _default_csaf_url(team):
         lines.append("# Our CSAF provider metadata")
         lines.append(f"CSAF: {csaf_url}")
 

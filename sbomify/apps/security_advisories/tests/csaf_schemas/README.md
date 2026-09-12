@@ -6,6 +6,7 @@ document against. They are test fixtures, not something the app serves.
 | File | Source | Retrieved |
 | --- | --- | --- |
 | `csaf_json_schema.json` | <https://docs.oasis-open.org/csaf/csaf/v2.0/csaf_json_schema.json> | 2026-09-03 |
+| `provider_json_schema.json` | <https://docs.oasis-open.org/csaf/csaf/v2.0/provider_json_schema.json> | 2026-09-11 |
 | `cvss-v2.0.json` | <https://www.first.org/cvss/cvss-v2.0.json> | 2026-09-03 |
 | `cvss-v3.0.json` | <https://www.first.org/cvss/cvss-v3.0.json> | 2026-09-03 |
 | `cvss-v3.1.json` | <https://www.first.org/cvss/cvss-v3.1.json> | 2026-09-03 |
