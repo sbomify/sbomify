@@ -33,7 +33,13 @@ from sbomify.apps.access_tokens.models import AccessToken
 def _lookup_binding(request: Any) -> Any:
     """Return the OIDCBinding row that owns the request's token user, or None."""
     token_record: AccessToken | None = getattr(request, "access_token_record", None)
-    if token_record is None or token_record.user_id is None:
+    # ``user_id`` via getattr, not attribute access: the MCP server is growing a
+    # second kind of credential (#1235), and the whole point of its documented
+    # contract is that a credential answering ``.scopes`` and ``.pk`` is enough.
+    # One that carries no bot user is not a Trusted Publishing bot, which is the
+    # answer this predicate exists to give, so absence reads as "no binding"
+    # rather than raising on the upload path.
+    if token_record is None or getattr(token_record, "user_id", None) is None:
         return None
     # ``oidc_binding`` is the reverse-side related_name on
     # ``OIDCBinding.bot_user`` (OneToOne). Looked up via the model so mypy
@@ -85,8 +91,16 @@ def _token_is_oidc_typed(token_record: AccessToken) -> bool:
 
     from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, decode_personal_access_token
 
+    # Same reason as _lookup_binding: a credential with no signed sbomify token
+    # cannot carry the ``token_type`` claim, so it is not OIDC-issued. Reading
+    # that as False is correct and keeps the attribute optional.
+    encoded = getattr(token_record, "encoded_token", None)
+    if not encoded:
+        setattr(token_record, "_is_oidc_typed", False)
+        return False
+
     try:
-        result = decode_personal_access_token(token_record.encoded_token).get("token_type") == TOKEN_TYPE_OIDC
+        result = decode_personal_access_token(encoded).get("token_type") == TOKEN_TYPE_OIDC
     except DecodeError:
         result = False
     setattr(token_record, "_is_oidc_typed", result)

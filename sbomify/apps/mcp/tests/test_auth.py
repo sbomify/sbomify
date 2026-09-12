@@ -164,7 +164,7 @@ async def test_a_pat_fills_every_principal_field(make_token):
     assert principal.workspace == token.team
     # can() and the rate throttle read this off the stub rather than the
     # Principal, so its contract is the narrower one: .scopes and .pk.
-    credential = getattr(principal.request, "access_token_record")
+    credential = principal.request.access_token_record
     assert credential.scopes == ["sbom:read"]
     assert credential.pk == token.pk
 
@@ -253,3 +253,55 @@ async def test_a_trusted_publishing_bot_is_not_audited_as_a_pat(mcp_owner):
     principal = await authenticate(fake_request(f"Bearer {token.encoded_token}"), attempted_action="upload_artifact")
 
     assert principal.credential_kind == "oidc"
+
+
+class TestTheCredentialContractHolds:
+    """The documented contract is `.scopes` and `.pk`. This is what enforces it.
+
+    The upload path reaches `oidc.permissions.request_is_oidc_authed`, which
+    also wants `.encoded_token` and `.user_id`. Before, a credential carrying
+    only the two documented attributes raised AttributeError on its first
+    `upload_artifact` or `create_release`. In `create_release` that call sits
+    outside the view's try, so it propagated: audited as `outcome="error"` with
+    no detail by design, and opaque to the agent.
+    """
+
+    class MinimalCredential:
+        """Exactly what the docstring promises a phase-two credential must answer."""
+
+        def __init__(self, scopes: list[str] | None) -> None:
+            self.scopes = scopes
+            self.pk = "oauth-credential-1"
+
+    @staticmethod
+    def _request(credential: object) -> Any:
+        from django.http import HttpRequest
+
+        request = HttpRequest()
+        setattr(request, "access_token_record", credential)
+        return request
+
+    def test_it_is_not_read_as_a_trusted_publishing_bot(self) -> None:
+        from sbomify.apps.oidc.permissions import request_is_oidc_authed
+
+        request = self._request(self.MinimalCredential(["artifact:publish"]))
+
+        assert request_is_oidc_authed(request) is False, "a credential with no bot user is not a bot"
+
+    @pytest.mark.django_db
+    def test_the_upload_gate_lets_it_through_to_the_ordinary_check(self) -> None:
+        """Not a bot means no component confinement, not a refusal."""
+        from types import SimpleNamespace
+
+        from sbomify.apps.oidc.permissions import is_authorised_for_component
+
+        request = self._request(self.MinimalCredential(None))
+
+        assert is_authorised_for_component(request, SimpleNamespace(id="anything")) is True
+
+    @pytest.mark.django_db
+    def test_a_real_pat_row_still_reaches_the_binding_check(self) -> None:
+        """The defensive reads must not blunt the check for the credential it guards."""
+        from sbomify.apps.oidc.permissions import request_is_oidc_authed
+
+        assert request_is_oidc_authed(self._request(None)) is False

@@ -29,16 +29,19 @@ through the ``Principal``. What they need of it:
 
 * ``.scopes`` — action strings, or ``None`` for unscoped. Read by ``can()``.
 * ``.pk`` — stable per credential; what the rate-limit window keys on.
-* ``.encoded_token`` and ``.user_id`` — read by
-  ``oidc.permissions.request_is_oidc_authed`` on the component-scoped upload
-  endpoints ``upload_artifact`` delegates into, to decide whether the caller is
-  a Trusted Publishing bot and so confined to its bound component.
 
-The last two are why this is not yet a free-standing interface. An adapter
-supplying only the first two would raise on upload, or worse, read as "not a
-bot" and skip the binding check. Making the row replaceable means teaching
-``oidc.permissions`` to consume a credential interface first; that is phase-two
-work, and this docstring is the list of what it has to cover.
+Those two, and no more. ``oidc.permissions.request_is_oidc_authed`` also reads
+``.encoded_token`` and ``.user_id``, and it runs on the component-scoped upload
+endpoints ``upload_artifact`` and ``create_release`` delegate into, to decide
+whether the caller is a Trusted Publishing bot confined to its bound component.
+It reads both defensively: a credential carrying neither is not a bot, which is
+the answer that predicate exists to give, and the call falls through to the
+ordinary ``can()`` path rather than raising.
+
+``token_team`` on the stub is ours rather than the row's contract. It is the
+workspace the credential is scoped to, the same value ``Principal.workspace``
+holds, and a credential with no row fills both from wherever it knows its
+workspace from.
 """
 
 from __future__ import annotations
