@@ -976,3 +976,28 @@ def test_document_table_edit_persists_and_clears_subcategory(
     sample_document.refresh_from_db()
     assert sample_document.document_type == document_type
     assert sample_document.compliance_subcategory == expected
+
+
+def test_the_upload_form_offers_every_document_type() -> None:
+    """The upload form's options are hand-written; the edit modal's are not.
+
+    ``edit_document_modal`` loops ``DocumentType.choices``, so it picks up a new
+    type for free. The upload form spells its options out inside optgroups the
+    enum has no notion of, so adding a type silently leaves it unselectable on
+    the way in — which is what happened to NDA, whose only route was to upload
+    it as Compliance and emit ``certification-report`` until someone edited it.
+    """
+    from pathlib import Path
+
+    from django.conf import settings
+
+    from sbomify.apps.documents.models import Document
+
+    template = (
+        Path(settings.BASE_DIR)
+        / "sbomify/apps/documents/templates/documents/components/document_upload.html.j2"
+    ).read_text(encoding="utf-8")
+
+    missing = [value for value, _label in Document.DocumentType.choices if f'value="{value}"' not in template]
+
+    assert not missing, f"document types with no option in the upload form: {missing}"
