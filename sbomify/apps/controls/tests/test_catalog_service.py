@@ -285,3 +285,22 @@ class TestBuiltinCatalogData:
         assert cmmc.ok and cmmc.value is not None
         derived = {cid.split("-", 1)[1] for cid in cmmc.value.controls.values_list("control_id", flat=True)}
         assert derived == set(catalog.controls.values_list("control_id", flat=True))
+
+
+def test_every_builtin_catalogue_has_a_tile_in_settings() -> None:
+    """The catalogue tiles are hand-kept; the catalogues themselves are globbed.
+
+    Dropping a file into ``controls/data`` registers it for the API but not for
+    the UI, so a catalogue can ship fully working and be unreachable for every
+    admin — which is exactly what happened to NIST SP 800-171. Comparing the two
+    lists is the only thing that notices.
+    """
+    from sbomify.apps.controls.services.catalog_service import _BUILTIN_CATALOGS
+    from sbomify.apps.teams.views.team_settings import BUILTIN_CATALOG_TILES
+
+    tiles = {slug for slug, _name, _label, _icon in BUILTIN_CATALOG_TILES}
+
+    assert tiles == set(_BUILTIN_CATALOGS), (
+        f"catalogues with no tile: {sorted(set(_BUILTIN_CATALOGS) - tiles)}; "
+        f"tiles with no catalogue: {sorted(tiles - set(_BUILTIN_CATALOGS))}"
+    )
