@@ -13,6 +13,35 @@ the token's action scopes *before* the role check
 ``token_team`` for workspace scoping. Handing it a faithful stub means MCP tools
 get byte-identical authorization to the REST API without a second permission
 model.
+
+A personal access token is not the only credential this endpoint will ever
+accept: OAuth is the next one (#1235). Two contracts carry that, and both are
+satisfied by a PAT today rather than being speculative shapes:
+
+``Principal`` holds what the server needs about a caller — a workspace, action
+scopes, and an id to throttle and audit under — instead of an ``AccessToken``
+row. It does not keep the row at all, so there is nothing for a credential
+without one to leave empty and nothing to disagree with the fields.
+
+``request.access_token_record`` is the one still tied to a row, because
+``can()``, the rate throttle and the upload path read it directly rather than
+through the ``Principal``. What they need of it:
+
+* ``.scopes`` — action strings, or ``None`` for unscoped. Read by ``can()``.
+* ``.pk`` — stable per credential; what the rate-limit window keys on.
+
+Those two, and no more. ``oidc.permissions.request_is_oidc_authed`` also reads
+``.encoded_token`` and ``.user_id``, and it runs on the component-scoped upload
+endpoints ``upload_artifact`` and ``create_release`` delegate into, to decide
+whether the caller is a Trusted Publishing bot confined to its bound component.
+It reads both defensively: a credential carrying neither is not a bot, which is
+the answer that predicate exists to give, and the call falls through to the
+ordinary ``can()`` path rather than raising.
+
+``token_team`` on the stub is ours rather than the row's contract. It is the
+workspace the credential is scoped to, the same value ``Principal.workspace``
+holds, and a credential with no row fills both from wherever it knows its
+workspace from.
 """
 
 from __future__ import annotations
@@ -40,7 +69,7 @@ if TYPE_CHECKING:
     from django.contrib.auth.base_user import AbstractBaseUser
     from starlette.requests import Request
 
-    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.teams.models import Team
 
 
 class MCPAuthError(ToolError):
@@ -70,20 +99,34 @@ because that object is built fresh per call and thrown away after it."""
 
 @dataclass(frozen=True)
 class Principal:
-    """An authenticated MCP caller.
+    """An authenticated MCP caller, however it authenticated.
 
     ``request`` is the stub ``HttpRequest`` to pass to ``can()`` — it is not a
     real request and must never be used for rendering or redirects.
+
+    The facts below are what the rest of the server actually needs: a workspace
+    to scope to, action scopes to narrow by, and an identity to throttle and
+    audit under. They are held here rather than reached for through an
+    ``AccessToken`` row because a personal access token is not the only
+    credential this endpoint will ever accept, and the four consumers should
+    not each learn about the next one.
+
+    The row itself is deliberately not kept. It would be a second description
+    of the same credential with nothing holding the two in agreement, and OAuth
+    would have to fill both.
     """
 
     user: AbstractBaseUser
-    token: AccessToken
     request: HttpRequest
-
-    @property
-    def scopes(self) -> list[str] | None:
-        """The token's action scopes; ``None`` means unscoped (full capability)."""
-        return self.token.scopes
+    workspace: Team | None
+    scopes: list[str] | None
+    #: Stable per credential, for the rate-limit window and the audit line. Two
+    #: credentials belonging to one user throttle independently, which is what
+    #: an operator expects of a token they can revoke on its own.
+    credential_id: str
+    #: What kind of credential this is, so an audit line says how someone got
+    #: in rather than only that they did.
+    credential_kind: str = "pat"
 
     @property
     def resolved_workspace(self) -> Any:
@@ -95,6 +138,25 @@ class Principal:
         ``resolve_workspace`` itself raises.
         """
         return getattr(self.request, WORKSPACE_ATTR, None)
+
+
+def _credential_kind(stub: HttpRequest) -> str:
+    """How this caller got in, for the audit line.
+
+    An ``AccessToken`` row is not always a personal access token: OIDC Trusted
+    Publishing mints rows too, and ``get_user_and_token_record`` resolves both,
+    so a bot uploading over ``/mcp`` would otherwise be recorded as a PAT and
+    the field would say nothing.
+
+    Asked through ``request_is_oidc_authed`` rather than by reading the signed
+    claim directly, so the label cannot disagree with the answer the upload
+    path's authorization uses. Its work is memoised on the request and on the
+    token row, so the binding probe happens at most once per call and the
+    upload path reuses it.
+    """
+    from sbomify.apps.oidc.permissions import request_is_oidc_authed
+
+    return "oidc" if request_is_oidc_authed(stub) else "pat"
 
 
 def current_request(mcp: Any) -> Any:
@@ -212,7 +274,14 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     # concurrent calls on a shared instance would write one token's window
     # under another token's key. The budget itself is unaffected — the sliding
     # window lives in the cache, keyed on the token pk.
-    principal = Principal(user=user, token=record, request=stub)
+    principal = Principal(
+        user=user,
+        request=stub,
+        workspace=record.team,
+        scopes=record.scopes,
+        credential_id=str(record.pk),
+        credential_kind=await sync_to_async(_credential_kind)(stub),
+    )
 
     throttle = AccessTokenRateThrottle()
     if not await sync_to_async(throttle.allow_request)(stub):
