@@ -5,6 +5,7 @@ from typing import Any, cast
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
@@ -26,6 +27,10 @@ from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, check_member_r
 from sbomify.apps.teams.queries import get_member_role_by_key, get_pending_invitations_for_user
 from sbomify.apps.teams.utils import refresh_current_team_session
 from sbomify.logging import getLogger
+
+# Enough to clear a burst of concurrent NDA uploads; each attempt re-reads the
+# versions in use, so a losing insert only ever has to step past what committed.
+NDA_VERSION_ALLOCATION_ATTEMPTS = 5
 
 logger = getLogger(__name__)
 
@@ -591,10 +596,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         try:
             import hashlib
-            from decimal import Decimal, InvalidOperation
 
-            from sbomify.apps.core.object_store import StorageClient
+            from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
             from sbomify.apps.documents.models import Document
+            from sbomify.apps.documents.utils import (
+                bump_decimal_version,
+                is_duplicate_document_error,
+                next_free_document_version,
+            )
 
             # Read file content
             file_content = uploaded_file.read()
@@ -617,51 +626,68 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 compliance_subcategory=Document.ComplianceSubcategory.NDA,
             ).order_by("-created_at")
 
-            # Calculate next version number
+            # Calculate next version number: count on from the newest NDA where the
+            # version is a number we can count on from ("1.0" -> "1.1"), otherwise
+            # from the first number inside it, otherwise from how many there are.
             next_version = "1.0"
             if previous_ndas.exists():
-                # Try to parse the latest version and increment
                 latest_nda = previous_ndas.first()
                 latest_version_str = latest_nda.version if latest_nda else "1.0"
-                try:
-                    # Try to parse as decimal (e.g., "1.0", "2.5")
-                    latest_version = Decimal(latest_version_str)
-                    next_version = str(latest_version + Decimal("0.1"))
-                    # Remove trailing zeros and unnecessary decimal point
-                    next_version = next_version.rstrip("0").rstrip(".")
-                except (InvalidOperation, ValueError):
-                    # If version is not a number, use a simple increment
-                    # Try to extract number from version string
+
+                bumped = bump_decimal_version(latest_version_str)
+                if bumped is None:
                     import re
 
                     match = re.search(r"(\d+(?:\.\d+)?)", latest_version_str)
-                    if match:
-                        try:
-                            latest_version = Decimal(match.group(1))
-                            next_version = str(latest_version + Decimal("0.1"))
-                            next_version = next_version.rstrip("0").rstrip(".")
-                        except (InvalidOperation, ValueError):
-                            # Fallback: append version number
-                            version_count = previous_ndas.count()
-                            next_version = f"{version_count + 1}.0"
-                    else:
-                        # No number found, use count-based version
-                        version_count = previous_ndas.count()
-                        next_version = f"{version_count + 1}.0"
+                    bumped = bump_decimal_version(match.group(1)) if match else None
+                if bumped is None:
+                    bumped = f"{previous_ndas.count() + 1}.0"
 
-            # Always create a new Document record (versioning)
-            document = Document.objects.create(
-                name=uploaded_file.name or "NDA",
-                version=next_version,
-                document_filename=filename,
-                component=company_component,
-                source="manual_upload",
-                document_type=Document.DocumentType.COMPLIANCE,
-                compliance_subcategory=Document.ComplianceSubcategory.NDA,
-                content_hash=content_hash,
-                content_type=uploaded_file.content_type,
-                file_size=uploaded_file.size,
-            )
+                next_version = bumped
+
+            # The version above is a guess: it counts on from the newest NDA, so it
+            # can name a version this component already holds (an out-of-order
+            # upload, or a version the duplicate migration suffixed). Documents are
+            # unique on component + name + version, so settle on a free one rather
+            # than fail the upload.
+            #
+            # The allocator reads the versions in use, so two uploads racing each
+            # other can be handed the same free one and one of them will lose the
+            # constraint. That is a conflict to re-resolve, not an error to show:
+            # re-read and retry, each attempt in its own savepoint so the failed
+            # insert does not poison the surrounding transaction.
+            document_name = uploaded_file.name or "NDA"
+            document = None
+            try:
+                for attempt in range(NDA_VERSION_ALLOCATION_ATTEMPTS):
+                    next_version = next_free_document_version(company_component.id, document_name, next_version)
+                    try:
+                        with transaction.atomic():
+                            # Always create a new Document record (versioning)
+                            document = Document.objects.create(
+                                name=document_name,
+                                version=next_version,
+                                document_filename=filename,
+                                component=company_component,
+                                source="manual_upload",
+                                document_type=Document.DocumentType.COMPLIANCE,
+                                compliance_subcategory=Document.ComplianceSubcategory.NDA,
+                                content_hash=content_hash,
+                                content_type=uploaded_file.content_type,
+                                file_size=uploaded_file.size,
+                            )
+                        break
+                    except IntegrityError as exc:
+                        if not is_duplicate_document_error(exc) or attempt == NDA_VERSION_ALLOCATION_ATTEMPTS - 1:
+                            raise
+            except IntegrityError:
+                # The object is already stored and no row will reference it, same
+                # as the artifact upload path.
+                log_orphaned_object(filename)
+                raise
+
+            if document is None:  # pragma: no cover - the loop either breaks or raises
+                raise RuntimeError("NDA version allocation did not settle")
 
             # Store Document ID in team's branding_info (point to latest version)
             # Create a copy of the dict to ensure Django detects the change

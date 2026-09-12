@@ -5,6 +5,10 @@ from django.db import models
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.sboms.models import Component
 
+# Named here (rather than inline in Meta) so the duplicate-detection helper and
+# the migration that adds the constraint can both refer to the same string.
+DOCUMENT_UNIQUE_CONSTRAINT = "documents_document_unique_component_name_version"
+
 
 class Document(models.Model):
     """Represents a document artifact associated with a component.
@@ -64,6 +68,16 @@ class Document(models.Model):
             models.Index(fields=["created_at"]),
             models.Index(fields=["document_type"]),
             models.Index(fields=["component", "created_at"]),
+        ]
+        constraints = [
+            # A document is identified by its name and its version, the same way an
+            # SBOM is identified by version/format/qualifiers. Re-uploading "foobar"
+            # at version "1.0" is a duplicate, not a second artifact; a different
+            # document (a README beside a LICENSE) may of course share a version.
+            models.UniqueConstraint(
+                fields=["component", "name", "version"],
+                name=DOCUMENT_UNIQUE_CONSTRAINT,
+            ),
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
