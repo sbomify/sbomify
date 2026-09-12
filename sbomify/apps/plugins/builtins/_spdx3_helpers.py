@@ -42,6 +42,7 @@ _AGENT_TYPES = frozenset({"Person", "Organization", "SoftwareAgent", "Agent"})
 
 _UNIQUE_ID_TYPES = frozenset({"packageUrl", "packageURL", "purl", "cpe22", "cpe23", "swid", "gitoid", "swhid"})
 _PURL_ID_TYPES = frozenset({"packageUrl", "packageURL", "purl"})
+_CPE_ID_TYPES = frozenset({"cpe23", "cpe23Type"})
 
 
 def is_spdx3(sbom_data: dict[str, Any]) -> bool:
@@ -116,6 +117,20 @@ def spdx3_package_purl(package: dict[str, Any]) -> str | None:
             if identifier:
                 return str(identifier)
     return None
+
+
+def spdx3_package_cpes(package: dict[str, Any]) -> list[str]:
+    """The package's CPE 2.3 identifiers, in document order.
+
+    A second identity beside the purl rather than a fallback for it. Yocto's
+    release SBOMs name every package this way and carry no purls at all, so for
+    those documents this is the only identity there is.
+    """
+    return [
+        str(identifier)
+        for ext_id in iter_spdx3_external_identifiers(package)
+        if ext_id.get("externalIdentifierType") in _CPE_ID_TYPES and (identifier := ext_id.get("identifier"))
+    ]
 
 
 def has_spdx3_supplier(supplier_refs: list[Any], agents: dict[str, dict[str, Any]]) -> bool:
