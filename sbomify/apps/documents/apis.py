@@ -43,6 +43,10 @@ def create_document(
     try:
         # Extract component_id from various sources
         actual_component_id = None
+        # Bound for both input paths: only the multipart branch carries a
+        # subcategory field, and a raw-body compliance upload still reaches the
+        # document_dict assembly below.
+        subcategory_value = None
 
         if document_file:
             # File upload scenario - extract form data from request.POST
@@ -70,8 +74,9 @@ def create_document(
             # Check for known subcategory fields
             compliance_subcategory = request.POST.get("compliance_subcategory", "") or None
             # Determine which subcategory to use based on document type
-            subcategory_value = None
             if form_document_type == Document.DocumentType.COMPLIANCE and compliance_subcategory:
+                if compliance_subcategory not in Document.ComplianceSubcategory.values:
+                    return 400, {"detail": "Invalid compliance subcategory"}
                 subcategory_value = compliance_subcategory
 
             # Remove file extension if name not provided

@@ -69,6 +69,26 @@ PLAN_FEATURES = {
 }
 
 
+# The built-in control catalogues offered as tiles on the Controls tab.
+# ``catalog_service`` discovers the catalogues themselves by globbing
+# ``controls/data``, so this list is the one place that has to be kept in
+# step by hand; ``test_every_builtin_catalogue_has_a_tile_in_settings``
+# fails if it drifts. Entries are (slug, catalogue name, tile label, icon).
+BUILTIN_CATALOG_TILES: list[tuple[str, str, str, str]] = [
+    ("soc2-type2", "SOC 2 Type II", "SOC 2 Type II", "fa-shield-halved"),
+    ("iso27001-2022", "ISO 27001:2022", "ISO 27001", "fa-certificate"),
+    ("nist-csf-2", "NIST Cybersecurity Framework 2.0", "NIST CSF 2.0", "fa-landmark"),
+    ("cis-controls-v8", "CIS Controls v8", "CIS v8", "fa-lock"),
+    ("hipaa", "HIPAA", "HIPAA", "fa-heart-pulse"),
+    ("gdpr", "GDPR", "GDPR", "fa-user-shield"),
+    ("cmmc-2", "CMMC 2.0", "CMMC 2.0", "fa-jet-fighter"),
+    ("csa-ccm-v4", "CSA CCM", "CSA CCM", "fa-cloud"),
+    ("pci-dss-v4", "PCI DSS", "PCI DSS", "fa-credit-card"),
+    ("nist-800-53-r5", "NIST SP 800-53", "NIST 800-53", "fa-building-columns"),
+    ("nist-800-171-r2", "NIST SP 800-171", "NIST 800-171", "fa-building-lock"),
+]
+
+
 def _get_bulk_statuses() -> list[tuple[str, str]]:
     """Return bulk status choices, importing from controls app if available."""
     try:
@@ -369,18 +389,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 if team_obj
                 else [],
                 "bulk_statuses": _get_bulk_statuses(),
-                "available_catalogs": [
-                    ("soc2-type2", "SOC 2 Type II", "SOC 2 Type II", "fa-shield-halved"),
-                    ("iso27001-2022", "ISO 27001:2022", "ISO 27001", "fa-certificate"),
-                    ("nist-csf-2", "NIST Cybersecurity Framework 2.0", "NIST CSF 2.0", "fa-landmark"),
-                    ("cis-controls-v8", "CIS Controls v8", "CIS v8", "fa-lock"),
-                    ("hipaa", "HIPAA", "HIPAA", "fa-heart-pulse"),
-                    ("gdpr", "GDPR", "GDPR", "fa-user-shield"),
-                    ("cmmc-2", "CMMC 2.0", "CMMC 2.0", "fa-jet-fighter"),
-                    ("csa-ccm-v4", "CSA CCM", "CSA CCM", "fa-cloud"),
-                    ("pci-dss-v4", "PCI DSS", "PCI DSS", "fa-credit-card"),
-                    ("nist-800-53-r5", "NIST SP 800-53", "NIST 800-53", "fa-building-columns"),
-                ],
+                "available_catalogs": BUILTIN_CATALOG_TILES,
                 # ``role`` above is the same live lookup against the same row;
                 # re-querying only asked the database a question it had already
                 # answered.
@@ -613,8 +622,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Find all previous NDA documents for this component to determine next version
             previous_ndas = Document.objects.filter(
                 component=company_component,
-                document_type=Document.DocumentType.COMPLIANCE,
-                compliance_subcategory=Document.ComplianceSubcategory.NDA,
+                document_type=Document.DocumentType.NDA,
             ).order_by("-created_at")
 
             # Calculate next version number
@@ -656,8 +664,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 document_filename=filename,
                 component=company_component,
                 source="manual_upload",
-                document_type=Document.DocumentType.COMPLIANCE,
-                compliance_subcategory=Document.ComplianceSubcategory.NDA,
+                document_type=Document.DocumentType.NDA,
                 content_hash=content_hash,
                 content_type=uploaded_file.content_type,
                 file_size=uploaded_file.size,

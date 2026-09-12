@@ -139,6 +139,38 @@ def test_create_document_raw_data_success(
 
 
 @pytest.mark.django_db
+def test_create_document_raw_data_accepts_a_compliance_document(
+    mocker: MockerFixture,
+    authenticated_api_client,
+    sample_document_component,
+):
+    """A raw-body compliance upload is a valid request, so it is not a 400.
+
+    ``subcategory_value`` used to be bound only in the multipart branch, so
+    this request hit an unbound local that the blanket ``except Exception``
+    reported as "Invalid request" — a crash wearing a validation error.
+    """
+    create_documents_api_mock(mocker, scenario="success")
+
+    client, access_token = authenticated_api_client
+    url = reverse("api-1:create_document") + (
+        f"?component_id={sample_document_component.id}&name=ISO Report&version=1.0&document_type=compliance"
+    )
+    response = client.post(
+        url,
+        b"report content",
+        content_type="application/octet-stream",
+        **get_api_headers(access_token),
+    )
+
+    assert response.status_code == 201
+    document = Document.objects.get(id=json.loads(response.content)["id"])
+    assert document.document_type == Document.DocumentType.COMPLIANCE
+    # Raw-body uploads carry no subcategory field, so the tag is set later.
+    assert document.compliance_subcategory is None
+
+
+@pytest.mark.django_db
 def test_create_document_raw_data_missing_name(
     authenticated_api_client,
     sample_document_component,
@@ -823,3 +855,149 @@ def test_get_document_denied_for_publish_only_token(sample_document):
     url = reverse("api-1:get_document", kwargs={"document_id": sample_document.id})
     response = Client().get(url, HTTP_AUTHORIZATION=f"Bearer {token_str}")
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("payload", "expected", "status"),
+    [
+        ({"compliance_subcategory": "soc2-type1"}, "soc2-type1", 200),
+        ({"compliance_subcategory": "soc2-type2"}, "soc2-type2", 200),
+        ({"compliance_subcategory": ""}, None, 200),
+        ({"compliance_subcategory": None}, None, 200),
+        ({"name": "Renamed"}, "iso27001", 200),
+        ({"document_type": "manual", "compliance_subcategory": "soc2-type2"}, None, 200),
+        ({"compliance_subcategory": "soc2"}, "iso27001", 400),
+        ({"compliance_subcategory": "unknown"}, "iso27001", 400),
+    ],
+)
+def test_patch_compliance_subcategory(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    sample_document: Document,
+    payload: dict[str, str | None],
+    expected: str | None,
+    status: int,
+) -> None:
+    sample_document.document_type = Document.DocumentType.COMPLIANCE
+    sample_document.compliance_subcategory = Document.ComplianceSubcategory.ISO27001
+    sample_document.save()
+    client.force_login(sample_user)
+
+    response = client.patch(
+        reverse("api-1:update_document", kwargs={"document_id": sample_document.id}),
+        json.dumps(payload),
+        content_type="application/json",
+    )
+
+    assert response.status_code == status
+    sample_document.refresh_from_db()
+    assert sample_document.compliance_subcategory == expected
+
+    # A caller that just set the tag has to be able to see it, so the success
+    # response carries it rather than making them re-read the document.
+    if status == 200:
+        assert response.json()["compliance_subcategory"] == expected
+        detail = client.get(reverse("api-1:get_document", kwargs={"document_id": sample_document.id}))
+        assert detail.json()["compliance_subcategory"] == expected
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("subcategory", ["soc2", "unknown"])
+def test_upload_rejects_retired_or_unknown_compliance_subcategory(
+    mocker: MockerFixture,
+    client: Client,
+    sample_user: AbstractBaseUser,
+    sample_document_component: Component,
+    subcategory: str,
+) -> None:
+    create_documents_api_mock(mocker, scenario="success")
+    client.force_login(sample_user)
+    before = Document.objects.count()
+
+    response = client.post(
+        reverse("api-1:create_document"),
+        {
+            "document_file": SimpleUploadedFile("report.pdf", b"report", content_type="application/pdf"),
+            "component_id": sample_document_component.id,
+            "document_type": Document.DocumentType.COMPLIANCE,
+            "compliance_subcategory": subcategory,
+        },
+    )
+
+    assert response.status_code == 400
+    assert Document.objects.count() == before
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("document_type", "subcategory", "expected"),
+    [
+        ("compliance", "soc2-type1", "soc2-type1"),
+        ("compliance", "soc2-type2", "soc2-type2"),
+        ("compliance", "", None),
+        ("manual", "", None),
+    ],
+)
+def test_document_table_edit_persists_and_clears_subcategory(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    sample_document: Document,
+    document_type: str,
+    subcategory: str,
+    expected: str | None,
+) -> None:
+    sample_document.document_type = Document.DocumentType.COMPLIANCE
+    sample_document.compliance_subcategory = Document.ComplianceSubcategory.ISO27001
+    sample_document.save()
+    client.force_login(sample_user)
+    url = reverse("documents:documents_table", kwargs={"component_id": sample_document.component_id})
+
+    page = client.get(url)
+    assert page.status_code == 200
+    assert b"editForm.compliance_subcategory" in page.content
+    assert b"soc2-type1" in page.content
+    assert b"soc2-type2" in page.content
+
+    response = client.post(
+        url,
+        {
+            "_method": "PATCH",
+            "document_id": sample_document.id,
+            "name": sample_document.name,
+            "version": sample_document.version,
+            "document_type": document_type,
+            "compliance_subcategory": subcategory,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "refreshDocumentsTable" in response.headers.get("HX-Trigger", "")
+    sample_document.refresh_from_db()
+    assert sample_document.document_type == document_type
+    assert sample_document.compliance_subcategory == expected
+
+
+def test_the_upload_form_offers_every_document_type() -> None:
+    """The upload form's options are hand-written; the edit modal's are not.
+
+    ``edit_document_modal`` loops ``DocumentType.choices``, so it picks up a new
+    type for free. The upload form spells its options out inside optgroups the
+    enum has no notion of, so adding a type silently leaves it unselectable on
+    the way in — which is what happened to NDA, whose only route was to upload
+    it as Compliance and emit ``certification-report`` until someone edited it.
+    """
+    from pathlib import Path
+
+    from django.conf import settings
+
+    from sbomify.apps.documents.models import Document
+
+    template = (
+        Path(settings.BASE_DIR)
+        / "sbomify/apps/documents/templates/documents/components/document_upload.html.j2"
+    ).read_text(encoding="utf-8")
+
+    missing = [value for value, _label in Document.DocumentType.choices if f'value="{value}"' not in template]
+
+    assert not missing, f"document types with no option in the upload form: {missing}"

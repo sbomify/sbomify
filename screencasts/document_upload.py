@@ -54,7 +54,7 @@ def _upload_document(page: Page, pdf_path: str) -> None:
     pace(page, 300)
     hover_and_click(page, subcat_select)
     pace(page, 200)
-    subcat_select.select_option("soc2")
+    subcat_select.select_option("soc2-type2")
     pace(page, 600)
 
     # Fill description

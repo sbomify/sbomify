@@ -30,8 +30,7 @@ def original_nda_document(team_with_business_plan):
     document = Document.objects.create(
         name="Company NDA v1.0",
         component=component,
-        document_type=Document.DocumentType.COMPLIANCE,
-        compliance_subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
         document_filename="nda_v1.pdf",
         content_type="application/pdf",
         file_size=len(content),
@@ -55,8 +54,7 @@ def updated_nda_document(team_with_business_plan, original_nda_document):
     document = Document.objects.create(
         name="Company NDA v2.0",
         component=original_nda_document.component,
-        document_type=Document.DocumentType.COMPLIANCE,
-        compliance_subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
         document_filename="nda_v2.pdf",
         content_type="application/pdf",
         file_size=len(content),
@@ -319,8 +317,7 @@ class TestNDAReSigning:
         nda_v3 = Document.objects.create(
             name="Company NDA v3.0",
             component=original_nda_document.component,
-            document_type=Document.DocumentType.COMPLIANCE,
-            compliance_subcategory=Document.ComplianceSubcategory.NDA,
+            document_type=Document.DocumentType.NDA,
             document_filename="nda_v3.pdf",
             content_type="application/pdf",
             file_size=len(content_v3),
