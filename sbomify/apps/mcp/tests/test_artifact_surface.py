@@ -232,9 +232,7 @@ async def test_the_risk_report_counts_every_bom_kind_the_release_ships(
     def setup() -> str:
         release = Release.objects.create(product=product_in_bound_workspace, name="v1", version="1")
         for index, bom_type in enumerate((SBOM.BomType.SBOM, SBOM.BomType.CBOM, SBOM.BomType.VEX)):
-            artifact = _artifact(
-                component_in_bound_workspace, f"the-{bom_type}", bom_type, version=f"1.0.{index}"
-            )
+            artifact = _artifact(component_in_bound_workspace, f"the-{bom_type}", bom_type, version=f"1.0.{index}")
             ReleaseArtifact.objects.create(release=release, sbom=artifact)
         return release.id
 
@@ -247,3 +245,57 @@ async def test_the_risk_report_counts_every_bom_kind_the_release_ships(
     # The scan fields stay SBOM-only: a VEX or CBOM row can never earn a
     # security run, so counting one would report it forever unscanned.
     assert report["unscanned_sboms"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_detail_tool_cuts_its_collections_rather_than_tripping_the_cap(
+    mcp_owner, make_token, product_in_bound_workspace
+):
+    """A detail tool takes no page argument, so an unbounded collection was a dead end.
+
+    Over the response cap, `enforce_response_size` tells the agent to narrow
+    the query with an argument `get_product` does not have. Cutting the list
+    and saying so leaves it an answer plus somewhere to go for the rest.
+    """
+    from sbomify.apps.core.models import Component
+    from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+
+    _, bound, _ = mcp_owner
+
+    def setup() -> None:
+        for i in range(DETAIL_COLLECTION_LIMIT + 5):
+            component = Component.objects.create(name=f"component-{i:03d}", team=bound)
+            product_in_bound_workspace.components.add(component)
+
+    await sync_to_async(setup)()
+    token = await sync_to_async(make_token)(["product:read"])
+
+    detail = structured(await _call(token, "get_product", product_id=product_in_bound_workspace.id))
+
+    components = detail["components"]
+    assert len(components["items"]) == DETAIL_COLLECTION_LIMIT
+    assert components["total"] == DETAIL_COLLECTION_LIMIT + 5
+    assert components["truncated"] is True
+    assert product_in_bound_workspace.id in components["more_with"], "name the tool that can page the rest"
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_small_product_is_not_marked_truncated(mcp_owner, make_token, product_in_bound_workspace):
+    """The flag has to mean something, so it must be absent on a normal answer."""
+    from sbomify.apps.core.models import Component
+
+    _, bound, _ = mcp_owner
+
+    def setup() -> None:
+        product_in_bound_workspace.components.add(Component.objects.create(name="only-one", team=bound))
+
+    await sync_to_async(setup)()
+    token = await sync_to_async(make_token)(["product:read"])
+
+    detail = structured(await _call(token, "get_product", product_id=product_in_bound_workspace.id))
+
+    assert detail["components"]["total"] == 1
+    assert "truncated" not in detail["components"]
+    assert "more_with" not in detail["components"]

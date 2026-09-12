@@ -3,7 +3,7 @@
 sbomify serves a [Model Context Protocol](https://modelcontextprotocol.io) endpoint at `/mcp` so AI
 agents can query a workspace and publish artifacts using scoped personal access tokens.
 
-**Why is it built this way?** See [ADR-0008](ADR/0008-mcp-server.md).
+**Why is it built this way?** See [ADR-0009](ADR/0009-mcp-server.md).
 
 Connecting a client is below. The rest of this page is the operator reference: the settings that
 govern the endpoint, and what to do when it misbehaves. Those knobs are read by code in this

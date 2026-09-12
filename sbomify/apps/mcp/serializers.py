@@ -49,6 +49,28 @@ def paginated(items: list[Any], *, page: int, page_size: int, total: int) -> dic
     }
 
 
+def capped(items: list[Any], *, total: int, limit: int, more_with: str | None = None) -> dict[str, Any]:
+    """A bounded slice of a collection the caller cannot page through.
+
+    A detail tool folds several collections into one answer, so it takes no
+    page arguments. Returning them whole meant a large enough product or
+    release tripped ``enforce_response_size``, whose message tells the agent to
+    "narrow the query" with an argument the tool does not have: a dead end
+    rather than something to retry differently.
+
+    So the collection is cut instead, and says that it was, naming the tool
+    that can page through the rest. Silence would be worse than the error it
+    replaces: a truncated list that looks complete is a wrong answer, where a
+    refusal was only an unhelpful one.
+    """
+    data: dict[str, Any] = {"items": items, "total": total}
+    if total > limit:
+        data["truncated"] = True
+        if more_with:
+            data["more_with"] = more_with
+    return data
+
+
 def page_queryset(queryset: QuerySet[Any], page: int, page_size: int) -> tuple[list[Any], int]:
     """Slice ``queryset`` for ``page``, returning the rows and the total count."""
     total = queryset.count()

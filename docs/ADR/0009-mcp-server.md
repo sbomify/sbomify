@@ -1,4 +1,4 @@
-# 8. MCP Server Mounted in the Django App
+# 9. MCP Server Mounted in the Django App
 
 Date: 2026-07-27
 
