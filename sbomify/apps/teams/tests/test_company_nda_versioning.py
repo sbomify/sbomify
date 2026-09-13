@@ -66,8 +66,7 @@ class TestCompanyNdaVersioning:
             document_filename="other.bin",
             component=component,
             source="manual_upload",
-            document_type=Document.DocumentType.COMPLIANCE,
-            compliance_subcategory=Document.ComplianceSubcategory.NDA,
+            document_type=Document.DocumentType.NDA,
         )
         Document.objects.filter(version="1.1").update(created_at=Document.objects.get(version="1.0").created_at)
 

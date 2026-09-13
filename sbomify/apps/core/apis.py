@@ -5008,6 +5008,12 @@ def list_component_documents(
                         "document_type": document.document_type,
                         "document_type_display": document.get_document_type_display(),
                         "compliance_subcategory": document.compliance_subcategory or "",
+                        # The documents table's edit form round-trips this field.
+                        # Without it the textarea bound to `undefined`, posted an
+                        # empty string, and every save silently cleared the
+                        # description — harmless only while the modal's HTMX form
+                        # was never wired at all.
+                        "description": document.description,
                         "content_type": document.content_type,
                         "file_size": document.file_size,
                         "version": document.version,

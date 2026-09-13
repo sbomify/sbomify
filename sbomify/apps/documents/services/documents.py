@@ -31,6 +31,7 @@ def serialize_document(document: Document) -> dict[str, Any]:
         "component_id": document.component.id,
         "component_name": document.component.name,
         "document_type": document.document_type,
+        "compliance_subcategory": document.compliance_subcategory or None,
         "description": document.description,
         "content_type": document.content_type,
         "file_size": document.file_size,
@@ -78,6 +79,11 @@ def update_document_metadata(
     if not can(request, "document:manage", document.component):
         return ServiceResult.failure("You don't have permission to update this document", status_code=403)
 
+    # Payload validation before the collision lookup: an unusable subcategory is
+    # answerable without asking the database anything.
+    if payload.compliance_subcategory and payload.compliance_subcategory not in Document.ComplianceSubcategory.values:
+        return ServiceResult.failure("Invalid compliance subcategory", status_code=400)
+
     # An edit can collide just as an upload can — renaming a document onto a
     # name/version pair the component already holds is the same duplicate.
     new_name = payload.name if payload.name is not None else document.name
@@ -97,12 +103,12 @@ def update_document_metadata(
     if payload.document_type is not None:
         document.document_type = payload.document_type
         update_fields.append("document_type")
-        # Clear compliance_subcategory if document_type is not compliance
-        if payload.document_type != Document.DocumentType.COMPLIANCE:
+    if document.document_type != Document.DocumentType.COMPLIANCE:
+        if payload.document_type is not None or "compliance_subcategory" in payload.model_fields_set:
             document.compliance_subcategory = None
             update_fields.append("compliance_subcategory")
-    if payload.compliance_subcategory is not None:
-        document.compliance_subcategory = payload.compliance_subcategory if payload.compliance_subcategory else None
+    elif "compliance_subcategory" in payload.model_fields_set:
+        document.compliance_subcategory = payload.compliance_subcategory or None
         update_fields.append("compliance_subcategory")
     if payload.description is not None:
         document.description = payload.description
