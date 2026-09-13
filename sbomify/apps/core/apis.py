@@ -33,6 +33,7 @@ from sbomify.apps.core.queries import (
     optimize_product_queryset,
 )
 from sbomify.apps.core.services.validation_response import validation_error_response
+from sbomify.apps.core.url_utils import get_component_public_slug
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
 from sbomify.apps.sboms.freshness import with_latest_sbom
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
@@ -274,7 +275,7 @@ def _build_item_base(
     return {
         "id": item.id,
         "name": item.name,
-        "slug": item.slug,
+        "slug": get_component_public_slug(item, request) if isinstance(item, Component) else item.slug,
         "team_id": str(item.team_id),
         "created_at": item.created_at.isoformat(),
         "has_crud_permissions": (
@@ -307,7 +308,7 @@ def _build_product_response(
         {
             "id": component.id,
             "name": component.name,
-            "slug": component.slug,
+            "slug": get_component_public_slug(component, request),
             "visibility": component.visibility,
             "is_global": component.is_global,
             "component_type": component.component_type,
@@ -3862,7 +3863,7 @@ def list_release_artifacts(
                         "bom_type": artifact.sbom.bom_type,
                         "document_type": None,
                         "document_version": None,
-                        "component_slug": artifact.sbom.component.slug,
+                        "component_slug": get_component_public_slug(artifact.sbom.component, request),
                     }
                 )
             elif artifact.document:
@@ -3879,7 +3880,7 @@ def list_release_artifacts(
                         "sbom_version": None,
                         "document_type": artifact.document.document_type,
                         "document_version": artifact.document.version or "",
-                        "component_slug": artifact.document.component.slug,
+                        "component_slug": get_component_public_slug(artifact.document.component, request),
                     }
                 )
 
@@ -4072,7 +4073,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "sbom_version": artifact.sbom.version or "",
                 "document_type": None,
                 "document_version": None,
-                "component_slug": artifact.sbom.component.slug,
+                "component_slug": get_component_public_slug(artifact.sbom.component, request),
             }
         except Exception:
             log.exception("Error processing SBOM")
@@ -4119,7 +4120,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "sbom_version": None,
                 "document_type": artifact.document.document_type,
                 "document_version": artifact.document.version or "",
-                "component_slug": artifact.document.component.slug,
+                "component_slug": get_component_public_slug(artifact.document.component, request),
             }
         except Exception:
             log.exception("Error processing document")

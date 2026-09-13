@@ -13,7 +13,7 @@ from typing import Any
 from django import template
 from django.urls import NoReverseMatch, reverse
 
-from sbomify.apps.core.url_utils import get_public_path
+from sbomify.apps.core.url_utils import get_component_public_slug, get_public_path
 
 logger = logging.getLogger(__name__)
 
@@ -323,6 +323,8 @@ def resource_public_absolute_url(context: Any, resource_type: Any, resource: Any
     # Get resource identifiers
     resource_id = getattr(resource, "id", None)
     resource_slug = getattr(resource, "slug", None)
+    if resource_type == "component" and context.get("request") is not None:
+        resource_slug = get_component_public_slug(resource, context["request"])
 
     if not resource_id:
         return ""

@@ -29,8 +29,13 @@ def move_nda_back_into_compliance(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    # Two 0015s landed independently — the certification subcategories on this
+    # branch, the name/version uniqueness constraint on master. Depending on
+    # both makes this the single leaf rather than adding a merge migration for
+    # two changes that never touch the same columns.
     dependencies = [
         ("documents", "0015_certification_subcategories"),
+        ("documents", "0015_document_unique_component_name_version"),
     ]
 
     operations = [

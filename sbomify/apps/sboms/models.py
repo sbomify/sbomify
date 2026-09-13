@@ -691,13 +691,7 @@ class Component(models.Model):
 
     @property
     def slug(self) -> str:
-        """Generate a URL-safe slug from the component name.
-
-        Note: Computed property - see Product.slug for rationale.
-
-        Returns:
-            URL-safe slug string derived from the component name.
-        """
+        """Generate a URL-safe slug from the component name without database access."""
         return slugify(self.name, allow_unicode=True)
 
     @property
