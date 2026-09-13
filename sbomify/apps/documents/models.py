@@ -268,7 +268,7 @@ class Document(models.Model):
         to the model cannot ship with a missing badge.
 
         Returns:
-            Badge label string (e.g., "SOC 2 Type II", "ISO 27001", "NDA") or None.
+            Badge label string (e.g., "SOC 2 Type II", "ISO 27001") or None.
         """
         if not self.compliance_subcategory:
             return None
@@ -287,6 +287,19 @@ class Document(models.Model):
         if not self.content_hash:
             return None
         return self.content_hash == expected_hash
+
+
+# The "Legal and Compliance" block of DocumentType, as a value rather than a
+# comment someone has to notice. Anything counting or filtering "the legal
+# paperwork" wants all four: the admin dashboard's compliance metric spelled
+# three of them out and silently stopped counting NDAs the moment they moved
+# out of COMPLIANCE into their own type.
+LEGAL_DOCUMENT_TYPES: tuple[str, ...] = (
+    Document.DocumentType.LICENSE,
+    Document.DocumentType.NDA,
+    Document.DocumentType.COMPLIANCE,
+    Document.DocumentType.EVIDENCE,
+)
 
 
 # Import access models to ensure they are discovered by Django when using --nomigrations
