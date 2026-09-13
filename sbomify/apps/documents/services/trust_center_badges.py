@@ -27,9 +27,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.http import HttpRequest
 from django.templatetags.static import static
 
 from sbomify.apps.core.models import Component
+from sbomify.apps.core.url_utils import get_component_public_slug
 from sbomify.apps.documents.models import Document
 from sbomify.apps.teams.models import Team
 
@@ -76,11 +78,13 @@ def badge_seal_url(subcategory: str) -> str:
     return static(BADGE_CATALOGUE[subcategory]["image"])
 
 
-def public_certification_badges(team: Team) -> list[dict[str, Any]]:
+def public_certification_badges(team: Team, request: HttpRequest) -> list[dict[str, Any]]:
     """Badges this workspace has earned, in catalogue order.
 
     Args:
         team: The workspace whose trust center is being rendered.
+        request: Needed to resolve each component's public identifier, which is
+            a per-request decision rather than a property of the component.
 
     Returns:
         One entry per certification, each carrying what the badge shows and
@@ -114,7 +118,13 @@ def public_certification_badges(team: Team) -> list[dict[str, Any]]:
             "summary": BADGE_CATALOGUE[subcategory]["summary"],
             "image": badge_seal_url(subcategory),
             "component_id": document.component.id,
-            "component_slug": document.component.slug,
+            # Not ``component.slug``: slugs are derived from names and are not
+            # unique per workspace, so a gated component can share one with a
+            # public component that wins the tie in ``resolve_component_identifier``.
+            # The helper hands back an id in that case, and for a name that
+            # slugifies to nothing. The Compliance artifacts section on this same
+            # page already goes through it.
+            "component_slug": get_component_public_slug(document.component, request),
             "document_name": document.name,
             "version": document.version,
             # The one thing the tile says that is not about the certification

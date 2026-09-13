@@ -12,7 +12,15 @@
         associated with it by id, which is how a dialog keeps one submit for a
         body that scrolls under the 90vh cap.
     {% endcomment %}
-    <c-modal id="edit-document-modal" show="open" title="Edit Document">
+    {% comment %}
+        teleport="false" for the same reason the delete confirmation needs it
+        (12d8f187): HTMX wires hx-* by walking the DOM at swap time, and
+        x-teleport keeps the dialog inside a <template> until Alpine moves it,
+        which is after every pass HTMX makes. Teleported, this form's hx-post is
+        never wired and "Save Changes" falls back to a native GET that persists
+        nothing — silently, since the dialog still closes.
+    {% endcomment %}
+    <c-modal id="edit-document-modal" show="open" title="Edit Document" teleport="false">
     <form id="edit-document-form"
           hx-post="{% url 'documents:documents_table' component_id %}"
           hx-disabled-elt="find button[type='submit']"

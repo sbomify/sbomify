@@ -210,7 +210,7 @@ class WorkspacePublicView(View):
         # Certifications, earned from published company-wide compliance
         # documents. Same for every visitor: a badge says the workspace holds
         # the certification, and the artifact behind it keeps its own gate.
-        certifications = public_certification_badges(team)
+        certifications = public_certification_badges(team, request)
 
         return render(
             request,

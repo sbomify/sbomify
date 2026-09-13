@@ -11,6 +11,7 @@ from importlib import import_module
 from pathlib import Path
 
 import pytest
+from django.http import HttpRequest
 from pytest_mock import MockerFixture
 
 from sbomify.apps.core.models import Component
@@ -64,7 +65,7 @@ def test_a_published_company_wide_report_earns_its_badge(public_team: Team) -> N
     component = _component(public_team)
     _document(component)
 
-    badges = public_certification_badges(public_team)
+    badges = public_certification_badges(public_team, HttpRequest())
 
     assert [badge["label"] for badge in badges] == ["ISO 27001"]
     assert badges[0]["component_id"] == component.id
@@ -77,21 +78,21 @@ def test_a_component_with_no_file_on_it_claims_nothing(public_team: Team) -> Non
     """The easy way to claim a certification you do not hold."""
     _document(_component(public_team), filename="")
 
-    assert public_certification_badges(public_team) == []
+    assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
 def test_a_product_level_report_is_not_a_company_certification(public_team: Team) -> None:
     _document(_component(public_team, is_global=False))
 
-    assert public_certification_badges(public_team) == []
+    assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
 def test_a_private_component_stays_off_the_trust_center(public_team: Team) -> None:
     _document(_component(public_team, visibility=Component.Visibility.PRIVATE))
 
-    assert public_certification_badges(public_team) == []
+    assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
@@ -99,7 +100,7 @@ def test_a_gated_report_still_earns_the_badge(public_team: Team) -> None:
     """The gate is on the download, not on the fact that the workspace holds it."""
     _document(_component(public_team, visibility=Component.Visibility.GATED))
 
-    badges = public_certification_badges(public_team)
+    badges = public_certification_badges(public_team, HttpRequest())
 
     assert [badge["label"] for badge in badges] == ["ISO 27001"]
     assert badges[0]["note"] == "Report available on request"
@@ -122,14 +123,14 @@ def test_an_nda_is_not_a_certification(public_team: Team) -> None:
         name="Mutual non-disclosure agreement",
     )
 
-    assert public_certification_badges(public_team) == []
+    assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
 def test_a_compliance_document_with_no_subcategory_earns_nothing(public_team: Team) -> None:
     _document(_component(public_team), subcategory=None)
 
-    assert public_certification_badges(public_team) == []
+    assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
@@ -137,7 +138,7 @@ def test_a_non_compliance_document_earns_nothing(public_team: Team) -> None:
     """document_type and subcategory are stored separately, so both are checked."""
     _document(_component(public_team), document_type=Document.DocumentType.REPORT)
 
-    assert public_certification_badges(public_team) == []
+    assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
@@ -153,7 +154,7 @@ def test_soc2_type_i_and_type_ii_are_separate_badges(public_team: Team) -> None:
         filename="soc2-type2.pdf",
     )
 
-    badges = public_certification_badges(public_team)
+    badges = public_certification_badges(public_team, HttpRequest())
 
     # Catalogue order: the strongest assurance reads first.
     assert [badge["label"] for badge in badges] == ["SOC 2 Type II", "SOC 2 Type I"]
@@ -168,7 +169,7 @@ def test_cra_conformity_earns_its_badge(public_team: Team) -> None:
         filename="cra-declaration-of-conformity.pdf",
     )
 
-    badges = public_certification_badges(public_team)
+    badges = public_certification_badges(public_team, HttpRequest())
 
     assert [badge["label"] for badge in badges] == ["CRA"]
     assert badges[0]["image"].endswith("cra.svg")
@@ -181,7 +182,7 @@ def test_every_year_of_a_report_shows_one_badge_pointing_at_the_newest(public_te
     newer = _component(public_team, name="ISO 27001 2026")
     _document(newer, version="2026")
 
-    badges = public_certification_badges(public_team)
+    badges = public_certification_badges(public_team, HttpRequest())
 
     assert len(badges) == 1
     assert badges[0]["component_id"] == newer.id
@@ -193,7 +194,7 @@ def test_another_workspace_report_does_not_leak(public_team: Team) -> None:
     other = Team.objects.create(name="Other Workspace", is_public=True)
     _document(_component(other))
 
-    assert public_certification_badges(public_team) == []
+    assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
@@ -318,7 +319,7 @@ def test_re_seeding_tags_a_certificate_seeded_before_subcategories(public_team: 
 
     stale.refresh_from_db()
     assert stale.compliance_subcategory == Document.ComplianceSubcategory.ISO27001
-    assert [badge["label"] for badge in public_certification_badges(public_team)] == ["ISO 27001"]
+    assert [badge["label"] for badge in public_certification_badges(public_team, HttpRequest())] == ["ISO 27001"]
 
 
 @pytest.mark.django_db
@@ -385,3 +386,24 @@ def test_the_migration_moves_the_nda_out_of_compliance_and_back(public_team: Tea
     nda.refresh_from_db()
     assert nda.document_type == Document.DocumentType.COMPLIANCE
     assert nda.compliance_subcategory == "nda"
+
+
+@pytest.mark.django_db
+def test_a_gated_certification_does_not_borrow_a_public_component_slug(public_team: Team) -> None:
+    """Slugs are derived from names and are not unique within a workspace.
+
+    "Foo Bar" and "Foo-Bar" slugify to the same thing, and
+    ``resolve_component_identifier`` gives the tie to the public component. A
+    badge linking by raw slug would therefore point a reader at a different
+    component entirely, so the gated one is linked by id instead.
+    """
+    public = _component(public_team, name="ISO 27001")
+    gated = _component(public_team, name="ISO-27001", visibility=Component.Visibility.GATED)
+    _document(gated)
+
+    badges = public_certification_badges(public_team, HttpRequest())
+
+    assert len(badges) == 1
+    assert badges[0]["component_id"] == gated.id
+    assert badges[0]["component_slug"] == gated.id, "the gated component must not take the shared slug"
+    assert public.slug == gated.slug, "precondition: the two names share a slug"

@@ -1001,3 +1001,62 @@ def test_the_upload_form_offers_every_document_type() -> None:
     missing = [value for value, _label in Document.DocumentType.choices if f'value="{value}"' not in template]
 
     assert not missing, f"document types with no option in the upload form: {missing}"
+
+
+@pytest.mark.django_db
+def test_the_documents_list_carries_the_description_the_edit_form_round_trips(
+    client: Client, sample_user: AbstractBaseUser, sample_document: Document
+) -> None:
+    """The edit form reads this field and posts it straight back.
+
+    It was absent from the payload, so the textarea bound to `undefined`,
+    submitted an empty string, and every save cleared the description. That was
+    invisible only because the modal's HTMX form was never wired, so no save
+    reached the server at all.
+    """
+    sample_document.description = "The 2026 surveillance audit report."
+    sample_document.save()
+    client.force_login(sample_user)
+
+    response = client.get(
+        reverse("api-1:list_component_documents", kwargs={"component_id": sample_document.component_id})
+    )
+
+    assert response.status_code == 200
+    documents = [item["document"] for item in response.json()["items"]]
+    assert [d["description"] for d in documents if d["id"] == str(sample_document.id)] == [
+        "The 2026 surveillance audit report."
+    ]
+
+
+@pytest.mark.django_db
+def test_the_edit_modal_is_not_teleported_so_htmx_can_wire_its_form(
+    client: Client, sample_user: AbstractBaseUser, sample_document: Document
+) -> None:
+    """A teleported dialog's hx-post is never wired, and the failure is silent.
+
+    HTMX binds hx-* by walking the DOM at swap time; x-teleport keeps the dialog
+    in a <template> until Alpine moves it, which is after every pass HTMX makes.
+    The form then falls back to a native GET, the dialog still closes, and
+    nothing persists — the same bug 12d8f187 fixed for the delete confirmation.
+    Request-level tests post to the endpoint directly and cannot see it.
+    """
+    client.force_login(sample_user)
+    url = reverse("documents:documents_table", kwargs={"component_id": sample_document.component_id})
+
+    page = client.get(url)
+
+    assert page.status_code == 200
+    body = page.content.decode()
+    assert 'id="edit-document-form"' in body, "precondition: the edit form is on the page"
+
+    # Other dialogs on this page teleport legitimately, so count nothing
+    # globally: ask whether the *edit* dialog's own wrapper is still open when
+    # its markup begins.
+    before_modal = body[: body.index('id="edit-document-modal"')]
+    last_open = before_modal.rfind('<template x-teleport="body">')
+    last_close = before_modal.rfind("</template>")
+
+    assert last_open < last_close, (
+        "the edit dialog is inside a teleported <template>, where HTMX cannot wire its hx-post"
+    )
