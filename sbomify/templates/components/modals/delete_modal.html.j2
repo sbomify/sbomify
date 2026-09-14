@@ -11,13 +11,22 @@
     The actions end on the right, where the dialog's own footer band puts them
     and where they already rendered: the legacy footer's justify-center never
     reached the band, whose class set the alignment and outranked it.
+
+    use_htmx turns the teleport off, and the two cannot be separated. HTMX wires
+    hx-* by walking the DOM, and x-teleport keeps the dialog inside a <template>
+    until Alpine moves it, which is after every pass HTMX makes. A teleported
+    form is therefore never wired, and since the htmx branch writes no method or
+    action, the submit fell back to a GET of the current page: the confirmation
+    closed, the page reloaded unchanged, and nothing was deleted. The form-post
+    branch is unaffected — it carries its own method and action — so it keeps
+    the teleport and the placement callers already snapshot.
 {% endcomment %}
 {# djlint:off #}
 <div id="{{ modal_id }}"
      x-data="{ open: false, displayName: '', formData: {}, init() { this.$watch('open', (value) => { if (!value) { this.displayName = ''; this.formData = {}; } }); }, openModal(event) { this.open = true; if (event.detail) { this.displayName = event.detail.displayName || ''; this.formData = event.detail.formData || {}; } }, close() { this.open = false; } }"
      @open-{{ modal_id }}.window="openModal($event)">
+<c-modal show="open" close="close()" size="sm" role="alertdialog" aria-labelledby="{{ modal_id }}-label" teleport="{% if use_htmx %}false{% else %}true{% endif %}">
 {# djlint:on #}
-<c-modal show="open" close="close()" size="sm" role="alertdialog" aria-labelledby="{{ modal_id }}-label">
 <div class="text-center">
     <c-buttons.icon label="Close" class="absolute top-4 right-4" @click="close()">
     <i class="fas fa-times"></i>

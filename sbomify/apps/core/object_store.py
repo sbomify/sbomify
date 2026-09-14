@@ -8,6 +8,7 @@ Supports optional credentials to enable cloud workload identity (IRSA, Pod Ident
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from abc import ABC, abstractmethod
 from typing import Any, Literal
@@ -16,6 +17,29 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.conf import settings
+
+log = logging.getLogger(__name__)
+
+# One marker for every artifact path that may strand an object, so an operator
+# (or a future reaper) has a single string to search for.
+ORPHANED_OBJECT_MARKER = "Potential orphaned S3 object after IntegrityError"
+
+
+def log_orphaned_object(object_name: str) -> None:
+    """Record an object whose row was never written, for later reconciliation.
+
+    An artifact upload stores the object before it writes the row, so losing the
+    race on a uniqueness constraint can leave the object behind. We deliberately
+    do NOT delete it here: under READ COMMITTED a synchronous reference check can
+    race with a concurrent transaction that has uploaded the same key but not yet
+    committed its row, and deleting then breaks a live artifact. A stranded object
+    is recoverable, a deleted one that something points at is not.
+
+    Document keys are the SHA-256 of their content, so an object is only ever
+    stranded when the losing upload carried different bytes; identical content
+    resolves to the key the winning row already references.
+    """
+    log.warning("%s: %s", ORPHANED_OBJECT_MARKER, object_name)
 
 
 class ObjectStoreClient(ABC):

@@ -14,6 +14,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
+    get_component_public_slug,
     get_public_path,
     get_workspace_public_url,
     resolve_component_identifier,
@@ -32,6 +33,109 @@ logger = getLogger(__name__)
 
 
 class ComponentItemPublicView(View):
+    @staticmethod
+    def _owns_artifact(item_type: str, item_id: str, component_id: str) -> bool:
+        """Is the requested artifact one this component actually holds?
+
+        The detail services authorize the artifact's own component and never
+        check it against the one in the URL. Without this, a private artifact id
+        from elsewhere, requested under a gated component's URL, drew a Request
+        Access page for a workspace whose approval could never release it.
+        """
+        from sbomify.apps.documents.services.documents import document_belongs_to_component
+        from sbomify.apps.sboms.services.sboms import sbom_belongs_to_component
+
+        if item_type == "documents":
+            return document_belongs_to_component(item_id, component_id)
+        return sbom_belongs_to_component(item_id, component_id)
+
+    @staticmethod
+    def _gated_denial(request: HttpRequest, component_obj: Any) -> Any:
+        """The access result when a gated component is withheld from this reader.
+
+        ``None`` when the component is not gated, when this reader holds a grant,
+        or when the fetch was refused by something an access request cannot lift.
+        In each of those cases the fetch failed for a reason of its own, and that
+        reason is the one to report.
+
+        The refusal is re-read through ``can``, the same front door the artifact
+        fetch went through, so the gate speaks for that decision rather than
+        offering a second opinion on it. ``can`` gates a scoped API token's
+        actions before it consults visibility at all, and no approval widens a
+        token's scopes: when the two disagree on why, the denial was not the gate
+        and a Request Access page would be an answer to a question nobody asked.
+        """
+        from sbomify.apps.core.authz import can
+        from sbomify.apps.core.services.access_control import check_component_access
+        from sbomify.apps.sboms.models import Component as SbomComponent
+
+        if component_obj.visibility != SbomComponent.Visibility.GATED:
+            return None
+
+        decision = can(request, "component:access", component_obj)
+        if decision:
+            return None
+
+        result = check_component_access(request, component_obj)
+        if result.has_access or result.reason != decision.reason or not result.requires_access_request:
+            return None
+        return result
+
+    @staticmethod
+    def _render_access_gate(
+        request: HttpRequest,
+        result: Any,
+        component_obj: Any,
+        resolved_id: str,
+        identifier: str,
+        item_type: str,
+    ) -> HttpResponse:
+        """The "Request Access" page standing in for a gated artifact."""
+        from sbomify.apps.core.services.access_control import gated_denial_copy, pending_request_needs_nda
+
+        team = component_obj.team
+        is_custom_domain = getattr(request, "is_custom_domain", False)
+        subject = {"documents": "document", "sboms": "SBOM", "vex": "VEX", "cbom": "CBOM"}.get(item_type, "artifact")
+
+        # Built from the identifier the reader arrived on rather than from the
+        # component's computed slug. Those differ for a gated component sharing
+        # its slug with a public one, where the resolver's public-wins tie-break
+        # leaves the id as the only form that comes back here: rebuilding the
+        # slug would point the way back, and the NDA action, at the other
+        # component's page.
+        component_url = get_public_path("component", resolved_id, is_custom_domain=is_custom_domain, slug=identifier)
+
+        # Which position in the access flow this reader is at decides both the
+        # message and the action; the service already worked that out.
+        message, offer_action, action_is_nda = gated_denial_copy(
+            result, subject, nda_outstanding=pending_request_needs_nda(request.user, team)
+        )
+        action_url = None
+        if offer_action:
+            # The component page resolves, and where necessary creates, the
+            # access request the signing URL needs. That is a write this read
+            # path must not do, so the NDA action routes through it.
+            if action_is_nda:
+                action_url = component_url
+            elif team:
+                action_url = reverse("documents:request_access", kwargs={"team_key": team.key})
+
+        return render(
+            request,
+            "core/access_denied_message.html.j2",
+            {
+                # The gate is still the workspace's own Trust Center page, so it
+                # wears their logo, title and accent rather than sbomify's.
+                "brand": build_branding_context(team),
+                "error_message": message,
+                "request_access_url": action_url,
+                "action_label": "Sign NDA" if action_is_nda else "Request Access",
+                "action_icon": "fa-file-signature" if action_is_nda else "fa-key",
+                "back_url": component_url,
+            },
+            status=403,
+        )
+
     def get(self, request: HttpRequest, component_id: str, item_type: str, item_id: str) -> HttpResponse:
         # Resolve component by slug (on custom domains) or ID (on main app)
         component_obj = resolve_component_identifier(request, component_id)
@@ -40,7 +144,7 @@ class ComponentItemPublicView(View):
 
         # Use the resolved component's ID for API calls
         resolved_id = component_obj.id
-        component_slug = component_obj.slug
+        component_slug = get_component_public_slug(component_obj, request)
 
         status_code, component = get_component(request, resolved_id, return_instance=True)
         if status_code != 200:
@@ -50,24 +154,33 @@ class ComponentItemPublicView(View):
 
         if item_type in ("sboms", "vex", "cbom"):
             result = get_sbom_detail(request, item_id)
-            if not result.ok:
-                return error_response(
-                    request,
-                    HttpResponse(status=result.status_code or 400, content=result.error or "Unknown error"),
-                )
-            item = result.value
-
         elif item_type == "documents":
             result = get_document_detail(request, item_id)
-            if not result.ok:
-                return error_response(
-                    request,
-                    HttpResponse(status=result.status_code or 400, content=result.error or "Unknown error"),
-                )
-            item = result.value
-
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))
+
+        if result.ok and not self._owns_artifact(item_type, item_id, resolved_id):
+            return error_response(request, HttpResponseNotFound("Artifact not found"))
+
+        # A gated component is published — it is listed on the Trust Center and
+        # its component page renders a "Request Access" gate. Reaching an
+        # artifact inside it without a grant is the same gate, not a dead end:
+        # the fetch 403s, and the generic error page left a reader who had just
+        # been told to request access with "Forbidden" and nowhere to go.
+        #
+        # Only a 403, only after the fetch, and only for an artifact this
+        # component holds: both services resolve the artifact before they check
+        # access, so an id that names nothing is still Not Found rather than a
+        # gate for something that was never there, and an id belonging to some
+        # other component is that component's answer to give, not this one's.
+        denial = None
+        if not result.ok and result.status_code == 403 and self._owns_artifact(item_type, item_id, resolved_id):
+            denial = self._gated_denial(request, component_obj)
+        if not result.ok and denial is None:
+            return error_response(
+                request,
+                HttpResponse(status=result.status_code or 400, content=result.error or "Unknown error"),
+            )
 
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain
@@ -83,6 +196,14 @@ class ComponentItemPublicView(View):
                 item_id=item_id,
             )
             return HttpResponseRedirect(build_custom_domain_url(component.team, path, request.is_secure()))
+
+        # After the redirect, so a gated artifact lands on the workspace's own
+        # domain exactly as a public one does; a gate served from the app domain
+        # would send the reader on to request access somewhere they never were.
+        if denial is not None:
+            return self._render_access_gate(request, denial, component_obj, resolved_id, component_id, item_type)
+
+        item = result.value
 
         brand = build_branding_context(component.team)
 

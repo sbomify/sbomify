@@ -20,7 +20,7 @@ from django.utils.html import format_html, format_html_join
 from sbomify.apps.billing.admin import BillingPlanAdmin
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.documents.admin import DocumentAdmin
-from sbomify.apps.documents.models import Document
+from sbomify.apps.documents.models import LEGAL_DOCUMENT_TYPES, Document
 from sbomify.apps.onboarding.models import OnboardingStatus
 from sbomify.apps.sboms.admin import SBOMAdmin
 from sbomify.apps.sboms.models import SBOM  # SBOM still lives in sboms app
@@ -168,9 +168,7 @@ class DashboardView(admin.AdminSite):
                     "documents_by_type": list(
                         Document.objects.values("document_type").annotate(count=Count("id")).order_by("-count")
                     ),
-                    "compliance_documents": Document.objects.filter(
-                        document_type__in=["compliance", "evidence", "license"]
-                    ).count(),
+                    "compliance_documents": Document.objects.filter(document_type__in=LEGAL_DOCUMENT_TYPES).count(),
                     # Email Verification
                     "email_verified_users": User.objects.filter(email_verified=True).count(),
                 }

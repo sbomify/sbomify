@@ -53,8 +53,7 @@ def company_nda_document(team_with_business_plan):
     document = Document.objects.create(
         name="Company NDA",
         component=component,
-        document_type=Document.DocumentType.COMPLIANCE,
-        compliance_subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
         document_filename="nda.pdf",
         content_type="application/pdf",
         file_size=len(content),
@@ -1011,8 +1010,7 @@ class TestNDADocumentVersioning:
         # Verify new document was created (versioning creates a new document)
         all_ndas = Document.objects.filter(
             component=company_nda_document.component,
-            document_type=Document.DocumentType.COMPLIANCE,
-            compliance_subcategory=Document.ComplianceSubcategory.NDA,
+            document_type=Document.DocumentType.NDA,
         ).order_by("-created_at")
         
         # Should have at least 2 documents now (original + new version)

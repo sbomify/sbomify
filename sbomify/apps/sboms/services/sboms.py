@@ -126,6 +126,15 @@ def serialize_sbom(sbom: SBOM) -> dict[str, Any]:
     }
 
 
+def sbom_belongs_to_component(sbom_id: str, component_id: str) -> bool:
+    """Is this SBOM one of that component's own artifacts?
+
+    See ``document_belongs_to_component``: the detail lookup authorizes the
+    artifact's component, not the one the URL names.
+    """
+    return SBOM.objects.filter(pk=sbom_id, component_id=component_id).exists()
+
+
 def get_sbom_detail(request: HttpRequest, sbom_id: str) -> ServiceResult[dict[str, Any]]:
     try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)

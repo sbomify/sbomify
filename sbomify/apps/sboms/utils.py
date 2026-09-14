@@ -1033,36 +1033,25 @@ def _get_cyclonedx_type_for_product_link(link_type: str) -> Any:
 
 
 def _get_cyclonedx_type_for_document_type(document_type: str) -> Any:
-    """Map document types to CycloneDX external reference types."""
+    """Map a document type to its CycloneDX external reference type.
+
+    ``Document.cyclonedx_external_ref_type`` is the single source of truth for
+    this mapping. It used to be restated here as a second table, which is a
+    trap: the property looks authoritative, so a change made there silently
+    does nothing to the SBOM we actually emit. The two agreed by luck, and a
+    test now pins that every document type still resolves to a real Type3.
+    """
     cdx16 = _get_cyclonedx_model()
     if cdx16 is None:
         return None
 
-    mapping = {
-        "specification": cdx16.Type3.documentation,
-        "manual": cdx16.Type3.documentation,
-        "readme": cdx16.Type3.documentation,
-        "documentation": cdx16.Type3.documentation,
-        "build-instructions": cdx16.Type3.build_meta,
-        "configuration": cdx16.Type3.configuration,
-        "license": cdx16.Type3.license,
-        "compliance": cdx16.Type3.certification_report,
-        "evidence": cdx16.Type3.evidence,
-        "changelog": cdx16.Type3.release_notes,
-        "release-notes": cdx16.Type3.release_notes,
-        "security-advisory": cdx16.Type3.advisories,
-        "vulnerability-report": cdx16.Type3.vulnerability_assertion,
-        "threat-model": cdx16.Type3.threat_model,
-        "risk-assessment": cdx16.Type3.risk_assessment,
-        "pentest-report": cdx16.Type3.pentest_report,
-        "static-analysis": cdx16.Type3.static_analysis_report,
-        "dynamic-analysis": cdx16.Type3.dynamic_analysis_report,
-        "quality-metrics": cdx16.Type3.quality_metrics,
-        "maturity-report": cdx16.Type3.maturity_report,
-        "report": cdx16.Type3.other,
-        "other": cdx16.Type3.other,
-    }
-    return mapping.get(document_type, cdx16.Type3.other)
+    from sbomify.apps.documents.models import Document
+
+    ref_type = Document(document_type=document_type).cyclonedx_external_ref_type
+    try:
+        return cdx16.Type3(ref_type)
+    except ValueError:
+        return cdx16.Type3.other
 
 
 def _get_spdx_category_for_product_link(link_type: str) -> str:

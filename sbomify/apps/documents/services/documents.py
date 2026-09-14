@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 
 from sbomify.apps.core.authz import can
@@ -11,6 +11,11 @@ from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.schemas import DocumentUpdateRequest
+from sbomify.apps.documents.utils import (
+    document_version_exists,
+    duplicate_document_detail,
+    is_duplicate_document_error,
+)
 
 log = logging.getLogger(__name__)
 
@@ -26,11 +31,22 @@ def serialize_document(document: Document) -> dict[str, Any]:
         "component_id": document.component.id,
         "component_name": document.component.name,
         "document_type": document.document_type,
+        "compliance_subcategory": document.compliance_subcategory or None,
         "description": document.description,
         "content_type": document.content_type,
         "file_size": document.file_size,
         "source_display": document.source_display,
     }
+
+
+def document_belongs_to_component(document_id: str, component_id: str) -> bool:
+    """Is this document one of that component's own artifacts?
+
+    A detail lookup authorizes the artifact's own component, not the one named
+    in the URL, so a caller that reports on the URL's component has to establish
+    the two are the same before it speaks for it.
+    """
+    return Document.objects.filter(pk=document_id, component_id=component_id).exists()
 
 
 def get_document_detail(request: HttpRequest, document_id: str) -> ServiceResult[dict[str, Any]]:
@@ -63,6 +79,20 @@ def update_document_metadata(
     if not can(request, "document:manage", document.component):
         return ServiceResult.failure("You don't have permission to update this document", status_code=403)
 
+    # Payload validation before the collision lookup: an unusable subcategory is
+    # answerable without asking the database anything.
+    if payload.compliance_subcategory and payload.compliance_subcategory not in Document.ComplianceSubcategory.values:
+        return ServiceResult.failure("Invalid compliance subcategory", status_code=400)
+
+    # An edit can collide just as an upload can — renaming a document onto a
+    # name/version pair the component already holds is the same duplicate.
+    new_name = payload.name if payload.name is not None else document.name
+    new_version = payload.version if payload.version is not None else document.version
+    if (new_name, new_version) != (document.name, document.version) and document_version_exists(
+        document.component_id, new_name, new_version, exclude_id=document.pk
+    ):
+        return ServiceResult.failure(duplicate_document_detail(new_name, new_version), status_code=409)
+
     update_fields = []
     if payload.name is not None:
         document.name = payload.name
@@ -73,19 +103,24 @@ def update_document_metadata(
     if payload.document_type is not None:
         document.document_type = payload.document_type
         update_fields.append("document_type")
-        # Clear compliance_subcategory if document_type is not compliance
-        if payload.document_type != Document.DocumentType.COMPLIANCE:
+    if document.document_type != Document.DocumentType.COMPLIANCE:
+        if payload.document_type is not None or "compliance_subcategory" in payload.model_fields_set:
             document.compliance_subcategory = None
             update_fields.append("compliance_subcategory")
-    if payload.compliance_subcategory is not None:
-        document.compliance_subcategory = payload.compliance_subcategory if payload.compliance_subcategory else None
+    elif "compliance_subcategory" in payload.model_fields_set:
+        document.compliance_subcategory = payload.compliance_subcategory or None
         update_fields.append("compliance_subcategory")
     if payload.description is not None:
         document.description = payload.description
         update_fields.append("description")
 
     if update_fields:
-        document.save(update_fields=update_fields)
+        try:
+            document.save(update_fields=update_fields)
+        except IntegrityError as exc:
+            if is_duplicate_document_error(exc):
+                return ServiceResult.failure(duplicate_document_detail(new_name, new_version), status_code=409)
+            raise
 
     return ServiceResult.success(serialize_document(document))
 
