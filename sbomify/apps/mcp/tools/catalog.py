@@ -145,22 +145,26 @@ def register_tools(mcp: FastMCP) -> None:
                 limit=DETAIL_COLLECTION_LIMIT,
                 more_with=f'list_components(product_id="{product_id}")',
             )
-            identifiers = list(obj.identifiers.all()[: DETAIL_COLLECTION_LIMIT + 1])
+            # Counted in the database rather than from the slice. Taking len()
+            # of a LIMIT+1 fetch reports 51 for a product with 500 identifiers,
+            # which is worse than the truncation it was describing: a wrong
+            # number reads as a right one.
+            identifiers = obj.identifiers.all()
             data["identifiers"] = serializers.capped(
                 [
                     serializers.compact({"type": i.identifier_type, "value": i.value})
                     for i in identifiers[:DETAIL_COLLECTION_LIMIT]
                 ],
-                total=len(identifiers),
+                total=identifiers.count(),
                 limit=DETAIL_COLLECTION_LIMIT,
             )
-            links = list(obj.links.all()[: DETAIL_COLLECTION_LIMIT + 1])
+            links = obj.links.all()
             data["links"] = serializers.capped(
                 [
                     serializers.compact({"type": link.link_type, "url": link.url, "title": link.title})
                     for link in links[:DETAIL_COLLECTION_LIMIT]
                 ],
-                total=len(links),
+                total=links.count(),
                 limit=DETAIL_COLLECTION_LIMIT,
             )
             return serializers.compact(data)
