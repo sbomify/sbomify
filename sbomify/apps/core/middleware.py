@@ -466,6 +466,8 @@ class CustomDomainContextMiddleware:
         what the periodic verification task checks. This is a one-time DB write
         per domain (only fires when custom_domain_validated=False).
         """
+        from django.db.models import DateTimeField, F
+        from django.db.models.functions import Coalesce, Greatest, Now
         from django.utils import timezone
 
         from sbomify.apps.teams.models import Team
@@ -478,11 +480,19 @@ class CustomDomainContextMiddleware:
                 custom_domain_validated=False,
             ).update(
                 custom_domain_validated=True,
+                # Validation is what makes the custom domain the preferred one,
+                # so it rewrites every absolute URL in the CSAF distribution.
+                # This bypasses the model signal, so it bumps the marker itself.
+                csaf_feed_updated_at=Greatest(
+                    Coalesce(F("csaf_feed_updated_at"), Now(), output_field=DateTimeField()),
+                    Now(),
+                    output_field=DateTimeField(),
+                ),
                 custom_domain_verification_failures=0,
                 custom_domain_last_checked_at=timezone.now(),
             )
             if updated:
-                team.custom_domain_validated = True
+                team.refresh_from_db(fields=["custom_domain_validated", "csaf_feed_updated_at"])
                 invalidate_custom_domain_cache(host)
                 logger.info(f"Auto-validated custom domain {host} for team {team.key}")
             else:
@@ -492,11 +502,12 @@ class CustomDomainContextMiddleware:
                 # for downstream views like TEAWellKnownView.
                 refreshed = (
                     Team.objects.filter(pk=team.pk, custom_domain=host)
-                    .values_list("custom_domain_validated", flat=True)
+                    .values("custom_domain_validated", "csaf_feed_updated_at")
                     .first()
                 )
                 if refreshed:
-                    team.custom_domain_validated = True
+                    team.custom_domain_validated = refreshed["custom_domain_validated"]
+                    team.csaf_feed_updated_at = refreshed["csaf_feed_updated_at"]
         except Exception as e:
             logger.warning(f"Failed to auto-validate domain {host}: {e}")
 
