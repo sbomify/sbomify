@@ -332,3 +332,48 @@ async def test_a_small_product_is_not_marked_truncated(mcp_owner, make_token, pr
     assert detail["components"]["total"] == 1
     assert "truncated" not in detail["components"]
     assert "more_with" not in detail["components"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_truncated_artifact_list_is_the_same_fifty_every_time(
+    mcp_owner, make_token, component_in_bound_workspace, product_in_bound_workspace
+):
+    """Slicing without an ORDER BY leaves which rows you get up to Postgres.
+
+    The cap made the list short; nothing made it stable. Two identical calls
+    could hand an agent different fifty artifacts, and neither would say so.
+    """
+    from sbomify.apps.core.models import Release, ReleaseArtifact
+    from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+
+    extra = 6
+
+    def setup() -> str:
+        release = Release.objects.create(product=product_in_bound_workspace, name="v1", version="1")
+        for i in range(DETAIL_COLLECTION_LIMIT + extra):
+            artifact = _artifact(component_in_bound_workspace, f"art-{i:03d}", SBOM.BomType.SBOM, version=f"1.0.{i}")
+            ReleaseArtifact.objects.create(release=release, sbom=artifact)
+        return release.id
+
+    release_id = await sync_to_async(setup)()
+    token = await sync_to_async(make_token)(["release:read"])
+
+    first = structured(await _call(token, "get_release", release_id=release_id))["artifacts"]
+    second = structured(await _call(token, "get_release", release_id=release_id))["artifacts"]
+
+    assert first["total"] == DETAIL_COLLECTION_LIMIT + extra
+    assert first["truncated"] is True
+    assert len(first["items"]) == DETAIL_COLLECTION_LIMIT
+    assert [a["sbom_id"] for a in first["items"]] == [a["sbom_id"] for a in second["items"]]
+
+    # Newest first, so the oldest `extra` are the ones left out.
+    newest = await sync_to_async(
+        lambda: [
+            a.sbom_id
+            for a in ReleaseArtifact.objects.filter(release_id=release_id).order_by("-created_at", "id")[
+                :DETAIL_COLLECTION_LIMIT
+            ]
+        ]
+    )()
+    assert [a["sbom_id"] for a in first["items"]] == newest
