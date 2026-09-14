@@ -305,3 +305,46 @@ class TestTheCredentialContractHolds:
         from sbomify.apps.oidc.permissions import request_is_oidc_authed
 
         assert request_is_oidc_authed(self._request(None)) is False
+
+    def test_an_immutable_credential_is_not_written_to(self) -> None:
+        """The contract says `.scopes` and `.pk`, so nothing may require a writable object.
+
+        The predicate memoised its answer onto the credential, which a frozen
+        or slot-based one refuses. That turned a predicate into the failure it
+        exists to avoid, on the upload path, for a credential that answered
+        everything the docstring asked of it.
+        """
+        from dataclasses import dataclass
+
+        from sbomify.apps.oidc.permissions import request_is_oidc_authed
+
+        @dataclass(frozen=True)
+        class FrozenCredential:
+            scopes: list[str] | None
+            pk: str
+
+        request = self._request(FrozenCredential(scopes=None, pk="oauth-2"))
+
+        assert request_is_oidc_authed(request) is False
+
+    @pytest.mark.django_db(transaction=True)
+    def test_labelling_a_credential_costs_no_query(self, make_token) -> None:
+        """The audit label must not put an OIDCBinding probe on every MCP call.
+
+        `request_is_oidc_authed` falls back to a binding lookup when the signed
+        claim is absent, which is right for authorization and wrong for a
+        label: read-only tools never touch the binding otherwise.
+        """
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+
+        from sbomify.apps.mcp.auth import _credential_kind
+
+        token = make_token(["sbom:read"])
+        request = self._request(token)
+
+        with CaptureQueriesContext(connection) as captured:
+            kind = _credential_kind(request)
+
+        assert kind == "pat"
+        assert [q for q in captured.captured_queries if "oidc" in q["sql"].lower()] == []

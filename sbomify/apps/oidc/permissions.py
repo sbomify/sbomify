@@ -25,6 +25,7 @@ The two checks are independent:
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from sbomify.apps.access_tokens.models import AccessToken
@@ -96,15 +97,35 @@ def _token_is_oidc_typed(token_record: AccessToken) -> bool:
     # that as False is correct and keeps the attribute optional.
     encoded = getattr(token_record, "encoded_token", None)
     if not encoded:
-        setattr(token_record, "_is_oidc_typed", False)
+        # Returned without memoising. There is nothing to cache — the answer
+        # cost no decode — and the object we would be writing to is exactly the
+        # one whose contract says it need only answer ``.scopes`` and ``.pk``.
+        # A frozen or slot-based credential would raise here, turning a
+        # predicate into the failure it exists to avoid.
         return False
 
     try:
         result = decode_personal_access_token(encoded).get("token_type") == TOKEN_TYPE_OIDC
     except DecodeError:
         result = False
-    setattr(token_record, "_is_oidc_typed", result)
+    # Best effort for the same reason the early return does not memoise: the
+    # cache belongs to the row, and a credential that is not one may refuse the
+    # write. Losing the memo costs one extra decode, not correctness.
+    with contextlib.suppress(AttributeError, TypeError):
+        setattr(token_record, "_is_oidc_typed", result)
     return result
+
+
+def token_is_oidc_issued(token_record: Any) -> bool:
+    """Whether the credential's signed token carries ``token_type="oidc"``.
+
+    The authoritative signal on its own, without the ``OIDCBinding`` probe
+    ``request_is_oidc_authed`` falls back to. That fallback is belt-and-braces
+    for an authorization decision, where an orphaned binding must still confine
+    a bot; a caller that only wants to label what kind of credential it is
+    looking at should not pay a query per request for it.
+    """
+    return token_record is not None and _token_is_oidc_typed(token_record)
 
 
 def request_is_oidc_authed(request: Any) -> bool:

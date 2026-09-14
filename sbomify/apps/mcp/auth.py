@@ -148,15 +148,22 @@ def _credential_kind(stub: HttpRequest) -> str:
     so a bot uploading over ``/mcp`` would otherwise be recorded as a PAT and
     the field would say nothing.
 
-    Asked through ``request_is_oidc_authed`` rather than by reading the signed
-    claim directly, so the label cannot disagree with the answer the upload
-    path's authorization uses. Its work is memoised on the request and on the
-    token row, so the binding probe happens at most once per call and the
-    upload path reuses it.
-    """
-    from sbomify.apps.oidc.permissions import request_is_oidc_authed
+    The signed ``token_type`` claim alone, not ``request_is_oidc_authed``. That
+    predicate falls back to an ``OIDCBinding`` lookup when the claim is absent,
+    which is right for an authorization decision — an orphaned binding must
+    still confine a bot — but it is a database query, and this runs on every
+    call including read-only ones that never touch the binding otherwise. A
+    label is not worth a query per request.
 
-    return "oidc" if request_is_oidc_authed(stub) else "pat"
+    The claim is HMAC-covered, so it cannot be forged without ``SECRET_KEY``,
+    and the decode is memoised on the row. The narrow cost is that a bot whose
+    JWT claim was somehow stripped while its binding survived is labelled
+    ``pat`` here while the upload path still confines it, which is the safe
+    direction for the two to disagree in.
+    """
+    from sbomify.apps.oidc.permissions import token_is_oidc_issued
+
+    return "oidc" if token_is_oidc_issued(getattr(stub, "access_token_record", None)) else "pat"
 
 
 def current_request(mcp: Any) -> Any:
