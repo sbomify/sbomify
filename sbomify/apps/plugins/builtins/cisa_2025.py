@@ -3,10 +3,10 @@
 This plugin validates SBOMs against the CISA Minimum Elements for a Software
 Bill of Materials as defined in the August 2025 public comment draft.
 
-IMPORTANT: This standard is based on the PUBLIC COMMENT DRAFT released in
-August 2025. It is NOT a finalized standard. The requirements may change
-when the final version is published by CISA. This plugin will be updated
-accordingly when the final standard is released.
+CISA finalized the standard in July 2026 with a different element set, which
+``cisa_2026.py`` scores. This plugin deliberately stays as the August 2025 draft:
+a regulation or an attestation can pin a specific version of the elements,
+so superseding a version does not retire it.
 
 Standard Reference:
     - Name: CISA 2025 Minimum Elements for a Software Bill of Materials (SBOM)
@@ -57,6 +57,7 @@ Generation Context recognition:
 """
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -100,9 +101,17 @@ logger = getLogger(__name__)
 #   - "source" = before_build (source code analysis)
 #   - "analyzed" = post_build (binary analysis)
 GENERATION_CONTEXT_VALUES = {
-    # CISA terminology (underscore format)
+    # CISA's own words, in the spellings documents use for them. The draft
+    # writes "before build, build, after build"; tooling writes the same
+    # phases with underscores, and "post build" for the last one.
+    "before build",
     "before_build",
+    "during build",
+    "during_build",
     "build",
+    "after build",
+    "after_build",
+    "post build",
     "post_build",
     # CycloneDX lifecycle phases (hyphen format)
     "design",
@@ -117,15 +126,28 @@ GENERATION_CONTEXT_VALUES = {
 }
 
 
-class CISAMinimumElementsPlugin(AssessmentPlugin):
+def _states_generation_context(text: str) -> bool:
+    """Whether the text names a lifecycle phase as a phrase rather than inside a word.
+
+    Matched as substrings, "build" was found in "rebuild" and "debuild",
+    "source" in "resource" and "operations" in "cooperations", so a comment
+    mentioning any of them scored as a stated phase. The lookarounds are on
+    word characters rather than ``\b`` because several of the phrases end in a
+    hyphen-joined word of their own.
+    """
+    lowered = text.lower()
+    return any(re.search(rf"(?<!\w){re.escape(value)}(?!\w)", lowered) for value in GENERATION_CONTEXT_VALUES)
+
+
+class CISA2025MinimumElementsPlugin(AssessmentPlugin):
     """CISA 2025 Minimum Elements compliance plugin (PUBLIC COMMENT DRAFT).
 
     This plugin checks SBOMs for compliance with the eleven minimum data fields
     defined in the CISA August 2025 public comment draft. It supports both SPDX
     and CycloneDX formats.
 
-    IMPORTANT: This is based on a PUBLIC COMMENT DRAFT, not a finalized standard.
-    The requirements may change when the final version is published by CISA.
+    The 2026 elements replaced this draft, and ``cisa_2026.py`` scores those. Both
+    ship, because a buyer or a regulation can ask for this version by name.
 
     Attributes:
         VERSION: Plugin version (semantic versioning).
@@ -134,7 +156,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         STANDARD_URL: Official URL to the standard documentation.
 
     Example:
-        >>> plugin = CISAMinimumElementsPlugin()
+        >>> plugin = CISA2025MinimumElementsPlugin()
         >>> result = plugin.assess("sbom123", Path("/tmp/sbom.json"))
         >>> print(f"Compliant: {result.summary.fail_count == 0}")
     """
@@ -350,8 +372,8 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 version_failures.append(package_name)
 
             # 5. Software Identifiers (at least one required)
-            # The type is read bare, so the IRI spelling SPDX 2.x also allows
-            # counts as the same identifier.
+            # The type is read bare, so the full IRI that SPDX 2.x also allows
+            # counts as the same identifier. Yocto writes only the IRI.
             purl = package.get("purl")
             external_refs = package.get("externalRefs")
             if not isinstance(external_refs, list):
@@ -456,7 +478,11 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         )
 
         # 1. SBOM Author (document-level)
-        creators = creation_info.get("creators", [])
+        # A malformed document must be scored, not crashed on: a bare string
+        # here iterates as characters, and a non-string entry has no
+        # ``startswith`` for the tool check below to call.
+        raw_creators = creation_info.get("creators", [])
+        creators = [entry for entry in raw_creators if isinstance(entry, str)] if isinstance(raw_creators, list) else []
         findings.append(
             self._create_finding(
                 "sbom_author",
@@ -532,15 +558,13 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         if isinstance(creation_info, dict):
             creator_comment_raw = creation_info.get("comment", "")
             if isinstance(creator_comment_raw, str):
-                creator_comment = creator_comment_raw.lower()
-                if any(ctx in creator_comment for ctx in GENERATION_CONTEXT_VALUES):
+                if _states_generation_context(creator_comment_raw):
                     return True
 
         # Check DocumentComment (document-level comment)
         document_comment_raw = data.get("comment", "")
         if isinstance(document_comment_raw, str):
-            document_comment = document_comment_raw.lower()
-            if any(ctx in document_comment for ctx in GENERATION_CONTEXT_VALUES):
+            if _states_generation_context(document_comment_raw):
                 return True
 
         # Document-level annotations with explicit cisa:generationContext.
@@ -620,9 +644,15 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             if not pkg_fields["has_hash"]:
                 hash_failures.append(pkg_name)
 
-            # 7. License — the relationship must resolve to a licensing
-            # element; a dangling hasConcludedLicense carries no licence.
-            if get_spdx3_package_license(package, relationships, licenses, "hasConcludedLicense") is None:
+            # 7. License. Either relationship states one: hasDeclaredLicense
+            # is the producer's own declaration, which is what the element
+            # asks for, and hasConcludedLicense is the author's determination.
+            # The relationship must also resolve to a licensing element, since
+            # an edge pointing at nothing carries no licence.
+            if all(
+                get_spdx3_package_license(package, relationships, licenses, kind) is None
+                for kind in ("hasDeclaredLicense", "hasConcludedLicense")
+            ):
                 license_failures.append(pkg_name)
 
         # 2. Software Producer
@@ -681,7 +711,8 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 "license",
                 status="fail" if license_failures else "pass",
                 details=f"Missing for: {', '.join(license_failures)}" if license_failures else None,
-                remediation="Add hasConcludedLicense Relationship to LicenseExpression element.",
+                remediation="Add a hasDeclaredLicense or hasConcludedLicense Relationship "
+                "pointing at a LicenseExpression element.",
             )
         )
 
@@ -795,16 +826,14 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             if bare_type == "SpdxDocument":
                 comment_raw = element.get("comment", "")
                 if isinstance(comment_raw, str):
-                    comment = comment_raw.lower()
-                    if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                    if _states_generation_context(comment_raw):
                         return True
 
             # Check CreationInfo comment
             if "CreationInfo" in elem_type:
                 comment_raw = element.get("comment", "")
                 if isinstance(comment_raw, str):
-                    comment = comment_raw.lower()
-                    if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                    if _states_generation_context(comment_raw):
                         return True
 
             # Check Annotation elements via the shared subject filter.
@@ -815,7 +844,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 if not isinstance(raw_comment, str):
                     continue
                 comment = raw_comment.lower()
-                if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                if _states_generation_context(raw_comment):
                     return True
                 # Check for explicit cisa:generationContext
                 if "cisa:generationcontext=" in comment:
@@ -1030,7 +1059,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                     "discovery, or decommission. Alternatively, add property "
                     "'internal:sbom:generationContext' in metadata.properties. Note: "
                     "the legacy 'cdx:sbom:generationContext' name is still recognised "
-                    "for backward compatibility but is deprecated — unofficial names "
+                    "for backward compatibility but is deprecated. Unofficial names "
                     "must not be used under the cdx: namespace."
                 ),
             )
@@ -1050,14 +1079,16 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         Returns:
             True if tool information found.
         """
-        tools = metadata.get("tools", [])
-        if isinstance(tools, list) and tools:
+        tools = metadata.get("tools")
+        if isinstance(tools, list):
             # CycloneDX 1.4 format: array of tool objects
-            return any(tool.get("name") or tool.get("vendor") for tool in tools)
-        elif isinstance(tools, dict):
+            return any(t.get("name") or t.get("vendor") for t in tools if isinstance(t, dict))
+        if isinstance(tools, dict):
             # CycloneDX 1.5+ format: tools.components array
-            components = tools.get("components", [])
-            return any(comp.get("name") for comp in components)
+            components = tools.get("components")
+            if not isinstance(components, list):
+                return False
+            return any(c.get("name") for c in components if isinstance(c, dict))
         return False
 
     # Sanctioned property name under the "internal" taxonomy namespace

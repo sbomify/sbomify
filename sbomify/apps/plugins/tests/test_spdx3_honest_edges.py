@@ -85,7 +85,7 @@ class TestSbomTypeGenerationContext:
     per spec."""
 
     def _has_context(self, *graph: object) -> bool:
-        from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+        from sbomify.apps.plugins.builtins.cisa_2026 import CISAMinimumElementsPlugin
 
         doc = {"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": list(graph)}
         return CISAMinimumElementsPlugin()._spdx3_has_generation_context(doc)
