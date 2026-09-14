@@ -5,6 +5,10 @@ from django.db import models
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.sboms.models import Component
 
+# Named here (rather than inline in Meta) so the duplicate-detection helper and
+# the migration that adds the constraint can both refer to the same string.
+DOCUMENT_UNIQUE_CONSTRAINT = "documents_document_unique_component_name_version"
+
 
 class Document(models.Model):
     """Represents a document artifact associated with a component.
@@ -26,6 +30,7 @@ class Document(models.Model):
 
         # Legal and Compliance
         LICENSE = "license", "License"
+        NDA = "nda", "NDA"
         COMPLIANCE = "compliance", "Compliance"
         EVIDENCE = "evidence", "Evidence"
 
@@ -51,11 +56,32 @@ class Document(models.Model):
         OTHER = "other", "Other"
 
     class ComplianceSubcategory(models.TextChoices):
-        """Compliance document subcategories for auto-detection and badging."""
+        """Certifications a workspace holds, for auto-detection and badging.
 
-        NDA = "nda", "NDA"
-        SOC2 = "soc2", "SOC 2"
+        Every value here is a claim about the workspace that a trust-center
+        reader can be shown, which is why every one of them is badgeable. An
+        NDA used to sit here and was the one exception: it is an agreement the
+        reader signs, not an attestation about us, so it is now
+        ``DocumentType.NDA`` and this enum means what its name says.
+
+        There is no plain SOC 2. A report is Type I, the design of the controls
+        at a point in time, or Type II, their operation over a period, and a
+        reader looking for assurance wants to know which one they are being
+        shown. The undifferentiated ``soc2`` this field used to offer said
+        neither, so it is gone and its rows moved to Type II, which is what is
+        almost always meant.
+
+        ``cra`` is the conformity a manufacturer declares under Regulation (EU)
+        2024/2847, which is a different kind of claim from an audit but reaches a
+        trust-center reader the same way: as a document the workspace published.
+        The wizard in the ``compliance`` app is where an assessment is worked
+        out; this is where its published outcome is filed.
+        """
+
+        SOC2_TYPE1 = "soc2-type1", "SOC 2 Type I"
+        SOC2_TYPE2 = "soc2-type2", "SOC 2 Type II"
         ISO27001 = "iso27001", "ISO 27001"
+        CRA = "cra", "CRA"
 
     class Meta:
         db_table = "documents_documents"
@@ -64,6 +90,16 @@ class Document(models.Model):
             models.Index(fields=["created_at"]),
             models.Index(fields=["document_type"]),
             models.Index(fields=["component", "created_at"]),
+        ]
+        constraints = [
+            # A document is identified by its name and its version, the same way an
+            # SBOM is identified by version/format/qualifiers. Re-uploading "foobar"
+            # at version "1.0" is a duplicate, not a second artifact; a different
+            # document (a README beside a LICENSE) may of course share a version.
+            models.UniqueConstraint(
+                fields=["component", "name", "version"],
+                name=DOCUMENT_UNIQUE_CONSTRAINT,
+            ),
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
@@ -151,6 +187,10 @@ class Document(models.Model):
             self.DocumentType.BUILD_INSTRUCTIONS: "build-meta",
             self.DocumentType.CONFIGURATION: "configuration",
             self.DocumentType.LICENSE: "license",
+            # CycloneDX has no type for a legal agreement, and an NDA is neither
+            # a licence nor a certification report, so it falls to "other"
+            # rather than borrowing a label that overstates it.
+            self.DocumentType.NDA: "other",
             self.DocumentType.COMPLIANCE: "certification-report",
             self.DocumentType.EVIDENCE: "evidence",
             self.DocumentType.CHANGELOG: "release-notes",
@@ -196,6 +236,7 @@ class Document(models.Model):
             self.DocumentType.BUILD_INSTRUCTIONS: "build-instructions",
             self.DocumentType.CONFIGURATION: "configuration",
             self.DocumentType.LICENSE: "license",
+            self.DocumentType.NDA: "nda",
             self.DocumentType.COMPLIANCE: "compliance",
             self.DocumentType.EVIDENCE: "evidence",
             self.DocumentType.CHANGELOG: "changelog",
@@ -224,10 +265,7 @@ class Document(models.Model):
         Returns:
             True if document is an NDA, False otherwise.
         """
-        return (
-            self.document_type == self.DocumentType.COMPLIANCE
-            and self.compliance_subcategory == self.ComplianceSubcategory.NDA
-        )
+        return self.document_type == self.DocumentType.NDA
 
     def is_compliance_document(self) -> bool:
         """Check if document is a compliance document.
@@ -240,19 +278,16 @@ class Document(models.Model):
     def get_compliance_badge(self) -> str | None:
         """Get the compliance badge label for this document.
 
+        The label is the subcategory's own display name, so a subcategory added
+        to the model cannot ship with a missing badge.
+
         Returns:
-            Badge label string (e.g., "SOC 2", "ISO 27001", "NDA") or None.
+            Badge label string (e.g., "SOC 2 Type II", "ISO 27001") or None.
         """
         if not self.compliance_subcategory:
             return None
 
-        compliance_labels: dict[str, str] = {
-            self.ComplianceSubcategory.NDA: "NDA",
-            self.ComplianceSubcategory.SOC2: "SOC 2",
-            self.ComplianceSubcategory.ISO27001: "ISO 27001",
-        }
-
-        return compliance_labels.get(self.compliance_subcategory or "")
+        return dict(self.ComplianceSubcategory.choices).get(self.compliance_subcategory or "")
 
     def verify_content_hash(self, expected_hash: str) -> bool | None:
         """Verify that the document's content hash matches the expected hash.
@@ -266,6 +301,19 @@ class Document(models.Model):
         if not self.content_hash:
             return None
         return self.content_hash == expected_hash
+
+
+# The "Legal and Compliance" block of DocumentType, as a value rather than a
+# comment someone has to notice. Anything counting or filtering "the legal
+# paperwork" wants all four: the admin dashboard's compliance metric spelled
+# three of them out and silently stopped counting NDAs the moment they moved
+# out of COMPLIANCE into their own type.
+LEGAL_DOCUMENT_TYPES: tuple[str, ...] = (
+    Document.DocumentType.LICENSE,
+    Document.DocumentType.NDA,
+    Document.DocumentType.COMPLIANCE,
+    Document.DocumentType.EVIDENCE,
+)
 
 
 # Import access models to ensure they are discovered by Django when using --nomigrations
