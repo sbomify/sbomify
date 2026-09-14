@@ -18,7 +18,7 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_au
 from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
 from sbomify.apps.core.apis import get_component_metadata, patch_component_metadata
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.object_store import StorageClient
+from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
 from sbomify.apps.core.purl import extract_purl_qualifiers
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.access_control import check_component_access, check_component_access_for_user
@@ -160,12 +160,10 @@ def _store_external_vex(
 def _cleanup_orphaned_s3_object(filename: str) -> None:
     """Log a potential orphaned S3 object for manual cleanup.
 
-    Under READ COMMITTED isolation, a synchronous .exists() check can race
-    with concurrent transactions, risking deletion of objects still needed.
-    Instead of immediate deletion, we log at WARNING level so operators can
-    monitor and clean up orphans manually or via future automation.
+    Shares one policy and one log format with the document upload path; the
+    reasoning for logging rather than deleting lives with the helper.
     """
-    log.warning("Potential orphaned S3 object after IntegrityError: %s", filename)
+    log_orphaned_object(filename)
 
 
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))

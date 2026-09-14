@@ -13,10 +13,21 @@
                 <p class="text-text-muted mb-6">{{ error_message }}</p>
             </div>
             <div class="flex flex-col sm:flex-row justify-center gap-3">
+                {% comment %}
+                Not every denial is "go and ask": a request already under review
+                has no action to offer, and an unsigned NDA is a different one.
+                Callers that pass neither label nor icon keep the request-access
+                button this page has always shown.
+
+                Secondary, not primary: this page renders on a workspace's own
+                Trust Center, and a filled library button hardcodes white text
+                over whatever accent the workspace picked. Neutral is the only
+                variant that stays readable on a pale one.
+                {% endcomment %}
                 {% if request_access_url %}
-                    <c-buttons.primary href="{{ request_access_url }}">
-                    <i class="fas fa-key mr-2"></i>Request Access
-                    </c-buttons.primary>
+                    <c-buttons.secondary href="{{ request_access_url }}">
+                    <i class="fas {{ action_icon|default:"fa-key" }} mr-2"></i>{{ action_label|default:"Request Access" }}
+                    </c-buttons.secondary>
                 {% endif %}
                 {% if back_url %}
                     <c-buttons.secondary href="{{ back_url }}" onclick="if (window.history.length > 1) { window.history.back(); return false; }">

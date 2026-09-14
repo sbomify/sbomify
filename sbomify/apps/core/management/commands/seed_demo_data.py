@@ -78,7 +78,7 @@ class ComponentSpec:
     gating: str = ""
     # How many SBOM versions to upload. Ignored for document components.
     sboms: int = 1
-    documents: tuple[tuple[str, str, str], ...] = ()  # (name, document_type, version)
+    documents: tuple[tuple[str, str, str, str | None], ...] = ()  # (name, document_type, version, subcategory)
 
 
 @dataclass(frozen=True)
@@ -117,8 +117,10 @@ class AdvisorySpec:
     references: tuple[str, ...] = ()
 
 
-def _doc(name: str, doc_type: str, version: str = "1.0") -> tuple[str, str, str]:
-    return (name, doc_type, version)
+def _doc(
+    name: str, doc_type: str, version: str = "1.0", subcategory: str | None = None
+) -> tuple[str, str, str, str | None]:
+    return (name, doc_type, version, subcategory)
 
 
 # Two catalogues so two workspaces do not look like copies of each other. A
@@ -357,7 +359,7 @@ GLOBAL_COMPONENTS: tuple[ComponentSpec, ...] = (
         "Company NDA",
         DOC,
         PRIVATE,
-        documents=(_doc("Mutual non-disclosure agreement", Document.DocumentType.COMPLIANCE, "2026.1"),),
+        documents=(_doc("Mutual non-disclosure agreement", Document.DocumentType.NDA, "2026.1"),),
     ),
     ComponentSpec(
         "Security policies",
@@ -372,7 +374,14 @@ GLOBAL_COMPONENTS: tuple[ComponentSpec, ...] = (
         "Certifications",
         DOC,
         PUBLIC,
-        documents=(_doc("ISO 27001 certificate", Document.DocumentType.COMPLIANCE, "2026"),),
+        documents=(
+            _doc(
+                "ISO 27001 certificate",
+                Document.DocumentType.COMPLIANCE,
+                "2026",
+                Document.ComplianceSubcategory.ISO27001,
+            ),
+        ),
     ),
 )
 
@@ -757,8 +766,8 @@ class Command(BaseCommand):
             )
             if created:
                 totals.components += 1
-            for name, doc_type, version in spec.documents:
-                document = self._ensure_document(team, component, name, doc_type, version, totals)
+            for name, doc_type, version, subcategory in spec.documents:
+                document = self._ensure_document(team, component, name, doc_type, version, subcategory, totals)
                 if spec.name == "Company NDA":
                     nda_document = document
         return nda_document
@@ -777,16 +786,26 @@ class Command(BaseCommand):
             component.save(update_fields=["nda_document"])
 
     def _ensure_document(
-        self, team: Team, component: Component, name: str, doc_type: str, version: str, totals: Counts
+        self,
+        team: Team,
+        component: Component,
+        name: str,
+        doc_type: str,
+        version: str,
+        subcategory: str | None,
+        totals: Counts,
     ) -> Document:
         existing = Document.objects.filter(component=component, name=name, version=version).first()
         if existing is not None:
+            # A workspace seeded before the subcategory existed still has the
+            # row, so re-seeding brings it up to the spec rather than leaving a
+            # certificate that cannot earn its badge.
+            if existing.compliance_subcategory != subcategory:
+                existing.compliance_subcategory = subcategory
+                existing.save(update_fields=["compliance_subcategory"])
             return existing
 
         body = _document_body(name, version, team.name)
-        subcategory = None
-        if doc_type == Document.DocumentType.COMPLIANCE and "non-disclosure" in name.lower():
-            subcategory = Document.ComplianceSubcategory.NDA
 
         filename = StorageClient("DOCUMENTS").upload_document(body)
         document = Document.objects.create(
@@ -808,8 +827,8 @@ class Command(BaseCommand):
         self, request: HttpRequest, team: Team, component: Component, spec: ComponentSpec, totals: Counts
     ) -> None:
         if spec.kind == DOC:
-            for name, doc_type, version in spec.documents:
-                self._ensure_document(team, component, name, doc_type, version, totals)
+            for name, doc_type, version, subcategory in spec.documents:
+                self._ensure_document(team, component, name, doc_type, version, subcategory, totals)
             return
 
         for index in range(min(spec.sboms, len(VERSION_LADDER))):
