@@ -661,7 +661,10 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 "software_identifiers",
                 status="fail" if identifier_failures else "pass",
                 details=f"Missing for: {', '.join(identifier_failures)}" if identifier_failures else None,
-                remediation="Add externalIdentifiers with packageURL, cpe23, or swid type.",
+                remediation=(
+                    "Add software_packageUrl to each package, or an externalIdentifier "
+                    "of type packageUrl, cpe23 or swid."
+                ),
             )
         )
 
