@@ -347,4 +347,7 @@ class TestTheCredentialContractHolds:
             kind = _credential_kind(request)
 
         assert kind == "pat"
-        assert [q for q in captured.captured_queries if "oidc" in q["sql"].lower()] == []
+        # No query at all, not merely no OIDC one. Matching on the table name
+        # would keep passing if some unrelated lookup were added here later,
+        # which is the regression this exists to catch.
+        assert captured.captured_queries == [], "labelling a credential must not touch the database"
