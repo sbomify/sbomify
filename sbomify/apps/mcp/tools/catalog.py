@@ -279,7 +279,12 @@ def register_tools(mcp: FastMCP) -> None:
             obj = _get_release(principal, release_id)
             data = serializers.release(obj, detail=True)
             data["product"] = {"id": obj.product.id, "name": obj.product.name}
-            artifacts = obj.artifacts.select_related("sbom", "document").all()
+            # Ordered, because the slice below takes the first fifty and
+            # Postgres has no obligation to return them in any particular order
+            # without an ORDER BY. Unordered, which fifty an agent saw could
+            # differ between two identical calls. Newest first, which the
+            # release-and-created_at index already covers.
+            artifacts = obj.artifacts.select_related("sbom", "document").order_by("-created_at", "id")
             data["artifacts"] = serializers.capped(
                 [serializers.release_artifact(a) for a in artifacts[:DETAIL_COLLECTION_LIMIT]],
                 total=artifacts.count(),
