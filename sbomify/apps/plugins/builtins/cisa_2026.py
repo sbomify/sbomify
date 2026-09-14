@@ -60,6 +60,7 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     get_spdx3_package_license,
     is_spdx3,
     iter_spdx3_external_identifiers,
+    spdx3_refs,
 )
 from sbomify.apps.plugins.builtins._spdx_shared import (
     spdx2_annotation_targets_document,
@@ -1313,12 +1314,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         separates the tool from the author, so only the two human-or-company
         types satisfy this element.
         """
-        created_by = creation_info.get("createdBy")
-        if isinstance(created_by, str):
-            created_by = [created_by]
-        if not isinstance(created_by, list):
-            return False
-        for ref in created_by:
+        for ref in spdx3_refs(creation_info.get("createdBy")):
             entity = agents.get(ref) if isinstance(ref, str) else (ref if isinstance(ref, dict) else None)
             if not isinstance(entity, dict):
                 continue
@@ -1334,13 +1330,8 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         agents: dict[str, dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """The tool elements createdUsing points at."""
-        refs = creation_info.get("createdUsing")
-        if isinstance(refs, str):
-            refs = [refs]
-        if not isinstance(refs, list):
-            return []
         found: list[dict[str, Any]] = []
-        for ref in refs:
+        for ref in spdx3_refs(creation_info.get("createdUsing")):
             if isinstance(ref, dict):
                 found.append(ref)
             elif isinstance(ref, str):
@@ -1436,12 +1427,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         """
         values: list[Any] = []
         for key in ("originatedBy", "suppliedBy"):
-            refs = package.get(key)
-            if isinstance(refs, str):
-                refs = [refs]
-            if not isinstance(refs, list):
-                continue
-            for ref in refs:
+            for ref in spdx3_refs(package.get(key)):
                 entity = agents.get(ref) if isinstance(ref, str) else (ref if isinstance(ref, dict) else None)
                 if isinstance(entity, dict):
                     values.append(entity.get("name"))

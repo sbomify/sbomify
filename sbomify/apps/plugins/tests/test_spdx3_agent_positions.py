@@ -166,3 +166,71 @@ class TestToolsOnCreationInfo:
         fields = get_spdx3_creation_info_fields({"createdUsing": "urn:unknown"}, {}, {})
 
         assert fields["tool_entries"] == ["urn:unknown"]
+
+
+class TestTheCisa2026Plugin:
+    """The current standard, and the last reader still carrying its own copies
+    of this normalisation: one each for createdBy, createdUsing and the
+    originatedBy/suppliedBy pair. All three read a bare string and none read a
+    bare object, so an inline Agent scored as nobody.
+    """
+
+    @pytest.fixture
+    def plugin(self):
+        from sbomify.apps.plugins.builtins.cisa_2026 import CISAMinimumElementsPlugin
+
+        return CISAMinimumElementsPlugin()
+
+    _PERSON = {"type": "Person", "spdxId": "urn:someone", "name": "A Person"}
+    _TOOL = {"type": "Tool", "spdxId": "urn:tool", "name": "syft 1.2.3"}
+
+    @pytest.mark.parametrize(
+        "created_by",
+        [
+            pytest.param(["urn:someone"], id="list"),
+            pytest.param("urn:someone", id="compact string"),
+            pytest.param(_PERSON, id="inline object"),
+            pytest.param([_PERSON], id="list of one inline object"),
+        ],
+    )
+    def test_every_shape_names_the_author(self, plugin, created_by):
+        assert plugin._spdx3_has_author({"createdBy": created_by}, {"urn:someone": self._PERSON}) is True
+
+    def test_a_software_agent_is_the_tool_not_the_author(self, plugin):
+        """Unchanged by the shared helper: the standard separates them."""
+        agent = {"type": "SoftwareAgent", "spdxId": "urn:bot", "name": "a bot"}
+
+        assert plugin._spdx3_has_author({"createdBy": agent}, {}) is False
+
+    @pytest.mark.parametrize(
+        "created_using",
+        [
+            pytest.param(["urn:tool"], id="list"),
+            pytest.param("urn:tool", id="compact string"),
+            pytest.param(_TOOL, id="inline object"),
+        ],
+    )
+    def test_every_shape_finds_the_tool(self, plugin, created_using):
+        found = plugin._spdx3_tools({"createdUsing": created_using}, {"urn:tool": self._TOOL}, {})
+
+        assert [t.get("name") for t in found] == ["syft 1.2.3"]
+
+    @pytest.mark.parametrize("key", ["originatedBy", "suppliedBy"])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pytest.param(["urn:someone"], id="list"),
+            pytest.param("urn:someone", id="compact string"),
+            pytest.param(_PERSON, id="inline object"),
+        ],
+    )
+    def test_every_shape_names_the_producer(self, plugin, key, value):
+        names = plugin._spdx3_producer_names({key: value}, {"urn:someone": self._PERSON})
+
+        assert names == ["A Person"]
+
+    def test_noassertion_still_counts_as_naming_nobody_explicitly(self, plugin):
+        assert plugin._spdx3_producer_names({"originatedBy": "NOASSERTION"}, {}) == ["NOASSERTION"]
+
+    def test_a_package_naming_nobody_names_nobody(self, plugin):
+        assert plugin._spdx3_producer_names({}, {}) == []
