@@ -49,8 +49,27 @@ published artefacts byte for byte — only the filenames differ, to match the
 naming used in this directory. Background:
 <https://sbomify.com/2026/05/19/yocto-spdx-3-0-overview/>.
 
-Note that Yocto emits CPE external references rather than purls, so these
-samples exercise the purl-less path.
+Yocto always emits CPE external references, from `CVE_PRODUCT`/`CVE_VERSION`.
+Whether it also emits purls changed between these two releases, so the samples
+do not exercise the same path as each other:
+
+| Sample | Packages | purl | cpe | neither |
+| --- | --- | --- | --- | --- |
+| 6.0.3 (SPDX 3.0) | 259 | 161 | 151 | 98 |
+| 5.0.19 (SPDX 2.2) | 233 | 0 | 102 | 131 |
+
+So the 2.2 sample is the purl-less one. On the 3.0 sample most packages carry
+both, and a test meaning to exercise CPE identity there would pass on the purl
+instead.
+
+The packages carrying neither are source archives (`acl-2.3.2.tar.gz`, git
+checkouts versioned by commit), not shipped software: 97 of the 98 on the 3.0
+sample have `software_primaryPurpose: source`. On what the image installs,
+coverage is 151 of 153.
+
+The 2.2 sample carries no VEX at all. SPDX 2.2 has no security profile, so
+`CVE_STATUS` has nowhere to live; its only annotations are `isNative` markers.
+VEX begins with the 3.0 output.
 
 ### SPDX 3.0
 

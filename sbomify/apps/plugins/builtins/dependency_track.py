@@ -903,6 +903,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
                         "version": component_version,
                         "ecosystem": ecosystem,
                         "purl": purl,
+                        # Kept because it is sometimes the only identity there
+                        # is. DT matches a package with no purl through NVD,
+                        # which is CPE-keyed, and a VEX statement about that
+                        # package has nothing else to meet it on. Yocto's
+                        # images are entirely this shape.
+                        "cpe": component_data.get("cpe") or "",
                     },
                     cvss_score=cvss_score,
                     references=references,
