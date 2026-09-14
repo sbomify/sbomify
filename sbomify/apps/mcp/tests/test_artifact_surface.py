@@ -282,6 +282,39 @@ async def test_a_detail_tool_cuts_its_collections_rather_than_tripping_the_cap(
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_a_capped_total_is_the_real_total(mcp_owner, make_token, product_in_bound_workspace):
+    """The count has to be the count, not the size of the slice it came from.
+
+    Taking len() of a LIMIT+1 fetch reported 51 for a product with far more,
+    which is worse than the truncation it was meant to describe: a truncated
+    list that says so is an answer, a wrong number reads as a right one.
+    """
+    from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+    from sbomify.apps.sboms.models import ProductIdentifier
+
+    extra = 12
+
+    def setup() -> None:
+        for i in range(DETAIL_COLLECTION_LIMIT + extra):
+            ProductIdentifier.objects.create(
+                product=product_in_bound_workspace,
+                identifier_type=ProductIdentifier.IdentifierType.SKU,
+                value=f"id-{i:04d}",
+            )
+
+    await sync_to_async(setup)()
+    token = await sync_to_async(make_token)(["product:read"])
+
+    detail = structured(await _call(token, "get_product", product_id=product_in_bound_workspace.id))
+
+    identifiers = detail["identifiers"]
+    assert len(identifiers["items"]) == DETAIL_COLLECTION_LIMIT
+    assert identifiers["total"] == DETAIL_COLLECTION_LIMIT + extra, "the real count, not the slice"
+    assert identifiers["truncated"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_a_small_product_is_not_marked_truncated(mcp_owner, make_token, product_in_bound_workspace):
     """The flag has to mean something, so it must be absent on a normal answer."""
     from sbomify.apps.core.models import Component
