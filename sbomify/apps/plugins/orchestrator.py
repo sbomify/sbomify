@@ -287,6 +287,22 @@ class PluginOrchestrator:
             # and drop them from the severity counts. Raw findings are kept (ADR-004).
             # Best-effort: the scan result is already complete, so a VEX problem
             # (missing S3 object, transient storage error) must never fail the run.
+            # The statements actually applied to the stored result. Reused for
+            # the row projection further down so the rows and the blob they
+            # derive from cannot be built from different sets: a VEX uploaded
+            # between the two would otherwise suppress in one and not the
+            # other. Stays empty unless annotation succeeded, which is what an
+            # un-suppressed stored result deserves.
+            #
+            # Bound out here rather than inside the branch below, because the
+            # branch tests the plugin RESULT's category while the projection
+            # further down tests the RUN's, which comes from the plugin's
+            # declared metadata. Nothing forces a plugin's returned result to
+            # carry the category its metadata promised, and where they differ
+            # this name would be read unbound. That raises while evaluating the
+            # argument, so sync_findings_safely's own guard cannot catch it.
+            applied_vex: list[dict[str, Any]] = []
+
             if result.category == AssessmentCategory.SECURITY:
                 from sbomify.apps.vulnerability_scanning.vex import (
                     VexArtifactUnreadable,
@@ -299,9 +315,17 @@ class PluginOrchestrator:
                 try:
                     if component_id:
                         with strict_vex_reads():
-                            annotate_findings_with_vex(
-                                result, resolve_vex_statements_for_sbom(component_id, assessment_run.sbom_id)
-                            )
+                            resolved = resolve_vex_statements_for_sbom(component_id, assessment_run.sbom_id)
+                            annotate_findings_with_vex(result, resolved)
+                            # Only claim them if they could have reached the
+                            # stored result. annotate_findings_with_vex returns
+                            # without touching anything when the result carries
+                            # no summary, and its count cannot say so: zero is
+                            # also what "ran, matched nothing" returns. Claiming
+                            # them there would suppress in the rows and not in
+                            # the blob they are supposed to derive from.
+                            if getattr(result, "summary", None) is not None:
+                                applied_vex = resolved
                 except VexArtifactUnreadable:
                     # A VEX artifact exists but its object could not be read: do not
                     # silently store an under-suppressed result. Log loud and enqueue
@@ -349,6 +373,13 @@ class PluginOrchestrator:
                         f"[PLUGIN] lifecycle update failed for run {assessment_run.id}; keeping the scan result",
                         exc_info=True,
                     )
+
+                # Project the findings into rows, for the same reason and with
+                # the same safety: derived from the immutable run, rebuildable,
+                # and never the reason a good scan result is lost.
+                from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
+
+                sync_findings_safely(assessment_run, applied_vex)
 
             # Populate the releases M2M from the CURRENT ReleaseArtifact state.
             # This is the source-of-truth moment: whichever releases link to this
