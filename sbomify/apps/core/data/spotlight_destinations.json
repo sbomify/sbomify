@@ -204,6 +204,16 @@
       "roles": ["owner", "admin"]
     },
     {
+      "title": "Integrations",
+      "url_name": "teams:team_settings",
+      "section": "settings",
+      "icon": "fa-plug",
+      "keywords": ["vanta", "connect", "oauth", "sync", "compliance tool", "drata", "data source", "frameworks"],
+      "args": ["team_key"],
+      "fragment": "integrations",
+      "roles": ["owner", "admin"]
+    },
+    {
       "title": "Branding",
       "url_name": "teams:team_settings",
       "section": "settings",

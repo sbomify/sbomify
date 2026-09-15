@@ -42,6 +42,12 @@ def get_public_controls_list(team: Team) -> ServiceResult[list[dict[str, Any]]]:
             "catalog": {
                 "name": catalog.name,
                 "version": catalog.version,
+                # Who keeps this catalogue up to date. A visitor reading a
+                # score wants to know whether a human typed it or a compliance
+                # tool is answering for it, so the public page says which.
+                "source": catalog.source,
+                "source_label": catalog.get_source_display(),
+                "is_synced": catalog.source not in (ControlCatalog.Source.BUILTIN, ControlCatalog.Source.CUSTOM),
             },
             **summary_result.value,
         }
@@ -91,6 +97,12 @@ def get_public_product_controls_list(product: Product) -> ServiceResult[list[dic
             "catalog": {
                 "name": catalog.name,
                 "version": catalog.version,
+                # Who keeps this catalogue up to date. A visitor reading a
+                # score wants to know whether a human typed it or a compliance
+                # tool is answering for it, so the public page says which.
+                "source": catalog.source,
+                "source_label": catalog.get_source_display(),
+                "is_synced": catalog.source not in (ControlCatalog.Source.BUILTIN, ControlCatalog.Source.CUSTOM),
             },
             "product": {
                 "id": product.id,

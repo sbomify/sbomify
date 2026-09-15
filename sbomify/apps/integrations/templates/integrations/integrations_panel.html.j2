@@ -1,0 +1,197 @@
+{% comment %}
+Integrations, in the settings-tab style the branding tab set: no card chrome,
+an h2 and one explainer line up top, then one plain section per provider
+separated by hairlines.
+
+Every control posts back to this same URL and swaps the whole panel, so the
+connected state, the last sync line and the framework list can never disagree
+with each other after an action.
+{% endcomment %}
+<div>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h2 class="text-lg font-semibold text-text m-0">Integrations</h2>
+            <p class="text-sm text-text-muted mt-1 m-0">
+                Connect a tool that already tracks your compliance, and choose what it shows on your Trust Center.
+            </p>
+        </div>
+    </div>
+    {% for card in cards %}
+        <section class="mt-8 {% if not forloop.first %}pt-8 border-t border-border{% endif %}">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="flex items-start gap-3">
+                    <c-chips.icon-chip>
+                    <i class="fas {{ card.provider.icon }}" aria-hidden="true"></i>
+                    </c-chips.icon-chip>
+                    <div>
+                        <h3 class="text-sm font-semibold text-text m-0 flex items-center gap-2">
+                            {{ card.provider.name }}
+                            {% if card.needs_reconnect %}
+                                <c-badges.warning size="sm">Needs reconnecting</c-badges.warning>
+                            {% elif card.is_connected %}
+                                <c-badges.success size="sm">Connected</c-badges.success>
+                            {% endif %}
+                        </h3>
+                        <p class="text-sm text-text-muted mt-1 m-0">{{ card.provider.tagline }}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if card.is_connected %}
+                        {% comment %}
+                        Reconnecting is the same consent flow as connecting, and
+                        it lands on the same row: a workspace has one connection
+                        per provider, so there is nothing to tear down first.
+                        {% endcomment %}
+                        {% if card.needs_reconnect and card.provider.is_configured %}
+                            <form method="post"
+                                  action="{% url 'integrations:connect' team.key card.provider.key %}">
+                                {% csrf_token %}
+                                <c-buttons.primary size="sm" type="submit">Reconnect</c-buttons.primary>
+                            </form>
+                        {% else %}
+                            <form method="post"
+                                  hx-post="{% url 'integrations:panel' team.key %}"
+                                  hx-target="#integrations-wrapper"
+                                  hx-disabled-elt="find button[type='submit']"
+                                  hx-swap="innerHTML">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="sync">
+                                <input type="hidden" name="provider" value="{{ card.provider.key }}">
+                                <c-buttons.secondary size="sm" type="submit">
+                                <i class="fas fa-arrows-rotate mr-2" aria-hidden="true"></i>Sync now
+                                </c-buttons.secondary>
+                            </form>
+                        {% endif %}
+                        <form method="post"
+                              hx-post="{% url 'integrations:panel' team.key %}"
+                              hx-target="#integrations-wrapper"
+                              hx-confirm="Disconnect {{ card.provider.name }}? Its frameworks come off your Trust Center straight away."
+                              hx-swap="innerHTML">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="disconnect">
+                            <input type="hidden" name="provider" value="{{ card.provider.key }}">
+                            <c-buttons.outline-danger size="sm" type="submit">Disconnect</c-buttons.outline-danger>
+                        </form>
+                    {% elif card.provider.is_configured %}
+                        {% comment %}
+                        A plain form post, not HTMX: this response is a redirect
+                        off site to the provider's consent screen, which HTMX
+                        would try to swap into the page.
+                        {% endcomment %}
+                        <form method="post"
+                              action="{% url 'integrations:connect' team.key card.provider.key %}">
+                            {% csrf_token %}
+                            <c-buttons.primary size="sm" type="submit">Connect {{ card.provider.name }}</c-buttons.primary>
+                        </form>
+                    {% else %}
+                        <c-badges.secondary size="sm">Not available here</c-badges.secondary>
+                    {% endif %}
+                </div>
+            </div>
+            <c-layout.section-body class="mt-4">
+            {% comment %}
+            Connected is checked first, deliberately. A deployment can lose its
+            credentials after a workspace has already connected, and that
+            workspace still needs to see what it published and be able to take
+            it down. It gets the warning as well as its frameworks, not instead
+            of them.
+            {% endcomment %}
+            {% if not card.is_connected and not card.provider.is_configured %}
+                <c-feedback.alert icon="fas fa-circle-info">
+                This deployment has no {{ card.provider.name }} credentials. Set them to turn this on.
+                <a href="{{ card.provider.docs_url }}"
+                   target="_blank"
+                   rel="noopener"
+                   class="font-medium">{{ card.provider.name }} docs</a>
+                </c-feedback.alert>
+            {% elif not card.is_connected %}
+                <p class="text-sm text-text-muted m-0">sbomify reads, and never writes:</p>
+                <ul class="mt-2 space-y-1">
+                    {% for item in card.provider.reads %}
+                        <li class="flex items-start gap-2 text-sm text-text-muted">
+                            <i class="fas fa-check text-success mt-1 text-xs" aria-hidden="true"></i>
+                            <span>{{ item }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                {% if not card.provider.is_configured %}
+                    <c-feedback.alert variant="warning" title="{{ card.provider.name }} credentials are missing">
+                    This deployment can no longer reach {{ card.provider.name }}, so syncing has stopped. What is already published stays until you take it down.
+                    </c-feedback.alert>
+                {% endif %}
+                {% if card.needs_reconnect %}
+                    <c-feedback.alert variant="warning" title="Reconnect {{ card.provider.name }}">
+                    {{ card.integration.last_sync_error|default:"The connection was refused." }} Reconnect to start syncing again.
+                    </c-feedback.alert>
+                {% elif card.integration.last_sync_status == 'failed' %}
+                    <c-feedback.alert variant="warning" title="Last sync failed">
+                    {{ card.integration.last_sync_error|default:"Something went wrong. The next scheduled sync tries again." }}
+                    </c-feedback.alert>
+                {% endif %}
+                <div class="flex flex-wrap gap-3">
+                    <c-chips.metric-chip>
+                    <i class="fas fa-clock text-text-muted" aria-hidden="true"></i>
+                    <c-chips.metric.label>Last sync</c-chips.metric.label>
+                    <c-chips.metric.value>
+                    {% if card.integration.last_sync_at %}
+                        {% include 'core/components/relative_time.html.j2' with timestamp=card.integration.last_sync_at %}
+                    {% else %}
+                        Not yet
+                    {% endif %}
+                    </c-chips.metric.value>
+                    </c-chips.metric-chip>
+                    {% if card.integration.connected_by %}
+                        <c-chips.metric-chip>
+                        <i class="fas fa-user text-text-muted" aria-hidden="true"></i>
+                        <c-chips.metric.label>Connected by</c-chips.metric.label>
+                        <c-chips.metric.value>{{ card.integration.connected_by.get_full_name|default:card.integration.connected_by.username }}</c-chips.metric.value>
+                        </c-chips.metric-chip>
+                    {% endif %}
+                </div>
+                <h4 class="text-sm font-semibold text-text mt-6 m-0">Frameworks on your Trust Center</h4>
+                <p class="text-sm text-text-muted mt-1 m-0">
+                    Everything {{ card.provider.name }} tracks is synced. Only what you switch on here is public.
+                </p>
+                {% if card.catalogs %}
+                    <div class="mt-4 space-y-2">
+                        {% for catalog in card.catalogs %}
+                            <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-background/30 rounded-lg">
+                                <div>
+                                    <div class="text-sm font-medium text-text">{{ catalog.name }}</div>
+                                    <div class="text-xs text-text-muted mt-0.5">
+                                        {{ catalog.control_count }} control{{ catalog.control_count|pluralize }}
+                                    </div>
+                                </div>
+                                <form method="post"
+                                      hx-post="{% url 'integrations:panel' team.key %}"
+                                      hx-target="#integrations-wrapper"
+                                      hx-trigger="change from:#publish-{{ catalog.id }}"
+                                      hx-swap="innerHTML">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="publish">
+                                    <input type="hidden" name="catalog_id" value="{{ catalog.id }}">
+                                    <input type="hidden"
+                                           name="published"
+                                           value="{% if catalog.is_active %}false{% else %}true{% endif %}">
+                                    <c-forms.toggle name="publish_toggle" id="publish-{{ catalog.id }}" checked="{{ catalog.is_active|yesno:'1,' }}" aria-label="Show {{ catalog.name }} on the Trust Center">
+                                    {% if catalog.is_active %}
+                                        Public
+                                    {% else %}
+                                        Hidden
+                                    {% endif %}
+                                    </c-forms.toggle>
+                                </form>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <c-feedback.empty-state icon="fas fa-list-check" icon_variant="neutral" title="No frameworks yet" class="mt-4">
+                    Frameworks appear here after the first sync finishes.
+                    </c-feedback.empty-state>
+                {% endif %}
+            {% endif %}
+            </c-layout.section-body>
+        </section>
+    {% endfor %}
+</div>

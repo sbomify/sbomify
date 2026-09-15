@@ -13,11 +13,20 @@ class ControlCatalog(models.Model):
     class Source(models.TextChoices):
         BUILTIN = "builtin", "Built-in"
         CUSTOM = "custom", "Custom"
+        # An integration owns this catalog: the workspace's compliance tool is
+        # the system of record and every sync overwrites what is here. The
+        # value is the provider key, so ``Integration.provider`` and
+        # ``ControlCatalog.source`` are the same string and a disconnect can
+        # find what it published without a second table.
+        VANTA = "vanta", "Vanta"
 
     class Meta:
         db_table = "controls_catalog"
         unique_together = ("team", "name", "version")
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["team", "source", "external_id"], name="controls_catalog_source_idx"),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
@@ -27,6 +36,10 @@ class ControlCatalog(models.Model):
     name = models.CharField(max_length=255)
     version = models.CharField(max_length=50)
     source = models.CharField(max_length=20, choices=Source.choices, default=Source.BUILTIN)
+    # The id this catalog has in the system that owns it, for synced sources.
+    # Identity for a sync is this, not the name: a framework that gets renamed
+    # upstream must update in place rather than arrive as a second catalog.
+    external_id = models.CharField(max_length=255, blank=True, default="")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -47,6 +60,9 @@ class Control(models.Model):
     control_id = models.CharField(max_length=50)
     title = models.CharField(max_length=500)
     description = models.TextField(blank=True, default="")
+    # As above, for controls: ``control_id`` is the code a reader recognises
+    # ("CC1.1") and can change, this is the upstream row's own id.
+    external_id = models.CharField(max_length=255, blank=True, default="")
     sort_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
