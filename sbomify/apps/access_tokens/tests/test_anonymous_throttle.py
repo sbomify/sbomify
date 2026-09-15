@@ -145,6 +145,20 @@ class TestTheBackendGoingDown:
     outside the handler that would otherwise catch it.
     """
 
+    @pytest.fixture(autouse=True)
+    def _clear_refusal_window(self):
+        """The refusal window lives on the class, so a test must start from zero.
+
+        It has to: the MCP server builds a throttle per request, and per-instance
+        state would restart the window on every one of them. The cost is that a
+        fresh instance no longer means fresh state here.
+        """
+        for cls in (AnonymousIPRateThrottle, AccessTokenRateThrottle):
+            cls._backend_refusal_until = 0.0
+        yield
+        for cls in (AnonymousIPRateThrottle, AccessTokenRateThrottle):
+            cls._backend_refusal_until = 0.0
+
     @staticmethod
     def _unreachable(mocker):
         from redis.exceptions import ConnectionError as RedisConnectionError

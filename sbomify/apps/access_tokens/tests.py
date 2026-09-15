@@ -1281,6 +1281,19 @@ class TestThrottleRefusesCleanlyWhenRedisIsDown:
     Throttled path and the 429 handler.
     """
 
+    @pytest.fixture(autouse=True)
+    def _clear_refusal_window(self):
+        """The refusal window lives on the class, so a test must start from zero.
+
+        It has to: the MCP server builds a throttle per request, and per-instance
+        state would restart the window on every one of them.
+        """
+        from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+
+        AccessTokenRateThrottle._backend_refusal_until = 0.0
+        yield
+        AccessTokenRateThrottle._backend_refusal_until = 0.0
+
     def _broken_cache(self):
         from unittest.mock import MagicMock
 
@@ -1386,4 +1399,28 @@ class TestThrottleRefusesCleanlyWhenRedisIsDown:
 
         # Second refusal lands inside the first refusal window, so it must not
         # log again: one alert per window, not one per rejected request.
+        assert mock_logger.exception.call_count == 1
+
+    def test_the_outage_logs_once_across_fresh_instances(self, sample_user):  # noqa: F811
+        """The MCP server builds a throttle per request; that must not restart the window."""
+        from unittest.mock import patch
+
+        from django.test import RequestFactory
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+        token = create_personal_access_token(sample_user)
+        record = AccessToken.objects.create(user=sample_user, encoded_token=token, description="t")
+        request = RequestFactory().get("/")
+        request.access_token_record = record
+
+        with (
+            patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": self._broken_cache()}),
+            patch("sbomify.apps.access_tokens.throttling.logger") as mock_logger,
+        ):
+            for _ in range(3):
+                assert AccessTokenRateThrottle().allow_request(request) is False
+
         assert mock_logger.exception.call_count == 1

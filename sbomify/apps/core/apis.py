@@ -207,8 +207,11 @@ def _get_user_team_id(request: HttpRequest) -> str | None:
         if default_team_id:
             return str(default_team_id)
 
-        # If no default workspace is set, fall back to first workspace
-        first_membership = Member.objects.filter(user=request.user).select_related("team").first()
+        # If no default workspace is set, fall back to first workspace.
+        # Ordered so the fallback is deterministic: an unordered .first() could
+        # hand two requests from the same user different workspaces (and let
+        # REST and MCP resolve the same legacy token to different workspaces).
+        first_membership = Member.objects.filter(user=request.user).select_related("team").order_by("pk").first()
         if first_membership:
             return str(first_membership.team.id)
 
@@ -2285,7 +2288,7 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
     if _is_guest_member(request):
         return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
-    log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
+    log.debug("Incoming metadata payload for component %s: %s", component_id, request.body)
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
