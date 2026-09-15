@@ -3493,6 +3493,26 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
             "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
         }
 
+    # A release's CLE records are its published lifecycle history, exported over
+    # TEA, and both foreign keys cascade. Deleting the release takes the trail
+    # with it and says nothing.
+    #
+    # PROTECT on those keys is not the fix. Workspace deletion cascades through
+    # product to release, so it would block account deletion, and a nullable key
+    # would push a release-less event into every reader. Refusing here is the
+    # same shape as the `latest` refusal above, and deleting the product still
+    # removes a product's history deliberately rather than by accident.
+    lifecycle_records = release.cle_events.count() + release.cle_support_definitions.count()
+    if lifecycle_records:
+        return 400, {
+            "detail": (
+                f"Cannot delete release '{release.name}'. It carries {lifecycle_records} lifecycle "
+                f"record(s) that sbomify publishes, and deleting the release would destroy them. "
+                f"Delete the product if you mean to remove its history as well."
+            ),
+            "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
+        }
+
     # Capture data for broadcast before deleting
     workspace_key = release.product.team.key
     product_id = str(release.product.id)
