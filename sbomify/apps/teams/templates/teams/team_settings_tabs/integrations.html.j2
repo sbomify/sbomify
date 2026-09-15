@@ -1,0 +1,21 @@
+<div id="integrations-wrapper"
+     hx-get="{% url 'integrations:panel' team.key %}"
+     hx-trigger="load, refreshIntegrations from:body"
+     hx-swap="innerHTML">
+    {# Skeleton loading state, shaped like the loaded layout: a heading, then one row per provider. #}
+    <div class="space-y-6">
+        <div>
+            <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
+            <div class="h-4 w-64 bg-border/30 rounded animate-pulse mt-2"></div>
+        </div>
+        <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg">
+            <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
+            <div class="flex-1">
+                <div class="h-4 w-40 bg-border/50 rounded animate-pulse"></div>
+                <div class="h-3 w-56 bg-border/30 rounded animate-pulse mt-2"></div>
+            </div>
+            <div class="h-8 w-24 bg-border/30 rounded-lg animate-pulse"></div>
+        </div>
+    </div>
+    <c-feedback.loading row message="Loading integrations..." class="mt-4" />
+</div>
