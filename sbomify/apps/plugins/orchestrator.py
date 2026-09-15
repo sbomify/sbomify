@@ -317,7 +317,15 @@ class PluginOrchestrator:
                         with strict_vex_reads():
                             resolved = resolve_vex_statements_for_sbom(component_id, assessment_run.sbom_id)
                             annotate_findings_with_vex(result, resolved)
-                            applied_vex = resolved
+                            # Only claim them if they could have reached the
+                            # stored result. annotate_findings_with_vex returns
+                            # without touching anything when the result carries
+                            # no summary, and its count cannot say so: zero is
+                            # also what "ran, matched nothing" returns. Claiming
+                            # them there would suppress in the rows and not in
+                            # the blob they are supposed to derive from.
+                            if getattr(result, "summary", None) is not None:
+                                applied_vex = resolved
                 except VexArtifactUnreadable:
                     # A VEX artifact exists but its object could not be read: do not
                     # silently store an under-suppressed result. Log loud and enqueue
