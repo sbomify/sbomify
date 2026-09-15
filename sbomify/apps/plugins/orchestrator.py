@@ -296,12 +296,19 @@ class PluginOrchestrator:
                 )
 
                 component_id = assessment_run.sbom.component_id
+                # The statements actually applied to the stored result. Reused
+                # for the row projection further down so the rows and the blob
+                # they derive from cannot be built from different sets: a VEX
+                # uploaded between the two would otherwise suppress in one and
+                # not the other. Stays empty unless annotation succeeded, which
+                # is what an un-suppressed stored result deserves.
+                applied_vex: list[dict[str, Any]] = []
                 try:
                     if component_id:
                         with strict_vex_reads():
-                            annotate_findings_with_vex(
-                                result, resolve_vex_statements_for_sbom(component_id, assessment_run.sbom_id)
-                            )
+                            resolved = resolve_vex_statements_for_sbom(component_id, assessment_run.sbom_id)
+                            annotate_findings_with_vex(result, resolved)
+                            applied_vex = resolved
                 except VexArtifactUnreadable:
                     # A VEX artifact exists but its object could not be read: do not
                     # silently store an under-suppressed result. Log loud and enqueue
@@ -355,7 +362,7 @@ class PluginOrchestrator:
                 # and never the reason a good scan result is lost.
                 from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
 
-                sync_findings_safely(assessment_run)
+                sync_findings_safely(assessment_run, applied_vex)
 
             # Populate the releases M2M from the CURRENT ReleaseArtifact state.
             # This is the source-of-truth moment: whichever releases link to this
