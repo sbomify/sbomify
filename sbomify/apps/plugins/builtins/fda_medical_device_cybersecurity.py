@@ -778,8 +778,8 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 status="fail" if end_of_support_failures else "pass",
                 details=f"Missing for: {', '.join(end_of_support_failures)}" if end_of_support_failures else None,
                 remediation=(
-                    "Add validUntilTime to each package, as an ISO-8601 date. "
-                    "Use the sbomify GitHub Action to inject CLE data."
+                    "Add validUntilTime to each package, as a UTC timestamp of the form "
+                    "YYYY-MM-DDTHH:MM:SSZ. Use the sbomify GitHub Action to inject CLE data."
                 ),
             )
         )
