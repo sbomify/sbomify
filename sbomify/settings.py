@@ -893,6 +893,15 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # CRA audit trail (sbomify.compliance.audit). Pinned for the same reason:
+        # scope-screening answers, step 1 classification and finding status changes
+        # back legally binding exports, and every emitter logs at INFO, so without
+        # this the whole trail vanishes the moment LOG_LEVEL is raised to WARNING.
+        "sbomify.compliance.audit": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "core": {
             "handlers": ["console"],
             "level": "DEBUG",
