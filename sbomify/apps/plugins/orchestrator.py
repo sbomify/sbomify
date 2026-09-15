@@ -287,6 +287,22 @@ class PluginOrchestrator:
             # and drop them from the severity counts. Raw findings are kept (ADR-004).
             # Best-effort: the scan result is already complete, so a VEX problem
             # (missing S3 object, transient storage error) must never fail the run.
+            # The statements actually applied to the stored result. Reused for
+            # the row projection further down so the rows and the blob they
+            # derive from cannot be built from different sets: a VEX uploaded
+            # between the two would otherwise suppress in one and not the
+            # other. Stays empty unless annotation succeeded, which is what an
+            # un-suppressed stored result deserves.
+            #
+            # Bound out here rather than inside the branch below, because the
+            # branch tests the plugin RESULT's category while the projection
+            # further down tests the RUN's, which comes from the plugin's
+            # declared metadata. Nothing forces a plugin's returned result to
+            # carry the category its metadata promised, and where they differ
+            # this name would be read unbound. That raises while evaluating the
+            # argument, so sync_findings_safely's own guard cannot catch it.
+            applied_vex: list[dict[str, Any]] = []
+
             if result.category == AssessmentCategory.SECURITY:
                 from sbomify.apps.vulnerability_scanning.vex import (
                     VexArtifactUnreadable,
@@ -296,13 +312,6 @@ class PluginOrchestrator:
                 )
 
                 component_id = assessment_run.sbom.component_id
-                # The statements actually applied to the stored result. Reused
-                # for the row projection further down so the rows and the blob
-                # they derive from cannot be built from different sets: a VEX
-                # uploaded between the two would otherwise suppress in one and
-                # not the other. Stays empty unless annotation succeeded, which
-                # is what an un-suppressed stored result deserves.
-                applied_vex: list[dict[str, Any]] = []
                 try:
                     if component_id:
                         with strict_vex_reads():
