@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from sbomify.apps.controls.models import ControlCatalog
 from sbomify.apps.integrations import oauth
-from sbomify.apps.integrations.exceptions import ProviderAuthError
+from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
 from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.providers.vanta import VANTA
 from sbomify.apps.integrations.services import connections
@@ -99,6 +99,28 @@ class TestAccessToken:
         connected_vanta.refresh_from_db()
         assert connected_vanta.status == Integration.Status.REVOKED
 
+    def test_an_unreachable_provider_leaves_the_connection_alone(self, connected_vanta, monkeypatch) -> None:
+        """A 503 at the token endpoint is not a dead credential.
+
+        Marking it revoked would stop the scheduler queueing this workspace at
+        all, so one bad minute would silently end syncing until a human redid
+        OAuth.
+        """
+        connected_vanta.token_expires_at = None
+        connected_vanta.save()
+
+        def unavailable(provider, token):
+            raise ProviderUnavailable("Vanta is not answering.", service="vanta")
+
+        monkeypatch.setattr(oauth, "refresh", unavailable)
+
+        with pytest.raises(ProviderUnavailable):
+            connections.access_token(connected_vanta, VANTA)
+
+        connected_vanta.refresh_from_db()
+        assert connected_vanta.status == Integration.Status.CONNECTED
+        assert connected_vanta.refresh_token == "vrt_live"
+
     def test_a_connection_with_no_refresh_token_cannot_recover(self, connected_vanta) -> None:
         connected_vanta.refresh_token = ""
         connected_vanta.token_expires_at = None
@@ -111,6 +133,48 @@ class TestAccessToken:
         assert connected_vanta.status == Integration.Status.REVOKED
 
 
+class TestConcurrentRefresh:
+    def test_a_second_caller_finds_the_token_already_rotated(self, connected_vanta, monkeypatch) -> None:
+        """Two callers must not both spend a refresh token the provider rotates.
+
+        "Sync now" landing on top of the scheduled run is the real case: both
+        read the same stored token, both send it, and the loser's 401 reads as
+        a dead credential and revokes a working connection. The row lock turns
+        the second caller into a no-op instead.
+        """
+        connected_vanta.token_expires_at = None
+        connected_vanta.save()
+
+        calls: list[str] = []
+
+        def refresh_once(provider, token):
+            calls.append(token)
+            return _token_set("vat_rotated", "vrt_rotated")
+
+        monkeypatch.setattr(oauth, "refresh", refresh_once)
+
+        first = connections.access_token(connected_vanta, VANTA)
+        # A second caller holding its own copy of the row, as a separate
+        # process would.
+        second_view = Integration.objects.get(pk=connected_vanta.pk)
+        second = connections.access_token(second_view, VANTA)
+
+        assert first == second == "vat_rotated"
+        assert calls == ["vrt_live"]
+
+    def test_the_callers_own_instance_is_brought_up_to_date(self, connected_vanta, monkeypatch) -> None:
+        """The caller goes on using the object it passed in, so it must be current."""
+        connected_vanta.token_expires_at = None
+        connected_vanta.save()
+        monkeypatch.setattr(oauth, "refresh", lambda provider, token: _token_set("vat_rotated", "vrt_rotated"))
+
+        connections.access_token(connected_vanta, VANTA)
+
+        assert connected_vanta.access_token == "vat_rotated"
+        assert connected_vanta.refresh_token == "vrt_rotated"
+
+
+@pytest.mark.django_db
 class TestDisconnect:
     def test_takes_synced_frameworks_off_the_trust_center(self, connected_vanta) -> None:
         catalog = ControlCatalog.objects.create(
@@ -119,13 +183,13 @@ class TestDisconnect:
             version="",
             source=ControlCatalog.Source.VANTA,
             external_id="fw_soc2",
-            is_active=True,
+            is_published=True,
         )
 
         assert connections.disconnect(connected_vanta.team, "vanta").ok
 
         catalog.refresh_from_db()
-        assert catalog.is_active is False
+        assert catalog.is_published is False
         assert not Integration.objects.filter(id=connected_vanta.id).exists()
 
     def test_keeps_the_synced_data_so_a_reconnect_is_not_a_reimport(self, connected_vanta) -> None:
@@ -148,13 +212,13 @@ class TestDisconnect:
             name="ISO 27001:2022",
             version="2022",
             source=ControlCatalog.Source.BUILTIN,
-            is_active=True,
+            is_published=True,
         )
 
         connections.disconnect(connected_vanta.team, "vanta")
 
         builtin.refresh_from_db()
-        assert builtin.is_active is True
+        assert builtin.is_published is True
 
     def test_disconnecting_what_is_not_connected_is_a_404(self, sample_team_with_owner_member) -> None:  # noqa: F811
         result = connections.disconnect(sample_team_with_owner_member.team, "vanta")
@@ -171,7 +235,7 @@ class TestPublishing:
             version="",
             source=ControlCatalog.Source.VANTA,
             external_id="fw_soc2",
-            is_active=False,
+            is_published=False,
         )
 
     def test_publishing_puts_a_framework_on_the_trust_center(self, connected_vanta, synced_catalog) -> None:
@@ -180,16 +244,22 @@ class TestPublishing:
         assert result.ok
         assert result.value == "SOC 2 Type II"
         synced_catalog.refresh_from_db()
+        assert synced_catalog.is_published is True
+
+    def test_publishing_does_not_touch_whether_it_is_tracked(self, connected_vanta, synced_catalog) -> None:
+        connections.set_catalog_published(connected_vanta.team, synced_catalog.id, False)
+
+        synced_catalog.refresh_from_db()
         assert synced_catalog.is_active is True
 
     def test_unpublishing_takes_it_off_again(self, connected_vanta, synced_catalog) -> None:
-        synced_catalog.is_active = True
+        synced_catalog.is_published = True
         synced_catalog.save()
 
         connections.set_catalog_published(connected_vanta.team, synced_catalog.id, False)
 
         synced_catalog.refresh_from_db()
-        assert synced_catalog.is_active is False
+        assert synced_catalog.is_published is False
 
     def test_refuses_a_framework_no_integration_owns(self, connected_vanta) -> None:
         """This endpoint publishes synced data; hand-maintained catalogues are not its business."""
@@ -231,7 +301,7 @@ class TestProviderCards:
             version="",
             source=ControlCatalog.Source.VANTA,
             external_id="fw_soc2",
-            is_active=True,
+            is_published=True,
         )
 
         card = connections.provider_cards(connected_vanta.team)[0]
@@ -239,7 +309,7 @@ class TestProviderCards:
         assert card["is_connected"] is True
         assert card["needs_reconnect"] is False
         assert [catalog["name"] for catalog in card["catalogs"]] == ["SOC 2 Type II"]
-        assert card["catalogs"][0]["is_active"] is True
+        assert card["catalogs"][0]["is_published"] is True
 
     def test_a_revoked_connection_is_flagged_for_a_reconnect(self, connected_vanta) -> None:
         connected_vanta.status = Integration.Status.REVOKED

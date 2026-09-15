@@ -12,7 +12,13 @@ from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 
-from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus, ControlStatusLog
+from sbomify.apps.controls.models import (
+    INTEGRATION_SOURCES,
+    Control,
+    ControlCatalog,
+    ControlStatus,
+    ControlStatusLog,
+)
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk.enums import RunStatus
@@ -93,8 +99,15 @@ def auto_update_from_assessment(team: Team, plugin_name: str, passed: bool) -> S
     if not passed:
         return ServiceResult.success(0)
 
-    # Find controls in this team's active catalogs that match the mapped IDs
-    active_catalogs = ControlCatalog.objects.filter(team=team, is_active=True)
+    # Find controls in this team's active catalogs that match the mapped IDs.
+    #
+    # Catalogues an integration owns are excluded. Their statuses come from the
+    # workspace's own compliance tool and are rewritten on every sync, so
+    # promoting one from a plugin result would both overwrite the authoritative
+    # answer and be silently undone a few hours later. The SOC 2 codes below
+    # are exactly the ones a synced SOC 2 catalogue also uses, so this is not
+    # hypothetical.
+    active_catalogs = ControlCatalog.objects.filter(team=team, is_active=True).exclude(source__in=INTEGRATION_SOURCES)
     controls = Control.objects.filter(catalog__in=active_catalogs, control_id__in=control_ids)
 
     if not controls.exists():

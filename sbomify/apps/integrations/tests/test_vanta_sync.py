@@ -75,13 +75,18 @@ class TestFirstSync:
     def test_a_new_framework_is_not_published_until_someone_says_so(
         self, connected_vanta, install_client
     ) -> None:
-        """Connecting reads data. Putting it on a public page is a second decision."""
+        """Connecting reads data. Putting it on a public page is a second decision.
+
+        Active because the workspace does track the framework; unpublished
+        because nobody has said to show it to their customers.
+        """
         install_client([SOC2], {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]}, {})
 
         sync(connected_vanta)
 
         catalog = ControlCatalog.objects.get(team=connected_vanta.team, source=ControlCatalog.Source.VANTA)
-        assert catalog.is_active is False
+        assert catalog.is_active is True
+        assert catalog.is_published is False
 
     def test_maps_the_control_fields_a_reader_sees(self, connected_vanta, install_client) -> None:
         install_client(
@@ -267,13 +272,15 @@ class TestResync:
     def test_a_framework_vanta_dropped_is_unpublished_but_kept(self, connected_vanta, install_client) -> None:
         install_client([SOC2, ISO], {"fw_soc2": [], "fw_iso": []}, {})
         sync(connected_vanta)
-        ControlCatalog.objects.filter(team=connected_vanta.team).update(is_active=True)
+        ControlCatalog.objects.filter(team=connected_vanta.team).update(is_published=True)
 
         install_client([SOC2], {"fw_soc2": []}, {})
         sync(connected_vanta)
 
-        assert ControlCatalog.objects.get(external_id="fw_iso").is_active is False
-        assert ControlCatalog.objects.get(external_id="fw_soc2").is_active is True
+        assert ControlCatalog.objects.get(external_id="fw_iso").is_published is False
+        assert ControlCatalog.objects.get(external_id="fw_soc2").is_published is True
+        # Kept, not deleted: the status history is worth more than the row.
+        assert ControlCatalog.objects.filter(external_id="fw_iso").exists()
 
     def test_a_hand_maintained_catalogue_is_never_touched(self, connected_vanta, install_client) -> None:
         builtin = ControlCatalog.objects.create(
@@ -282,6 +289,7 @@ class TestResync:
             version="2024",
             source=ControlCatalog.Source.BUILTIN,
             is_active=True,
+            is_published=True,
         )
         install_client([SOC2], {"fw_soc2": []}, {})
 
@@ -289,6 +297,7 @@ class TestResync:
 
         builtin.refresh_from_db()
         assert builtin.is_active is True
+        assert builtin.is_published is True
 
 
 class TestRequestBudget:
@@ -303,3 +312,93 @@ class TestRequestBudget:
         sync(connected_vanta)
 
         assert fake.detail_calls == ["c_shared"]
+
+
+class TestAnEmptyAnswerIsNotAnInstruction:
+    """The client is tolerant of a body it cannot parse, so "nothing came back"
+    and "there is nothing" arrive here as the same empty list. Neither one may
+    be treated as "delete what you have".
+    """
+
+    def test_a_framework_that_returns_no_controls_keeps_the_ones_it_has(
+        self, connected_vanta, install_client
+    ) -> None:
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        install_client([SOC2], {"fw_soc2": []}, {})
+        result = sync(connected_vanta)
+
+        assert result.ok
+        assert Control.objects.filter(catalog__external_id="fw_soc2").count() == 1
+        assert result.value["controls_removed"] == 0
+
+    def test_the_statuses_survive_too(self, connected_vanta, install_client) -> None:
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        install_client([SOC2], {"fw_soc2": []}, {})
+        sync(connected_vanta)
+
+        assert (
+            ControlStatus.objects.get(control__control_id="CC1.1", product__isnull=True).status
+            == ControlStatus.Status.COMPLIANT
+        )
+
+    def test_no_frameworks_at_all_leaves_published_ones_alone(self, connected_vanta, install_client) -> None:
+        """Otherwise one unparseable response empties the whole trust center."""
+        install_client([SOC2], {"fw_soc2": []}, {})
+        sync(connected_vanta)
+        ControlCatalog.objects.filter(team=connected_vanta.team).update(is_published=True)
+
+        install_client([], {}, {})
+        result = sync(connected_vanta)
+
+        assert result.ok
+        assert result.value["frameworks"] == 0
+        assert ControlCatalog.objects.get(external_id="fw_soc2").is_published is True
+
+
+class TestOversizedProviderStrings:
+    """Every string here is someone else's and the columns are bounded."""
+
+    def test_a_long_control_code_is_cut_to_fit(self, connected_vanta, install_client) -> None:
+        long_code = "CC" + "9" * 200
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", long_code, "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+
+        result = sync(connected_vanta)
+
+        assert result.ok
+        control = Control.objects.get(catalog__external_id="fw_soc2")
+        assert control.control_id == long_code[:50]
+
+    def test_a_long_title_and_domain_are_cut_to_fit(self, connected_vanta, install_client) -> None:
+        payload = _control("c1", "CC1.1", "T" * 900, "D" * 400)
+        install_client([SOC2], {"fw_soc2": [payload]}, {"c1": {"status": "COMPLETED"}})
+
+        result = sync(connected_vanta)
+
+        assert result.ok
+        control = Control.objects.get(catalog__external_id="fw_soc2")
+        assert len(control.title) == 500
+        assert len(control.group) == 255
+
+    def test_a_long_framework_name_is_cut_to_fit(self, connected_vanta, install_client) -> None:
+        install_client([{"id": "fw_long", "displayName": "F" * 400}], {"fw_long": []}, {})
+
+        result = sync(connected_vanta)
+
+        assert result.ok
+        assert len(ControlCatalog.objects.get(external_id="fw_long").name) == 255

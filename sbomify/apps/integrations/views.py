@@ -18,10 +18,10 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
+from sbomify.apps.core.domain.exceptions import ExternalServiceError
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.integrations import oauth
-from sbomify.apps.integrations.exceptions import ProviderAuthError
 from sbomify.apps.integrations.providers import get_provider
 from sbomify.apps.integrations.services import connections
 from sbomify.apps.integrations.tasks import sync_integration
@@ -183,7 +183,10 @@ class IntegrationCallbackView(LoginRequiredMixin, View):
 
         try:
             token_set = oauth.exchange_code(request, spec, code)
-        except ProviderAuthError as exc:
+        # The base class, so a refusal and an unreachable provider both land
+        # here: the user is standing in front of a redirect either way, and a
+        # traceback is not an answer to either.
+        except ExternalServiceError as exc:
             logger.warning("Token exchange failed for %s: %s", spec.key, exc.detail)
             messages.error(request, exc.detail)
             return redirect_to_team_settings(team_key, SETTINGS_TAB)

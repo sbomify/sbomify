@@ -19,12 +19,25 @@ Nothing downstream knows a provider exists: the trust center, the product
 pages and the scoring in `controls.services.status_service` treat a synced
 framework exactly like one somebody activated by hand.
 
-Two consequences worth knowing:
+Four consequences worth knowing:
 
-- **A synced framework arrives unpublished.** Connecting reads data. Putting a
-  framework on a page the workspace's customers read is a second, deliberate
-  act, the same way `product:set_visibility` sits above the tier that creates
-  products. Settings → Integrations is where someone chooses.
+- **Tracking a framework and publishing it are two flags.** `is_active` means
+  the workspace tracks the framework: it appears in settings, and plugin
+  assessments may promote its controls. `is_published` means it appears on the
+  public trust center, and it defaults to off. They used to be one flag, which
+  would have meant every workspace already tracking SOC 2 internally started
+  publishing a compliance score to its customers the moment the trust center
+  learned to render one.
+- **A synced framework arrives active but unpublished.** Connecting reads data.
+  Putting a framework on a page the workspace's customers read is a second,
+  deliberate act, the same way `product:set_visibility` sits above the tier
+  that creates products. Settings → Integrations is where someone chooses.
+- **Nothing else writes into a synced catalogue.** `controls.INTEGRATION_SOURCES`
+  names the sources an external system owns, and `automation_service` skips
+  them: promoting one of their controls from a plugin result would overwrite
+  the answer the workspace's own compliance tool gave, and be undone by the
+  next sync a few hours later. The SOC 2 codes in `PLUGIN_CONTROL_MAP` are
+  exactly the ones a synced SOC 2 catalogue uses, so this is not hypothetical.
 - **Product-scope statuses are never touched.** The provider describes the
   organisation, so a status somebody set on one product stays theirs.
 
@@ -103,9 +116,30 @@ different on purpose:
   that, so the scheduler skips the connection entirely and someone has to go
   through the consent screen again.
 
-Vanta rotates the refresh token on every use. sbomify saves the new one before
-using the access token, so a process that dies mid-sync leaves the workspace
-connected.
+Which one you get is decided by what the provider actually said, and the line
+matters: a connection wrongly marked as needing a reconnect is skipped by the
+scheduler forever, so one timeout would end syncing until a human noticed. A
+**4xx at the token endpoint is the provider refusing the grant** and is
+terminal (`ProviderAuthError`). **Everything else is transient**
+(`ProviderUnavailable`): 5xx, timeouts, DNS failures, an unreadable body.
+
+Vanta rotates the refresh token on every use, which makes a concurrent refresh
+worse than a wasted request: two callers read the same token, both spend it,
+and the loser's 401 looks exactly like a dead credential. `access_token` takes
+a row lock before refreshing and re-reads under it, so a "Sync now" landing on
+top of the scheduled run waits and then finds the token already fresh. The new
+refresh token is saved before the access token is used, so a process that dies
+mid-sync leaves the workspace connected.
+
+### Nothing empty is treated as an instruction
+
+The client is deliberately tolerant of a response it cannot parse, which means
+"this framework has no controls" and "a shape we did not recognise" arrive as
+the same empty list. Pruning against that would delete a whole framework and
+record the run as a success, so a sync only removes controls when the framework
+actually returned some, and only retires catalogues when the account returned
+at least one framework. Running past the pagination ceiling fails the sync
+rather than returning a partial list for the same reason.
 
 ## Disconnecting
 

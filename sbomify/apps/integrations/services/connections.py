@@ -65,34 +65,92 @@ def access_token(integration: Integration, provider: ProviderSpec) -> str:
     before the access token is handed out: if the caller then dies mid-sync,
     the workspace is still connected.
 
-    A refusal here is terminal. The connection is marked so the settings page
-    can ask for a reconnect instead of retrying forever against a credential
-    the provider has forgotten.
+    **The refresh is serialised on the row.** A provider that rotates its
+    refresh token turns a concurrent refresh into a lost connection rather than
+    a wasted request: two callers read the same token, both spend it, and the
+    loser gets a 401 that reads as a dead credential and marks a perfectly good
+    connection as needing a reconnect. "Sync now" landing on top of the
+    scheduled run is exactly that race. Taking the row lock first means the
+    second caller waits, then finds the token already fresh and never sends a
+    request at all.
+
+    Only a refusal is terminal. An unreachable provider raises
+    ``ProviderUnavailable`` and leaves the connection alone, so the next
+    scheduled sync can pick it up.
     """
     if not integration.token_is_stale:
         return integration.access_token
 
-    if not integration.refresh_token:
-        _mark_revoked(integration, "The connection has no refresh token. Reconnect the workspace.")
-        raise ProviderAuthError(f"{provider.name} needs reconnecting.", service=provider.key)
+    # The marking of a dead credential is deliberately outside this block. A
+    # ``_mark_revoked`` written inside it would be rolled back by the very
+    # exception that caused it, and the connection would come out of a refusal
+    # still looking healthy, so the refusal is carried out and applied after
+    # the transaction closes.
+    refusal: ProviderAuthError | None = None
+    revoke_reason = ""
 
-    try:
-        token_set = oauth.refresh(provider, integration.refresh_token)
-    except ProviderAuthError:
-        _mark_revoked(integration, f"{provider.name} rejected the stored credential.")
-        raise
+    with transaction.atomic():
+        locked = Integration.objects.select_for_update().filter(pk=integration.pk).first()
+        if locked is None:
+            raise ProviderAuthError(f"{provider.name} is no longer connected.", service=provider.key)
 
-    integration.access_token = token_set.access_token
-    # An empty rotation means the provider reissued without replacing; keeping
-    # the old refresh token is what lets the next refresh work at all.
-    integration.refresh_token = token_set.refresh_token or integration.refresh_token
-    integration.token_expires_at = token_set.expires_at
-    integration.scopes = list(token_set.scopes)
-    integration.status = Integration.Status.CONNECTED
-    integration.save(
-        update_fields=["access_token", "refresh_token", "token_expires_at", "scopes", "status", "updated_at"]
-    )
-    return integration.access_token
+        # Re-read under the lock. Whoever held it before us may already have
+        # rotated, in which case there is nothing to do.
+        if not locked.token_is_stale:
+            _copy_credential(locked, integration)
+            return locked.access_token
+
+        if not locked.refresh_token:
+            revoke_reason = "The connection has no refresh token. Reconnect the workspace."
+            refusal = ProviderAuthError(f"{provider.name} needs reconnecting.", service=provider.key)
+        else:
+            try:
+                token_set = oauth.refresh(provider, locked.refresh_token)
+            except ProviderAuthError as exc:
+                revoke_reason = f"{provider.name} rejected the stored credential."
+                refusal = exc
+            else:
+                locked.access_token = token_set.access_token
+                # An empty rotation means the provider reissued without
+                # replacing; keeping the old refresh token is what lets the
+                # next refresh work at all.
+                locked.refresh_token = token_set.refresh_token or locked.refresh_token
+                locked.token_expires_at = token_set.expires_at
+                locked.scopes = list(token_set.scopes)
+                locked.status = Integration.Status.CONNECTED
+                locked.save(
+                    update_fields=[
+                        "access_token",
+                        "refresh_token",
+                        "token_expires_at",
+                        "scopes",
+                        "status",
+                        "updated_at",
+                    ]
+                )
+
+    if refusal is not None:
+        _mark_revoked(locked, revoke_reason)
+        _copy_credential(locked, integration)
+        raise refusal
+
+    _copy_credential(locked, integration)
+    return locked.access_token
+
+
+def _copy_credential(source: Integration, target: Integration) -> None:
+    """Bring the caller's in-memory row up to date with the locked copy.
+
+    The caller holds the instance it passed in and goes on using it after this
+    returns, so it has to see whatever the locked row decided.
+    """
+    target.access_token = source.access_token
+    target.refresh_token = source.refresh_token
+    target.token_expires_at = source.token_expires_at
+    target.scopes = source.scopes
+    target.status = source.status
+    target.last_sync_status = source.last_sync_status
+    target.last_sync_error = source.last_sync_error
 
 
 def _mark_revoked(integration: Integration, message: str) -> None:
@@ -117,8 +175,8 @@ def disconnect(team: Team, provider_key: str) -> ServiceResult[None]:
     from sbomify.apps.controls.models import ControlCatalog
 
     with transaction.atomic():
-        ControlCatalog.objects.filter(team=team, source=provider_key, is_active=True).update(
-            is_active=False, updated_at=timezone.now()
+        ControlCatalog.objects.filter(team=team, source=provider_key, is_published=True).update(
+            is_published=False, updated_at=timezone.now()
         )
         integration.delete()
 
@@ -159,7 +217,7 @@ def provider_cards(team: Team) -> list[dict[str, Any]]:
                         "id": catalog.id,
                         "name": catalog.name,
                         "version": catalog.version,
-                        "is_active": catalog.is_active,
+                        "is_published": catalog.is_published,
                         "control_count": catalog.control_count,
                     }
                     for catalog in catalogs
@@ -182,11 +240,11 @@ def set_catalog_published(team: Team, catalog_id: str, published: bool) -> Servi
     catalog = ControlCatalog.objects.filter(id=catalog_id, team=team).first()
     if catalog is None:
         return ServiceResult.failure("Framework not found", status_code=404)
-    if catalog.source not in {provider.key for provider in PROVIDERS}:
+    if not catalog.is_integration_owned:
         return ServiceResult.failure("That framework is not managed by an integration", status_code=400)
 
-    if catalog.is_active != published:
-        catalog.is_active = published
-        catalog.save(update_fields=["is_active", "updated_at"])
+    if catalog.is_published != published:
+        catalog.is_published = published
+        catalog.save(update_fields=["is_published", "updated_at"])
 
     return ServiceResult.success(catalog.name)

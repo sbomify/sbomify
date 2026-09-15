@@ -64,6 +64,14 @@ class TestPagination:
 
         assert [item["id"] for item in client.frameworks()] == ["f1"]
 
+    def test_running_out_of_pages_fails_rather_than_truncating(self, client, monkeypatch) -> None:
+        """A short list here would be pruned against by the sync and recorded as a success."""
+        endless = _page([{"id": "f"}], next_cursor="always-more")
+        monkeypatch.setattr(vanta_module, "request_with_retry", lambda *a, **k: _Response(200, endless))
+
+        with pytest.raises(VantaUnavailable):
+            list(client.frameworks())
+
     def test_sends_the_bearer_token(self, client, monkeypatch) -> None:
         captured: dict[str, object] = {}
 

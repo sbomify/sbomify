@@ -337,7 +337,11 @@ class TestPublicSummary:
         from django.test import Client
 
         team = sample_team_with_owner_member.team
-        activate_builtin_catalog(team, "soc2-type2")
+        result = activate_builtin_catalog(team, "soc2-type2")
+        # Activating tracks the framework; the public endpoint needs the
+        # separate decision to publish it.
+        result.value.is_published = True
+        result.value.save(update_fields=["is_published"])
 
         client = Client()
         response = client.get(f"/api/v1/controls/public/{team.key}/")

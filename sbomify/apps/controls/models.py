@@ -40,12 +40,31 @@ class ControlCatalog(models.Model):
     # Identity for a sync is this, not the name: a framework that gets renamed
     # upstream must update in place rather than arrive as a second catalog.
     external_id = models.CharField(max_length=255, blank=True, default="")
+    # Whether this workspace tracks the framework at all: it appears in the
+    # settings UI, and plugin assessments may promote its controls.
     is_active = models.BooleanField(default=True)
+    # Whether it appears on the public trust center. Separate from is_active,
+    # and default off, because the two are different decisions and only one of
+    # them is outward-facing. Tracking SOC 2 internally is not consent to
+    # publish a compliance score to your customers, so a catalogue a workspace
+    # was already using stays internal until somebody says otherwise.
+    is_published = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
         return f"{self.name} {self.version}"
+
+    @property
+    def is_integration_owned(self) -> bool:
+        return self.source in INTEGRATION_SOURCES
+
+
+# The sources an external system owns and rewrites on every sync. A catalogue
+# with one of these is not ours to edit: promoting one of its controls from a
+# plugin result would overwrite the answer the workspace's own compliance tool
+# gave, which is the one thing a synced catalogue is for.
+INTEGRATION_SOURCES: frozenset[str] = frozenset({ControlCatalog.Source.VANTA})
 
 
 class Control(models.Model):

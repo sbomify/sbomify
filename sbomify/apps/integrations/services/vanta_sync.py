@@ -25,7 +25,8 @@ from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, models, transaction
+from django.utils import timezone
 
 from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus, ControlStatusLog
 from sbomify.apps.core.services.results import ServiceResult
@@ -104,7 +105,18 @@ def sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
         controls = list(client.framework_controls(framework_id))
         _sync_framework_controls(client, catalog, controls, detail_cache, summary)
 
-    _retire_missing_catalogs(integration, seen_catalog_ids)
+    if seen_catalog_ids:
+        _retire_missing_catalogs(integration, seen_catalog_ids)
+    else:
+        # Nothing was returned. A real account always tracks at least one
+        # framework, so this is far more likely to be a response shape the
+        # parser did not recognise than a workspace that genuinely tracks
+        # nothing, and retiring on it would silently empty the trust center
+        # and need every framework switched back on by hand. Left alone and
+        # logged; the next sync that returns frameworks retires properly.
+        logger.warning(
+            "Vanta returned no frameworks for workspace %s, leaving published ones alone", integration.team.key
+        )
 
     logger.info(
         "Vanta sync for workspace %s: %d frameworks, %d controls, %d status changes",
@@ -147,6 +159,14 @@ def _sync_framework_controls(
     # than left behind: a stale row has no status, so it would count as "not
     # met" and drag down a score published on a public page.
     #
+    # Only when this framework actually returned controls. The client is
+    # deliberately tolerant of a response it cannot parse, which means "no
+    # controls" and "a shape we did not recognise" arrive here as the same
+    # empty list, and pruning against it would delete the whole framework and
+    # record the run as a success.
+    if not seen_control_ids:
+        return
+
     # The per-model figure, not the total: ``delete()`` returns every row it
     # touched, and each control takes its status and its status log with it, so
     # the total would report a handful of controls as dozens.
@@ -157,13 +177,20 @@ def _sync_framework_controls(
 def _upsert_catalog(integration: Integration, framework: dict[str, Any], framework_id: str) -> ControlCatalog:
     """The catalogue for one Vanta framework, matched on its Vanta id.
 
-    New catalogues arrive **unpublished**. Connecting an account reads data;
-    putting a framework on a public trust center is a second, deliberate act,
-    the same way ``product:set_visibility`` sits above the tier that creates
-    products. The Integrations tab is where someone makes that choice.
+    New catalogues arrive active but **unpublished**: the workspace is
+    tracking the framework, which is what ``is_active`` says, and nobody has
+    yet decided to put it on a page their customers read, which is what
+    ``is_published`` says. Connecting an account reads data; publishing is a
+    second, deliberate act, the same way ``product:set_visibility`` sits above
+    the tier that creates products. The Integrations tab is where someone
+    makes that choice.
     """
-    name = _text(framework.get("displayName")) or _text(framework.get("shorthandName")) or framework_id
-    version = _text(framework.get("shorthandName"))
+    name = _fit(
+        ControlCatalog,
+        "name",
+        _text(framework.get("displayName")) or _text(framework.get("shorthandName")) or framework_id,
+    )
+    version = _fit(ControlCatalog, "version", _text(framework.get("shorthandName")))
     if version == name:
         version = ""
 
@@ -183,7 +210,7 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
                 # name and version, almost always the built-in copy of the
                 # same framework. Keep the rename but make it distinguishable
                 # rather than failing the whole sync over a label.
-                catalog.version = framework_id
+                catalog.version = _fit(ControlCatalog, "version", framework_id)
                 catalog.save(update_fields=["name", "version", "updated_at"])
         return catalog
 
@@ -195,16 +222,16 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
                 version=version,
                 source=ControlCatalog.Source.VANTA,
                 external_id=framework_id,
-                is_active=False,
+                is_published=False,
             )
     except IntegrityError:
         return ControlCatalog.objects.create(
             team=integration.team,
             name=name,
-            version=framework_id,
+            version=_fit(ControlCatalog, "version", framework_id),
             source=ControlCatalog.Source.VANTA,
             external_id=framework_id,
-            is_active=False,
+            is_published=False,
         )
 
 
@@ -216,7 +243,11 @@ def _upsert_control(catalog: ControlCatalog, payload: dict[str, Any], external_i
     a custom control has none, its Vanta id stands in so the row still has a
     stable key.
     """
-    control_id = _text(payload.get("externalId")) or external_id
+    # Truncating a code could in principle collide two controls onto one row,
+    # since (catalog, control_id) is the key. A framework code is a handful of
+    # characters, so this only bites on a custom control with a 50+ character
+    # slug, and merging two of those beats failing the whole sync.
+    control_id = _fit(Control, "control_id", _text(payload.get("externalId")) or external_id)
     domains = payload.get("domains")
     group = _text(domains[0]) if isinstance(domains, list) and domains else _UNGROUPED
 
@@ -224,10 +255,10 @@ def _upsert_control(catalog: ControlCatalog, payload: dict[str, Any], external_i
         catalog=catalog,
         control_id=control_id,
         defaults={
-            "group": group or _UNGROUPED,
-            "title": _text(payload.get("name")) or control_id,
+            "group": _fit(Control, "group", group or _UNGROUPED),
+            "title": _fit(Control, "title", _text(payload.get("name")) or control_id),
             "description": _text(payload.get("description")),
-            "external_id": external_id,
+            "external_id": _fit(Control, "external_id", external_id),
             "sort_order": sort_order,
         },
     )
@@ -271,11 +302,29 @@ def _retire_missing_catalogs(integration: Integration, seen_catalog_ids: list[st
     a quarter and turned it back on, and deleting takes the status history with
     it. Unpublishing is enough to stop a claim nobody is backing any more.
     """
-    ControlCatalog.objects.filter(team=integration.team, source=ControlCatalog.Source.VANTA, is_active=True).exclude(
+    ControlCatalog.objects.filter(team=integration.team, source=ControlCatalog.Source.VANTA, is_published=True).exclude(
         id__in=seen_catalog_ids
-    ).update(is_active=False)
+    ).update(is_published=False, updated_at=timezone.now())
 
 
 def _text(value: Any) -> str:
     """A trimmed string for anything the API might have left null."""
     return value.strip() if isinstance(value, str) else ""
+
+
+def _fit(model: type[models.Model], field_name: str, value: str) -> str:
+    """``value`` cut to what its column will actually take.
+
+    Every string here is someone else's, and the columns it lands in are
+    bounded: ``control_id`` is 50 characters, ``group`` 255, ``title`` 500. One
+    over-long control slug in a Vanta account would otherwise raise a
+    ``DataError`` that fails that sync and every sync after it, with nothing on
+    the settings page to say which control is at fault.
+
+    The limit is read off the field rather than written out, so widening a
+    column does not leave a stale number here.
+    """
+    # getattr rather than attribute access: get_field is typed as returning
+    # any field kind, and only the concrete char fields carry a max_length.
+    max_length = getattr(model._meta.get_field(field_name), "max_length", None)
+    return value[:max_length] if isinstance(max_length, int) else value

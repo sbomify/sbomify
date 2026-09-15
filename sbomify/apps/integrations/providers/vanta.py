@@ -18,16 +18,15 @@ from typing import Any, Iterator
 
 import requests
 
-from sbomify.apps.core.domain.exceptions import ExternalServiceError
 from sbomify.apps.core.integrations.http import request_with_retry
-from sbomify.apps.integrations.exceptions import ProviderAuthError
+from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
 from sbomify.apps.integrations.providers.base import ProviderSpec
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
 
-class VantaUnavailable(ExternalServiceError):
+class VantaUnavailable(ProviderUnavailable):
     """Vanta could not answer. The next scheduled sync tries again."""
 
     error_code = "vanta_unavailable"
@@ -135,7 +134,10 @@ class VantaClient:
             if not cursor:
                 return
 
-        logger.warning("Vanta pagination stopped at %d pages for %s", MAX_PAGES, path)
+        # Running out of pages is not "that is all of them". Returning the
+        # partial list would let the sync prune every control it did not reach
+        # and record the run as a success, so this fails the sync instead.
+        raise VantaUnavailable(f"Vanta paged past {MAX_PAGES} pages for {path}")
 
     def frameworks(self) -> Iterator[dict[str, Any]]:
         """Every framework the connected account tracks."""

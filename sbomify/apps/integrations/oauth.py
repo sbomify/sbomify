@@ -28,7 +28,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from sbomify.apps.core.integrations.http import request_with_retry
-from sbomify.apps.integrations.exceptions import ProviderAuthError
+from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
 from sbomify.apps.integrations.providers.base import ProviderSpec
 from sbomify.logging import getLogger
 
@@ -157,18 +157,24 @@ def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
             headers={"Accept": "application/json", "Content-Type": "application/json"},
         )
     except requests.RequestException as exc:
-        raise ProviderAuthError(f"Could not reach {provider.name}: {exc}", service=provider.key) from exc
+        # A timeout or a DNS blip says nothing about the credential, so it must
+        # not cost the workspace its connection.
+        raise ProviderUnavailable(f"Could not reach {provider.name}: {exc}", service=provider.key) from exc
 
     if response.status_code >= 400:
         # The body can hold the client secret back in an error echo, so only
         # the status is logged and only a fixed string is shown.
         logger.warning("%s token endpoint returned %s", provider.key, response.status_code)
+        if response.status_code >= 500:
+            raise ProviderUnavailable(f"{provider.name} is not answering.", service=provider.key)
+        # A 4xx is the provider answering, and for a grant that means the grant
+        # itself was refused (``invalid_grant`` and friends are all 400).
         raise ProviderAuthError(f"{provider.name} refused the connection.", service=provider.key)
 
     try:
         data = response.json()
     except ValueError as exc:
-        raise ProviderAuthError(
+        raise ProviderUnavailable(
             f"{provider.name} returned an unreadable token response.", service=provider.key
         ) from exc
 
@@ -177,11 +183,11 @@ def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
 
 def _token_set(provider: ProviderSpec, data: Any) -> TokenSet:
     if not isinstance(data, dict):
-        raise ProviderAuthError(f"{provider.name} returned an unreadable token response.", service=provider.key)
+        raise ProviderUnavailable(f"{provider.name} returned an unreadable token response.", service=provider.key)
 
     access_token = data.get("access_token")
     if not isinstance(access_token, str) or not access_token:
-        raise ProviderAuthError(f"{provider.name} returned no access token.", service=provider.key)
+        raise ProviderUnavailable(f"{provider.name} returned no access token.", service=provider.key)
 
     refresh_token = data.get("refresh_token")
     refresh_token = refresh_token if isinstance(refresh_token, str) else ""

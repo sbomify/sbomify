@@ -93,7 +93,7 @@ class TestPanel:
             version="",
             source=ControlCatalog.Source.VANTA,
             external_id="fw_soc2",
-            is_active=True,
+            is_published=True,
         )
 
         response = admin_client_for_team.get(_panel_url(connected_vanta.team))
@@ -113,7 +113,7 @@ class TestPanel:
             version="",
             source=ControlCatalog.Source.VANTA,
             external_id="fw_soc2",
-            is_active=True,
+            is_published=True,
         )
 
         response = admin_client_for_team.get(_panel_url(connected_vanta.team))
@@ -174,7 +174,7 @@ class TestPanelActions:
             version="",
             source=ControlCatalog.Source.VANTA,
             external_id="fw_soc2",
-            is_active=False,
+            is_published=False,
         )
 
         admin_client_for_team.post(
@@ -183,7 +183,7 @@ class TestPanelActions:
         )
 
         catalog.refresh_from_db()
-        assert catalog.is_active is True
+        assert catalog.is_published is True
 
     def test_an_unknown_action_is_refused(self, admin_client_for_team, connected_vanta) -> None:
         response = admin_client_for_team.post(_panel_url(connected_vanta.team), {"action": "explode"})

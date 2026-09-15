@@ -173,9 +173,9 @@ with each other after an action.
                                     <input type="hidden" name="catalog_id" value="{{ catalog.id }}">
                                     <input type="hidden"
                                            name="published"
-                                           value="{% if catalog.is_active %}false{% else %}true{% endif %}">
-                                    <c-forms.toggle name="publish_toggle" id="publish-{{ catalog.id }}" checked="{{ catalog.is_active|yesno:'1,' }}" aria-label="Show {{ catalog.name }} on the Trust Center">
-                                    {% if catalog.is_active %}
+                                           value="{% if catalog.is_published %}false{% else %}true{% endif %}">
+                                    <c-forms.toggle name="publish_toggle" id="publish-{{ catalog.id }}" checked="{{ catalog.is_published|yesno:'1,' }}" aria-label="Show {{ catalog.name }} on the Trust Center">
+                                    {% if catalog.is_published %}
                                         Public
                                     {% else %}
                                         Hidden

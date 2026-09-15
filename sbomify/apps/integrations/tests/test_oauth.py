@@ -11,7 +11,7 @@ from django.test import RequestFactory
 from django.utils import timezone
 
 from sbomify.apps.integrations import oauth
-from sbomify.apps.integrations.exceptions import ProviderAuthError
+from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
 from sbomify.apps.integrations.providers.vanta import VANTA
 
 
@@ -177,8 +177,16 @@ class TestTokenRequests:
         assert token_set.scopes == VANTA.scopes
         assert token_set.refresh_token == ""
 
-    def test_a_refused_grant_raises_without_echoing_the_body(self, monkeypatch) -> None:
-        """The error body can repeat the client secret, so it must not surface."""
+    @pytest.mark.parametrize("status", [400, 401, 403])
+    def test_a_refused_grant_is_terminal(self, monkeypatch, status) -> None:
+        """A 4xx is the provider answering, and for a grant that is a refusal."""
+        monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(status, {"error": "invalid_grant"}))
+
+        with pytest.raises(ProviderAuthError):
+            oauth.refresh(VANTA, "vrt_one")
+
+    def test_a_refusal_does_not_echo_the_error_body(self, monkeypatch) -> None:
+        """The body can repeat the client secret back, so it must not surface."""
         monkeypatch.setattr(
             oauth,
             "request_with_retry",
@@ -190,25 +198,36 @@ class TestTokenRequests:
 
         assert "vcs_test" not in exc.value.detail
 
-    def test_an_unreachable_provider_raises(self, monkeypatch) -> None:
+    @pytest.mark.parametrize("status", [500, 502, 503, 504])
+    def test_a_server_error_is_not_a_credential_problem(self, monkeypatch, status) -> None:
+        """A bad minute at the provider must not cost the workspace its connection."""
+        monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(status, {}))
+
+        with pytest.raises(ProviderUnavailable):
+            oauth.refresh(VANTA, "vrt_one")
+
+    def test_an_unreachable_provider_is_transient(self, monkeypatch) -> None:
         def boom(*args, **kwargs):
             raise requests.ConnectionError("no route")
 
         monkeypatch.setattr(oauth, "request_with_retry", boom)
 
-        with pytest.raises(ProviderAuthError):
+        with pytest.raises(ProviderUnavailable):
             oauth.refresh(VANTA, "vrt_one")
 
-    def test_a_response_with_no_access_token_raises(self, monkeypatch) -> None:
+    def test_a_response_with_no_access_token_is_transient(self, monkeypatch) -> None:
         monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(200, {"expires_in": 60}))
 
-        with pytest.raises(ProviderAuthError):
+        with pytest.raises(ProviderUnavailable):
             oauth.refresh(VANTA, "vrt_one")
 
-    def test_a_non_json_response_raises(self, monkeypatch) -> None:
-        monkeypatch.setattr(
-            oauth, "request_with_retry", lambda *a, **k: _Response(200, ValueError("not json"))
-        )
+    def test_a_non_json_response_is_transient(self, monkeypatch) -> None:
+        monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(200, ValueError("not json")))
 
-        with pytest.raises(ProviderAuthError):
+        with pytest.raises(ProviderUnavailable):
             oauth.refresh(VANTA, "vrt_one")
+
+    def test_the_transient_half_is_not_the_terminal_one(self) -> None:
+        """The two must not be catchable as each other, or the split does nothing."""
+        assert not issubclass(ProviderUnavailable, ProviderAuthError)
+        assert not issubclass(ProviderAuthError, ProviderUnavailable)

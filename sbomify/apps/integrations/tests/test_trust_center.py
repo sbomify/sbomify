@@ -20,14 +20,15 @@ def public_team(sample_team_with_owner_member):  # noqa: F811
     return team
 
 
-def _framework(team, *, source: str, is_active: bool = True) -> ControlCatalog:
+def _framework(team, *, source: str, is_published: bool = True) -> ControlCatalog:
     catalog = ControlCatalog.objects.create(
         team=team,
         name="SOC 2 Type II",
         version="" if source == ControlCatalog.Source.VANTA else "2024",
         source=source,
         external_id="fw_soc2" if source == ControlCatalog.Source.VANTA else "",
-        is_active=is_active,
+        is_active=True,
+        is_published=is_published,
     )
     met = Control.objects.create(
         catalog=catalog, group="Security", control_id="CC1.1", title="Control environment", sort_order=0
@@ -74,7 +75,7 @@ class TestFrameworksSection:
         assert b"Synced from" not in content
 
     def test_an_unpublished_framework_stays_off_the_page(self, public_team) -> None:
-        _framework(public_team, source=ControlCatalog.Source.VANTA, is_active=False)
+        _framework(public_team, source=ControlCatalog.Source.VANTA, is_published=False)
 
         assert b"Compliance frameworks" not in _page(public_team)
 
@@ -91,6 +92,7 @@ class TestFrameworksSection:
             source=ControlCatalog.Source.VANTA,
             external_id="fw_iso",
             is_active=True,
+            is_published=True,
         )
         control = Control.objects.create(
             catalog=catalog, group="People Controls", control_id="A.6.1", title="Screening", sort_order=0
@@ -98,3 +100,27 @@ class TestFrameworksSection:
         ControlStatus.objects.create(control=control, product=None, status=ControlStatus.Status.COMPLIANT)
 
         assert b"Fully addressed" in _page(public_team)
+
+
+class TestTrackingIsNotPublishing:
+    """The section that never existed must not publish what was already there.
+
+    Every workspace that activated a framework internally has a catalogue with
+    is_active=True and has never had it rendered anywhere public, because
+    nothing rendered it. Turning the section on must not turn their compliance
+    score into a public page on deploy.
+    """
+
+    def test_an_internally_tracked_framework_stays_off_the_page(self, public_team) -> None:
+        catalog = _framework(public_team, source=ControlCatalog.Source.BUILTIN, is_published=False)
+
+        assert catalog.is_active is True
+        assert b"Compliance frameworks" not in _page(public_team)
+
+    def test_publishing_it_puts_it_on(self, public_team) -> None:
+        catalog = _framework(public_team, source=ControlCatalog.Source.BUILTIN, is_published=False)
+
+        catalog.is_published = True
+        catalog.save(update_fields=["is_published"])
+
+        assert b"Compliance frameworks" in _page(public_team)
