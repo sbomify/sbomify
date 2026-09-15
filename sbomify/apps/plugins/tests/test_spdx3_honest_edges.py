@@ -104,3 +104,72 @@ class TestSbomTypeGenerationContext:
 
     def test_no_sbom_element_keeps_failing(self) -> None:
         assert self._has_context({"type": "software_Package", "spdxId": "urn:x:p", "name": "p"}) is False
+
+
+class TestBsiReadsTheSharedDetector:
+    """BSI used to carry its own SPDX 3 detector, narrower than the shared one.
+
+    It matched "spdx.org/rdf/3.0" and nothing else, so a document identified by
+    its @graph alone, or one on the 3.1 line, fell through to FORMAT_UNKNOWN and
+    was reported as an unrecognised file rather than as the SPDX 3 it is.
+    """
+
+    def _detect(self, document):
+        from sbomify.apps.plugins.builtins.bsi import BSICompliancePlugin
+
+        return BSICompliancePlugin()._detect_format_and_version(document)
+
+    def _verdict(self, document):
+        from sbomify.apps.plugins.builtins.bsi import BSICompliancePlugin
+
+        plugin = BSICompliancePlugin()
+        sbom_format, version = plugin._detect_format_and_version(document)
+        return plugin._check_format_version(sbom_format, version).status
+
+    def test_a_graph_alone_is_recognised_as_spdx3(self):
+        document = {"@graph": [{"type": "CreationInfo", "specVersion": "3.0.1"}]}
+
+        assert self._detect(document) == ("spdx", "3.0.1")
+        assert self._verdict(document) == "pass"
+
+    def test_an_unversioned_document_takes_the_version_from_its_context(self):
+        """Not 3.0.1 by default: that would clear the floor on a claim nobody made."""
+        document = {"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": []}
+
+        assert self._detect(document) == ("spdx", "3.0.1")
+
+    def test_a_document_stating_no_version_anywhere_fails_rather_than_guesses(self):
+        document = {"@graph": []}
+
+        assert self._detect(document) == ("spdx", "")
+        assert self._verdict(document) == "fail"
+
+    def test_the_3_1_line_is_detected_and_still_fails_the_floor(self):
+        """Broadening detection must not let 3.1 pass by sorting above 3.0.1.
+
+        BSI §4 takes officially released versions only, and 3.1 is a release
+        candidate.
+        """
+        document = {
+            "@context": "https://spdx.org/rdf/3.1/spdx-context.jsonld",
+            "@graph": [{"type": "CreationInfo", "specVersion": "3.1.0"}],
+        }
+
+        assert self._detect(document) == ("spdx", "3.1.0")
+        assert self._verdict(document) == "fail"
+
+    def test_3_0_1_and_3_0_keep_their_existing_verdicts(self):
+        conformant = {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [{"type": "CreationInfo", "specVersion": "3.0.1"}],
+        }
+        one_patch_short = {
+            "@context": "https://spdx.org/rdf/3.0/spdx-context.jsonld",
+            "@graph": [{"type": "CreationInfo", "specVersion": "3.0"}],
+        }
+
+        assert self._verdict(conformant) == "pass"
+        assert self._verdict(one_patch_short) == "fail"
+
+    def test_cyclonedx_is_untouched(self):
+        assert self._detect({"bomFormat": "CycloneDX", "specVersion": "1.6"}) == ("cyclonedx", "1.6")
