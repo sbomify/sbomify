@@ -65,6 +65,7 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     get_spdx3_package_license,
     iter_spdx3_external_identifiers,
     resolve_spdx3_agent,
+    spdx3_refs,
 )
 from sbomify.apps.plugins.builtins._spdx_shared import spdx2_reference_type, spdx3_document_subjects
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
@@ -932,8 +933,8 @@ class BSICompliancePlugin(AssessmentPlugin):
                 status="pass" if sbom_creator else "fail",
                 details=None if sbom_creator else "No valid email or URL found for SBOM creator in CreationInfo",
                 remediation=(
-                    "Add createdBy reference to a Person or Organization element with "
-                    "externalIdentifiers containing email or URL."
+                    "Point createdBy at a Person or Organization element carrying an "
+                    "externalIdentifier of type email or urlScheme."
                 ),
             )
         )
@@ -1163,7 +1164,10 @@ class BSICompliancePlugin(AssessmentPlugin):
                 "unique_identifiers",
                 status="pass" if not identifier_warnings else "warning",
                 details=self._format_failure_details(identifier_warnings) if identifier_warnings else None,
-                remediation="Add externalIdentifiers with cpe22, cpe23, swid, or packageURL types.",
+                remediation=(
+                    "Add software_packageUrl to each package, or an externalIdentifier "
+                    "of type packageUrl, cpe22, cpe23 or swid."
+                ),
             )
         )
 
@@ -1183,8 +1187,8 @@ class BSICompliancePlugin(AssessmentPlugin):
                 status="pass" if not source_code_uri_warnings else "warning",
                 details=self._format_failure_details(source_code_uri_warnings) if source_code_uri_warnings else None,
                 remediation=(
-                    "Populate software_sourceInfo or add an externalIdentifier referencing the source "
-                    "repository (vcs) for each package."
+                    "Populate software_sourceInfo, or add an externalRef of type vcs "
+                    "naming the source repository, for each package."
                 ),
             )
         )
@@ -1711,10 +1715,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         if not creation_info:
             return None
 
-        created_by = creation_info.get("createdBy", [])
-        if not isinstance(created_by, list):
-            return None
-        for ref in created_by:
+        for ref in spdx3_refs(creation_info.get("createdBy")):
             entity = resolve_spdx3_agent(ref, persons_orgs)
             for ext_id in iter_spdx3_external_identifiers(entity):
                 id_type: str = ext_id.get("externalIdentifierType", "")
@@ -1729,10 +1730,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         self, package: dict[str, Any], persons_orgs: dict[str, dict[str, Any]]
     ) -> str | None:
         """Extract component creator email or URL from SPDX 3.x package."""
-        originated_by = package.get("originatedBy", [])
-        if not isinstance(originated_by, list):
-            return None
-        for ref in originated_by:
+        for ref in spdx3_refs(package.get("originatedBy")):
             entity = resolve_spdx3_agent(ref, persons_orgs)
             for ext_id in iter_spdx3_external_identifiers(entity):
                 id_type: str = ext_id.get("externalIdentifierType", "")
