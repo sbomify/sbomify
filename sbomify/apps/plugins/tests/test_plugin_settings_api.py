@@ -71,6 +71,9 @@ class TestReadingTheSettings:
         assert body["team_key"] == team.key
         assert body["enabled_plugins"] == ["osv"]
         assert any(p["name"] == "osv" for p in body["available_plugins"])
+        # Declared on the schema, so it reaches a caller rather than being
+        # dropped on the way out.
+        assert body["team_plan"]
 
     def test_a_workspace_you_are_not_in_is_refused(self, owner, registered_plugin, guest_user):
         client, team = owner

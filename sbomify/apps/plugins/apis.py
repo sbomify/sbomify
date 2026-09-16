@@ -493,6 +493,11 @@ class TeamPluginSettingsResponse(BaseModel):
     enabled_plugins: list[str]
     plugin_configs: dict[str, Any]
     available_plugins: list[dict[str, Any]]
+    # The handler has always returned this and the schema never declared it, so
+    # it went undocumented while the settings page read it straight off the
+    # dict. It says which plugins the workspace may enable at all, which is
+    # exactly what an API caller needs before it tries.
+    team_plan: str
 
 
 class UpdateTeamPluginSettingsResponse(BaseModel):
