@@ -832,10 +832,10 @@ def spdx3_member_import(
     ``root_element_uri`` in its ``describes`` relationship; ``externalSpdxId`` and
     that referenced URI are identical so the cross-document reference resolves.
     """
-    is_spdx3 = "@graph" in sbom_data or (
-        str(sbom_data.get("spdxVersion", "")).startswith("SPDX-3.") and "elements" in sbom_data
-    )
-    if not is_spdx3:
+    # Function-local: sboms may not take a module-level edge into plugins.
+    from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+    if not is_spdx3(sbom_data):
         return None
     checksum = getattr(sbom_instance, "sha256_hash", None)
     if not _is_sha256_hex(checksum):  # goes into verifiedUsing as the integrity digest

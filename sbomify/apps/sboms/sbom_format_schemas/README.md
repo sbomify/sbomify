@@ -57,7 +57,7 @@ uv run datamodel-codegen \
 
 ### SPDX 3.0 Schema
 
-SPDX 3.0 uses JSON-LD with a graph-based structure (`@context` + `@graph`), which is incompatible with `datamodel-codegen`. The models in `spdx_3_0.py` are **hand-written** to cover the key types needed for upload validation, metadata extraction, and aggregated SBOM generation. Each model class includes a reference to the corresponding section in the SPDX 3.0.1 specification.
+SPDX 3.0 uses JSON-LD with a graph-based structure (`@context` + `@graph`), which is incompatible with `datamodel-codegen`. The live parser is `SPDX3Schema` in `sbomify/apps/sboms/schemas.py`, a lenient model that reads the graph as dicts, and documents claiming 3.0.1 are then checked against the vendored schema by `sbomify/apps/sboms/spdx3_validation.py`. `spdx_3_0.py` retains only `_normalize_legacy_to_graph`, which folds a legacy `spdxVersion`/`elements` document into `@context`/`@graph` form before parsing.
 
 **Document structure:**
 
@@ -199,4 +199,4 @@ class RefLinkType(RootModel[RefType]):
 - CycloneDX 1.7 changed the main class name from `CyclonedxSoftwareBillOfMaterialsStandard` to `CyclonedxBillOfMaterialsStandard` (removed "Software")
 - We add an alias for backward compatibility in naming
 - SPDX 2.x versions all use the same schema structure
-- SPDX 3.0 uses a JSON-LD graph structure (`@context` + `@graph`); hand-written Pydantic models in `spdx_3_0.py` cover the key types (SPDX3Document, SoftwarePackage, Relationship, CreationInfo, Organization, Tool, Person, SoftwareAgent, Hash, ExternalRef, ExternalIdentifier)
+- SPDX 3.0 uses a JSON-LD graph structure (`@context` + `@graph`); `SPDX3Schema` in `schemas.py` parses it and `spdx3_validation.py` checks 3.0.1 claims against the vendored schema. The typed model classes that once lived in `spdx_3_0.py` were deleted as dead code
