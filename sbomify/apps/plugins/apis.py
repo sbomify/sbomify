@@ -495,6 +495,14 @@ class TeamPluginSettingsResponse(BaseModel):
     available_plugins: list[dict[str, Any]]
 
 
+class UpdateTeamPluginSettingsResponse(BaseModel):
+    """What a workspace's plugin list looks like after an update."""
+
+    message: str
+    enabled_plugins: list[str]
+    plugin_configs: dict[str, Any]
+
+
 class UpdateTeamPluginSettingsRequest(BaseModel):
     """Request schema for updating team plugin settings."""
 
@@ -616,6 +624,27 @@ def _resolve_config_schema(schema: list[dict[str, Any]], team: Team | None = Non
     return resolved
 
 
+def _token_may_manage_plugins(request: HttpRequest, team: Team) -> bool:
+    """Whether a token caller's scope reaches this workspace's plugin settings.
+
+    The Member check in both handlers is the authority on *who* may change
+    them, and it is enough for the settings page, which posts a session. A token
+    carries a second, narrower question: its owner may well be an admin, and the
+    token may still be scoped to reads or to another workspace. ``can`` answers
+    that, and is a no-op for a session because there is no token record on the
+    request to narrow against.
+    """
+    if getattr(request, "access_token_record", None) is None:
+        return True
+    return bool(can(request, "workspace:manage", team))
+
+
+@router.get(
+    "/workspaces/{team_key}/settings",
+    response={200: TeamPluginSettingsResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    throttle=[AccessTokenRateThrottle()],
+)
 def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, dict[str, Any]]:
     """Get plugin settings for a team.
 
@@ -631,6 +660,8 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
     if not request.user.is_authenticated:
         return 403, {"detail": "You don't have permission to view this workspace's plugins"}
     if not Member.objects.filter(user=request.user, team=team, role__in=("owner", "admin")).exists():
+        return 403, {"detail": "You don't have permission to view this workspace's plugins"}
+    if not _token_may_manage_plugins(request, team):
         return 403, {"detail": "You don't have permission to view this workspace's plugins"}
 
     # Get or create team plugin settings
@@ -671,6 +702,17 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
     }
 
 
+@router.put(
+    "/workspaces/{team_key}/settings",
+    response={
+        200: UpdateTeamPluginSettingsResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    throttle=[AccessTokenRateThrottle()],
+)
 def update_team_plugin_settings(
     request: HttpRequest, team_key: str, payload: UpdateTeamPluginSettingsRequest
 ) -> tuple[int, dict[str, Any]]:
@@ -689,6 +731,8 @@ def update_team_plugin_settings(
     if not request.user.is_authenticated:
         return 403, {"detail": "You don't have permission to manage this workspace's plugins"}
     if not Member.objects.filter(user=request.user, team=team, role__in=("owner", "admin")).exists():
+        return 403, {"detail": "You don't have permission to manage this workspace's plugins"}
+    if not _token_may_manage_plugins(request, team):
         return 403, {"detail": "You don't have permission to manage this workspace's plugins"}
 
     # Validate that all enabled plugins are registered and enabled
