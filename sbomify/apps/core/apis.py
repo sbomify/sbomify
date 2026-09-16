@@ -184,6 +184,52 @@ def _is_internal_member(request: HttpRequest) -> bool:
     return bool(request.user and request.user.is_authenticated and not _is_guest_member(request))
 
 
+def _enforce_limit_under_lock(team_id: str, resource_type: str) -> tuple[bool, str, ErrorCode | None]:
+    """Re-count under a workspace row lock, for a caller about to insert.
+
+    The plan, suspension and scheduled-downgrade checks live in
+    ``_check_billing_limits`` and run before the transaction opens, because that
+    path can reach Stripe and a transaction should not stay open across a network
+    round trip. This does only the part that has to be serialized with the
+    insert: lock the workspace, count, compare.
+
+    Must be called inside ``transaction.atomic``, and the insert must follow in
+    the same transaction, or the lock buys nothing. No effect on SQLite, which
+    has no row locks.
+    """
+    if not is_billing_enabled():
+        return True, "", None
+
+    team = Team.objects.select_for_update().filter(id=team_id).first()
+    if team is None:
+        return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
+
+    try:
+        plan = BillingPlan.objects.get(key=team.billing_plan)
+    except BillingPlan.DoesNotExist:
+        return False, "Invalid billing plan", ErrorCode.INVALID_BILLING_PLAN
+
+    if resource_type == "product":
+        max_allowed = plan.max_products
+    elif resource_type == "component":
+        max_allowed = plan.max_components
+    else:
+        return False, f"Invalid resource type: {resource_type}", ErrorCode.INVALID_DATA
+
+    if plan.key == "enterprise" or max_allowed is None:
+        return True, "", None
+
+    current_count = get_team_asset_count(team_id, resource_type)
+    if (current_count + 1) > max_allowed:
+        return (
+            False,
+            f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan. "
+            f"You currently have {current_count} {resource_type}s.",
+            ErrorCode.BILLING_LIMIT_EXCEEDED,
+        )
+    return True, "", None
+
+
 def _get_user_team_id(request: HttpRequest) -> str | None:
     """Get the current user's workspace ID from the session or fall back to user's default workspace."""
     from sbomify.apps.core.utils import get_team_id_from_session
@@ -485,6 +531,7 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
     Check if team has reached billing limits for the given resource type.
     Also checks for suspended accounts due to payment failure.
 
+    Args:
     Returns:
         (can_create, error_message, error_code): Tuple of boolean, error message, and error code
     """
@@ -645,23 +692,31 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
-    # Check billing limits
+    # Plan state, suspension and the Stripe-backed downgrade path, all outside
+    # the transaction: none of it should hold one open across a network call.
     can_create, error_msg, error_code = _check_billing_limits(team_id, "product")
     if not can_create:
         return 403, {"detail": error_msg, "error_code": error_code}
 
     try:
-        # Check if user has permission to create products in this team
-        team = Team.objects.get(id=team_id)
-        if not can(request, "product:create", team):
-            return 403, {
-                "detail": "You don't have permission to create products in this workspace",
-                "error_code": ErrorCode.FORBIDDEN,
-            }
-
-        allow_private = _private_items_allowed(team)
-
         with transaction.atomic():
+            # The count that decides, under a row lock and in the same
+            # transaction as the insert. The check above can go stale between
+            # the two, which is the race this closes.
+            can_create, error_msg, error_code = _enforce_limit_under_lock(team_id, "product")
+            if not can_create:
+                return 403, {"detail": error_msg, "error_code": error_code}
+
+            # Check if user has permission to create products in this team
+            team = Team.objects.get(id=team_id)
+            if not can(request, "product:create", team):
+                return 403, {
+                    "detail": "You don't have permission to create products in this workspace",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
+
+            allow_private = _private_items_allowed(team)
+
             product = Product.objects.create(
                 name=payload.name,
                 description=payload.description,
@@ -1638,29 +1693,37 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
-    # Check billing limits
+    # Plan state, suspension and the Stripe-backed downgrade path, all outside
+    # the transaction: none of it should hold one open across a network call.
     can_create, error_msg, error_code = _check_billing_limits(team_id, "component")
     if not can_create:
         return 403, {"detail": error_msg, "error_code": error_code}
 
     try:
-        # Check if user has permission to create components in this team
-        team = Team.objects.get(id=team_id)
-        if not can(request, "component:create", team):
-            return 403, {
-                "detail": "You don't have permission to create components in this workspace",
-                "error_code": ErrorCode.FORBIDDEN,
-            }
-
-        if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
-            return 400, {
-                "detail": "Only document components can be marked as workspace-wide",
-                "error_code": ErrorCode.INVALID_DATA,
-            }
-
-        allow_private = _private_items_allowed(team)
-
         with transaction.atomic():
+            # The count that decides, under a row lock and in the same
+            # transaction as the insert. The check above can go stale between
+            # the two, which is the race this closes.
+            can_create, error_msg, error_code = _enforce_limit_under_lock(team_id, "component")
+            if not can_create:
+                return 403, {"detail": error_msg, "error_code": error_code}
+
+            # Check if user has permission to create components in this team
+            team = Team.objects.get(id=team_id)
+            if not can(request, "component:create", team):
+                return 403, {
+                    "detail": "You don't have permission to create components in this workspace",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
+
+            if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
+                return 400, {
+                    "detail": "Only document components can be marked as workspace-wide",
+                    "error_code": ErrorCode.INVALID_DATA,
+                }
+
+            allow_private = _private_items_allowed(team)
+
             # Set visibility based on is_public (for backward compatibility)
             # Community plan users can only create public components
             initial_visibility = Component.Visibility.PUBLIC if (not allow_private) else Component.Visibility.PRIVATE
