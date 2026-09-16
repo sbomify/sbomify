@@ -64,7 +64,10 @@ def _plan_with_room(team):
     """A plan generous enough that both halves of the check run to completion."""
     from sbomify.apps.billing.models import BillingPlan
 
-    BillingPlan.objects.get_or_create(
+    # update_or_create, not get_or_create: another fixture may have made a
+    # "business" plan with tighter limits, and inheriting those would fail the
+    # pre-check here for reasons that have nothing to do with what is tested.
+    BillingPlan.objects.update_or_create(
         key="business",
         defaults={"name": "Business", "description": "b", "max_products": 50, "max_components": 50},
     )
@@ -98,7 +101,7 @@ def test_the_product_limit_check_runs_locked_inside_the_create_transaction(
     )
 
     assert response.status_code == 201, response.content[:200]
-    assert seen["locked_depth"] > seen["precheck_depth"], (
+    assert seen.get("locked_depth", -1) > seen.get("precheck_depth", -1), (
         "the deciding count must run inside the create transaction and the Stripe-capable pre-check outside it"
     )
 
@@ -123,7 +126,7 @@ def test_the_component_limit_check_runs_locked_inside_the_create_transaction(
     )
 
     assert response.status_code == 201, response.content[:200]
-    assert seen["locked_depth"] > seen["precheck_depth"], (
+    assert seen.get("locked_depth", -1) > seen.get("precheck_depth", -1), (
         "the deciding count must run inside the create transaction and the Stripe-capable pre-check outside it"
     )
 
