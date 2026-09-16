@@ -33,10 +33,10 @@ Always run tests in Docker:
 # Start test services
 docker compose -f docker-compose.tests.yml up -d
 
-# All tests (parallel — requires pytest-xdist installed in container)
+# All tests (parallel). Use this one: ~2 minutes on 6 cores, against ~12 sequential.
 docker compose -f docker-compose.tests.yml exec tests uv run pytest -n auto --ignore=sbomify/apps/core/tests/e2e
 
-# All tests (sequential)
+# All tests (sequential). For --pdb, which xdist cannot support.
 docker compose -f docker-compose.tests.yml exec tests uv run pytest --ignore=sbomify/apps/core/tests/e2e
 
 # Specific file or directory
@@ -100,6 +100,12 @@ Global fixtures (no import needed — registered in root `conftest.py`):
 Session setup helper: `setup_authenticated_client_session(client, team, user)` from `sbomify.apps.core.tests.shared_fixtures`.
 
 Test settings: `sbomify.test_settings`. Tests run with `--nomigrations` (bare schema). Deselect slow tests: `-m "not slow"`.
+
+`test_settings` pins `PASSWORD_HASHERS` to MD5. That is not a shortcut to tidy
+away: PBKDF2 at Django's default work factor costs 0.13 s per hash, the fixtures
+set a password on nearly every user they build, and restoring the real hasher
+puts roughly fifteen minutes back into a full run. Nothing outside
+`test_settings` may pin a hasher, and no test should assert on one.
 
 ### Linting and Formatting
 
