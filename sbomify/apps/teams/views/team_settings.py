@@ -600,7 +600,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         # The one artifact upload that used to carry its own literal, so raising
-        # ARTIFACT_MAX_UPLOAD_SIZE_MB moved every ceiling except this one.
+        # DATA_UPLOAD_MAX_MEMORY_SIZE_MB (which is what sets
+        # ARTIFACT_MAX_UPLOAD_SIZE) moved every ceiling except this one.
         max_size = settings.ARTIFACT_MAX_UPLOAD_SIZE
         max_size_mb = max_size // (1024 * 1024)
         if (uploaded_file.size or 0) > max_size:

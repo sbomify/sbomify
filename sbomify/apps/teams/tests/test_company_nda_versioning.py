@@ -144,9 +144,9 @@ class TestCompanyNdaVersioning:
 class TestTheNdaUploadFollowsTheConfiguredCeiling:
     """This upload used to carry its own 50MB literal.
 
-    Every other artifact ceiling reads `ARTIFACT_MAX_UPLOAD_SIZE`, so raising
-    `ARTIFACT_MAX_UPLOAD_SIZE_MB` on a deployment moved all of them except this
-    one, and nothing said so.
+    Every other artifact ceiling reads `ARTIFACT_MAX_UPLOAD_SIZE`, which
+    `DATA_UPLOAD_MAX_MEMORY_SIZE_MB` sets for a deployment, so raising that env
+    var moved all of them except this one, and nothing said so.
     """
 
     def test_a_file_over_the_ceiling_is_refused(self, mocker: MockerFixture, owner_client, settings):
