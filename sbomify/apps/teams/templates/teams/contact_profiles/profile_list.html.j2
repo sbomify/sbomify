@@ -70,4 +70,5 @@
     </template>
 {% endif %}
 </c-tables.shell>
-{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}
+{% url 'teams:contact_profiles_list' team.key as contact_profiles_url %}
+{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=contact_profiles_url form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}
