@@ -111,10 +111,6 @@ class ComponentVulnerabilitiesContext:
     sbom_id: str | None = None
     version: str | None = None
 
-    @property
-    def has_findings(self) -> bool:
-        return bool(self.panel and self.panel["unfiltered_total"])
-
 
 def build_component_vulnerabilities(component_id: str, query: FindingQuery) -> ComponentVulnerabilitiesContext:
     """The newest SBOM's findings, summarised whole and paged for display.
