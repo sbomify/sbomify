@@ -151,28 +151,29 @@ TRUSTED_PROXIES = [
 ]
 
 
+def _megabytes_from_env(name: str, default_mb: int) -> int:
+    """Bytes from a megabyte-valued env var, falling back on anything unusable.
+
+    These are read at import, so bad config would fail the boot rather than one
+    request. A value that is not a positive integer, such as "100MB" or a stray
+    space, and a zero or negative one that would refuse every request body, both
+    fall back to the default instead.
+    """
+    raw = (os.environ.get(name) or "").strip()
+    megabytes = int(raw) if raw.isdigit() else 0
+    return (megabytes if megabytes > 0 else default_mb) * 1024 * 1024
+
+
 # The ceiling on a request body Django will read into memory (its own default is
 # 2.5 MB). SBOM uploads are the large bodies here: a Yocto SPDX 3 image SBOM runs
 # to tens of megabytes, because SPDX 3 makes every relationship a standalone
 # element rather than an entry in an array.
 #
-# Keep this at or above sboms.apis.SBOM_MAX_UPLOAD_SIZE. Below it, the endpoint's
-# own limit never runs and never reports: Django raises RequestDataTooBig while
-# reading the body, so a document inside the advertised cap is refused with no
-# message naming a size. That is what this setting sitting at 20 MB under a
-# 100 MB endpoint cap did.
-def _megabytes_from_env(name: str, default_mb: int) -> int:
-    """Bytes from a megabyte-valued env var, ignoring anything unusable.
-
-    Parsed at import, so a typo such as "100MB" or a stray space would take the
-    whole app down on boot, and a zero or negative value would refuse every
-    request body. Either falls back to the default instead.
-    """
-    raw = (os.environ.get(name) or "").strip()
-    megabytes = int(raw) if raw.isdigit() and int(raw) > 0 else default_mb
-    return megabytes * 1024 * 1024
-
-
+# Keep this at or above sbomify.apps.sboms.apis.SBOM_MAX_UPLOAD_SIZE. Below it,
+# the endpoint's own limit never runs and never reports: Django raises
+# RequestDataTooBig while reading the body, so a document inside the advertised
+# cap is refused with no message naming a size. That is what this setting sitting
+# at 20 MB under a 100 MB endpoint cap did.
 DATA_UPLOAD_MAX_MEMORY_SIZE = _megabytes_from_env("DATA_UPLOAD_MAX_MEMORY_SIZE_MB", 100)
 
 # What any artifact upload may weigh: SBOM, CBOM, HBOM, AI BOM, SaaSBOM, VEX and
