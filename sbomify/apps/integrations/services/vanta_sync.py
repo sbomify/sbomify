@@ -225,6 +225,19 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
                 is_published=False,
             )
     except IntegrityError:
+        # Two different collisions land here. Another sync of the same account
+        # got the framework in first, in which case its row is the one to go on
+        # with: creating a second would split this framework's controls and
+        # statuses across two catalogs that later syncs pick between at random.
+        raced = ControlCatalog.objects.filter(
+            team=integration.team, source=ControlCatalog.Source.VANTA, external_id=framework_id
+        ).first()
+        if raced is not None:
+            return raced
+
+        # Otherwise the workspace already holds a catalog under this exact name
+        # and version, almost always its own copy of the same framework, and the
+        # synced one needs a label of its own.
         return ControlCatalog.objects.create(
             team=integration.team,
             name=name,

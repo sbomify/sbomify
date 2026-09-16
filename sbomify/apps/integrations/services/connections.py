@@ -154,10 +154,33 @@ def _copy_credential(source: Integration, target: Integration) -> None:
 
 
 def _mark_revoked(integration: Integration, message: str) -> None:
-    integration.status = Integration.Status.REVOKED
-    integration.last_sync_status = Integration.SyncStatus.FAILED
-    integration.last_sync_error = message
-    integration.save(update_fields=["status", "last_sync_status", "last_sync_error", "updated_at"])
+    """Flag a dead credential, unless one has already replaced it.
+
+    This runs after the lock is gone, so a reconnect can land in between, and
+    saving the instance we hold would push a stale refusal over a working
+    connection. The refresh token we were refused on is what the write is keyed
+    to: if the row still carries it, the refusal is still true about what is
+    stored; if it does not, somebody has reconnected and being asked to
+    reconnect again is wrong.
+    """
+    replaced = Integration.objects.filter(pk=integration.pk, refresh_token=integration.refresh_token).update(
+        status=Integration.Status.REVOKED,
+        last_sync_status=Integration.SyncStatus.FAILED,
+        last_sync_error=message,
+        updated_at=timezone.now(),
+    )
+    if replaced:
+        integration.status = Integration.Status.REVOKED
+        integration.last_sync_status = Integration.SyncStatus.FAILED
+        integration.last_sync_error = message
+        return
+
+    # Somebody reconnected while we were being refused. This call still failed,
+    # so the caller still gets its error, but the row now describes the new
+    # credential and the instance has to say so too.
+    current = Integration.objects.filter(pk=integration.pk).first()
+    if current is not None:
+        _copy_credential(current, integration)
 
 
 def disconnect(team: Team, provider_key: str) -> ServiceResult[None]:
@@ -187,8 +210,10 @@ def disconnect(team: Team, provider_key: str) -> ServiceResult[None]:
 def provider_cards(team: Team) -> list[dict[str, Any]]:
     """One entry per registered provider, for the Integrations tab.
 
-    Tokens never appear. ``redacted_token`` is the only credential-shaped
-    thing that reaches a template.
+    Tokens never appear, and not because the template happens not to render
+    them: what goes in the context is a mapping of the sync fields the panel
+    reads, so a field added to ``Integration`` later cannot arrive on a page by
+    being added to the model.
     """
     connections = {integration.provider: integration for integration in Integration.objects.filter(team=team)}
 
@@ -209,7 +234,7 @@ def provider_cards(team: Team) -> list[dict[str, Any]]:
         cards.append(
             {
                 "provider": provider,
-                "integration": integration,
+                "integration": _sync_state(integration),
                 "is_connected": integration is not None,
                 "needs_reconnect": integration is not None and integration.status == Integration.Status.REVOKED,
                 "catalogs": [
@@ -225,6 +250,18 @@ def provider_cards(team: Team) -> list[dict[str, Any]]:
             }
         )
     return cards
+
+
+def _sync_state(integration: Integration | None) -> dict[str, Any] | None:
+    """What the Integrations tab says about a connection, and nothing else."""
+    if integration is None:
+        return None
+    return {
+        "last_sync_at": integration.last_sync_at,
+        "last_sync_status": integration.last_sync_status,
+        "last_sync_error": integration.last_sync_error,
+        "connected_by": integration.connected_by,
+    }
 
 
 def set_catalog_published(team: Team, catalog_id: str, published: bool) -> ServiceResult[str]:

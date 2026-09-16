@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.db import IntegrityError, transaction
 
 from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus, ControlStatusLog
 from sbomify.apps.integrations.services import vanta_sync
@@ -402,3 +403,63 @@ class TestOversizedProviderStrings:
 
         assert result.ok
         assert len(ControlCatalog.objects.get(external_id="fw_long").name) == 255
+
+
+class TestAFrameworkExistsOnce:
+    """One catalog per framework, enforced where a race cannot get past it.
+
+    Two syncs of the same account can both miss the lookup and both insert.
+    Left alone that splits one framework's controls and statuses across two
+    catalogs, and later syncs pick between them by whichever row comes back
+    first.
+    """
+
+    def test_the_database_refuses_a_second_catalogue_for_one_framework(self, connected_vanta) -> None:
+        ControlCatalog.objects.create(
+            team=connected_vanta.team,
+            name="SOC 2 Type II",
+            version="SOC 2",
+            source=ControlCatalog.Source.VANTA,
+            external_id="fw_soc2",
+        )
+
+        # The savepoint is what keeps the refusal from poisoning the test's own
+        # transaction, and is why the sync wraps its insert the same way.
+        with pytest.raises(IntegrityError), transaction.atomic():
+            ControlCatalog.objects.create(
+                team=connected_vanta.team,
+                name="SOC 2 Type II",
+                version="fw_soc2",
+                source=ControlCatalog.Source.VANTA,
+                external_id="fw_soc2",
+            )
+
+    def test_hand_maintained_catalogues_still_coexist(self, connected_vanta) -> None:
+        """They carry no external id, so uniqueness must not apply to them."""
+        for version in ("2017", "2024"):
+            ControlCatalog.objects.create(
+                team=connected_vanta.team,
+                name="SOC 2 Type II",
+                version=version,
+                source=ControlCatalog.Source.BUILTIN,
+            )
+
+        assert ControlCatalog.objects.filter(team=connected_vanta.team, external_id="").count() == 2
+
+    def test_a_name_collision_with_a_builtin_still_imports_under_its_own_label(
+        self, connected_vanta, install_client
+    ) -> None:
+        """The workspace's own copy of SOC 2 must not block the synced one."""
+        ControlCatalog.objects.create(
+            team=connected_vanta.team,
+            name="SOC 2 Type II",
+            version="SOC 2",
+            source=ControlCatalog.Source.BUILTIN,
+        )
+        install_client([SOC2], {"fw_soc2": [_control("c_one", "CC1.1", "Control environment", "Security")]}, {})
+
+        sync(connected_vanta)
+
+        synced = ControlCatalog.objects.get(team=connected_vanta.team, source=ControlCatalog.Source.VANTA)
+        assert synced.external_id == "fw_soc2"
+        assert synced.version == "fw_soc2"

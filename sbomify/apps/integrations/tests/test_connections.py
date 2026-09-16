@@ -318,3 +318,66 @@ class TestProviderCards:
         card = connections.provider_cards(connected_vanta.team)[0]
 
         assert card["needs_reconnect"] is True
+
+
+class TestARefusalDoesNotOutliveTheCredentialItRefused:
+    def test_a_reconnect_during_the_refusal_is_not_revoked(self, connected_vanta, monkeypatch) -> None:
+        """The refusal is applied after the lock, so a reconnect can land first.
+
+        Saving the instance we hold would push "needs reconnecting" over the
+        connection somebody has just fixed, and the workspace would be told to
+        redo OAuth it had already redone.
+        """
+        connected_vanta.token_expires_at = None
+        connected_vanta.save()
+
+        def refuse_then_reconnect(provider, token):
+            connections.save_connection(
+                connected_vanta.team, VANTA, _token_set("vat_reconnected", "vrt_reconnected"), None
+            )
+            raise ProviderAuthError("refused", service="vanta")
+
+        monkeypatch.setattr(oauth, "refresh", refuse_then_reconnect)
+
+        with pytest.raises(ProviderAuthError):
+            connections.access_token(connected_vanta, VANTA)
+
+        stored = Integration.objects.get(pk=connected_vanta.pk)
+        assert stored.status == Integration.Status.CONNECTED
+        assert stored.refresh_token == "vrt_reconnected"
+        # The caller's own instance has to describe the row, not the refusal.
+        assert connected_vanta.status == Integration.Status.CONNECTED
+
+    def test_a_refusal_on_the_stored_credential_still_revokes(self, connected_vanta, monkeypatch) -> None:
+        connected_vanta.token_expires_at = None
+        connected_vanta.save()
+
+        monkeypatch.setattr(
+            oauth, "refresh", lambda provider, token: (_ for _ in ()).throw(ProviderAuthError("no", service="vanta"))
+        )
+
+        with pytest.raises(ProviderAuthError):
+            connections.access_token(connected_vanta, VANTA)
+
+        assert Integration.objects.get(pk=connected_vanta.pk).status == Integration.Status.REVOKED
+
+
+class TestNoCredentialReachesATemplate:
+    def test_the_card_carries_sync_state_and_not_the_connection(self, connected_vanta) -> None:
+        """The panel needs four fields, so four fields is what it is handed.
+
+        Passing the model would put a live access and refresh token one
+        ``{{ }}`` away from a public settings page, and would put every field
+        added to ``Integration`` later there too.
+        """
+        card = connections.provider_cards(connected_vanta.team)[0]
+
+        assert not isinstance(card["integration"], Integration)
+        assert set(card["integration"]) == {
+            "last_sync_at",
+            "last_sync_status",
+            "last_sync_error",
+            "connected_by",
+        }
+        assert "vat_live" not in str(card)
+        assert "vrt_live" not in str(card)

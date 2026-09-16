@@ -27,6 +27,17 @@ class ControlCatalog(models.Model):
         indexes = [
             models.Index(fields=["team", "source", "external_id"], name="controls_catalog_source_idx"),
         ]
+        constraints = [
+            # A synced catalog is identified by the id its own system gave it,
+            # so the database is what stops two concurrent syncs of one account
+            # from both creating it. Hand-made catalogs carry no external id and
+            # are excluded, or they would all collide on the empty string.
+            models.UniqueConstraint(
+                fields=["team", "source", "external_id"],
+                condition=~models.Q(external_id=""),
+                name="unique_catalog_per_external_id",
+            ),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)

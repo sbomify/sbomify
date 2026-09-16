@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import dramatiq
+from django.db.models import Q
 from django.utils import timezone
 
 from sbomify.apps.integrations.models import Integration
@@ -24,6 +25,36 @@ logger = getLogger(__name__)
 # and well outside anything a provider would call chatty.
 SYNC_INTERVAL = timedelta(hours=6)
 
+# How long a claim on a connection stays good. This is the actor's own time
+# limit: past it dramatiq has killed the run, so a claim still standing belongs
+# to a worker that is no longer there and the next run may take it.
+SYNC_LEASE = timedelta(minutes=30)
+
+
+def _claim(integration_id: str) -> Integration | None:
+    """Take this connection for this run, or decline it.
+
+    Three things queue a sync, the button, the OAuth callback and the six-hour
+    scheduler, so the same connection can be queued several times over while a
+    run is still going. Two runs against one account duplicate every per-control
+    request and let the slower one write its older answers last. The claim is a
+    single conditional update, so the database picks the winner and the losers
+    return without touching anything.
+
+    It is also where a disconnect takes effect: the row is gone or no longer
+    connected by the time the worker starts, nothing is claimed, and queued work
+    stops rather than syncing an account nobody is connected to any more.
+    """
+    expired = timezone.now() - SYNC_LEASE
+    claimed = (
+        Integration.objects.filter(id=integration_id, status=Integration.Status.CONNECTED)
+        .filter(~Q(last_sync_status=Integration.SyncStatus.RUNNING) | Q(updated_at__lt=expired))
+        .update(last_sync_status=Integration.SyncStatus.RUNNING, updated_at=timezone.now())
+    )
+    if not claimed:
+        return None
+    return Integration.objects.filter(id=integration_id).select_related("team").first()
+
 
 @dramatiq.actor(queue_name="integrations", max_retries=0, time_limit=1_800_000)
 def sync_integration(integration_id: str) -> None:
@@ -33,9 +64,9 @@ def sync_integration(integration_id: str) -> None:
     being unreachable or a credential being gone, and the next scheduled run
     is a better answer to both than three immediate attempts.
     """
-    integration = Integration.objects.filter(id=integration_id).select_related("team").first()
+    integration = _claim(integration_id)
     if integration is None:
-        logger.info("Integration %s no longer exists, skipping sync", integration_id)
+        logger.info("Integration %s is gone, disconnected or already syncing, skipping", integration_id)
         return
 
     record_task_breadcrumb(

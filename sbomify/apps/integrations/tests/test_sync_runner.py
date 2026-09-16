@@ -146,3 +146,92 @@ class TestScheduling:
         monkeypatch.setattr(tasks, "run_sync", lambda integration: pytest.fail("should not have run"))
 
         tasks.sync_integration("nonexistent1")
+
+
+def _records_into(runs: list[str]):
+    """A ``run_sync`` that only says which connection reached it."""
+
+    def _run(integration) -> ServiceResult[dict]:
+        runs.append(integration.id)
+        return ServiceResult.success({})
+
+    return _run
+
+
+class TestClaimingAConnection:
+    """One run per connection at a time, and none at all once it is gone."""
+
+    def test_a_run_already_under_way_is_not_joined(self, connected_vanta, monkeypatch) -> None:
+        """Sync now, the OAuth callback and the scheduler can all queue the same row.
+
+        Two runs against one account duplicate every per-control request and
+        let the slower one write its older answers last.
+        """
+        from sbomify.apps.integrations import tasks
+
+        runs: list[str] = []
+        monkeypatch.setattr(tasks, "run_sync", _records_into(runs))
+
+        connected_vanta.last_sync_status = Integration.SyncStatus.RUNNING
+        connected_vanta.save()
+
+        tasks.sync_integration(connected_vanta.id)
+
+        assert runs == []
+
+    def test_a_claim_from_a_worker_that_died_expires(self, connected_vanta, monkeypatch) -> None:
+        """Otherwise a killed worker ends syncing for that workspace for good."""
+        from sbomify.apps.integrations import tasks
+
+        runs: list[str] = []
+        monkeypatch.setattr(tasks, "run_sync", _records_into(runs))
+
+        Integration.objects.filter(pk=connected_vanta.pk).update(
+            last_sync_status=Integration.SyncStatus.RUNNING,
+            updated_at=timezone.now() - tasks.SYNC_LEASE - timedelta(minutes=1),
+        )
+
+        tasks.sync_integration(connected_vanta.id)
+
+        assert runs == [connected_vanta.id]
+
+    def test_a_disconnect_cancels_work_already_queued(self, connected_vanta, monkeypatch) -> None:
+        """The check has to be here, not at queueing time.
+
+        A queued task that loaded the row before the disconnect still holds the
+        credential, and would go on updating catalogs for an account nobody is
+        connected to.
+        """
+        from sbomify.apps.integrations import tasks
+
+        monkeypatch.setattr(tasks, "run_sync", lambda integration: pytest.fail("should not have run"))
+
+        integration_id = connected_vanta.id
+        connected_vanta.delete()
+
+        tasks.sync_integration(integration_id)
+
+    def test_a_connection_needing_a_reconnect_is_not_claimed(self, connected_vanta, monkeypatch) -> None:
+        from sbomify.apps.integrations import tasks
+
+        monkeypatch.setattr(tasks, "run_sync", lambda integration: pytest.fail("should not have run"))
+
+        connected_vanta.status = Integration.Status.REVOKED
+        connected_vanta.save()
+
+        tasks.sync_integration(connected_vanta.id)
+
+    def test_claiming_marks_the_connection_as_syncing(self, connected_vanta, monkeypatch) -> None:
+        from sbomify.apps.integrations import tasks
+
+        seen: list[str] = []
+
+        def record(integration):
+            seen.append(Integration.objects.get(pk=integration.pk).last_sync_status)
+            return ServiceResult.success({})
+
+        monkeypatch.setattr(tasks, "run_sync", record)
+
+        tasks.sync_integration(connected_vanta.id)
+
+        assert seen == [Integration.SyncStatus.RUNNING]
