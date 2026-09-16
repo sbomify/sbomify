@@ -11,12 +11,17 @@ the per-commit suite. The file loads in well under a second.
 
 import collections
 import gzip
+import hashlib
 import json
 import pathlib
 
 import pytest
 
 FIXTURE = pathlib.Path(__file__).parent.resolve() / "test_data" / "yocto_core-image-sato-sdk.spdx3.json.gz"
+
+# What Yocto published, recorded in the test_data README beside the download
+# instructions. The gzip wrapper is ours; the bytes inside it are theirs.
+DOCUMENTED_SHA256 = "ad7c716ee239032369ebc07d4eb5ef9eb1d87394dd6ff43a99298cf1a50fd481"
 
 
 @pytest.fixture(scope="module")
@@ -36,8 +41,23 @@ def counts(graph: list) -> collections.Counter:
     return collections.Counter(e.get("type") for e in graph if isinstance(e, dict))
 
 
+def test_the_document_is_the_one_yocto_published():
+    """The README's provenance claim, checked instead of asserted in prose.
+
+    Every other test here reads the parsed graph, so a re-wrapped archive or an
+    edited field that left the counts alone would pass the lot. Hashing the
+    decompressed bytes is what lets CI fail on the claim the README makes.
+    """
+    digest = hashlib.sha256()
+    with gzip.open(FIXTURE) as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+
+    assert digest.hexdigest() == DOCUMENTED_SHA256
+
+
 def test_the_archive_opens_and_is_spdx3(document: dict):
-    """A truncated or re-wrapped archive fails here first."""
+    """A truncated archive fails here first."""
     from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
 
     assert is_spdx3(document)
