@@ -24,6 +24,17 @@ logger = logging.getLogger(__name__)
 #: report comparable in size to the component page's paged panel.
 PACKAGES_PER_PAGE = 25
 
+#: Advisory cards rendered for one package. Paging the packages bounds how many
+#: groups a response holds, not how many cards: a kernel package in a BSP image
+#: can carry hundreds of advisories on its own, and twenty-five of those rebuild
+#: the oversized response this page was paginated to avoid. Together the two
+#: numbers put a hard ceiling on the page.
+#:
+#: The rest are not lost. Advisories are ordered worst-first, the row says how
+#: many were left out, and the component page's panel pages through every
+#: finding of the artifact with search and filters.
+MAX_ADVISORIES_PER_PACKAGE = 10
+
 
 class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest, sbom_id: str) -> HttpResponse:
@@ -313,6 +324,27 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     paginator = Paginator(packages, PACKAGES_PER_PAGE)
                     package_page = paginator.get_page(request.GET.get("page"))
                     page_range = list(paginator.get_elided_page_range(package_page.number, on_each_side=1, on_ends=1))
+
+                    # Paging the packages alone does not bound the page. The
+                    # cards are advisories, not packages, and one package can
+                    # carry hundreds of them: a kernel or a libc in a BSP image
+                    # does. Twenty-five packages each holding four hundred
+                    # advisories rebuilds exactly the response this change
+                    # exists to prevent, so the nested list is capped too and
+                    # the ceiling becomes PACKAGES_PER_PAGE x this.
+                    #
+                    # Capped after open_count and suppressed_count are computed,
+                    # so the row still summarises the whole package rather than
+                    # the part of it being shown. Rows are already worst-first,
+                    # so the cap keeps the advisories that matter; the count
+                    # beside them says what was left out, and the component
+                    # panel pages through every one of them with search.
+                    for entry in package_page:
+                        total = len(entry["vulnerabilities"])
+                        entry["shown_count"] = min(total, MAX_ADVISORIES_PER_PACKAGE)
+                        entry["hidden_count"] = total - entry["shown_count"]
+                        entry["vulnerabilities"] = entry["vulnerabilities"][:MAX_ADVISORIES_PER_PACKAGE]
+
                     vulnerabilities_data = {"results": [{"packages": list(package_page)}]}
 
                 # Check for error metadata on the newest run
