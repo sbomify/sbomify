@@ -150,8 +150,17 @@ TRUSTED_PROXIES = [
     if cidr.strip()
 ]
 
-# Allow larger request bodies for OSCAL catalog imports (default is 2.5 MB)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB
+# The ceiling on a request body Django will read into memory (its own default is
+# 2.5 MB). SBOM uploads are the large bodies here: a Yocto SPDX 3 image SBOM runs
+# to tens of megabytes, because SPDX 3 makes every relationship a standalone
+# element rather than an entry in an array.
+#
+# Keep this at or above sboms.apis.SBOM_MAX_UPLOAD_SIZE. Below it, the endpoint's
+# own limit never runs and never reports: Django raises RequestDataTooBig while
+# reading the body, so a document inside the advertised cap is refused with no
+# message naming a size. That is what this setting sitting at 20 MB under a
+# 100 MB endpoint cap did.
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get("DATA_UPLOAD_MAX_MEMORY_SIZE_MB", "100")) * 1024 * 1024
 
 # Prevent browsers from MIME-sniffing responses away from their declared
 # Content-Type — defense-in-depth for user-uploaded artifact downloads.
