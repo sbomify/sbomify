@@ -162,6 +162,14 @@ TRUSTED_PROXIES = [
 # 100 MB endpoint cap did.
 DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get("DATA_UPLOAD_MAX_MEMORY_SIZE_MB", "100")) * 1024 * 1024
 
+# What any artifact upload may weigh: SBOM, CBOM, HBOM, AI BOM, SaaSBOM, VEX and
+# documents. One number so the formats cannot drift apart, and so a document is
+# not held to a different limit from the SBOM beside it.
+#
+# Documents arrive as multipart file uploads, which Django does not measure
+# against DATA_UPLOAD_MAX_MEMORY_SIZE, so that path enforces this itself.
+ARTIFACT_MAX_UPLOAD_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
+
 # Prevent browsers from MIME-sniffing responses away from their declared
 # Content-Type — defense-in-depth for user-uploaded artifact downloads.
 SECURE_CONTENT_TYPE_NOSNIFF = True

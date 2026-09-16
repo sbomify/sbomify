@@ -190,6 +190,9 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             "latest_cbom_version": cbom_issues.artifact_version,
             "latest_cbom_id": cbom_issues.artifact_id,
             "latest_cbom_item_type": cbom_issues.artifact_item_type,
+            # The upload widget validates against the same number the API
+            # enforces, rather than carrying its own copy that can drift.
+            "max_upload_size_mb": settings.ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024),
             "document_type_subcategories": document_type_subcategories,
             "document_type_subcategories_json": json.dumps(document_type_subcategories),
         }

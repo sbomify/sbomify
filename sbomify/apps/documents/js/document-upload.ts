@@ -2,12 +2,15 @@ import Alpine from '../../core/js/alpine-init';
 import { showSuccess, showError } from '../../core/js/alerts';
 import { getCsrfToken } from '../../core/js/csrf';
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
+// The server owns this number; it arrives from the template so the two cannot
+// drift. The default is only what applies if a caller forgets to pass it.
+const DEFAULT_MAX_FILE_SIZE_MB = 100;
 const FILE_SIZE_UNITS = ['Bytes', 'KB', 'MB', 'GB'] as const;
 
 export function registerDocumentUpload(): void {
-    Alpine.data('documentUpload', (componentId: string) => ({
+    Alpine.data('documentUpload', (componentId: string, maxFileSizeMb: number = DEFAULT_MAX_FILE_SIZE_MB) => ({
         componentId,
+        maxFileSizeMb,
         expanded: false,
         isDragOver: false,
         isUploading: false,
@@ -38,8 +41,8 @@ export function registerDocumentUpload(): void {
         },
 
         validateFile(file: File): string | null {
-            if (file.size > MAX_FILE_SIZE) {
-                return 'File size must be less than 50MB';
+            if (file.size > this.maxFileSizeMb * 1024 * 1024) {
+                return `File size must be less than ${this.maxFileSizeMb}MB`;
             }
             return null;
         },

@@ -1,4 +1,4 @@
-<div x-data="documentUpload('{{ component_id }}')"
+<div x-data="documentUpload('{{ component_id }}', {{ max_upload_size_mb }})"
      x-init="expanded = localStorage.getItem('document-upload-expanded') !== 'false'; $watch('expanded', val => localStorage.setItem('document-upload-expanded', val ? 'true' : 'false')); documentTypeSubcategories = JSON.parse(document.getElementById('document-type-subcategories-{{ component_id }}').textContent)"
      x-cloak>
     <script type="application/json"

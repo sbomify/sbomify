@@ -80,9 +80,9 @@ log = logging.getLogger(__name__)
 # first and the caller would never see this limit's message.
 _sbom_cap_mb = os.environ.get("SBOM_MAX_UPLOAD_SIZE_MB")
 SBOM_MAX_UPLOAD_SIZE = (
-    min(int(_sbom_cap_mb) * 1024 * 1024, settings.DATA_UPLOAD_MAX_MEMORY_SIZE)
+    min(int(_sbom_cap_mb) * 1024 * 1024, settings.ARTIFACT_MAX_UPLOAD_SIZE)
     if _sbom_cap_mb
-    else settings.DATA_UPLOAD_MAX_MEMORY_SIZE
+    else settings.ARTIFACT_MAX_UPLOAD_SIZE
 )
 
 

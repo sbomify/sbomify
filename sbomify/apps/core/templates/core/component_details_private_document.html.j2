@@ -26,7 +26,7 @@
 {% block upload_section %}
     {% if component.has_crud_permissions %}
         <div>
-            {% include "documents/components/document_upload.html.j2" with component_id=component.id document_type_subcategories=document_type_subcategories %}
+            {% include "documents/components/document_upload.html.j2" with component_id=component.id document_type_subcategories=document_type_subcategories max_upload_size_mb=max_upload_size_mb %}
         </div>
         {# Trusted publishers modal — opened from the header ⋮ menu. #}
         {% include "core/components/trusted_publishers_modal.html.j2" %}

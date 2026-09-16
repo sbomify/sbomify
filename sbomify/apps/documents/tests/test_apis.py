@@ -270,10 +270,14 @@ def test_create_document_file_too_large(
     sample_document_component,
 ):
     """Test upload with file that exceeds size limit."""
+    from django.conf import settings
+
     client.force_login(sample_user)
 
-    # Create a file larger than 50MB
-    large_content = b"x" * (51 * 1024 * 1024)  # 51MB
+    # One byte over whatever the shared artifact ceiling is, so this test follows
+    # the setting instead of pinning a number that has already drifted once.
+    limit_mb = settings.ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024)
+    large_content = b"x" * (settings.ARTIFACT_MAX_UPLOAD_SIZE + 1)
     test_file = SimpleUploadedFile("large_document.pdf", large_content, content_type="application/pdf")
 
     response = client.post(
@@ -284,7 +288,7 @@ def test_create_document_file_too_large(
 
     assert response.status_code == 400
     data = json.loads(response.content)
-    assert "File size must be less than 50MB" in data["detail"]
+    assert f"File size must be less than {limit_mb}MB" in data["detail"]
 
 
 @pytest.mark.django_db
@@ -994,8 +998,7 @@ def test_the_upload_form_offers_every_document_type() -> None:
     from sbomify.apps.documents.models import Document
 
     template = (
-        Path(settings.BASE_DIR)
-        / "sbomify/apps/documents/templates/documents/components/document_upload.html.j2"
+        Path(settings.BASE_DIR) / "sbomify/apps/documents/templates/documents/components/document_upload.html.j2"
     ).read_text(encoding="utf-8")
 
     missing = [value for value, _label in Document.DocumentType.choices if f'value="{value}"' not in template]
