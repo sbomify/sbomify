@@ -7,6 +7,7 @@ in that gap.
 """
 
 import json
+import os
 import pathlib
 import re
 
@@ -61,13 +62,33 @@ def test_the_default_is_a_hundred_megabytes():
     assert settings.DATA_UPLOAD_MAX_MEMORY_SIZE == 100 * 1024 * 1024
 
 
-def test_one_env_var_moves_both_caps():
-    """Viktor's requirement: change the limit without a code change.
+def test_the_bom_cap_follows_the_shared_ceiling_by_default():
+    """One number to set, not two that can disagree.
 
-    The SBOM cap follows the body ceiling unless something deliberately pins it
-    lower, so operators have one number to set rather than two that can disagree.
+    With no SBOM-specific override, the BOM cap is the artifact ceiling, so
+    moving DATA_UPLOAD_MAX_MEMORY_SIZE_MB moves this too.
     """
-    assert SBOM_MAX_UPLOAD_SIZE == settings.DATA_UPLOAD_MAX_MEMORY_SIZE
+    assert SBOM_MAX_UPLOAD_SIZE == settings.ARTIFACT_MAX_UPLOAD_SIZE
+    assert settings.ARTIFACT_MAX_UPLOAD_SIZE == settings.DATA_UPLOAD_MAX_MEMORY_SIZE
+
+
+@pytest.mark.parametrize(
+    "value,expected_mb",
+    [("250", 250), ("100MB", 100), ("", 100), ("0", 100), ("-5", 100), ("  150  ", 150)],
+)
+def test_the_env_var_is_parsed_without_taking_the_app_down(value, expected_mb):
+    """Parsed at import, so a typo would otherwise fail the boot, not the request."""
+    from sbomify.settings import _megabytes_from_env
+
+    monkey = os.environ.get("X_TEST_UPLOAD_MB")
+    os.environ["X_TEST_UPLOAD_MB"] = value
+    try:
+        assert _megabytes_from_env("X_TEST_UPLOAD_MB", 100) == expected_mb * 1024 * 1024
+    finally:
+        if monkey is None:
+            os.environ.pop("X_TEST_UPLOAD_MB", None)
+        else:
+            os.environ["X_TEST_UPLOAD_MB"] = monkey
 
 
 @pytest.mark.django_db

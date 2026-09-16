@@ -150,6 +150,7 @@ TRUSTED_PROXIES = [
     if cidr.strip()
 ]
 
+
 # The ceiling on a request body Django will read into memory (its own default is
 # 2.5 MB). SBOM uploads are the large bodies here: a Yocto SPDX 3 image SBOM runs
 # to tens of megabytes, because SPDX 3 makes every relationship a standalone
@@ -160,7 +161,19 @@ TRUSTED_PROXIES = [
 # reading the body, so a document inside the advertised cap is refused with no
 # message naming a size. That is what this setting sitting at 20 MB under a
 # 100 MB endpoint cap did.
-DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get("DATA_UPLOAD_MAX_MEMORY_SIZE_MB", "100")) * 1024 * 1024
+def _megabytes_from_env(name: str, default_mb: int) -> int:
+    """Bytes from a megabyte-valued env var, ignoring anything unusable.
+
+    Parsed at import, so a typo such as "100MB" or a stray space would take the
+    whole app down on boot, and a zero or negative value would refuse every
+    request body. Either falls back to the default instead.
+    """
+    raw = (os.environ.get(name) or "").strip()
+    megabytes = int(raw) if raw.isdigit() and int(raw) > 0 else default_mb
+    return megabytes * 1024 * 1024
+
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = _megabytes_from_env("DATA_UPLOAD_MAX_MEMORY_SIZE_MB", 100)
 
 # What any artifact upload may weigh: SBOM, CBOM, HBOM, AI BOM, SaaSBOM, VEX and
 # documents. One number so the formats cannot drift apart, and so a document is
@@ -169,6 +182,14 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get("DATA_UPLOAD_MAX_MEMORY_SIZE_MB
 # Documents arrive as multipart file uploads, which Django does not measure
 # against DATA_UPLOAD_MAX_MEMORY_SIZE, so that path enforces this itself.
 ARTIFACT_MAX_UPLOAD_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
+
+# Optional: hold BOMs to something smaller than the shared ceiling. Clamped to
+# it, because a cap above the body ceiling is unreachable, Django refuses the
+# body first and the caller never sees this limit's message.
+SBOM_MAX_UPLOAD_SIZE = min(
+    _megabytes_from_env("SBOM_MAX_UPLOAD_SIZE_MB", ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024)),
+    ARTIFACT_MAX_UPLOAD_SIZE,
+)
 
 # Prevent browsers from MIME-sniffing responses away from their declared
 # Content-Type — defense-in-depth for user-uploaded artifact downloads.

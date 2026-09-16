@@ -4,7 +4,6 @@ import base64
 import hashlib
 import json
 import logging
-import os
 from typing import Any
 
 from django.conf import settings
@@ -74,16 +73,10 @@ log = logging.getLogger(__name__)
 # Django raises RequestDataTooBig while reading the body, before this check can
 # run, so the caller gets a bare 400 rather than a message naming the size.
 # Raise DATA_UPLOAD_MAX_MEMORY_SIZE_MB to raise both.
-# One knob by default: DATA_UPLOAD_MAX_MEMORY_SIZE_MB moves both. Set
-# SBOM_MAX_UPLOAD_SIZE_MB only to hold SBOMs to something smaller than the body
-# ceiling; a value above it is clamped, because Django would refuse the body
-# first and the caller would never see this limit's message.
-_sbom_cap_mb = os.environ.get("SBOM_MAX_UPLOAD_SIZE_MB")
-SBOM_MAX_UPLOAD_SIZE = (
-    min(int(_sbom_cap_mb) * 1024 * 1024, settings.ARTIFACT_MAX_UPLOAD_SIZE)
-    if _sbom_cap_mb
-    else settings.ARTIFACT_MAX_UPLOAD_SIZE
-)
+# One knob by default: DATA_UPLOAD_MAX_MEMORY_SIZE_MB moves this with it.
+# SBOM_MAX_UPLOAD_SIZE_MB holds BOMs lower if wanted. Both are parsed in
+# settings, so config parsing lives in one place.
+SBOM_MAX_UPLOAD_SIZE = settings.SBOM_MAX_UPLOAD_SIZE
 
 
 _VALID_BOM_TYPES = {choice[0] for choice in SBOM.BomType.choices}
