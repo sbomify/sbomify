@@ -30,7 +30,7 @@ YOCTO = pathlib.Path(__file__).parent.resolve() / "test_data/yocto_core-image-mi
 
 def _yocto_scaled_to(target_mb: float) -> bytes:
     """The real Yocto fixture, its graph repeated with fresh ids until big enough."""
-    doc = json.loads(YOCTO.read_text())
+    doc = json.loads(YOCTO.read_text(encoding="utf-8"))
     doc_types = {"SpdxDocument", "software_Sbom"}
     singletons = [e for e in doc["@graph"] if isinstance(e, dict) and e.get("type") in doc_types]
     bulk = [e for e in doc["@graph"] if e not in singletons]
