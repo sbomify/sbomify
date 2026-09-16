@@ -480,10 +480,19 @@ def _paginate_queryset(queryset: Any, page: int = 1, page_size: int = 15) -> Any
     return items_list, pagination_meta
 
 
-def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, ErrorCode | None]:
+def _check_billing_limits(
+    team_id: str, resource_type: str, *, lock: bool = False
+) -> tuple[bool, str, ErrorCode | None]:
     """
     Check if team has reached billing limits for the given resource type.
     Also checks for suspended accounts due to payment failure.
+
+    Args:
+        lock: Take a row lock on the workspace for the rest of the transaction.
+            Counting and inserting without it lets two concurrent creates read
+            the same count and both pass, so callers that go on to create must
+            pass ``lock=True`` from inside the same ``transaction.atomic``.
+            No effect on SQLite, which has no row locks.
 
     Returns:
         (can_create, error_message, error_code): Tuple of boolean, error message, and error code
@@ -493,7 +502,8 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
         return True, "", None
 
     try:
-        team = Team.objects.get(id=team_id)
+        teams = Team.objects.select_for_update() if lock else Team.objects
+        team = teams.get(id=team_id)
     except Team.DoesNotExist:
         return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
 
@@ -645,23 +655,25 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
-    # Check billing limits
-    can_create, error_msg, error_code = _check_billing_limits(team_id, "product")
-    if not can_create:
-        return 403, {"detail": error_msg, "error_code": error_code}
-
     try:
-        # Check if user has permission to create products in this team
-        team = Team.objects.get(id=team_id)
-        if not can(request, "product:create", team):
-            return 403, {
-                "detail": "You don't have permission to create products in this workspace",
-                "error_code": ErrorCode.FORBIDDEN,
-            }
-
-        allow_private = _private_items_allowed(team)
-
         with transaction.atomic():
+            # The limit check and the insert share one transaction with the
+            # workspace row locked. Checked outside one, two concurrent creates
+            # read the same count, both pass, and the plan limit is exceeded.
+            can_create, error_msg, error_code = _check_billing_limits(team_id, "product", lock=True)
+            if not can_create:
+                return 403, {"detail": error_msg, "error_code": error_code}
+
+            # Check if user has permission to create products in this team
+            team = Team.objects.get(id=team_id)
+            if not can(request, "product:create", team):
+                return 403, {
+                    "detail": "You don't have permission to create products in this workspace",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
+
+            allow_private = _private_items_allowed(team)
+
             product = Product.objects.create(
                 name=payload.name,
                 description=payload.description,
@@ -1638,29 +1650,30 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
-    # Check billing limits
-    can_create, error_msg, error_code = _check_billing_limits(team_id, "component")
-    if not can_create:
-        return 403, {"detail": error_msg, "error_code": error_code}
-
     try:
-        # Check if user has permission to create components in this team
-        team = Team.objects.get(id=team_id)
-        if not can(request, "component:create", team):
-            return 403, {
-                "detail": "You don't have permission to create components in this workspace",
-                "error_code": ErrorCode.FORBIDDEN,
-            }
-
-        if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
-            return 400, {
-                "detail": "Only document components can be marked as workspace-wide",
-                "error_code": ErrorCode.INVALID_DATA,
-            }
-
-        allow_private = _private_items_allowed(team)
-
         with transaction.atomic():
+            # Same reason as create_product: the count and the insert have to
+            # share one transaction with the workspace row locked.
+            can_create, error_msg, error_code = _check_billing_limits(team_id, "component", lock=True)
+            if not can_create:
+                return 403, {"detail": error_msg, "error_code": error_code}
+
+            # Check if user has permission to create components in this team
+            team = Team.objects.get(id=team_id)
+            if not can(request, "component:create", team):
+                return 403, {
+                    "detail": "You don't have permission to create components in this workspace",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
+
+            if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
+                return 400, {
+                    "detail": "Only document components can be marked as workspace-wide",
+                    "error_code": ErrorCode.INVALID_DATA,
+                }
+
+            allow_private = _private_items_allowed(team)
+
             # Set visibility based on is_public (for backward compatibility)
             # Community plan users can only create public components
             initial_visibility = Component.Visibility.PUBLIC if (not allow_private) else Component.Visibility.PRIVATE
