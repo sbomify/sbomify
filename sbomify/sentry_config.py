@@ -1,7 +1,12 @@
-"""Pure helpers for Sentry startup wiring.
+"""Pure helpers for Sentry startup wiring and self-healing-notice throttling.
 
 Extracted from ``settings.py`` so regression tests can pin the actual
 resolution logic instead of duplicating it locally.
+
+The throttle below started as a Sentry ``before_send`` hook and now serves the
+log stream as well; it lives here rather than in ``logging_filters`` because
+what it needs is the fault taxonomy at the bottom of this module, not the
+filter plumbing.
 """
 
 from __future__ import annotations
@@ -77,6 +82,10 @@ _SELF_HEALING_NOTICES = (
     ("sbomify.cache", "Exception ignored"),
 )
 
+# Keys are namespaced by consumer ("sentry:…", "log:…"). Sentry and the log
+# handler are different consumers of the same taxonomy and must not share a
+# window: a filter on the console handler cannot see what Sentry decided, and a
+# shared window would mean whichever one asked first spent the other's report.
 _last_reported: dict[str, float] = {}
 _last_reported_lock = threading.Lock()
 
@@ -116,6 +125,17 @@ def _self_healing_notice_key(record: logging.LogRecord) -> str | None:
     return None
 
 
+def _open_window(key: str) -> bool:
+    """``True`` when this fault has not been reported inside the current window."""
+    now = time.monotonic()
+    with _last_reported_lock:
+        previous = _last_reported.get(key)
+        if previous is not None and now - previous < _OUTAGE_REPORT_INTERVAL_SECONDS:
+            return False
+        _last_reported[key] = now
+    return True
+
+
 def throttle_self_healing_notices(event: Any, hint: Any) -> Any:
     """``before_send`` hook: report a recovering outage once, not once a second.
 
@@ -131,10 +151,32 @@ def throttle_self_healing_notices(event: Any, hint: Any) -> Any:
     if key is None:
         return event
 
-    now = time.monotonic()
-    with _last_reported_lock:
-        previous = _last_reported.get(key)
-        if previous is not None and now - previous < _OUTAGE_REPORT_INTERVAL_SECONDS:
-            return None
-        _last_reported[key] = now
-    return event
+    return event if _open_window(f"sentry:{key}") else None
+
+
+def is_repeat_self_healing_notice(record: logging.LogRecord) -> bool:
+    """``True`` for a self-healing notice already written inside this window.
+
+    The same throttle as the Sentry hook, applied to stdout, because stdout is
+    where the on-call signal actually comes from: the container logs ship to
+    Graylog and Graylog alerts Slack on error-level volume. Throttling only the
+    Sentry copy left that path seeing every line, so one Redis blip — one fault,
+    self-healing, already recovered by the time anyone looked — arrived as
+    hundreds of error-level lines and cleared the alert threshold on its own.
+
+    Keeping the first line of each fault per window is what makes this safe to
+    put on a handler: an outage that lasts is still reported, once every five
+    minutes, for as long as it lasts. That also makes "more than one of these in
+    ten minutes" a usable definition of *still broken* for the Graylog alert,
+    which a raw line count could never be.
+    """
+    # Both notices are logged at ERROR or above, so this skips formatting the
+    # message for the INFO/WARNING records that make up the bulk of the stream.
+    if record.levelno < logging.ERROR:
+        return False
+
+    key = _self_healing_notice_key(record)
+    if key is None:
+        return False
+
+    return not _open_window(f"log:{key}")

@@ -34,8 +34,9 @@ from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
-from sbomify.logging_filters import is_benign_shielded_future_error
+from sbomify.logging_filters import is_benign_shielded_future_error, is_on_demand_tls_ask_denial
 from sbomify.sentry_config import (
+    is_repeat_self_healing_notice,
     resolve_environment,
     should_warn_missing_dsn,
     throttle_self_healing_notices,
@@ -875,12 +876,30 @@ LOGGING = {
             "()": "django.utils.log.CallbackFilter",
             "callback": lambda record: not is_benign_shielded_future_error(record),
         },
+        # These two run on every console record, so both bail on a cheap
+        # attribute check before formatting a message. Between them they are
+        # most of what made the production log stream unreadable: a third of it
+        # was one repeated 404 path, and the error-level portion was dominated
+        # by faults that had already recovered.
+        "suppress_on_demand_tls_ask_denials": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_on_demand_tls_ask_denial(record),
+        },
+        # Keeps the first line of each distinct fault per five-minute window and
+        # drops the repeats, so an outage that lasts is still reported for as
+        # long as it lasts. Same throttle the Sentry before_send hook applies,
+        # with its own window.
+        "throttle_self_healing_notices": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_repeat_self_healing_notice(record),
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
             "formatter": "default",
+            "filters": ["suppress_on_demand_tls_ask_denials", "throttle_self_healing_notices"],
         },
         "console_asyncio": {
             "class": "logging.StreamHandler",

@@ -14,6 +14,8 @@ on.
 * Dramatiq's consumer reconnects once a second while the broker is down, and
   logs at CRITICAL each time, so a single outage arrives as tens of thousands
   of alerts.
+* That throttle was applied to the Sentry copy only, so stdout still carried
+  every line, and stdout is what ships to Graylog and raises Slack.
 
 Each is pinned here because none of them is visible from ordinary use: they only
 show up when Redis is already having a bad day, which is exactly when nobody
@@ -33,6 +35,7 @@ from redis.retry import Retry as RedisRetry
 from sbomify.sentry_config import (
     _OUTAGE_REPORT_INTERVAL_SECONDS,
     _last_reported,
+    is_repeat_self_healing_notice,
     throttle_self_healing_notices,
 )
 from sbomify.settings import (
@@ -300,3 +303,55 @@ def test_nothing_else_is_ever_dropped(hint) -> None:
     fault. Matching on the logger alone would have hidden it.
     """
     assert throttle_self_healing_notices({"event": 1}, hint) is not None
+
+
+def test_the_log_stream_is_throttled_too_not_just_sentry() -> None:
+    """The Sentry-only throttle left the louder path untouched.
+
+    Container stdout ships to Graylog, and Graylog is what raises Slack. Over a
+    week of production, 86% of the error-level lines it saw were one Redis
+    incident repeating, which is how a channel meant for 500s became something
+    nobody reads.
+
+    The first line of each fault survives, so an outage that lasts is still
+    reported every five minutes for as long as it lasts. That is also what makes
+    "more than one of these in ten minutes" a usable definition of *still
+    broken* for the Graylog alert, which a raw line count could never be.
+    """
+    record = _Record(_PLUGINS, _LOOP)
+
+    assert is_repeat_self_healing_notice(record) is False, "the first line of an outage must be kept"
+    assert is_repeat_self_healing_notice(record) is True
+    assert is_repeat_self_healing_notice(_Record(_BILLING, _LOOP)) is True, "one outage, not one per queue"
+
+
+def test_the_log_window_is_not_spent_by_sentry() -> None:
+    """Two consumers, two windows.
+
+    A filter on the console handler cannot see what ``before_send`` decided, and
+    the handler may not even run first. Sharing one window would mean whichever
+    consumer asked first silently spent the other's report, so an operator would
+    find the incident in Sentry but not in the logs, or the reverse.
+    """
+    record = _Record("sbomify.cache", "Exception ignored")
+
+    assert throttle_self_healing_notices({"event": 1}, {"log_record": record}) is not None
+    assert is_repeat_self_healing_notice(record) is False, "the log stream gets its own first report"
+
+
+def test_the_log_filter_cannot_swallow_a_real_error() -> None:
+    """Same guarantee as the Sentry hook, on a hotter path.
+
+    This one runs on every record the console handler touches, so the blast
+    radius of a loose match is the whole log stream. Only the two self-healing
+    notices are ever dropped, and dramatiq's genuine ``except Exception`` branch
+    rides in on the same logger at the same level, which is the case that says
+    the message has to match too.
+    """
+    for record in (
+        _Record("sbomify.apps.core", _LOOP),
+        _Record(_PLUGINS, "Consumer encountered an unexpected error."),
+        _Record("sbomify.cache", "ConnectionInterrupted: Redis TimeoutError"),
+    ):
+        assert is_repeat_self_healing_notice(record) is False
+        assert is_repeat_self_healing_notice(record) is False, "and not on the second one either"

@@ -1,0 +1,46 @@
+Stop the log stream drowning the 500 alert
+
+Graylog raises Slack off container stdout, and a week of production
+stdout is not something a human can read: 152,128 messages, of which a
+third are one repeated 404 and most of the error-level remainder is a
+single Redis incident saying the same thing hundreds of times. The
+alert channel built on it stopped being read, which is the actual
+outage here.
+
+Two filters on the console handler, both narrow.
+
+The self-healing throttle now applies to stdout, not only to Sentry.
+sentry_config already knew that a dramatiq broker reconnect and a
+swallowed django-redis cache error are one fault reported once a
+second, and already collapsed them to one report per five minutes per
+fault - but only in before_send. The log stream, which is the louder
+path and the one on-call actually sees, kept every line. Same taxonomy,
+same window length, its own window: a handler filter cannot see what
+before_send decided, and sharing state would mean whichever consumer
+asked first silently spent the other's report.
+
+Keeping the first line of each fault is what makes this safe to put on
+a handler. An outage that lasts is still reported every five minutes
+for as long as it lasts, so the throttle reduces volume without
+reducing coverage - and it gives Graylog a usable definition of "still
+broken" (more than one of these in ten minutes) that a raw line count
+could never provide.
+
+Django's "Not Found: /api/v1/internal/domains" is dropped. That is
+Caddy's on-demand TLS ask endpoint, where 404 is the documented way to
+answer "do not issue a certificate for this SNI" - the endpoint working,
+logged by django.request as though it had failed, once for every
+scanner that opens a TLS connection to our IP. 49,835 lines in seven
+days, one every twelve seconds, a third of the entire stream. Nothing
+is lost: check_domain_allowed already logs each denial with the domain
+that was refused, deduplicated by the resolve cache, and that line
+stays. Scoped to django.request at WARNING, so a 5xx from the same
+endpoint - which would mean no custom domain can get a certificate -
+still surfaces.
+
+Verified end to end against the real LOGGING config: nine log calls
+covering both cases emit three lines, and the three kept are a
+different 404, a 500 on the ask path, and the first line of the Redis
+outage.
+
+Refs SIRI-149.
