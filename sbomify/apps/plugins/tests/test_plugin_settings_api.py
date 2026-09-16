@@ -160,6 +160,23 @@ class TestAScopedTokenCannotExceedItself:
         assert response.status_code == 403
         assert TeamPluginSettings.objects.get(team=team).enabled_plugins == []
 
+    def test_a_read_only_token_may_not_read_them_either(self, owner, registered_plugin, sample_user):  # noqa: F811
+        """The gate is on both verbs: the settings carry the workspace's plan."""
+        _session_client, team = owner
+        client, headers = self._token_client(sample_user, team, ["sbom:read"])
+
+        assert client.get(_url(team.key), **headers).status_code == 403
+
+    def test_a_token_scoped_to_workspace_management_may_read_them(self, owner, registered_plugin, sample_user):  # noqa: F811
+        _session_client, team = owner
+        TeamPluginSettings.objects.filter(team=team).update(enabled_plugins=["osv"])
+        client, headers = self._token_client(sample_user, team, ["workspace:manage"])
+
+        response = client.get(_url(team.key), **headers)
+
+        assert response.status_code == 200
+        assert response.json()["enabled_plugins"] == ["osv"]
+
     def test_a_token_scoped_to_workspace_management_may(self, owner, registered_plugin, sample_user):  # noqa: F811
         _session_client, team = owner
         client, headers = self._token_client(sample_user, team, ["workspace:manage"])
