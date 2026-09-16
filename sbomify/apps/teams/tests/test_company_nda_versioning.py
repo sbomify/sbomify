@@ -138,3 +138,60 @@ class TestCompanyNdaVersioning:
         versions = list(Document.objects.filter(name="nda.pdf").values_list("version", flat=True))
         assert len(versions) == 2, "a second NDA was created rather than the upload failing"
         assert len(set(versions)) == 2
+
+
+@pytest.mark.django_db
+class TestTheNdaUploadFollowsTheConfiguredCeiling:
+    """This upload used to carry its own 50MB literal.
+
+    Every other artifact ceiling reads `ARTIFACT_MAX_UPLOAD_SIZE`, which
+    `DATA_UPLOAD_MAX_MEMORY_SIZE_MB` sets for a deployment, so raising that env
+    var moved all of them except this one, and nothing said so.
+    """
+
+    def test_a_file_over_the_ceiling_is_refused(self, mocker: MockerFixture, owner_client, settings):
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+        settings.ARTIFACT_MAX_UPLOAD_SIZE = 1024 * 1024
+        client, team = owner_client
+
+        oversized = SimpleUploadedFile("nda.pdf", b"x" * (1024 * 1024 + 1), content_type="application/pdf")
+        response = client.post(
+            reverse("teams:team_settings", kwargs={"team_key": team.key}),
+            {"company_nda_action": "upload", "company_nda_file": oversized},
+            follow=True,
+        )
+
+        # The message, not only the absence of a row: without it this passes
+        # whenever the upload fails for any reason at all.
+        assert "File size must be 1MB or smaller" in [m.message for m in response.context["messages"]]
+        assert not Document.objects.filter(component__team=team).exists()
+
+    def test_a_file_the_raised_ceiling_allows_is_accepted(self, mocker: MockerFixture, owner_client, settings):
+        """The point of the setting: raising it has to actually raise this one.
+
+        Both sides are exercised against a 1MB ceiling. What is under test is
+        the comparison against the setting, which reads the file's reported
+        size, so allocating a realistic 60MB would buy nothing but CI memory.
+        """
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+        settings.ARTIFACT_MAX_UPLOAD_SIZE = 1024 * 1024
+        client, team = owner_client
+
+        big = SimpleUploadedFile("nda.pdf", b"x" * (512 * 1024), content_type="application/pdf")
+        client.post(
+            reverse("teams:team_settings", kwargs={"team_key": team.key}),
+            {"company_nda_action": "upload", "company_nda_file": big},
+        )
+
+        assert Document.objects.filter(component__team=team).exists()
+
+    def test_the_tab_states_the_ceiling_it_enforces(self, owner_client, settings):
+        settings.ARTIFACT_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+        client, team = owner_client
+
+        body = client.get(
+            reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "trust-center"})
+        ).content.decode()
+
+        assert "Max 100MB." in body
+        assert "Max 50MB." not in body

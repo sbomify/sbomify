@@ -360,6 +360,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 # Trust center settings
                 "branding_info": branding_info,
                 "company_nda_document": company_nda_document,
+                "max_upload_size_mb": settings.ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024),
                 "trust_center_domain": getattr(settings, "TRUST_CENTER_DOMAIN", ""),
                 "trust_center_url": (
                     build_custom_domain_url(team_obj, "/", secure=True).rstrip("/") if team_obj else ""
@@ -598,9 +599,13 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.error(request, "Only PDF files are allowed")
             return self._redirect_with_tab(request, team_key)
 
-        max_size = 50 * 1024 * 1024  # 50MB
+        # The one artifact upload that used to carry its own literal, so raising
+        # DATA_UPLOAD_MAX_MEMORY_SIZE_MB (which is what sets
+        # ARTIFACT_MAX_UPLOAD_SIZE) moved every ceiling except this one.
+        max_size = settings.ARTIFACT_MAX_UPLOAD_SIZE
+        max_size_mb = max_size // (1024 * 1024)
         if (uploaded_file.size or 0) > max_size:
-            messages.error(request, "File size must be less than 50MB")
+            messages.error(request, f"File size must be {max_size_mb}MB or smaller")
             return self._redirect_with_tab(request, team_key)
 
         try:

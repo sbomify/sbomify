@@ -99,7 +99,7 @@
              @dragleave.prevent="isDragOver = false"
              @dragenter.prevent>
             <template x-if="!selectedFile && !isUploading">
-                <c-forms.file-upload active="isDragOver" accept=".pdf,.doc,.docx,.txt,.md,.html,.json,.xml,.yaml,.yml" icon="fas fa-cloud-upload-alt" on_change="handleFileSelect($event)" hint="Supports PDF, Word, text, markdown, and other document formats (max 50MB)">
+                <c-forms.file-upload active="isDragOver" accept=".pdf,.doc,.docx,.txt,.md,.html,.json,.xml,.yaml,.yml" icon="fas fa-cloud-upload-alt" on_change="handleFileSelect($event)" hint="Supports PDF, Word, text, markdown, and other document formats (max {{ max_upload_size_mb }}MB)">
                 <strong>Drop your document file here</strong> or <span class="text-primary font-medium">click to browse</span>
                 </c-forms.file-upload>
             </template>

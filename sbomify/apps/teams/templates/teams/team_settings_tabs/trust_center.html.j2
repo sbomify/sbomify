@@ -541,7 +541,7 @@
                             <span><span class="text-primary font-medium">Click to upload</span> or drag and drop</span>
                         </template>
                     </p>
-                    <p class="text-xs text-text-muted mt-1 m-0">PDF files only. Max 50MB.</p>
+                    <p class="text-xs text-text-muted mt-1 m-0">PDF files only. Max {{ max_upload_size_mb }}MB.</p>
                 </label>
                 <div class="flex justify-end">
                     <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">
