@@ -282,6 +282,12 @@ def set_catalog_published(team: Team, catalog_id: str, published: bool) -> Servi
     reason ``product:set_visibility`` is not part of ``MANAGE``: connecting
     reads data, publishing puts a claim on a page the workspace's customers
     read. A first sync therefore lands unpublished and someone chooses.
+
+    Publishing also needs the connection to still be there. ``disconnect``
+    keeps the synced frameworks and only unpublishes them, so without this a
+    settings tab left open from before the disconnect could put a framework
+    nobody is syncing any more back on the trust center. Taking one down is
+    always allowed: that is how a stale framework gets removed.
     """
     from sbomify.apps.controls.models import ControlCatalog
 
@@ -290,6 +296,15 @@ def set_catalog_published(team: Team, catalog_id: str, published: bool) -> Servi
         return ServiceResult.failure("Framework not found", status_code=404)
     if not catalog.is_integration_owned:
         return ServiceResult.failure("That framework is not managed by an integration", status_code=400)
+    if (
+        published
+        and not Integration.objects.filter(
+            team=team, provider=catalog.source, status=Integration.Status.CONNECTED
+        ).exists()
+    ):
+        return ServiceResult.failure(
+            "Reconnect this provider before putting its frameworks on your Trust Center", status_code=409
+        )
 
     if catalog.is_published != published:
         catalog.is_published = published

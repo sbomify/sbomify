@@ -85,6 +85,15 @@ def sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
     token = access_token(integration, VANTA)
     client = VantaClient(token, settings.VANTA_API_BASE_URL)
 
+    # The credential this run belongs to. A sync is one request per control, so
+    # it stays open for minutes, and a reconnect or a disconnect inside that
+    # window makes everything below it a write on behalf of an account that is
+    # no longer the connected one. Checked between frameworks rather than
+    # between controls: the run already spends a network round trip per control,
+    # but bounding the damage to one framework is what matters and a query per
+    # control would buy very little for it.
+    generation = integration.connected_at
+
     summary = SyncSummary()
     # A control mapped into three frameworks is one control in Vanta, so its
     # detail is fetched once. On a SOC 2 plus ISO 27001 account this is the
@@ -93,6 +102,9 @@ def sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
 
     seen_catalog_ids: list[str] = []
     for framework in client.frameworks():
+        if _superseded(integration, generation):
+            return _superseded_result(integration)
+
         framework_id = _text(framework.get("id"))
         if not framework_id:
             continue
@@ -103,7 +115,10 @@ def sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
         summary.framework_names.append(catalog.name)
 
         controls = list(client.framework_controls(framework_id))
-        _sync_framework_controls(client, catalog, controls, detail_cache, summary)
+        _sync_framework_controls(client, catalog, controls, detail_cache, summary, integration, generation)
+
+    if _superseded(integration, generation):
+        return _superseded_result(integration)
 
     if seen_catalog_ids:
         _retire_missing_catalogs(integration, seen_catalog_ids)
@@ -128,12 +143,33 @@ def sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
     return ServiceResult.success(summary.as_dict())
 
 
+def _superseded(integration: Integration, generation: Any) -> bool:
+    """Whether the connection this run started on is still the connected one.
+
+    ``connected_at`` moves when somebody reconnects, and the row is gone after a
+    disconnect, so one cheap read answers both.
+    """
+    from sbomify.apps.integrations.models import Integration as IntegrationModel
+
+    return not IntegrationModel.objects.filter(pk=integration.pk, connected_at=generation).exists()
+
+
+def _superseded_result(integration: Integration) -> ServiceResult[dict[str, Any]]:
+    logger.info(
+        "Vanta sync for workspace %s stopped: the connection was replaced while it was running",
+        integration.team.key,
+    )
+    return ServiceResult.failure("The connection was replaced while this sync was running.", status_code=409)
+
+
 def _sync_framework_controls(
     client: VantaClient,
     catalog: ControlCatalog,
     controls: list[dict[str, Any]],
     detail_cache: dict[str, dict[str, Any]],
     summary: SyncSummary,
+    integration: Integration,
+    generation: Any,
 ) -> None:
     """Write one framework's controls and statuses, and drop what Vanta dropped."""
     seen_control_ids: list[str] = []
@@ -165,6 +201,12 @@ def _sync_framework_controls(
     # empty list, and pruning against it would delete the whole framework and
     # record the run as a success.
     if not seen_control_ids:
+        return
+
+    # Deleting is the destructive half, and the loop above has just spent a
+    # request per control getting here, so the connection is re-checked before
+    # it runs rather than trusted from whenever this framework started.
+    if _superseded(integration, generation):
         return
 
     # The per-model figure, not the total: ``delete()`` returns every row it
@@ -249,12 +291,15 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
 
 
 def _upsert_control(catalog: ControlCatalog, payload: dict[str, Any], external_id: str, sort_order: int) -> Control:
-    """One control row, keyed by the code a reader recognises.
+    """One control row, found by Vanta's id and labelled with the reader's code.
 
     ``Control`` is unique on (catalog, control_id), and ``control_id`` is the
-    framework's own code ("CC1.1"). Vanta returns that as ``externalId``; when
-    a custom control has none, its Vanta id stands in so the row still has a
-    stable key.
+    framework's own code ("CC1.1"), which is what somebody reading the trust
+    center recognises. It is not identity: Vanta can rename a code, and keying
+    on it would make the renamed control a new row, which the prune below then
+    deletes, taking the control's statuses and its whole status history with
+    it. ``external_id`` is Vanta's own id and does not move, so the row is
+    found by that and the code is just another field to update.
     """
     # Truncating a code could in principle collide two controls onto one row,
     # since (catalog, control_id) is the key. A framework code is a handful of
@@ -263,17 +308,34 @@ def _upsert_control(catalog: ControlCatalog, payload: dict[str, Any], external_i
     control_id = _fit(Control, "control_id", _text(payload.get("externalId")) or external_id)
     domains = payload.get("domains")
     group = _text(domains[0]) if isinstance(domains, list) and domains else _UNGROUPED
+    fitted_external_id = _fit(Control, "external_id", external_id)
+
+    fields = {
+        "group": _fit(Control, "group", group or _UNGROUPED),
+        "title": _fit(Control, "title", _text(payload.get("name")) or control_id),
+        "description": _text(payload.get("description")),
+        "sort_order": sort_order,
+    }
+
+    existing = Control.objects.filter(catalog=catalog, external_id=fitted_external_id).first()
+    if existing is not None:
+        # A rename can land on a code some other row in this catalogue already
+        # holds, and (catalog, control_id) is unique. Keeping our own code is
+        # the safe answer: the identity is right either way, and one stale
+        # label beats failing the sync.
+        if existing.control_id != control_id and not (
+            Control.objects.filter(catalog=catalog, control_id=control_id).exclude(pk=existing.pk).exists()
+        ):
+            fields["control_id"] = control_id
+        for name, value in fields.items():
+            setattr(existing, name, value)
+        existing.save(update_fields=[*fields, "updated_at"])
+        return existing
 
     control, _created = Control.objects.update_or_create(
         catalog=catalog,
         control_id=control_id,
-        defaults={
-            "group": _fit(Control, "group", group or _UNGROUPED),
-            "title": _fit(Control, "title", _text(payload.get("name")) or control_id),
-            "description": _text(payload.get("description")),
-            "external_id": _fit(Control, "external_id", external_id),
-            "sort_order": sort_order,
-        },
+        defaults={**fields, "external_id": fitted_external_id},
     )
     return control
 

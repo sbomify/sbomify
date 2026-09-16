@@ -411,3 +411,63 @@ class TestAReconnectSupersedesTheRunItReplaced:
         stored = Integration.objects.get(pk=connected_vanta.pk)
         assert stored.last_sync_status == Integration.SyncStatus.OK
         assert stored.last_sync_at == synced_at
+
+
+class TestPublishingNeedsTheConnectionToStillBeThere:
+    """`disconnect` keeps the synced frameworks and only unpublishes them.
+
+    Without a check here a settings tab left open from before the disconnect
+    could put a framework nobody is syncing any more back on the trust center,
+    which is the one thing disconnecting is supposed to guarantee.
+    """
+
+    def _vanta_catalog(self, team) -> ControlCatalog:
+        return ControlCatalog.objects.create(
+            team=team,
+            name="SOC 2 Type II",
+            version="SOC 2",
+            source=ControlCatalog.Source.VANTA,
+            external_id="fw_soc2",
+            is_published=True,
+        )
+
+    def test_publishing_after_a_disconnect_is_refused(self, connected_vanta) -> None:
+        team = connected_vanta.team
+        catalog = self._vanta_catalog(team)
+        connections.set_catalog_published(team, catalog.id, False)
+        connected_vanta.delete()
+
+        result = connections.set_catalog_published(team, catalog.id, True)
+
+        assert not result.ok
+        assert result.status_code == 409
+        catalog.refresh_from_db()
+        assert catalog.is_published is False
+
+    def test_publishing_while_a_reconnect_is_pending_is_refused(self, connected_vanta) -> None:
+        team = connected_vanta.team
+        catalog = self._vanta_catalog(team)
+        connections.set_catalog_published(team, catalog.id, False)
+        connected_vanta.status = Integration.Status.REVOKED
+        connected_vanta.save()
+
+        assert not connections.set_catalog_published(team, catalog.id, True).ok
+
+    def test_unpublishing_is_always_allowed(self, connected_vanta) -> None:
+        """Taking a stale framework down is how it gets removed."""
+        team = connected_vanta.team
+        catalog = self._vanta_catalog(team)
+        connected_vanta.delete()
+
+        result = connections.set_catalog_published(team, catalog.id, False)
+
+        assert result.ok
+        catalog.refresh_from_db()
+        assert catalog.is_published is False
+
+    def test_a_live_connection_still_publishes(self, connected_vanta) -> None:
+        team = connected_vanta.team
+        catalog = self._vanta_catalog(team)
+        connections.set_catalog_published(team, catalog.id, False)
+
+        assert connections.set_catalog_published(team, catalog.id, True).ok

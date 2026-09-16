@@ -7,7 +7,10 @@ from typing import Any
 import pytest
 from django.db import IntegrityError, transaction
 
+from django.utils import timezone
+
 from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus, ControlStatusLog
+from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.services import vanta_sync
 from sbomify.apps.integrations.services.vanta_sync import sync
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
@@ -463,3 +466,122 @@ class TestAFrameworkExistsOnce:
         synced = ControlCatalog.objects.get(team=connected_vanta.team, source=ControlCatalog.Source.VANTA)
         assert synced.external_id == "fw_soc2"
         assert synced.version == "fw_soc2"
+
+
+class TestAControlKeepsItsHistoryWhenVantaRenamesTheCode:
+    """The code a reader recognises is a label, not identity.
+
+    `control_id` is the framework's own code, and Vanta can change it. Keying
+    the row on it made a renamed control a new row, which the prune in the same
+    pass then deleted, taking the control's statuses and its whole status log
+    with it. `external_id` is Vanta's id and does not move.
+    """
+
+    def test_a_renamed_code_updates_the_row_it_already_had(self, connected_vanta, install_client) -> None:
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+        original = Control.objects.get(catalog__source=ControlCatalog.Source.VANTA, external_id="c1")
+
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.2", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        controls = list(Control.objects.filter(catalog__source=ControlCatalog.Source.VANTA))
+        assert len(controls) == 1
+        assert controls[0].id == original.id
+        assert controls[0].control_id == "CC1.2"
+
+    def test_the_status_and_its_history_survive_the_rename(self, connected_vanta, install_client) -> None:
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]},
+            {"c1": {"status": "IN_PROGRESS"}},
+        )
+        sync(connected_vanta)
+
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.2", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        control = Control.objects.get(catalog__source=ControlCatalog.Source.VANTA, external_id="c1")
+        logs = list(ControlStatusLog.objects.filter(control=control).order_by("created_at"))
+        assert [(log.old_status, log.new_status) for log in logs] == [
+            ("", ControlStatus.Status.PARTIAL),
+            (ControlStatus.Status.PARTIAL, ControlStatus.Status.COMPLIANT),
+        ]
+
+    def test_a_rename_onto_a_code_already_taken_keeps_both_rows(self, connected_vanta, install_client) -> None:
+        """(catalog, control_id) is unique, so a collision must not fail the sync."""
+        install_client(
+            [SOC2],
+            {
+                "fw_soc2": [
+                    _control("c1", "CC1.1", "Control environment", "Security"),
+                    _control("c2", "CC1.2", "Board oversight", "Security"),
+                ]
+            },
+            {"c1": {"status": "COMPLETED"}, "c2": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        install_client(
+            [SOC2],
+            {
+                "fw_soc2": [
+                    _control("c1", "CC1.2", "Control environment", "Security"),
+                    _control("c2", "CC1.2", "Board oversight", "Security"),
+                ]
+            },
+            {"c1": {"status": "COMPLETED"}, "c2": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        assert Control.objects.filter(catalog__source=ControlCatalog.Source.VANTA).count() == 2
+
+
+class TestAReconnectStopsTheRunItReplaced:
+    """A sync is minutes long, so the account can change under it."""
+
+    def test_a_superseded_run_does_not_retire_frameworks(self, connected_vanta, install_client) -> None:
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+        ControlCatalog.objects.filter(team=connected_vanta.team).update(is_published=True)
+
+        # Vanta now answers with a different programme, which would normally
+        # retire SOC 2. The reconnect lands first.
+        install_client([ISO], {"fw_iso": [_control("c9", "A.5.1", "Policies", "Org")]}, {"c9": {"status": "COMPLETED"}})
+        Integration.objects.filter(pk=connected_vanta.pk).update(connected_at=timezone.now())
+
+        result = sync(connected_vanta)
+
+        assert not result.ok
+        assert ControlCatalog.objects.get(external_id="fw_soc2").is_published is True
+
+    def test_a_current_run_still_retires(self, connected_vanta, install_client) -> None:
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+        ControlCatalog.objects.filter(team=connected_vanta.team).update(is_published=True)
+
+        install_client([ISO], {"fw_iso": [_control("c9", "A.5.1", "Policies", "Org")]}, {"c9": {"status": "COMPLETED"}})
+        result = sync(connected_vanta)
+
+        assert result.ok
+        assert ControlCatalog.objects.get(external_id="fw_soc2").is_published is False
