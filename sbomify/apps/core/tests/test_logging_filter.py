@@ -78,14 +78,23 @@ def test_a_server_error_on_the_ask_endpoint_still_surfaces() -> None:
         _django_request_record("Not Found: /api/v1/sboms"),
         _django_request_record(f"Not Found: {ASK_PATH}/extra"),
         _make_record(f"On-demand TLS denied: {ASK_PATH}", name="sbomify.apps.teams.apis"),
+        _django_request_record(f"Unprocessable Entity: {ASK_PATH}"),
+        _django_request_record(f"Bad Request: {ASK_PATH}"),
+        _django_request_record(f"Forbidden: {ASK_PATH}"),
     ],
-    ids=["another 404", "a longer path", "another logger"],
+    ids=["another 404", "a longer path", "another logger", "a 422", "a 400", "a 403"],
 )
 def test_nothing_else_is_dropped(record: logging.LogRecord) -> None:
     """Matching is anchored on the full path and pinned to ``django.request``.
 
-    The "longer path" case is why this is an ``endswith`` on ": <path>" rather
-    than a substring test: ``/api/v1/internal/domains-something`` would be a
-    different endpoint, and a 404 from it is real.
+    The "longer path" case is why the match is anchored rather than a substring
+    test: ``/api/v1/internal/domains-something`` would be a different endpoint.
+
+    The 422 is the one that matters most, and it is why the reason phrase is
+    matched instead of the level. Django writes every 4xx at WARNING, and this
+    endpoint answers 422 when Caddy calls it with no ``domain`` at all, which
+    means the proxy is misconfigured and no custom domain will ever get a
+    certificate. Keying on WARNING would have discarded it as though it were
+    the routine denial.
     """
     assert is_on_demand_tls_ask_denial(record) is False

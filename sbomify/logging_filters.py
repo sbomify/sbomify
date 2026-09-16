@@ -41,9 +41,15 @@ def is_on_demand_tls_ask_denial(record: logging.LogRecord) -> bool:
     denial *with the domain*, deduplicated by the resolve cache, which is the
     line worth having. A bare repeated path is not.
 
-    Scoped tightly on purpose. Only ``django.request``, only WARNING, so if this
-    endpoint ever starts returning 5xx (logged at ERROR) that still surfaces.
+    Matched on the exact line Django writes for a 404 and nothing else. The
+    level is not a proxy for the status: ``log_response`` writes *every* 4xx at
+    WARNING, and this endpoint answers 422 when Caddy calls it without a
+    ``domain`` (``test_internal_apis.py``), so keying on WARNING alone would
+    also discard "Unprocessable Entity" - a misconfigured proxy, silently
+    swallowed. Only "Not Found" is the expected denial; every other status here
+    is a genuine failure of the ask endpoint and stays visible.
     """
-    if record.name != "django.request" or record.levelno != logging.WARNING:
+    if record.name != "django.request":
         return False
-    return record.getMessage().endswith(f": {_ON_DEMAND_TLS_ASK_PATH}")
+    # django.core.handlers.base logs `log_response("%s: %s", reason_phrase, path)`.
+    return record.getMessage() == f"Not Found: {_ON_DEMAND_TLS_ASK_PATH}"
