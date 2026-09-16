@@ -5,6 +5,7 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import render
 from django.urls import reverse
@@ -17,6 +18,22 @@ from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 logger = logging.getLogger(__name__)
+
+#: Packages per page. Each one expands into a card per advisory, so the page
+#: weight is a multiple of this rather than equal to it; 25 keeps the full
+#: report comparable in size to the component page's paged panel.
+PACKAGES_PER_PAGE = 25
+
+#: Advisory cards rendered for one package. Paging the packages bounds how many
+#: groups a response holds, not how many cards: a kernel package in a BSP image
+#: can carry hundreds of advisories on its own, and twenty-five of those rebuild
+#: the oversized response this page was paginated to avoid. Together the two
+#: numbers put a hard ceiling on the page.
+#:
+#: The rest are not lost. Advisories are ordered worst-first, the row says how
+#: many were left out, and the component page's panel pages through every
+#: finding of the artifact with search and filters.
+MAX_ADVISORIES_PER_PACKAGE = 10
 
 
 class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
@@ -39,6 +56,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         processing_message = None
         sbom_version_info = None
         latest_result = None
+        package_page = None
+        page_range: list[Any] = []
 
         try:
             # One section per provider: the latest completed run of each scanner
@@ -278,7 +297,55 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                                 -(v.get("cvss_score") or 0),
                             )
                         )
-                    vulnerabilities_data = {"results": [{"packages": list(packages_dict.values())}]}
+
+                    # Packages worst-first too, by the advisory each one leads
+                    # with. The list is paginated below, so its order decides
+                    # what page one holds; leaving it in provider order would put
+                    # a critical on page 40 of a Yocto image because that is
+                    # where the scanner happened to report it. Name breaks ties
+                    # so the same scan always pages the same way.
+                    packages = sorted(
+                        packages_dict.values(),
+                        key=lambda entry: (
+                            severity_rank.get((entry["vulnerabilities"][0].get("severity") or "").lower(), 5)
+                            if entry["vulnerabilities"]
+                            else 6,
+                            -(entry["vulnerabilities"][0].get("cvss_score") or 0) if entry["vulnerabilities"] else 0,
+                            entry["package"]["name"].lower(),
+                        ),
+                    )
+
+                    # One page of packages, not all of them. Each package renders
+                    # a card per advisory, so a BSP-class SBOM with thousands of
+                    # findings was building tens of megabytes of HTML for a
+                    # reader who sees the first screen of it: 5.1s of render on
+                    # the component page's smaller version of the same table,
+                    # against a 30s gateway timeout.
+                    paginator = Paginator(packages, PACKAGES_PER_PAGE)
+                    package_page = paginator.get_page(request.GET.get("page"))
+                    page_range = list(paginator.get_elided_page_range(package_page.number, on_each_side=1, on_ends=1))
+
+                    # Paging the packages alone does not bound the page. The
+                    # cards are advisories, not packages, and one package can
+                    # carry hundreds of them: a kernel or a libc in a BSP image
+                    # does. Twenty-five packages each holding four hundred
+                    # advisories rebuilds exactly the response this change
+                    # exists to prevent, so the nested list is capped too and
+                    # the ceiling becomes PACKAGES_PER_PAGE x this.
+                    #
+                    # Capped after open_count and suppressed_count are computed,
+                    # so the row still summarises the whole package rather than
+                    # the part of it being shown. Rows are already worst-first,
+                    # so the cap keeps the advisories that matter; the count
+                    # beside them says what was left out, and the component
+                    # panel pages through every one of them with search.
+                    for entry in package_page:
+                        total = len(entry["vulnerabilities"])
+                        entry["shown_count"] = min(total, MAX_ADVISORIES_PER_PACKAGE)
+                        entry["hidden_count"] = total - entry["shown_count"]
+                        entry["vulnerabilities"] = entry["vulnerabilities"][:MAX_ADVISORIES_PER_PACKAGE]
+
+                    vulnerabilities_data = {"results": [{"packages": list(package_page)}]}
 
                 # Check for error metadata on the newest run
                 result_json = latest_result.result or {}
@@ -319,6 +386,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 "sbom": sbom,
                 "breadcrumb_items": breadcrumb_items,
                 "vulnerabilities": vulnerabilities_data,
+                "page_obj": package_page,
+                "page_range": page_range,
                 "scan_timestamp": scan_timestamp_str,
                 "sbom_version_info": sbom_version_info,
                 "error_message": error_message,

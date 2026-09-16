@@ -128,6 +128,19 @@
                                             their borders — not a one-line table column.
                                         {% endcomment %}
                                         <c-tables.cell colspan="4">
+                                        {% comment %}
+                                        The nested list is capped, so a package
+                                        carrying hundreds of advisories cannot
+                                        rebuild the oversized page on its own.
+                                        Say so where the rows were cut rather
+                                        than letting the list just stop.
+                                        {% endcomment %}
+                                        {% if pkg_vuln_info.hidden_count %}
+                                            <p class="text-sm text-text-muted mb-3">
+                                                Showing the {{ pkg_vuln_info.shown_count }} most severe of {{ pkg_vuln_info.vulnerabilities|length|add:pkg_vuln_info.hidden_count }}.
+                                                Open the component page to search and page through all of them.
+                                            </p>
+                                        {% endif %}
                                         <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
                                             {% for vuln in pkg_vuln_info.vulnerabilities %}
                                                 <c-cards.card flush class="p-4 min-w-0">
@@ -222,6 +235,20 @@
                                 </tbody>
                             {% endfor %}
                             </c-tables.table>
+                            {% comment %}
+                            The package list is paged on the server: a BSP-class
+                            SBOM holds thousands of them, each expanding into a
+                            card per advisory.
+                            {% endcomment %}
+                            {% if page_obj.has_other_pages %}
+                                <c-tables.footer>
+                                <c-tables.info>
+                                Showing <strong>{{ page_obj.start_index }}</strong> to <strong>{{ page_obj.end_index }}</strong>
+                                of <strong>{{ page_obj.paginator.count }}</strong> packages
+                                </c-tables.info>
+                                <c-navigation.pagination :current="page_obj.number" :total="page_obj.paginator.num_pages" :page_range="page_range" label="Package pagination" />
+                                </c-tables.footer>
+                            {% endif %}
                             </c-tables.shell>
                         {% else %}
                             <c-feedback.alert variant="info">No packages with vulnerability information found in this result.</c-feedback.alert>

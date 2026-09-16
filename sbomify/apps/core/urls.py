@@ -91,6 +91,11 @@ urlpatterns = [
         views.ComponentScopeView.as_view(),
         name="component_scope",
     ),
+    path(
+        "component/<str:component_id>/vulnerabilities/panel/",
+        views.ComponentVulnerabilitiesPanelView.as_view(),
+        name="component_vulnerabilities_panel",
+    ),
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
     path("releases/table/", views.ReleasesTableView.as_view(), name="releases_table"),
     path(

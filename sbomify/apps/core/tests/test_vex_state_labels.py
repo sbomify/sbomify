@@ -20,7 +20,11 @@ from pathlib import Path
 from sbomify.apps.vulnerability_scanning.vex import SUPPRESSED_STATES
 
 TEMPLATE = (
-    Path(__file__).resolve().parents[1] / "templates" / "core" / "components" / "component_vulnerabilities.html.j2"
+    Path(__file__).resolve().parents[1]
+    / "templates"
+    / "core"
+    / "components"
+    / "component_vulnerabilities_table.html.j2"
 )
 
 

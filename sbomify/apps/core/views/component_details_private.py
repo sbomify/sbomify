@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -10,7 +10,14 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_component
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.services.component_security import (
+    ComponentVulnerabilitiesContext,
+    build_component_vulnerabilities,
+    viewer_manages_component,
+)
+from sbomify.apps.core.views.component_vulnerabilities import vulnerabilities_panel_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query
 
 
 class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
@@ -28,6 +35,23 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
+
+        # get_component answers 200 for any PUBLIC or GATED component to anyone,
+        # because it also serves the public read path. This page is the internal
+        # one: it renders the vulnerability panel, the metadata editor and the
+        # upload widget, none of which the public page shows. Without this check
+        # any authenticated user could read another workspace's findings, VEX
+        # dispositions and KEV flags for a published component simply by opening
+        # its private URL.
+        #
+        # Serving the public page rather than refusing, matching the custom
+        # domain branch above: a reader who followed a link to a published
+        # component should land on what they are entitled to see, not on a 403.
+        if not viewer_manages_component(request, component_id):
+            from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView
+
+            public = ComponentDetailsPublicView.as_view()(request, component_id=component_id)
+            return cast("HttpResponse", public)
 
         current_team = request.session.get("current_team", {})
         billing_plan = current_team.get("billing_plan")
@@ -69,92 +93,22 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
                 }
             # Add more document types with subcategories here as needed
 
-        # Latest-scan vulnerability summary for the header badge: the newest SBOM's
-        # most recent completed security run (VEX-suppressed findings already
-        # excluded). Tied to the newest SBOM so it matches the top artifacts row,
-        # rather than whichever run happened to complete last.
-        from sbomify.apps.plugins.models import AssessmentRun
-        from sbomify.apps.sboms.models import SBOM
-        from sbomify.apps.vulnerability_scanning.utils import (
-            extract_finding_rows,
-            extract_severity_counts,
-            merge_findings_by_alias,
-        )
-        from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
-
         # Only BOM components render the security sections; document
         # components must not pay the artifact/scan queries for template
         # sections their page never shows.
         is_bom_component = component.get("component_type") == "bom"
 
-        latest_sbom = (
-            SBOM.objects.filter(component_id=component_id, bom_type=SBOM.BomType.SBOM)
-            .order_by("-created_at")
-            .values("id", "version")
-            .first()
+        # The vulnerabilities panel: the newest SBOM's findings, summarised whole
+        # for the header badge and paged for the table. Filtering and paging are
+        # server-side and read from the request, so the panel's own HTMX endpoint
+        # and a plain link into the page render the same state — and so a
+        # component with thousands of findings ships one page of HTML instead of
+        # all of them.
+        vulns = (
+            build_component_vulnerabilities(component_id, parse_finding_query(request.GET))
             if is_bom_component
-            else None
+            else ComponentVulnerabilitiesContext()
         )
-        latest_sbom_id = latest_sbom["id"] if latest_sbom else None
-        latest_scan_result = (
-            (
-                AssessmentRun.objects.filter(sbom_id=latest_sbom_id, category="security", status="completed")
-                .order_by("-created_at")
-                .values_list("result", flat=True)
-                .first()
-            )
-            if latest_sbom_id
-            else None
-        )
-        # Flat, severity-sorted findings for the latest SBOM's drill-down table,
-        # merged across every provider's latest run so aliases auto-resolve (OSV
-        # carries the GHSA↔CVE mapping the DT run lacks). The component's VEX
-        # resolves each finding's status live, even when the stored scan predates
-        # the VEX upload.
-        latest_vulns: list[dict[str, Any]] = []
-        if latest_scan_result:
-            provider_results = list(
-                AssessmentRun.objects.filter(sbom_id=latest_sbom_id, category="security", status="completed")
-                .order_by("plugin_name", "-created_at")
-                .distinct("plugin_name")
-                .values_list("result", flat=True)
-            )
-            from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
-
-            vex_statements = load_vex_suppressions(component_id)
-            latest_vulns = extract_finding_rows(
-                merge_findings_by_alias(provider_results),
-                vex_statements=vex_statements,
-                kev_ids=kev_ids_for_serialization(),
-            )
-
-        # The header badge counts the same merged view the table shows, minus
-        # what VEX suppressed — matching the Trust Center posture, which lists
-        # suppressed findings separately rather than inside the severity counts.
-        vuln_summary = None
-        open_vulns = [v for v in latest_vulns if not v["vex_suppressed"]]
-        if latest_vulns:
-            vuln_summary = {
-                "total": len(open_vulns),
-                "critical": sum(1 for v in open_vulns if v["severity"] == "critical"),
-                "high": sum(1 for v in open_vulns if v["severity"] == "high"),
-                "medium": sum(1 for v in open_vulns if v["severity"] == "medium"),
-                "low": sum(1 for v in open_vulns if v["severity"] == "low"),
-                "suppressed": len(latest_vulns) - len(open_vulns),
-            }
-        elif latest_scan_result:
-            vuln_summary = extract_severity_counts(latest_scan_result)
-        # Lowercased "advisory package ecosystem" haystack per finding, so the
-        # drill-down's search box can filter client-side without re-fetching.
-        latest_vuln_terms = [
-            f"{v['id']} {' '.join(v['aliases'])} {v['package']} {v['ecosystem']}".lower() for v in latest_vulns
-        ]
-        # Parallel per-row lists so the drill-down's dropdowns and toggles can
-        # filter by index without re-serializing the rows.
-        latest_vuln_severities = [v["severity"] for v in latest_vulns]
-        latest_vuln_states = [v["vex_state"] or "open" for v in latest_vulns]
-        latest_vuln_suppressed = [v["vex_suppressed"] for v in latest_vulns]
-        latest_vuln_kev = [v["kev"] for v in latest_vulns]
 
         # CBOM issues drill-down: the newest crypto-bearing artifact's
         # fail/warning compliance findings (newest CBOM, else the newest mixed
@@ -175,15 +129,8 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             "company_nda_id": company_nda_id,
             "gated_visibility_allowed": gated_visibility_allowed,
             "team_key": team_key,
-            "vuln_summary": vuln_summary,
-            "latest_vulns": latest_vulns,
-            "latest_vuln_terms": latest_vuln_terms,
-            "latest_vuln_severities": latest_vuln_severities,
-            "latest_vuln_states": latest_vuln_states,
-            "latest_vuln_suppressed": latest_vuln_suppressed,
-            "latest_vuln_kev": latest_vuln_kev,
-            "latest_vuln_version": latest_sbom["version"] if latest_sbom else None,
-            "latest_vuln_sbom_id": latest_sbom_id,
+            "vuln_summary": vulns.summary,
+            **vulnerabilities_panel_context(component_id, vulns),
             "latest_cbom_issues": cbom_issues.issues,
             "latest_cbom_issue_terms": cbom_issues.terms,
             "latest_cbom_issue_severities": cbom_issues.severities,

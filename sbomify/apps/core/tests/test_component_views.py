@@ -4,6 +4,7 @@ from django.urls import reverse
 
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.sboms.tests.test_views import setup_test_session
+from sbomify.apps.vulnerability_scanning.services.finding_browse import row_state
 
 
 @pytest.mark.django_db
@@ -397,9 +398,9 @@ class TestComponentItemVexAliasEnrichment:
 @pytest.mark.django_db
 class TestComponentVulnFilterContext:
     """The internal drill-down's filter data: suppressed rows stay in the list
-    (revealed by the toggle), the header counts exclude them so they reconcile
-    with the Trust Center posture, and the per-row parallel lists feed the
-    severity / analysis-state / KEV filters."""
+    (hidden only by the toggle), the header counts exclude them so they
+    reconcile with the Trust Center posture, and the filter dropdowns are built
+    from the severities and analysis states the rows actually carry."""
 
     def _component_with_vex(self, team):
 
@@ -488,13 +489,18 @@ class TestComponentVulnFilterContext:
             "low": 0,
             "suppressed": 1,
         }
-        rows = {v["id"]: v for v in context["latest_vulns"]}
+        panel = context["vuln_panel"]
+        rows = {v["id"]: v for v in panel["rows"]}
         assert rows["CVE-2026-2"]["vex_suppressed"] is True
         assert rows["CVE-2026-2"]["vex_justification"] == "code_not_reachable"
         assert rows["CVE-2026-1"]["kev"] is True
-        assert context["latest_vuln_suppressed"] == [False, True]
-        assert context["latest_vuln_states"] == ["open", "not_affected"]
-        assert context["latest_vuln_kev"] == [True, False]
+        assert panel["suppressed_total"] == 1
+        assert [row_state(row) for row in panel["rows"]] == ["open", "not_affected"]
+        assert [row["kev"] for row in panel["rows"]] == [True, False]
+        # The dropdowns offer what the rows actually carry, so a filter can
+        # never be selected and come back empty.
+        assert panel["severity_options"] == ["critical", "high"]
+        assert [option["value"] for option in panel["state_options"]] == ["open", "not_affected"]
 
 
 @pytest.mark.django_db

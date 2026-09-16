@@ -41,6 +41,9 @@ from sbomify.apps.core.views.component_details_public import ComponentDetailsPub
 from sbomify.apps.core.views.component_item import ComponentItemPublicView as ComponentItemPublicView
 from sbomify.apps.core.views.component_item import ComponentItemView as ComponentItemView
 from sbomify.apps.core.views.component_scope import ComponentScopeView as ComponentScopeView
+from sbomify.apps.core.views.component_vulnerabilities import (
+    ComponentVulnerabilitiesPanelView as ComponentVulnerabilitiesPanelView,
+)
 from sbomify.apps.core.views.components_dashboard import ComponentCreateView as ComponentCreateView
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView as ComponentsDashboardView
 from sbomify.apps.core.views.components_dashboard import ComponentsTableView as ComponentsTableView

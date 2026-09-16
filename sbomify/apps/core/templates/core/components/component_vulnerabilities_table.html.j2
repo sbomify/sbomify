@@ -1,0 +1,215 @@
+{% load advisory_tags %}
+{% comment %}
+The vulnerabilities panel's toolbar, table and footer: one page of findings.
+
+Everything here is resolved on the server. A component can carry thousands of
+findings, and rendering them all to show five cost 5.1s and 8.5MB of HTML on the
+largest one we have seen, so the table holds one page and the filters run before
+the slice rather than after it.
+
+The whole region swaps as one, because the toolbar carries state the table shows
+(the result count, which severities are on offer) and the two must never
+disagree. The card around it is not re-rendered, so the panel stays open.
+
+Every control is a real form field or a real link, and the endpoint they point
+at redirects a non-HTMX request to the component page carrying the same
+parameters. So the panel filters and pages with JavaScript off, and no control
+needs a second URL for that case.
+
+That same property is what makes hx-push-url safe below: every swap would
+otherwise leave the address bar on the component page's bare URL, so a refresh,
+a Back, or a link sent to a colleague would drop the filters and the page. What
+gets pushed is a URL the server already renders on its own.
+{% endcomment %}
+<div id="component-vulnerabilities-table">
+    <c-tables.shell nested>
+    <form method="get"
+          action="{{ vuln_panel_url }}"
+          hx-get="{{ vuln_panel_url }}"
+          hx-target="#component-vulnerabilities-table"
+          hx-swap="outerHTML"
+          hx-push-url="true"
+          hx-trigger="change, input changed delay:350ms from:#vuln-search, submit">
+        {% comment %}
+        The marker that tells the view this request came from the form. Without
+        it an unticked checkbox and an untouched page are the same request, and
+        the view cannot tell "hide suppressed rows" from "nobody has said".
+        {% endcomment %}
+        <input type="hidden" name="vuln_submitted" value="1">
+        <c-tables.toolbar class="[&>div:first-child]:flex-wrap">
+        {% comment %}
+        hx-preserve keeps the live input across the swap, so a search that fires
+        mid-word does not move the cursor back to the start.
+        {% endcomment %}
+        <c-tables.search id="vuln-search" label="Search vulnerabilities" placeholder="Search vulnerabilities..." class="max-w-xs" name="vuln_search" value="{{ vuln_panel.query.search }}" hx-preserve="true" />
+        <c-tables.select id="vuln-sev-filter" label="Filter by severity" name="vuln_severity">
+        <option value="all">All Severities</option>
+        {% for severity in vuln_panel.severity_options %}
+            <option value="{{ severity }}"
+                    {% if severity == vuln_panel.query.severity %}selected{% endif %}>{{ severity|capfirst }}</option>
+        {% endfor %}
+        </c-tables.select>
+        <c-tables.select id="vuln-state-filter" label="Filter by VEX analysis state" name="vuln_state">
+        <option value="all">All States</option>
+        {% for state in vuln_panel.state_options %}
+            <option value="{{ state.value }}"
+                    {% if state.value == vuln_panel.query.state %}selected{% endif %}>{{ state.label }}</option>
+        {% endfor %}
+        </c-tables.select>
+        <c-forms.checkbox name="vuln_kev" :checked="vuln_panel.query.kev_only">KEV only</c-forms.checkbox>
+        {% comment %}
+        Suppressed rows show by default, struck through and labelled with the
+        state that cleared them; the toggle hides them so the working list
+        matches the open counts. Picking a suppressing state in the filter
+        implies showing them, so the two controls cannot ask for nothing.
+        {% endcomment %}
+        {% if vuln_panel.suppressed_total %}
+            <c-forms.checkbox class="whitespace-nowrap" name="vuln_suppressed" :checked="vuln_panel.query.show_suppressed">
+            Show suppressed ({{ vuln_panel.suppressed_total }})
+            </c-forms.checkbox>
+        {% endif %}
+        <noscript>
+            <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
+        </noscript>
+        </c-tables.toolbar>
+    </form>
+    <c-tables.table>
+    <c-tables.head>
+    <c-tables.header-cell>Severity</c-tables.header-cell>
+    <c-tables.header-cell nowrap>Advisory</c-tables.header-cell>
+    <c-tables.header-cell>Package</c-tables.header-cell>
+    <c-tables.header-cell>Fixed in</c-tables.header-cell>
+    <c-tables.header-cell>Status</c-tables.header-cell>
+    </c-tables.head>
+    <tbody>
+        {% for vuln in vuln_panel.rows %}
+            <c-tables.row>
+            <c-tables.cell nowrap>
+            {% if vuln.severity == 'critical' or vuln.severity == 'high' or vuln.severity == 'medium' or vuln.severity == 'low' %}
+                <c-badges.severity level="{{ vuln.severity|lower }}" class="
+                {% if vuln.vex_suppressed %}line-through{% endif %}
+                ">
+                {{ vuln.severity|capfirst }}
+                </c-badges.severity>
+            {% else %}
+                <c-badges.severity level="unknown" class="
+                {% if vuln.vex_suppressed %}line-through{% endif %}
+                ">
+                {{ vuln.severity|title }}
+                </c-badges.severity>
+            {% endif %}
+            </c-tables.cell>
+            <c-tables.cell nowrap>
+            {% with vuln_url=vuln.id|advisory_url %}
+                {% if vuln_url %}
+                    <a href="{{ vuln_url }}"
+                       target="_blank"
+                       rel="noopener"
+                       class="font-medium text-primary hover:underline inline-flex items-center gap-1">
+                        {{ vuln.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
+                    </a>
+                {% else %}
+                    <span class="font-medium text-text-muted">{{ vuln.id }}</span>
+                {% endif %}
+            {% endwith %}
+            {% if vuln.kev %}
+                <c-badges.solid-danger size="sm" class="ml-1.5 align-middle" title="In CISA's Known Exploited Vulnerabilities catalog">KEV</c-badges.solid-danger>
+            {% endif %}
+            {% if vuln.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ vuln.aliases|join:", " }}</div>{% endif %}
+            </c-tables.cell>
+            <c-tables.cell>
+            <span class="font-medium text-text">{{ vuln.package }}</span>
+            {% if vuln.version %}<span class="text-text-muted">· {{ vuln.version }}</span>{% endif %}
+            {% if vuln.ecosystem %}<c-badges.secondary class="ml-2">{{ vuln.ecosystem }}</c-badges.secondary>{% endif %}
+            </c-tables.cell>
+            <c-tables.cell>
+            {% if vuln.fixed %}
+                <span class="font-mono text-sm text-success">{{ vuln.fixed }}</span>
+            {% else %}
+                <span class="text-text-muted">Not reported</span>
+            {% endif %}
+            </c-tables.cell>
+            <c-tables.cell>
+            {% if vuln.vex_suppressed %}
+                <span class="text-info">
+                    {% if vuln.vex_state == 'false_positive' %}
+                        False positive
+                    {% elif vuln.vex_state == 'resolved' %}
+                        Fixed
+                    {% else %}
+                        Not affected
+                    {% endif %}
+                    ·
+                    {% if vuln.vex_manual %}
+                        manually
+                    {% else %}
+                        VEX
+                    {% endif %}
+                </span>
+                {% if vuln.vex_justification %}
+                    <div class="text-xs text-text-muted mt-1">{{ vuln.vex_justification_label }}</div>
+                {% endif %}
+            {% elif vuln.vex_state == 'in_triage' %}
+                <span class="text-warning">Under investigation</span>
+            {% else %}
+                <span class="text-text-muted">Affected</span>
+            {% endif %}
+            </c-tables.cell>
+            </c-tables.row>
+        {% empty %}
+            <tr>
+                <td colspan="5" class="text-center">
+                    <span class="text-text-muted">No vulnerabilities match your search.</span>
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+    </c-tables.table>
+    {# Footer: row count + full report on the left, pagination on the right #}
+    <c-tables.footer>
+    <div class="flex flex-wrap items-center gap-4">
+        <c-tables.info>
+        Showing {{ vuln_panel.start_index }} to {{ vuln_panel.end_index }} of {{ vuln_panel.total }}
+        {% if not vuln_panel.suppressed_shown and vuln_panel.suppressed_total %}
+            · {{ vuln_panel.suppressed_total }} suppressed hidden
+        {% endif %}
+        </c-tables.info>
+        {% if latest_vuln_sbom_id %}
+            <a href="{% url 'sboms:sbom_vulnerabilities' latest_vuln_sbom_id %}"
+               class="text-sm text-primary hover:underline no-underline inline-flex items-center gap-1">
+                View full scan report<i class="fas fa-arrow-right text-xs"></i>
+            </a>
+        {% endif %}
+    </div>
+    {% comment %}
+    hx-boost turns these two links into panel swaps and leaves them as ordinary
+    links when it is not running. Scoped to the pager rather than the region, so
+    the full-report link above still navigates.
+
+    hx-push-url is off because boosting pushes by default, and the address bar
+    would then hold the panel endpoint rather than the page the reader is on.
+    The links still point at that endpoint, which redirects a plain visit back to
+    the page, so the no-JS path is unaffected.
+    {% endcomment %}
+    {% if vuln_panel.page_count > 1 %}
+        <div class="flex items-center gap-2"
+             hx-boost="true"
+             hx-push-url="false"
+             hx-target="#component-vulnerabilities-table"
+             hx-swap="outerHTML">
+            {% if vuln_panel.has_prev %}
+                <c-buttons.secondary size="sm" aria-label="Previous page" href="{{ vuln_prev_url }}"><i class="fas fa-chevron-left text-xs" aria-hidden="true"></i></c-buttons.secondary>
+            {% else %}
+                <c-buttons.secondary size="sm" aria-label="Previous page" disabled><i class="fas fa-chevron-left text-xs" aria-hidden="true"></i></c-buttons.secondary>
+            {% endif %}
+            <span class="text-sm text-text-muted">Page {{ vuln_panel.page }} / {{ vuln_panel.page_count }}</span>
+            {% if vuln_panel.has_next %}
+                <c-buttons.secondary size="sm" aria-label="Next page" href="{{ vuln_next_url }}"><i class="fas fa-chevron-right text-xs" aria-hidden="true"></i></c-buttons.secondary>
+            {% else %}
+                <c-buttons.secondary size="sm" aria-label="Next page" disabled><i class="fas fa-chevron-right text-xs" aria-hidden="true"></i></c-buttons.secondary>
+            {% endif %}
+        </div>
+    {% endif %}
+    </c-tables.footer>
+    </c-tables.shell>
+</div>
