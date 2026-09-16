@@ -835,7 +835,7 @@ def spdx3_member_import(
     # Function-local: sboms may not take a module-level edge into plugins.
     from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
 
-    if not (is_spdx3(sbom_data) or "elements" in sbom_data):
+    if not is_spdx3(sbom_data):
         return None
     checksum = getattr(sbom_instance, "sha256_hash", None)
     if not _is_sha256_hex(checksum):  # goes into verifiedUsing as the integrity digest
