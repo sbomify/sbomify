@@ -107,6 +107,73 @@ class TestThePageShipsOnePage:
         assert "Showing 1 to 5 of 40" in response.content.decode()
 
 
+class TestTheReportedIncident:
+    """The customer's case, at its real size, as one property.
+
+    The component that prompted this carried 2,390 findings. The page rendered
+    every one of them into the HTML to show five: 8.5 MB and 5.10 s of template
+    render on production, against Caddy's 30 s response_header_timeout.
+
+    What went wrong is not "the page was slow" but "the page grew with the
+    scan", so that is what is asserted: **the response size does not depend on
+    how many findings the component has.** A 2,390-finding component and a
+    50-finding one must ship within a few hundred bytes of each other, the
+    difference being the footer's count and the page number.
+
+    That is the assertion that would have failed before. Rendering this same
+    fixture unbounded produces **7.83 MB** of HTML against **0.027 MB** paged,
+    so the old page failed the comparison by roughly 290x rather than by a
+    margin someone could argue about.
+
+    Marked slow because it builds the real number of findings; it runs in a
+    couple of seconds, which is itself the point.
+    """
+
+    @pytest.mark.slow
+    def test_the_response_size_does_not_grow_with_the_finding_count(self, sample_team_with_owner_member, sample_user):
+        member = sample_team_with_owner_member
+        small, _ = _component_with_findings(member.team, count=50, name="small")
+        huge, _ = _component_with_findings(member.team, count=2390, name="large-image")
+        client = _client(member.team, sample_user)
+
+        small_body = client.get(reverse("core:component_details", kwargs={"component_id": small.id})).content
+        huge_body = client.get(reverse("core:component_details", kwargs={"component_id": huge.id})).content
+
+        growth = len(huge_body) - len(small_body)
+        assert growth < 1024, f"the page grew {growth} bytes for 2,340 more findings"
+        # An absolute ceiling as well, so a future regression that makes both
+        # pages huge cannot pass by growing them equally.
+        assert len(huge_body) < 512 * 1024, f"{len(huge_body)} bytes for one component page"
+
+    @pytest.mark.slow
+    def test_the_page_is_still_correct_at_that_size(self, sample_team_with_owner_member, sample_user):
+        """Cheap is no good if the numbers stopped being true."""
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(member.team, count=2390)
+        client = _client(member.team, sample_user)
+
+        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+
+        assert response.context["vuln_summary"]["total"] == 2390
+        assert response.context["vuln_panel"]["page_count"] == 478
+        assert "Showing 1 to 5 of 2390" in response.content.decode()
+
+    @pytest.mark.slow
+    def test_the_last_finding_is_still_reachable(self, sample_team_with_owner_member, sample_user):
+        """Nothing was dropped; it is a page away rather than in the first response."""
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(member.team, count=2390)
+        client = _client(member.team, sample_user)
+
+        response = client.get(
+            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
+            {"vuln_search": "CVE-2026-2389"},
+            headers={"hx-request": "true"},
+        )
+
+        assert "CVE-2026-2389" in response.content.decode()
+
+
 class TestTheSummaryFallback:
     def test_a_summary_only_result_still_feeds_the_badge(self, sample_team_with_owner_member, sample_user):
         """Some providers store counts and no findings list; the badge reads those.
