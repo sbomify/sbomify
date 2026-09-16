@@ -222,6 +222,20 @@
                                 </tbody>
                             {% endfor %}
                             </c-tables.table>
+                            {% comment %}
+                            The package list is paged on the server: a BSP-class
+                            SBOM holds thousands of them, each expanding into a
+                            card per advisory.
+                            {% endcomment %}
+                            {% if page_obj.has_other_pages %}
+                                <c-tables.footer>
+                                <c-tables.info>
+                                Showing <strong>{{ page_obj.start_index }}</strong> to <strong>{{ page_obj.end_index }}</strong>
+                                of <strong>{{ page_obj.paginator.count }}</strong> packages
+                                </c-tables.info>
+                                <c-navigation.pagination :current="page_obj.number" :total="page_obj.paginator.num_pages" :page_range="page_range" label="Package pagination" />
+                                </c-tables.footer>
+                            {% endif %}
                             </c-tables.shell>
                         {% else %}
                             <c-feedback.alert variant="info">No packages with vulnerability information found in this result.</c-feedback.alert>
