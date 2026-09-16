@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sbomify.apps.core.authz import ADMINISTER, MANAGE, READ_INTERNAL
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL
 
 # Roles that may see a tab, taken from the capability tiers rather than spelled
 # out here: a tab and the actions behind it should never disagree about who may
@@ -74,10 +74,12 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         label="API tokens",
         icon="fa-key",
         template="tokens",
-        # MANAGE, not ADMINISTER: tokens are personal and this page only ever
-        # lists, creates and revokes the caller's own. A member needs one to
-        # upload from CI, and a token can never exceed its holder's role.
-        roles=MANAGE,
+        # READ_INTERNAL, not ADMINISTER: tokens are personal and this page only
+        # ever lists, creates and revokes the caller's own. A member needs one to
+        # upload from CI and an operator needs one to triage from a script, and a
+        # token can never exceed its holder's role — so the tier is "any internal
+        # role", the same one the Account tab uses.
+        roles=READ_INTERNAL,
         description="Personal access tokens for the API and CI.",
     ),
     SettingsTab(
