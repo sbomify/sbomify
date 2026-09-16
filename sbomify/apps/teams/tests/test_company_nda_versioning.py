@@ -154,9 +154,7 @@ class TestTheNdaUploadFollowsTheConfiguredCeiling:
         settings.ARTIFACT_MAX_UPLOAD_SIZE = 1024 * 1024
         client, team = owner_client
 
-        oversized = SimpleUploadedFile(
-            "nda.pdf", b"%PDF-1.4" + b"x" * (2 * 1024 * 1024), content_type="application/pdf"
-        )
+        oversized = SimpleUploadedFile("nda.pdf", b"x" * (1024 * 1024 + 1), content_type="application/pdf")
         response = client.post(
             reverse("teams:team_settings", kwargs={"team_key": team.key}),
             {"company_nda_action": "upload", "company_nda_file": oversized},
@@ -169,12 +167,17 @@ class TestTheNdaUploadFollowsTheConfiguredCeiling:
         assert not Document.objects.filter(component__team=team).exists()
 
     def test_a_file_the_raised_ceiling_allows_is_accepted(self, mocker: MockerFixture, owner_client, settings):
-        """The point of the setting: raising it has to actually raise this one."""
+        """The point of the setting: raising it has to actually raise this one.
+
+        Both sides are exercised against a 1MB ceiling. What is under test is
+        the comparison against the setting, which reads the file's reported
+        size, so allocating a realistic 60MB would buy nothing but CI memory.
+        """
         mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
-        settings.ARTIFACT_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+        settings.ARTIFACT_MAX_UPLOAD_SIZE = 1024 * 1024
         client, team = owner_client
 
-        big = SimpleUploadedFile("nda.pdf", b"%PDF-1.4" + b"x" * (60 * 1024 * 1024), content_type="application/pdf")
+        big = SimpleUploadedFile("nda.pdf", b"x" * (512 * 1024), content_type="application/pdf")
         client.post(
             reverse("teams:team_settings", kwargs={"team_key": team.key}),
             {"company_nda_action": "upload", "company_nda_file": big},
