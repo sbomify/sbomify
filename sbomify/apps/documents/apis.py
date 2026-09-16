@@ -97,8 +97,10 @@ def create_document(
             # not measured against DATA_UPLOAD_MAX_MEMORY_SIZE, so this is the
             # only thing standing between a large document and the object store.
             max_size = settings.ARTIFACT_MAX_UPLOAD_SIZE
+            # The check is inclusive, so a file of exactly the limit is accepted.
+            # Says "or smaller" to match, and to match the SBOM path's wording.
             if file_size is not None and file_size > max_size:
-                return 400, {"detail": f"File size must be less than {max_size // (1024 * 1024)}MB"}
+                return 400, {"detail": f"File size must be {max_size // (1024 * 1024)}MB or smaller"}
         else:
             # Raw data scenario (API upload) - use query parameters
             actual_component_id = request.GET.get("component_id") or component_id

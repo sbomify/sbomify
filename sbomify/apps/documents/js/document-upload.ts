@@ -42,7 +42,7 @@ export function registerDocumentUpload(): void {
 
         validateFile(file: File): string | null {
             if (file.size > this.maxFileSizeMb * 1024 * 1024) {
-                return `File size must be less than ${this.maxFileSizeMb}MB`;
+                return `File size must be ${this.maxFileSizeMb}MB or smaller`;
             }
             return null;
         },

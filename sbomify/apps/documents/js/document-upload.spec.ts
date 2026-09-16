@@ -14,7 +14,7 @@ describe('Document Upload Business Logic', () => {
     describe('File Validation', () => {
         const validateFile = (file: File): string | null => {
             if (file.size > MAX_FILE_SIZE) {
-                return `File size must be less than ${MAX_FILE_SIZE_MB}MB`
+                return `File size must be ${MAX_FILE_SIZE_MB}MB or smaller`
             }
             return null
         }
@@ -27,7 +27,7 @@ describe('Document Upload Business Logic', () => {
         test('should reject a file larger than the limit', () => {
             const size = MAX_FILE_SIZE + 1
             const file = createMockFile('large-doc.pdf', size, 'application/pdf')
-            expect(validateFile(file)).toBe(`File size must be less than ${MAX_FILE_SIZE_MB}MB`)
+            expect(validateFile(file)).toBe(`File size must be ${MAX_FILE_SIZE_MB}MB or smaller`)
         })
 
         test('should accept a file exactly at the limit', () => {

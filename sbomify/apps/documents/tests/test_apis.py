@@ -5,7 +5,7 @@ import json
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client
+from django.test import Client, override_settings
 from django.urls import reverse
 from pytest_mock import MockerFixture
 
@@ -264,20 +264,22 @@ def test_create_document_forbidden(
 
 
 @pytest.mark.django_db
+@override_settings(ARTIFACT_MAX_UPLOAD_SIZE=1 * 1024 * 1024)
 def test_create_document_file_too_large(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
     sample_document_component,
 ):
-    """Test upload with file that exceeds size limit."""
-    from django.conf import settings
+    """Test upload with file that exceeds size limit.
 
+    The ceiling is lowered for the test rather than allocating one over the real
+    one: at the 100 MB default that is 100 MB per run, and pytest-xdist would
+    hold one per worker.
+    """
     client.force_login(sample_user)
 
-    # One byte over whatever the shared artifact ceiling is, so this test follows
-    # the setting instead of pinning a number that has already drifted once.
-    limit_mb = settings.ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024)
-    large_content = b"x" * (settings.ARTIFACT_MAX_UPLOAD_SIZE + 1)
+    limit_mb = 1
+    large_content = b"x" * (limit_mb * 1024 * 1024 + 1)
     test_file = SimpleUploadedFile("large_document.pdf", large_content, content_type="application/pdf")
 
     response = client.post(
@@ -288,7 +290,7 @@ def test_create_document_file_too_large(
 
     assert response.status_code == 400
     data = json.loads(response.content)
-    assert f"File size must be less than {limit_mb}MB" in data["detail"]
+    assert f"File size must be {limit_mb}MB or smaller" in data["detail"]
 
 
 @pytest.mark.django_db
