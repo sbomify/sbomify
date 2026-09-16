@@ -34,9 +34,7 @@ class _Request:
 # What Django writes for a 404: ``log_response("%s: %s", reason_phrase, path)``
 # on the ``django.request`` logger, at WARNING for any status below 500. The
 # request rides along in ``extra``, which is where the filter reads it from.
-def _django_request_record(
-    message: str, *, level: int = logging.WARNING, resolved: bool = True
-) -> logging.LogRecord:
+def _django_request_record(message: str, *, level: int = logging.WARNING, resolved: bool = True) -> logging.LogRecord:
     record = _make_record(message, name="django.request", level=level)
     record.request = _Request(resolved=resolved)  # type: ignore[attr-defined]
     return record
