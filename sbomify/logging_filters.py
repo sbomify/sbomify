@@ -52,4 +52,17 @@ def is_on_demand_tls_ask_denial(record: logging.LogRecord) -> bool:
     if record.name != "django.request":
         return False
     # django.core.handlers.base logs `log_response("%s: %s", reason_phrase, path)`.
-    return record.getMessage() == f"Not Found: {_ON_DEMAND_TLS_ASK_PATH}"
+    if record.getMessage() != f"Not Found: {_ON_DEMAND_TLS_ASK_PATH}":
+        return False
+
+    # The message alone cannot tell the endpoint's answer from the route having
+    # gone missing: a URL-resolver 404 writes the identical line. That failure
+    # makes Caddy refuse a certificate for every custom domain, so it is the
+    # last thing that should be swallowed as routine.
+    #
+    # ``_get_response`` assigns ``request.resolver_match`` once a route matches
+    # and before the view runs, so a 404 the view returned has one and a 404
+    # from resolution failing does not. No match means the ask endpoint is not
+    # registered, and that line stays.
+    request = getattr(record, "request", None)
+    return getattr(request, "resolver_match", None) is not None

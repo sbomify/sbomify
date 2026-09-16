@@ -19,10 +19,27 @@ def _make_record(message: str, *, name: str = "asyncio", level: int = logging.ER
     )
 
 
+class _Request:
+    """Enough of an HttpRequest for the filter.
+
+    ``resolver_match`` is the whole point: ``_get_response`` assigns it once a
+    route matches and before the view runs, so a 404 a view returned carries one
+    and a 404 from resolution failing does not.
+    """
+
+    def __init__(self, *, resolved: bool = True) -> None:
+        self.resolver_match = object() if resolved else None
+
+
 # What Django writes for a 404: ``log_response("%s: %s", reason_phrase, path)``
-# on the ``django.request`` logger, at WARNING for any status below 500.
-def _django_request_record(message: str, *, level: int = logging.WARNING) -> logging.LogRecord:
-    return _make_record(message, name="django.request", level=level)
+# on the ``django.request`` logger, at WARNING for any status below 500. The
+# request rides along in ``extra``, which is where the filter reads it from.
+def _django_request_record(
+    message: str, *, level: int = logging.WARNING, resolved: bool = True
+) -> logging.LogRecord:
+    record = _make_record(message, name="django.request", level=level)
+    record.request = _Request(resolved=resolved)  # type: ignore[attr-defined]
+    return record
 
 
 ASK_PATH = "/api/v1/internal/domains"
@@ -70,6 +87,24 @@ def test_a_server_error_on_the_ask_endpoint_still_surfaces() -> None:
     """
     broken = _django_request_record(f"Internal Server Error: {ASK_PATH}", level=logging.ERROR)
     assert is_on_demand_tls_ask_denial(broken) is False
+
+
+def test_the_route_going_missing_is_not_a_denial() -> None:
+    """The failure this filter could hide, and the reason it reads the request.
+
+    A URL-resolver 404 writes the identical line: same logger, same path, same
+    level. It means the ask endpoint is not registered, so Caddy gets no answer
+    and stops issuing certificates for every custom domain. Matching on the
+    message alone would swallow exactly that.
+    """
+    unrouted = _django_request_record(f"Not Found: {ASK_PATH}", resolved=False)
+    assert is_on_demand_tls_ask_denial(unrouted) is False
+
+
+def test_a_record_with_no_request_is_not_a_denial() -> None:
+    """Nothing to check it against, so it stays visible."""
+    bare = _make_record(f"Not Found: {ASK_PATH}", name="django.request", level=logging.WARNING)
+    assert is_on_demand_tls_ask_denial(bare) is False
 
 
 @pytest.mark.parametrize(
