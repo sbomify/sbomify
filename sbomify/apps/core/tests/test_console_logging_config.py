@@ -19,6 +19,22 @@ import pytest
 from django.conf import settings
 
 ASK_PATH = "/api/v1/internal/domains"
+
+
+def _routed(*, resolved: bool = True) -> dict[str, object]:
+    """The ``extra`` Django attaches to a response log line.
+
+    ``log_response`` passes the request every time, and the filter reads
+    ``resolver_match`` off it to tell the endpoint answering 404 from the route
+    having gone missing. Logging without it is not a shape production produces.
+    """
+
+    class _Request:
+        resolver_match = object() if resolved else None
+
+    return {"request": _Request()}
+
+
 RECONNECT = "Consumer encountered a connection error: Error 111 connecting to redis"
 
 
@@ -45,9 +61,20 @@ def _lines(buffer: io.StringIO) -> list[str]:
 
 
 def test_the_expected_tls_denial_never_reaches_stdout(console: io.StringIO) -> None:
-    logging.getLogger("django.request").warning("Not Found: %s", ASK_PATH)
+    logging.getLogger("django.request").warning("Not Found: %s", ASK_PATH, extra=_routed())
 
     assert _lines(console) == []
+
+
+def test_the_ask_route_going_missing_does_reach_stdout(console: io.StringIO) -> None:
+    """The same line, and the one case that must never be swallowed.
+
+    A URL-resolver 404 writes it too, and it means Caddy gets no answer and
+    stops issuing certificates for every custom domain.
+    """
+    logging.getLogger("django.request").warning("Not Found: %s", ASK_PATH, extra=_routed(resolved=False))
+
+    assert len(_lines(console)) == 1
 
 
 @pytest.mark.parametrize(
