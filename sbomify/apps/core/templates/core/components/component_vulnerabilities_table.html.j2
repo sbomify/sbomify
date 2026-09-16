@@ -15,6 +15,11 @@ Every control is a real form field or a real link, and the endpoint they point
 at redirects a non-HTMX request to the component page carrying the same
 parameters. So the panel filters and pages with JavaScript off, and no control
 needs a second URL for that case.
+
+That same property is what makes hx-push-url safe below: every swap would
+otherwise leave the address bar on the component page's bare URL, so a refresh,
+a Back, or a link sent to a colleague would drop the filters and the page. What
+gets pushed is a URL the server already renders on its own.
 {% endcomment %}
 <div id="component-vulnerabilities-table">
     <c-tables.shell nested>
@@ -23,6 +28,7 @@ needs a second URL for that case.
           hx-get="{{ vuln_panel_url }}"
           hx-target="#component-vulnerabilities-table"
           hx-swap="outerHTML"
+          hx-push-url="true"
           hx-trigger="change, input changed delay:350ms from:#vuln-search, submit">
         {% comment %}
         The marker that tells the view this request came from the form. Without

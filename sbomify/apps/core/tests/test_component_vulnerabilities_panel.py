@@ -283,6 +283,53 @@ class TestPublishedComponentsAreNotOpen:
         assert "CVE-2026-0000" in response.content.decode()
 
 
+class TestTheFiltersSurviveALeaveAndAReturn:
+    """A filtered panel has to be a place, not a gesture.
+
+    Every swap replaces the region and leaves the address bar on the component
+    page's bare URL, so without hx-push-url a refresh, a Back, or a link sent to
+    a colleague all silently reset to page one with no filters. The view already
+    renders the same state from a plain GET, so the URL is worth pushing.
+    """
+
+    def test_the_panel_pushes_its_url(self, sample_team_with_owner_member, sample_user):
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(member.team, count=12)
+        client = _client(member.team, sample_user)
+
+        body = client.get(
+            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
+            {"vuln_severity": "high", "page": "2"},
+            headers={"hx-request": "true"},
+        ).content.decode()
+
+        assert 'hx-push-url="true"' in body
+
+    def test_what_it_pushes_is_something_a_plain_request_can_serve(
+        self, sample_team_with_owner_member, sample_user
+    ):
+        """Pushing a URL that only htmx can render would break the refresh it exists to fix."""
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(member.team, count=12)
+        client = _client(member.team, sample_user)
+        params = {"vuln_severity": "high", "page": "2", "vuln_submitted": "1"}
+
+        panel = client.get(
+            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
+            params,
+            headers={"hx-request": "true"},
+        )
+        page = client.get(
+            reverse("core:component_details", kwargs={"component_id": component.id}), params
+        )
+
+        assert panel.status_code == 200
+        assert page.status_code == 200
+        assert [r["id"] for r in page.context["vuln_panel"]["rows"]] == [
+            r["id"] for r in panel.context["vuln_panel"]["rows"]
+        ]
+
+
 class TestThePanelEndpoint:
     def test_an_htmx_request_gets_the_region_rather_than_the_page(self, sample_team_with_owner_member, sample_user):
         member = sample_team_with_owner_member
