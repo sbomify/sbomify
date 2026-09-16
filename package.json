@@ -45,7 +45,7 @@
     "js-cookie": "^3.0.8",
     "jsbarcode": "^3.12.3",
     "license-expressions": "^0.8.0",
-    "marked": "^18.0.12",
+    "marked": "^18.0.13",
     "postcss": "^8.5.28",
     "signature_pad": "^5.1.4",
     "tailwindcss": "^4.3.3",
