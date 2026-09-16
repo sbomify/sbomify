@@ -157,11 +157,15 @@ class TestTheNdaUploadFollowsTheConfiguredCeiling:
         oversized = SimpleUploadedFile(
             "nda.pdf", b"%PDF-1.4" + b"x" * (2 * 1024 * 1024), content_type="application/pdf"
         )
-        client.post(
+        response = client.post(
             reverse("teams:team_settings", kwargs={"team_key": team.key}),
             {"company_nda_action": "upload", "company_nda_file": oversized},
+            follow=True,
         )
 
+        # The message, not only the absence of a row: without it this passes
+        # whenever the upload fails for any reason at all.
+        assert "File size must be 1MB or smaller" in [m.message for m in response.context["messages"]]
         assert not Document.objects.filter(component__team=team).exists()
 
     def test_a_file_the_raised_ceiling_allows_is_accepted(self, mocker: MockerFixture, owner_client, settings):
