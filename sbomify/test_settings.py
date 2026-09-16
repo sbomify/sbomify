@@ -99,6 +99,14 @@ else:
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
+# PBKDF2 at Django's default work factor costs 0.13 s per hash on CI hardware,
+# and the fixtures set a password for nearly every user they build. That is the
+# single largest line item in a suite run: measured against the real hasher the
+# same 769 tests spend minutes doing key stretching that proves nothing about
+# this application. Tests need a hash that round-trips, not one that resists an
+# offline attack, so use the cheapest one Django ships.
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
 # Override signed URL salt for testing (required)
 SIGNED_URL_SALT = "test-signed-url-salt-unique-per-installation"
 
