@@ -28,9 +28,12 @@ def get_public_controls_list(team: Team) -> ServiceResult[list[dict[str, Any]]]:
 
     Returns a list of catalog data dicts, each with catalog info, summary, and categories.
     """
-    # is_published, not is_active: a workspace that tracks a framework
-    # internally has not asked for its score to be on a page its customers
-    # read. See the field's note on ControlCatalog.
+    # Both flags, because they answer different questions. is_active is whether
+    # the workspace tracks the framework at all; is_published is whether it has
+    # asked for the score to appear on a page its customers read. Tracking SOC 2
+    # internally is not consent to publish it, and a catalogue the workspace has
+    # stopped tracking should not stay on the page because it was published once.
+    # See the field notes on ControlCatalog.
     active_catalogs = list(ControlCatalog.objects.filter(team=team, is_active=True, is_published=True))
     if not active_catalogs:
         return ServiceResult.failure("No active catalog", status_code=404)
