@@ -57,12 +57,18 @@ class TestPagination:
         assert "pageCursor" not in calls[0]
         assert calls[1]["pageCursor"] == "cursor-1"
 
-    def test_stops_when_the_page_claims_more_but_names_no_cursor(self, client, monkeypatch) -> None:
-        """A truthy hasNextPage with a null endCursor would otherwise loop forever."""
+    def test_a_page_claiming_more_with_no_cursor_fails(self, client, monkeypatch) -> None:
+        """Same reason as the ceiling below: a short list gets pruned against.
+
+        Vanta says there is another page and hands over nothing to fetch it
+        with. Treating this one as the last page would let the sync delete every
+        framework and control it never reached, and record that as a success.
+        """
         payload = {"results": {"data": [{"id": "f1"}], "pageInfo": {"hasNextPage": True, "endCursor": None}}}
         monkeypatch.setattr(vanta_module, "request_with_retry", lambda *a, **k: _Response(200, payload))
 
-        assert [item["id"] for item in client.frameworks()] == ["f1"]
+        with pytest.raises(VantaUnavailable):
+            list(client.frameworks())
 
     def test_running_out_of_pages_fails_rather_than_truncating(self, client, monkeypatch) -> None:
         """A short list here would be pruned against by the sync and recorded as a success."""

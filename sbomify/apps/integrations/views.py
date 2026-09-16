@@ -22,6 +22,7 @@ from sbomify.apps.core.domain.exceptions import ExternalServiceError
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.integrations import oauth
+from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.providers import get_provider
 from sbomify.apps.integrations.services import connections
 from sbomify.apps.integrations.tasks import sync_integration
@@ -98,6 +99,12 @@ class IntegrationsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         integration = connections.get_integration(team, provider.key)
         if integration is None:
             return htmx_error_response(f"{provider.name} is not connected")
+        if not provider.is_configured:
+            return htmx_error_response(f"{provider.name} is not set up on this deployment")
+        # The worker claims none of these, so queueing one would answer
+        # "Syncing..." to a run that exits without doing anything.
+        if integration.status != Integration.Status.CONNECTED:
+            return htmx_error_response(f"{provider.name} needs reconnecting before it can sync")
 
         # Queued, not run: a sync is one request per control against someone
         # else's API, which is not something a page load can wait for.

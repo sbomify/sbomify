@@ -58,17 +58,34 @@ def run_sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
         _record_failure(integration, result.error or "Sync failed")
         return result
 
-    integration.last_sync_status = Integration.SyncStatus.OK
-    integration.last_sync_at = timezone.now()
-    integration.last_sync_error = ""
-    integration.last_sync_summary = result.value or {}
-    integration.save(
-        update_fields=["last_sync_status", "last_sync_at", "last_sync_error", "last_sync_summary", "updated_at"]
+    _record(
+        integration,
+        last_sync_status=Integration.SyncStatus.OK,
+        last_sync_at=timezone.now(),
+        last_sync_error="",
+        last_sync_summary=result.value or {},
     )
     return result
 
 
 def _record_failure(integration: Integration, message: str) -> None:
-    integration.last_sync_status = Integration.SyncStatus.FAILED
-    integration.last_sync_error = message
-    integration.save(update_fields=["last_sync_status", "last_sync_error", "updated_at"])
+    _record(integration, last_sync_status=Integration.SyncStatus.FAILED, last_sync_error=message)
+
+
+def _record(integration: Integration, **fields: Any) -> None:
+    """Write this run's outcome, unless a reconnect has superseded the run.
+
+    ``connected_at`` moves when somebody reconnects, and the callback queues a
+    run against the new credential. This run read the old one, so its answer is
+    about an account that may not be the connected one any more, and the row
+    keeps what the newer run has to say instead.
+
+    A disconnect lands here too: the row is gone, nothing matches, and the run
+    ends quietly rather than on a write against a deleted row.
+    """
+    for field, value in fields.items():
+        setattr(integration, field, value)
+
+    Integration.objects.filter(pk=integration.pk, connected_at=integration.connected_at).update(
+        updated_at=timezone.now(), **fields
+    )

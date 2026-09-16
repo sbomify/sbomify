@@ -41,6 +41,11 @@ def save_connection(
     Reconnecting is an update rather than a second row: a workspace has one
     connection per provider, and the sync state from the previous credential
     is still true about the data on the trust center.
+
+    A run still in flight is the exception. It is reading the credential this
+    call has just replaced, so the reconnect ends it: the claim comes off, and
+    the run the callback queues can take the connection straight away instead
+    of waiting out a lease it would otherwise have just renewed.
     """
     integration, _created = Integration.objects.update_or_create(
         team=team,
@@ -55,6 +60,12 @@ def save_connection(
             "connected_at": timezone.now(),
         },
     )
+
+    if integration.last_sync_status == Integration.SyncStatus.RUNNING:
+        integration.last_sync_status = Integration.SyncStatus.FAILED
+        integration.last_sync_error = "A reconnect replaced the credential this sync started with."
+        integration.save(update_fields=["last_sync_status", "last_sync_error", "updated_at"])
+
     return integration
 
 

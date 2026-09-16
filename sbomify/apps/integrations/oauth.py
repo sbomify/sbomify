@@ -139,6 +139,13 @@ def refresh(provider: ProviderSpec, refresh_token: str) -> TokenSet:
     )
 
 
+# Two 4xx codes that say nothing about the credential: 408 is the provider
+# timing out on its own request and 429 is it asking us to slow down. Reading
+# either as a refusal costs the workspace its connection over a busy minute,
+# because a revoked connection is one ``sync_due_integrations`` skips.
+_RETRYABLE_STATUSES = frozenset({408, 429})
+
+
 def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
     body = {
         "client_id": provider.client_id,
@@ -165,10 +172,11 @@ def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
         # The body can hold the client secret back in an error echo, so only
         # the status is logged and only a fixed string is shown.
         logger.warning("%s token endpoint returned %s", provider.key, response.status_code)
-        if response.status_code >= 500:
+        if response.status_code >= 500 or response.status_code in _RETRYABLE_STATUSES:
             raise ProviderUnavailable(f"{provider.name} is not answering.", service=provider.key)
-        # A 4xx is the provider answering, and for a grant that means the grant
-        # itself was refused (``invalid_grant`` and friends are all 400).
+        # Every other 4xx is the provider answering, and for a grant that means
+        # the grant itself was refused (``invalid_grant`` and friends are all
+        # 400).
         raise ProviderAuthError(f"{provider.name} refused the connection.", service=provider.key)
 
     try:

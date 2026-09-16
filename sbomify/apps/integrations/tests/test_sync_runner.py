@@ -235,3 +235,47 @@ class TestClaimingAConnection:
         tasks.sync_integration(connected_vanta.id)
 
         assert seen == [Integration.SyncStatus.RUNNING]
+
+
+class TestASupersededRunDoesNotReportItsResult:
+    """A reconnect moves ``connected_at``, and the run that missed it loses."""
+
+    def test_a_result_from_the_replaced_credential_is_dropped(self, connected_vanta, monkeypatch) -> None:
+        def reconnect_then_succeed(integration):
+            Integration.objects.filter(pk=integration.pk).update(
+                connected_at=timezone.now(), last_sync_status=Integration.SyncStatus.OK
+            )
+            return ServiceResult.success({"frameworks": 1})
+
+        _install(monkeypatch, reconnect_then_succeed)
+
+        run_sync(connected_vanta)
+
+        stored = Integration.objects.get(pk=connected_vanta.pk)
+        assert stored.last_sync_summary == {}
+        assert stored.last_sync_at is None
+
+    def test_a_failure_from_the_replaced_credential_is_dropped_too(self, connected_vanta, monkeypatch) -> None:
+        """A superseded run must not put the new connection into a failed state."""
+
+        def reconnect_then_fail(integration):
+            Integration.objects.filter(pk=integration.pk).update(
+                connected_at=timezone.now(), last_sync_status=Integration.SyncStatus.OK
+            )
+            raise ExternalServiceError("Vanta is not answering.")
+
+        _install(monkeypatch, reconnect_then_fail)
+
+        run_sync(connected_vanta)
+
+        assert Integration.objects.get(pk=connected_vanta.pk).last_sync_status == Integration.SyncStatus.OK
+
+    def test_an_ordinary_run_still_records_its_result(self, connected_vanta, monkeypatch) -> None:
+        _install(monkeypatch, lambda integration: ServiceResult.success({"frameworks": 2}))
+
+        run_sync(connected_vanta)
+
+        stored = Integration.objects.get(pk=connected_vanta.pk)
+        assert stored.last_sync_status == Integration.SyncStatus.OK
+        assert stored.last_sync_summary == {"frameworks": 2}
+        assert stored.last_sync_at is not None

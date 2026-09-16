@@ -381,3 +381,33 @@ class TestNoCredentialReachesATemplate:
         }
         assert "vat_live" not in str(card)
         assert "vrt_live" not in str(card)
+
+
+class TestAReconnectSupersedesTheRunItReplaced:
+    def test_reconnecting_clears_a_claim_left_by_the_old_credential(self, connected_vanta) -> None:
+        """Otherwise the connection is unsyncable for the length of the lease.
+
+        The callback queues a run as soon as the reconnect lands, and the claim
+        that run has to take was renewed by the reconnect itself.
+        """
+        connected_vanta.last_sync_status = Integration.SyncStatus.RUNNING
+        connected_vanta.save()
+
+        connections.save_connection(connected_vanta.team, VANTA, _token_set("vat_two", "vrt_two"), None)
+
+        stored = Integration.objects.get(pk=connected_vanta.pk)
+        assert stored.last_sync_status == Integration.SyncStatus.FAILED
+        assert "reconnect" in stored.last_sync_error
+
+    def test_a_finished_sync_survives_a_reconnect(self, connected_vanta) -> None:
+        """Only a run still in flight is superseded; what it synced is still true."""
+        synced_at = timezone.now() - timedelta(hours=2)
+        Integration.objects.filter(pk=connected_vanta.pk).update(
+            last_sync_status=Integration.SyncStatus.OK, last_sync_at=synced_at
+        )
+
+        connections.save_connection(connected_vanta.team, VANTA, _token_set("vat_two", "vrt_two"), None)
+
+        stored = Integration.objects.get(pk=connected_vanta.pk)
+        assert stored.last_sync_status == Integration.SyncStatus.OK
+        assert stored.last_sync_at == synced_at

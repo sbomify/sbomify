@@ -142,6 +142,7 @@ class TestPanel:
 
 
 class TestPanelActions:
+    @pytest.mark.usefixtures("vanta_credentials")
     def test_sync_queues_a_run(self, admin_client_for_team, connected_vanta, no_queue) -> None:
         response = admin_client_for_team.post(
             _panel_url(connected_vanta.team), {"action": "sync", "provider": "vanta"}
@@ -158,6 +159,42 @@ class TestPanelActions:
         )
 
         assert response["HX-Reswap"] == "none"
+
+    @pytest.mark.usefixtures("vanta_credentials")
+    def test_sync_on_a_revoked_connection_is_refused(
+        self, admin_client_for_team, connected_vanta, no_queue
+    ) -> None:
+        """The worker claims only a connected row, so queueing one answers a lie."""
+        connected_vanta.status = Integration.Status.REVOKED
+        connected_vanta.save()
+
+        response = admin_client_for_team.post(
+            _panel_url(connected_vanta.team), {"action": "sync", "provider": "vanta"}
+        )
+
+        assert response["HX-Reswap"] == "none"
+        assert no_queue == []
+
+    def test_sync_without_deployment_credentials_is_refused(
+        self, admin_client_for_team, connected_vanta, no_queue
+    ) -> None:
+        """Nothing can refresh the token, so the run would only record a failure."""
+        response = admin_client_for_team.post(
+            _panel_url(connected_vanta.team), {"action": "sync", "provider": "vanta"}
+        )
+
+        assert response["HX-Reswap"] == "none"
+        assert no_queue == []
+
+    def test_a_connection_with_no_deployment_credentials_offers_no_sync(
+        self, admin_client_for_team, connected_vanta
+    ) -> None:
+        """The card already says syncing has stopped; a button would contradict it."""
+        response = admin_client_for_team.get(_panel_url(connected_vanta.team))
+
+        assert b"credentials are missing" in response.content
+        assert b"Sync now" not in response.content
+        assert b"Disconnect" in response.content
 
     def test_disconnect_removes_the_connection(self, admin_client_for_team, connected_vanta) -> None:
         response = admin_client_for_team.post(

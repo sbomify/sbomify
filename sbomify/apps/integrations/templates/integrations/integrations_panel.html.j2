@@ -41,6 +41,11 @@ with each other after an action.
                         Reconnecting is the same consent flow as connecting, and
                         it lands on the same row: a workspace has one connection
                         per provider, so there is nothing to tear down first.
+
+                        Neither button shows without deployment credentials. The
+                        warning above already says syncing has stopped, and the
+                        worker claims no connection that cannot be refreshed, so
+                        a Sync now here would report a run that does nothing.
                         {% endcomment %}
                         {% if card.needs_reconnect and card.provider.is_configured %}
                             <form method="post"
@@ -48,7 +53,7 @@ with each other after an action.
                                 {% csrf_token %}
                                 <c-buttons.primary size="sm" type="submit">Reconnect</c-buttons.primary>
                             </form>
-                        {% else %}
+                        {% elif card.provider.is_configured %}
                             <form method="post"
                                   hx-post="{% url 'integrations:panel' team.key %}"
                                   hx-target="#integrations-wrapper"

@@ -81,7 +81,13 @@ def _results(payload: Any) -> tuple[list[dict[str, Any]], str | None]:
     cursor: str | None = None
     if isinstance(page_info, dict) and page_info.get("hasNextPage"):
         end_cursor = page_info.get("endCursor")
-        cursor = end_cursor if isinstance(end_cursor, str) and end_cursor else None
+        if not isinstance(end_cursor, str) or not end_cursor:
+            # Vanta says there is another page and gives nothing to ask for it
+            # with. Returning this one as the last page hands the sync a list
+            # it would then prune every unfetched framework and control
+            # against, and record as a success.
+            raise VantaUnavailable("Vanta offered another page with no cursor to fetch it with")
+        cursor = end_cursor
 
     return items, cursor
 

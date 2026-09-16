@@ -185,6 +185,20 @@ class TestTokenRequests:
         with pytest.raises(ProviderAuthError):
             oauth.refresh(VANTA, "vrt_one")
 
+    @pytest.mark.parametrize("status", [408, 429])
+    def test_a_timeout_or_a_rate_limit_is_not_a_refusal(self, monkeypatch, status) -> None:
+        """Neither says anything about the credential.
+
+        408 is Vanta timing out on its own request and 429 is Vanta asking us to
+        slow down. Reading either as a refusal revokes the connection, and
+        ``sync_due_integrations`` skips a revoked one, so a busy minute would end
+        syncing until somebody redid OAuth by hand.
+        """
+        monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(status, {"error": "slow_down"}))
+
+        with pytest.raises(ProviderUnavailable):
+            oauth.refresh(VANTA, "vrt_one")
+
     def test_a_refusal_does_not_echo_the_error_body(self, monkeypatch) -> None:
         """The body can repeat the client secret back, so it must not surface."""
         monkeypatch.setattr(
