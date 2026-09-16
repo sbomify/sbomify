@@ -12,13 +12,51 @@
                     <i class="fas fa-cube"></i>Product-scoped
                 {% endif %}
             </span>
+            {% comment %}
+                Scope and visibility are two decisions, and this line used to
+                read as though scope alone put a document on the Trust Center.
+                A private workspace-wide document is on no public page at all,
+                so the wording follows the visibility selector above.
+            {% endcomment %}
             <p class="text-text-muted text-sm mb-0 mt-2">
                 {% if component.is_global %}
-                    Visible on the workspace Trust Center and not attached to any product.
+                    Not attached to any product.
+                    {% if component.visibility == 'private' %}
+                        Make it public or gated to show it on your Trust Center.
+                    {% else %}
+                        It appears on your Trust Center.
+                    {% endif %}
                 {% else %}
-                    Restricted to the products this component is assigned to.
+                    Restricted to the products this component is assigned to. A certification
+                    only earns a Trust Center badge once it is workspace-wide.
                 {% endif %}
             </p>
+            {% comment %}
+                The switch itself, which nothing rendered until now: the endpoint
+                and its permission check already existed, so a document could
+                only be made workspace-wide through the API, and a certification
+                uploaded through the UI could never earn its badge.
+            {% endcomment %}
+            {% if component.has_crud_permissions %}
+                <form method="post"
+                      action="{% url 'core:component_scope' component.id %}"
+                      class="mt-3">
+                    {% csrf_token %}
+                    <input type="hidden"
+                           name="target_scope"
+                           value="{% if component.is_global %}product{% else %}workspace{% endif %}">
+                    <c-buttons.secondary size="sm" type="submit">
+                    {% if component.is_global %}
+                        Make product-scoped
+                    {% else %}
+                        Make workspace-wide
+                    {% endif %}
+                    </c-buttons.secondary>
+                    {% if not component.is_global %}
+                        <c-forms.hint>This also takes it off any product it is assigned to.</c-forms.hint>
+                    {% endif %}
+                </form>
+            {% endif %}
         </div>
         </c-cards.card>
     </div>
