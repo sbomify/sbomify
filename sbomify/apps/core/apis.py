@@ -184,6 +184,52 @@ def _is_internal_member(request: HttpRequest) -> bool:
     return bool(request.user and request.user.is_authenticated and not _is_guest_member(request))
 
 
+def _enforce_limit_under_lock(team_id: str, resource_type: str) -> tuple[bool, str, ErrorCode | None]:
+    """Re-count under a workspace row lock, for a caller about to insert.
+
+    The plan, suspension and scheduled-downgrade checks live in
+    ``_check_billing_limits`` and run before the transaction opens, because that
+    path can reach Stripe and a transaction should not stay open across a network
+    round trip. This does only the part that has to be serialized with the
+    insert: lock the workspace, count, compare.
+
+    Must be called inside ``transaction.atomic``, and the insert must follow in
+    the same transaction, or the lock buys nothing. No effect on SQLite, which
+    has no row locks.
+    """
+    if not is_billing_enabled():
+        return True, "", None
+
+    team = Team.objects.select_for_update().filter(id=team_id).first()
+    if team is None:
+        return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
+
+    try:
+        plan = BillingPlan.objects.get(key=team.billing_plan)
+    except BillingPlan.DoesNotExist:
+        return False, "Invalid billing plan", ErrorCode.INVALID_BILLING_PLAN
+
+    if resource_type == "product":
+        max_allowed = plan.max_products
+    elif resource_type == "component":
+        max_allowed = plan.max_components
+    else:
+        return False, f"Invalid resource type: {resource_type}", ErrorCode.INVALID_DATA
+
+    if plan.key == "enterprise" or max_allowed is None:
+        return True, "", None
+
+    current_count = get_team_asset_count(team_id, resource_type)
+    if (current_count + 1) > max_allowed:
+        return (
+            False,
+            f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan. "
+            f"You currently have {current_count} {resource_type}s.",
+            ErrorCode.BILLING_LIMIT_EXCEEDED,
+        )
+    return True, "", None
+
+
 def _get_user_team_id(request: HttpRequest) -> str | None:
     """Get the current user's workspace ID from the session or fall back to user's default workspace."""
     from sbomify.apps.core.utils import get_team_id_from_session
@@ -480,22 +526,12 @@ def _paginate_queryset(queryset: Any, page: int = 1, page_size: int = 15) -> Any
     return items_list, pagination_meta
 
 
-def _check_billing_limits(
-    team_id: str, resource_type: str, *, lock: bool = False
-) -> tuple[bool, str, ErrorCode | None]:
+def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, ErrorCode | None]:
     """
     Check if team has reached billing limits for the given resource type.
     Also checks for suspended accounts due to payment failure.
 
     Args:
-        lock: Take a row lock on the workspace immediately before counting, held
-            until the transaction ends. Counting and inserting without it lets
-            two concurrent creates read the same count and both pass, so callers
-            that go on to create must pass ``lock=True`` from inside the same
-            ``transaction.atomic``. Deliberately not taken any earlier: the
-            checks above it can call Stripe. No effect on SQLite, which has no
-            row locks.
-
     Returns:
         (can_create, error_message, error_code): Tuple of boolean, error message, and error code
     """
@@ -610,15 +646,6 @@ def _check_billing_limits(
     except BillingPlan.DoesNotExist:
         return False, "Invalid billing plan", ErrorCode.INVALID_BILLING_PLAN
 
-    # Take the row lock here rather than on the fetch above. Everything between
-    # the two can be slow: the scheduled-downgrade path calls Stripe, and holding
-    # a workspace lock across a network round trip would serialize every create
-    # for that workspace behind it. The lock only has to cover the count and the
-    # caller's insert, and select_for_update holds until the transaction ends, so
-    # taking it immediately before counting is enough.
-    if lock:
-        Team.objects.select_for_update().filter(pk=team.pk).first()
-
     # Get current count and limits
     if resource_type == "product":
         current_count = get_team_asset_count(team_id, "product")
@@ -665,12 +692,18 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
+    # Plan state, suspension and the Stripe-backed downgrade path, all outside
+    # the transaction: none of it should hold one open across a network call.
+    can_create, error_msg, error_code = _check_billing_limits(team_id, "product")
+    if not can_create:
+        return 403, {"detail": error_msg, "error_code": error_code}
+
     try:
         with transaction.atomic():
-            # The limit check and the insert share one transaction with the
-            # workspace row locked. Checked outside one, two concurrent creates
-            # read the same count, both pass, and the plan limit is exceeded.
-            can_create, error_msg, error_code = _check_billing_limits(team_id, "product", lock=True)
+            # The count that decides, under a row lock and in the same
+            # transaction as the insert. The check above can go stale between
+            # the two, which is the race this closes.
+            can_create, error_msg, error_code = _enforce_limit_under_lock(team_id, "product")
             if not can_create:
                 return 403, {"detail": error_msg, "error_code": error_code}
 
@@ -1660,11 +1693,18 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
+    # Plan state, suspension and the Stripe-backed downgrade path, all outside
+    # the transaction: none of it should hold one open across a network call.
+    can_create, error_msg, error_code = _check_billing_limits(team_id, "component")
+    if not can_create:
+        return 403, {"detail": error_msg, "error_code": error_code}
+
     try:
         with transaction.atomic():
-            # Same reason as create_product: the count and the insert have to
-            # share one transaction with the workspace row locked.
-            can_create, error_msg, error_code = _check_billing_limits(team_id, "component", lock=True)
+            # The count that decides, under a row lock and in the same
+            # transaction as the insert. The check above can go stale between
+            # the two, which is the race this closes.
+            can_create, error_msg, error_code = _enforce_limit_under_lock(team_id, "component")
             if not can_create:
                 return 403, {"detail": error_msg, "error_code": error_code}
 

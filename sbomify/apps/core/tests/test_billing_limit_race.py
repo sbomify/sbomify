@@ -1,13 +1,16 @@
 """The plan limit is only a limit if the count and the insert share a transaction.
 
 Checked outside one, two requests arriving together both read the same count,
-both pass, and a workspace on ``max_products=1`` ends up with two. The fix moves
-the check inside the create transaction and locks the workspace row, so the
-second request waits and then counts the first one's committed row.
+both pass, and a workspace on ``max_products=1`` ends up with two.
 
-These tests assert the structure rather than trying to race two threads: the
-lock has no effect on SQLite, so a timing test would pass locally whether or not
-the fix is present.
+The work is split in two on purpose. Plan state, suspension and the
+scheduled-downgrade path can reach Stripe, so they run before the transaction
+opens; a transaction held across a network round trip ties up a connection and
+shows as a long-running transaction. Only the part that must be serialized with
+the insert, lock the workspace and count, runs inside it.
+
+These tests assert that structure rather than racing two threads: the lock has
+no effect on SQLite, so a timing test would pass whether or not the fix is here.
 """
 
 import os
@@ -27,18 +30,47 @@ from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F
 from sbomify.apps.teams.models import Member
 
 
+def _atomic_depth() -> int:
+    """How many atomic blocks deep we are.
+
+    ``in_atomic_block`` is useless here: pytest-django wraps the whole test in a
+    transaction, so it is True everywhere. Savepoint count moves with nesting,
+    which is what actually distinguishes inside the endpoint's transaction from
+    outside it.
+    """
+    return len(transaction.get_connection().savepoint_ids)
+
+
 def _spy_on_the_limit_check(monkeypatch):
-    """Record how the endpoint called the limit check, then call the real one."""
+    """Record how deep each half of the check ran, then call the real one."""
     seen: dict[str, object] = {}
-    real = apis._check_billing_limits
+    real_precheck = apis._check_billing_limits
+    real_locked = apis._enforce_limit_under_lock
 
-    def spy(team_id, resource_type, *, lock=False):
-        seen["in_atomic_block"] = transaction.get_connection().in_atomic_block
-        seen["lock"] = lock
-        return real(team_id, resource_type, lock=lock)
+    def precheck(team_id, resource_type):
+        seen["precheck_depth"] = _atomic_depth()
+        return real_precheck(team_id, resource_type)
 
-    monkeypatch.setattr(apis, "_check_billing_limits", spy)
+    def locked(team_id, resource_type):
+        seen["locked_depth"] = _atomic_depth()
+        return real_locked(team_id, resource_type)
+
+    monkeypatch.setattr(apis, "_check_billing_limits", precheck)
+    monkeypatch.setattr(apis, "_enforce_limit_under_lock", locked)
     return seen
+
+
+def _plan_with_room(team):
+    """A plan generous enough that both halves of the check run to completion."""
+    from sbomify.apps.billing.models import BillingPlan
+
+    BillingPlan.objects.get_or_create(
+        key="business",
+        defaults={"name": "Business", "description": "b", "max_products": 50, "max_components": 50},
+    )
+    team.billing_plan = "business"
+    team.billing_plan_limits = {"max_products": 50, "max_components": 50}
+    team.save(update_fields=["billing_plan", "billing_plan_limits"])
 
 
 def _as_owner(client, team, user):
@@ -52,8 +84,9 @@ def test_the_product_limit_check_runs_locked_inside_the_create_transaction(
     sample_access_token: AccessToken,  # noqa: F811
     monkeypatch,
 ):
-    seen = _spy_on_the_limit_check(monkeypatch)
     team = sample_team_with_owner_member.team
+    _plan_with_room(team)
+    seen = _spy_on_the_limit_check(monkeypatch)
     client = Client()
     _as_owner(client, team, sample_team_with_owner_member.user)
 
@@ -64,9 +97,10 @@ def test_the_product_limit_check_runs_locked_inside_the_create_transaction(
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
 
-    assert response.status_code in (201, 403)
-    assert seen.get("in_atomic_block") is True, "the check ran outside the create transaction"
-    assert seen.get("lock") is True, "the check did not lock the workspace row"
+    assert response.status_code == 201, response.content[:200]
+    assert seen["locked_depth"] > seen["precheck_depth"], (
+        "the deciding count must run inside the create transaction and the Stripe-capable pre-check outside it"
+    )
 
 
 @pytest.mark.django_db
@@ -75,8 +109,9 @@ def test_the_component_limit_check_runs_locked_inside_the_create_transaction(
     sample_access_token: AccessToken,  # noqa: F811
     monkeypatch,
 ):
-    seen = _spy_on_the_limit_check(monkeypatch)
     team = sample_team_with_owner_member.team
+    _plan_with_room(team)
+    seen = _spy_on_the_limit_check(monkeypatch)
     client = Client()
     _as_owner(client, team, sample_team_with_owner_member.user)
 
@@ -87,9 +122,10 @@ def test_the_component_limit_check_runs_locked_inside_the_create_transaction(
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
 
-    assert response.status_code in (201, 403, 400)
-    assert seen.get("in_atomic_block") is True, "the check ran outside the create transaction"
-    assert seen.get("lock") is True, "the check did not lock the workspace row"
+    assert response.status_code == 201, response.content[:200]
+    assert seen["locked_depth"] > seen["precheck_depth"], (
+        "the deciding count must run inside the create transaction and the Stripe-capable pre-check outside it"
+    )
 
 
 @pytest.mark.django_db
@@ -111,7 +147,7 @@ def test_the_limit_itself_still_holds():
 
 
 @pytest.mark.django_db(transaction=True)
-def test_locking_still_answers_the_same_way():
+def test_the_locked_recount_answers_the_same_way():
     """The lock changes concurrency, not the verdict."""
     from sbomify.apps.billing.models import BillingPlan
     from sbomify.apps.teams.models import Team
@@ -120,9 +156,9 @@ def test_locking_still_answers_the_same_way():
     team = Team.objects.create(name="limited", billing_plan="community")
 
     with transaction.atomic():
-        assert apis._check_billing_limits(str(team.id), "product", lock=True)[0] is True
+        assert apis._enforce_limit_under_lock(str(team.id), "product")[0] is True
 
     Product.objects.create(name="P1", team=team)
 
     with transaction.atomic():
-        assert apis._check_billing_limits(str(team.id), "product", lock=True)[0] is False
+        assert apis._enforce_limit_under_lock(str(team.id), "product")[0] is False
