@@ -352,7 +352,9 @@ class TestPublicSummary:
         assert data["total"] > 0
         assert "by_status" in data
         assert "categories" in data
-        assert response["Cache-Control"] == "public, max-age=3600"
+        # A minute rather than an hour: taking a framework down promises the
+        # score goes with it, and the cache window is how long that can be a lie.
+        assert response["Cache-Control"] == "public, max-age=60"
 
     def test_public_summary_no_catalog(self, sample_team_with_owner_member):
         from django.test import Client

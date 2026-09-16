@@ -270,6 +270,23 @@ class TestASupersededRunDoesNotReportItsResult:
 
         assert Integration.objects.get(pk=connected_vanta.pk).last_sync_status == Integration.SyncStatus.OK
 
+    def test_a_superseded_run_does_not_re_claim_the_connection(self, connected_vanta, monkeypatch) -> None:
+        """The opening RUNNING write is a write like any other.
+
+        Unconditional, it was a way to undo a reconnect: `save_connection`
+        clears the claim so the queued replacement can take it, and a stale
+        worker writing RUNNING through its old instance blocks that replacement
+        for the lease.
+        """
+        Integration.objects.filter(pk=connected_vanta.pk).update(
+            connected_at=timezone.now(), last_sync_status=Integration.SyncStatus.NEVER
+        )
+        _install(monkeypatch, lambda integration: ServiceResult.success({}))
+
+        run_sync(connected_vanta)
+
+        assert Integration.objects.get(pk=connected_vanta.pk).last_sync_status == Integration.SyncStatus.NEVER
+
     def test_an_ordinary_run_still_records_its_result(self, connected_vanta, monkeypatch) -> None:
         _install(monkeypatch, lambda integration: ServiceResult.success({"frameworks": 2}))
 

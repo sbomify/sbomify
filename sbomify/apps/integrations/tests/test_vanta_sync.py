@@ -76,9 +76,7 @@ class TestFirstSync:
         assert result.value["frameworks"] == 1
         assert result.value["controls"] == 1
 
-    def test_a_new_framework_is_not_published_until_someone_says_so(
-        self, connected_vanta, install_client
-    ) -> None:
+    def test_a_new_framework_is_not_published_until_someone_says_so(self, connected_vanta, install_client) -> None:
         """Connecting reads data. Putting it on a public page is a second decision.
 
         Active because the workspace does track the framework; unpublished
@@ -107,9 +105,7 @@ class TestFirstSync:
         assert control.title == "Control environment"
         assert control.group == "Security"
 
-    def test_a_control_with_no_external_code_falls_back_to_its_vanta_id(
-        self, connected_vanta, install_client
-    ) -> None:
+    def test_a_control_with_no_external_code_falls_back_to_its_vanta_id(self, connected_vanta, install_client) -> None:
         install_client(
             [SOC2],
             {"fw_soc2": [{"id": "c_custom", "name": "Our own control", "domains": []}]},
@@ -204,9 +200,7 @@ class TestStatusMapping:
 
         control = Control.objects.get(control_id="CC1.1")
         product = Product.objects.create(team=connected_vanta.team, name="Widget")
-        ControlStatus.objects.create(
-            control=control, product=product, status=ControlStatus.Status.NOT_APPLICABLE
-        )
+        ControlStatus.objects.create(control=control, product=product, status=ControlStatus.Status.NOT_APPLICABLE)
 
         install_client(
             [SOC2],
@@ -215,10 +209,7 @@ class TestStatusMapping:
         )
         sync(connected_vanta)
 
-        assert (
-            ControlStatus.objects.get(control=control, product=product).status
-            == ControlStatus.Status.NOT_APPLICABLE
-        )
+        assert ControlStatus.objects.get(control=control, product=product).status == ControlStatus.Status.NOT_APPLICABLE
 
 
 class TestResync:
@@ -324,9 +315,7 @@ class TestAnEmptyAnswerIsNotAnInstruction:
     be treated as "delete what you have".
     """
 
-    def test_a_framework_that_returns_no_controls_keeps_the_ones_it_has(
-        self, connected_vanta, install_client
-    ) -> None:
+    def test_a_framework_that_returns_no_controls_keeps_the_ones_it_has(self, connected_vanta, install_client) -> None:
         install_client(
             [SOC2],
             {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]},
@@ -585,3 +574,127 @@ class TestAReconnectStopsTheRunItReplaced:
 
         assert result.ok
         assert ControlCatalog.objects.get(external_id="fw_soc2").is_published is False
+
+
+class TestWhatVantaDropsDoesNotTakeSomebodyElsesDecisionWithIt:
+    """The sync never writes product scope, and must not delete it either.
+
+    Deleting a Control cascades its statuses, so pruning a control Vanta
+    stopped listing took any product override on it, and that override's
+    history, with no trace.
+    """
+
+    def _product(self, team):
+        from sbomify.apps.core.models import Product
+
+        return Product.objects.create(team=team, name="Widget")
+
+    def test_a_control_with_a_product_override_is_kept(self, connected_vanta, install_client) -> None:
+        install_client(
+            [SOC2],
+            {
+                "fw_soc2": [
+                    _control("c1", "CC1.1", "Control environment", "Security"),
+                    _control("c2", "CC1.2", "Board", "Security"),
+                ]
+            },
+            {"c1": {"status": "COMPLETED"}, "c2": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+        kept = Control.objects.get(catalog__source=ControlCatalog.Source.VANTA, external_id="c2")
+        ControlStatus.objects.create(
+            control=kept, product=self._product(connected_vanta.team), status=ControlStatus.Status.COMPLIANT
+        )
+
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        assert Control.objects.filter(pk=kept.pk).exists()
+        assert ControlStatus.objects.filter(control=kept, product__isnull=False).exists()
+
+    def test_its_stale_workspace_status_goes(self, connected_vanta, install_client) -> None:
+        """Vanta was answering for that one, and it is no longer answering."""
+        install_client(
+            [SOC2],
+            {
+                "fw_soc2": [
+                    _control("c1", "CC1.1", "Control environment", "Security"),
+                    _control("c2", "CC1.2", "Board", "Security"),
+                ]
+            },
+            {"c1": {"status": "COMPLETED"}, "c2": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+        kept = Control.objects.get(catalog__source=ControlCatalog.Source.VANTA, external_id="c2")
+        ControlStatus.objects.create(
+            control=kept, product=self._product(connected_vanta.team), status=ControlStatus.Status.COMPLIANT
+        )
+
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        assert Control.objects.filter(pk=kept.pk).exists()
+        assert not ControlStatus.objects.filter(control=kept, product__isnull=True).exists()
+
+    def test_a_control_nobody_overrode_is_still_deleted(self, connected_vanta, install_client) -> None:
+        install_client(
+            [SOC2],
+            {
+                "fw_soc2": [
+                    _control("c1", "CC1.1", "Control environment", "Security"),
+                    _control("c2", "CC1.2", "Board", "Security"),
+                ]
+            },
+            {"c1": {"status": "COMPLETED"}, "c2": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c1", "CC1.1", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        assert not Control.objects.filter(catalog__source=ControlCatalog.Source.VANTA, external_id="c2").exists()
+
+
+class TestARecreatedControlDoesNotInheritTheOldOne:
+    def test_a_new_control_under_a_used_code_takes_a_label_of_its_own(self, connected_vanta, install_client) -> None:
+        """Vanta deleting and recreating under one code must not reassign identity."""
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control("c_old", "CC1.1", "Control environment", "Security")]},
+            {"c_old": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+        old = Control.objects.get(catalog__source=ControlCatalog.Source.VANTA, external_id="c_old")
+
+        # Same code, different upstream id, and the old one still listed so the
+        # collision is live rather than resolved by the prune.
+        install_client(
+            [SOC2],
+            {
+                "fw_soc2": [
+                    # New one first: processed before the old is renamed off
+                    # CC1.1, so the collision is live rather than already gone.
+                    _control("c_new", "CC1.1", "Board oversight", "Security"),
+                    _control("c_old", "CC9.9", "Control environment", "Security"),
+                ]
+            },
+            {"c_old": {"status": "COMPLETED"}, "c_new": {"status": "COMPLETED"}},
+        )
+        sync(connected_vanta)
+
+        old.refresh_from_db()
+        assert old.external_id == "c_old"
+        new = Control.objects.get(catalog__source=ControlCatalog.Source.VANTA, external_id="c_new")
+        assert new.pk != old.pk

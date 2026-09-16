@@ -34,8 +34,13 @@ def run_sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
     if provider is None:
         return ServiceResult.failure(f"Unknown provider: {integration.provider}", status_code=400)
 
-    integration.last_sync_status = Integration.SyncStatus.RUNNING
-    integration.save(update_fields=["last_sync_status", "updated_at"])
+    # Keyed to the generation like every other write here. `_claim` has already
+    # set RUNNING for the task path; this is for a direct caller. Unconditional
+    # it was a way to undo a reconnect: `save_connection` clears the claim so
+    # the queued replacement can take it, and a stale worker writing RUNNING
+    # through its old instance would block that replacement for the lease, or
+    # later overwrite the newer run's OK.
+    _record(integration, last_sync_status=Integration.SyncStatus.RUNNING)
 
     try:
         result: ServiceResult[dict[str, Any]] = import_string(provider.sync_path)(integration)

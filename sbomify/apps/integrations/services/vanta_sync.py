@@ -209,10 +209,30 @@ def _sync_framework_controls(
     if _superseded(integration, generation):
         return
 
+    missing = Control.objects.filter(catalog=catalog).exclude(id__in=seen_control_ids)
+
+    # A product override is a decision somebody made about their own product,
+    # and deleting the control cascades it away along with its history. This
+    # sync does not touch product scope anywhere else and must not do it here
+    # by the back door, so a control carrying one is kept.
+    #
+    # Its workspace-scope status goes, because that is the part Vanta was
+    # answering for and it is now stale: left behind it would keep scoring a
+    # control the framework no longer lists. What remains is the override and
+    # the history behind it, which is what somebody would come looking for.
+    overridden = list(missing.filter(statuses__product__isnull=False).distinct().values_list("id", flat=True))
+    if overridden:
+        ControlStatus.objects.filter(control_id__in=overridden, product__isnull=True).delete()
+        logger.info(
+            "Vanta dropped %d control(s) in %s that carry product overrides; kept them and their overrides",
+            len(overridden),
+            catalog.name,
+        )
+
     # The per-model figure, not the total: ``delete()`` returns every row it
     # touched, and each control takes its status and its status log with it, so
     # the total would report a handful of controls as dozens.
-    _total, by_model = Control.objects.filter(catalog=catalog).exclude(id__in=seen_control_ids).delete()
+    _total, by_model = missing.exclude(id__in=overridden).delete()
     summary.controls_removed += by_model.get("controls.Control", 0)
 
 
@@ -331,6 +351,19 @@ def _upsert_control(catalog: ControlCatalog, payload: dict[str, Any], external_i
             setattr(existing, name, value)
         existing.save(update_fields=[*fields, "updated_at"])
         return existing
+
+    # No row carries this upstream id. A row already holding the code is a
+    # different control of Vanta's, so matching on the code would hand it this
+    # one's identity: its statuses and its whole history would be reassigned and
+    # the old control lost. Vanta deleting and recreating a control under the
+    # same code does exactly that.
+    #
+    # The colliding row is stale by definition, since Vanta no longer lists it,
+    # and the prune at the end of this framework takes it. So the new control
+    # takes a label of its own for now and the next sync renames it through the
+    # branch above, once the code is free.
+    if Control.objects.filter(catalog=catalog, control_id=control_id).exists():
+        control_id = _fit(Control, "control_id", fitted_external_id)
 
     control, _created = Control.objects.update_or_create(
         catalog=catalog,
