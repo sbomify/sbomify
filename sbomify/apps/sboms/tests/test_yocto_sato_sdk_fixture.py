@@ -1,12 +1,19 @@
-"""The large Yocto fixture is read once and checked against what the README says.
+"""The large Yocto fixture, checked against what the README says about it.
 
 Committing a 4.2 MiB gzip that nothing loads means CI never notices a truncated
-upload or a change in how the graph reads. This opens it once per module and
-asserts the counts the README documents, so the two cannot drift apart and a
-broken archive fails here rather than in whatever uses it next.
+upload or a change in how the graph reads. The parsed document is read once for
+the whole module and asserted against the counts the README documents, so the
+two cannot drift apart and a broken archive fails here rather than in whatever
+uses it next.
+
+The provenance test is the one deliberate second pass. It hashes the
+decompressed bytes, which the parsed document cannot answer for: a re-wrapped
+archive or a reordered key gives an identical graph and a different digest. It
+streams in 1 MiB chunks and never holds the 50 MiB, and the whole module still
+runs in well under a second.
 
 Deliberately no schema validation: that is what makes it cheap enough to keep in
-the per-commit suite. The file loads in well under a second.
+the per-commit suite.
 """
 
 import collections
