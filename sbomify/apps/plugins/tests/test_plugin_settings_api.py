@@ -141,9 +141,7 @@ class TestAScopedTokenCannotExceedItself:
         from sbomify.apps.access_tokens.utils import create_personal_access_token
 
         encoded = create_personal_access_token(user)
-        AccessToken.objects.create(
-            user=user, encoded_token=encoded, description="scoped", team=team, scopes=scopes
-        )
+        AccessToken.objects.create(user=user, encoded_token=encoded, description="scoped", team=team, scopes=scopes)
         return Client(), {"HTTP_AUTHORIZATION": f"Bearer {encoded}"}
 
     def test_a_read_only_token_may_not_change_them(self, owner, registered_plugin, sample_user):  # noqa: F811
