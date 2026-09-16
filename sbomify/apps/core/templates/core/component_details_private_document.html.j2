@@ -12,9 +12,20 @@
                     <i class="fas fa-cube"></i>Product-scoped
                 {% endif %}
             </span>
+            {% comment %}
+                Scope and visibility are two decisions, and this line used to
+                read as though scope alone put a document on the Trust Center.
+                A private workspace-wide document is on no public page at all,
+                so the wording follows the visibility selector above.
+            {% endcomment %}
             <p class="text-text-muted text-sm mb-0 mt-2">
                 {% if component.is_global %}
-                    Visible on the workspace Trust Center and not attached to any product.
+                    Not attached to any product.
+                    {% if component.visibility == 'private' %}
+                        Make it public or gated to show it on your Trust Center.
+                    {% else %}
+                        It appears on your Trust Center.
+                    {% endif %}
                 {% else %}
                     Restricted to the products this component is assigned to. A certification
                     only earns a Trust Center badge once it is workspace-wide.
@@ -42,7 +53,7 @@
                     {% endif %}
                     </c-buttons.secondary>
                     {% if not component.is_global %}
-                        <p class="text-text-muted text-xs mb-0 mt-2">This also takes it off any product it is assigned to.</p>
+                        <c-forms.hint>This also takes it off any product it is assigned to.</c-forms.hint>
                     {% endif %}
                 </form>
             {% endif %}

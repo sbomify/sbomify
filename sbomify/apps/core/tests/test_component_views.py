@@ -523,7 +523,11 @@ class TestDocumentComponentScopeControl:
     def _open(self, team, user, component):
         self.client.login(username=user.username, password="test")
         setup_test_session(self.client, team, user)
-        return self.client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        response = self.client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        # Otherwise a session regression turns these into assertions about a
+        # login page, which would pass or fail for the wrong reason.
+        assert response.status_code == 200
+        return response
 
     def test_a_product_scoped_document_offers_the_switch(self, sample_team_with_owner_member, sample_user):
         team = sample_team_with_owner_member.team
@@ -544,6 +548,30 @@ class TestDocumentComponentScopeControl:
 
         assert 'value="product"' in body
         assert "Make product-scoped" in body
+
+    def test_a_published_workspace_wide_document_says_it_is_on_the_trust_center(
+        self, sample_team_with_owner_member, sample_user
+    ):
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=True)
+
+        body = self._open(team, sample_user, component).content.decode()
+
+        assert "It appears on your Trust Center." in body
+
+    def test_a_private_workspace_wide_document_does_not_claim_to_be_published(
+        self, sample_team_with_owner_member, sample_user
+    ):
+        """Scope and visibility are two decisions; scope alone publishes nothing."""
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=True)
+        component.visibility = Component.Visibility.PRIVATE
+        component.save()
+
+        body = self._open(team, sample_user, component).content.decode()
+
+        assert "It appears on your Trust Center." not in body
+        assert "Make it public or gated to show it on your Trust Center." in body
 
     def test_the_switch_moves_the_component(self, sample_team_with_owner_member, sample_user):
         team = sample_team_with_owner_member.team
