@@ -14,6 +14,11 @@ on.
 * Dramatiq's consumer reconnects once a second while the broker is down, and
   logs at CRITICAL each time, so a single outage arrives as tens of thousands
   of alerts.
+* That throttle was applied to the Sentry copy only, so stdout still carried
+  every line, and stdout is what ships to Graylog and raises Slack.
+* The throttle window is per process, so counting the surviving lines cannot
+  tell one blip seen by six processes from one process seeing six windows of a
+  real outage. Duration can, and each process can measure it alone.
 
 Each is pinned here because none of them is visible from ordinary use: they only
 show up when Redis is already having a bad day, which is exactly when nobody
@@ -31,8 +36,10 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 from redis.retry import Retry as RedisRetry
 
 from sbomify.sentry_config import (
+    _EPISODE_CONTINUES_WITHIN_SECONDS,
     _OUTAGE_REPORT_INTERVAL_SECONDS,
     _last_reported,
+    is_repeat_self_healing_notice,
     throttle_self_healing_notices,
 )
 from sbomify.settings import (
@@ -300,3 +307,155 @@ def test_nothing_else_is_ever_dropped(hint) -> None:
     fault. Matching on the logger alone would have hidden it.
     """
     assert throttle_self_healing_notices({"event": 1}, hint) is not None
+
+
+def test_the_log_stream_is_throttled_too_not_just_sentry() -> None:
+    """The Sentry-only throttle left the louder path untouched.
+
+    Container stdout ships to Graylog, and Graylog is what raises Slack. Over a
+    week of production, 86% of the error-level lines it saw were one Redis
+    incident repeating, which is how a channel meant for 500s became something
+    nobody reads.
+
+    The first line of each fault survives, so an outage that lasts is still
+    reported every five minutes for as long as it lasts. That is also what makes
+    "more than one of these in ten minutes" a usable definition of *still
+    broken* for the Graylog alert, which a raw line count could never be.
+    """
+    record = _Record(_PLUGINS, _LOOP)
+
+    assert is_repeat_self_healing_notice(record) is False, "the first line of an outage must be kept"
+    assert is_repeat_self_healing_notice(record) is True
+    assert is_repeat_self_healing_notice(_Record(_BILLING, _LOOP)) is True, "one outage, not one per queue"
+
+
+def test_the_log_window_is_not_spent_by_sentry() -> None:
+    """Two consumers, two windows.
+
+    A filter on the console handler cannot see what ``before_send`` decided, and
+    the handler may not even run first. Sharing one window would mean whichever
+    consumer asked first silently spent the other's report, so an operator would
+    find the incident in Sentry but not in the logs, or the reverse.
+    """
+    record = _Record("sbomify.cache", "Exception ignored")
+
+    assert throttle_self_healing_notices({"event": 1}, {"log_record": record}) is not None
+    assert is_repeat_self_healing_notice(record) is False, "the log stream gets its own first report"
+
+
+def test_the_log_filter_cannot_swallow_a_real_error() -> None:
+    """Same guarantee as the Sentry hook, on a hotter path.
+
+    This one runs on every record the console handler touches, so the blast
+    radius of a loose match is the whole log stream. Only the two self-healing
+    notices are ever dropped, and dramatiq's genuine ``except Exception`` branch
+    rides in on the same logger at the same level, which is the case that says
+    the message has to match too.
+    """
+    for record in (
+        _Record("sbomify.apps.core", _LOOP),
+        _Record(_PLUGINS, "Consumer encountered an unexpected error."),
+        _Record("sbomify.cache", "ConnectionInterrupted: Redis TimeoutError"),
+    ):
+        assert is_repeat_self_healing_notice(record) is False
+        assert is_repeat_self_healing_notice(record) is False, "and not on the second one either"
+
+
+def _rewind(seconds: float) -> None:
+    """Age every open window by ``seconds``, rather than sleeping through it."""
+    for key in _last_reported:
+        _last_reported[key] -= seconds
+
+
+class _Capture(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@pytest.fixture
+def sustained_faults():
+    """Records raised on the sustained-fault logger during one test.
+
+    A handler on that logger rather than ``caplog``, because the ``sbomify``
+    logger is configured ``propagate=False`` and nothing beneath it reaches the
+    root logger where ``caplog`` listens.
+    """
+    capture = _Capture()
+    logger = logging.getLogger("sbomify.resilience")
+    logger.addHandler(capture)
+    try:
+        yield capture.records
+    finally:
+        logger.removeHandler(capture)
+
+
+def test_a_blip_raises_no_sustained_fault_however_many_processes_saw_it(sustained_faults) -> None:
+    """The reason this is duration and not a count.
+
+    Production runs two web containers with two gunicorn workers each plus two
+    dramatiq workers, and the throttle window is process-local, because the
+    fault being throttled is "Redis is unreachable" and a Redis-backed lock is
+    the one thing that cannot be relied on here. So a blip lasting under a
+    second still produces one first line from every process that saw it.
+
+    In the sampled week that was ten reconnect blips, each two lines in the same
+    second, roughly 15.5 hours apart. Any line-count threshold either fires on
+    those or hardcodes the replica count. Measuring how long the fault lasted
+    needs neither.
+    """
+    for _ in range(6):  # six processes, one blip, all inside one window
+        is_repeat_self_healing_notice(_Record(_PLUGINS, _LOOP))
+
+    assert sustained_faults == [], "a fault that recovered inside a window is not an outage"
+
+
+def test_a_fault_that_outlives_a_window_raises_one(sustained_faults) -> None:
+    """And the reason it is not simply "seen twice".
+
+    Five minutes on, the dramatiq consumer is still failing to reach the broker.
+    That is an outage, and it is the only thing here that should reach Slack.
+    """
+    assert is_repeat_self_healing_notice(_Record(_PLUGINS, _LOOP)) is False
+    _rewind(_OUTAGE_REPORT_INTERVAL_SECONDS + 1)
+
+    assert is_repeat_self_healing_notice(_Record(_PLUGINS, _LOOP)) is False
+    assert len(sustained_faults) == 1
+    assert sustained_faults[0].levelno == logging.ERROR
+
+
+def test_the_next_blip_hours_later_is_a_new_fault_not_a_continuing_one(sustained_faults) -> None:
+    """The bound that stops "still failing" meaning "failed once, last Tuesday".
+
+    Those reconnect blips recur on a ~15.5-hour cycle. Without an upper bound on
+    the gap, the second one would read as the first one still running half a day
+    later, and the alert would be back to firing on blips.
+    """
+    assert is_repeat_self_healing_notice(_Record(_PLUGINS, _LOOP)) is False
+    _rewind(_EPISODE_CONTINUES_WITHIN_SECONDS + 1)
+
+    assert is_repeat_self_healing_notice(_Record(_PLUGINS, _LOOP)) is False
+    assert sustained_faults == []
+
+
+def test_the_sustained_signal_is_not_itself_throttled(sustained_faults) -> None:
+    """It must not land in the taxonomy it is raised from.
+
+    ``sbomify.resilience`` is a separate logger for that reason: if the filter
+    ever matched it, the one line the Slack alert depends on would be dropped by
+    the machinery that produced it.
+    """
+    raised = logging.LogRecord(
+        "sbomify.resilience",
+        logging.ERROR,
+        __file__,
+        1,
+        "Dependency still failing 5 minutes after the first report: x",
+        None,
+        None,
+    )
+    assert is_repeat_self_healing_notice(raised) is False
+    assert is_repeat_self_healing_notice(raised) is False
