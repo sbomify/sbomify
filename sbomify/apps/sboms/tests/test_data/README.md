@@ -153,6 +153,11 @@ One JSON-LD document, 68511 graph elements:
 | `security_VexFixedVulnAssessmentRelationship` | 205 |
 | `security_VexNotAffectedVulnAssessmentRelationship` | 86 |
 | `simplelicensing_LicenseExpression` | 149 |
+| `simplelicensing_SimpleLicensingText` | 15 |
+| `SpdxDocument`, `software_Sbom`, `Organization`, `Tool` | 1 each |
+
+Those rows account for all 68511; the table is the whole inventory rather than
+the interesting parts of it.
 
 The 3813 packages split by `software_primaryPurpose` into 1649 `source`, 1600
 `install`, 563 `specification` and 1 `archive`. Of the 86 not-affected VEX
