@@ -6,6 +6,7 @@ import json
 import logging
 from typing import Any
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -65,8 +66,17 @@ from .services.sboms import delete_sbom_record, get_crypto_inventory, get_sbom_d
 
 log = logging.getLogger(__name__)
 
-# Max SBOM upload size in bytes (100MB — SPDX 3.0 SBOMs can be 50-100MB)
-SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+# Max SBOM upload size in bytes. SPDX 3 SBOMs from Yocto and similar image
+# builds run to tens of megabytes.
+#
+# Capped at DATA_UPLOAD_MAX_MEMORY_SIZE because a limit above it is unreachable:
+# Django raises RequestDataTooBig while reading the body, before this check can
+# run, so the caller gets a bare 400 rather than a message naming the size.
+# Raise DATA_UPLOAD_MAX_MEMORY_SIZE_MB to raise both.
+# One knob by default: DATA_UPLOAD_MAX_MEMORY_SIZE_MB moves this with it.
+# SBOM_MAX_UPLOAD_SIZE_MB holds BOMs lower if wanted. Both are parsed in
+# settings, so config parsing lives in one place.
+SBOM_MAX_UPLOAD_SIZE = settings.SBOM_MAX_UPLOAD_SIZE
 
 
 _VALID_BOM_TYPES = {choice[0] for choice in SBOM.BomType.choices}

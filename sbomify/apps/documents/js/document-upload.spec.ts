@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'bun:test'
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_FILE_SIZE_MB = 100;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 describe('Document Upload Business Logic', () => {
     const testComponentId = 'test-component-123';
@@ -13,7 +14,7 @@ describe('Document Upload Business Logic', () => {
     describe('File Validation', () => {
         const validateFile = (file: File): string | null => {
             if (file.size > MAX_FILE_SIZE) {
-                return 'File size must be less than 50MB'
+                return `File size must be ${MAX_FILE_SIZE_MB}MB or smaller`
             }
             return null
         }
@@ -23,14 +24,14 @@ describe('Document Upload Business Logic', () => {
             expect(validateFile(file)).toBeNull()
         })
 
-        test('should reject file larger than 50MB', () => {
-            const size = 51 * 1024 * 1024
+        test('should reject a file larger than the limit', () => {
+            const size = MAX_FILE_SIZE + 1
             const file = createMockFile('large-doc.pdf', size, 'application/pdf')
-            expect(validateFile(file)).toBe('File size must be less than 50MB')
+            expect(validateFile(file)).toBe(`File size must be ${MAX_FILE_SIZE_MB}MB or smaller`)
         })
 
-        test('should accept file exactly at 50MB limit', () => {
-            const size = 50 * 1024 * 1024
+        test('should accept a file exactly at the limit', () => {
+            const size = MAX_FILE_SIZE
             const file = createMockFile('max-doc.pdf', size, 'application/pdf')
             expect(validateFile(file)).toBeNull()
         })
