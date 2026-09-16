@@ -88,3 +88,37 @@ def test_the_packages_split_by_purpose_as_documented(graph: list):
     assert purposes["install"] == 1600
     assert purposes["specification"] == 563
     assert purposes["archive"] == 1
+
+
+@pytest.fixture(scope="module")
+def vex_statements(document: dict) -> list:
+    """What the VEX reader makes of the graph, derived once."""
+    from sbomify.apps.vulnerability_scanning.vex_formats import derive_spdx3_vex_suppressions
+
+    return derive_spdx3_vex_suppressions(document)
+
+
+def test_the_vex_reader_returns_the_documented_statements(vex_statements: list):
+    """Counting element types in the raw JSON does not exercise the reader.
+
+    A regression in how it walks a 68k-element graph would leave every other
+    test here green while the document silently yielded nothing.
+    """
+    assert len(vex_statements) == 291
+
+
+def test_the_statements_keep_their_state_split(vex_statements: list):
+    states = collections.Counter(statement.get("state") for statement in vex_statements)
+
+    assert states["resolved"] == 205
+    assert states["not_affected"] == 86
+
+
+def test_no_statement_widens_to_the_whole_document(vex_statements: list):
+    """Product scoping fails closed here: every statement names its packages.
+
+    A statement that resolved to no package would be skipped rather than
+    suppressing by vulnerability id alone, so a non-zero count here would mean
+    the reader had started widening.
+    """
+    assert [s for s in vex_statements if s.get("product_scoped")] == []
