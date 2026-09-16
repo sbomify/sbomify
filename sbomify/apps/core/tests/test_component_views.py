@@ -588,6 +588,42 @@ class TestDocumentComponentScopeControl:
         component.refresh_from_db()
         assert component.is_global is True
 
+    def test_the_message_does_not_promise_the_trust_center_to_a_private_document(
+        self, sample_team_with_owner_member, sample_user
+    ):
+        """The flash lands in the moment a reader is most likely to believe it."""
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=False)
+        component.visibility = Component.Visibility.PRIVATE
+        component.save()
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, sample_user)
+
+        response = self.client.post(
+            reverse("core:component_scope", kwargs={"component_id": component.id}),
+            {"target_scope": "workspace"},
+            follow=True,
+        )
+
+        said = [m.message for m in response.context["messages"]]
+        assert "Component is now workspace-wide. Make it public or gated to show it on your Trust Center." in said
+
+    def test_a_published_document_is_told_it_is_on_the_trust_center(self, sample_team_with_owner_member, sample_user):
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=False)
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, sample_user)
+
+        response = self.client.post(
+            reverse("core:component_scope", kwargs={"component_id": component.id}),
+            {"target_scope": "workspace"},
+            follow=True,
+        )
+
+        assert "Component is now workspace-wide and on your Trust Center." in [
+            m.message for m in response.context["messages"]
+        ]
+
     def test_a_bom_component_never_offers_it(self, sample_team_with_owner_member, sample_user):
         """Only documents can be workspace-wide, so the control must not appear."""
         team = sample_team_with_owner_member.team
