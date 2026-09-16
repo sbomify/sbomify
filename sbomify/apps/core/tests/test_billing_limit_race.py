@@ -65,8 +65,8 @@ def test_the_product_limit_check_runs_locked_inside_the_create_transaction(
     )
 
     assert response.status_code in (201, 403)
-    assert seen["in_atomic_block"] is True, "the check ran outside the create transaction"
-    assert seen["lock"] is True, "the check did not lock the workspace row"
+    assert seen.get("in_atomic_block") is True, "the check ran outside the create transaction"
+    assert seen.get("lock") is True, "the check did not lock the workspace row"
 
 
 @pytest.mark.django_db
@@ -88,8 +88,8 @@ def test_the_component_limit_check_runs_locked_inside_the_create_transaction(
     )
 
     assert response.status_code in (201, 403, 400)
-    assert seen["in_atomic_block"] is True, "the check ran outside the create transaction"
-    assert seen["lock"] is True, "the check did not lock the workspace row"
+    assert seen.get("in_atomic_block") is True, "the check ran outside the create transaction"
+    assert seen.get("lock") is True, "the check did not lock the workspace row"
 
 
 @pytest.mark.django_db

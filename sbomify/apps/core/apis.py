@@ -488,11 +488,13 @@ def _check_billing_limits(
     Also checks for suspended accounts due to payment failure.
 
     Args:
-        lock: Take a row lock on the workspace for the rest of the transaction.
-            Counting and inserting without it lets two concurrent creates read
-            the same count and both pass, so callers that go on to create must
-            pass ``lock=True`` from inside the same ``transaction.atomic``.
-            No effect on SQLite, which has no row locks.
+        lock: Take a row lock on the workspace immediately before counting, held
+            until the transaction ends. Counting and inserting without it lets
+            two concurrent creates read the same count and both pass, so callers
+            that go on to create must pass ``lock=True`` from inside the same
+            ``transaction.atomic``. Deliberately not taken any earlier: the
+            checks above it can call Stripe. No effect on SQLite, which has no
+            row locks.
 
     Returns:
         (can_create, error_message, error_code): Tuple of boolean, error message, and error code
@@ -502,8 +504,7 @@ def _check_billing_limits(
         return True, "", None
 
     try:
-        teams = Team.objects.select_for_update() if lock else Team.objects
-        team = teams.get(id=team_id)
+        team = Team.objects.get(id=team_id)
     except Team.DoesNotExist:
         return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
 
@@ -608,6 +609,15 @@ def _check_billing_limits(
         plan = BillingPlan.objects.get(key=team.billing_plan)
     except BillingPlan.DoesNotExist:
         return False, "Invalid billing plan", ErrorCode.INVALID_BILLING_PLAN
+
+    # Take the row lock here rather than on the fetch above. Everything between
+    # the two can be slow: the scheduled-downgrade path calls Stripe, and holding
+    # a workspace lock across a network round trip would serialize every create
+    # for that workspace behind it. The lock only has to cover the count and the
+    # caller's insert, and select_for_update holds until the transaction ends, so
+    # taking it immediately before counting is enough.
+    if lock:
+        Team.objects.select_for_update().filter(pk=team.pk).first()
 
     # Get current count and limits
     if resource_type == "product":
