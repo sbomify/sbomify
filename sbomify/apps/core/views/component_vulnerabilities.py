@@ -31,6 +31,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.services.component_security import (
     ComponentVulnerabilitiesContext,
     build_component_vulnerabilities,
+    viewer_manages_component,
 )
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query, query_string
@@ -70,9 +71,12 @@ def vulnerabilities_panel_context(component_id: str, vulns: ComponentVulnerabili
 class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """One page of the component's findings, for HTMX to swap the panel with.
 
-    Access is resolved through ``get_component`` rather than re-derived here, so
-    this endpoint grants exactly what the page it belongs to grants: a component
-    a reader may not open does not become readable a region at a time.
+    Gated on ``component:manage``, not on ``get_component`` returning 200.
+    ``get_component`` also serves the public read path and answers 200 for any
+    PUBLIC or GATED component to anyone, so treating it as the authorization
+    check would hand every authenticated user the findings, VEX dispositions and
+    KEV flags of every published component in the install, none of which the
+    public component page shows. See ``viewer_manages_component``.
     """
 
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
@@ -81,6 +85,10 @@ class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMi
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
+        if not viewer_manages_component(request, component_id):
+            # 404 rather than 403: for a component this reader has no business
+            # with, confirming one exists at that id is itself an answer.
+            return error_response(request, HttpResponse(status=404, content="Component not found"))
         if component.get("component_type") != "bom":
             return error_response(request, HttpResponse(status=404, content="Component has no vulnerabilities"))
 

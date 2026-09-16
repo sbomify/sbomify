@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -13,6 +13,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.services.component_security import (
     ComponentVulnerabilitiesContext,
     build_component_vulnerabilities,
+    viewer_manages_component,
 )
 from sbomify.apps.core.views.component_vulnerabilities import vulnerabilities_panel_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -34,6 +35,23 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
+
+        # get_component answers 200 for any PUBLIC or GATED component to anyone,
+        # because it also serves the public read path. This page is the internal
+        # one: it renders the vulnerability panel, the metadata editor and the
+        # upload widget, none of which the public page shows. Without this check
+        # any authenticated user could read another workspace's findings, VEX
+        # dispositions and KEV flags for a published component simply by opening
+        # its private URL.
+        #
+        # Serving the public page rather than refusing, matching the custom
+        # domain branch above: a reader who followed a link to a published
+        # component should land on what they are entitled to see, not on a 403.
+        if not viewer_manages_component(request, component_id):
+            from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView
+
+            public = ComponentDetailsPublicView.as_view()(request, component_id=component_id)
+            return cast("HttpResponse", public)
 
         current_team = request.session.get("current_team", {})
         billing_plan = current_team.get("billing_plan")

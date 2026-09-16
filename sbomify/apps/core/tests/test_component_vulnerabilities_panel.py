@@ -220,6 +220,69 @@ class TestTheSummaryFallback:
         assert "component-vulnerabilities-table" not in response.content.decode()
 
 
+class TestPublishedComponentsAreNotOpen:
+    """Publishing a component does not publish its CVE list.
+
+    ``get_component`` answers 200 for any PUBLIC or GATED component to anyone,
+    because it also serves the trust-center read path. Treating that 200 as
+    authorization hands every authenticated user the findings, VEX dispositions
+    and KEV flags of every published component in the install, none of which the
+    public component page renders. The panel and the page it lives on both gate
+    on ``component:manage`` instead.
+    """
+
+    @pytest.fixture
+    def outsider(self, guest_user) -> Client:
+        """Authenticated, and a member of nothing."""
+        client = Client()
+        client.force_login(guest_user)
+        return client
+
+    @pytest.mark.parametrize("visibility", ["public", "gated", "private"])
+    def test_the_panel_endpoint_tells_an_outsider_nothing(
+        self, sample_team_with_owner_member, outsider, visibility
+    ):
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(member.team, count=8, name=f"published-{visibility}")
+        Component.objects.filter(pk=component.id).update(visibility=visibility)
+
+        response = outsider.get(
+            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
+            headers={"hx-request": "true"},
+        )
+
+        assert response.status_code in (403, 404)
+        assert "CVE-2026-0000" not in response.content.decode()
+
+    @pytest.mark.parametrize("visibility", ["public", "gated", "private"])
+    def test_the_component_page_tells_an_outsider_nothing(
+        self, sample_team_with_owner_member, outsider, visibility
+    ):
+        """The page has the same hole as the endpoint, so it takes the same fix."""
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(member.team, count=8, name=f"page-{visibility}")
+        Component.objects.filter(pk=component.id).update(visibility=visibility)
+
+        response = outsider.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+
+        assert "CVE-2026-0000" not in response.content.decode()
+        assert "component-vulnerabilities-table" not in response.content.decode()
+
+    def test_a_member_of_the_workspace_still_sees_its_own_published_component(
+        self, sample_team_with_owner_member, sample_user
+    ):
+        """The gate is membership, not privacy: publishing must not blind the owner."""
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(member.team, count=8, name="published-own")
+        Component.objects.filter(pk=component.id).update(visibility="public")
+        client = _client(member.team, sample_user)
+
+        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+
+        assert response.status_code == 200
+        assert "CVE-2026-0000" in response.content.decode()
+
+
 class TestThePanelEndpoint:
     def test_an_htmx_request_gets_the_region_rather_than_the_page(self, sample_team_with_owner_member, sample_user):
         member = sample_team_with_owner_member

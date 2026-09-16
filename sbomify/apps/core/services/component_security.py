@@ -193,3 +193,27 @@ def build_component_vulnerabilities(component_id: str, query: FindingQuery) -> C
         sbom_id=sbom_id,
         version=latest_sbom["version"],
     )
+
+
+def viewer_manages_component(request: Any, component_id: str) -> bool:
+    """Whether this reader may see the component's *internal* security picture.
+
+    ``get_component`` is not this check. It returns 200 for any PUBLIC or GATED
+    component to anyone, because it also serves the trust-center read path, so a
+    view that treats its 200 as authorization grants every authenticated user
+    the findings of every published component in the install. The public
+    component page deliberately shows no vulnerability data at all, so that is
+    a disclosure rather than a redundancy: a workspace publishing a component to
+    its trust center is not publishing its CVE inventory, its VEX dispositions
+    or which of its findings are known-exploited.
+
+    ``component:manage`` is the capability the private component page is for,
+    and the one the standalone scan report already requires (`sbom:manage`
+    resolves to the same workspace tiers), so this puts the panel and the page
+    that links to it on the same footing.
+    """
+    from sbomify.apps.core.authz import can
+    from sbomify.apps.core.models import Component
+
+    component = Component.objects.filter(pk=component_id).only("id", "team_id", "visibility").first()
+    return component is not None and bool(can(request, "component:manage", component))
