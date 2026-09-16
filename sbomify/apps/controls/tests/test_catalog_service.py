@@ -304,3 +304,39 @@ def test_every_builtin_catalogue_has_a_tile_in_settings() -> None:
         f"catalogues with no tile: {sorted(set(_BUILTIN_CATALOGS) - tiles)}; "
         f"tiles with no catalogue: {sorted(tiles - set(_BUILTIN_CATALOGS))}"
     )
+
+
+@pytest.mark.django_db
+class TestAFrameworkYouMaintainYourselfStaysPublic:
+    """``is_active`` was the trust center switch before ``is_published`` existed.
+
+    The public controls endpoints and the public product page both read it, and
+    deactivating a catalog is documented as hiding it from the trust center. The
+    opt-in the new flag adds belongs to synced frameworks, where a workspace is
+    republishing what somebody else's tool says, so a framework it maintains
+    itself has to keep going public when it is activated.
+    """
+
+    def test_activating_a_builtin_publishes_it(self, sample_team_with_owner_member) -> None:
+        catalog = activate_builtin_catalog(sample_team_with_owner_member.team, "soc2-type2").value
+
+        assert catalog is not None
+        assert catalog.is_published is True
+
+    def test_reactivating_publishes_it_again(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        activate_builtin_catalog(team, "soc2-type2")
+        ControlCatalog.objects.filter(team=team).update(is_active=False, is_published=False)
+
+        activate_builtin_catalog(team, "soc2-type2")
+
+        catalog = ControlCatalog.objects.get(team=team)
+        assert catalog.is_active is True
+        assert catalog.is_published is True
+
+    def test_an_imported_oscal_catalog_is_published(self, sample_team_with_owner_member) -> None:
+        result = import_oscal_catalog(sample_team_with_owner_member.team, SAMPLE_OSCAL_CATALOG)
+
+        assert result.ok
+        assert result.value is not None
+        assert result.value.is_published is True
