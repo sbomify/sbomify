@@ -80,6 +80,26 @@ def is_spdx3(sbom_data: dict[str, Any]) -> bool:
     return False
 
 
+def spdx3_refs(value: Any) -> list[Any]:
+    """The members of a set-valued SPDX 3 property, as a list to iterate.
+
+    ``createdBy``, ``originatedBy``, ``suppliedBy`` and ``createdUsing`` are
+    all sets in the schema, and JSON-LD compact form serialises a one-element
+    set as a bare string or a bare object. The same document is conformant
+    written either way. A reader that only iterates lists finds nobody in the
+    compact form; one that iterates the value directly walks a string
+    character by character. Anything else resolves nobody rather than
+    guessing.
+    """
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        return [value]
+    if isinstance(value, str):
+        return [value]
+    return []
+
+
 def resolve_spdx3_agent(ref: Any, agents: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """Resolve anything legal in an Agent position to an agent dict.
 
@@ -230,14 +250,7 @@ def get_spdx3_creation_info_fields(
 
     tools = tools or {}
 
-    # Extract creators from createdBy references. Normalized like the
-    # package agent fields: a bare string is a singleton reference, and any
-    # other non-list shape resolves nobody instead of iterating characters.
-    created_by = creation_info.get("createdBy", [])
-    if isinstance(created_by, str):
-        created_by = [created_by]
-    elif not isinstance(created_by, list):
-        created_by = []
+    created_by = spdx3_refs(creation_info.get("createdBy"))
     creators: list[str] = []
     for ref in created_by:
         entity = resolve_spdx3_agent(ref, persons_orgs)
@@ -253,21 +266,19 @@ def get_spdx3_creation_info_fields(
     # Extract tool names from createdUsing references. A SoftwareAgent lives
     # in the agents map, so the lookup checks both.
     tool_entries: list[str] = []
-    refs = creation_info.get("createdUsing", [])
-    if isinstance(refs, list):
-        for ref in refs:
-            if isinstance(ref, str):
-                tool_element = tools.get(ref) or persons_orgs.get(ref)
-                if tool_element:
-                    tool_name = tool_element.get("name", "")
-                    if tool_name:
-                        tool_entries.append(tool_name)
-                        continue
-                tool_entries.append(ref)
-            elif isinstance(ref, dict):
-                tool_name = ref.get("name", "")
+    for ref in spdx3_refs(creation_info.get("createdUsing")):
+        if isinstance(ref, str):
+            tool_element = tools.get(ref) or persons_orgs.get(ref)
+            if tool_element:
+                tool_name = tool_element.get("name", "")
                 if tool_name:
                     tool_entries.append(tool_name)
+                    continue
+            tool_entries.append(ref)
+        elif isinstance(ref, dict):
+            tool_name = ref.get("name", "")
+            if tool_name:
+                tool_entries.append(tool_name)
 
     timestamp = creation_info.get("created")
 
@@ -292,16 +303,8 @@ def get_spdx3_package_fields(
     """
     name = package.get("name", "")
     version = package.get("software_packageVersion", "")
-    originated_by = package.get("originatedBy", [])
-    if isinstance(originated_by, str):
-        originated_by = [originated_by]
-    elif not isinstance(originated_by, list):
-        originated_by = []
-    supplied_by = package.get("suppliedBy")
-    if isinstance(supplied_by, str):
-        supplied_by = [supplied_by]
-    elif not isinstance(supplied_by, list):
-        supplied_by = []
+    originated_by = spdx3_refs(package.get("originatedBy"))
+    supplied_by = spdx3_refs(package.get("suppliedBy"))
     supplier_refs = originated_by if originated_by else supplied_by
     download_location = package.get("software_downloadLocation", "")
 

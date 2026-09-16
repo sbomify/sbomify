@@ -438,7 +438,10 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
                 "unique_identifiers",
                 status="fail" if unique_id_failures else "pass",
                 details=f"Missing for: {', '.join(unique_id_failures)}" if unique_id_failures else None,
-                remediation="Add externalIdentifiers with packageURL, cpe23, or swid type.",
+                remediation=(
+                    "Add software_packageUrl to each package, or an externalIdentifier "
+                    "of type packageUrl, cpe23 or swid."
+                ),
             )
         )
 

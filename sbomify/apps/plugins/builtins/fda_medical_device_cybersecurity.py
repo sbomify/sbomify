@@ -707,7 +707,10 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 is_ntia=True,
                 status="fail" if unique_id_failures else "pass",
                 details=f"Missing for: {', '.join(unique_id_failures)}" if unique_id_failures else None,
-                remediation="Add externalIdentifiers with packageURL, cpe23, or swid type.",
+                remediation=(
+                    "Add software_packageUrl to each package, or an externalIdentifier "
+                    "of type packageUrl, cpe23 or swid."
+                ),
             )
         )
 
@@ -775,8 +778,8 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 status="fail" if end_of_support_failures else "pass",
                 details=f"Missing for: {', '.join(end_of_support_failures)}" if end_of_support_failures else None,
                 remediation=(
-                    "Add software_validUntilDate field to packages with ISO-8601 date. "
-                    "Use sbomify GitHub Action to inject CLE data."
+                    "Add validUntilTime to each package, as a UTC timestamp of the form "
+                    "YYYY-MM-DDTHH:MM:SSZ. Use the sbomify GitHub Action to inject CLE data."
                 ),
             )
         )
