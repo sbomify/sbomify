@@ -221,10 +221,14 @@ def disconnect(team: Team, provider_key: str) -> ServiceResult[None]:
 def provider_cards(team: Team) -> list[dict[str, Any]]:
     """One entry per registered provider, for the Integrations tab.
 
-    Tokens never appear, and not because the template happens not to render
-    them: what goes in the context is a mapping of the sync fields the panel
-    reads, so a field added to ``Integration`` later cannot arrive on a page by
-    being added to the model.
+    Neither the connection nor the provider reaches the page as an object. Both
+    go in as a mapping of the fields the panel reads, so nothing a template can
+    dot its way onto is a credential.
+
+    ``ProviderSpec`` is the reason that matters for the provider half:
+    ``client_secret`` and ``client_id`` are properties that read deployment
+    settings when they are touched, so ``card.provider.client_secret`` would
+    have resolved to the real secret the moment a template asked for it.
     """
     connections = {integration.provider: integration for integration in Integration.objects.filter(team=team)}
 
@@ -244,7 +248,7 @@ def provider_cards(team: Team) -> list[dict[str, Any]]:
         )
         cards.append(
             {
-                "provider": provider,
+                "provider": _provider_card(provider),
                 "integration": _sync_state(integration),
                 "is_connected": integration is not None,
                 "needs_reconnect": integration is not None and integration.status == Integration.Status.REVOKED,
@@ -261,6 +265,24 @@ def provider_cards(team: Team) -> list[dict[str, Any]]:
             }
         )
     return cards
+
+
+def _provider_card(provider: ProviderSpec) -> dict[str, Any]:
+    """What the tile says about a provider, and nothing else.
+
+    ``is_configured`` is the one derived field worth carrying: it is the answer
+    to "can this deployment reach the provider at all", which the tile needs and
+    which is computed from the credentials rather than being one.
+    """
+    return {
+        "key": provider.key,
+        "name": provider.name,
+        "tagline": provider.tagline,
+        "icon": provider.icon,
+        "docs_url": provider.docs_url,
+        "reads": provider.reads,
+        "is_configured": provider.is_configured,
+    }
 
 
 def _sync_state(integration: Integration | None) -> dict[str, Any] | None:

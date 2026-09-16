@@ -290,7 +290,7 @@ class TestProviderCards:
     def test_lists_every_provider_even_when_nothing_is_connected(self, sample_team_with_owner_member) -> None:  # noqa: F811
         cards = connections.provider_cards(sample_team_with_owner_member.team)
 
-        assert [card["provider"].key for card in cards] == ["vanta"]
+        assert [card["provider"]["key"] for card in cards] == ["vanta"]
         assert cards[0]["is_connected"] is False
         assert cards[0]["catalogs"] == []
 
@@ -471,3 +471,35 @@ class TestPublishingNeedsTheConnectionToStillBeThere:
         connections.set_catalog_published(team, catalog.id, False)
 
         assert connections.set_catalog_published(team, catalog.id, True).ok
+
+
+class TestNoProviderCredentialReachesATemplate:
+    """`ProviderSpec` resolves its credentials when they are touched.
+
+    `client_id` and `client_secret` are properties reading deployment settings,
+    so a spec in a template context is a secret one `{{ }}` away, whatever the
+    current markup happens to render. The card carries the seven fields the
+    tile reads instead.
+    """
+
+    def test_the_card_carries_no_credential(self, vanta_credentials, sample_team_with_owner_member) -> None:  # noqa: F811
+        card = connections.provider_cards(sample_team_with_owner_member.team)[0]
+
+        assert not isinstance(card["provider"], type(VANTA))
+        assert set(card["provider"]) == {"key", "name", "tagline", "icon", "docs_url", "reads", "is_configured"}
+        assert "vcs_test" not in str(card)
+        assert "vci_test" not in str(card)
+
+    def test_the_tile_still_knows_whether_it_can_connect(self, vanta_credentials, sample_team_with_owner_member) -> None:  # noqa: F811
+        """is_configured is derived from the credentials, so it has to survive."""
+        card = connections.provider_cards(sample_team_with_owner_member.team)[0]
+
+        assert card["provider"]["is_configured"] is True
+
+    def test_a_deployment_without_credentials_says_so(self, settings, sample_team_with_owner_member) -> None:  # noqa: F811
+        settings.VANTA_CLIENT_ID = ""
+        settings.VANTA_CLIENT_SECRET = ""
+
+        card = connections.provider_cards(sample_team_with_owner_member.team)[0]
+
+        assert card["provider"]["is_configured"] is False
