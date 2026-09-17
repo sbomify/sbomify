@@ -384,6 +384,10 @@ class TestTheFindingsListArrivesWhenAsked:
         html = client.get(url).content.decode()
 
         assert self._findings_url(run) in html
+        # The placeholder and the partial that replaces it have to agree on the
+        # id, or the pager swaps into nothing.
+        assert f'id="findings-{run.id}"' in html
+        assert f"from:#run-trigger-{run.id}" in html
         # One title rides along in the header; the three hundredth is not on the page.
         assert "CVE-2026-00299" not in html
 

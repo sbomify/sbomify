@@ -129,7 +129,7 @@
                     {% comment %}Fetched when the card is opened, not when the page is built: see
                     _assessment_run_findings.html.j2. The trigger beside this carries the hx-get, so one
                     click both expands the card and asks for the page.{% endcomment %}
-                    <div id="findings-{ run.id }"
+                    <div id="findings-{{ run.id }}"
                          class="run-findings"
                          hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
                          hx-trigger="click once from:#run-trigger-{{ run.id }}"
@@ -263,7 +263,7 @@
                 {% comment %}Fetched when the card is opened, not when the page is built: see
                 _assessment_run_findings.html.j2. The trigger beside this carries the hx-get, so one
                 click both expands the card and asks for the page.{% endcomment %}
-                <div id="findings-{ run.id }"
+                <div id="findings-{{ run.id }}"
                      class="run-findings"
                      hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
                      hx-trigger="click once from:#run-trigger-{{ run.id }}"
