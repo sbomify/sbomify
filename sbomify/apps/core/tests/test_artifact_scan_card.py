@@ -186,14 +186,15 @@ class TestTheScanCard:
 
 @pytest.mark.django_db
 class TestTheCardIsNotHandedEveryFinding:
-    """The artifact page carried every finding to a card that renders one.
+    """The artifact page carried every finding to a card nobody had opened.
 
-    `_assessment_run_item` reads `result.summary` for every number it shows and
-    exactly one finding, `result.findings.0.title`. It never loops them. Passing
-    the whole list anyway meant serialising each plugin's findings and building
-    a Django context to match: measured on staging at 9 MB for a thousand
-    findings and 31 MB for four thousand, and a 504 at the 60s gateway in both
-    cases. That is the same shape as the panel bug, one page over.
+    `_assessment_run_item` renders its header from `result.summary` plus one
+    title, `result.findings.0.title`. The list under it is a collapsed
+    accordion, so it now arrives over HTMX a page at a time when a reader opens
+    the card. Building it for every plugin on every page load, closed or not,
+    measured 9 MB on staging for a thousand findings and 31 MB for four
+    thousand, and a 504 at the 60s gateway in both cases. That is the same shape
+    as the panel bug, one page over.
     """
 
     @pytest.fixture
@@ -303,3 +304,130 @@ class TestTheCardIsNotHandedEveryFinding:
 
         # A hundredfold more findings must not show up as a bigger page.
         assert large_len < small_len * 1.1
+
+
+@pytest.mark.django_db
+class TestTheFindingsListArrivesWhenAsked:
+    """The list behind a run card, and who may read it.
+
+    Bounding the page's payload only helps if the findings are still reachable.
+    They are, one page at a time, from the endpoint the collapsed card points
+    at. Nothing fetches it until a reader opens the card.
+    """
+
+    @pytest.fixture
+    def signed_in(self, sample_team_with_owner_member: Member) -> tuple[Client, Component]:
+        component = Component.objects.create(
+            team=sample_team_with_owner_member.team,
+            name="lazy-image",
+            component_type=Component.ComponentType.BOM,
+        )
+        client = Client()
+        setup_authenticated_client_session(
+            client, sample_team_with_owner_member.team, sample_team_with_owner_member.user
+        )
+        return client, component
+
+    @staticmethod
+    def _run_with(component: Component, finding_count: int) -> AssessmentRun:
+        sbom = SBOM.objects.create(
+            component=component,
+            name="lazy",
+            format="cyclonedx",
+            format_version="1.6",
+            version=f"2.0.{finding_count}",
+            sbom_filename=f"lazy-{finding_count}.json",
+        )
+        return _run(
+            sbom,
+            "osv",
+            {
+                "plugin_name": "osv",
+                "plugin_version": "1.0.0",
+                "category": "security",
+                "assessed_at": "2026-09-17T07:00:00Z",
+                "summary": {
+                    "total_findings": finding_count,
+                    "by_severity": {"critical": 0, "high": finding_count, "medium": 0, "low": 0},
+                },
+                "findings": [
+                    {
+                        "id": f"CVE-2026-{i:05d}",
+                        "title": f"CVE-2026-{i:05d}",
+                        "description": "x" * 200,
+                        "severity": "high",
+                        "component": {"name": "tensorflow", "version": "2.0.0", "ecosystem": "PyPI"},
+                    }
+                    for i in range(finding_count)
+                ],
+                "metadata": {"scanner": "osv-scanner"},
+            },
+        )
+
+    @staticmethod
+    def _findings_url(run: AssessmentRun, page: int | None = None) -> str:
+        url = reverse("plugins:assessment_run_findings", kwargs={"run_id": str(run.id)})
+        return url if page is None else f"{url}?page={page}"
+
+    def test_the_closed_card_carries_the_link_and_none_of_the_rows(self, signed_in) -> None:
+        client, component = signed_in
+        run = self._run_with(component, 300)
+
+        url = reverse(
+            "core:component_item",
+            kwargs={"component_id": component.id, "item_type": "sboms", "item_id": run.sbom_id},
+        )
+        html = client.get(url).content.decode()
+
+        assert self._findings_url(run) in html
+        # One title rides along in the header; the three hundredth is not on the page.
+        assert "CVE-2026-00299" not in html
+
+    def test_a_page_of_findings_comes_back(self, signed_in) -> None:
+        client, component = signed_in
+        run = self._run_with(component, 300)
+
+        html = client.get(self._findings_url(run)).content.decode()
+
+        assert "CVE-2026-00000" in html
+        assert "CVE-2026-00024" in html
+        # 25 to a page, so the twenty-sixth belongs to the next one.
+        assert "CVE-2026-00025" not in html
+        assert "Page 1 / 12" in html
+
+    def test_the_last_finding_is_reachable(self, signed_in) -> None:
+        """The whole point of paging rather than dropping."""
+        client, component = signed_in
+        run = self._run_with(component, 300)
+
+        html = client.get(self._findings_url(run, page=12)).content.decode()
+
+        assert "CVE-2026-00299" in html
+
+    def test_a_scanner_status_marker_is_not_listed_as_a_vulnerability(self, signed_in) -> None:
+        client, component = signed_in
+        run = self._run_with(component, 1)
+        run.result["findings"].append(
+            {"id": "osv:no-packages", "title": "No Packages Recognised", "status": "warning", "severity": "info"}
+        )
+        AssessmentRun.objects.filter(pk=run.pk).update(result=run.result)
+
+        html = client.get(self._findings_url(run)).content.decode()
+
+        assert "CVE-2026-00000" in html
+        assert "No Packages Recognised" not in html
+
+    def test_a_reader_without_the_component_gets_nothing(self, signed_in, guest_user) -> None:
+        _, component = signed_in
+        run = self._run_with(component, 5)
+        outsider = Client()
+        outsider.force_login(guest_user)
+
+        response = outsider.get(self._findings_url(run))
+
+        assert response.status_code == 404
+
+    def test_an_id_that_is_not_a_run_is_a_404(self, signed_in) -> None:
+        client, _ = signed_in
+
+        assert client.get(reverse("plugins:assessment_run_findings", kwargs={"run_id": "run1"})).status_code == 404

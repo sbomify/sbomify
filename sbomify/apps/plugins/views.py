@@ -1,10 +1,12 @@
 """Views for the plugins framework."""
 
+import uuid
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
@@ -173,3 +175,81 @@ class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 context["plugin_stats"] = stats
 
         return render(request, "plugins/plugins_summary.html.j2", context)
+
+
+class AssessmentRunFindingsView(LoginRequiredMixin, View):
+    """One page of a single assessment run's findings.
+
+    The run card on the artifact page renders its header from ``result.summary``,
+    which is a handful of integers however large the scan was. The findings list
+    is the part that grows with the SBOM, and rendering every finding of every
+    plugin is what took that page past the gateway timeout. This endpoint serves
+    the list for one run, one page at a time, when a reader opens the card.
+
+    Authorized by the same ``component:access`` check the assessments API runs,
+    so this adds no reachable data beyond what that endpoint already answers.
+    """
+
+    #: Findings per page. Matches the vulnerabilities panel so a reader moving
+    #: between the two is paging at the same rate.
+    page_size = 25
+
+    def get(self, request: HttpRequest, run_id: str) -> HttpResponse:
+        from django.core.paginator import Paginator
+
+        from sbomify.apps.core.authz import can
+        from sbomify.apps.vulnerability_scanning.euvd import euvd_ids_for_serialization
+        from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
+
+        from .apis import _readable_sbom, _result_with_kev
+        from .models import AssessmentRun
+        from .templatetags.plugins_extras import vulnerability_findings
+
+        try:
+            # The id reaches this from a template, so a value that is not a UUID
+            # at all is a 404 rather than the ValidationError the field lookup
+            # would otherwise raise.
+            uuid.UUID(run_id)
+        except ValueError:
+            return HttpResponseNotFound("Assessment run not found")
+
+        run = AssessmentRun.objects.filter(id=run_id).first()
+        if run is None:
+            # 404 rather than 403 for a run this reader has no business with:
+            # confirming one exists at that id is itself an answer.
+            return HttpResponseNotFound("Assessment run not found")
+        sbom = _readable_sbom(request, str(run.sbom_id))
+        if sbom is None:
+            return HttpResponseNotFound("Assessment run not found")
+
+        is_security = run.category == "security"
+        kev_ids = kev_ids_for_serialization() if is_security else frozenset()
+        euvd_ids = euvd_ids_for_serialization() if is_security else frozenset()
+        result = _result_with_kev(run, kev_ids, euvd_ids)
+        findings = result.get("findings") if isinstance(result, dict) else None
+        if not isinstance(findings, list):
+            findings = []
+        if is_security:
+            # Scanner status markers ride the same array and are not
+            # vulnerabilities, the same filter the eager list used to apply.
+            findings = vulnerability_findings(findings)
+
+        paginator = Paginator(findings, self.page_size)
+        page = paginator.get_page(request.GET.get("page"))
+        base_url = reverse("plugins:assessment_run_findings", args=[str(run.id)])
+        return render(
+            request,
+            "plugins/components/_assessment_run_findings.html.j2",
+            {
+                "run": run,
+                "is_security": is_security,
+                "findings": list(page.object_list),
+                "can_triage": can(request, "artifact:publish_vex", sbom.component),
+                "page": page.number,
+                "page_count": paginator.num_pages,
+                "has_prev": page.has_previous(),
+                "has_next": page.has_next(),
+                "prev_url": f"{base_url}?page={page.previous_page_number()}" if page.has_previous() else "",
+                "next_url": f"{base_url}?page={page.next_page_number()}" if page.has_next() else "",
+            },
+        )
