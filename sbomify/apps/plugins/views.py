@@ -11,7 +11,7 @@ from django.views import View
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
-from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 from sbomify.logging import getLogger
 
 from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, update_team_plugin_settings
@@ -176,7 +176,7 @@ class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return render(request, "plugins/plugins_summary.html.j2", context)
 
 
-class AssessmentRunFindingsView(LoginRequiredMixin, View):
+class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """One page of a single assessment run's findings.
 
     The run card on the artifact page renders its header from ``result.summary``
@@ -185,6 +185,10 @@ class AssessmentRunFindingsView(LoginRequiredMixin, View):
 
     Authorized by the same ``component:access`` check the assessments API runs,
     so this adds no reachable data beyond what that endpoint already answers.
+    Guests are blocked on top of that, the way the page this belongs to is.
+    ``component:access`` is the attribute path a guest legitimately reaches
+    gated trust-center content through, so without the mixin a guest redirected
+    off the artifact page could still pull its fragments by URL.
 
     One URL, two audiences. An HTMX request gets the region; a plain one, a
     pasted link or a pager link followed with hx-boost not running, lands on the

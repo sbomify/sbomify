@@ -458,6 +458,26 @@ class TestTheFindingsListArrivesWhenAsked:
         )
         assert response["Location"].endswith("#plugin-osv")
 
+    def test_a_guest_member_is_sent_to_the_public_page(self, sample_team_with_guest_member: Member) -> None:
+        """The artifact page blocks guests, so its fragments have to as well.
+
+        ``component:access`` is the attribute path a guest reaches gated content
+        through, so the authorization check alone would let one pull an internal
+        fragment by URL after being redirected off the page that hosts it.
+        """
+        member = sample_team_with_guest_member
+        component = Component.objects.create(
+            team=member.team, name="guarded", component_type=Component.ComponentType.BOM
+        )
+        run = self._run_with(component, 3)
+        client = Client()
+        setup_authenticated_client_session(client, member.team, member.user)
+
+        response = client.get(self._findings_url(run), headers={"hx-request": "true"})
+
+        assert response.status_code == 302
+        assert response["Location"] == reverse("core:workspace_public", kwargs={"workspace_key": member.team.key})
+
     def test_an_id_that_is_not_a_run_is_a_404(self, signed_in) -> None:
         client, _ = signed_in
 
