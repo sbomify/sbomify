@@ -432,8 +432,13 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             try:
                 from sbomify.apps.plugins.apis import get_sbom_assessments
 
-                # Create a mock request object with the sbom_id parameter
-                assessment_response = get_sbom_assessments(request, item_id)
+                # The card loops `latest_runs` alone, reads counts from each
+                # run's summary, and shows one title; the findings list behind
+                # it is fetched when a reader opens the card. Asking for the
+                # whole response built every finding of every run twice, which
+                # is how this page reached 31 MB and a 504 on a
+                # four-thousand-finding scan.
+                assessment_response = get_sbom_assessments(request, item_id, findings_limit=1, include_history=False)
                 # Use mode='json' to ensure datetime objects are serialized as ISO strings
                 assessment_runs = assessment_response.model_dump(mode="json")
             except Exception:

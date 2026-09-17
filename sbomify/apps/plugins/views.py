@@ -3,14 +3,15 @@
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
-from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 from sbomify.logging import getLogger
 
 from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, update_team_plugin_settings
@@ -173,3 +174,65 @@ class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 context["plugin_stats"] = stats
 
         return render(request, "plugins/plugins_summary.html.j2", context)
+
+
+class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """One page of a single assessment run's findings.
+
+    The run card on the artifact page renders its header from ``result.summary``
+    and fetches this when a reader opens it, so a scan with thousands of
+    findings costs the page nothing until someone looks.
+
+    Authorized by the same ``component:access`` check the assessments API runs,
+    so this adds no reachable data beyond what that endpoint already answers.
+    Guests are blocked on top of that, the way the page this belongs to is.
+    ``component:access`` is the attribute path a guest legitimately reaches
+    gated trust-center content through, so without the mixin a guest redirected
+    off the artifact page could still pull its fragments by URL.
+
+    One URL, two audiences. An HTMX request gets the region; a plain one, a
+    pasted link or a pager link followed with hx-boost not running, lands on the
+    artifact page at that plugin's card instead of a bare fragment.
+    """
+
+    def get(self, request: HttpRequest, run_id: str) -> HttpResponse:
+        from sbomify.apps.core.authz import can
+
+        from .services.run_findings import build_run_findings_page
+
+        result = build_run_findings_page(request, run_id, request.GET.get("page"))
+        if not result.ok or result.value is None:
+            return HttpResponseNotFound(result.error or "Assessment run not found")
+        found = result.value
+
+        # The header rather than django-htmx's request.htmx, the same reading the
+        # vulnerabilities panel does: the middleware that sets that attribute is
+        # not in the test settings.
+        if not request.headers.get("HX-Request"):
+            page_url = reverse(
+                "core:component_item",
+                kwargs={
+                    "component_id": found.sbom.component_id,
+                    "item_type": "sboms",
+                    "item_id": str(found.sbom.id),
+                },
+            )
+            return HttpResponseRedirect(f"{page_url}#plugin-{found.run.plugin_name}")
+
+        base_url = reverse("plugins:assessment_run_findings", args=[str(found.run.id)])
+        return render(
+            request,
+            "plugins/components/_assessment_run_findings.html.j2",
+            {
+                "run": found.run,
+                "is_security": found.is_security,
+                "findings": found.findings,
+                "can_triage": can(request, "artifact:publish_vex", found.sbom.component),
+                "page": found.page,
+                "page_count": found.page_count,
+                "has_prev": found.has_prev,
+                "has_next": found.has_next,
+                "prev_url": f"{base_url}?page={found.page - 1}" if found.has_prev else "",
+                "next_url": f"{base_url}?page={found.page + 1}" if found.has_next else "",
+            },
+        )

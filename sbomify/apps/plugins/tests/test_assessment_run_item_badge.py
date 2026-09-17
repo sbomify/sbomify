@@ -55,6 +55,31 @@ def _render(run: dict) -> str:
     return render_to_string("plugins/components/_assessment_run_item.html.j2", {"run": run, "loop_index": 1})
 
 
+def _findings_of(run: dict) -> str:
+    """The list the card fetches once a reader opens it.
+
+    The card itself carries a placeholder and an hx-get; the rows live in their
+    own partial, which is what these assertions are about.
+    """
+    from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_findings
+
+    findings = run["result"]["findings"]
+    is_security = run.get("category") == "security"
+    return render_to_string(
+        "plugins/components/_assessment_run_findings.html.j2",
+        {
+            "run": run,
+            "is_security": is_security,
+            "findings": vulnerability_findings(findings) if is_security else findings,
+            "can_triage": True,
+            "page": 1,
+            "page_count": 1,
+            "has_prev": False,
+            "has_next": False,
+        },
+    )
+
+
 def _header(run: dict) -> str:
     """What a reader sees before expanding the card.
 
@@ -268,7 +293,7 @@ class TestStatusMarkersAreNotVulnerabilities:
         return run
 
     def test_marker_does_not_render_as_a_vulnerability_row(self):
-        html = _render(self._skipped_security_run())
+        html = _findings_of(self._skipped_security_run())
         assert "findings-list" not in html
         assert "Triage" not in html
 
@@ -291,6 +316,6 @@ class TestStatusMarkersAreNotVulnerabilities:
                 "component": {"name": "django", "version": "5.2.3"},
             }
         ]
-        html = _render(run)
+        html = _findings_of(run)
         assert "CVE-2025-1111" in html
         assert "findings-list" in html

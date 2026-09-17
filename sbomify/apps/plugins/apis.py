@@ -125,7 +125,12 @@ def _get_plugin_display_names_map(plugin_names: set[str]) -> dict[str, str]:
     }
 
 
-def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None, euvd_ids: frozenset[str] | None = None) -> Any:
+def _result_with_kev(
+    run: AssessmentRun,
+    kev_ids: frozenset[str] | None,
+    euvd_ids: frozenset[str] | None = None,
+    findings_limit: int | None = None,
+) -> Any:
     """A copy of the run's result with the read-time finding flags stamped in.
 
     Three flags, all derived rather than stored: ``kev`` from the cached CISA
@@ -133,13 +138,29 @@ def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None, euvd_id
     already inside the finding. Deriving them here means every run ever
     recorded carries them without a rescan.
 
-    The stored blob is never mutated. Non-security runs pass through as-is.
+    The stored blob is never mutated. Only the flags are security-only; the
+    bound below applies to every category, because a compliance plugin checks
+    each component and reports per component, so its list grows with the SBOM
+    exactly as a scanner's does.
     """
     result = run.result
-    if run.category != "security" or not isinstance(result, dict):
+    if not isinstance(result, dict):
         return result
     findings = result.get("findings")
-    if not isinstance(findings, list):
+
+    # Bounded before the stamping below, so a caller that renders a count and one
+    # title does not pay KEV lookup, schema validation and JSON serialisation per
+    # finding for thousands it will never read.
+    # Clamped at zero because the endpoint above takes this as a query parameter
+    # from anyone: a negative limit would slice from the end and hand back all
+    # but the last finding, which is the response this bound exists to prevent.
+    if isinstance(findings, list) and findings_limit is not None:
+        limit = max(findings_limit, 0)
+        if len(findings) > limit:
+            result = {**result, "findings": findings[:limit]}
+            findings = result["findings"]
+
+    if run.category != "security" or not isinstance(findings, list):
         return result
 
     from sbomify.apps.vulnerability_scanning.kev import finding_in_kev
@@ -184,6 +205,7 @@ def _run_to_schema(
     display_names: dict[str, str] | None = None,
     kev_ids: frozenset[str] | None = None,
     euvd_ids: frozenset[str] | None = None,
+    findings_limit: int | None = None,
 ) -> AssessmentRunSchema:
     """Convert an AssessmentRun model to schema.
 
@@ -230,7 +252,7 @@ def _run_to_schema(
         "started_at": run.started_at,
         "completed_at": run.completed_at,
         "error_message": run.error_message or None,
-        "result": _result_with_kev(run, kev_ids, euvd_ids),
+        "result": _result_with_kev(run, kev_ids, euvd_ids, findings_limit),
         "created_at": run.created_at,
     }
     try:
@@ -318,10 +340,29 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
 
 @router.get("/assessments/{sbom_id}", response=SBOMAssessmentsResponse, auth=None)
 @decorate_view(optional_auth)
-def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsResponse:
+def get_sbom_assessments(
+    request: HttpRequest,
+    sbom_id: str,
+    *,
+    findings_limit: int | None = None,
+    include_history: bool = True,
+) -> SBOMAssessmentsResponse:
     """Get all assessment runs for an SBOM.
 
     Returns both the latest run per plugin and the full history.
+
+    Two knobs for callers that render a summary rather than a list, both
+    defaulting to the full response so the HTTP contract is unchanged:
+
+    ``findings_limit`` bounds the findings carried per run. The artifact page's
+    card shows counts from ``result.summary`` and exactly one title, and the
+    findings list behind it reached 31 MB on a four-thousand-finding scan, which
+    is a 504 at the gateway before the page is ever written.
+
+    ``include_history`` drops ``all_runs``. Every finding was otherwise stamped,
+    validated and serialised twice, once for the latest run per plugin and again
+    for the same run inside the history, and the artifact page reads only the
+    former.
     """
     # Only expose results for an SBOM whose component the caller may read (public, or an
     # authorized member/token). Otherwise return the empty "no assessments" shape so neither
@@ -366,8 +407,12 @@ def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsR
     return SBOMAssessmentsResponse(
         sbom_id=sbom_id,
         status_summary=status_summary,
-        latest_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids) for run in latest_runs],
-        all_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids) for run in all_runs],
+        latest_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in latest_runs],
+        all_runs=(
+            [_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in all_runs]
+            if include_history
+            else []
+        ),
     )
 
 
