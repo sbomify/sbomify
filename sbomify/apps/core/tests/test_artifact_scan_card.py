@@ -182,3 +182,124 @@ class TestTheScanCard:
         summary = self._summary(client, component, sbom)
         assert summary is not None
         assert summary["provider"] == "osv"
+
+
+@pytest.mark.django_db
+class TestTheCardIsNotHandedEveryFinding:
+    """The artifact page carried every finding to a card that renders one.
+
+    `_assessment_run_item` reads `result.summary` for every number it shows and
+    exactly one finding, `result.findings.0.title`. It never loops them. Passing
+    the whole list anyway meant serialising each plugin's findings and building
+    a Django context to match: measured on staging at 9 MB for a thousand
+    findings and 31 MB for four thousand, and a 504 at the 60s gateway in both
+    cases. That is the same shape as the panel bug, one page over.
+    """
+
+    @pytest.fixture
+    def signed_in(self, sample_team_with_owner_member: Member) -> tuple[Client, Component]:
+        component = Component.objects.create(
+            team=sample_team_with_owner_member.team,
+            name="noisy-image",
+            component_type=Component.ComponentType.BOM,
+        )
+        client = Client()
+        setup_authenticated_client_session(
+            client, sample_team_with_owner_member.team, sample_team_with_owner_member.user
+        )
+        return client, component
+
+    def _sbom_with(self, component: Component, finding_count: int) -> SBOM:
+        sbom = SBOM.objects.create(
+            component=component,
+            name="noisy",
+            format="cyclonedx",
+            format_version="1.6",
+            # Unique per size: documents are unique on component, name and version.
+            version=f"1.0.{finding_count}",
+            sbom_filename=f"noisy-{finding_count}.json",
+        )
+        findings = [
+            {
+                "id": f"CVE-2026-{i:05d}",
+                "title": f"CVE-2026-{i:05d}",
+                "description": "x" * 200,
+                "severity": "high",
+                "component": {"name": "tensorflow", "version": "2.0.0", "ecosystem": "PyPI"},
+            }
+            for i in range(finding_count)
+        ]
+        _run(
+            sbom,
+            "osv",
+            {
+                "plugin_name": "osv",
+                "plugin_version": "1.0.0",
+                "category": "security",
+                "assessed_at": "2026-09-17T07:00:00Z",
+                "summary": {
+                    "total_findings": finding_count,
+                    "by_severity": {"critical": 0, "high": finding_count, "medium": 0, "low": 0},
+                },
+                "findings": findings,
+                "metadata": {"scanner": "osv-scanner"},
+            },
+        )
+        return sbom
+
+    def _runs(self, client: Client, component: Component, sbom: SBOM):
+        url = reverse(
+            "core:component_item",
+            kwargs={"component_id": component.id, "item_type": "sboms", "item_id": sbom.id},
+        )
+        response = client.get(url)
+        assert response.status_code == 200
+        return response.context["assessment_runs"]
+
+    def test_only_the_finding_the_card_shows_is_carried(self, signed_in) -> None:
+        client, component = signed_in
+        sbom = self._sbom_with(component, 500)
+
+        runs = self._runs(client, component, sbom)
+
+        osv = next(r for r in runs["latest_runs"] if r["plugin_name"] == "osv")
+        assert len(osv["result"]["findings"]) == 1
+
+    def test_the_title_the_card_renders_survives(self, signed_in) -> None:
+        """`findings.0.title` is on the page, so the first one has to stay."""
+        client, component = signed_in
+        sbom = self._sbom_with(component, 500)
+
+        runs = self._runs(client, component, sbom)
+
+        osv = next(r for r in runs["latest_runs"] if r["plugin_name"] == "osv")
+        assert osv["result"]["findings"][0]["title"] == "CVE-2026-00000"
+
+    def test_every_count_the_card_shows_is_untouched(self, signed_in) -> None:
+        """The numbers come from summary, never from counting the list."""
+        client, component = signed_in
+        sbom = self._sbom_with(component, 500)
+
+        runs = self._runs(client, component, sbom)
+
+        osv = next(r for r in runs["latest_runs"] if r["plugin_name"] == "osv")
+        assert osv["result"]["summary"]["total_findings"] == 500
+        assert osv["result"]["summary"]["by_severity"]["high"] == 500
+
+    def test_the_page_does_not_grow_with_the_finding_count(self, signed_in) -> None:
+        """The property that matters: 500 findings and 5,000 cost the same."""
+        client, component = signed_in
+        small = self._sbom_with(component, 50)
+        large = self._sbom_with(component, 5000)
+
+        url = reverse(
+            "core:component_item", kwargs={"component_id": component.id, "item_type": "sboms", "item_id": small.id}
+        )
+        small_len = len(client.get(url).content)
+        url = reverse(
+            "core:component_item", kwargs={"component_id": component.id, "item_type": "sboms", "item_id": large.id}
+        )
+        large_len = len(client.get(url).content)
+
+        # A hundredfold more findings must not show up as a bigger page.
+        assert large_len < small_len * 1.1
