@@ -431,3 +431,44 @@ class TestTheFindingsListArrivesWhenAsked:
         client, _ = signed_in
 
         assert client.get(reverse("plugins:assessment_run_findings", kwargs={"run_id": "run1"})).status_code == 404
+
+
+@pytest.mark.django_db
+class TestTheBoundCannotBeTurnedOff:
+    """``findings_limit`` reaches the assessments endpoint as a query parameter,
+    and that endpoint is ``auth=None``. A negative value would slice from the
+    end and return every finding but the last, which is the response the bound
+    exists to prevent."""
+
+    @pytest.mark.parametrize("limit", [-1, -500])
+    def test_a_negative_limit_returns_no_findings_rather_than_nearly_all(
+        self, sample_team_with_owner_member: Member, limit: int
+    ) -> None:
+        from sbomify.apps.plugins.apis import _result_with_kev
+
+        component = Component.objects.create(
+            team=sample_team_with_owner_member.team,
+            name="bounded",
+            component_type=Component.ComponentType.BOM,
+        )
+        sbom = SBOM.objects.create(
+            component=component,
+            name="bounded",
+            format="cyclonedx",
+            format_version="1.6",
+            version="1.0",
+            sbom_filename="bounded.json",
+        )
+        run = _run(
+            sbom,
+            "osv",
+            {
+                "summary": {"total_findings": 3, "by_severity": {"critical": 0, "high": 3, "medium": 0, "low": 0}},
+                "findings": [{"id": f"CVE-2026-{i}", "title": f"CVE-2026-{i}", "severity": "high"} for i in range(3)],
+                "metadata": {"scanner": "osv-scanner"},
+            },
+        )
+
+        result = _result_with_kev(run, frozenset(), frozenset(), findings_limit=limit)
+
+        assert result["findings"] == []

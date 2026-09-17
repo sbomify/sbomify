@@ -150,9 +150,14 @@ def _result_with_kev(
     # Bounded before the stamping below, so a caller that renders a count and one
     # title does not pay KEV lookup, schema validation and JSON serialisation per
     # finding for thousands it will never read.
-    if findings_limit is not None and len(findings) > findings_limit:
-        result = {**result, "findings": findings[:findings_limit]}
-        findings = result["findings"]
+    # Clamped at zero because the endpoint above takes this as a query parameter
+    # from anyone: a negative limit would slice from the end and hand back all
+    # but the last finding, which is the response this bound exists to prevent.
+    if findings_limit is not None:
+        limit = max(findings_limit, 0)
+        if len(findings) > limit:
+            result = {**result, "findings": findings[:limit]}
+            findings = result["findings"]
 
     from sbomify.apps.vulnerability_scanning.kev import finding_in_kev
     from sbomify.apps.vulnerability_scanning.malicious import stamp_malicious
