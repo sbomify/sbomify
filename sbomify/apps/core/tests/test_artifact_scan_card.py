@@ -65,13 +65,19 @@ CLEAN_RESULT: dict[str, Any] = {
 }
 
 
-def _run(sbom: SBOM, plugin_name: str, result: dict[str, Any], created_at: datetime | None = None) -> AssessmentRun:
+def _run(
+    sbom: SBOM,
+    plugin_name: str,
+    result: dict[str, Any],
+    created_at: datetime | None = None,
+    category: str = "security",
+) -> AssessmentRun:
     run = AssessmentRun.objects.create(
         sbom=sbom,
         plugin_name=plugin_name,
         plugin_version="1.0.0",
         plugin_config_hash=sha256(plugin_name.encode()).hexdigest(),
-        category="security",
+        category=category,
         run_reason=RunReason.ON_UPLOAD.value,
         status="completed",
         result=result,
@@ -466,15 +472,11 @@ class TestTheBoundCannotBeTurnedOff:
     end and return every finding but the last, which is the response the bound
     exists to prevent."""
 
-    @pytest.mark.parametrize("limit", [-1, -500])
-    def test_a_negative_limit_returns_no_findings_rather_than_nearly_all(
-        self, sample_team_with_owner_member: Member, limit: int
-    ) -> None:
-        from sbomify.apps.plugins.apis import _result_with_kev
-
+    @staticmethod
+    def _run_of(member: Member, category: str, count: int) -> AssessmentRun:
         component = Component.objects.create(
-            team=sample_team_with_owner_member.team,
-            name="bounded",
+            team=member.team,
+            name=f"bounded-{category}",
             component_type=Component.ComponentType.BOM,
         )
         sbom = SBOM.objects.create(
@@ -482,18 +484,48 @@ class TestTheBoundCannotBeTurnedOff:
             name="bounded",
             format="cyclonedx",
             format_version="1.6",
-            version="1.0",
-            sbom_filename="bounded.json",
+            version=f"1.0.{count}",
+            sbom_filename=f"bounded-{category}.json",
         )
-        run = _run(
+        return _run(
             sbom,
-            "osv",
+            "osv" if category == "security" else "ntia-minimum-elements-2021",
             {
-                "summary": {"total_findings": 3, "by_severity": {"critical": 0, "high": 3, "medium": 0, "low": 0}},
-                "findings": [{"id": f"CVE-2026-{i}", "title": f"CVE-2026-{i}", "severity": "high"} for i in range(3)],
+                "summary": {
+                    "total_findings": count,
+                    "by_severity": {"critical": 0, "high": count, "medium": 0, "low": 0},
+                },
+                "findings": [
+                    {"id": f"CVE-2026-{i}", "title": f"CVE-2026-{i}", "severity": "high"} for i in range(count)
+                ],
                 "metadata": {"scanner": "osv-scanner"},
             },
+            category=category,
         )
+
+    @pytest.mark.parametrize("category", ["security", "compliance"])
+    def test_the_bound_holds_whatever_the_plugin_checks(
+        self, sample_team_with_owner_member: Member, category: str
+    ) -> None:
+        """A compliance plugin reports per component, so its list grows with the
+        SBOM exactly as a scanner's does. The flags are security-only; the bound
+        is not."""
+        from sbomify.apps.plugins.apis import _result_with_kev
+
+        run = self._run_of(sample_team_with_owner_member, category, count=40)
+
+        result = _result_with_kev(run, frozenset(), frozenset(), findings_limit=1)
+
+        assert len(result["findings"]) == 1
+        assert result["summary"]["total_findings"] == 40
+
+    @pytest.mark.parametrize("limit", [-1, -500])
+    def test_a_negative_limit_returns_no_findings_rather_than_nearly_all(
+        self, sample_team_with_owner_member: Member, limit: int
+    ) -> None:
+        from sbomify.apps.plugins.apis import _result_with_kev
+
+        run = self._run_of(sample_team_with_owner_member, "security", count=3)
 
         result = _result_with_kev(run, frozenset(), frozenset(), findings_limit=limit)
 

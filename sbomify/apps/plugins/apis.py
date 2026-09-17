@@ -138,14 +138,15 @@ def _result_with_kev(
     already inside the finding. Deriving them here means every run ever
     recorded carries them without a rescan.
 
-    The stored blob is never mutated. Non-security runs pass through as-is.
+    The stored blob is never mutated. Only the flags are security-only; the
+    bound below applies to every category, because a compliance plugin checks
+    each component and reports per component, so its list grows with the SBOM
+    exactly as a scanner's does.
     """
     result = run.result
-    if run.category != "security" or not isinstance(result, dict):
+    if not isinstance(result, dict):
         return result
     findings = result.get("findings")
-    if not isinstance(findings, list):
-        return result
 
     # Bounded before the stamping below, so a caller that renders a count and one
     # title does not pay KEV lookup, schema validation and JSON serialisation per
@@ -153,11 +154,14 @@ def _result_with_kev(
     # Clamped at zero because the endpoint above takes this as a query parameter
     # from anyone: a negative limit would slice from the end and hand back all
     # but the last finding, which is the response this bound exists to prevent.
-    if findings_limit is not None:
+    if isinstance(findings, list) and findings_limit is not None:
         limit = max(findings_limit, 0)
         if len(findings) > limit:
             result = {**result, "findings": findings[:limit]}
             findings = result["findings"]
+
+    if run.category != "security" or not isinstance(findings, list):
+        return result
 
     from sbomify.apps.vulnerability_scanning.kev import finding_in_kev
     from sbomify.apps.vulnerability_scanning.malicious import stamp_malicious
