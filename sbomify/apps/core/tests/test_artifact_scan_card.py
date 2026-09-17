@@ -369,6 +369,10 @@ class TestTheFindingsListArrivesWhenAsked:
         url = reverse("plugins:assessment_run_findings", kwargs={"run_id": str(run.id)})
         return url if page is None else f"{url}?page={page}"
 
+    def _open(self, client: Client, run: AssessmentRun, page: int | None = None):
+        """Fetch the list the way the card does, as HTMX."""
+        return client.get(self._findings_url(run, page), headers={"hx-request": "true"})
+
     def test_the_closed_card_carries_the_link_and_none_of_the_rows(self, signed_in) -> None:
         client, component = signed_in
         run = self._run_with(component, 300)
@@ -387,7 +391,7 @@ class TestTheFindingsListArrivesWhenAsked:
         client, component = signed_in
         run = self._run_with(component, 300)
 
-        html = client.get(self._findings_url(run)).content.decode()
+        html = self._open(client, run).content.decode()
 
         assert "CVE-2026-00000" in html
         assert "CVE-2026-00024" in html
@@ -400,7 +404,7 @@ class TestTheFindingsListArrivesWhenAsked:
         client, component = signed_in
         run = self._run_with(component, 300)
 
-        html = client.get(self._findings_url(run, page=12)).content.decode()
+        html = self._open(client, run, page=12).content.decode()
 
         assert "CVE-2026-00299" in html
 
@@ -412,7 +416,7 @@ class TestTheFindingsListArrivesWhenAsked:
         )
         AssessmentRun.objects.filter(pk=run.pk).update(result=run.result)
 
-        html = client.get(self._findings_url(run)).content.decode()
+        html = self._open(client, run).content.decode()
 
         assert "CVE-2026-00000" in html
         assert "No Packages Recognised" not in html
@@ -423,14 +427,32 @@ class TestTheFindingsListArrivesWhenAsked:
         outsider = Client()
         outsider.force_login(guest_user)
 
-        response = outsider.get(self._findings_url(run))
+        response = outsider.get(self._findings_url(run), headers={"hx-request": "true"})
 
         assert response.status_code == 404
+
+    def test_a_plain_visit_lands_on_the_artifact_page(self, signed_in) -> None:
+        """A pasted link is a reader, not a swap, so it gets the page the card
+        is on rather than a fragment with no styling around it."""
+        client, component = signed_in
+        run = self._run_with(component, 5)
+
+        response = client.get(self._findings_url(run, page=1))
+
+        assert response.status_code == 302
+        assert response["Location"].startswith(
+            reverse(
+                "core:component_item",
+                kwargs={"component_id": component.id, "item_type": "sboms", "item_id": str(run.sbom_id)},
+            )
+        )
+        assert response["Location"].endswith("#plugin-osv")
 
     def test_an_id_that_is_not_a_run_is_a_404(self, signed_in) -> None:
         client, _ = signed_in
 
-        assert client.get(reverse("plugins:assessment_run_findings", kwargs={"run_id": "run1"})).status_code == 404
+        url = reverse("plugins:assessment_run_findings", kwargs={"run_id": "run1"})
+        assert client.get(url, headers={"hx-request": "true"}).status_code == 404
 
 
 @pytest.mark.django_db

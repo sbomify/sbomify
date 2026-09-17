@@ -4,7 +4,7 @@ import uuid
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
@@ -188,6 +188,10 @@ class AssessmentRunFindingsView(LoginRequiredMixin, View):
 
     Authorized by the same ``component:access`` check the assessments API runs,
     so this adds no reachable data beyond what that endpoint already answers.
+
+    One URL, two audiences. An HTMX request gets the region; a plain one, a
+    pasted link or a pager link followed with hx-boost not running, lands on the
+    artifact page at that plugin's card instead of a bare fragment.
     """
 
     #: Findings per page. Matches the vulnerabilities panel so a reader moving
@@ -221,6 +225,16 @@ class AssessmentRunFindingsView(LoginRequiredMixin, View):
         sbom = _readable_sbom(request, str(run.sbom_id))
         if sbom is None:
             return HttpResponseNotFound("Assessment run not found")
+
+        # The header rather than django-htmx's request.htmx, the same reading the
+        # vulnerabilities panel does: the middleware that sets that attribute is
+        # not in the test settings.
+        if not request.headers.get("HX-Request"):
+            page_url = reverse(
+                "core:component_item",
+                kwargs={"component_id": sbom.component_id, "item_type": "sboms", "item_id": str(sbom.id)},
+            )
+            return HttpResponseRedirect(f"{page_url}#plugin-{run.plugin_name}")
 
         is_security = run.category == "security"
         kev_ids = kev_ids_for_serialization() if is_security else frozenset()
