@@ -70,4 +70,11 @@
     </template>
 {% endif %}
 </c-tables.shell>
-{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}
+{% comment %}The delete modal posts to the list endpoint by name, not to
+request.path. This template is rendered by two views: the list itself, and the
+form view after a create or an update. Taking the action from the request meant a
+profile deleted straight after being created posted to the form endpoint, which
+validated the create form and answered "name: This field is required" to a
+request that was not creating anything.{% endcomment %}
+{% url 'teams:contact_profiles_list' team.key as delete_url %}
+{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=delete_url form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}
