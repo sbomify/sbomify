@@ -84,7 +84,7 @@
             <c-buttons.secondary hx-get="{% url 'teams:contact_profiles_list' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML">
             Cancel
             </c-buttons.secondary>
-            <c-buttons.primary type="submit" ::disabled="hasErrors">
+            <c-buttons.primary type="submit" ::disabled="hasErrors || visibleEntitiesCount === 0">
             <i class="fas fa-check mr-2"></i>
             {% if is_create %}
                 Create Profile

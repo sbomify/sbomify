@@ -164,7 +164,7 @@ class TestContactProfileScope:
         client = Client()
         base_url = f"{WORKSPACES_URL}{bound.key}/contact-profiles"
 
-        response = _post_json(client, base_url, {"name": "In scope"}, scoped_token)
+        response = _post_json(client, base_url, {"name": "In scope", "company": "Example Corp"}, scoped_token)
         assert response.status_code == 201
         profile_id = response.json()["id"]
 
@@ -177,7 +177,10 @@ class TestContactProfileScope:
     def test_unscoped_token_can_manage_profiles_in_any_workspace(self, owner_of_two_workspaces, unscoped_token):
         _, _, other = owner_of_two_workspaces
         response = _post_json(
-            Client(), f"{WORKSPACES_URL}{other.key}/contact-profiles", {"name": "Unscoped"}, unscoped_token
+            Client(),
+            f"{WORKSPACES_URL}{other.key}/contact-profiles",
+            {"name": "Unscoped", "company": "Example Corp"},
+            unscoped_token,
         )
         assert response.status_code == 201
         assert ContactProfile.objects.filter(team=other, name="Unscoped").exists()

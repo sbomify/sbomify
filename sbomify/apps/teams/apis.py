@@ -871,6 +871,9 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
             if payload.authors:
                 _upsert_authors(profile, payload.authors, fallback_email)
 
+            if not profile.entities.exists():
+                raise ValueError("Add at least one entity before creating a contact profile.")
+
         # Re-fetch with prefetch_related for efficient serialization
         profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
         return 201, serialize_contact_profile(profile)
