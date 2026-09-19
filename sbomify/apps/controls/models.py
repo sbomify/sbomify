@@ -13,11 +13,31 @@ class ControlCatalog(models.Model):
     class Source(models.TextChoices):
         BUILTIN = "builtin", "Built-in"
         CUSTOM = "custom", "Custom"
+        # An integration owns this catalog: the workspace's compliance tool is
+        # the system of record and every sync overwrites what is here. The
+        # value is the provider key, so ``Integration.provider`` and
+        # ``ControlCatalog.source`` are the same string and a disconnect can
+        # find what it published without a second table.
+        VANTA = "vanta", "Vanta"
 
     class Meta:
         db_table = "controls_catalog"
         unique_together = ("team", "name", "version")
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["team", "source", "external_id"], name="controls_catalog_source_idx"),
+        ]
+        constraints = [
+            # A synced catalog is identified by the id its own system gave it,
+            # so the database is what stops two concurrent syncs of one account
+            # from both creating it. Hand-made catalogs carry no external id and
+            # are excluded, or they would all collide on the empty string.
+            models.UniqueConstraint(
+                fields=["team", "source", "external_id"],
+                condition=~models.Q(external_id=""),
+                name="unique_catalog_per_external_id",
+            ),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
@@ -27,12 +47,35 @@ class ControlCatalog(models.Model):
     name = models.CharField(max_length=255)
     version = models.CharField(max_length=50)
     source = models.CharField(max_length=20, choices=Source.choices, default=Source.BUILTIN)
+    # The id this catalog has in the system that owns it, for synced sources.
+    # Identity for a sync is this, not the name: a framework that gets renamed
+    # upstream must update in place rather than arrive as a second catalog.
+    external_id = models.CharField(max_length=255, blank=True, default="")
+    # Whether this workspace tracks the framework at all: it appears in the
+    # settings UI, and plugin assessments may promote its controls.
     is_active = models.BooleanField(default=True)
+    # Whether it appears on the public trust center. Separate from is_active,
+    # and default off, because the two are different decisions and only one of
+    # them is outward-facing. Tracking SOC 2 internally is not consent to
+    # publish a compliance score to your customers, so a catalogue a workspace
+    # was already using stays internal until somebody says otherwise.
+    is_published = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
         return f"{self.name} {self.version}"
+
+    @property
+    def is_integration_owned(self) -> bool:
+        return self.source in INTEGRATION_SOURCES
+
+
+# The sources an external system owns and rewrites on every sync. A catalogue
+# with one of these is not ours to edit: promoting one of its controls from a
+# plugin result would overwrite the answer the workspace's own compliance tool
+# gave, which is the one thing a synced catalogue is for.
+INTEGRATION_SOURCES: frozenset[str] = frozenset({ControlCatalog.Source.VANTA})
 
 
 class Control(models.Model):
@@ -47,6 +90,9 @@ class Control(models.Model):
     control_id = models.CharField(max_length=50)
     title = models.CharField(max_length=500)
     description = models.TextField(blank=True, default="")
+    # As above, for controls: ``control_id`` is the code a reader recognises
+    # ("CC1.1") and can change, this is the upstream row's own id.
+    external_id = models.CharField(max_length=255, blank=True, default="")
     sort_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

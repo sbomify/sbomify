@@ -133,6 +133,8 @@ jobs:
             path: "sbomify/apps/oidc/tests/"
           - name: "Controls Tests"
             path: "sbomify/apps/controls/tests/"
+          - name: "Integrations Tests"
+            path: "sbomify/apps/integrations/tests/"
           - name: "Team Tests"
             path: "sbomify/apps/teams/tests/"
           - name: "Billing Tests"

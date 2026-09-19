@@ -65,6 +65,27 @@
                 </div>
             </section>
         {% endif %}
+        {# ---- Compliance frameworks ------------------------------------------- #}
+        {% comment %}
+        Second, under certifications, because the two answer the same question
+        at different resolutions: a certificate says an auditor signed off, a
+        framework says how much of the programme behind it is in place.
+
+        Like certifications, the whole section disappears when there is nothing
+        published rather than announcing an absence. A workspace publishes a
+        framework deliberately, from Settings, whether it maintains the
+        controls by hand or an integration keeps them current.
+        {% endcomment %}
+        {% if controls_summary_list %}
+            <section class="flex flex-col gap-4 scroll-mt-[4.5rem]" id="frameworks">
+                <c-branded.section-header title="Compliance frameworks" subtitle="The frameworks we work to, and how much of each one is in place." />
+                <div class="flex flex-col gap-4">
+                    {% for catalog_summary in controls_summary_list %}
+                        {% include "core/components/trust_center/framework_panel.html.j2" with catalog_summary=catalog_summary %}
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
         {# ---- Security advisories -------------------------------------------- #}
         <section class="flex flex-col gap-4 scroll-mt-[4.5rem]" id="advisories">
             <c-branded.section-header title="Security advisories" subtitle="Vulnerabilities we have disclosed, what they affect, and where the fix is.">

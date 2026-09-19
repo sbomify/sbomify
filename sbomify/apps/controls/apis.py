@@ -896,7 +896,11 @@ def public_controls_summary(request: HttpRequest, workspace_key: str) -> HttpRes
         content_type="application/json",
         status=200,
     )
-    response["Cache-Control"] = "public, max-age=3600"
+    # A minute, not an hour. Unpublishing a framework and disconnecting the
+    # provider both promise the score comes off the trust center straight away,
+    # and there is no purge on the edge to make that true, so the cache window
+    # is the upper bound on how long a taken-down claim can still be served.
+    response["Cache-Control"] = "public, max-age=60"
     return response
 
 
@@ -952,5 +956,9 @@ def public_product_controls_summary(
         content_type="application/json",
         status=200,
     )
-    response["Cache-Control"] = "public, max-age=3600"
+    # A minute, not an hour. Unpublishing a framework and disconnecting the
+    # provider both promise the score comes off the trust center straight away,
+    # and there is no purge on the edge to make that true, so the cache window
+    # is the upper bound on how long a taken-down claim can still be served.
+    response["Cache-Control"] = "public, max-age=60"
     return response

@@ -95,6 +95,13 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         description="What the public sees, and who may be let past the gate.",
     ),
     SettingsTab(
+        key="integrations",
+        label="Integrations",
+        icon="fa-plug",
+        template="integrations",
+        description="Connect the tools that already track your compliance.",
+    ),
+    SettingsTab(
         key="branding",
         label="Branding",
         icon="fa-palette",
