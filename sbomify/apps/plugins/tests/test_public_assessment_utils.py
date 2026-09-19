@@ -300,6 +300,41 @@ class TestGetSbomPassingAssessments:
 
         assert get_sbom_passing_assessments(str(sbom.id)) == []
 
+    def test_mixed_pass_and_warning_run_is_not_passing(self, sbom, ntia_plugin):
+        """Warnings must suppress the public "All checks passed" badge.
+
+        A document whose per-component elements all warn (everything exempt)
+        still has document-level checks that pass, so pass_count > 0 — but a
+        public badge claiming every check passed over live warnings is false.
+        """
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={
+                "summary": {
+                    "total_findings": 7,
+                    "pass_count": 3,
+                    "fail_count": 0,
+                    "warning_count": 4,
+                    "error_count": 0,
+                }
+            },
+        )
+
+        assert get_sbom_passing_assessments(str(sbom.id)) == []
+
+    def test_public_badge_and_dependency_gate_share_one_judgement(self):
+        """The two predicates must not drift: same function, explicit axis."""
+        from sbomify.apps.plugins import orchestrator, public_assessment_utils, verdict
+
+        assert public_assessment_utils.compliance_summary_passing is verdict.compliance_summary_passing
+        assert orchestrator.compliance_summary_passing is verdict.compliance_summary_passing
+
     def test_passing_run_carries_citable_facts(self, sbom, ntia_plugin):
         """The standard identity, check counts and verified date reach the badge."""
         from django.utils import timezone
