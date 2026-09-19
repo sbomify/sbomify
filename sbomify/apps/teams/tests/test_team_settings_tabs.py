@@ -263,6 +263,31 @@ class TestMembersRoleLegend:
         admin_description = next(d for role, _label, d in ROLE_DESCRIPTIONS if role == ROLE_ADMIN)
         assert "Cannot remove an owner or delete the workspace." in admin_description
 
+    def test_legend_states_what_an_operator_cannot_do(self):
+        """An operator is defined by its limits, so the legend has to name them."""
+        from sbomify.apps.core.authz import ROLE_DESCRIPTIONS, ROLE_OPERATOR
+
+        operator_description = next(d for role, _label, d in ROLE_DESCRIPTIONS if role == ROLE_OPERATOR)
+        assert "triages findings" in operator_description
+        assert "Cannot create or edit anything else" in operator_description
+
+
+@pytest.mark.django_db
+class TestOperatorSettingsTabs:
+    """An operator reaches its own account and tokens, and no workspace config."""
+
+    def test_operator_sees_only_personal_tabs(self):
+        from sbomify.apps.teams.settings_tabs import visible_tabs
+
+        keys = {tab.key for tab in visible_tabs("operator", billing_enabled=True)}
+        assert keys == {"tokens", "account"}
+
+    def test_operator_needs_a_token_to_triage_from_a_script(self):
+        """The tokens tab is why it is READ_INTERNAL rather than MANAGE."""
+        from sbomify.apps.teams.settings_tabs import TABS_BY_KEY
+
+        assert "operator" in TABS_BY_KEY["tokens"].roles
+
 
 @pytest.mark.django_db
 class TestTrustCenterDescription:

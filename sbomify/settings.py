@@ -1173,6 +1173,7 @@ TEAMS_SUPPORTED_ROLES = [
     ("owner", "Owner"),
     ("admin", "Admin"),
     ("member", "Member"),
+    ("operator", "Operator"),
     ("guest", "Guest"),
     ("bot", "Bot"),
 ]
