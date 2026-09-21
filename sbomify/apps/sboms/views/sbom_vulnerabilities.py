@@ -35,6 +35,75 @@ PACKAGES_PER_PAGE = 25
 #: finding of the artifact with search and filters.
 MAX_ADVISORIES_PER_PACKAGE = 10
 
+#: This report's filter controls. Its own page, so nothing would collide with
+#: the component panel's ``vuln_`` or the assessment card's ``run_``, but naming
+#: them keeps a link carrying more than one readable.
+PARAM_PREFIX = "scan_"
+
+
+def _advisory_matches(advisory: dict[str, Any], query: Any) -> bool:
+    """Whether one merged advisory survives the toolbar.
+
+    The browse engine reads a flatter shape than this page builds, and this page
+    merges across providers into its own entries rather than using
+    ``extract_finding_rows``. So the few keys the predicates read are handed over
+    beside the advisory rather than converting it, the same way the assessment
+    card does it.
+    """
+    from sbomify.apps.vulnerability_scanning.services.finding_browse import matches_query
+
+    return matches_query(
+        {
+            "id": advisory.get("id") or "",
+            "aliases": advisory.get("aliases") or [],
+            "package": advisory.get("_package_name") or "",
+            "ecosystem": advisory.get("_ecosystem") or "",
+            "severity": advisory.get("severity") or "",
+            "vex_state": advisory.get("vex_state") or "",
+            "vex_suppressed": bool(advisory.get("vex_suppressed")),
+            "kev": bool(advisory.get("kev")),
+        },
+        query,
+    )
+
+
+def _severities_present(packages: list[dict[str, Any]]) -> list[str]:
+    """The severities this scan actually reported, worst first.
+
+    Built before filtering, so choosing one severity does not empty the dropdown
+    that chose it.
+    """
+    from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK
+
+    present = {
+        str(advisory.get("severity") or "").lower()
+        for entry in packages
+        for advisory in entry["vulnerabilities"]
+        if advisory.get("severity")
+    }
+    return sorted(present, key=lambda name: SEVERITY_RANK.get(name, 5))
+
+
+def _filtered_packages(packages: list[dict[str, Any]], query: Any) -> list[dict[str, Any]]:
+    """Packages whose advisories still have something to show."""
+    if not query.is_filtered:
+        return packages
+
+    kept: list[dict[str, Any]] = []
+    for entry in packages:
+        package = entry["package"]
+        surviving = [
+            advisory
+            for advisory in entry["vulnerabilities"]
+            if _advisory_matches(
+                {**advisory, "_package_name": package.get("name"), "_ecosystem": package.get("ecosystem")},
+                query,
+            )
+        ]
+        if surviving:
+            kept.append({**entry, "vulnerabilities": surviving})
+    return kept
+
 
 class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest, sbom_id: str) -> HttpResponse:
@@ -49,6 +118,13 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             )
 
         vulnerabilities_data: dict[str, Any] | None = None
+        # Built before the try so the toolbar renders whatever happens below,
+        # including the error path: a filter that vanishes when a scan fails
+        # leaves the reader unable to clear it.
+        from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query
+
+        scan_query = parse_finding_query(request.GET, prefix=PARAM_PREFIX)
+        scan_severity_options: list[str] = []
         scan_timestamp_str = None
         error_message = None
         error_details = None
@@ -88,6 +164,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
 
                 from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as severity_rank
                 from sbomify.apps.vulnerability_scanning.utils import is_vulnerability
+
+                query = scan_query
 
                 def package_identity(component: dict[str, Any]) -> tuple[str, str, str, str, str]:
                     """(tail_key, purl_base, name, version, ecosystem) for a finding's component."""
@@ -321,6 +399,20 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     # reader who sees the first screen of it: 5.1s of render on
                     # the component page's smaller version of the same table,
                     # against a 30s gateway timeout.
+                    # Filter the advisories inside each package, then drop the
+                    # packages left holding nothing. The grouping is what this
+                    # page is for, so a severity filter answers "which packages
+                    # have a critical" rather than flattening into a list the
+                    # component panel already serves better.
+                    #
+                    # The counts computed above are deliberately not recomputed:
+                    # open_count and suppressed_count describe the whole package,
+                    # which is what the reader is deciding about. A row saying
+                    # "1 of 40" under a critical filter is the useful reading;
+                    # one saying "1 of 1" hides the other 39.
+                    scan_severity_options = _severities_present(packages)
+                    packages = _filtered_packages(packages, query)
+
                     paginator = Paginator(packages, PACKAGES_PER_PAGE)
                     package_page = paginator.get_page(request.GET.get("page"))
                     page_range = list(paginator.get_elided_page_range(package_page.number, on_each_side=1, on_ends=1))
@@ -388,6 +480,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 "vulnerabilities": vulnerabilities_data,
                 "page_obj": package_page,
                 "page_range": page_range,
+                "scan_query": scan_query,
+                "scan_severity_options": scan_severity_options,
                 "scan_timestamp": scan_timestamp_str,
                 "sbom_version_info": sbom_version_info,
                 "error_message": error_message,

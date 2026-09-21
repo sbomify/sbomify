@@ -67,10 +67,41 @@
             <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">Scan Results</h4>
         </div>
         </c-slot>
+        {% comment %}The report keeps its package grouping: it answers "what do I
+        need to upgrade", which is the one question neither the component panel
+        nor the assessment card answers. The filters narrow the advisories inside
+        each package and drop the packages left with nothing, so a severity
+        filter reads as "which packages have a critical" rather than flattening
+        into a list the panel already serves.{% endcomment %}
+        {% if scan_severity_options or scan_query.is_filtered %}
+            <div class="px-6 pt-4">
+                <form method="get" class="flex flex-wrap items-end gap-3">
+                    <input type="hidden" name="scan_submitted" value="1">
+                    <c-tables.search id="scan-search" label="Search advisories and packages" placeholder="Search advisories, packages..." class="max-w-xs" name="scan_search" value="{{ scan_query.search }}" />
+                    <c-tables.select id="scan-severity" label="Filter by severity" name="scan_severity">
+                    <option value="all">All Severities</option>
+                    {% for severity in scan_severity_options %}
+                        <option value="{{ severity }}"
+                                {% if severity == scan_query.severity %}selected{% endif %}>
+                            {{ severity|capfirst }}
+                        </option>
+                    {% endfor %}
+                    </c-tables.select>
+                    <c-forms.checkbox name="scan_suppressed" :checked="scan_query.show_suppressed">Show suppressed</c-forms.checkbox>
+                    <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
+                    {% if scan_query.is_filtered %}
+                        <c-buttons.secondary size="sm" href="{{ request.path }}">Clear</c-buttons.secondary>
+                    {% endif %}
+                </form>
+            </div>
+        {% endif %}
         {% if vulnerabilities %}
             {% if vulnerabilities.results %}
                 {% for result in vulnerabilities.results %}
                     <div class="mb-8 {% if not forloop.last %}pb-8 border-b border-border{% endif %}">
+                        {% if not result.packages and scan_query.is_filtered %}
+                            <c-feedback.empty-state compact icon="fas fa-search" icon_variant="neutral" title="No matches found" message="No packages have an advisory matching these filters." />
+                        {% endif %}
                         {% if result.packages %}
                             <c-tables.shell nested>
                             <c-tables.table sized>
