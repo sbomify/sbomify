@@ -31,7 +31,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.services.component_security import (
     ComponentVulnerabilitiesContext,
     build_component_vulnerabilities,
-    viewer_manages_component,
+    viewer_rights,
 )
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query, query_string
@@ -44,7 +44,9 @@ PANEL_TEMPLATE = "core/components/component_vulnerabilities_table.html.j2"
 PANEL_ANCHOR = "component-vulnerabilities"
 
 
-def vulnerabilities_panel_context(component_id: str, vulns: ComponentVulnerabilitiesContext) -> dict[str, Any]:
+def vulnerabilities_panel_context(
+    component_id: str, vulns: ComponentVulnerabilitiesContext, *, can_triage: bool = False
+) -> dict[str, Any]:
     """Everything the panel template renders, including the URLs it posts back to.
 
     The pager links sit outside the filter form, so they carry the active filters
@@ -58,6 +60,10 @@ def vulnerabilities_panel_context(component_id: str, vulns: ComponentVulnerabili
         "vuln_panel_url": panel_url,
         "latest_vuln_version": vulns.version,
         "latest_vuln_sbom_id": vulns.sbom_id,
+        # Carried in the panel's own context rather than the page's, because the
+        # table is swapped on its own and a page-level flag would not survive it.
+        "can_triage": can_triage,
+        "component_id": component_id,
     }
     if panel is None:
         return context
@@ -85,7 +91,8 @@ class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMi
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
-        if not viewer_manages_component(request, component_id):
+        rights = viewer_rights(request, component_id)
+        if not rights.may_see:
             # 404 rather than 403: for a component this reader has no business
             # with, confirming one exists at that id is itself an answer.
             return error_response(request, HttpResponse(status=404, content="Component not found"))
@@ -101,4 +108,8 @@ class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMi
             return HttpResponseRedirect(f"{page_url}?{query_string(query)}#{PANEL_ANCHOR}")
 
         vulns = build_component_vulnerabilities(component_id, query)
-        return render(request, PANEL_TEMPLATE, vulnerabilities_panel_context(component_id, vulns))
+        return render(
+            request,
+            PANEL_TEMPLATE,
+            vulnerabilities_panel_context(component_id, vulns, can_triage=rights.may_triage),
+        )

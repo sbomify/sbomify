@@ -197,10 +197,11 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
     def get(self, request: HttpRequest, run_id: str) -> HttpResponse:
         from sbomify.apps.core.authz import can
+        from sbomify.apps.vulnerability_scanning.services.finding_browse import query_string
 
-        from .services.run_findings import build_run_findings_page
+        from .services.run_findings import PAGE_SIZE, PARAM_PREFIX, build_run_findings_page
 
-        result = build_run_findings_page(request, run_id, request.GET.get("page"))
+        result = build_run_findings_page(request, run_id, request.GET)
         if not result.ok or result.value is None:
             return HttpResponseNotFound(result.error or "Assessment run not found")
         found = result.value
@@ -220,6 +221,11 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             return HttpResponseRedirect(f"{page_url}#plugin-{found.run.plugin_name}")
 
         base_url = reverse("plugins:assessment_run_findings", args=[str(found.run.id)])
+        query = found.panel["query"]
+        # The pager sits outside the filter form, so its links carry the active
+        # filters themselves; following one must not silently clear the search.
+        prev_qs = query_string(query, page=found.page - 1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE)
+        next_qs = query_string(query, page=found.page + 1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE)
         return render(
             request,
             "plugins/components/_assessment_run_findings.html.j2",
@@ -232,7 +238,9 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "page_count": found.page_count,
                 "has_prev": found.has_prev,
                 "has_next": found.has_next,
-                "prev_url": f"{base_url}?page={found.page - 1}" if found.has_prev else "",
-                "next_url": f"{base_url}?page={found.page + 1}" if found.has_next else "",
+                "prev_url": f"{base_url}?{prev_qs}" if found.has_prev else "",
+                "next_url": f"{base_url}?{next_qs}" if found.has_next else "",
+                "findings_url": base_url,
+                "panel": found.panel,
             },
         )

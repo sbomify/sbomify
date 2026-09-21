@@ -372,8 +372,10 @@ class TestTheFindingsListArrivesWhenAsked:
 
     @staticmethod
     def _findings_url(run: AssessmentRun, page: int | None = None) -> str:
+        # The card's parameters are prefixed now that its toolbar shares the
+        # component panel's filter engine, so the page is `run_page`.
         url = reverse("plugins:assessment_run_findings", kwargs={"run_id": str(run.id)})
-        return url if page is None else f"{url}?page={page}"
+        return url if page is None else f"{url}?run_page={page}"
 
     def _open(self, client: Client, run: AssessmentRun, page: int | None = None):
         """Fetch the list the way the card does, as HTMX."""

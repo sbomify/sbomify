@@ -163,27 +163,14 @@ def _result_with_kev(
     if run.category != "security" or not isinstance(findings, list):
         return result
 
-    from sbomify.apps.vulnerability_scanning.kev import finding_in_kev
+    from sbomify.apps.vulnerability_scanning.kev import stamp_exploited
     from sbomify.apps.vulnerability_scanning.malicious import stamp_malicious
 
-    # Build a new findings list only once a match is actually found — the common
-    # case (no matches) returns the original result with no allocation.
-    # finding_in_kev is a generic id-or-alias set membership test, so the EUVD
-    # list reuses it rather than growing a twin.
-    stamped: list[Any] | None = None
-    if kev_ids or euvd_ids:
-        for i, finding in enumerate(findings):
-            if not isinstance(finding, dict):
-                continue
-            flags: dict[str, bool] = {}
-            if kev_ids and finding_in_kev(finding, kev_ids):
-                flags["kev"] = True
-            if euvd_ids and finding_in_kev(finding, euvd_ids):
-                flags["euvd"] = True
-            if flags:
-                if stamped is None:
-                    stamped = list(findings)
-                stamped[i] = {**finding, **flags}
+    # Both stampers return the list they were given when nothing matched, so the
+    # common case allocates nothing and the identity check below reads as "did
+    # anything change".
+    flagged = stamp_exploited(findings, kev_ids, euvd_ids)
+    stamped: list[Any] | None = flagged if flagged is not findings else None
 
     findings_out, malicious_count = stamp_malicious(stamped if stamped is not None else findings)
     if findings_out is not (stamped if stamped is not None else findings):
