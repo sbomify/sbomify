@@ -89,7 +89,7 @@ data:
       handle @django_health {
         log_skip
         reverse_proxy {{ $web }} {
-          header_up X-Real-IP {remote_host}
+          header_up X-Real-IP {client_ip}
           header_up Host {host}
           header_down -Server
         }
@@ -113,7 +113,7 @@ data:
         @allowed_internal client_ip {{ join " " .Values.caddy.internalApiAllowedCidrs }}
         handle @allowed_internal {
           reverse_proxy {{ $web }} {
-            header_up X-Real-IP {remote_host}
+            header_up X-Real-IP {client_ip}
             header_up Host {host}
             header_down -Server
           }
@@ -128,7 +128,14 @@ data:
       # Caddy upgrades WebSocket connections through reverse_proxy automatically,
       # which is what Django Channels needs.
       reverse_proxy {{ $web }} {
-        header_up X-Real-IP {remote_host}
+        # {client_ip}, never {remote_host}: with a CDN or LB in front, the peer
+        # address is the proxy, so {remote_host} collapses every visitor onto a
+        # few addresses. Django keys per-IP rate limiting and its audit fields
+        # on X-Real-IP, so that turns the anonymous budget into a shared pool.
+        # Resolved from caddy.clientIpHeaders, and only for peers in
+        # caddy.trustedProxies; with trustedProxies empty this is exactly the
+        # peer address, which is the correct answer when nothing is in front.
+        header_up X-Real-IP {client_ip}
         header_up Host {host}
         header_down -Server
 
@@ -198,7 +205,7 @@ data:
     # pods. OIDC breaks if they disagree.
     {{ .scheme | default "https" }}://{{ .host }} {
       reverse_proxy {{ .upstream }} {
-        header_up X-Real-IP {remote_host}
+        header_up X-Real-IP {client_ip}
         header_up Host {host}
       }
     }
