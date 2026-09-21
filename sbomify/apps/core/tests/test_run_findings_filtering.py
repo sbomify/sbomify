@@ -213,6 +213,33 @@ class TestPagingAndFiltersTravelTogether:
         assert filtered["page_count"] == 1
         assert filtered["total"] == 10
 
+    def test_a_compliance_run_is_offered_only_search(self, signed_in) -> None:
+        """Severity, VEX state and KEV belong to vulnerabilities. A check carries
+        none of them, so offering those controls gives a blank severity option, a
+        state dropdown reading "No decision" for every row, and a filter for a
+        concept that does not apply."""
+        client, component = signed_in
+        findings = [
+            {"id": f"check-{n:03d}", "title": f"Field {n}", "description": "d", "status": "fail"} for n in range(5)
+        ]
+        run = _run_with(component, findings, category="compliance")
+
+        body = _open(client, run).content.decode()
+
+        assert "run_search" in body
+        assert "run_severity" not in body
+        assert "run_state" not in body
+        assert "run_kev" not in body
+
+    def test_a_security_run_is_offered_the_filters(self, signed_in) -> None:
+        client, component = signed_in
+        run = _run_with(component, [_finding(0), _finding(1)])
+
+        body = _open(client, run).content.decode()
+
+        assert "run_severity" in body
+        assert "run_state" in body
+
     def test_a_compliance_run_filters_too(self, signed_in) -> None:
         """The card's other branch renders checks rather than vulnerabilities,
         and a standard that reports per component grows just as long."""

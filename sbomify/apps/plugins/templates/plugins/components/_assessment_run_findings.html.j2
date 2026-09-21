@@ -26,24 +26,34 @@ filled.{% endcomment %}
             <input type="hidden" name="run_submitted" value="1">
             <c-tables.toolbar class="[&>div:first-child]:flex-wrap">
             <c-tables.search id="run-search-{{ run.id }}" label="Search findings" placeholder="Search findings..." class="max-w-xs" name="run_search" value="{{ panel.query.search }}" hx-preserve="true" />
-            <c-tables.select id="run-sev-{{ run.id }}" label="Filter by severity" name="run_severity">
-            <option value="all">All Severities</option>
-            {% for severity in panel.severity_options %}
-                <option value="{{ severity }}"
-                        {% if severity == panel.query.severity %}selected{% endif %}>{{ severity|capfirst }}</option>
-            {% endfor %}
-            </c-tables.select>
-            {% if panel.state_options %}
-                <c-tables.select id="run-state-{{ run.id }}" label="Filter by VEX analysis state" name="run_state">
-                <option value="all">All States</option>
-                {% for state in panel.state_options %}
-                    <option value="{{ state.value }}"
-                            {% if state.value == panel.query.state %}selected{% endif %}>{{ state.label }}</option>
+            {% comment %}Severity, VEX state and KEV belong to vulnerabilities.
+            A compliance run reports checks, which carry none of the three, so
+            offering them there gives a severity dropdown with a blank option, a
+            state dropdown reading "No decision" for every row, and a KEV filter
+            for a concept that does not apply. Search is the filter that means
+            something for a list of checks.{% endcomment %}
+            {% if is_security %}
+                <c-tables.select id="run-sev-{{ run.id }}" label="Filter by severity" name="run_severity">
+                <option value="all">All Severities</option>
+                {% for severity in panel.severity_options %}
+                    <option value="{{ severity }}"
+                            {% if severity == panel.query.severity %}selected{% endif %}>
+                        {{ severity|capfirst }}
+                    </option>
                 {% endfor %}
                 </c-tables.select>
-            {% endif %}
-            {% if panel.kev_total %}
-                <c-forms.checkbox name="run_kev" :checked="panel.query.kev_only">KEV only</c-forms.checkbox>
+                {% if panel.state_options %}
+                    <c-tables.select id="run-state-{{ run.id }}" label="Filter by VEX analysis state" name="run_state">
+                    <option value="all">All States</option>
+                    {% for state in panel.state_options %}
+                        <option value="{{ state.value }}"
+                                {% if state.value == panel.query.state %}selected{% endif %}>{{ state.label }}</option>
+                    {% endfor %}
+                    </c-tables.select>
+                {% endif %}
+                {% if panel.kev_total %}
+                    <c-forms.checkbox name="run_kev" :checked="panel.query.kev_only">KEV only</c-forms.checkbox>
+                {% endif %}
             {% endif %}
             <noscript>
                 <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
