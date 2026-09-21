@@ -16,6 +16,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+from sbomify.apps.vulnerability_scanning.services.finding_browse import matches_query
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,6 @@ def _advisory_matches(advisory: dict[str, Any], package: dict[str, Any], query: 
     copying it onto each advisory to pass it along is one dict per advisory on a
     report that can hold thousands.
     """
-    from sbomify.apps.vulnerability_scanning.services.finding_browse import matches_query
-
     return matches_query(
         {
             "id": advisory.get("id") or "",
