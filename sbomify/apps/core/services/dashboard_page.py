@@ -100,7 +100,6 @@ def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> l
             "package_version",
             "ecosystem",
             "vex_state",
-            "malicious",
             "component_id",
             "scanned_at",
             "sbom_version",
