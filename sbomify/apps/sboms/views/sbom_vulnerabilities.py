@@ -67,6 +67,19 @@ def _advisory_matches(advisory: dict[str, Any], query: Any) -> bool:
     )
 
 
+def _narrows_rows(query: Any) -> bool:
+    """Whether the toolbar is hiding anything.
+
+    ``FindingQuery.is_filtered`` covers search, severity, state and KEV, but not
+    the suppressed toggle, and the public trust-center browse reads that same
+    property, so widening it there would change a page this has no business
+    changing. Hiding suppressed advisories is a filter from the reader's side,
+    though: unticking the box has to narrow the list, and the toolbar has to keep
+    offering a way back.
+    """
+    return bool(query.is_filtered) or not query.show_suppressed
+
+
 def _severities_present(packages: list[dict[str, Any]]) -> list[str]:
     """The severities this scan actually reported, worst first.
 
@@ -86,7 +99,7 @@ def _severities_present(packages: list[dict[str, Any]]) -> list[str]:
 
 def _filtered_packages(packages: list[dict[str, Any]], query: Any) -> list[dict[str, Any]]:
     """Packages whose advisories still have something to show."""
-    if not query.is_filtered:
+    if not _narrows_rows(query):
         return packages
 
     kept: list[dict[str, Any]] = []
@@ -482,6 +495,7 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 "page_range": page_range,
                 "scan_query": scan_query,
                 "scan_severity_options": scan_severity_options,
+                "scan_is_narrowed": _narrows_rows(scan_query),
                 "scan_timestamp": scan_timestamp_str,
                 "sbom_version_info": sbom_version_info,
                 "error_message": error_message,

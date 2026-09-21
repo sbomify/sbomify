@@ -73,7 +73,7 @@
         each package and drop the packages left with nothing, so a severity
         filter reads as "which packages have a critical" rather than flattening
         into a list the panel already serves.{% endcomment %}
-        {% if scan_severity_options or scan_query.is_filtered %}
+        {% if scan_severity_options or scan_is_narrowed %}
             <div class="px-6 pt-4">
                 <form method="get" class="flex flex-wrap items-end gap-3">
                     <input type="hidden" name="scan_submitted" value="1">
@@ -89,7 +89,7 @@
                     </c-tables.select>
                     <c-forms.checkbox name="scan_suppressed" :checked="scan_query.show_suppressed">Show suppressed</c-forms.checkbox>
                     <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
-                    {% if scan_query.is_filtered %}
+                    {% if scan_is_narrowed %}
                         <c-buttons.secondary size="sm" href="{{ request.path }}">Clear</c-buttons.secondary>
                     {% endif %}
                 </form>
@@ -99,7 +99,7 @@
             {% if vulnerabilities.results %}
                 {% for result in vulnerabilities.results %}
                     <div class="mb-8 {% if not forloop.last %}pb-8 border-b border-border{% endif %}">
-                        {% if not result.packages and scan_query.is_filtered %}
+                        {% if not result.packages and scan_is_narrowed %}
                             <c-feedback.empty-state compact icon="fas fa-search" icon_variant="neutral" title="No matches found" message="No packages have an advisory matching these filters." />
                         {% endif %}
                         {% if result.packages %}

@@ -133,6 +133,55 @@ class TestTheFiltersNarrowIt:
         assert len(_packages(response)) == 4
 
 
+class TestTheSuppressedToggleIsAFilter:
+    def test_unticking_it_hides_suppressed_advisories_on_its_own(self, sample_sbom: SBOM):  # noqa: F811
+        """It has to narrow the list without another filter being active.
+
+        ``FindingQuery.is_filtered`` covers search, severity, state and KEV but
+        not this toggle, so gating on it alone made the box do nothing unless
+        something else was already set.
+        """
+        _run(
+            sample_sbom,
+            [
+                _finding("CVE-2026-0001", "openssl", "high", analysis_state="not_affected"),
+                _finding("CVE-2026-0002", "zlib", "high"),
+            ],
+        )
+
+        response = _report(sample_sbom, scan_submitted="1")
+
+        assert [entry["package"]["name"] for entry in _packages(response)] == ["zlib"]
+
+    def test_leaving_it_ticked_shows_them(self, sample_sbom: SBOM):  # noqa: F811
+        _run(
+            sample_sbom,
+            [
+                _finding("CVE-2026-0001", "openssl", "high", analysis_state="not_affected"),
+                _finding("CVE-2026-0002", "zlib", "high"),
+            ],
+        )
+
+        response = _report(sample_sbom, scan_submitted="1", scan_suppressed="1")
+
+        assert {entry["package"]["name"] for entry in _packages(response)} == {"openssl", "zlib"}
+
+    def test_the_toolbar_counts_it_as_narrowed(self, sample_sbom: SBOM):  # noqa: F811
+        """So the Clear control is offered and the empty state reads correctly."""
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
+
+        response = _report(sample_sbom, scan_submitted="1")
+
+        assert response.context["scan_is_narrowed"] is True
+
+    def test_an_untouched_page_is_not_narrowed(self, sample_sbom: SBOM):  # noqa: F811
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
+
+        response = _report(sample_sbom)
+
+        assert response.context["scan_is_narrowed"] is False
+
+
 class TestTheRowStillDescribesTheWholePackage:
     def test_the_counts_are_not_recomputed_from_the_filtered_subset(self, sample_sbom: SBOM):  # noqa: F811
         """A row saying "1 of 40" under a critical filter is the useful reading.
