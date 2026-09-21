@@ -250,6 +250,20 @@ def get_client_ip(request: HttpRequest) -> str | None:
     direct peer (REMOTE_ADDR) is a trusted proxy (settings.TRUSTED_PROXIES);
     otherwise a client reaching Django directly could spoof X-Real-IP and defeat
     per-IP rate limiting.
+
+    X-Real-IP is the ONLY header consulted here, and deliberately so. Caddy
+    resolves the origin address once, from its own ``client_ip_headers`` and
+    only for a peer in its ``trusted_proxies`` list, then writes the answer into
+    X-Real-IP with ``header_up`` — which replaces whatever the client sent. That
+    makes the value arriving here one Caddy vouches for.
+
+    Cf-Connecting-Ip in particular must NOT be read here, however tempting it is
+    as "the header Cloudflare sets". Caddy forwards the client's raw
+    Cf-Connecting-Ip upstream untouched, so anything that reaches the edge
+    directly, bypassing Cloudflare, can set it to any value it likes. Trusting
+    it here would hand every caller a rate-limit bucket and an audit-log entry
+    of their choosing. Add new sources to Caddy's ``client_ip_headers``, never
+    to this function.
     """
     remote_addr: str | None = request.META.get("REMOTE_ADDR")
     real_ip: str | None = request.META.get("HTTP_X_REAL_IP")
