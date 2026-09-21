@@ -258,7 +258,13 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
     # The seat is counted and taken under one lock: checking capacity and then
     # creating the membership in separate statements let two acceptances both
     # pass the same count.
-    with user_seat(team) as (can_add, error_message):
+    #
+    # Joining via an invite, because this user is already one of the pending
+    # invitations the count includes, and the row is deleted a few lines below.
+    # Without it a workspace whose members plus invitations reach the plan limit
+    # refuses the very invitations making up that total, and the same person is
+    # let in by the token link and the sign-up auto-accept, which both pass it.
+    with user_seat(team, is_joining_via_invite=True) as (can_add, error_message):
         if not can_add:
             messages.add_message(
                 request, messages.ERROR, f"Cannot join {invitation.team.display_name}: {error_message}"

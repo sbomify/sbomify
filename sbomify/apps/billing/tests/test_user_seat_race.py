@@ -26,6 +26,12 @@ from sbomify.apps.teams.models import Member, Team
 from sbomify.apps.teams.utils import can_add_user_to_team, user_seat
 
 
+def _user(email: str):
+    from django.contrib.auth import get_user_model
+
+    return get_user_model().objects.create_user(username=email, email=email, password="x")
+
+
 def _two_seat_team(name: str = "capped") -> Team:
     plan, _ = BillingPlan.objects.get_or_create(
         key="two-seats",
@@ -208,3 +214,59 @@ class TestTheSeatTransitionIsOneStep:
         # the emailed accept link, and NDA acceptance. If this number changes,
         # a path was added or removed and wants checking rather than updating.
         assert len(sites) == 4, sites
+
+
+@pytest.mark.django_db
+class TestEveryAcceptancePathAgreesOnAReservedSeat:
+    """An invitation already occupies a slot in the count, so accepting one is
+    not the same question as issuing one. Three paths accept an invitation: the
+    token link, the sign-up auto-accept, and the settings page. All three have
+    to read the reserved seat the same way, or the same person is let in by one
+    route and refused by another.
+    """
+
+    def test_a_reserved_seat_is_not_counted_against_its_own_holder(self) -> None:
+        """One member plus one invitation fills a two-seat plan, and that total
+        *is* the invitee. Counting it against them refuses the invitation for
+        occupying the seat it reserved."""
+        from sbomify.apps.teams.models import Invitation
+
+        team = _two_seat_team("reserved")
+        Member.objects.create(user=_user("owner@example.test"), team=team, role="owner")
+        Invitation.objects.create(team=team, email="invitee@example.test", role="member")
+
+        assert can_add_user_to_team(team, is_joining_via_invite=True) == (True, "")
+        assert can_add_user_to_team(team)[0] is False, "the same count has to refuse a brand new invitation"
+
+    def test_issuing_a_new_invitation_at_the_limit_is_refused(self) -> None:
+        """The other side of the same count, so the flag cannot simply be on."""
+        team = _two_seat_team("reserved-2")
+        Member.objects.create(user=_user("a@example.test"), team=team, role="owner")
+        Member.objects.create(user=_user("b@example.test"), team=team, role="member")
+
+        can_add, error = can_add_user_to_team(team)
+
+        assert can_add is False
+        assert "upgrade" in error.lower()
+
+    def test_every_acceptance_path_passes_the_flag(self) -> None:
+        """The settings-page path did not, so a workspace at its limit refused
+        the very invitations making up that limit while the token link let the
+        same person in. Read off the source because the three paths are in three
+        modules and nothing else ties them together.
+        """
+        import inspect
+        import re
+
+        from sbomify.apps.core.views import accept_user_invitation
+        from sbomify.apps.teams.signals.handlers import _accept_pending_invitations
+        from sbomify.apps.teams.views import accept_invite
+
+        for view in (accept_user_invitation, accept_invite, _accept_pending_invitations):
+            calls = re.findall(r"user_seat\(([^)]*)\)", inspect.getsource(view))
+            assert calls, f"{view.__name__} no longer takes a seat"
+            for call in calls:
+                assert "is_joining_via_invite=True" in call, (
+                    f"{view.__name__} accepts an invitation without saying so, "
+                    "so it counts the invitee against the seat they already hold"
+                )
