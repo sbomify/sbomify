@@ -70,13 +70,22 @@ def _filterable(finding: dict[str, Any]) -> dict[str, Any]:
     Rather than convert the card to that shape and lose everything the flat one
     does not carry, the few keys are added alongside. None of them collide with
     a name the template already reads.
+
+    Both the projection and the page pass through here, which is why the alias
+    list is normalised here rather than in either of them.
     """
     from sbomify.apps.vulnerability_scanning.vex import SUPPRESSED_STATES
 
     component = finding.get("component") or {}
     state = finding.get("analysis_state") or ""
+    # Only the projection gets aliases as a text array from SQL; the page gets
+    # whatever was stored. The template iterates them for the badge list and
+    # joins them into the triage payload, so a stored string would render one
+    # badge per character and submit the same nonsense to the triage API.
+    aliases = finding.get("aliases")
     return {
         **finding,
+        "aliases": [str(alias) for alias in aliases] if isinstance(aliases, list) else [],
         "package": component.get("name") or "",
         "ecosystem": component.get("ecosystem") or "",
         "vex_state": state,

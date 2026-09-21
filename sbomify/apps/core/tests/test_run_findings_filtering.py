@@ -358,3 +358,31 @@ class TestOnlyThePageLeavesPostgres:
 
         assert [row["id"] for row in rows] == [f"CVE-2026-{n:05d}" for n in range(0, 60, 10)]
         assert all(row["description"] == "x" * 80 for row in rows)
+
+
+class TestAStoredAliasListThatIsNotOne:
+    """The template iterates the aliases for its badge list and joins them into
+    the triage payload. A stored string satisfies both without complaint and
+    yields one badge per character, then submits that to the triage API."""
+
+    def test_a_string_renders_no_aliases_rather_than_its_letters(self, signed_in) -> None:
+        client, component = signed_in
+        run = _run_with(component, [_finding(0, aliases="GHSA-aaaa-bbbb-cccc")])
+
+        row = _open(client, run).context["panel"]["rows"][0]
+
+        assert row["aliases"] == []
+
+    def test_a_missing_one_reads_the_same_way(self, signed_in) -> None:
+        client, component = signed_in
+        run = _run_with(component, [_finding(0)])
+
+        assert _open(client, run).context["panel"]["rows"][0]["aliases"] == []
+
+    def test_a_real_list_survives(self, signed_in) -> None:
+        client, component = signed_in
+        run = _run_with(component, [_finding(0, aliases=["GHSA-aaaa-bbbb-cccc", "OSV-2026-1"])])
+
+        row = _open(client, run).context["panel"]["rows"][0]
+
+        assert row["aliases"] == ["GHSA-aaaa-bbbb-cccc", "OSV-2026-1"]
