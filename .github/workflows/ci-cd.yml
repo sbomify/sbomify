@@ -581,11 +581,21 @@ jobs:
           # certificate is still valid, so it would prove a property that stops
           # holding before anyone else can rely on it.
           #
-          # No --registry-referrers-mode here: it is a flag on cosign sign and
-          # not on cosign verify, so passing it would have failed the step on
-          # "unknown flag" without ever reading a signature. Verify reads the
-          # legacy sha256-<digest>.sig tag by default, which is the tag the sign
-          # step above writes.
+          # No --registry-referrers-mode here: it comes from
+          # RegistryExperimentalOptions, which cosign adds to sign and not to
+          # verify, so passing it would have failed the step on "unknown flag"
+          # without ever reading a signature. Verify reads the legacy
+          # sha256-<digest>.sig tag by default, which is the tag the sign step
+          # above writes.
+          #
+          # Verify's own knob is --experimental-oci11, and it is deprecated with
+          # the notice "OCI referrers will be the default behavior in future
+          # versions". So the day cosign flips that default, this step starts
+          # looking for referrers, which are empty on GHCR and are the reason
+          # this signature exists. Passing the deprecated flag today buys
+          # nothing, since false is already the default. What holds the
+          # behaviour is the pinned cosign-release above, which is the thing to
+          # re-read this step against when someone bumps it.
           #
           # Identity is pinned to this workflow file and the refs that publish,
           # not to the repository. Any workflow here can mint an OIDC
