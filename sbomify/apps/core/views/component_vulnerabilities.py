@@ -31,7 +31,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.services.component_security import (
     ComponentVulnerabilitiesContext,
     build_component_vulnerabilities,
-    viewer_manages_component,
+    viewer_rights,
 )
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query, query_string
@@ -74,19 +74,6 @@ def vulnerabilities_panel_context(
     return context
 
 
-def _may_triage(request: HttpRequest, component_id: str) -> bool:
-    """Whether this reader may record a VEX decision on this component.
-
-    The same tier the triage endpoint enforces, so the control is only offered
-    to someone the API would accept.
-    """
-    from sbomify.apps.core.authz import can
-    from sbomify.apps.core.models import Component
-
-    component = Component.objects.filter(pk=component_id).first()
-    return component is not None and bool(can(request, "artifact:publish_vex", component))
-
-
 class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """One page of the component's findings, for HTMX to swap the panel with.
 
@@ -104,7 +91,8 @@ class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMi
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
-        if not viewer_manages_component(request, component_id):
+        rights = viewer_rights(request, component_id)
+        if not rights.may_see:
             # 404 rather than 403: for a component this reader has no business
             # with, confirming one exists at that id is itself an answer.
             return error_response(request, HttpResponse(status=404, content="Component not found"))
@@ -123,5 +111,5 @@ class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMi
         return render(
             request,
             PANEL_TEMPLATE,
-            vulnerabilities_panel_context(component_id, vulns, can_triage=_may_triage(request, component_id)),
+            vulnerabilities_panel_context(component_id, vulns, can_triage=rights.may_triage),
         )

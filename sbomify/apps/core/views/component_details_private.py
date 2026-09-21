@@ -13,9 +13,9 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.services.component_security import (
     ComponentVulnerabilitiesContext,
     build_component_vulnerabilities,
-    viewer_manages_component,
+    viewer_rights,
 )
-from sbomify.apps.core.views.component_vulnerabilities import _may_triage, vulnerabilities_panel_context
+from sbomify.apps.core.views.component_vulnerabilities import vulnerabilities_panel_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query
 
@@ -47,7 +47,8 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         # Serving the public page rather than refusing, matching the custom
         # domain branch above: a reader who followed a link to a published
         # component should land on what they are entitled to see, not on a 403.
-        if not viewer_manages_component(request, component_id):
+        rights = viewer_rights(request, component_id)
+        if not rights.may_see:
             from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView
 
             public = ComponentDetailsPublicView.as_view()(request, component_id=component_id)
@@ -130,7 +131,7 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             "gated_visibility_allowed": gated_visibility_allowed,
             "team_key": team_key,
             "vuln_summary": vulns.summary,
-            **vulnerabilities_panel_context(component_id, vulns, can_triage=_may_triage(request, component_id)),
+            **vulnerabilities_panel_context(component_id, vulns, can_triage=rights.may_triage),
             "latest_cbom_issues": cbom_issues.issues,
             "latest_cbom_issue_terms": cbom_issues.terms,
             "latest_cbom_issue_severities": cbom_issues.severities,

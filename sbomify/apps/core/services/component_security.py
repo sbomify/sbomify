@@ -208,8 +208,34 @@ def viewer_manages_component(request: Any, component_id: str) -> bool:
     resolves to the same workspace tiers), so this puts the panel and the page
     that links to it on the same footing.
     """
+    return viewer_rights(request, component_id).may_see
+
+
+@dataclass(frozen=True)
+class ViewerRights:
+    """What one reader may do with one component's security picture.
+
+    Both verdicts come from a single lookup because both views that ask want
+    both: the panel has to know whether to render at all, and whether to offer
+    the triage control on each row. Asking separately meant a second Component
+    query on every filter change and page turn.
+    """
+
+    #: ``component:manage``: may see the internal security picture at all.
+    may_see: bool
+    #: ``artifact:publish_vex``: may record a VEX decision on what they see.
+    may_triage: bool
+
+
+def viewer_rights(request: Any, component_id: str) -> ViewerRights:
+    """Both verdicts for this reader and this component, from one query."""
     from sbomify.apps.core.authz import can
     from sbomify.apps.core.models import Component
 
     component = Component.objects.filter(pk=component_id).only("id", "team_id", "visibility").first()
-    return component is not None and bool(can(request, "component:manage", component))
+    if component is None:
+        return ViewerRights(may_see=False, may_triage=False)
+    return ViewerRights(
+        may_see=bool(can(request, "component:manage", component)),
+        may_triage=bool(can(request, "artifact:publish_vex", component)),
+    )

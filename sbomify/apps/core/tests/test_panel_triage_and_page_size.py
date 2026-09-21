@@ -17,8 +17,8 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
+from sbomify.apps.core.models import Component
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.sboms.models import Component
 
 pytestmark = pytest.mark.django_db
 
@@ -194,7 +194,45 @@ class TestTheReaderChoosesHowMuchToSee:
         response = _panel(client, component.id, vuln_per_page=bad)
 
         assert response.status_code == 200
-        assert response.context["vuln_panel"]["per_page"] in (1, 5)
+        assert response.context["vuln_panel"]["per_page"] == 5
+
+    @pytest.mark.parametrize(("asked", "served"), [(7, 5), (26, 25), (99, 50), (5, 5), (100, 100)])
+    def test_a_size_the_toolbar_does_not_offer_becomes_one_it_does(
+        self, sample_team_with_owner_member, sample_user, asked, served
+    ):
+        """A value the select cannot show as selected would leave the control
+        blank while paging used a size the reader never chose. The answer is the
+        largest offered size that does not exceed the ask, so an unbounded
+        request stays bounded and nobody is served more rows than they asked
+        for."""
+        member = sample_team_with_owner_member
+        component = _component_with_findings(member.team, count=200)
+        client = _client(member.team, sample_user)
+
+        panel = _panel(client, component.id, vuln_per_page=asked).context["vuln_panel"]
+
+        assert panel["per_page"] == served
+        assert panel["per_page"] in panel["per_page_choices"]
+
+    def test_the_panel_asks_for_the_component_once(self, sample_team_with_owner_member, sample_user):
+        """Whether the reader may see the panel and whether they may triage on
+        it are two verdicts from one lookup. Asking separately put a second
+        Component query on every filter change and page turn."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        member = sample_team_with_owner_member
+        component = _component_with_findings(member.team, count=10)
+        client = _client(member.team, sample_user)
+        _panel(client, component.id)  # warm anything cached per process
+
+        with CaptureQueriesContext(connection) as captured:
+            _panel(client, component.id)
+
+        component_reads = sum(
+            1 for query in captured if "sboms_components" in query["sql"] and "SELECT" in query["sql"]
+        )
+        assert component_reads <= 2, f"{component_reads} component lookups for one panel render"
 
     def test_paging_keeps_the_size_the_reader_chose(self, sample_team_with_owner_member, sample_user):
         """The pager sits outside the filter form, so its links carry the state
