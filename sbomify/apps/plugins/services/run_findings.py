@@ -119,8 +119,9 @@ _PROJECTION_SQL = """
 """
 
 #: The findings themselves, for the handful of positions a page renders. Guarded
-#: the same way as the projection, so a run rescanned between the two queries
-#: comes back empty rather than raising.
+#: the same way as the projection: a run rescanned between the two queries comes
+#: back empty rather than raising, and a stored array holding anything that is
+#: not an object skips it rather than handing the template a string.
 _PAGE_SQL = """
     SELECT t.ord - 1, t.finding
     FROM {table} run
@@ -129,7 +130,7 @@ _PAGE_SQL = """
              THEN run.result -> 'findings'
              ELSE '[]'::jsonb END
     ) WITH ORDINALITY AS t(finding, ord)
-    WHERE run.id = %s AND t.ord - 1 = ANY(%s)
+    WHERE run.id = %s AND t.ord - 1 = ANY(%s) AND jsonb_typeof(t.finding) = 'object'
 """
 
 #: Set on a projected finding, never on a stored one: where it sits in the
@@ -191,10 +192,9 @@ def _findings_at(
     with connection.cursor() as cursor:
         cursor.execute(_PAGE_SQL.format(table=table), [str(run_id), positions])
         # json.loads because this one is a jsonb column read through a raw
-        # cursor, which arrives as the JSON source rather than as a dict.
+        # cursor, which arrives as the JSON source rather than as a dict. The
+        # statement returns objects only, so there is nothing else to get back.
         by_position = {position: json.loads(finding) for position, finding in cursor.fetchall()}
-
-    by_position = {position: finding for position, finding in by_position.items() if isinstance(finding, dict)}
 
     findings = [by_position[position] for position in positions if position in by_position]
     if is_security:
