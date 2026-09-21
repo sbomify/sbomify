@@ -2,14 +2,60 @@ from __future__ import annotations
 
 import asyncio
 import os
+from functools import wraps
 from importlib.metadata import PackageNotFoundError, version
-from typing import Any
+from typing import Any, Callable
 
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
 
+def once_per_request(processor: Callable[[Any], Any]) -> Callable[[Any], Any]:
+    """Run a context processor once per request rather than once per render.
+
+    Cotton builds a fresh ``RequestContext`` for every component it renders, and
+    binding one runs every processor in this module again. A page is hundreds of
+    components, so the counts here were being recomputed hundreds of times:
+    measured at 443 invitation lookups and 889 member lookups on one artifact
+    scan report, 3,116 queries for a single page.
+
+    None of these answers can change inside one request, so the first one is
+    kept on the request object. A render with no request (cotton's fully
+    isolated mode builds a plain ``Context``) never reaches a processor at all.
+
+    One thing does write to the session mid-render: ``user_workspaces`` in
+    teams/templatetags repairs ``current_team`` when the session points at a
+    workspace the user has lost. Caching means the rest of the page keeps the
+    answer from before that repair, which is what Django gives you anyway, since
+    processors normally run at bind time, before any tag executes. Re-binding
+    per component made a later component sometimes see the repair and sometimes
+    not, depending on where it sat on the page. One answer per page is the
+    correct one.
+    """
+    name = processor.__name__
+
+    @wraps(processor)
+    def wrapper(request: Any) -> Any:
+        cache = getattr(request, "_ctx_cache", None)
+        if not isinstance(cache, dict):
+            # A plain attribute would be read straight off a Mock, which answers
+            # every getattr, and the processor would never run under test. A
+            # dict has to be one we put there.
+            cache = {}
+            try:
+                request._ctx_cache = cache
+            except AttributeError:
+                # Not every object handed to a processor accepts attributes.
+                return processor(request)
+        if name not in cache:
+            cache[name] = processor(request)
+        return cache[name]
+
+    return wrapper
+
+
+@once_per_request
 def version_context(request: Any) -> Any:
     """Add version and build information to template context.
 
@@ -43,6 +89,7 @@ def version_context(request: Any) -> Any:
     }
 
 
+@once_per_request
 def pending_invitations_context(request: Any) -> Any:
     """Add pending invitations count to template context."""
     if not request.user.is_authenticated:
@@ -77,6 +124,7 @@ def pending_invitations_context(request: Any) -> Any:
     }
 
 
+@once_per_request
 def global_modals_context(request: Any) -> Any:
     """Add global modals forms to template context."""
     if not request.user.is_authenticated:
@@ -89,6 +137,7 @@ def global_modals_context(request: Any) -> Any:
     }
 
 
+@once_per_request
 def pending_access_requests_context(request: Any) -> Any:
     """Add pending access requests count to template context for owners/admins."""
     if not request.user.is_authenticated:
@@ -164,6 +213,7 @@ def pending_access_requests_context(request: Any) -> Any:
         }
 
 
+@once_per_request
 def team_context(request: Any) -> Any:
     """
     Add current team, user role, and derived capability flags to context.
@@ -251,6 +301,7 @@ def team_context(request: Any) -> Any:
         return {}
 
 
+@once_per_request
 def sentry_context(request: Any) -> Any:
     """Add Sentry configuration for frontend.
 
@@ -265,6 +316,7 @@ def sentry_context(request: Any) -> Any:
     }
 
 
+@once_per_request
 def posthog_context(request: Any) -> dict[str, Any]:
     """Add PostHog analytics configuration for frontend.
 
