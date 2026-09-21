@@ -41,14 +41,16 @@ MAX_ADVISORIES_PER_PACKAGE = 10
 PARAM_PREFIX = "scan_"
 
 
-def _advisory_matches(advisory: dict[str, Any], query: Any) -> bool:
+def _advisory_matches(advisory: dict[str, Any], package: dict[str, Any], query: Any) -> bool:
     """Whether one merged advisory survives the toolbar.
 
     The browse engine reads a flatter shape than this page builds, and this page
     merges across providers into its own entries rather than using
-    ``extract_finding_rows``. So the few keys the predicates read are handed over
-    beside the advisory rather than converting it, the same way the assessment
-    card does it.
+    ``extract_finding_rows``. So the few keys the predicates read are gathered
+    here, the same way the assessment card does it. The package arrives as its
+    own argument because it belongs to the entry rather than the advisory, and
+    copying it onto each advisory to pass it along is one dict per advisory on a
+    report that can hold thousands.
     """
     from sbomify.apps.vulnerability_scanning.services.finding_browse import matches_query
 
@@ -56,8 +58,8 @@ def _advisory_matches(advisory: dict[str, Any], query: Any) -> bool:
         {
             "id": advisory.get("id") or "",
             "aliases": advisory.get("aliases") or [],
-            "package": advisory.get("_package_name") or "",
-            "ecosystem": advisory.get("_ecosystem") or "",
+            "package": package.get("name") or "",
+            "ecosystem": package.get("ecosystem") or "",
             "severity": advisory.get("severity") or "",
             "vex_state": advisory.get("vex_state") or "",
             "vex_suppressed": bool(advisory.get("vex_suppressed")),
@@ -80,21 +82,28 @@ def _narrows_rows(query: Any) -> bool:
     return bool(query.is_filtered) or not query.show_suppressed
 
 
-def _severities_present(packages: list[dict[str, Any]]) -> list[str]:
-    """The severities this scan actually reported, worst first.
+def _severity_options(packages: list[dict[str, Any]], query: Any) -> list[str]:
+    """The severities the dropdown offers, worst first.
 
-    Built before filtering, so choosing one severity does not empty the dropdown
-    that chose it.
+    Built from every advisory rather than the filtered set, so choosing one
+    severity does not empty the dropdown that chose it. The shared helper also
+    keeps the active token when no advisory carries it, which is what a
+    bookmarked ``scan_severity=moderate`` needs: without it the select renders
+    as "All Severities" over an empty report and the reader cannot see what
+    emptied it.
     """
-    from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK
+    from sbomify.apps.vulnerability_scanning.services.finding_browse import SEVERITY_ORDER, present_options
 
-    present = {
-        str(advisory.get("severity") or "").lower()
-        for entry in packages
-        for advisory in entry["vulnerabilities"]
-        if advisory.get("severity")
-    }
-    return sorted(present, key=lambda name: SEVERITY_RANK.get(name, 5))
+    return present_options(
+        [
+            str(advisory.get("severity") or "").lower()
+            for entry in packages
+            for advisory in entry["vulnerabilities"]
+            if advisory.get("severity")
+        ],
+        SEVERITY_ORDER,
+        query.severity,
+    )
 
 
 def _filtered_packages(packages: list[dict[str, Any]], query: Any) -> list[dict[str, Any]]:
@@ -105,14 +114,7 @@ def _filtered_packages(packages: list[dict[str, Any]], query: Any) -> list[dict[
     kept: list[dict[str, Any]] = []
     for entry in packages:
         package = entry["package"]
-        surviving = [
-            advisory
-            for advisory in entry["vulnerabilities"]
-            if _advisory_matches(
-                {**advisory, "_package_name": package.get("name"), "_ecosystem": package.get("ecosystem")},
-                query,
-            )
-        ]
+        surviving = [advisory for advisory in entry["vulnerabilities"] if _advisory_matches(advisory, package, query)]
         if surviving:
             kept.append({**entry, "vulnerabilities": surviving})
     return kept
@@ -131,9 +133,11 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             )
 
         vulnerabilities_data: dict[str, Any] | None = None
-        # Built before the try so the toolbar renders whatever happens below,
-        # including the error path: a filter that vanishes when a scan fails
-        # leaves the reader unable to clear it.
+        # Built before the try because the template reads it on every path. The
+        # toolbar itself only renders once there is something to render: an
+        # option list, or an active filter. That second half is why this is not
+        # inside the try, since a scan that fails while a filter is on would
+        # otherwise drop the control the reader needs to clear it.
         from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query
 
         scan_query = parse_finding_query(request.GET, prefix=PARAM_PREFIX)
@@ -423,7 +427,7 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     # which is what the reader is deciding about. A row saying
                     # "1 of 40" under a critical filter is the useful reading;
                     # one saying "1 of 1" hides the other 39.
-                    scan_severity_options = _severities_present(packages)
+                    scan_severity_options = _severity_options(packages, scan_query)
                     packages = _filtered_packages(packages, query)
 
                     paginator = Paginator(packages, PACKAGES_PER_PAGE)

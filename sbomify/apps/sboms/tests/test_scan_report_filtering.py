@@ -229,3 +229,22 @@ class TestTheToolbarOffersWhatIsThere:
         response = _report(sample_sbom, scan_submitted="1", scan_severity="critical")
 
         assert response.context["scan_severity_options"] == ["critical", "low"]
+
+    def test_a_severity_no_advisory_carries_is_still_offered(self, sample_sbom: SBOM):  # noqa: F811
+        """A scanner may report a severity of its own, so the parser keeps any
+        well-formed token. A bookmarked link carrying one no advisory has would
+        otherwise leave the select rendering as "All Severities" over an empty
+        report, with nothing on the page naming what emptied it."""
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "critical")])
+
+        response = _report(sample_sbom, scan_submitted="1", scan_severity="moderate")
+
+        assert "moderate" in response.context["scan_severity_options"]
+        assert _packages(response) == []
+
+    def test_an_unreported_severity_is_not_offered_unprompted(self, sample_sbom: SBOM):  # noqa: F811
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "critical")])
+
+        response = _report(sample_sbom)
+
+        assert response.context["scan_severity_options"] == ["critical"]
