@@ -18,12 +18,18 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from django.core.paginator import Paginator
-
 from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.vulnerability_scanning.services.finding_browse import (
+    browse_finding_rows,
+)
 
-#: Findings per page. Matches the vulnerabilities panel, so a reader moving
-#: between the two pages at the same rate.
+#: The card's filter controls. Its own endpoint, so nothing would collide with
+#: the component panel's ``vuln_`` parameters, but naming them keeps a link that
+#: carries both readable.
+PARAM_PREFIX = "run_"
+
+#: Findings per page in the card. The component panel shows five because it sits
+#: in a page full of other cards; this one owns its accordion, so it shows more.
 PAGE_SIZE = 25
 
 
@@ -39,20 +45,50 @@ class RunFindingsPage:
     page_count: int
     has_prev: bool
     has_next: bool
+    #: Everything the toolbar renders: the active query, the option lists the
+    #: filters offer, and the totals the counts read.
+    panel: dict[str, Any]
 
 
-def build_run_findings_page(request: Any, run_id: str, page: Any = None) -> ServiceResult[RunFindingsPage]:
+def _filterable(finding: dict[str, Any]) -> dict[str, Any]:
+    """A finding with the flat keys the browse layer reads added to it.
+
+    The card renders raw findings, which carry the references, CVSS, EPSS,
+    malicious flag and description its template needs. The browse layer reads a
+    flatter shape: ``package``, ``ecosystem``, ``vex_state``, ``vex_suppressed``.
+    Rather than convert the card to that shape and lose everything the flat one
+    does not carry, the few keys are added alongside. None of them collide with
+    a name the template already reads.
+    """
+    from sbomify.apps.vulnerability_scanning.vex import SUPPRESSED_STATES
+
+    component = finding.get("component") or {}
+    state = finding.get("analysis_state") or ""
+    return {
+        **finding,
+        "package": component.get("name") or "",
+        "ecosystem": component.get("ecosystem") or "",
+        "vex_state": state,
+        "vex_suppressed": state in SUPPRESSED_STATES,
+    }
+
+
+def build_run_findings_page(request: Any, run_id: str, params: Any = None) -> ServiceResult[RunFindingsPage]:
     """Resolve a page of findings for a run the caller may read.
 
     A run the caller may not read and a run that does not exist give the same
     404: for an assessment this reader has no business with, confirming one
     exists at that id is itself an answer.
+
+    ``params`` is the request's query dict: the page, and the search and filters
+    the toolbar posts back.
     """
     from sbomify.apps.plugins.apis import _readable_sbom, _result_with_kev
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_findings
     from sbomify.apps.vulnerability_scanning.euvd import euvd_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
+    from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query
 
     missing: ServiceResult[RunFindingsPage] = ServiceResult.failure("Assessment run not found", status_code=404)
     try:
@@ -81,17 +117,18 @@ def build_run_findings_page(request: Any, run_id: str, page: Any = None) -> Serv
         # vulnerabilities, the filter the eager list used to apply.
         findings = vulnerability_findings(findings)
 
-    paginator = Paginator(findings, PAGE_SIZE)
-    current = paginator.get_page(page)
+    query = parse_finding_query(params if params is not None else {}, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE)
+    panel = browse_finding_rows([_filterable(f) for f in findings if isinstance(f, dict)], query)
     return ServiceResult.success(
         RunFindingsPage(
             run=run,
             sbom=sbom,
             is_security=is_security,
-            findings=list(current.object_list),
-            page=current.number,
-            page_count=paginator.num_pages,
-            has_prev=current.has_previous(),
-            has_next=current.has_next(),
+            findings=panel["rows"],
+            page=panel["page"],
+            page_count=panel["page_count"],
+            has_prev=panel["has_prev"],
+            has_next=panel["has_next"],
+            panel=panel,
         )
     )

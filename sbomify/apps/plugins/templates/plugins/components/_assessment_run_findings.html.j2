@@ -11,6 +11,49 @@ nothing here is built until one is opened.
 Swapped in whole, pager included, so a page link replaces the same region the first load
 filled.{% endcomment %}
 <div id="findings-{{ run.id }}" class="run-findings">
+    {% comment %}The toolbar narrows the list this card shows. Its parameters are
+    prefixed, so a URL that carries both this and the component panel's filters
+    stays readable. The form targets this region, which is the same region the
+    card's first fetch fills and the pager replaces.{% endcomment %}
+    {% if panel.unfiltered_total %}
+        <form method="get"
+              action="{{ findings_url }}"
+              hx-get="{{ findings_url }}"
+              hx-target="#findings-{{ run.id }}"
+              hx-swap="outerHTML"
+              hx-trigger="change, input changed delay:350ms from:#run-search-{{ run.id }}, submit"
+              class="mb-3">
+            <input type="hidden" name="run_submitted" value="1">
+            <c-tables.toolbar class="[&>div:first-child]:flex-wrap">
+            <c-tables.search id="run-search-{{ run.id }}" label="Search findings" placeholder="Search findings..." class="max-w-xs" name="run_search" value="{{ panel.query.search }}" hx-preserve="true" />
+            <c-tables.select id="run-sev-{{ run.id }}" label="Filter by severity" name="run_severity">
+            <option value="all">All Severities</option>
+            {% for severity in panel.severity_options %}
+                <option value="{{ severity }}"
+                        {% if severity == panel.query.severity %}selected{% endif %}>{{ severity|capfirst }}</option>
+            {% endfor %}
+            </c-tables.select>
+            {% if panel.state_options %}
+                <c-tables.select id="run-state-{{ run.id }}" label="Filter by VEX analysis state" name="run_state">
+                <option value="all">All States</option>
+                {% for state in panel.state_options %}
+                    <option value="{{ state.value }}"
+                            {% if state.value == panel.query.state %}selected{% endif %}>{{ state.label }}</option>
+                {% endfor %}
+                </c-tables.select>
+            {% endif %}
+            {% if panel.kev_total %}
+                <c-forms.checkbox name="run_kev" :checked="panel.query.kev_only">KEV only</c-forms.checkbox>
+            {% endif %}
+            <noscript>
+                <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
+            </noscript>
+            </c-tables.toolbar>
+        </form>
+    {% endif %}
+    {% if panel.unfiltered_total and not findings %}
+        <c-feedback.empty-state compact icon="fas fa-search" icon_variant="neutral" title="No matches found" message="No findings match your search criteria" />
+    {% endif %}
     {% if is_security %}
         {% if findings %}
             {# Security Findings List #}
