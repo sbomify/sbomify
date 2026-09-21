@@ -44,7 +44,9 @@ PANEL_TEMPLATE = "core/components/component_vulnerabilities_table.html.j2"
 PANEL_ANCHOR = "component-vulnerabilities"
 
 
-def vulnerabilities_panel_context(component_id: str, vulns: ComponentVulnerabilitiesContext) -> dict[str, Any]:
+def vulnerabilities_panel_context(
+    component_id: str, vulns: ComponentVulnerabilitiesContext, *, can_triage: bool = False
+) -> dict[str, Any]:
     """Everything the panel template renders, including the URLs it posts back to.
 
     The pager links sit outside the filter form, so they carry the active filters
@@ -58,6 +60,10 @@ def vulnerabilities_panel_context(component_id: str, vulns: ComponentVulnerabili
         "vuln_panel_url": panel_url,
         "latest_vuln_version": vulns.version,
         "latest_vuln_sbom_id": vulns.sbom_id,
+        # Carried in the panel's own context rather than the page's, because the
+        # table is swapped on its own and a page-level flag would not survive it.
+        "can_triage": can_triage,
+        "component_id": component_id,
     }
     if panel is None:
         return context
@@ -66,6 +72,19 @@ def vulnerabilities_panel_context(component_id: str, vulns: ComponentVulnerabili
     context["vuln_prev_url"] = f"{panel_url}?{query_string(query, page=panel['prev_page'])}"
     context["vuln_next_url"] = f"{panel_url}?{query_string(query, page=panel['next_page'])}"
     return context
+
+
+def _may_triage(request: HttpRequest, component_id: str) -> bool:
+    """Whether this reader may record a VEX decision on this component.
+
+    The same tier the triage endpoint enforces, so the control is only offered
+    to someone the API would accept.
+    """
+    from sbomify.apps.core.authz import can
+    from sbomify.apps.core.models import Component
+
+    component = Component.objects.filter(pk=component_id).first()
+    return component is not None and bool(can(request, "artifact:publish_vex", component))
 
 
 class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
@@ -101,4 +120,8 @@ class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMi
             return HttpResponseRedirect(f"{page_url}?{query_string(query)}#{PANEL_ANCHOR}")
 
         vulns = build_component_vulnerabilities(component_id, query)
-        return render(request, PANEL_TEMPLATE, vulnerabilities_panel_context(component_id, vulns))
+        return render(
+            request,
+            PANEL_TEMPLATE,
+            vulnerabilities_panel_context(component_id, vulns, can_triage=_may_triage(request, component_id)),
+        )

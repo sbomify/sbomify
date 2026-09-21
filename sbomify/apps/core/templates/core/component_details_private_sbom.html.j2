@@ -13,6 +13,12 @@
     {% include "core/components/component_vulnerabilities.html.j2" %}
     {# CBOM issues drill-down for the latest CBOM — hidden when crypto assessments are clean #}
     {% include "core/components/component_cbom_issues.html.j2" %}
+    {% comment %}Outside the panel, which HTMX swaps on its own: a modal inside
+    that region would be torn out from under an open dialog on the next filter
+    keystroke. One instance serves every row.{% endcomment %}
+    {% if can_triage %}
+        {% include "plugins/components/triage_modal.html.j2" %}
+    {% endif %}
 {% endblock %}
 {% block upload_section %}
     {% if component.has_crud_permissions %}

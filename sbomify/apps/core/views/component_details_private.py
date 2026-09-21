@@ -15,7 +15,7 @@ from sbomify.apps.core.services.component_security import (
     build_component_vulnerabilities,
     viewer_manages_component,
 )
-from sbomify.apps.core.views.component_vulnerabilities import vulnerabilities_panel_context
+from sbomify.apps.core.views.component_vulnerabilities import _may_triage, vulnerabilities_panel_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query
 
@@ -130,7 +130,7 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             "gated_visibility_allowed": gated_visibility_allowed,
             "team_key": team_key,
             "vuln_summary": vulns.summary,
-            **vulnerabilities_panel_context(component_id, vulns),
+            **vulnerabilities_panel_context(component_id, vulns, can_triage=_may_triage(request, component_id)),
             "latest_cbom_issues": cbom_issues.issues,
             "latest_cbom_issue_terms": cbom_issues.terms,
             "latest_cbom_issue_severities": cbom_issues.severities,
