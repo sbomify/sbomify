@@ -10,7 +10,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path
@@ -19,6 +19,12 @@ from django.utils.html import format_html, format_html_join
 
 from sbomify.apps.billing.admin import BillingPlanAdmin
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.services.workspace_status import (
+    canceled_workspaces,
+    past_due_workspaces,
+    paying_workspaces,
+    trialing_workspaces,
+)
 from sbomify.apps.documents.admin import DocumentAdmin
 from sbomify.apps.documents.models import LEGAL_DOCUMENT_TYPES, Document
 from sbomify.apps.onboarding.models import OnboardingStatus
@@ -126,18 +132,26 @@ class DashboardView(admin.AdminSite):
                     "products": Product.objects.count(),
                     "components": Component.objects.count(),
                     "sboms": SBOM.objects.count(),
+                    # Ordered, or the slice returns an arbitrary 15 rows while
+                    # presenting itself as the largest workspaces. Bot members
+                    # are synthetic OIDC publishing identities, not users.
                     "users_per_team": list(
-                        Team.objects.annotate(user_count=Count("members")).values("name", "user_count")[:15]
+                        Team.objects.annotate(user_count=Count("member", filter=~Q(member__role="bot"), distinct=True))
+                        .order_by("-user_count", "name")
+                        .values("name", "user_count")[:15]
                     ),
                     # Billing & Subscription metrics
                     "teams_by_plan": list(
                         Team.objects.values("billing_plan").annotate(count=Count("id")).order_by("-count")
                     ),
-                    # Subscription status breakdown (replaces incorrect teams_with_stripe)
-                    "teams_active": Team.objects.filter(billing_plan_limits__subscription_status="active").count(),
-                    "teams_trialing": Team.objects.filter(billing_plan_limits__subscription_status="trialing").count(),
-                    "teams_past_due": Team.objects.filter(billing_plan_limits__subscription_status="past_due").count(),
-                    "teams_canceled": Team.objects.filter(billing_plan_limits__subscription_status="canceled").count(),
+                    # Subscription status breakdown. These go through
+                    # billing.services.workspace_status because a bare
+                    # subscription_status filter counts every free community
+                    # workspace as a paying one.
+                    "teams_active": paying_workspaces().count(),
+                    "teams_trialing": trialing_workspaces().count(),
+                    "teams_past_due": past_due_workspaces().count(),
+                    "teams_canceled": canceled_workspaces().count(),
                     # User Growth metrics
                     "new_users_30d": User.objects.filter(date_joined__gte=thirty_days_ago).count(),
                     "new_teams_30d": Team.objects.filter(created_at__gte=thirty_days_ago).count(),
