@@ -106,6 +106,10 @@ class TestTwoAtOnceCannotBothWin:
         for thread in threads:
             thread.join(timeout=20)
 
+        # Asserted before the verdict: a worker still stuck on the row lock would
+        # leave `admitted` short, and "exactly one got in" would pass for the
+        # wrong reason.
+        assert not any(thread.is_alive() for thread in threads), "a worker never finished"
         assert len(admitted) == 1, f"both acceptances won the last seat: {admitted}"
         assert Member.objects.filter(team=team).count() == 2
 
@@ -143,5 +147,6 @@ class TestTwoAtOnceCannotBothWin:
         for thread in threads:
             thread.join(timeout=20)
 
+        assert not any(thread.is_alive() for thread in threads), "a worker never finished"
         assert len(admitted) == 2, "the unlocked shape was expected to overshoot"
         assert Member.objects.filter(team=team).count() == 3
