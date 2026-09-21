@@ -69,6 +69,7 @@ dependencies = [
     "defusedcsv>=3.0.0",
     "jsonschema>=4.26,<5",
     "django-cotton>=2.7.2",
+    "fastjsonschema>=2.22.2",
 ]
 
 [project.urls]
@@ -266,7 +267,7 @@ django_settings_module = "sbomify.settings"
 
 # Packages with inline types but no py.typed marker
 [[tool.mypy.overrides]]
-module = ["django_redis.*", "django_vite.*", "ruid.*", "defusedcsv", "defusedcsv.*"]
+module = ["django_redis.*", "django_vite.*", "ruid.*", "defusedcsv", "defusedcsv.*", "fastjsonschema"]
 follow_untyped_imports = true
 
 # Packages with no/minimal types and no stubs on PyPI
