@@ -213,6 +213,36 @@ class TestPagingAndFiltersTravelTogether:
         assert filtered["page_count"] == 1
         assert filtered["total"] == 10
 
+    def test_suppressed_findings_survive_a_filter_change(self, signed_in) -> None:
+        """The form always carries run_submitted, and a submitted request with no
+        run_suppressed reads as "hide them", which is how the marker tells an
+        untouched page from a deliberate choice. Without the control on the form
+        the card silently lost its suppressed rows the moment anyone searched.
+        """
+        client, component = signed_in
+        run = _run_with(
+            component,
+            [_finding(0, analysis_state="not_affected"), _finding(1), _finding(2)],
+        )
+
+        body = _open(client, run).content.decode()
+        assert "run_suppressed" in body
+
+        # what the form actually sends once the box is left ticked
+        panel = _open(client, run, run_submitted="1", run_suppressed="1").context["panel"]
+        assert len(panel["rows"]) == 3
+
+    def test_unticking_it_hides_them(self, signed_in) -> None:
+        client, component = signed_in
+        run = _run_with(
+            component,
+            [_finding(0, analysis_state="not_affected"), _finding(1), _finding(2)],
+        )
+
+        panel = _open(client, run, run_submitted="1").context["panel"]
+
+        assert [row["id"] for row in panel["rows"]] == ["CVE-2026-00001", "CVE-2026-00002"]
+
     def test_a_compliance_run_is_offered_only_search(self, signed_in) -> None:
         """Severity, VEX state and KEV belong to vulnerabilities. A check carries
         none of them, so offering those controls gives a blank severity option, a

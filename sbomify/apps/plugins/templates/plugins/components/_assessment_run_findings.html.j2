@@ -54,6 +54,17 @@ filled.{% endcomment %}
                 {% if panel.kev_total %}
                     <c-forms.checkbox name="run_kev" :checked="panel.query.kev_only">KEV only</c-forms.checkbox>
                 {% endif %}
+                {% comment %}Without this the card silently loses its suppressed
+                rows on the first filter change: the form always carries
+                run_submitted, and a submitted request with no run_suppressed
+                reads as "hide them", which is how the marker distinguishes an
+                untouched page from a deliberate choice. The panel offers the
+                same control for the same reason.{% endcomment %}
+                {% if panel.suppressed_total %}
+                    <c-forms.checkbox class="whitespace-nowrap" name="run_suppressed" :checked="panel.query.show_suppressed">
+                    Show suppressed ({{ panel.suppressed_total }})
+                    </c-forms.checkbox>
+                {% endif %}
             {% endif %}
             <noscript>
                 <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
