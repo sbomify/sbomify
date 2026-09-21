@@ -47,7 +47,9 @@ class TestTheRowIsActuallyLocked:
 
         locking = [q["sql"] for q in captured if "FOR UPDATE" in q["sql"].upper()]
         assert locking, "user_seat did not lock the workspace row"
-        assert any("workspaces_workspaces" in sql for sql in locking)
+        # Asked of the model rather than spelled out, so this keeps testing the
+        # lock rather than the table's legacy name.
+        assert any(Team._meta.db_table in sql for sql in locking)
 
     def test_the_verdict_is_the_one_the_unlocked_check_gives(self) -> None:
         """The lock changes when the count is safe to act on, not what it says."""
