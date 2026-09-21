@@ -196,7 +196,7 @@ class TestTheReaderChoosesHowMuchToSee:
         assert response.status_code == 200
         assert response.context["vuln_panel"]["per_page"] == 5
 
-    @pytest.mark.parametrize(("asked", "served"), [(7, 5), (26, 25), (99, 50), (5, 5), (100, 100)])
+    @pytest.mark.parametrize(("asked", "served"), [(7, 5), (26, 25), (99, 50), (5, 5), (100, 100), (1, 5), (4, 5)])
     def test_a_size_the_toolbar_does_not_offer_becomes_one_it_does(
         self, sample_team_with_owner_member, sample_user, asked, served
     ):
@@ -204,7 +204,8 @@ class TestTheReaderChoosesHowMuchToSee:
         blank while paging used a size the reader never chose. The answer is the
         largest offered size that does not exceed the ask, so an unbounded
         request stays bounded and nobody is served more rows than they asked
-        for."""
+        for. Below the smallest offered size there is no such answer, so the
+        view's default applies rather than rounding up."""
         member = sample_team_with_owner_member
         component = _component_with_findings(member.team, count=200)
         client = _client(member.team, sample_user)
