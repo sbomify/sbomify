@@ -277,7 +277,7 @@
                                 Showing <strong>{{ page_obj.start_index }}</strong> to <strong>{{ page_obj.end_index }}</strong>
                                 of <strong>{{ page_obj.paginator.count }}</strong> packages
                                 </c-tables.info>
-                                <c-navigation.pagination :current="page_obj.number" :total="page_obj.paginator.num_pages" :page_range="page_range" label="Package pagination" />
+                                <c-navigation.pagination :current="page_obj.number" :total="page_obj.paginator.num_pages" :page_range="page_range" query="{{ scan_query_string }}" label="Package pagination" />
                                 </c-tables.footer>
                             {% endif %}
                             </c-tables.shell>

@@ -248,3 +248,50 @@ class TestTheToolbarOffersWhatIsThere:
         response = _report(sample_sbom)
 
         assert response.context["scan_severity_options"] == ["critical"]
+
+
+class TestPagingKeepsTheFilter:
+    """The pager sits outside the filter form and pages packages, so its links
+    carry the toolbar's state or following one returns the reader to an
+    unfiltered report, which is the state they just left."""
+
+    def test_the_pager_links_carry_the_search(self, sample_sbom: SBOM):  # noqa: F811
+        findings = [_finding(f"CVE-2026-{n:04d}", f"pkg-{n:03d}", "high") for n in range(PACKAGES_PER_PAGE + 5)]
+        _run(sample_sbom, findings)
+
+        response = _report(sample_sbom, scan_submitted="1", scan_search="pkg-0")
+
+        assert "scan_search=pkg-0" in response.context["scan_query_string"]
+        assert "scan_submitted=1" in response.context["scan_query_string"]
+
+    def test_it_carries_the_suppressed_choice_too(self, sample_sbom: SBOM):  # noqa: F811
+        """Unticking the box is a choice the marker carries, so a pager link
+        that dropped it would quietly show the suppressed rows again."""
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
+
+        response = _report(sample_sbom, scan_submitted="1")
+
+        assert "scan_suppressed" not in response.context["scan_query_string"]
+        assert "scan_submitted=1" in response.context["scan_query_string"]
+
+    def test_an_unfiltered_report_keeps_its_links_clean(self, sample_sbom: SBOM):  # noqa: F811
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
+
+        assert _report(sample_sbom).context["scan_query_string"] == ""
+
+    def test_the_pager_never_carries_a_findings_page(self, sample_sbom: SBOM):  # noqa: F811
+        """The number in these links is the package page. The findings page the
+        shared query would otherwise add belongs to a different pager."""
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
+
+        response = _report(sample_sbom, scan_submitted="1", scan_search="openssl", scan_page="3")
+
+        assert "scan_page" not in response.context["scan_query_string"]
+
+    def test_the_rendered_pager_holds_the_filter(self, sample_sbom: SBOM):  # noqa: F811
+        findings = [_finding(f"CVE-2026-{n:04d}", f"pkg-{n:03d}", "high") for n in range(PACKAGES_PER_PAGE + 5)]
+        _run(sample_sbom, findings)
+
+        body = _report(sample_sbom, scan_submitted="1", scan_severity="high").content.decode()
+
+        assert "page=2&amp;scan_submitted=1&amp;scan_severity=high" in body

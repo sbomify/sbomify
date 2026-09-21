@@ -138,7 +138,7 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         # option list, or an active filter. That second half is why this is not
         # inside the try, since a scan that fails while a filter is on would
         # otherwise drop the control the reader needs to clear it.
-        from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query
+        from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query, query_string
 
         scan_query = parse_finding_query(request.GET, prefix=PARAM_PREFIX)
         scan_severity_options: list[str] = []
@@ -488,6 +488,14 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             {"label": "Vulnerabilities"},
         ]
 
+        # The pager sits outside the filter form and pages packages, not
+        # findings, so its links carry the toolbar's state themselves or
+        # following one silently returns the reader to an unfiltered report.
+        # page=1 because the number in these links is the package page; the
+        # findings page this query would otherwise carry is not this pager's.
+        scan_is_narrowed = _narrows_rows(scan_query)
+        scan_query_string = query_string(scan_query, page=1, prefix=PARAM_PREFIX) if scan_is_narrowed else ""
+
         return render(
             request,
             "sboms/sbom_vulnerabilities.html.j2",
@@ -499,7 +507,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 "page_range": page_range,
                 "scan_query": scan_query,
                 "scan_severity_options": scan_severity_options,
-                "scan_is_narrowed": _narrows_rows(scan_query),
+                "scan_is_narrowed": scan_is_narrowed,
+                "scan_query_string": scan_query_string,
                 "scan_timestamp": scan_timestamp_str,
                 "sbom_version_info": sbom_version_info,
                 "error_message": error_message,
