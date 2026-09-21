@@ -95,6 +95,59 @@ class TestTheSameAdvisoryFromTwoScannersShowsOnce:
 
         assert {row["id"] for row in digest} == {"CVE-2026-0001", "CVE-2026-0002"}
 
+    def test_a_chain_of_aliases_folds_to_one(self, sample_team_with_owner_member) -> None:
+        """The transitive case, which a single claiming pass gets wrong.
+
+        OSV reports GHSA-a aliased to CVE-1; Dependency Track reports CVE-1
+        aliased to CVE-2; a third scanner reports CVE-2 alone. All three are one
+        vulnerability, and the first and third share no id at all. A pass that
+        claims ids as it goes folds the first two and then emits the third
+        beside them, because by the time the bridging row arrives the earlier
+        ones are already written out.
+        """
+        team = sample_team_with_owner_member.team
+        _component_with(
+            team,
+            {
+                "osv": [_finding("GHSA-a", "critical", aliases=["CVE-1"])],
+                "dependency-track": [_finding("CVE-1", "critical", aliases=["CVE-2"])],
+                "sbom-verification": [_finding("CVE-2", "critical")],
+            },
+        )
+
+        digest = build_dashboard_context(team.id)["needs_attention"]
+
+        assert len(digest) == 1, [row["id"] for row in digest]
+
+    def test_a_bridging_row_arriving_last_still_folds(self, sample_team_with_owner_member) -> None:
+        """The same chain with the bridge reported by the lowest-ranked scanner,
+        so it is the last candidate the database returns."""
+        team = sample_team_with_owner_member.team
+        _component_with(
+            team,
+            {
+                "osv": [_finding("GHSA-a", "critical")],
+                "dependency-track": [_finding("CVE-2", "critical")],
+                "sbom-verification": [_finding("CVE-3", "low", aliases=["GHSA-a", "CVE-2"])],
+            },
+        )
+
+        digest = build_dashboard_context(team.id)["needs_attention"]
+
+        assert len(digest) == 1, [row["id"] for row in digest]
+
+    def test_a_malicious_package_leads(self, sample_team_with_owner_member) -> None:
+        """It carries no severity of its own, so ranking on severity alone
+        buries it below every real CVE, and it is a remove-now decision."""
+        team = sample_team_with_owner_member.team
+        nasty = _finding("MAL-2026-0001", "")
+        nasty["malicious"] = True
+        _component_with(team, {"osv": [_finding("CVE-2026-0001", "critical"), nasty]})
+
+        digest = build_dashboard_context(team.id)["needs_attention"]
+
+        assert digest[0]["id"] == "MAL-2026-0001", [row["id"] for row in digest]
+
     def test_the_aliases_reach_the_table(self, sample_team_with_owner_member) -> None:
         """Without the column there is nothing to fold on."""
         team = sample_team_with_owner_member.team
