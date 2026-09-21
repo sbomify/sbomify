@@ -514,10 +514,21 @@ jobs:
       # window.
       #
       # A bare signature does not have that problem. cosign writes it to the
-      # legacy sha256-<digest>.sig tag, which any cosign v2 or later verifies
-      # from the registry alone, with no referrers support and no transparency
-      # log lookup. It is a backstop for the attestation rather than a
-      # replacement: the provenance is still the richer artifact.
+      # legacy sha256-<digest>.sig tag, which any cosign v2 or later finds in
+      # the registry with no referrers support. It is a backstop for the
+      # attestation rather than a replacement: the provenance is still the
+      # richer artifact.
+      #
+      # It removes GitHub's API from the path, not Rekor. Signing here is
+      # keyless, so the Fulcio certificate is valid for ten minutes, and what
+      # proves the signature was made inside that window is the Rekor entry's
+      # timestamp. Take the log away and cosign falls back to checking the
+      # certificate against the current time (CheckExpiry, "certificate expired
+      # before observed time"), which every consumer fails from ten minutes
+      # after the build onwards. Genuinely log-free verification needs either a
+      # long-lived key or an RFC3161 timestamp, and cosign v3 configures a TSA
+      # through --signing-config rather than a flag. Neither belongs in the
+      # change that stops the attestation being invisible.
       - name: Install cosign
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -549,11 +560,11 @@ jobs:
 
       # Reports rather than gates, for one release cycle. The signing step above
       # is the fix and blocks if it fails, because a silently unsigned image is
-      # the bug being closed. This check is a different thing: it asserts that a
-      # consumer can verify with neither GitHub's API nor Rekor in the path, and
-      # its flag combination has not been run anywhere yet. A wrong flag here
-      # would redden master for a reason unrelated to whether the signature
-      # exists, which is a worse trade than reading one log line.
+      # the bug being closed. This check is a different thing: it asserts a
+      # consumer can verify from the registry without reaching GitHub's API, and
+      # it has not been run anywhere yet. A wrong flag here would redden master
+      # for a reason unrelated to whether the signature exists, which is a worse
+      # trade than reading one log line.
       #
       # Flip continue-on-error off once it has been observed green.
       - name: Confirm the signature is readable from the registry
@@ -564,22 +575,23 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
-          # The point of the backstop is that a consumer can verify without
-          # GitHub's API and without Rekor, so the check has to assert that and
-          # not merely that the sign step exited zero. --insecure-ignore-tlog is
-          # what removes Rekor from the path; identity is still checked.
-          # Pinned to this workflow file and the refs that publish, not to the
-          # repository. Any workflow here can mint an OIDC certificate, so a
-          # repository-wide identity would accept a signature from a job that has
-          # no business publishing images, which is most of the value of checking
-          # the identity at all.
+          # Run as a consumer runs it, which means letting cosign consult the
+          # transparency log. --insecure-ignore-tlog would pass here and mislead:
+          # this step runs seconds after signing, while the ten-minute Fulcio
+          # certificate is still valid, so it would prove a property that stops
+          # holding before anyone else can rely on it.
+          #
+          # Identity is pinned to this workflow file and the refs that publish,
+          # not to the repository. Any workflow here can mint an OIDC
+          # certificate, so a repository-wide identity would accept a signature
+          # from a job that has no business publishing images, which is most of
+          # the value of checking the identity at all.
           cosign verify \
             --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\\.github/workflows/ci-cd\\.yml@refs/(heads/master|tags/v.*)$" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             --registry-referrers-mode=legacy \
-            --insecure-ignore-tlog \
             "${GHCR_IMAGE}@${DIGEST}" > /dev/null
-          echo "Signature verified from the registry alone."
+          echo "Signature verified from the registry, without GitHub's attestation API."
 
       - name: Add build summary for non-pushes
         if: ${{ !(github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) }}
