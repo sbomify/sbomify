@@ -87,6 +87,20 @@
                         </option>
                     {% endfor %}
                     </c-tables.select>
+                    {% if scan_state_options %}
+                        <c-tables.select id="scan-state" label="Filter by triage state" name="scan_state">
+                        <option value="all">All States</option>
+                        {% for state in scan_state_options %}
+                            <option value="{{ state.value }}"
+                                    {% if state.value == scan_query.state %}selected{% endif %}>
+                                {{ state.label }}
+                            </option>
+                        {% endfor %}
+                        </c-tables.select>
+                    {% endif %}
+                    {% if scan_kev_total %}
+                        <c-forms.checkbox name="scan_kev" :checked="scan_query.kev_only">Known exploited ({{ scan_kev_total }})</c-forms.checkbox>
+                    {% endif %}
                     <c-forms.checkbox name="scan_suppressed" :checked="scan_query.show_suppressed">Show suppressed</c-forms.checkbox>
                     <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
                     {% if scan_is_narrowed %}

@@ -295,3 +295,87 @@ class TestPagingKeepsTheFilter:
         body = _report(sample_sbom, scan_submitted="1", scan_severity="high").content.decode()
 
         assert "page=2&amp;scan_submitted=1&amp;scan_severity=high" in body
+
+
+class TestTheStateAndKevFilters:
+    """The report was asked for four filters: search, severity, VEX state and
+    KEV. The first two landed with the toolbar; these are the other two."""
+
+    def test_kev_only_keeps_the_exploited_advisories(self, sample_sbom: SBOM, monkeypatch):  # noqa: F811
+        """The predicate read a `kev` key the merged advisories never carried,
+        so this filter matched nothing at all and emptied the report."""
+        from sbomify.apps.vulnerability_scanning import kev
+
+        _run(
+            sample_sbom,
+            [_finding("CVE-2026-0001", "openssl", "high"), _finding("CVE-2026-0002", "zlib", "high")],
+        )
+        monkeypatch.setattr(kev, "kev_ids_for_serialization", lambda: frozenset({"cve-2026-0001"}))
+
+        response = _report(sample_sbom, scan_submitted="1", scan_kev="1")
+
+        assert [entry["package"]["name"] for entry in _packages(response)] == ["openssl"]
+
+    def test_an_alias_counts_as_exploited_too(self, sample_sbom: SBOM, monkeypatch):  # noqa: F811
+        """Merging folds every id an advisory answers to into one entry, which
+        is why the mark is stamped after the fold rather than per provider."""
+        from sbomify.apps.vulnerability_scanning import kev
+
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high", aliases=["GHSA-aaaa-bbbb-cccc"])])
+        monkeypatch.setattr(kev, "kev_ids_for_serialization", lambda: frozenset({"ghsa-aaaa-bbbb-cccc"}))
+
+        response = _report(sample_sbom, scan_submitted="1", scan_kev="1")
+
+        assert len(_packages(response)) == 1
+
+    def test_the_control_counts_the_whole_scan(self, sample_sbom: SBOM, monkeypatch):  # noqa: F811
+        from sbomify.apps.vulnerability_scanning import kev
+
+        _run(
+            sample_sbom,
+            [_finding("CVE-2026-0001", "openssl", "high"), _finding("CVE-2026-0002", "zlib", "high")],
+        )
+        monkeypatch.setattr(kev, "kev_ids_for_serialization", lambda: frozenset({"cve-2026-0001"}))
+
+        response = _report(sample_sbom, scan_submitted="1", scan_kev="1")
+
+        assert response.context["scan_kev_total"] == 1
+        assert "scan_kev" in response.content.decode()
+
+    def test_no_exploited_advisory_means_no_control(self, sample_sbom: SBOM):  # noqa: F811
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
+
+        response = _report(sample_sbom)
+
+        assert response.context["scan_kev_total"] == 0
+        assert "scan_kev" not in response.content.decode()
+
+    def test_the_state_filter_narrows_the_report(self, sample_sbom: SBOM):  # noqa: F811
+        _run(
+            sample_sbom,
+            [
+                _finding("CVE-2026-0001", "openssl", "high", analysis_state="exploitable"),
+                _finding("CVE-2026-0002", "zlib", "high"),
+            ],
+        )
+
+        response = _report(sample_sbom, scan_submitted="1", scan_state="exploitable")
+
+        assert [entry["package"]["name"] for entry in _packages(response)] == ["openssl"]
+
+    def test_an_undecided_advisory_reads_as_open(self, sample_sbom: SBOM):  # noqa: F811
+        """No decision is a state the reader can filter by, which is why the
+        options come from the same mapping the predicate uses."""
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
+
+        response = _report(sample_sbom, scan_submitted="1", scan_state="open")
+
+        assert len(_packages(response)) == 1
+        assert {option["value"] for option in response.context["scan_state_options"]} == {"open"}
+
+    def test_the_state_options_carry_their_labels(self, sample_sbom: SBOM):  # noqa: F811
+        _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high", analysis_state="not_affected")])
+
+        options = _report(sample_sbom).context["scan_state_options"]
+
+        assert {option["value"]: option["label"] for option in options}["not_affected"] == "Not affected"

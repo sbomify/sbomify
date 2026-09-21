@@ -106,6 +106,36 @@ def _severity_options(packages: list[dict[str, Any]], query: Any) -> list[str]:
     )
 
 
+def _state_options(packages: list[dict[str, Any]], query: Any) -> list[dict[str, str]]:
+    """The VEX states the dropdown offers, with the labels the reader sees.
+
+    ``row_state`` is what the predicate filters on, so the options come from it
+    too: an advisory with no decision reads as "open" in both places rather than
+    as an empty value that the select cannot represent.
+    """
+    from sbomify.apps.vulnerability_scanning.services.finding_browse import (
+        STATE_LABELS,
+        STATE_ORDER,
+        present_options,
+        row_state,
+    )
+
+    values = [row_state(advisory) for entry in packages for advisory in entry["vulnerabilities"]]
+    return [
+        {"value": value, "label": STATE_LABELS.get(value, value)}
+        for value in present_options(values, STATE_ORDER, query.state)
+    ]
+
+
+def _kev_total(packages: list[dict[str, Any]]) -> int:
+    """How many advisories the catalog knows are exploited.
+
+    Counted over the whole scan rather than the filtered set, so the control
+    that reads "KEV only (3)" keeps saying three once it is ticked.
+    """
+    return sum(1 for entry in packages for advisory in entry["vulnerabilities"] if advisory.get("kev"))
+
+
 def _filtered_packages(packages: list[dict[str, Any]], query: Any) -> list[dict[str, Any]]:
     """Packages whose advisories still have something to show."""
     if not _narrows_rows(query):
@@ -142,6 +172,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
 
         scan_query = parse_finding_query(request.GET, prefix=PARAM_PREFIX)
         scan_severity_options: list[str] = []
+        scan_state_options: list[dict[str, str]] = []
+        scan_kev_total = 0
         scan_timestamp_str = None
         error_message = None
         error_details = None
@@ -246,6 +278,12 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 # S3 fetch and O(findings + statements) matching rather than a
                 # rebuilt index per finding.
                 vex_index: dict[str, list[tuple[int, dict[str, Any]]]] | None = None
+
+                # One catalog read for the whole report, matched per advisory
+                # once its merged id set is known.
+                from sbomify.apps.vulnerability_scanning.kev import finding_in_kev, kev_ids_for_serialization
+
+                kev_ids = kev_ids_for_serialization()
 
                 def vex_state_of(finding: dict[str, Any]) -> str:
                     """The finding's VEX state: stored first, live statements second.
@@ -385,6 +423,12 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                             )
                             merged["id"] = display_id
                             merged["aliases"] = [i for i in merged_ids if i != display_id]
+                            # Read from the catalog rather than stored, the way
+                            # every other view marks KEV. Stamped here because
+                            # this is where the merged advisory finally knows
+                            # every id it answers to, which is what the lookup
+                            # matches on.
+                            merged["kev"] = finding_in_kev(merged, kev_ids)
                         # Worst first: severity rank, then CVSS descending within a rank.
                         entry["vulnerabilities"].sort(
                             key=lambda v: (
@@ -428,6 +472,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     # "1 of 40" under a critical filter is the useful reading;
                     # one saying "1 of 1" hides the other 39.
                     scan_severity_options = _severity_options(packages, scan_query)
+                    scan_state_options = _state_options(packages, scan_query)
+                    scan_kev_total = _kev_total(packages)
                     packages = _filtered_packages(packages, query)
 
                     paginator = Paginator(packages, PACKAGES_PER_PAGE)
@@ -507,6 +553,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 "page_range": page_range,
                 "scan_query": scan_query,
                 "scan_severity_options": scan_severity_options,
+                "scan_state_options": scan_state_options,
+                "scan_kev_total": scan_kev_total,
                 "scan_is_narrowed": scan_is_narrowed,
                 "scan_query_string": scan_query_string,
                 "scan_timestamp": scan_timestamp_str,
