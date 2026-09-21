@@ -14,70 +14,114 @@ from django.core.cache import cache as django_cache
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as _SEVERITY_RANK
 
 _CACHE_TTL_SECONDS = 60
 _DIGEST_LIMIT = 3
 
 
-def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> list[dict[str, Any]]:
-    """Worst non-suppressed findings across the given components."""
-    from sbomify.apps.plugins.models import AssessmentRun
-    from sbomify.apps.vulnerability_scanning.utils import extract_finding_rows, merge_findings_by_alias
-    from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
+#: How many ranked rows to fold before taking the digest's three.
+#:
+#: The fold is by alias and cannot go into SQL, so something has to bound what
+#: it runs over. The database returns the worst rows first, and folding the top
+#: few is enough: two rows can only merge into one, so the worst three survivors
+#: are always inside the worst few candidates by a wide margin.
+_DIGEST_CANDIDATES = 60
 
-    latest_sboms = (
+
+def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> list[dict[str, Any]]:
+    """Worst non-suppressed findings across the given components.
+
+    Read from the findings table rather than from scan results. The old shape
+    loaded every current run's whole ``result`` for every component in the
+    workspace, merged and extracted in Python, sorted the lot, and returned
+    three rows. The work scaled with the workspace while the answer never grew.
+
+    Ranking and bounding now happen in SQL. What stays in Python is the
+    cross-provider fold, because it is by alias and transitive, and it runs over
+    the ranked candidates rather than over everything.
+    """
+    from django.db.models import F, Value
+    from django.db.models.functions import Coalesce
+
+    from sbomify.apps.vulnerability_scanning.models import Finding
+
+    # ``is_current`` is scoped per SBOM, not per component: it means the newest
+    # run per (sbom, plugin). A component that has since uploaded a newer
+    # artifact still has current rows against the superseded one, and the
+    # dashboard must not resurface those, so the newest SBOM per component is
+    # resolved first and the findings are narrowed to it.
+    latest_sbom_ids = (
         SBOM.objects.filter(component_id__in=component_ids, bom_type=SBOM.BomType.SBOM)
         .order_by("component_id", "-created_at")
         .distinct("component_id")
-        .values("id", "component_id", "version")
+        .values_list("id", flat=True)
     )
-    sbom_meta = {str(row["id"]): row for row in latest_sboms}
-    runs = (
-        AssessmentRun.objects.filter(sbom_id__in=sbom_meta.keys(), category="security", status="completed")
-        .order_by("sbom_id", "plugin_name", "-created_at")
-        .distinct("sbom_id", "plugin_name")
-        .values("sbom_id", "result", "created_at")
-    )
-    results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
-    scanned_at_by_sbom: dict[str, Any] = {}
-    for run in runs:
-        sbom_key = str(run["sbom_id"])
-        results_by_sbom.setdefault(sbom_key, []).append(run["result"])
-        if sbom_key not in scanned_at_by_sbom or run["created_at"] > scanned_at_by_sbom[sbom_key]:
-            scanned_at_by_sbom[sbom_key] = run["created_at"]
 
-    vex_cache: dict[Any, list[dict[str, Any]]] = {}
-    findings: list[dict[str, Any]] = []
-    for sbom_id, provider_results in results_by_sbom.items():
-        meta = sbom_meta[sbom_id]
-        component_id = meta["component_id"]
-        merged = merge_findings_by_alias(provider_results)
-        # VEX lives in S3; skip the fetch entirely for clean components.
-        statements = load_vex_suppressions(component_id, cache=vex_cache) if merged["findings"] else []
-        for row in extract_finding_rows(merged, statements):
-            if row.get("vex_suppressed"):
-                continue
-            findings.append(
-                {
-                    **row,
-                    "component_id": component_id,
-                    "component_name": component_names.get(component_id, ""),
-                    "sbom_version": meta["version"],
-                    "scanned_at": scanned_at_by_sbom.get(sbom_id),
-                }
-            )
-    # Worst severity first; within a severity band, the most recently updated
-    # component leads, so a critical from today's scan outranks one from last
-    # month's.
-    findings.sort(
-        key=lambda r: (
-            _SEVERITY_RANK.get(r["severity"], 5),
-            -(r["scanned_at"].timestamp() if r["scanned_at"] else 0.0),
-            -(r.get("cvss_score") or 0),
+    candidates = (
+        Finding.objects.filter(
+            component_id__in=component_ids,
+            sbom_id__in=list(latest_sbom_ids),
+            # Rows accumulate per run, so one advisory seen by fifty scans is
+            # fifty rows. Every reader has to narrow to the current ones.
+            is_current=True,
+            vex_suppressed=False,
         )
+        .annotate(scanned_at=F("run__created_at"), sbom_version=F("sbom__version"))
+        .order_by(
+            "severity_rank",
+            F("run__created_at").desc(),
+            # The display rule is ``or 0``, so a missing score ties with an
+            # explicit 0.0 rather than sorting above or below every score.
+            Coalesce("cvss_score", Value(0.0)).desc(),
+        )
+        .values(
+            "advisory_id",
+            "aliases",
+            "severity",
+            "cvss_score",
+            "package_name",
+            "package_version",
+            "ecosystem",
+            "vex_state",
+            "malicious",
+            "component_id",
+            "scanned_at",
+            "sbom_version",
+        )[:_DIGEST_CANDIDATES]
     )
-    return findings[:_DIGEST_LIMIT]
+
+    folded: list[dict[str, Any]] = []
+    claimed: dict[str, int] = {}
+    for row in candidates:
+        ids = {row["advisory_id"], *(row.get("aliases") or [])}
+        keys = {str(one).lower() for one in ids if one}
+        existing = next((claimed[key] for key in keys if key in claimed), None)
+        if existing is not None:
+            # Already shown under another of its ids by a different scanner.
+            for key in keys:
+                claimed.setdefault(key, existing)
+            continue
+        folded.append(
+            {
+                "id": row["advisory_id"],
+                "severity": row["severity"],
+                "cvss_score": row["cvss_score"],
+                "package": row["package_name"],
+                "version": row["package_version"],
+                "ecosystem": row["ecosystem"],
+                "vex_state": row["vex_state"],
+                "malicious": row["malicious"],
+                "component_id": row["component_id"],
+                "component_name": component_names.get(row["component_id"], ""),
+                "sbom_version": row["sbom_version"],
+                "scanned_at": row["scanned_at"],
+            }
+        )
+        for key in keys:
+            claimed[key] = len(folded) - 1
+        if len(folded) >= _DIGEST_LIMIT:
+            break
+    return folded
 
 
 def get_first_component(team_id: int) -> Component | None:
