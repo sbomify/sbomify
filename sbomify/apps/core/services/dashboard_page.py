@@ -67,21 +67,31 @@ def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> l
             vex_suppressed=False,
         )
         .annotate(scanned_at=F("run__created_at"), sbom_version=F("sbom__version"))
+        # Exactly the columns of vuln_finding_current_rank_idx, in its order, so
+        # this walks the index instead of sorting the workspace's findings.
+        #
+        # Malicious leads, ahead of severity, for the reason the model records:
+        # a malicious package carries no severity of its own, so ranking on
+        # severity alone buries it in the unranked bucket below every real CVE,
+        # and it is a remove-now decision rather than a patch-later one. The old
+        # Python sort had that gap; porting it unchanged would have kept it.
+        #
+        # Recency is deliberately not here. It lives on the run, so ordering by
+        # it joins another table and gives up the index, which on a large
+        # workspace means sorting many rows to slice sixty. It is applied to the
+        # window below instead, which honours it among the candidates rather
+        # than across every finding: for a digest of three that is the right
+        # trade, and the alternative is a sort that grows with the workspace.
         .order_by(
-            # Malicious first, ahead of severity, for the reason the model
-            # records: a malicious package carries no severity of its own, so
-            # ranking on severity alone buries it in the unranked bucket below
-            # every real CVE, and it is a remove-now decision rather than a
-            # patch-later one. The old Python sort had the same gap; porting it
-            # unchanged would have carried the gap across.
             F("malicious").desc(),
             "severity_rank",
-            F("run__created_at").desc(),
             # The display rule is ``or 0``, so a missing score ties with an
             # explicit 0.0 rather than sorting above or below every score.
             Coalesce("cvss_score", Value(0.0)).desc(),
         )
         .values(
+            "severity_rank",
+            "malicious",
             "advisory_id",
             "aliases",
             "severity",
@@ -97,8 +107,22 @@ def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> l
         )[:_DIGEST_CANDIDATES]
     )
 
+    # Recency restored as the tiebreak the digest has always used: within a
+    # severity band the freshly scanned component leads, so a critical from
+    # today outranks one from last month. Stable, so rows that tie on it keep
+    # the database's order.
+    ranked = sorted(
+        candidates,
+        key=lambda row: (
+            not row["malicious"],
+            row["severity_rank"],
+            -(row["scanned_at"].timestamp() if row["scanned_at"] else 0.0),
+            -(row["cvss_score"] or 0),
+        ),
+    )
+
     folded: list[dict[str, Any]] = []
-    for row in _fold_by_alias(list(candidates))[:_DIGEST_LIMIT]:
+    for row in _fold_by_alias(ranked)[:_DIGEST_LIMIT]:
         folded.append(
             {
                 "id": row["advisory_id"],
