@@ -639,9 +639,10 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
 
     messages.add_message(request, messages.INFO, f"You have joined {joined_team.name} as {joined_role}")
 
-    # Capture invitation fields into locals BEFORE the delete() below;
-    # the deferred ``on_commit`` lambdas reference these by closure and
-    # ``invitation`` becomes invalid after deletion.
+    # The invitation is already gone: it is deleted inside the user_seat block
+    # above, so that taking the seat and releasing the one the invitation held
+    # is a single transition under the lock. These read joined_* rather than the
+    # row, and the deferred on_commit lambdas below reference them by closure.
     captured_role = joined_role
     captured_team_key = joined_team.key
     transaction.on_commit(
