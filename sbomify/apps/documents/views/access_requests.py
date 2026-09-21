@@ -39,9 +39,9 @@ from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.utils import (
-    can_add_user_to_team,
     switch_active_workspace,
     update_user_teams_session,
+    user_seat,
 )
 
 # Anyone already in the workspace, internal or external — they do not need to
@@ -588,76 +588,82 @@ class NDASigningView(View):
                     # Check if user is already a member
                     if not Member.objects.filter(team=team, user=current_user).exists():
                         # Complete invitation acceptance
-                        can_add, error_message = can_add_user_to_team(team, is_joining_via_invite=True)
-                        if can_add:
-                            has_default_team = Member.objects.filter(user=current_user, is_default_team=True).exists()
-                            Member.objects.create(
-                                team=team,
-                                user=current_user,
-                                role=invitation.role,
-                                is_default_team=not has_default_team,
-                            )
-                            update_user_teams_session(request, current_user)
-                            switch_active_workspace(request, team, invitation.role)
-
-                            # NDA-gated invitations bypass both accept_invite and the
-                            # login auto-accept signal; without this capture the
-                            # collaboration funnel undercounts invited users who had
-                            # to sign an NDA before joining.
-                            invitation_role = invitation.role
-                            transaction.on_commit(
-                                lambda: capture_for_request(
-                                    request,
-                                    "team:member_invitation_accepted",
-                                    {"role": invitation_role},
-                                    team_key=team_key,
+                        # Counted and taken under one lock, so an NDA signed at the same
+                        # moment as another acceptance cannot take the same last seat twice.
+                        with user_seat(team, is_joining_via_invite=True) as (can_add, error_message):
+                            if can_add:
+                                has_default_team = Member.objects.filter(
+                                    user=current_user, is_default_team=True
+                                ).exists()
+                                Member.objects.create(
+                                    team=team,
+                                    user=current_user,
+                                    role=invitation.role,
+                                    is_default_team=not has_default_team,
                                 )
-                            )
+                                update_user_teams_session(request, current_user)
+                                switch_active_workspace(request, team, invitation.role)
 
-                            invitation.delete()
-
-                            # Auto-approve the access request since user has been invited and is now a member
-                            was_pending = access_request.status == AccessRequest.Status.PENDING
-                            access_request.status = AccessRequest.Status.APPROVED
-                            access_request.decided_at = timezone.now()
-                            # Set decided_by to the inviter if available, otherwise leave as None
-                            if inviter_id:
-                                try:
-                                    inviter = get_user_model().objects.get(id=inviter_id)
-                                    access_request.decided_by = inviter
-                                except get_user_model().DoesNotExist:
-                                    # Inviter user not found, continue without setting decided_by
-                                    pass
-                            access_request.save()
-
-                            # Only emit document:access_approved when this is genuinely a
-                            # trust-center invitation (signalled by the `invitation_inviter:`
-                            # cache key set in documents/views/access_requests.py at invite
-                            # send time). Regular workspace invites with a company NDA also
-                            # reach this branch and approve a freshly-created plumbing
-                            # AccessRequest; counting them would inflate the funnel.
-                            if was_pending and inviter_id:
+                                # NDA-gated invitations bypass both accept_invite and the
+                                # login auto-accept signal; without this capture the
+                                # collaboration funnel undercounts invited users who had
+                                # to sign an NDA before joining.
+                                invitation_role = invitation.role
                                 transaction.on_commit(
-                                    lambda: capture_for_request(request, "document:access_approved", team_key=team_key)
+                                    lambda: capture_for_request(
+                                        request,
+                                        "team:member_invitation_accepted",
+                                        {"role": invitation_role},
+                                        team_key=team_key,
+                                    )
                                 )
 
-                            # Invalidate cache after transaction commits
-                            transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+                                invitation.delete()
 
-                            messages.success(
-                                request,
-                                f"NDA signed successfully. You have joined {team.name} as {invitation.role}.",
-                            )
+                                # Auto-approve the access request since user has been invited and is now a member
+                                was_pending = access_request.status == AccessRequest.Status.PENDING
+                                access_request.status = AccessRequest.Status.APPROVED
+                                access_request.decided_at = timezone.now()
+                                # Set decided_by to the inviter if available, otherwise leave as None
+                                if inviter_id:
+                                    try:
+                                        inviter = get_user_model().objects.get(id=inviter_id)
+                                        access_request.decided_by = inviter
+                                    except get_user_model().DoesNotExist:
+                                        # Inviter user not found, continue without setting decided_by
+                                        pass
+                                access_request.save()
 
-                            # Check for return URL in session
-                            return_url = request.session.pop("nda_signing_return_url", None)
-                            if return_url:
-                                return redirect(return_url)
+                                # Only emit document:access_approved when this is genuinely a
+                                # trust-center invitation (signalled by the `invitation_inviter:`
+                                # cache key set in documents/views/access_requests.py at invite
+                                # send time). Regular workspace invites with a company NDA also
+                                # reach this branch and approve a freshly-created plumbing
+                                # AccessRequest; counting them would inflate the funnel.
+                                if was_pending and inviter_id:
+                                    transaction.on_commit(
+                                        lambda: capture_for_request(
+                                            request, "document:access_approved", team_key=team_key
+                                        )
+                                    )
 
-                            return redirect("core:dashboard")
-                        else:
-                            messages.error(request, error_message)
-                            return redirect("core:workspace_public", workspace_key=team_key)
+                                # Invalidate cache after transaction commits
+                                transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+
+                                messages.success(
+                                    request,
+                                    f"NDA signed successfully. You have joined {team.name} as {invitation.role}.",
+                                )
+
+                                # Check for return URL in session
+                                return_url = request.session.pop("nda_signing_return_url", None)
+                                if return_url:
+                                    return redirect(return_url)
+
+                                return redirect("core:dashboard")
+                            else:
+                                messages.error(request, error_message)
+                                return redirect("core:workspace_public", workspace_key=team_key)
                     else:
                         # User is already a member, just complete the invitation
                         # But still approve the access request if it's pending

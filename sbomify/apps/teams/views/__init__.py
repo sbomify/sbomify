@@ -235,8 +235,10 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
     if request.method == "POST":
         invite_user_form = InviteUserForm(request.POST)
 
-        # Check user limits before form validation to show as form error
-        from sbomify.apps.teams.utils import can_add_user_to_team
+        # Advisory, so the limit shows as a form error rather than as a refusal
+        # after the user has filled the form in. The authoritative check is taken
+        # under a lock at the point the invitation is written, below.
+        from sbomify.apps.teams.utils import can_add_user_to_team, user_seat
 
         can_add, error_message = can_add_user_to_team(team)
 
@@ -264,12 +266,22 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                 # Invitation doesn't exist, proceed with creating new one
                 pass
 
-            invitation = Invitation(
-                team_id=team_id,
-                email=invite_user_form.cleaned_data["email"],
-                role=invite_user_form.cleaned_data["role"],
-            )
-            invitation.save()
+            # Counted and written under one lock. The advisory check above ran
+            # before the form was even validated, so by here another invitation
+            # may have taken the last seat. The email is sent afterwards, on
+            # purpose: an SMTP round trip has no business inside a row lock.
+            with user_seat(team) as (seat_available, seat_error):
+                if not seat_available:
+                    invite_user_form.add_error(None, seat_error)
+                    context["invite_user_form"] = invite_user_form
+                    return render(request, "teams/invite.html.j2", context)
+
+                invitation = Invitation(
+                    team_id=team_id,
+                    email=invite_user_form.cleaned_data["email"],
+                    role=invite_user_form.cleaned_data["role"],
+                )
+                invitation.save()
 
             email_context = {
                 "team": team,
@@ -533,22 +545,24 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
 
         return redirect("documents:sign_nda", team_key=invitation.team.key, request_id=access_request.id)
 
-    # Check user limits before accepting invitation
-    from sbomify.apps.teams.utils import can_add_user_to_team
+    # Counted and taken under one lock. is_joining_via_invite allows total ==
+    # max because this user's own pending invitation already occupies a slot,
+    # and that only holds if nobody else can take the slot in between.
+    from sbomify.apps.teams.utils import user_seat
 
-    can_add, error_message = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
-    if not can_add:
-        return _render_workspace_availability_page(request, invitation.team, invitation, error_message)
+    with user_seat(invitation.team, is_joining_via_invite=True) as (can_add, error_message):
+        if not can_add:
+            return _render_workspace_availability_page(request, invitation.team, invitation, error_message)
 
-    # Set default workspace if user does not have one yet (common for invite-only signups)
-    has_default_team = Member.objects.filter(user=request.user, is_default_team=True).exists()
-    membership = Member(
-        team_id=invitation.team_id,
-        user_id=request.user.id,
-        role=invitation.role,
-        is_default_team=not has_default_team,
-    )
-    membership.save()
+        # Set default workspace if user does not have one yet (common for invite-only signups)
+        has_default_team = Member.objects.filter(user=request.user, is_default_team=True).exists()
+        membership = Member(
+            team_id=invitation.team_id,
+            user_id=request.user.id,
+            role=invitation.role,
+            is_default_team=not has_default_team,
+        )
+        membership.save()
 
     # Create/approve AccessRequest for trust center invitations (only when NO NDA is required)
     # If NDA was required, it would have been handled above and user redirected to sign NDA

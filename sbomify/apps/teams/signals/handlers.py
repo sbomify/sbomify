@@ -20,7 +20,7 @@ from django.utils import timezone
 from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.teams.models import Invitation, Member, Team
-from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, update_user_teams_session
+from sbomify.apps.teams.utils import get_user_teams, update_user_teams_session, user_seat
 
 logger = logging.getLogger(__name__)
 
@@ -59,19 +59,22 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
             invitation.delete()
             continue
 
-        can_add, error_msg = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
-        if not can_add:
-            logger.warning(
-                "Skipping invitation %s for user %s due to limit: %s", invitation.id, user.username, error_msg
-            )
-            continue
+        # Counted and taken under one lock. Several invitations can be accepted
+        # for one workspace at the same moment, here and from the accept views,
+        # and separate statements let them all pass the same count.
+        with user_seat(invitation.team, is_joining_via_invite=True) as (can_add, error_msg):
+            if not can_add:
+                logger.warning(
+                    "Skipping invitation %s for user %s due to limit: %s", invitation.id, user.username, error_msg
+                )
+                continue
 
-        membership = Member.objects.create(
-            user=user,
-            team=invitation.team,
-            role=invitation.role,
-            is_default_team=not has_default,
-        )
+            membership = Member.objects.create(
+                user=user,
+                team=invitation.team,
+                role=invitation.role,
+                is_default_team=not has_default,
+            )
         has_default = has_default or membership.is_default_team
         # Accepting deletes the invitation, so the pending-invitation
         # notification has nothing left to show and the user is put in a

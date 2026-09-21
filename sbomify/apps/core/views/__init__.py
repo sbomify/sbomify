@@ -220,7 +220,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
     from django.utils import timezone
 
     from sbomify.apps.teams.models import Invitation, Member
-    from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, switch_active_workspace
+    from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace, user_seat
 
     user = cast(User, request.user)
 
@@ -250,19 +250,21 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         invitation.delete()
         return redirect("core:settings")
 
-    # Check team capacity
-    can_add, error_message = can_add_user_to_team(invitation.team)
-    if not can_add:
-        messages.add_message(request, messages.ERROR, f"Cannot join {invitation.team.display_name}: {error_message}")
-        return redirect("core:settings")
-
     # Capture team and role before deleting invitation, because the invitation object
     # will be invalidated after deletion and its attributes will no longer be accessible.
     team = invitation.team
     role = invitation.role
 
-    # Create membership in atomic transaction to ensure it's committed
-    with transaction.atomic():
+    # The seat is counted and taken under one lock: checking capacity and then
+    # creating the membership in separate statements let two acceptances both
+    # pass the same count.
+    with user_seat(team) as (can_add, error_message):
+        if not can_add:
+            messages.add_message(
+                request, messages.ERROR, f"Cannot join {invitation.team.display_name}: {error_message}"
+            )
+            return redirect("core:settings")
+
         has_default_team = Member.objects.filter(user=user, is_default_team=True).exists()
         Member.objects.create(
             user=user,
