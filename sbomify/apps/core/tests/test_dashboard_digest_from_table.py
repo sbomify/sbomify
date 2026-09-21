@@ -39,11 +39,18 @@ def _scan(sbom: SBOM, findings: list[dict[str, Any]], plugin: str = "osv") -> As
     return run
 
 
-def _finding(advisory: str, severity: str, *, aliases: list[str] | None = None, cvss: float | None = None):
+def _finding(
+    advisory: str,
+    severity: str,
+    *,
+    aliases: list[str] | None = None,
+    cvss: float | None = None,
+    package: str = "openssl",
+):
     row: dict[str, Any] = {
         "id": advisory,
         "severity": severity,
-        "component": {"name": "openssl", "version": "1.1.1", "ecosystem": "deb"},
+        "component": {"name": package, "version": "1.1.1", "ecosystem": "deb"},
     }
     if aliases:
         row["aliases"] = aliases
@@ -223,3 +230,58 @@ class TestScopeIsKept:
         digest = build_dashboard_context(team.id)["needs_attention"]
 
         assert [row["id"] for row in digest] == ["CVE-MINE"]
+
+
+class TestOnePackageAtATime:
+    """A finding is stored per advisory *and* package, and a digest entry names
+    the package it was found in. Folding across packages would print one line
+    naming whichever package ranked first and say nothing about the other, so
+    the fold is scoped the way merge_findings_by_alias is.
+    """
+
+    def test_one_cve_in_two_packages_is_two_entries(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        _component_with(
+            team,
+            {
+                "osv": [
+                    _finding("CVE-2026-0001", "critical", package="openssl"),
+                    _finding("CVE-2026-0001", "critical", package="zlib"),
+                ]
+            },
+        )
+
+        rows = build_dashboard_context(team.id)["needs_attention"]
+
+        assert sorted(row["package"] for row in rows) == ["openssl", "zlib"]
+
+    def test_an_alias_does_not_bridge_two_packages(self, sample_team_with_owner_member) -> None:
+        """The chain that folds two scanners inside one package must not reach
+        across to a different one."""
+        team = sample_team_with_owner_member.team
+        _component_with(
+            team,
+            {
+                "osv": [_finding("GHSA-a", "critical", aliases=["CVE-1"], package="openssl")],
+                "dependency-track": [_finding("CVE-1", "critical", package="zlib")],
+            },
+        )
+
+        rows = build_dashboard_context(team.id)["needs_attention"]
+
+        assert sorted(row["package"] for row in rows) == ["openssl", "zlib"]
+
+    def test_two_scanners_on_one_package_still_fold(self, sample_team_with_owner_member) -> None:
+        """The scoping must not cost the fold this pipeline exists for."""
+        team = sample_team_with_owner_member.team
+        _component_with(
+            team,
+            {
+                "osv": [_finding("GHSA-a", "critical", aliases=["CVE-1"], package="openssl")],
+                "dependency-track": [_finding("CVE-1", "critical", package="openssl")],
+            },
+        )
+
+        rows = build_dashboard_context(team.id)["needs_attention"]
+
+        assert len(rows) == 1

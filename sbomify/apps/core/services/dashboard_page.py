@@ -154,12 +154,18 @@ def _fold_by_alias(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     So the groups are built first and emitted afterwards. ``rows`` arrives in the
     order the database ranked it, and each group is represented by its earliest
     member, so folding never promotes a finding above one that outranks it.
+
+    Scoped to the package, as ``merge_findings_by_alias`` is. A finding is stored
+    per advisory *and* package, and a digest entry names the package it found, so
+    folding one CVE across two of them would print one line naming whichever
+    package ranked first and say nothing about the other.
     """
-    group_of: dict[str, int] = {}
+    group_of: dict[tuple[Any, ...], int] = {}
     groups: list[list[int]] = []
 
     for position, row in enumerate(rows):
-        keys = {str(one).lower() for one in (row["advisory_id"], *(row.get("aliases") or [])) if one}
+        scope = (row["package_name"], row["package_version"], row["ecosystem"])
+        keys = {(scope, str(one).lower()) for one in (row["advisory_id"], *(row.get("aliases") or [])) if one}
         joined = sorted({group_of[key] for key in keys if key in group_of})
         if not joined:
             groups.append([position])
