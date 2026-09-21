@@ -1,0 +1,40 @@
+{% extends "core/base.html.j2" %}
+{% comment %}
+The ops shell. It extends the plain page base rather than the workspace
+dashboard base on purpose: this page reports across every workspace, so the
+workspace sidebar, the workspace switcher and the workspace websocket would
+all be lying about what you are looking at. What it keeps is the app's own
+surface, type and tokens, so it reads as sbomify rather than as Django admin.
+{% endcomment %}
+{% block title %}sbomify Ops{% endblock %}
+{% block main %}
+    <div class="min-h-screen flex flex-col bg-background">
+        <header class="border-b border-solid border-border bg-surface">
+            <div class="max-w-7xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <c-chips.icon-chip size="lg" aria-hidden="true"><i class="fas fa-gauge-high"></i></c-chips.icon-chip>
+                    <div>
+                        <span class="block text-lg font-semibold text-text leading-tight">sbomify Ops</span>
+                        <span class="block text-xs text-text-muted">Internal. Every workspace.</span>
+                    </div>
+                </div>
+                <nav class="flex items-center gap-1" aria-label="Ops sections">
+                    <a href="{% url 'ops:overview' %}"
+                       {% if active_section == 'overview' %}aria-current="page"{% endif %}
+                       class="px-3 py-2 rounded-lg text-sm font-medium no-underline transition-colors text-text-muted hover:text-text hover:bg-surface-elevated aria-[current=page]:bg-primary aria-[current=page]:text-white">
+                        Overview
+                    </a>
+                    <a href="/"
+                       class="px-3 py-2 rounded-lg text-sm font-medium no-underline transition-colors text-text-muted hover:text-text hover:bg-surface-elevated">
+                        Back to app
+                    </a>
+                </nav>
+            </div>
+        </header>
+        <main id="main-content" class="flex-1">
+            <div class="p-6 max-w-7xl mx-auto">
+                {% block ops_content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+{% endblock %}

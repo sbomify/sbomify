@@ -272,6 +272,7 @@ INSTALLED_APPS = [
     "sbomify.apps.controls",
     "sbomify.apps.oidc",
     "sbomify.apps.security_advisories",
+    "sbomify.apps.ops",
 ]
 
 
