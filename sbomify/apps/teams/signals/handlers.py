@@ -75,6 +75,20 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
                 role=invitation.role,
                 is_default_team=not has_default,
             )
+            # Inside the lock with the membership. The count is members plus
+            # pending invitations, so between creating one and deleting the
+            # other this user occupies two seats, and a concurrent acceptance
+            # would be refused a seat that is actually free. Taking a seat and
+            # releasing the invitation that reserved it is one transition.
+            #
+            # Read what the deferred capture needs first: the row is gone after
+            # this and the lambda reads these by closure.
+            captured_role = invitation.role
+            captured_team_key = invitation.team.key
+            captured_invitation_id = invitation.id
+            captured_token = str(invitation.token)
+            captured_team_name = invitation.team.name
+            invitation.delete()
         has_default = has_default or membership.is_default_team
         # Accepting deletes the invitation, so the pending-invitation
         # notification has nothing left to show and the user is put in a
@@ -86,23 +100,19 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
         # flag to decide whether it still has to say so itself.
         announced = False
         if request is not None and hasattr(request, "_messages"):
-            messages.info(request, f"You have joined {invitation.team.name} as {invitation.role}")
+            messages.info(request, f"You have joined {captured_team_name} as {captured_role}")
             announced = True
 
         accepted.append(
             {
-                "team_key": invitation.team.key,
-                "invitation_id": invitation.id,
-                "invitation_token": str(invitation.token),
+                "team_key": captured_team_key,
+                "invitation_id": captured_invitation_id,
+                "invitation_token": captured_token,
                 "announced": announced,
             }
         )
 
         if request is not None:
-            # Capture into locals BEFORE invitation.delete() below; the
-            # deferred ``on_commit`` lambda reads these by closure.
-            captured_role = invitation.role
-            captured_team_key = invitation.team.key
             transaction.on_commit(
                 lambda: capture_for_request(
                     request,
@@ -111,8 +121,6 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
                     team_key=captured_team_key,
                 )
             )
-
-        invitation.delete()
 
     if request is not None and accepted:
         request.session["auto_accepted_invites"] = accepted

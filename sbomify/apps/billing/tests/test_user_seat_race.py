@@ -150,3 +150,59 @@ class TestTwoAtOnceCannotBothWin:
         assert not any(thread.is_alive() for thread in threads), "a worker never finished"
         assert len(admitted) == 2, "the unlocked shape was expected to overshoot"
         assert Member.objects.filter(team=team).count() == 3
+
+
+@pytest.mark.django_db
+class TestTheSeatTransitionIsOneStep:
+    """Taking a seat and releasing the invitation that reserved it.
+
+    The count is members plus unexpired invitations, so an acceptance that
+    creates the membership under the lock but deletes the invitation after it
+    leaves a window where one person occupies two seats. A concurrent acceptance
+    lands in that window and is refused a seat that is actually free.
+    """
+
+    def _accepting_sites(self) -> list[tuple[str, int]]:
+        """Every ``user_seat`` block that accepts an invitation, and its line."""
+        import pathlib as _pathlib
+
+        root = _pathlib.Path(__file__).resolve().parents[3]
+        found: list[tuple[str, int]] = []
+        for relative in (
+            "apps/core/views/__init__.py",
+            "apps/teams/signals/handlers.py",
+            "apps/teams/views/__init__.py",
+            "apps/documents/views/access_requests.py",
+        ):
+            path = root / relative
+            lines = path.read_text().splitlines()
+            for index, line in enumerate(lines):
+                if "with user_seat(" not in line:
+                    continue
+                indent = len(line) - len(line.lstrip())
+                end = index + 1
+                while end < len(lines):
+                    current = lines[end]
+                    if current.strip() and (len(current) - len(current.lstrip())) <= indent:
+                        break
+                    end += 1
+                block = lines[index:end]
+                # The invite form reserves a seat by creating an invitation
+                # rather than accepting one, so it has nothing to release.
+                if any("Invitation(" in one for one in block):
+                    continue
+                found.append((relative, index + 1))
+                if not any("invitation.delete()" in one for one in block):
+                    raise AssertionError(
+                        f"{relative}:{index + 1} takes a seat under the lock but releases the "
+                        "invitation outside it, so the seat is double counted in between"
+                    )
+        return found
+
+    def test_every_acceptance_releases_the_invitation_under_the_lock(self) -> None:
+        sites = self._accepting_sites()
+
+        # Four acceptance paths today: the settings page, the login auto-accept,
+        # the emailed accept link, and NDA acceptance. If this number changes,
+        # a path was added or removed and wants checking rather than updating.
+        assert len(sites) == 4, sites
