@@ -15,7 +15,9 @@ from __future__ import annotations
 from hashlib import sha256
 
 import pytest
+from django.db import connection
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from sbomify.apps.core.models import Component
@@ -137,11 +139,38 @@ class TestTheReaderCanNarrowTheList:
         assert {row["severity"] for row in panel["rows"]} == {"critical"}
         assert panel["total"] == 2
 
-    def test_kev_only_narrows_the_list(self, signed_in) -> None:
+    def test_kev_only_narrows_the_list(self, signed_in, monkeypatch) -> None:
+        """KEV is read from the catalog on every request, never stored on the
+        finding, so the feed is what this filter has to be driven by."""
+        from sbomify.apps.vulnerability_scanning import kev
+
         client, component = signed_in
-        run = _run_with(component, [_finding(0, kev=True), _finding(1), _finding(2)])
+        run = _run_with(component, [_finding(0), _finding(1), _finding(2)])
+        monkeypatch.setattr(kev, "kev_ids_for_serialization", lambda: frozenset({"cve-2026-00000"}))
 
         panel = _open(client, run, run_kev="1").context["panel"]
+
+        assert [row["id"] for row in panel["rows"]] == ["CVE-2026-00000"]
+        assert panel["kev_total"] == 1
+
+    def test_an_alias_puts_a_finding_in_kev_too(self, signed_in, monkeypatch) -> None:
+        """The aliases are the other half of the catalog match, and they are the
+        one list-valued field the filters read."""
+        from sbomify.apps.vulnerability_scanning import kev
+
+        client, component = signed_in
+        run = _run_with(component, [_finding(0, aliases=["GHSA-aaaa-bbbb-cccc"]), _finding(1)])
+        monkeypatch.setattr(kev, "kev_ids_for_serialization", lambda: frozenset({"ghsa-aaaa-bbbb-cccc"}))
+
+        panel = _open(client, run, run_kev="1").context["panel"]
+
+        assert [row["id"] for row in panel["rows"]] == ["CVE-2026-00000"]
+
+    def test_the_aliases_are_searchable(self, signed_in) -> None:
+        client, component = signed_in
+        run = _run_with(component, [_finding(0, aliases=["GHSA-aaaa-bbbb-cccc"]), _finding(1)])
+
+        panel = _open(client, run, run_search="GHSA-aaaa").context["panel"]
 
         assert [row["id"] for row in panel["rows"]] == ["CVE-2026-00000"]
 
@@ -283,3 +312,49 @@ class TestPagingAndFiltersTravelTogether:
         panel = _open(client, run, run_search="check-007").context["panel"]
 
         assert [row["id"] for row in panel["rows"]] == ["check-007"]
+
+
+class TestOnlyThePageLeavesPostgres:
+    """Rendering twenty-five rows used to cost the whole stored result.
+
+    A scan of a few thousand findings is a blob of several megabytes, and every
+    byte of it was de-TOASTed, sent and parsed to show one screen. Filtering and
+    the toolbar's counts read seven small keys per finding, so those come back as
+    a flat projection and the findings themselves are fetched for the page alone.
+    """
+
+    def test_no_query_selects_the_stored_result(self, signed_in) -> None:
+        client, component = signed_in
+        run = _run_with(component, [_finding(n) for n in range(60)])
+        column = f'"{AssessmentRun._meta.db_table}"."result"'
+
+        with CaptureQueriesContext(connection) as queries:
+            panel = _open(client, run).context["panel"]
+
+        assert len(panel["rows"]) == 25, "rendered nothing, so the assertion below proves nothing"
+        assert not [q["sql"] for q in queries.captured_queries if column in q["sql"]]
+
+    def test_the_page_carries_the_fields_the_projection_drops(self, signed_in) -> None:
+        """The projection has no title, description or references. Those are
+        most of a finding's bytes and the reason it exists, so the rows that
+        render have to come from the findings themselves."""
+        client, component = signed_in
+        run = _run_with(component, [_finding(n, references=[f"https://example.test/{n}"]) for n in range(60)])
+
+        rows = _open(client, run, run_page="2").context["panel"]["rows"]
+
+        assert rows[0]["description"] == "x" * 80
+        assert rows[0]["title"].startswith("Flaw in ")
+        assert rows[0]["references"] == ["https://example.test/25"]
+
+    def test_a_filtered_page_reads_the_findings_it_kept(self, signed_in) -> None:
+        """Filtering happens over the projection, so the positions the page
+        renders are no longer contiguous."""
+        client, component = signed_in
+        findings = [_finding(n, severity="critical" if n % 10 == 0 else "low") for n in range(60)]
+        run = _run_with(component, findings)
+
+        rows = _open(client, run, run_severity="critical").context["panel"]["rows"]
+
+        assert [row["id"] for row in rows] == [f"CVE-2026-{n:05d}" for n in range(0, 60, 10)]
+        assert all(row["description"] == "x" * 80 for row in rows)
