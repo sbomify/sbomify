@@ -730,12 +730,24 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        """List pending access requests."""
+        """List pending access requests.
+
+        The template below is a section, not a page: it extends no base, so a
+        browser sent straight here got the markup with no stylesheet, no script
+        and nothing that works. The notification email pointed its "Review
+        request" button at this URL, so every admin reviewing a request landed
+        on that. Its real home is the trust-center tab of workspace settings,
+        which renders this same section inside the page, and a direct visit goes
+        there. htmx keeps getting the section, which is what the tab swaps.
+        """
         user = cast(User, request.user)
         try:
             team = Team.objects.get(key=team_key)
         except Team.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
+
+        if request.headers.get("HX-Request") != "true":
+            return redirect("teams:team_settings_tab", team_key=team.key, tab="trust-center")
 
         # Verify user is owner or admin
         try:
