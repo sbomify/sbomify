@@ -12,7 +12,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.models import Product, User
 from sbomify.apps.teams.models import Member, Team
 
-pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures", "sbomify.apps.core.tests.e2e.test_billing_pages"]
+pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
 pytestmark = pytest.mark.django_db
 
 

@@ -5,6 +5,9 @@ from typing import Generator
 import pytest
 from django.utils import timezone
 
+from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.teams.models import Team
+
 from sbomify.apps.core.models import LATEST_RELEASE_NAME, Component, Product, Release
 from sbomify.apps.core.tests.e2e.factories import *  # noqa: F403
 from sbomify.apps.documents.models import Document
@@ -331,3 +334,41 @@ def trust_center_product(product_factory, component_factory, sbom_factory, docum
     )
 
     yield product
+
+
+@pytest.fixture
+def priced_plans(team_with_business_plan: Team) -> Team:
+    """Priced plans served from the database, with a promotion and renewal date."""
+    business = BillingPlan.objects.get(key="business")
+    business.monthly_price = 199
+    business.annual_price = 1990
+    business.discount_percent_monthly = 20
+    business.discount_percent_annual = 20
+    business.promo_message = "Launch offer"
+    business.last_synced_at = timezone.now()
+    business.save()
+
+    BillingPlan.objects.get_or_create(
+        key="community",
+        defaults={
+            "name": "Community",
+            "description": "For open source and evaluation",
+            "max_products": 1,
+            "max_components": 5,
+            "max_users": 1,
+        },
+    )
+    BillingPlan.objects.get_or_create(
+        key="enterprise",
+        defaults={
+            "name": "Enterprise",
+            "description": "For organisations with custom needs",
+        },
+    )
+
+    limits = dict(team_with_business_plan.billing_plan_limits or {})
+    limits["next_billing_date"] = (timezone.now() + timedelta(days=21)).date().isoformat()
+    team_with_business_plan.billing_plan_limits = limits
+    team_with_business_plan.save(update_fields=["billing_plan_limits"])
+
+    return team_with_business_plan

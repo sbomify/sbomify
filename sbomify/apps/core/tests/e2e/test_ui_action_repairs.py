@@ -188,6 +188,7 @@ def test_cra_parties_link_opens_complete_settings(authenticated_page: Page, cra_
     expect(
         page.get_by_role("navigation", name="Settings sections").get_by_role("link", name="Parties", exact=True)
     ).to_have_attribute("aria-current", "page")
+    expect(page.locator('#contact-profiles-content > [x-data="contactProfileList"]')).to_be_visible()
     page.get_by_role("button", name="Add profile", exact=True).click()
     page.get_by_role("button", name="Back to profiles", exact=True).click()
     expect(page.locator("#contact-profiles-content")).to_be_visible()

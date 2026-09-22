@@ -110,7 +110,7 @@ def test_overview_priority_table_and_mobile_drawer(
         expect(page.locator("#sidebar")).to_be_hidden()
     page.get_by_role("link", name="Add release", exact=False).click()
     expect(page.get_by_role("heading", name="New release", exact=True)).to_be_visible()
-    expect(page.get_by_role("combobox", name="Product", exact=False)).to_contain_text("Test Product 0")
+    expect(page.get_by_role("combobox", name="Product *", exact=True)).to_contain_text("Test Product 0")
 
 
 @pytest.mark.django_db
