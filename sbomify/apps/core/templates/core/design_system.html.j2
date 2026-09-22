@@ -240,6 +240,14 @@
         <c-chips.metric.value>3</c-chips.metric.value>
         <c-chips.metric.label>Critical</c-chips.metric.label>
         </c-chips.metric-chip>
+        <c-chips.metric-chip>
+        <i class="fas fa-shield-halved text-text-muted" aria-hidden="true"></i>
+        <c-chips.metric.value>12 Critical</c-chips.metric.value>
+        <c-chips.metric.value>24 High</c-chips.metric.value>
+        <c-chips.metric.value>36 Medium</c-chips.metric.value>
+        <c-chips.metric.value>48 Low</c-chips.metric.value>
+        <c-chips.metric.label>Scanned 5 minutes ago</c-chips.metric.label>
+        </c-chips.metric-chip>
     </div>
     <p class="text-sm text-text-muted mt-4 mb-0">
         An accent recolours the fill, the border and the text together. The label
@@ -300,7 +308,7 @@
         a tab replacement root or a narrower form page. This demo and Settings controls above compose
         headers and content in that frame, without spacing switches on their children.
     </p>
-    <c-layout.page-header mark="avatar" icon="fas fa-cube" title="Acme Gateway" :breadcrumbs="demo_breadcrumbs" :copy_values="demo_copy_values" editable_item_type="product" editable_item_id="ds-demo">
+    <c-layout.page-header mark="avatar" icon="fas fa-cube" title="Acme Gateway Enterprise Edition" :breadcrumbs="demo_breadcrumbs" :copy_values="demo_copy_values" editable_item_type="product" editable_item_id="ds-demo">
     <c-slot name="meta">
     <c-badges.danger>
     <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
@@ -309,7 +317,8 @@
     <c-buttons.primary size="sm">New release</c-buttons.primary>
     </c-layout.page-header>
     <p class="text-sm text-text-muted">
-        The detail-page shape of the same header. <code class="tw-code-inline">mark="avatar"</code> swaps the
+        Long titles, identifiers and breadcrumbs wrap within the available width. The detail-page shape
+        uses the same header. <code class="tw-code-inline">mark="avatar"</code> swaps the
         chip for the avatar mark, which is <code class="tw-code-inline">c-avatar</code> wearing the page's icon.
         <code class="tw-code-inline">copy_values</code> adds click-to-copy identifiers beside the title, and the
         named <code class="tw-code-inline">meta</code> slot puts a status the title is qualified by on the same
@@ -796,7 +805,8 @@ first-of-type rule that drops the leading hairline reads the section's position
         <code class="tw-code-inline">show</code> names the Alpine boolean the page already keeps.
         A dialog inside an HTMX-swapped partial passes
         <c-code-inline>teleport="false"</c-code-inline> and stays where it was written, which is what
-        keeps its form wired.
+        keeps its form wired. On phones, the body uses smaller padding and scrolls while the title
+        and actions stay visible. Actions wrap when they need more room.
     </p>
     <div class="flex flex-wrap gap-2"
          x-data="{ open: false, wide: false, removeTarget: null }">
@@ -1510,11 +1520,15 @@ first-of-type rule that drops the leading hairline reads the section's position
     <h2 id="stepper" class="text-xl font-semibold text-text">Stepper</h2>
     <c-cards.card>
     <c-navigation.stepper>
-    <c-navigation.stepper-step state="completed" label="Scope"><i class="fas fa-check" aria-hidden="true"></i></c-navigation.stepper-step>
+    <c-navigation.stepper-step state="completed" label="Scope" label_class="hidden sm:inline"><i class="fas fa-check" aria-hidden="true"></i></c-navigation.stepper-step>
     <c-navigation.stepper-connector completed />
-    <c-navigation.stepper-step state="active" label="Assessment">2</c-navigation.stepper-step>
+    <c-navigation.stepper-step state="active" label="Assessment" label_class="hidden sm:inline">2</c-navigation.stepper-step>
     <c-navigation.stepper-connector />
     <c-navigation.stepper-step label="Declaration" label_class="hidden sm:inline">3</c-navigation.stepper-step>
+    <c-navigation.stepper-connector />
+    <c-navigation.stepper-step label="Review" label_class="hidden sm:inline">4</c-navigation.stepper-step>
+    <c-navigation.stepper-connector />
+    <c-navigation.stepper-step label="Export" label_class="hidden sm:inline">5</c-navigation.stepper-step>
     </c-navigation.stepper>
     <p class="text-sm text-text-muted mt-4 mb-0">
         A long rail hides its captions on a narrow screen and keeps the circles:

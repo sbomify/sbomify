@@ -24,7 +24,7 @@ default slot, on the right.
 <c-vars title subtitle icon mark copy_values breadcrumbs editable_item_type editable_item_id class />
 <div class="flex flex-wrap items-start justify-between gap-4{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>
-    <div class="flex items-center gap-3.5 min-w-0">
+    <div class="flex items-center gap-3.5 min-w-0 max-w-full">
         {% if icon %}
             {% if mark == "avatar" %}
                 <c-avatar size="lg" aria-hidden="true"><i class="{{ icon }}"></i></c-avatar>
@@ -32,10 +32,10 @@ default slot, on the right.
                 <c-chips.icon-chip size="lg" aria-hidden="true"><i class="{{ icon }}"></i></c-chips.icon-chip>
             {% endif %}
         {% endif %}
-        <div>
+        <div class="min-w-0">
             {% if copy_values or meta %}
                 <div class="flex items-center gap-3 flex-wrap">
-                    <h1 class="text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">
+                    <h1 class="min-w-0 max-w-full [overflow-wrap:anywhere] text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">
                         {% if editable_item_type and editable_item_id %}
                             {% include 'core/components/editable_single_field.html.j2' with item_type=editable_item_type item_id=editable_item_id item_value=title only %}
                         {% else %}
@@ -43,7 +43,7 @@ default slot, on the right.
                         {% endif %}
                     </h1>
                     {% if copy_values %}
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
                             {% for cv in copy_values %}
                                 {% include 'core/components/copyable_value.html.j2' with value=cv.value title=cv.title only %}
                             {% endfor %}
@@ -52,7 +52,7 @@ default slot, on the right.
                     {{ meta }}
                 </div>
             {% else %}
-                <h1 class="text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">
+                <h1 class="min-w-0 max-w-full [overflow-wrap:anywhere] text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">
                     {% if editable_item_type and editable_item_id %}
                         {% include 'core/components/editable_single_field.html.j2' with item_type=editable_item_type item_id=editable_item_id item_value=title only %}
                     {% else %}
@@ -63,7 +63,7 @@ default slot, on the right.
             {% if breadcrumbs %}
                 <c-navigation.breadcrumbs :items="breadcrumbs" class="text-sm text-text-muted mt-1" />
             {% elif subtitle %}
-                <p class="text-sm leading-[1.5] text-text-muted mt-1">{{ subtitle }}</p>
+                <p class="text-sm leading-[1.5] text-text-muted [overflow-wrap:anywhere] mt-1">{{ subtitle }}</p>
             {% endif %}
         </div>
     </div>

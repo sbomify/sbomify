@@ -2,11 +2,13 @@
 The shared search field. size="sm" fits table toolbars; the default fills a
 form or navigation search. label provides a hidden accessible label when a
 visible one is not present. Attributes land on the input and class sizes the
-wrapper. model adds the Alpine clear action; hint reserves a shortcut slot.
+wrapper. The small field aims for 240px but shrinks to fit its toolbar.
+model adds the Alpine clear action; hint reserves room at the same breakpoint
+as the shortcut, so a hidden shortcut does not crowd the field on phones.
 The field comes first so the icon can respond to its focus through peer.
 {% endcomment %}
 <c-vars name id label model icon="fas fa-search" placeholder hint size class />
-<div class="relative{% if size == 'sm' %} flex items-center{% endif %}{% if class %} {{ class }}{% endif %}">
+<div class="relative min-w-0{% if size == 'sm' %} flex items-center w-[min(240px,100%)]{% endif %}{% if class %} {{ class }}{% endif %}">
     {% if label %}
         <label for="{% firstof id name %}" class="sr-only">{{ label }}</label>
     {% endif %}
@@ -14,7 +16,7 @@ The field comes first so the icon can respond to its focus through peer.
            {% if id or name %}id="{% firstof id name %}"{% endif %}
            {% if name %}name="{{ name }}"{% endif %}
            {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
-           class="peer bg-surface border-solid border-border text-text transition-all duration-200 placeholder:text-text-muted focus:outline-none focus:border-primary {% if size == 'sm' %}py-2 pl-9 min-w-[240px] text-[0.875rem] border rounded-[0.5rem] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_10%,transparent)]{% else %}w-full py-3 pl-11 border-[1.5px] rounded-lg text-sm leading-[1.5] hover:not-focus:border-border-light focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent)]{% endif %} {% if hint %}pr-14{% elif model %}pr-10{% elif size == 'sm' %}pr-3{% else %}pr-4{% endif %}"
+           class="peer w-full min-w-0 bg-surface border-solid border-border text-text transition-all duration-200 placeholder:text-text-muted focus:outline-none focus:border-primary {% if size == 'sm' %}py-2 pl-9 text-[0.875rem] border rounded-[0.5rem] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_10%,transparent)]{% else %}py-3 pl-11 border-[1.5px] rounded-lg text-sm leading-[1.5] hover:not-focus:border-border-light focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent)]{% endif %} {% if hint %}pr-4 sm:pr-14{% elif model %}pr-10{% elif size == 'sm' %}pr-3{% else %}pr-4{% endif %}"
            {% if model %}x-model="{{ model }}"{% endif %}
            {{ attrs }}>
     <i class="{{ icon }} absolute top-1/2 -translate-y-1/2 text-text-muted pointer-events-none transition-[color] duration-200 peer-focus:text-primary {% if size == 'sm' %}left-3 text-sm{% else %}left-4{% endif %}"

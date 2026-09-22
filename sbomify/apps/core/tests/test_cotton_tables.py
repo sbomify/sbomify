@@ -55,8 +55,8 @@ def test_toolbar_recipe(rendered: str) -> None:
 
 def test_toolbar_renders_the_right_group_only_when_it_is_filled(rendered: str) -> None:
     filled, without_right = rendered.split("bg-transparent", 1)
-    assert filled.count('<div class="flex items-center gap-3">') == 2
-    assert without_right.count('<div class="flex items-center gap-3">') == 1
+    assert filled.count('<div class="flex flex-wrap min-w-0 max-w-full items-center gap-3">') == 2
+    assert without_right.count('<div class="flex flex-wrap min-w-0 max-w-full items-center gap-3">') == 1
 
 
 def test_search_field_recipe_and_label_pairing(rendered: str) -> None:
@@ -65,7 +65,7 @@ def test_search_field_recipe_and_label_pairing(rendered: str) -> None:
         "py-2",
         "pr-3",
         "pl-9",
-        "min-w-[240px]",
+        "min-w-0",
         "bg-surface",
         "rounded-[0.5rem]",
         "placeholder:text-text-muted",

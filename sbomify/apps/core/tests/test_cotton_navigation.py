@@ -13,7 +13,7 @@ TAB = "relative px-5 py-3.5 text-sm font-medium border-b-2 border-solid -mb-px"
 CELL = "flex items-center justify-center min-w-8 h-8 px-2 rounded-md border border-solid border-transparent"
 CIRCLE = "relative shrink-0 flex items-center justify-center w-10 h-10 rounded-full"
 TRIGGER = "group flex w-full items-center justify-between px-6 py-5 text-left"
-RAIL = "flex-1 h-[3px] mx-4 rounded-full overflow-hidden"
+RAIL = "flex-1 h-[3px] rounded-full overflow-hidden"
 VERTICAL_RAIL = "[[data-stepper-vertical]_&]:w-[3px]"
 
 PROBE_CONTEXT = {
@@ -164,13 +164,13 @@ def test_tab_forwards_attrs(rendered: str) -> None:
 def test_breadcrumbs_are_a_labelled_trail(rendered: str) -> None:
     crumbs = _chunk(rendered, "nav", 'data-probe="crumbs"')
     assert 'aria-label="Breadcrumb"' in crumbs
-    assert '<ol class="flex items-center gap-2 text-sm">' in crumbs
+    assert '<ol class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">' in crumbs
     assert 'class="mb-2"' in crumbs
 
 
 def test_breadcrumb_separator_sits_between_crumbs_only(rendered: str) -> None:
     crumbs = _chunk(rendered, "nav", 'data-probe="crumbs"')
-    assert crumbs.count('class="fas fa-chevron-right text-xs text-text-muted"') == 2
+    assert crumbs.count('class="fas fa-chevron-right shrink-0 text-xs text-text-muted"') == 2
 
 
 def test_breadcrumb_links_lead_to_the_current_page_as_text(rendered: str) -> None:
@@ -178,7 +178,7 @@ def test_breadcrumb_links_lead_to_the_current_page_as_text(rendered: str) -> Non
     assert '<a href="/products"' in crumbs
     assert "text-text-muted hover:text-text transition-colors" in crumbs
     current = _open_tag(rendered, "span", "Releases")
-    assert 'class="text-text font-medium"' in current
+    assert 'class="min-w-0 text-text font-medium"' in current
     assert 'aria-current="page"' in current
 
 

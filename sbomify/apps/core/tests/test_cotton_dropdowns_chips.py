@@ -15,7 +15,7 @@ from django.template.loader import render_to_string
 PANEL = "min-w-48"
 ITEM = "group flex items-center gap-3"
 ICON_CHIP = "shrink-0 flex items-center justify-center"
-METRIC_CHIP = "inline-flex items-center gap-1.5"
+METRIC_CHIP = "inline-flex flex-wrap items-center min-w-0 max-w-full gap-1.5"
 ASSESSMENT = "inline-flex items-center justify-center gap-1"
 
 
@@ -133,7 +133,7 @@ def test_panel_width_comes_from_the_caller_class(rendered: str) -> None:
 def test_item_carries_the_shared_row(rendered: str) -> None:
     item = _classes(rendered, ITEM, "Edit")
     for bit in (
-        "flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold",
+        "flex items-center gap-3 w-full max-sm:min-h-11 px-2.5 py-2 rounded-lg text-sm font-semibold",
         "text-left no-underline cursor-pointer",
         "transition-all duration-150",
         "focus-visible:outline-none",
@@ -276,7 +276,8 @@ def test_icon_chip_forwards_attrs_and_caller_class(rendered: str) -> None:
 def test_metric_chip_shares_the_pill_shell(rendered: str) -> None:
     chip = _classes(rendered, METRIC_CHIP, "Components")
     assert chip.startswith(
-        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5]"
+        "inline-flex flex-wrap items-center min-w-0 max-w-full gap-1.5 "
+        "px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5]"
     )
 
 

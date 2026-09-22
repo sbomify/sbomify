@@ -12,8 +12,8 @@ band 16px taller on a public page. That sheet has no px-*/py-* names.
 <c-vars flush class />
 <div class="flex flex-wrap items-center justify-between gap-4{% if not flush %} px-4 py-4 bg-[color-mix(in_oklab,var(--color-background)_50%,transparent)] border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>
-    <div class="flex{% if flush %} flex-wrap min-w-0 max-w-full{% endif %} items-center gap-3">{{ slot }}</div>
+    <div class="flex flex-wrap min-w-0 max-w-full items-center gap-3">{{ slot }}</div>
     {% if right %}
-        <div class="flex{% if flush %} flex-wrap min-w-0 max-w-full{% endif %} items-center gap-3">{{ right }}</div>
+        <div class="flex flex-wrap min-w-0 max-w-full items-center gap-3">{{ right }}</div>
     {% endif %}
 </div>

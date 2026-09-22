@@ -144,18 +144,16 @@
             {# Vulnerability Summary Section #}
             {% if vulnerability_summary %}
                 <c-cards.card flush>
-                <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-shield-alt text-primary"></i>
-                        Vulnerability Scan
-                        <span class="text-sm font-normal text-text-muted ml-2">{{ vulnerability_summary.scan_date|date:"j M Y" }}</span>
-                        <c-badges.secondary size="sm">{{ vulnerability_summary.provider|upper }}</c-badges.secondary>
-                    </h4>
-                    <c-buttons.secondary href="{% url 'sboms:sbom_vulnerabilities' item.id %}">
-                    <i class="fas fa-shield-alt"></i>Vulnerabilities
-                    <i class="fas fa-arrow-right text-xs" aria-hidden="true"></i>
-                    </c-buttons.secondary>
+                <c-cards.header class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-3 min-w-0">
+                    <c-layout.section-header level="2" title="Vulnerability scan" subtitle="{{ vulnerability_summary.scan_date|date:'j M Y' }}" />
+                    <c-badges.secondary size="sm">{{ vulnerability_summary.provider|upper }}</c-badges.secondary>
                 </div>
+                <c-buttons.secondary href="{% url 'sboms:sbom_vulnerabilities' item.id %}">
+                <i class="fas fa-shield-alt" aria-hidden="true"></i>Vulnerabilities
+                <i class="fas fa-arrow-right text-xs" aria-hidden="true"></i>
+                </c-buttons.secondary>
+                </c-cards.header>
                 <div class="p-6">
                     <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
                         <div class="flex items-baseline gap-2">

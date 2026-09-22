@@ -361,7 +361,7 @@ def test_search_input_precedes_the_icon_so_peer_can_reach_it(rendered: str) -> N
 def test_search_hint_segment_reserves_the_shortcut_room(rendered: str) -> None:
     field = _open_tag(rendered, "input", 'id="probe-search-hint"')
     assert "pl-11" in field and "pr-14" in field
-    assert "pr-4" not in field
+    assert "pr-4 sm:pr-14" in field
 
 
 def test_search_clear_button_is_wired_to_the_model(rendered: str) -> None:

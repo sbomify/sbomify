@@ -84,9 +84,13 @@ def test_frame_preserves_replacement_attributes_without_leaking_layout_to_childr
 
 
 def test_page_header_title_and_subtitle_recipes(rendered: str) -> None:
-    assert '<h1 class="text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">' in rendered
     assert (
-        '<p class="text-sm leading-[1.5] text-text-muted mt-1">Quantum readiness across all components.</p>'
+        '<h1 class="min-w-0 max-w-full [overflow-wrap:anywhere] '
+        'text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">'
+    ) in rendered
+    assert (
+        '<p class="text-sm leading-[1.5] text-text-muted [overflow-wrap:anywhere] mt-1">'
+        "Quantum readiness across all components.</p>"
     ) in rendered
 
 

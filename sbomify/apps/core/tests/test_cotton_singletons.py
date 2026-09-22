@@ -50,7 +50,8 @@ def test_modal_teleports_to_the_body_and_declares_its_dialog_role(rendered: str)
 def test_modal_panel_recipe_and_default_size(rendered: str) -> None:
     section = _section(rendered, "modal-default")
     assert "flex flex-col w-full" in section
-    assert "max-h-[90vh] overflow-hidden bg-surface border border-solid border-border rounded-2xl" in section
+    assert "max-h-[calc(100dvh-2rem)] sm:max-h-[min(90vh,calc(100dvh-2rem))]" in section
+    assert "overflow-hidden bg-surface border border-solid border-border rounded-2xl" in section
     assert "shadow-[0_25px_50px_-12px_rgb(0_0_0/0.4)]" in section
     assert "max-w-lg" in section
 
@@ -130,7 +131,7 @@ def test_modal_without_a_title_renders_no_header(rendered: str) -> None:
 
 def test_modal_slots_land_in_body_and_footer(rendered: str) -> None:
     default = _section(rendered, "modal-default")
-    assert "flex-auto min-h-0 p-6 overflow-y-auto" in default
+    assert "flex-auto min-h-0 px-4 py-4 sm:px-6 sm:py-6 overflow-y-auto" in default
     assert "<p>Modal body</p>" in default
     large = _section(rendered, "modal-lg")
     footer = large[large.index("border-t border-solid") :]

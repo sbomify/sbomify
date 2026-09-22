@@ -10,7 +10,7 @@ import hashlib
 from typing import Generator
 
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
@@ -119,6 +119,31 @@ class TestCRAScopeScreeningSnapshot:
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [320, 390])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_mobile_cra_actions_and_tabs(authenticated_page: Page, cra_assessment, width: int, theme: str) -> None:
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.set_viewport_size({"width": width, "height": 740})
+    page.goto(f"/compliance/cra/scope/{cra_assessment.product_id}/")
+    save = page.get_by_role("button", name="Save & Continue to Wizard")
+    expect(save).to_be_visible()
+    assert save.evaluate("el => el.getBoundingClientRect().right <= document.documentElement.clientWidth")
+    assert page.locator("html").evaluate("el => el.scrollWidth <= el.clientWidth")
+
+    page.goto(f"/compliance/cra/{cra_assessment.id}/step/3/")
+    tabs = page.get_by_role("tablist", name="Security assessment sections")
+    expect(tabs.get_by_role("tab", name="Security checklist")).to_have_attribute("aria-selected", "true")
+    tabs.get_by_role("tab", name="Incident reporting").click()
+    expect(page.get_by_role("tabpanel", name="Incident reporting")).to_be_visible()
+    assert page.locator("html").evaluate("el => el.scrollWidth <= el.clientWidth")
+    page.keyboard.press("Home")
+    expect(tabs.get_by_role("tab", name="Security checklist")).to_have_attribute("aria-selected", "true")
+    page.keyboard.press("ArrowRight")
+    expect(page.get_by_role("tabpanel", name="Vulnerability handling")).to_be_visible()
 
 
 @pytest.mark.django_db

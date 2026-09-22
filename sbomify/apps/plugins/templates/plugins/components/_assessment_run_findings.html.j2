@@ -24,7 +24,7 @@ filled.{% endcomment %}
               hx-trigger="change, input changed delay:350ms from:#run-search-{{ run.id }}, submit"
               class="mb-3">
             <input type="hidden" name="run_submitted" value="1">
-            <c-tables.toolbar class="[&>div:first-child]:flex-wrap">
+            <c-tables.toolbar>
             <c-forms.search-input size="sm" id="run-search-{{ run.id }}" label="Search findings" placeholder="Search findings..." class="max-w-xs" name="run_search" value="{{ panel.query.search }}" hx-preserve="true" />
             {% comment %}Severity, VEX state and KEV belong to vulnerabilities.
             A compliance run reports checks, which carry none of the three, so
