@@ -490,15 +490,20 @@ class TestTheKevControlIsOfferedOnlyWhenItCanMatch:
 
     def test_the_three_views_say_the_same_thing(self) -> None:
         """Three templates offer this filter. They drifted into two spellings,
-        and "KEV" is the catalog's acronym rather than a word a reader has."""
-        from pathlib import Path
+        and "KEV" is the catalog's acronym rather than a word a reader has.
+
+        Resolved from BASE_DIR rather than the working directory, so this holds
+        wherever pytest is started from.
+        """
+        from django.conf import settings
 
         roots = [
-            "sbomify/apps/core/templates/core/components/component_vulnerabilities_table.html.j2",
-            "sbomify/apps/plugins/templates/plugins/components/_assessment_run_findings.html.j2",
-            "sbomify/apps/sboms/templates/sboms/sbom_vulnerabilities.html.j2",
+            "core/templates/core/components/component_vulnerabilities_table.html.j2",
+            "plugins/templates/plugins/components/_assessment_run_findings.html.j2",
+            "sboms/templates/sboms/sbom_vulnerabilities.html.j2",
         ]
-        for path in roots:
-            text = Path(path).read_text()
-            assert "KEV only" not in text, f"{path} still says KEV only"
-            assert "Known exploited (" in text, f"{path} lost the label"
+        for relative in roots:
+            path = settings.BASE_DIR / "sbomify" / "apps" / relative
+            text = path.read_text(encoding="utf-8")
+            assert "KEV only" not in text, f"{relative} still says KEV only"
+            assert "Known exploited (" in text, f"{relative} lost the label"
