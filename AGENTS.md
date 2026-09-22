@@ -442,6 +442,33 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
 **Templates must not branch on `request.session.current_team.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
 
+## This repository is public
+
+Commit messages, branch names, pull request titles and bodies are all
+world-readable the moment you push. **An edit does not take it back.** GitHub
+keeps the previous revision in its edit history, where anyone with read access
+can open it, and every watcher was emailed the original when it landed.
+
+The mistake worth naming is not leaking a credential. It is quoting a figure
+out of the issue you are working from, because the issue and the pull request
+felt like one conversation. They are two audiences, and moving text between
+them is a decision rather than a formatting step.
+
+**Never put in a commit message, branch name, PR title or PR body:**
+
+- Customer or workspace counts, revenue, MRR, ARR, churn, conversion or signup
+  figures, and any sentence that characterises them. "The real number is much
+  lower" gives away as much as the number.
+- Internal tracker ids, branch names included. They link a public change to a
+  private thread. Reference issues in this repo by number instead.
+- Real names, email addresses, or anything identifying a customer or a
+  workspace. Fixtures use `example.com`.
+- Screenshots or logs taken against real data. Seed what you need.
+
+**Write instead** what the code does, why it is wrong today, and how you know
+the change is right. That is the whole audience for a PR description. If a
+figure genuinely has to be public, get a human to say so before it goes out.
+
 ## Key Conventions
 
 ### Naming
