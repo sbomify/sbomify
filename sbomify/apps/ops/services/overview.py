@@ -25,7 +25,7 @@ from sbomify.apps.core.services.results import ServiceResult
 
 from .cache import panel
 from .growth import ActivationStep, DailyCount, activation_funnel, signups_by_day
-from .populations import artifacts, people, workspaces
+from .populations import artifact_count, people, workspaces, workspaces_publishing_since
 from .revenue import RecurringRevenue, recurring_revenue
 
 logger = logging.getLogger(__name__)
@@ -93,14 +93,10 @@ def _build_counts() -> Counts:
         past_due_workspaces=past_due_workspaces().count(),
         people=people().count(),
         new_people_30d=people().filter(date_joined__gte=thirty_days_ago).count(),
-        # A workspace is active if something was published into it, not if
-        # someone signed in. With SSO and long-lived sessions a daily user can
-        # go months without a fresh login, which is what made the old "active
-        # users" number meaningless.
-        active_workspaces_7d=workspaces().filter(component__sbom__created_at__gte=seven_days_ago).distinct().count(),
+        active_workspaces_7d=workspaces_publishing_since(seven_days_ago).count(),
         total_workspaces=workspaces().count(),
-        artifacts_total=artifacts().count(),
-        artifacts_30d=artifacts().filter(created_at__gte=thirty_days_ago).count(),
+        artifacts_total=artifact_count(),
+        artifacts_30d=artifact_count(since=thirty_days_ago),
         plans=[
             PlanCount(plan=row["billing_plan"] or "none", count=row["count"])
             for row in workspaces().values("billing_plan").annotate(count=Count("id")).order_by("-count")

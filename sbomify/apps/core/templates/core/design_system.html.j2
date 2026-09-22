@@ -978,6 +978,24 @@
         <c-layout.stat.value>4</c-layout.stat.value>
         </c-layout.stat-card>
     </div>
+    <p class="tw-data-label mb-3">With a note, for a figure that needs a caveat</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <c-layout.stat-card icon="fas fa-sack-dollar">
+        <c-layout.stat.label>Monthly recurring revenue</c-layout.stat.label>
+        <c-layout.stat.value>$24,180</c-layout.stat.value>
+        <c-layout.stat.note>From plan list prices. 3 workspaces not priced here.</c-layout.stat.note>
+        </c-layout.stat-card>
+        <c-layout.stat-card accent="danger" icon="fas fa-credit-card">
+        <c-layout.stat.label>Payment failing</c-layout.stat.label>
+        <c-layout.stat.value>2</c-layout.stat.value>
+        <c-layout.stat.note>Past due, in dunning.</c-layout.stat.note>
+        </c-layout.stat-card>
+    </div>
+    <p class="text-sm text-text-muted mb-8">
+        <code class="tw-code-inline">c-layout.stat.note</code> is the footnote under a number: where it came from,
+        or what it leaves out. It is a part of the card rather than a paragraph the page styles, so a strip of
+        cards cannot drift apart one card at a time.
+    </p>
     <p class="tw-data-label mb-3">Compact, the dense metric strip above a table</p>
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
         <c-layout.stat-card compact accent="danger">

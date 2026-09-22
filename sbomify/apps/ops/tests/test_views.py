@@ -89,6 +89,22 @@ class TestLegacyUrls:
         assert response.status_code == 302
         assert response["Location"] == reverse("ops:overview")
 
+    def test_a_customer_gets_a_404_from_the_alias_too(self, client: Client, customer):
+        """A 302 where a missing URL gives 404 announces the surface exists,
+        which is the whole thing the 404 on /ops/ is there to prevent."""
+        client.force_login(customer)
+
+        assert client.get("/admin/dashboard/").status_code == 404
+
+    def test_an_anonymous_visitor_gets_a_404_from_the_alias(self, client: Client):
+        assert client.get("/admin/dashboard/").status_code == 404
+
+    @pytest.mark.parametrize("section", ["billing", "growth", "funnel", "health"])
+    def test_the_sub_page_aliases_are_gated_too(self, client: Client, customer, section):
+        client.force_login(customer)
+
+        assert client.get(f"/admin/dashboard/{section}/").status_code == 404
+
 
 @pytest.mark.django_db
 class TestRendering:

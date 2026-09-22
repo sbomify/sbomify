@@ -1,0 +1,12 @@
+{% comment %}
+The line under a number that says where it came from or what it leaves out:
+"From plan list prices", "Past due, in dunning". Small and muted, so it reads
+as a footnote to the figure rather than a second figure.
+
+It is a part of the stat card like c-layout.stat.label and c-layout.stat.value,
+not a paragraph the page styles, so a strip of cards cannot drift apart one
+card at a time.
+{% endcomment %}
+<c-vars class />
+<p class="text-xs text-text-muted mt-2 mb-0{% if class %} {{ class }}{% endif %}"
+   {{ attrs }}>{{ slot }}</p>

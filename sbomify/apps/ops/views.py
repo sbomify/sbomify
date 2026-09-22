@@ -13,6 +13,7 @@ from typing import Any
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
+from django.views.generic import RedirectView
 
 from .permissions import StaffRequiredMixin
 from .services.overview import Overview, get_overview
@@ -49,3 +50,17 @@ class OverviewView(StaffRequiredMixin, View):
         context["overview"] = result.value
         context["charts"] = _chart_payloads(result.value)
         return render(request, "ops/overview.html.j2", context)
+
+
+class LegacyDashboardRedirectView(StaffRequiredMixin, RedirectView):
+    """``/admin/dashboard/`` and its old sub-pages, kept working for bookmarks.
+
+    Behind the same staff gate as the page it points at. An ungated redirect
+    would answer 302 where a non-existent URL answers 404, which tells a
+    signed-in customer the surface is there: exactly what the 404 on ``/ops/``
+    is for. The alias has to be as quiet as its destination or it is not an
+    alias, it is a disclosure.
+    """
+
+    pattern_name = "ops:overview"
+    permanent = False

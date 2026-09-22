@@ -27,6 +27,7 @@ from django.views.generic import RedirectView
 from sbomify.apis import api, api_v2
 from sbomify.apps.billing.views import PublicEnterpriseContactView
 from sbomify.apps.core.admin import admin_site
+from sbomify.apps.ops.views import LegacyDashboardRedirectView
 from sbomify.apps.security_advisories.wellknown import (
     ProviderMetadataView,
     WhiteDocumentView,
@@ -42,14 +43,12 @@ urlpatterns = [
     path("favicon.ico", RedirectView.as_view(url="/static/img/favicons/favicon.ico", permanent=True)),
     path("ops/", include("sbomify.apps.ops.urls")),
     # The ops dashboard used to live at /admin/dashboard/. Anyone who
-    # bookmarked it keeps working.
-    path(
-        "admin/dashboard/",
-        RedirectView.as_view(pattern_name="ops:overview", permanent=False),
-    ),
+    # bookmarked it keeps working. Staff-gated like its destination, so the
+    # alias cannot answer a customer where /ops/ would 404.
+    path("admin/dashboard/", LegacyDashboardRedirectView.as_view()),
     re_path(
         r"^admin/dashboard/(?:billing|growth|funnel|health)/$",
-        RedirectView.as_view(pattern_name="ops:overview", permanent=False),
+        LegacyDashboardRedirectView.as_view(),
     ),
     path("admin/", admin_site.urls),
     # Redirect old accounts/login to our Keycloak login

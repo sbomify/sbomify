@@ -6,6 +6,12 @@ line and read as steady activity. And the funnel divided ``OnboardingStatus``
 rows by the total user count, which are different populations: bots never get
 a status row, so every completion rate read low by however many publishing
 identities existed.
+
+Both sides of the funnel are now the same population, ``people()``. Counting
+status rows on either side is the same category error in the other direction,
+because a status row is not guaranteed for a real person either: see
+``onboarding.tests.test_missing_status_backfill`` for four live accounts that
+have none.
 """
 
 from __future__ import annotations
@@ -71,14 +77,24 @@ def _build_signups_by_day(days: int) -> list[DailyCount]:
 
 
 def _build_activation_funnel() -> list[ActivationStep]:
-    """How far signups get, measured against the population that can progress.
+    """How far signups get, measured against the population that signed up.
 
-    The denominator is people with an ``OnboardingStatus`` row, not every User
-    row. A synthetic bot identity has no status row by design, so including it
-    in the denominator would permanently understate every rate below.
+    The denominator is ``people()``: everyone with a live account who is not a
+    publishing identity. It is deliberately not the count of
+    ``OnboardingStatus`` rows, even though every step above it is one.
+
+    The status row is created by a signal on user creation, so anyone who
+    predates that signal, or whose creation took a path around it, has none.
+    That is not hypothetical: the sequence processor was stepping over four
+    such owners on every run until the row was backfilled. Counting rows here
+    would drop those people out of the denominator *and* out of "Signed up",
+    which quietly flatters every rate below.
+
+    Bots are excluded because ``people()`` excludes them, not because they
+    happen to lack a status row.
     """
+    signed_up = people().count()
     statuses = OnboardingStatus.objects.filter(user__in=people())
-    signed_up = statuses.count()
 
     steps = (
         ("Signed up", signed_up),

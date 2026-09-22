@@ -69,6 +69,38 @@ class TestActivationFunnel:
         assert steps[1].count == 1
         assert steps[1].percent_of_signups == 100.0
 
+    def test_a_person_with_no_status_row_still_signed_up(self):
+        """The row is created by a signal, so it is not guaranteed.
+
+        Four live workspace owners had none until they were backfilled.
+        Counting status rows dropped them out of "Signed up" and out of the
+        denominator, which flattered every rate below.
+        """
+        person = User.objects.create_user(username="legacy", email="legacy@example.com", password="x")
+        OnboardingStatus.objects.filter(user=person).delete()
+
+        steps = activation_funnel()
+
+        assert steps[0].label == "Signed up"
+        assert steps[0].count == 1
+
+    def test_the_rates_are_measured_against_everyone_who_signed_up(self):
+        """One of two people finished the wizard, so the rate is half.
+
+        Against status rows it would have read 100%, because the person
+        without a row vanished from the denominator as well as the numerator.
+        """
+        finished = User.objects.create_user(username="finished", email="finished@example.com", password="x")
+        stalled = User.objects.create_user(username="stalled", email="stalled@example.com", password="x")
+        OnboardingStatus.objects.filter(user=finished).update(has_completed_wizard=True)
+        OnboardingStatus.objects.filter(user=stalled).delete()
+
+        steps = activation_funnel()
+
+        assert steps[0].count == 2
+        assert steps[1].count == 1
+        assert steps[1].percent_of_signups == 50.0
+
     def test_an_empty_install_does_not_divide_by_zero(self):
         steps = activation_funnel()
 
