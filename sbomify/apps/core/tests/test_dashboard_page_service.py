@@ -233,7 +233,7 @@ def test_document_only_workspace_is_not_empty(sample_team_with_owner_member: Mem
     from sbomify.apps.documents.models import Document
 
     workspace = sample_team_with_owner_member.team
-    component = Component.objects.create(name="documents", team=workspace)
+    component = Component.objects.create(name="documents", team=workspace, component_type="document")
     Document.objects.create(name="Architecture", component=component)
     cache.clear()
 
@@ -241,6 +241,34 @@ def test_document_only_workspace_is_not_empty(sample_team_with_owner_member: Mem
     assert result.ok and result.value is not None
     assert result.value["is_first_visit"] is False
     assert result.value["metrics"]["open"] == 0
+    assert result.value["unassessed"] == 0
+
+
+def test_overview_and_inventory_agree_on_product_evidence(sample_team_with_owner_member: Member) -> None:
+    from sbomify.apps.core.models import Product
+    from sbomify.apps.core.services.inventory_page import build_inventory_snapshot
+
+    workspace = sample_team_with_owner_member.team
+    document = Component.objects.create(name="Document", team=workspace, component_type="document")
+    missing = Component.objects.create(name="Missing SBOM", team=workspace)
+    no_policy = Component.objects.create(name="No policy", team=workspace)
+    configured = Component.objects.create(name="With policy", team=workspace, sbom_freshness_days=30)
+    for component in (no_policy, configured):
+        _make_scan(SBOM.objects.create(name="bom", component=component, format="cyclonedx"), [])
+    for name, assigned in (("Documents", [document]), ("Mixed", [document, missing, no_policy, configured])):
+        Product.objects.create(name=name, team=workspace).components.add(*assigned)
+    cache.clear()
+
+    dashboard = build_dashboard_context(workspace.pk).value
+    assert dashboard is not None
+    inventory = {row["id"]: row for row in build_inventory_snapshot(workspace, "products")["rows"]}
+    for row in dashboard["products"]:
+        for field in ("component_count", "security_component_count", "unassessed", "stale", "missing_sboms", "no_policy"):
+            assert row[field] == inventory[row["id"]][field], field
+    assert dashboard["unassessed"] == 1
+    mixed = next(row for row in dashboard["products"] if row["name"] == "Mixed")
+    assert mixed["no_policy"] == 1
+    assert mixed["missing_sboms"] == 1
 
 
 def test_missing_workspace_returns_a_service_error() -> None:

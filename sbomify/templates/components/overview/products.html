@@ -18,8 +18,10 @@
             <c-tables.row>
             <c-tables.cell><c-overview.record href="{% url 'core:product_details' product.id %}" title="{{ product.name }}" detail="{{ product.component_count }} component{{ product.component_count|pluralize }}" /></c-tables.cell>
             <c-tables.cell>
-            {% if product.component_count %}
+            {% if product.security_component_count %}
                 <c-overview.exposure :counts="product.counts" :unassessed="product.unassessed" />
+            {% elif product.component_count %}
+                <c-feedback.status>Not applicable</c-feedback.status>
             {% else %}
                 <c-badges.secondary>No components</c-badges.secondary>
             {% endif %}

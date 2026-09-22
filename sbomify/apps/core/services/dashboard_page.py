@@ -51,7 +51,11 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     if workspace is None:
         return ServiceResult.failure("Workspace not found", status_code=404)
 
-    components = list(Component.objects.filter(team_id=team_id).values("id", "name", "sbom_freshness_days"))
+    components = list(
+        Component.objects.filter(team_id=team_id, component_type=Component.ComponentType.BOM).values(
+            "id", "name", "sbom_freshness_days"
+        )
+    )
     component_names = {component["id"]: component["name"] for component in components}
     picture = build_component_security_picture(list(component_names), component_names, workspace.patch_sla_days or {})
     has_artifacts = (
@@ -59,6 +63,7 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
         or Document.objects.filter(component__team_id=team_id).exists()
     )
     stale_components: set[str] = set()
+    without_policy: set[str] = set()
     for component in components:
         latest = picture["latest_sboms"].get(component["id"])
         override = component["sbom_freshness_days"]
@@ -66,6 +71,8 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
         freshness = freshness_state(latest["created_at"] if latest else None, window)
         if freshness and freshness["is_stale"]:
             stale_components.add(component["id"])
+        if latest and window is None:
+            without_policy.add(component["id"])
 
     products: list[dict[str, Any]] = []
     product_names_by_component: dict[str, list[str]] = {}
@@ -83,10 +90,11 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
         .prefetch_related(Prefetch("components", queryset=Component.objects.filter(team_id=team_id).only("id")))
     ):
         component_ids = {component.id for component in product.components.all()}
+        security_ids = component_ids & component_names.keys()
         for component_id in component_ids:
             product_names_by_component.setdefault(component_id, []).append(product.name)
         counts = {
-            key: sum(picture["counts"].get(component_id, {}).get(key, 0) for component_id in component_ids)
+            key: sum(picture["counts"].get(component_id, {}).get(key, 0) for component_id in security_ids)
             for key in ("total", "critical", "high", "medium", "low")
         }
         counts["other"] = counts["total"] - counts["critical"] - counts["high"]
@@ -96,11 +104,13 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
                 "id": product.id,
                 "name": product.name,
                 "component_count": len(component_ids),
+                "security_component_count": len(security_ids),
                 "counts": counts,
-                "unassessed": len(component_ids & picture["unassessed"]),
-                "stale": len(component_ids & stale_components),
-                "missing_sboms": len(component_ids - picture["latest_sboms"].keys()),
-                "past_sla": sum(overdue_by_component.get(component_id, 0) for component_id in component_ids),
+                "unassessed": len(security_ids & picture["unassessed"]),
+                "stale": len(security_ids & stale_components),
+                "missing_sboms": len(security_ids - picture["latest_sboms"].keys()),
+                "no_policy": len(security_ids & without_policy),
+                "past_sla": sum(overdue_by_component.get(component_id, 0) for component_id in security_ids),
             }
         )
     products.sort(
