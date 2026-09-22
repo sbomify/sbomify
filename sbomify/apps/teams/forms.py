@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
-from django.conf import settings
 from django.forms import inlineformset_factory
 
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.teams.permissions import grantable_roles
 
 if TYPE_CHECKING:
     _TeamFormBase = forms.ModelForm[Team]
@@ -59,15 +59,26 @@ class InviteUserForm(forms.Form):
     )
     role = forms.ChoiceField(
         required=True,
-        # ``guest`` is a self-service trust-center role (not invited).
-        # ``bot`` is reserved for synthetic OIDC binding identities and
-        # must NEVER be human-assignable — see settings.TEAMS_SUPPORTED_ROLES.
-        choices=[(role, label) for role, label in settings.TEAMS_SUPPORTED_ROLES if role not in ("guest", "bot")],
+        # Replaced in __init__ by the roles the inviter may actually grant.
+        # Kept non-empty here so the field is valid when the form is built
+        # without an inviter, which only tests do.
+        choices=[],
         # Least privilege by default: most people being invited need to do the
         # work, not configure the workspace.
         initial="member",
         widget=forms.Select(attrs={"class": "form-control"}),
     )
+
+    def __init__(self, *args: Any, actor_role: str | None = None, **kwargs: Any) -> None:
+        """``actor_role`` is the inviter's own role in this workspace.
+
+        The choices are narrowed rather than merely hidden: a ChoiceField
+        refuses anything outside them, so the crafted POST is refused by the
+        same line that shortens the dropdown. Nobody grants above themselves.
+        """
+        super().__init__(*args, **kwargs)
+        role_field = cast(forms.ChoiceField, self.fields["role"])
+        role_field.choices = grantable_roles(actor_role)
 
 
 class TeamBrandingForm(forms.Form):
