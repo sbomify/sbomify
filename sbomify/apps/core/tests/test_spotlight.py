@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from django.urls import reverse
 
-from sbomify.apps.core.spotlight import SECTION_ORDER, load_destinations, search_destinations
+from sbomify.apps.core.spotlight import SECTION_ORDER, initial_suggestions, load_destinations, search_destinations
 
 
 class TestRegistryIntegrity:
@@ -389,3 +389,22 @@ class TestUrlsAreReversed:
 
         assert reverse("core:product_details", kwargs={"product_id": product.id}) in urls
         assert reverse("core:release_details", kwargs={"product_id": product.id, "release_id": release.id}) in urls
+
+
+class TestInitialSuggestions:
+    def test_pages_and_examples_share_the_registry(self) -> None:
+        suggestions = initial_suggestions(role="owner", workspace_key="AAAAAAAA")
+        assert {item["section"] for item in suggestions} == {"suggested", "examples"}
+        for item in suggestions:
+            results = search_destinations(item.get("query", item["title"]), role="owner", team_key="AAAAAAAA")
+            assert any(result["url"] == item["url"] for result in results)
+
+    @pytest.mark.parametrize("role", ["member", "admin", "owner", ""])
+    def test_examples_follow_destination_permissions(self, role: str) -> None:
+        queries = {item.get("query") for item in initial_suggestions(role=role, workspace_key="AAAAAAAA")}
+        assert ("api key" in queries) == (role in {"admin", "owner"})
+        assert ("new release" in queries) == (role in {"member", "admin", "owner"})
+        assert "versions" in queries
+
+    def test_workspace_examples_are_omitted_without_a_workspace(self) -> None:
+        assert "api key" not in {item.get("query") for item in initial_suggestions(role="owner")}

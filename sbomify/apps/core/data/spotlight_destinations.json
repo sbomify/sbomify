@@ -15,6 +15,9 @@
     "  5. `args` names URL kwargs the resolver fills from the current session:",
     "     'team_key' is the only one supported today.",
     "",
+    "  6. `suggested` includes the destination when search first opens.",
+    "     `example` offers a clickable search phrase that finds this destination.",
+    "",
     "Ordering within a section is by match quality, not by position here.",
     "Sections themselves are ordered by `SECTION_ORDER` in spotlight.py."
   ],
@@ -28,6 +31,7 @@
     },
     {
       "title": "Products",
+      "suggested": true,
       "url_name": "core:products_dashboard",
       "section": "navigate",
       "icon": "fa-cube",
@@ -35,6 +39,7 @@
     },
     {
       "title": "Components",
+      "suggested": true,
       "url_name": "core:products_dashboard",
       "query": {
         "view": "components"
@@ -45,6 +50,7 @@
     },
     {
       "title": "Releases",
+      "example": "versions",
       "url_name": "core:products_dashboard",
       "query": {
         "view": "releases"
@@ -55,6 +61,7 @@
     },
     {
       "title": "Security Advisories",
+      "suggested": true,
       "url_name": "core:security_advisories_dashboard",
       "section": "navigate",
       "icon": "fa-shield-halved",
@@ -144,6 +151,7 @@
     },
     {
       "title": "Add release",
+      "example": "new release",
       "url_name": "core:release_new",
       "section": "create",
       "icon": "fa-tag",
@@ -187,6 +195,7 @@
     },
     {
       "title": "API tokens",
+      "example": "api key",
       "url_name": "teams:team_settings",
       "section": "settings",
       "icon": "fa-key",

@@ -174,8 +174,70 @@ def test_pending_search_cannot_restore_dismissed_results(
     pending[0].fulfill(json={"results": search_results})
     # Allow the late response to settle; neither selection nor visibility may return.
     page.wait_for_timeout(300)
+    if dismissal == "clear":
+        expect(panel.get_by_role("option", name="Products", exact=True)).to_be_visible()
+        expect(panel.get_by_role("option", name="Example page 00", exact=True)).to_have_count(0)
+        expect(panel).to_be_visible()
+        return
     expect(panel.get_by_role("option")).to_have_count(0)
     if dismissal != "replace":
         expect(panel).to_be_hidden()
     else:
         expect(panel.get_by_text("No results", exact=True)).to_be_visible()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1280, 375])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_focus_shows_preloaded_pages_and_search_examples(
+    authenticated_page: Page, search_results: list[dict[str, Any]], width: int, theme: str, tmp_path: Path
+) -> None:
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.set_viewport_size({"width": width, "height": 750})
+    requests: list[str] = []
+
+    def respond(route: Route) -> None:
+        requests.append(route.request.url)
+        route.fulfill(json={"results": search_results[:1]})
+
+    page.route("**/search/?*", respond)
+    page.goto("/products/")
+    search = page.get_by_role("combobox", name="Search products, components and pages")
+    panel = page.locator("#navbar-search-dropdown")
+    search.focus()
+    expect(panel).to_be_visible()
+    expect(panel.get_by_role("option", name="Products", exact=True)).to_be_visible()
+    expect(panel.get_by_role("option", name="versions", exact=True)).to_be_visible()
+    expect(panel.get_by_text("Searching...", exact=True)).to_be_hidden()
+    expect(search).to_have_value("")
+    expect(search).to_have_attribute("aria-activedescendant", "navbar-search-option-0")
+    panel.screenshot(path=str(tmp_path / f"suggestions-{theme}-{width}.png"))
+    assert requests == []
+    search.press("Escape")
+    expect(panel).to_be_hidden()
+    search.click()
+    expect(panel).to_be_visible()
+    search.press("ArrowDown")
+    expect(panel.get_by_role("option", name="Components", exact=True)).to_have_attribute("aria-selected", "true")
+    search.press("Enter")
+    page.wait_for_url("**/products/?view=components")
+    assert requests == []
+
+    page.keyboard.press("Control+k")
+    expect(panel).to_be_visible()
+    panel.get_by_role("option", name="versions", exact=True).click()
+    expect(search).to_be_focused()
+    expect(search).to_have_value("versions")
+    expect(panel.get_by_role("option")).to_have_count(1)
+    assert len(requests) == 1 and "q=versions" in requests[0]
+    search.fill("")
+    expect(panel.get_by_role("option", name="Products", exact=True)).to_be_visible()
+    expect(panel.get_by_text("No results", exact=True)).to_be_hidden()
+    assert len(requests) == 1
+    search.press("ArrowUp")
+    expect(panel.get_by_role("option", name="api key", exact=True)).to_have_attribute("aria-selected", "true")
+    search.press("Enter")
+    expect(search).to_have_value("api key")
+    expect(panel.get_by_role("option")).to_have_count(1)
+    assert len(requests) == 2 and "q=api+key" in requests[1]

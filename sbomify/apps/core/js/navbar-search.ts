@@ -6,6 +6,7 @@ interface SpotlightResult {
   section: string;
   section_label: string;
   icon: string;
+  query?: string;
 }
 
 interface SearchOption extends SpotlightResult {
@@ -21,8 +22,9 @@ interface SearchSection {
 interface NavbarSearch {
   query: string;
   open: boolean;
-  status: 'idle' | 'loading' | 'ready' | 'error' | 'expired';
+  status: 'suggested' | 'idle' | 'loading' | 'ready' | 'error' | 'expired';
   sections: SearchSection[];
+  suggestions: SpotlightResult[];
   activeIndex: number;
   readonly results: SearchOption[];
   readonly activeId: string | null;
@@ -31,7 +33,10 @@ interface NavbarSearch {
   timer: ReturnType<typeof setTimeout> | undefined;
   request: AbortController | undefined;
   revision: number;
-  update(event: Event): void;
+  update(value: string, composing?: boolean): void;
+  setResults(results: SpotlightResult[]): void;
+  showSuggestions(): void;
+  choose(event: MouseEvent, result: SpotlightResult): void;
   show(): void;
   cancel(): void;
   dismiss(): void;
@@ -48,11 +53,16 @@ export function navbarSearch(): AlpineComponent<NavbarSearch> {
     open: false,
     status: 'idle',
     sections: [],
+    suggestions: [],
     activeIndex: -1,
     shortcutLabel: /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl',
     timer: undefined,
     request: undefined,
     revision: 0,
+
+    init() {
+      this.suggestions = window.parseJsonScript(`${this.$root.id}-suggestions`) ?? [];
+    },
 
     get results() {
       return this.sections.flatMap(section => section.results);
@@ -62,29 +72,66 @@ export function navbarSearch(): AlpineComponent<NavbarSearch> {
     },
     get announcement() {
       if (!this.open) return '';
+      if (this.status === 'suggested') return `${this.results.length} suggestions. Choose a page or try a search.`;
       if (this.status === 'loading') return 'Searching...';
       if (this.status === 'error') return 'Search is unavailable right now.';
       if (this.status === 'expired') return 'Your session has expired. Sign in again.';
       return `${this.results.length} ${this.results.length === 1 ? 'result' : 'results'}.`;
     },
 
-    update(event) {
+    update(value, composing = false) {
       this.cancel();
-      this.query = (event.target as HTMLInputElement).value.trim();
+      this.query = value.trim();
+      this.open = true;
+      if (this.query.length < 2 || composing) {
+        this.showSuggestions();
+        return;
+      }
       this.sections = [];
       this.activeIndex = -1;
-      this.status = 'idle';
-      this.open = this.query.length >= 2 && !(event instanceof InputEvent && event.isComposing);
-      if (!this.open) return;
       this.status = 'loading';
       this.timer = setTimeout(() => void this.search(), 200);
     },
 
+    setResults(results) {
+      // Preserve server ranking within each section, and index the displayed order.
+      const groups = new Map<string, SearchSection>();
+      for (const result of results) {
+        if (!groups.has(result.section)) {
+          groups.set(result.section, { key: result.section, label: result.section_label, results: [] });
+        }
+        groups.get(result.section)!.results.push({ ...result, index: 0 });
+      }
+      this.sections = [...groups.values()];
+      this.results.forEach((result, index) => { result.index = index; });
+      this.activeIndex = this.results.length ? 0 : -1;
+      this.$refs.list.scrollTop = 0;
+    },
+
+    showSuggestions() {
+      this.status = 'suggested';
+      this.setResults(this.suggestions);
+    },
+
     show() {
-      if (this.query.length < 2 || this.open) return;
+      if (this.open) return;
       this.open = true;
-      if (this.status === 'idle') void this.search();
+      if (this.query.length < 2) this.showSuggestions();
+      else if (this.status === 'idle') void this.search();
       else this.$nextTick(() => this.reveal());
+    },
+
+    choose(event, result) {
+      if (!result.query || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        this.dismiss();
+        return;
+      }
+      event.preventDefault();
+      const input = this.$refs.input as HTMLInputElement;
+      input.value = result.query;
+      input.focus({ preventScroll: true });
+      this.update(result.query);
+      void this.search();
     },
 
     cancel() {
@@ -122,19 +169,8 @@ export function navbarSearch(): AlpineComponent<NavbarSearch> {
         const data: { results?: SpotlightResult[] } = await response.json();
         if (revision !== this.revision) return;
 
-        // Preserve server ranking within each section, and index the displayed order.
-        const groups = new Map<string, SearchSection>();
-        for (const result of data.results ?? []) {
-          if (!groups.has(result.section)) {
-            groups.set(result.section, { key: result.section, label: result.section_label, results: [] });
-          }
-          groups.get(result.section)!.results.push({ ...result, index: 0 });
-        }
-        this.sections = [...groups.values()];
-        this.results.forEach((result, index) => { result.index = index; });
-        this.activeIndex = this.results.length ? 0 : -1;
+        this.setResults(data.results ?? []);
         this.status = 'ready';
-        this.$refs.list.scrollTop = 0;
       } catch {
         if (revision === this.revision) this.status = 'error';
       }
@@ -151,7 +187,6 @@ export function navbarSearch(): AlpineComponent<NavbarSearch> {
       }
       if (event.target !== this.$refs.input) return;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        if (this.query.length < 2) return;
         event.preventDefault();
         const wasOpen = this.open;
         this.show();

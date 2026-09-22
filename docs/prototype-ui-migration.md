@@ -31,7 +31,11 @@ The search dropdown now uses inset rows, a neutral selection and quiet keyboard
 hints. Its Cotton component owns presentation, with Alpine handling keyboard
 and pointer selection, focus and cancellation of pending searches. Results scroll
 inside the panel, which fits narrow and short screens. The live gallery includes
-a second instance to demonstrate the shared component.
+a second instance to demonstrate the shared component. Focusing an empty field
+opens preloaded page suggestions and example searches immediately. Both come
+from the existing destination registry and respect live workspace permissions.
+Choosing an example fills the field and runs the search; clearing the query
+restores suggestions without another request.
 The onboarding component owns its setup and upload dialogs, so pages only place
 the component and load the existing SBOM entry point when needed.
 

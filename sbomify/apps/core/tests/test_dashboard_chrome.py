@@ -1,5 +1,8 @@
 """The shared chrome must follow live capabilities and keep working links."""
 
+import json
+import re
+
 import pytest
 from django.test import Client
 from django.urls import reverse
@@ -28,6 +31,11 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
     assert b'aria-label="Posture"' in owner_page.content
     assert b'aria-label="Plugins"' in owner_page.content
     assert b'aria-label="Quick actions"' in owner_page.content
+    owner_suggestions = re.search(
+        rb'<script id="navbar-search-suggestions" type="application/json">(.*?)</script>', owner_page.content
+    )
+    assert owner_suggestions
+    assert "api key" in {item.get("query") for item in json.loads(owner_suggestions[1])}
 
     member.role = "member"
     member.save(update_fields=["role"])
@@ -38,6 +46,11 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
     assert b'aria-label="Quick actions"' in contributor_page.content
     assert b'aria-current="page"' in contributor_page.content
     assert b"<c-" not in contributor_page.content
+    member_suggestions = re.search(
+        rb'<script id="navbar-search-suggestions" type="application/json">(.*?)</script>', contributor_page.content
+    )
+    assert member_suggestions
+    assert "api key" not in {item.get("query") for item in json.loads(member_suggestions[1])}
 
     member.role = "guest"
     member.save(update_fields=["role"])
