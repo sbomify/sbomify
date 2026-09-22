@@ -46,7 +46,6 @@ release and component inventory tabs. Capability flags are live, so this compone
         {% endif %}
         <c-chrome.nav-item href="{% url 'core:security_advisories_dashboard' %}" label="Security advisories" icon="fas fa-shield-halved" match="core:security_advisor" />
         </c-chrome.nav-group>
-        {{ slot }}
     </nav>
     <div class="px-3 py-3 border-t border-border space-y-1">
         {% if can_administer %}

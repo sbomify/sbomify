@@ -303,7 +303,7 @@ class SelectPlanView(LoginRequiredMixin, View):
         sync_subscription_from_stripe(team, force_refresh=False)
         team.refresh_from_db()
 
-        return self._render_plan_page(request, team, team_key, stripe_pricing_data)
+        return self._render_plan_page(request, team, stripe_pricing_data)
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from .billing_helpers import check_rate_limit
@@ -484,7 +484,6 @@ class SelectPlanView(LoginRequiredMixin, View):
         self,
         request: HttpRequest,
         team: Team,
-        team_key: str,
         stripe_pricing_data: dict[str, dict[str, Any]],
     ) -> HttpResponse:
         from .services.plan_selection import build_plan_selection_context

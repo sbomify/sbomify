@@ -721,7 +721,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     </c-cards.card>
     <h2 id="plan-cards" class="text-xl font-semibold text-text">Plan cards</h2>
     <div class="flex flex-col gap-4"
-         x-data="planSelection({ currentPlan: 'community', teamKey: 'gallery', usage: { users: 1, products: 1, components: 5 }, csrfToken: '', enterpriseContactUrl: '#plan-cards' })">
+         x-data="planSelection({ currentPlan: 'community', csrfToken: '', enterpriseContactUrl: '#plan-cards' })">
         <div class="flex">
             <c-navigation.segmented aria-label="Preview billing period">
             <c-navigation.segment ::data-active="billingPeriod === 'monthly'" ::aria-pressed="billingPeriod === 'monthly'" @click="billingPeriod = 'monthly'">Monthly</c-navigation.segment>

@@ -4,8 +4,6 @@ import planSelection from './plan-selection';
 describe('planSelection', () => {
     const mockData = {
         currentPlan: 'community',
-        teamKey: 'test-team',
-        usage: { users: 1, products: 5, components: 50 },
         csrfToken: 'token',
         enterpriseContactUrl: '/contact',
     };
@@ -14,13 +12,32 @@ describe('planSelection', () => {
         const vm = planSelection(mockData);
         expect(vm.billingPeriod).toBe('monthly');
         expect(vm.currentPlan).toBe('community');
-        expect(vm.usage).toEqual(mockData.usage);
     });
 
-    it('returns correct features for community plan', () => {
-        const vm = planSelection(mockData);
-        const features = vm.getFeatures('community');
-        expect(features).toContainEqual({ key: 'public-only', label: 'Public products and components' });
+    it('keeps current and scheduled Community actions disabled independently of their labels', () => {
+        const current = planSelection(mockData);
+        current.getButtonText = () => 'A different label';
+        expect(current.canSelectPlan('community')).toBe(false);
+        expect(current.canSelectPlan('business')).toBe(true);
+        current.handlePlanSelection('community');
+        expect(current.isSubmitting).toBe(false);
+
+        const scheduled = planSelection({ ...mockData, currentPlan: 'business', cancelAtPeriodEnd: true });
+        expect(scheduled.canSelectPlan('community')).toBe(false);
+        expect(scheduled.canSelectPlan('business')).toBe(true);
+    });
+
+    it('blocks plans over their limits and repeated submissions', () => {
+        const vm = planSelection({
+            ...mockData, currentPlan: 'business',
+            downgradeLimits: { community: { exceeds: true, resources: ['2 products (limit: 1)'] } },
+        });
+        expect(vm.canSelectPlan('community')).toBe(false);
+        vm.handlePlanSelection('community');
+        expect(vm.isSubmitting).toBe(false);
+        vm.isSubmitting = true;
+        expect(vm.canSelectPlan('business')).toBe(false);
+        expect(vm.canSelectPlan('enterprise')).toBe(false);
     });
 
     describe('getButtonText', () => {

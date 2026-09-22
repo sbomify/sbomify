@@ -79,13 +79,12 @@ size themselves naturally on smaller screens.
     </div>
     <div class="flex flex-col gap-5 px-5 sm:px-6">
         <ul class="m-0 flex list-none flex-col gap-3 p-0">
-            <template x-for="feature in getFeatures('{{ plan.key|escapejs }}')"
-                      :key="feature.key">
+            {% for feature in plan.features %}
                 <li class="flex items-start gap-2.5 text-sm leading-5 text-text">
                     <i class="fas fa-check w-4 shrink-0 text-center leading-5 text-text-muted"
-                       aria-hidden="true"></i><span x-text="feature.label"></span>
+                       aria-hidden="true"></i><span>{{ feature }}</span>
                 </li>
-            </template>
+            {% endfor %}
         </ul>
         <c-feedback.alert variant="warning" x-show="getDowngradeWarning('{{ plan.key|escapejs }}')" x-cloak><span x-text="getDowngradeWarning('{{ plan.key|escapejs }}')"></span></c-feedback.alert>
     </div>
@@ -97,7 +96,7 @@ size themselves naturally on smaller screens.
     {% elif plan.key == 'business' and not plan.current %}
         <c-buttons.primary class="w-full" ::disabled="!canSelectPlan('{{ plan.key|escapejs }}')" @click="handlePlanSelection('{{ plan.key|escapejs }}')"><span x-text="getButtonText('{{ plan.key|escapejs }}')">Select {{ plan.name }}</span></c-buttons.primary>
     {% else %}
-        <c-buttons.secondary class="w-full" ::disabled="!canSelectPlan('{{ plan.key|escapejs }}') || getButtonText('{{ plan.key|escapejs }}') === 'Current plan' || getButtonText('{{ plan.key|escapejs }}') === 'Downgrade scheduled'" @click="handlePlanSelection('{{ plan.key|escapejs }}')"><span x-text="getButtonText('{{ plan.key|escapejs }}')">Select {{ plan.name }}</span></c-buttons.secondary>
+        <c-buttons.secondary class="w-full" ::disabled="!canSelectPlan('{{ plan.key|escapejs }}')" @click="handlePlanSelection('{{ plan.key|escapejs }}')"><span x-text="getButtonText('{{ plan.key|escapejs }}')">Select {{ plan.name }}</span></c-buttons.secondary>
     {% endif %}
 </div>
 </c-slot>

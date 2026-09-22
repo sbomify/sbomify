@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest
 from django.urls import reverse
@@ -94,7 +93,6 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
             )
             if can(request, "product:manage", instance)
             else [],
-            "APP_BASE_URL": settings.APP_BASE_URL,
             "current_team": request.session.get("current_team", {}),
             "header_copy_values": copy_values,
             "product_tei": product_tei,

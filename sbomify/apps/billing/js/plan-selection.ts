@@ -1,21 +1,10 @@
 import { formatDate as sharedFormatDate } from '../../core/js/utils';
 
-interface Usage {
-    users: number;
-    products: number;
-    components: number;
-}
-
 interface FAQ {
     id: string;
     question: string;
     answer: string;
     expanded: boolean;
-}
-
-interface Feature {
-    key: string;
-    label: string;
 }
 
 interface DowngradeLimits {
@@ -28,8 +17,6 @@ interface DowngradeLimits {
 interface PlanSelectionData {
     billingPeriod: 'monthly' | 'annual';
     currentPlan: string;
-    teamKey: string;
-    usage: Usage;
     faqs: FAQ[];
     isSubmitting: boolean;
     cancelAtPeriodEnd: boolean;
@@ -37,7 +24,6 @@ interface PlanSelectionData {
     downgradeLimits: DowngradeLimits;
 
     init(): void;
-    getFeatures(planKey: string): Feature[];
     toggleFAQ(id: string): void;
     canSelectPlan(planKey?: string): boolean;
     getButtonText(planKey: string): string;
@@ -56,8 +42,6 @@ export function registerPlanSelection() {
 
 export default function planSelection(initialData: {
     currentPlan: string;
-    teamKey: string;
-    usage: Usage;
     csrfToken: string;
     enterpriseContactUrl: string;
     currentSubscriptionStatus?: string;
@@ -70,8 +54,6 @@ export default function planSelection(initialData: {
     return {
         billingPeriod: initialData.billingPeriod || 'monthly',
         currentPlan: initialData.currentPlan,
-        teamKey: initialData.teamKey,
-        usage: initialData.usage,
         isSubmitting: false,
         cancelAtPeriodEnd: initialData.cancelAtPeriodEnd || false,
         currentPeriodEnd: initialData.currentPeriodEnd || '',
@@ -121,39 +103,6 @@ export default function planSelection(initialData: {
             }
         },
 
-        getFeatures(planKey: string) {
-            const features: Record<string, Feature[]> = {
-                community: [
-                    { key: 'unlimited-sboms', label: 'Unlimited SBOMs' },
-                    { key: 'public-only', label: 'Public products and components' },
-                    { key: 'scanning', label: 'Weekly vulnerability scans' },
-                    { key: 'support', label: 'Community support' },
-                    { key: 'api', label: 'API access' },
-                    { key: 'trust-center', label: 'Public Trust Center' },
-                    { key: 'branding', label: 'Custom branding' },
-                ],
-                business: [
-                    { key: 'includes-community', label: 'Everything in Community' },
-                    { key: 'private-data', label: 'Private products and components' },
-                    { key: 'ntia', label: 'NTIA Minimum Elements check' },
-                    { key: 'scanning', label: 'Vulnerability scans every 12 hours' },
-                    { key: 'identifiers', label: 'Product identifiers' },
-                    { key: 'support', label: 'Priority support' },
-                    { key: 'domain', label: 'Custom Trust Center domain' },
-                ],
-                enterprise: [
-                    { key: 'includes-business', label: 'Everything in Business' },
-                    { key: 'dependency-track', label: 'Custom Dependency Track servers' },
-                    { key: 'support', label: 'Dedicated support' },
-                    { key: 'integrations', label: 'Custom integrations' },
-                    { key: 'sla', label: 'SLA guarantee' },
-                    { key: 'security', label: 'Advanced security' },
-                    { key: 'deployment', label: 'Custom deployment options' },
-                ],
-            };
-            return features[planKey] || [];
-        },
-
         toggleFAQ(id: string) {
             const faq = this.faqs.find(f => f.id === id);
             if (faq) {
@@ -172,8 +121,7 @@ export default function planSelection(initialData: {
                 }
             }
 
-            // Allow all plans to be clickable - we handle special cases in handlePlanSelection
-            return true;
+            return planKey !== 'community' || (this.currentPlan !== 'community' && !this.cancelAtPeriodEnd);
         },
 
         getDowngradeWarning(planKey: string): string | null {
@@ -223,28 +171,7 @@ export default function planSelection(initialData: {
         },
 
         handlePlanSelection(planKey: string) {
-            if (this.isSubmitting) {
-                return;
-            }
-
-            // Check if downgrade limits are exceeded
-            if (this.downgradeLimits && this.downgradeLimits[planKey]) {
-                const limits = this.downgradeLimits[planKey];
-                if (limits && limits.exceeds) {
-                    const warning = this.getDowngradeWarning(planKey);
-                    if (warning) {
-                        alert(warning);
-                    }
-                    return;
-                }
-            }
-
-            // Handle clicking Community when downgrade is already scheduled
-            if (this.cancelAtPeriodEnd && planKey === 'community') {
-                const endDate = this.formatDate(this.currentPeriodEnd);
-                alert(`Your downgrade to Community is already scheduled. Your current plan will remain active until ${endDate || 'the end of your billing period'}.`);
-                return;
-            }
+            if (!this.canSelectPlan(planKey)) return;
 
             if (planKey === 'enterprise') {
                 window.location.href = initialData.enterpriseContactUrl;

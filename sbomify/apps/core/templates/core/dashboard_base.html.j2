@@ -7,9 +7,6 @@
              class="hidden"></div>
     {% endif %}
     <c-chrome.shell>
-    <c-slot name="sidebar_content">
-    {% block sidebar_content %}{% endblock %}
-    </c-slot>
     {% block dashboard_messages %}
         {% include 'core/components/messages.html.j2' %}
     {% endblock %}

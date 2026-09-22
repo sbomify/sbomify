@@ -139,10 +139,6 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
         },
         "unassessed": len(picture["unassessed"]),
         "products": products[:8],
-        "release_products": sorted(
-            ({"id": product["id"], "name": product["name"]} for product in products),
-            key=lambda product: product["name"].lower(),
-        ),
         "product_count": len(products),
     }
     django_cache.set(cache_key, context, _CACHE_TTL_SECONDS)

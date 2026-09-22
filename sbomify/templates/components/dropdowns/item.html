@@ -1,7 +1,6 @@
 {% comment %}
 A row in a dropdown panel. compact uses the lighter, smaller account-menu type. With an href it renders an anchor, otherwise a
-button, and the two branches differ only in element and disabled affordance;
-they must stay in lockstep. Rows carry menuitem or menuitemradio roles for
+button. Both use one recipe and slot; only the tag and disabled affordance differ. Rows carry menuitem or menuitemradio roles for
 the panel's keyboard handling to find.
 
 icon is a Font Awesome class rather than slot content: the icon sits in a fixed
@@ -16,52 +15,28 @@ Colour is one conditional segment through variant_class, so c-dropdowns.item-dan
 replaces it whole and two colours never land on the same row.
 {% endcomment %}
 <c-vars variant_class compact radio checked description icon type="button" href disabled class />
-{% if href %}
-    <a href="{{ href }}"
-       role="{% if radio %}menuitemradio{% else %}menuitem{% endif %}"
-       {% if radio %}aria-checked="{{ checked|yesno:'true,false' }}"{% endif %}
-       class="group flex items-center gap-3 w-full max-sm:min-h-11 px-2.5 py-2 rounded-lg {% if radio %}text-sm leading-5 font-medium{% elif compact %}text-[13px] leading-5 font-normal{% else %}text-sm font-semibold{% endif %} text-left no-underline cursor-pointer transition-colors duration-150 focus-visible:outline-none aria-disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:pointer-events-none {% if variant_class %}{{ variant_class }}{% elif radio %}text-text hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:shadow-[inset_0_0_0_1px_var(--color-border-focus)] aria-checked:bg-surface-hover{% else %}text-text hover:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] hover:text-primary focus-visible:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] focus-visible:text-primary{% endif %}{% if class %} {{ class }}{% endif %}"
-       {% if disabled %}tabindex="-1" aria-disabled="true"{% endif %}
-       {{ attrs }}>
-        {% if icon %}
-            <i class="{{ icon }} shrink-0 w-4 text-center text-text-muted group-hover:text-inherit group-focus-visible:text-inherit"
-               aria-hidden="true"></i>
-        {% endif %}
-        {% if description or radio %}
-            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span>{{ slot }}</span>
-                {% if description %}<span class="text-xs leading-5 font-normal text-text-muted">{{ description }}</span>{% endif %}
-            </span>
-        {% else %}
-            {{ slot }}
-        {% endif %}
-        {% if radio %}
-            <i class="fas fa-check w-4 shrink-0 text-xs text-text-muted opacity-0 group-aria-checked:opacity-100"
-               aria-hidden="true"></i>
-        {% endif %}
-    </a>
-{% else %}
-    <button type="{{ type }}"
-            role="{% if radio %}menuitemradio{% else %}menuitem{% endif %}"
-            {% if radio %}aria-checked="{{ checked|yesno:'true,false' }}"{% endif %}
-            class="group flex items-center gap-3 w-full max-sm:min-h-11 px-2.5 py-2 rounded-lg {% if radio %}text-sm leading-5 font-medium{% elif compact %}text-[13px] leading-5 font-normal{% else %}text-sm font-semibold{% endif %} text-left no-underline cursor-pointer transition-colors duration-150 focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none {% if variant_class %}{{ variant_class }}{% elif radio %}text-text hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:shadow-[inset_0_0_0_1px_var(--color-border-focus)] aria-checked:bg-surface-hover{% else %}text-text hover:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] hover:text-primary focus-visible:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] focus-visible:text-primary{% endif %}{% if class %} {{ class }}{% endif %}"
-            {% if disabled %}disabled{% endif %}
-            {{ attrs }}>
-        {% if icon %}
-            <i class="{{ icon }} shrink-0 w-4 text-center text-text-muted group-hover:text-inherit group-focus-visible:text-inherit"
-               aria-hidden="true"></i>
-        {% endif %}
-        {% if description or radio %}
-            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span>{{ slot }}</span>
-                {% if description %}<span class="text-xs leading-5 font-normal text-text-muted">{{ description }}</span>{% endif %}
-            </span>
-        {% else %}
-            {{ slot }}
-        {% endif %}
-        {% if radio %}
-            <i class="fas fa-check w-4 shrink-0 text-xs text-text-muted opacity-0 group-aria-checked:opacity-100"
-               aria-hidden="true"></i>
-        {% endif %}
-    </button>
-{% endif %}
+{# djlint:off #}
+{% if href %}<a href="{{ href }}"{% else %}<button type="{{ type }}"{% endif %}
+    role="{% if radio %}menuitemradio{% else %}menuitem{% endif %}"
+    {% if radio %}aria-checked="{{ checked|yesno:'true,false' }}"{% endif %}
+    class="group flex items-center gap-3 w-full max-sm:min-h-11 px-2.5 py-2 rounded-lg {% if radio %}text-sm leading-5 font-medium{% elif compact %}text-[13px] leading-5 font-normal{% else %}text-sm font-semibold{% endif %} text-left no-underline cursor-pointer transition-colors duration-150 focus-visible:outline-none {% if href %}aria-disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:pointer-events-none{% else %}disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none{% endif %} {% if variant_class %}{{ variant_class }}{% elif radio %}text-text hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:shadow-[inset_0_0_0_1px_var(--color-border-focus)] aria-checked:bg-surface-hover{% else %}text-text hover:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] hover:text-primary focus-visible:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] focus-visible:text-primary{% endif %}{% if class %} {{ class }}{% endif %}"
+    {% if disabled %}{% if href %}tabindex="-1" aria-disabled="true"{% else %}disabled{% endif %}{% endif %}
+    {{ attrs }}>
+    {% if icon %}
+        <i class="{{ icon }} shrink-0 w-4 text-center text-text-muted group-hover:text-inherit group-focus-visible:text-inherit"
+           aria-hidden="true"></i>
+    {% endif %}
+    {% if description or radio %}
+        <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span>{{ slot }}</span>
+            {% if description %}<span class="text-xs leading-5 font-normal text-text-muted">{{ description }}</span>{% endif %}
+        </span>
+    {% else %}
+        {{ slot }}
+    {% endif %}
+    {% if radio %}
+        <i class="fas fa-check w-4 shrink-0 text-xs text-text-muted opacity-0 group-aria-checked:opacity-100"
+           aria-hidden="true"></i>
+    {% endif %}
+{% if href %}</a>{% else %}</button>{% endif %}
+{# djlint:on #}

@@ -13,6 +13,7 @@ from django.views import View
 from django.views.decorators.cache import never_cache
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
 from sbomify.apps.core.authz import ADMINISTER, MANAGE, ROLE_DESCRIPTIONS
@@ -34,57 +35,6 @@ from sbomify.logging import getLogger
 NDA_VERSION_ALLOCATION_ATTEMPTS = 5
 
 logger = getLogger(__name__)
-
-PLAN_FEATURES = {
-    "community": [
-        "Unlimited SBOMs",
-        "Unlimited products & components",
-        "All data is public",
-        "Weekly vulnerability scans",
-        "Community support",
-        "API access",
-        "Workspace management",
-        "Public Trust Center",
-        "Custom branding (logo & colors)",
-    ],
-    "business": [
-        "Everything in Community",
-        "Private components/products",
-        "NTIA Minimum Elements check",
-        "Advanced vulnerability scanning (every 12 hours)",
-        "Product identifiers (SKUs/barcodes)",
-        "Priority support",
-        "Workspace management",
-        "Public Trust Center",
-        "Custom domain for Trust Center",
-        "Custom branding (logo & colors)",
-    ],
-    "enterprise": [
-        "Everything in Business",
-        "Unlimited users",
-        "Custom Dependency Track servers",
-        "Dedicated support",
-        "Custom integrations",
-        "SLA guarantee",
-        "Advanced security",
-        "Custom deployment options",
-        "Public Trust Center",
-        "Custom domain for Trust Center",
-        "Advanced custom branding (logo, colors, themes)",
-    ],
-}
-
-
-PLAN_LIMITS = {
-    "max_products": {
-        "label": "Products",
-        "icon": "cube",
-    },
-    "max_components": {
-        "label": "Components",
-        "icon": "puzzle-piece",
-    },
-}
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -190,7 +140,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         plan_limits: list[dict[str, str]] = []
 
         if wants_fresh_billing:
-            plan_features = PLAN_FEATURES.get(billing_plan, [])
+            plan_features = list(PLAN_FEATURES.get(billing_plan, ()))
             pricing_service = TeamPricingService()
             try:
                 billing_plan_obj = BillingPlan.objects.get(key=billing_plan)

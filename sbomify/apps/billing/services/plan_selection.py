@@ -7,6 +7,7 @@ from django.middleware.csrf import get_token
 from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.teams.models import Team
@@ -41,8 +42,8 @@ def build_plan_selection_context(
         prices = []
         if key == BillingPlan.KEY_BUSINESS:
             annual_savings_percent = pricing.get("annual_savings_percent")
-            for period, prefix, unit in (("monthly", "monthly", "month"), ("annual", "annual", "year")):
-                amount = pricing.get(f"{prefix}_price_discounted")
+            for period, unit in (("monthly", "month"), ("annual", "year")):
+                amount = pricing.get(f"{period}_price_discounted")
                 original = pricing.get("monthly_price_base_annualized" if period == "annual" else "monthly_price")
                 prices.append(
                     {
@@ -50,7 +51,7 @@ def build_plan_selection_context(
                         "amount": amount,
                         "original": original,
                         "unit": unit,
-                        "discount": pricing.get(f"discount_percent_{prefix}"),
+                        "discount": pricing.get(f"discount_percent_{period}"),
                         "promo": pricing.get("promo_message"),
                         "savings": pricing.get("total_annual_savings") if period == "annual" else None,
                     }
@@ -60,6 +61,7 @@ def build_plan_selection_context(
                 "key": key,
                 "name": plan.name,
                 "description": plan.description,
+                "features": PLAN_FEATURES.get(key, ()),
                 "current": key == current_plan,
                 "prices": prices,
                 "limits": [
@@ -79,8 +81,6 @@ def build_plan_selection_context(
             "annual_savings_percent": annual_savings_percent,
             "plan_selection_data": {
                 "currentPlan": current_plan,
-                "teamKey": workspace.key,
-                "usage": usage,
                 "csrfToken": get_token(request),
                 "enterpriseContactUrl": reverse("billing:enterprise_contact"),
                 "currentSubscriptionStatus": billing_limits.get("subscription_status", ""),

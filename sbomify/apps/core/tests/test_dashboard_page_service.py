@@ -361,4 +361,3 @@ def test_overview_evidence_distinguishes_missing_from_stale(sample_team_with_own
     assert result.ok and result.value is not None
     assert result.value["products"][0]["missing_sboms"] == 1
     assert result.value["products"][0]["stale"] == 1
-    assert result.value["release_products"] == [{"id": product.id, "name": "Evidence"}]

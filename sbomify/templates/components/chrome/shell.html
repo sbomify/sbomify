@@ -1,13 +1,12 @@
 {% comment %}
 One private app frame for normal and HTMX pages. The fixed rail width drives
-header, content and footer together. Mobile uses a drawer. sidebarCollapsed
-stays false for the existing compliance sidebar slots.
+header, content and footer together. Mobile uses a drawer.
 {% endcomment %}
 <div class="min-h-screen flex flex-col bg-background"
-     x-data="{ sidebarCollapsed: false, sidebarMobileOpen: false }"
+     x-data="{ sidebarMobileOpen: false }"
      @keydown.escape.window="sidebarMobileOpen = false"
      @resize.window="if (window.innerWidth >= 1024) sidebarMobileOpen = false">
-    <c-chrome.sidebar>{{ sidebar_content }}</c-chrome.sidebar>
+    <c-chrome.sidebar />
     <c-chrome.header />
     <main id="main-content"
           tabindex="-1"

@@ -8,7 +8,6 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
-from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
 
@@ -56,8 +55,6 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         if self.show_trends:
             return render(request, "core/dashboard_trends.html.j2")
 
-        has_crud_permissions = get_member_role_by_key(request.user, current_team.get("key")) in MANAGE
-
         from sbomify.apps.core.services.dashboard_page import build_dashboard_context, get_first_component
 
         result = build_dashboard_context(team.id) if team else None
@@ -70,7 +67,6 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
 
         context = {
             "current_team": current_team,
-            "has_crud_permissions": has_crud_permissions,
             "page_subtitle": subtitle,
             "dashboard": dashboard,
         }

@@ -6,6 +6,7 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE, badge_seal_url
 
@@ -74,6 +75,7 @@ class DesignSystemView(LoginRequiredMixin, View):
             "plan_card_demos": [
                 {
                     "key": "community",
+                    "features": PLAN_FEATURES["community"],
                     "name": "Community",
                     "description": "For public projects.",
                     "current": True,
@@ -85,6 +87,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 },
                 {
                     "key": "business",
+                    "features": PLAN_FEATURES["business"],
                     "name": "Business",
                     "description": "For teams sharing private artifacts.",
                     "limits": [
@@ -99,6 +102,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 },
                 {
                     "key": "enterprise",
+                    "features": PLAN_FEATURES["enterprise"],
                     "name": "Enterprise",
                     "description": "For custom requirements.",
                     "limits": [
