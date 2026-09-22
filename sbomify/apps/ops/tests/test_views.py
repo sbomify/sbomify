@@ -10,14 +10,17 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.models import User
-from sbomify.apps.ops.services.overview import CACHE_KEY
+from sbomify.apps.ops.services.cache import KEY_PREFIX
+
+
+PANEL_KEYS = [f"{KEY_PREFIX}:{name}" for name in ("counts", "revenue", "activation", "signups:30")]
 
 
 @pytest.fixture(autouse=True)
 def clear_panel_cache():
-    cache.delete(CACHE_KEY)
+    cache.delete_many(PANEL_KEYS)
     yield
-    cache.delete(CACHE_KEY)
+    cache.delete_many(PANEL_KEYS)
 
 
 @pytest.fixture

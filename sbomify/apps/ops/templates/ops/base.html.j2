@@ -19,15 +19,12 @@ surface, type and tokens, so it reads as sbomify rather than as Django admin.
                     </div>
                 </div>
                 <nav class="flex items-center gap-1" aria-label="Ops sections">
-                    <a href="{% url 'ops:overview' %}"
-                       {% if active_section == 'overview' %}aria-current="page"{% endif %}
-                       class="px-3 py-2 rounded-lg text-sm font-medium no-underline transition-colors text-text-muted hover:text-text hover:bg-surface-elevated aria-[current=page]:bg-primary aria-[current=page]:text-white">
-                        Overview
-                    </a>
-                    <a href="/"
-                       class="px-3 py-2 rounded-lg text-sm font-medium no-underline transition-colors text-text-muted hover:text-text hover:bg-surface-elevated">
-                        Back to app
-                    </a>
+                    {% if active_section == 'overview' %}
+                        <c-navigation.nav-link href="{% url 'ops:overview' %}" current>Overview</c-navigation.nav-link>
+                    {% else %}
+                        <c-navigation.nav-link href="{% url 'ops:overview' %}">Overview</c-navigation.nav-link>
+                    {% endif %}
+                    <c-navigation.nav-link href="{% url 'core:home' %}">Back to app</c-navigation.nav-link>
                 </nav>
             </div>
         </header>

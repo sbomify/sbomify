@@ -1271,6 +1271,16 @@
         <c-navigation.tabs-pills :tabs="demo_tabs" active="sboms" />
     </div>
     <p class="text-sm text-text-muted mt-6 mb-2">
+        The nav link is the one that moves you between pages, rather than between panels on one
+        page. It is a real anchor, and the page you are on carries
+        <c-code-inline>aria-current="page"</c-code-inline> on the anchor itself.
+    </p>
+    <nav class="flex items-center gap-1" aria-label="Navigation link demo">
+        <c-navigation.nav-link href="#nav-link" current>Overview</c-navigation.nav-link>
+        <c-navigation.nav-link href="#nav-link">Revenue</c-navigation.nav-link>
+        <c-navigation.nav-link href="#nav-link" icon="fas fa-heart-pulse">Platform</c-navigation.nav-link>
+    </nav>
+    <p class="text-sm text-text-muted mt-6 mb-2">
         The segmented control wears the same pills, for buttons that switch what is already on screen
         rather than select a panel: it is a group, so every button stays in the tab order, and which
         one is chosen is client state bound to <c-code-inline>data-active</c-code-inline>.

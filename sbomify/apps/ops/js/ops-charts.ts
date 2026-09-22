@@ -8,6 +8,7 @@
  */
 
 import type { Chart, ChartConfiguration } from 'chart.js';
+import { defaultBrandColors } from '../../core/js/constants/colors';
 
 const charts = new WeakMap<HTMLCanvasElement, Chart>();
 
@@ -33,10 +34,18 @@ function readStrings(canvas: HTMLCanvasElement, attribute: string): string[] {
   }
 }
 
-function cssToken(name: string, fallback: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  if (!value) return fallback;
-  // Tokens are stored as space-separated channels, e.g. "37 41 63".
+/**
+ * Read a design-system token, falling back to the shared constant for it.
+ *
+ * The fallback is `defaultBrandColors` rather than a hex written here, so a
+ * chart rendered before the stylesheet lands still uses the one colour the rest
+ * of the app would have used. A private hex in this file could drift from both
+ * themes without anything noticing.
+ */
+function accentColor(): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim();
+  if (!value) return defaultBrandColors.accent;
+  // Some tokens are stored as space-separated channels, e.g. "37 41 63".
   return /^[\d\s.]+$/.test(value) ? `rgb(${value.replace(/\s+/g, ' ')})` : value;
 }
 
@@ -47,7 +56,7 @@ function shortDate(iso: string): string {
 }
 
 function signupsConfig(canvas: HTMLCanvasElement): ChartConfiguration {
-  const accent = cssToken('--color-primary', '#4263EB');
+  const accent = accentColor();
   return {
     type: 'line',
     data: {
@@ -77,7 +86,7 @@ function signupsConfig(canvas: HTMLCanvasElement): ChartConfiguration {
 }
 
 function plansConfig(canvas: HTMLCanvasElement): ChartConfiguration {
-  const accent = cssToken('--color-primary', '#4263EB');
+  const accent = accentColor();
   return {
     type: 'bar',
     data: {

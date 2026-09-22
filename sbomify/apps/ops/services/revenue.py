@@ -16,7 +16,13 @@ from decimal import Decimal
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.services.workspace_status import paying_workspaces
 
+from .cache import panel
+
 MONTHS_PER_YEAR = 12
+
+CACHE_TTL_SECONDS = 900
+"""Fifteen minutes. This walks every paying workspace, and it only moves when
+a subscription does."""
 
 
 @dataclass(frozen=True)
@@ -57,8 +63,7 @@ def _monthly_equivalent(plan: BillingPlan, billing_period: str) -> Decimal | Non
     return Decimal(plan.monthly_price)
 
 
-def recurring_revenue() -> RecurringRevenue:
-    """Monthly recurring revenue across every paying workspace."""
+def _build_recurring_revenue() -> RecurringRevenue:
     plans = {plan.key: plan for plan in BillingPlan.objects.all() if plan.key}
 
     mrr = Decimal("0")
@@ -80,3 +85,8 @@ def recurring_revenue() -> RecurringRevenue:
         priced_workspaces=priced,
         unpriced_workspaces=unpriced,
     )
+
+
+def recurring_revenue(*, refresh: bool = False) -> RecurringRevenue:
+    """Monthly recurring revenue across every paying workspace."""
+    return panel("revenue", CACHE_TTL_SECONDS, _build_recurring_revenue, refresh=refresh)

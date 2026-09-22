@@ -19,7 +19,10 @@ from django.utils import timezone
 
 from sbomify.apps.onboarding.models import OnboardingStatus
 
+from .cache import panel
 from .populations import people
+
+CACHE_TTL_SECONDS = 600
 
 
 @dataclass(frozen=True)
@@ -40,7 +43,7 @@ class ActivationStep:
     """Percentage of the same population that reached this step, 0 to 100."""
 
 
-def signups_by_day(days: int = 30) -> list[DailyCount]:
+def _build_signups_by_day(days: int) -> list[DailyCount]:
     """New people per day, with every day in the window present.
 
     Days with no signups are returned as zero rather than omitted. A chart
@@ -67,7 +70,7 @@ def signups_by_day(days: int = 30) -> list[DailyCount]:
     ]
 
 
-def activation_funnel() -> list[ActivationStep]:
+def _build_activation_funnel() -> list[ActivationStep]:
     """How far signups get, measured against the population that can progress.
 
     The denominator is people with an ``OnboardingStatus`` row, not every User
@@ -92,3 +95,13 @@ def activation_funnel() -> list[ActivationStep]:
         )
         for label, count in steps
     ]
+
+
+def signups_by_day(days: int = 30, *, refresh: bool = False) -> list[DailyCount]:
+    """New people per day, with every day in the window present."""
+    return panel(f"signups:{days}", CACHE_TTL_SECONDS, lambda: _build_signups_by_day(days), refresh=refresh)
+
+
+def activation_funnel(*, refresh: bool = False) -> list[ActivationStep]:
+    """How far signups get, measured against the population that can progress."""
+    return panel("activation", CACHE_TTL_SECONDS, _build_activation_funnel, refresh=refresh)
