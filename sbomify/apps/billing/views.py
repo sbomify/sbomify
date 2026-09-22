@@ -27,7 +27,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 
 from sbomify.apps.core.utils import get_client_ip
-from sbomify.apps.sboms.models import Product
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
@@ -488,61 +487,10 @@ class SelectPlanView(LoginRequiredMixin, View):
         team_key: str,
         stripe_pricing_data: dict[str, dict[str, Any]],
     ) -> HttpResponse:
-        plans_list = list(BillingPlan.objects.all())
-        order: dict[str, int] = {
-            BillingPlan.KEY_COMMUNITY: 0,
-            BillingPlan.KEY_BUSINESS: 1,
-            BillingPlan.KEY_ENTERPRISE: 2,
-        }
-        plans = sorted(plans_list, key=lambda p: order.get(p.key or "", 99))
+        from .services.plan_selection import build_plan_selection_context
 
-        # Count products and components per team. The Project layer was
-        # removed; the corresponding ``BillingPlan.max_projects`` quota
-        # (and its downgrade-guard branch) went with it in migration 0011.
-        from sbomify.apps.sboms.models import Component
-
-        product_count: int = Product.objects.filter(team=team).count()
-        component_count: int = Component.objects.filter(team=team).count()
-
-        billing_limits = team.billing_plan_limits or {}
-        current_plan_key = team.billing_plan or BillingPlan.KEY_COMMUNITY
-        is_subscribed = billing_limits.get("subscription_status") in ["active", "trialing"]
-
-        for plan in plans:
-            plan_key_str: str = plan.key or ""
-            plan.stripe_pricing = stripe_pricing_data.get(plan_key_str, {})  # type: ignore[attr-defined]
-            if plan.promo_message and "promo_message" not in plan.stripe_pricing:  # type: ignore[attr-defined]
-                plan.stripe_pricing["promo_message"] = plan.promo_message  # type: ignore[attr-defined]
-
-            plan_order = order.get(plan_key_str, 99)
-            current_plan_order = order.get(current_plan_key, 99)
-            plan.exceeds_downgrade_limits = False  # type: ignore[attr-defined]
-            plan.downgrade_exceeded_resources = []  # type: ignore[attr-defined]
-
-            if is_subscribed and plan_order < current_plan_order:
-                if plan.max_products is not None and product_count > plan.max_products:
-                    plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
-                    plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
-                        f"{product_count} products (limit: {plan.max_products})"
-                    )
-
-                if plan.max_components is not None and component_count > plan.max_components:
-                    plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
-                    plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
-                        f"{component_count} components (limit: {plan.max_components})"
-                    )
-
-        return render(
-            request,
-            "billing/select_plan.html.j2",
-            {
-                "plans": plans,
-                "team_key": team_key,
-                "team": team,
-                "product_count": product_count,
-                "component_count": component_count,
-            },
-        )
+        result = build_plan_selection_context(request, team, stripe_pricing_data)
+        return render(request, "billing/select_plan.html.j2", result.value)
 
 
 class BillingReturnView(LoginRequiredMixin, View):

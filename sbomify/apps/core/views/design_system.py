@@ -29,6 +29,8 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "file-upload", "label": "File upload", "group": "Controls"},
     {"id": "date-picker", "label": "Date picker", "group": "Controls"},
     {"id": "cards", "label": "Cards", "group": "Containers"},
+    {"id": "plan-cards", "label": "Plan cards", "group": "Containers"},
+    {"id": "workspace-cards", "label": "Workspace cards", "group": "Containers"},
     {"id": "collapsible", "label": "Collapsible card", "group": "Containers"},
     {"id": "accordion", "label": "Accordion", "group": "Containers"},
     {"id": "modals", "label": "Modals", "group": "Containers"},
@@ -69,6 +71,43 @@ class DesignSystemView(LoginRequiredMixin, View):
         if not settings.DEBUG:
             raise Http404
         context = {
+            "plan_card_demos": [
+                {
+                    "key": "community",
+                    "name": "Community",
+                    "description": "For public projects.",
+                    "current": True,
+                    "limits": [
+                        {"label": "member", "count": 1},
+                        {"label": "product", "count": 1},
+                        {"label": "component", "count": 5},
+                    ],
+                },
+                {
+                    "key": "business",
+                    "name": "Business",
+                    "description": "For teams sharing private artifacts.",
+                    "limits": [
+                        {"label": "member", "count": 5},
+                        {"label": "product", "count": None},
+                        {"label": "component", "count": None},
+                    ],
+                    "prices": [
+                        {"period": "monthly", "amount": 199, "unit": "month"},
+                        {"period": "annual", "amount": 1990, "unit": "year"},
+                    ],
+                },
+                {
+                    "key": "enterprise",
+                    "name": "Enterprise",
+                    "description": "For custom requirements.",
+                    "limits": [
+                        {"label": "member", "count": None},
+                        {"label": "product", "count": None},
+                        {"label": "component", "count": None},
+                    ],
+                },
+            ],
             "overview_demo_counts": {"total": 6, "critical": 1, "high": 2, "medium": 2, "low": 1, "other": 3},
             "overview_demo_sla": {"label": "3 days over", "overdue": True},
             "overview_demo_evidence": {"component_count": 3, "stale": 1, "missing_sboms": 1},

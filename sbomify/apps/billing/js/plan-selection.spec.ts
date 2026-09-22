@@ -20,28 +20,28 @@ describe('planSelection', () => {
     it('returns correct features for community plan', () => {
         const vm = planSelection(mockData);
         const features = vm.getFeatures('community');
-        expect(features).toContainEqual({ key: 'user-limit', label: '1 user (owner only)' });
+        expect(features).toContainEqual({ key: 'public-only', label: 'Public products and components' });
     });
 
     describe('getButtonText', () => {
-        it('returns "Current Plan" for current plan', () => {
+        it('returns "Current plan" for current plan', () => {
             const vm = planSelection(mockData);
-            expect(vm.getButtonText('community')).toBe('Current Plan');
+            expect(vm.getButtonText('community')).toBe('Current plan');
         });
 
-        it('returns "Contact Sales" for enterprise', () => {
+        it('returns "Contact sales" for enterprise', () => {
             const vm = planSelection(mockData);
-            expect(vm.getButtonText('enterprise')).toBe('Contact Sales');
+            expect(vm.getButtonText('enterprise')).toBe('Contact sales');
         });
 
-        it('returns "Switch to This Plan" for other plans when current plan exists', () => {
+        it('returns "Select plan" for other plans when current plan exists', () => {
             const vm = planSelection(mockData);
-            expect(vm.getButtonText('business')).toBe('Switch to This Plan');
+            expect(vm.getButtonText('business')).toBe('Select plan');
         });
 
-        it('returns "Get Started" when no current plan (corner case)', () => {
+        it('returns "Get started" when no current plan (corner case)', () => {
             const vm = planSelection({ ...mockData, currentPlan: '' });
-            expect(vm.getButtonText('business')).toBe('Get Started');
+            expect(vm.getButtonText('business')).toBe('Get started');
         });
     });
 });

@@ -719,6 +719,34 @@ first-of-type rule that drops the leading hairline reads the section's position
     </c-cards.inset>
     </c-cards.inset>
     </c-cards.card>
+    <h2 id="plan-cards" class="text-xl font-semibold text-text">Plan cards</h2>
+    <div class="flex flex-col gap-4"
+         x-data="planSelection({ currentPlan: 'community', teamKey: 'gallery', usage: { users: 1, products: 1, components: 5 }, csrfToken: '', enterpriseContactUrl: '#plan-cards' })">
+        <div class="flex">
+            <c-navigation.segmented aria-label="Preview billing period">
+            <c-navigation.segment ::data-active="billingPeriod === 'monthly'" ::aria-pressed="billingPeriod === 'monthly'" @click="billingPeriod = 'monthly'">Monthly</c-navigation.segment>
+            <c-navigation.segment ::data-active="billingPeriod === 'annual'" ::aria-pressed="billingPeriod === 'annual'" @click="billingPeriod = 'annual'">Annual</c-navigation.segment>
+            </c-navigation.segmented>
+        </div>
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {% for plan in plan_card_demos %}
+                <c-billing.plan-card :plan="plan">
+                <c-slot name="action"><c-buttons.secondary disabled class="w-full">Preview only</c-buttons.secondary></c-slot>
+                </c-billing.plan-card>
+            {% endfor %}
+        </div>
+    </div>
+    <h2 id="workspace-cards" class="text-xl font-semibold text-text">Workspace cards</h2>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <c-workspaces.card name="Example workspace" role="owner" member_count="4" invitation_count="0" workspace_key="example" current_key="example" default>
+        <c-buttons.secondary size="sm" href="#workspace-cards">Open workspace</c-buttons.secondary>
+        <c-buttons.secondary size="sm" href="#workspace-cards">Settings</c-buttons.secondary>
+        </c-workspaces.card>
+        <c-workspaces.card name="A workspace with a longer name that wraps naturally" role="member" member_count="12" invitation_count="2" workspace_key="second" current_key="example">
+        <c-buttons.secondary size="sm" href="#workspace-cards">Open workspace</c-buttons.secondary>
+        <c-buttons.secondary size="sm" href="#workspace-cards">Settings</c-buttons.secondary>
+        </c-workspaces.card>
+    </div>
     <h2 id="collapsible" class="text-xl font-semibold text-text">Collapsible card</h2>
     <p class="text-sm text-text-muted">
         The trigger is a real button, and the open state is an Alpine expression the page owns, so one
