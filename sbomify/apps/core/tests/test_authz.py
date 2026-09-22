@@ -436,7 +436,9 @@ def test_no_view_gates_on_the_cached_session_role():
     # and a template gate — ``current_team.role == 'owner'`` in
     # teams/team_settings.html.j2 — sat behind both holes until an audit found
     # it. A guardrail that covers one of the two dialects is not a guardrail.
-    pattern = re.compile(r"""current_team(?:\.get\(["']role["']\)|\[["']role["']\]|\.role\b)""")
+    pattern = re.compile(
+        r"""current_team(?:\.get\(["']role["']\)|\[["']role["']\]|\.role\b)"""
+    )
     exempt = {"teams/utils.py"}
 
     # Prose *about* the rule is not a violation of it. Docstrings here quote the

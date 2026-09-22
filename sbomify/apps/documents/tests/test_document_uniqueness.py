@@ -538,7 +538,8 @@ class TestOrphanedObjectLogging:
             Document,
             "save",
             side_effect=IntegrityError(
-                f'duplicate key value violates unique constraint "{DOCUMENT_UNIQUE_CONSTRAINT}"'
+                "duplicate key value violates unique constraint "
+                f'"{DOCUMENT_UNIQUE_CONSTRAINT}"'
             ),
         )
         client.force_login(sample_user)

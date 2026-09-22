@@ -130,7 +130,6 @@ class TestBuilderFactory:
         assert builder.entity == mock_entity
         assert builder.user == mock_user
 
-
 class TestBuilderBaseClasses:
     """Tests for builder base classes."""
 
@@ -689,9 +688,7 @@ class TestReleaseAggregateMembership:
 
         assert [artifact.sbom_id for artifact in members] == [sample_sbom.id]
 
-    def test_authorized_build_bypasses_the_public_cache(
-        self, sample_product, sample_component, sample_sbom, mocker, tmp_path
-    ):
+    def test_authorized_build_bypasses_the_public_cache(self, sample_product, sample_component, sample_sbom, mocker, tmp_path):
         from sbomify.apps.sboms.utils import get_release_sbom_package
 
         release = self._release_with_gated_member(sample_product, sample_component, sample_sbom)

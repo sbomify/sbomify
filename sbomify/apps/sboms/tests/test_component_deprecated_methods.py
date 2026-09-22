@@ -79,7 +79,9 @@ class TestComponentCanBeAccessedBy:
 
     def test_private_component_owner(self, sample_user, team_with_business_plan):
         """Test private component access for owner."""
-        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
+        Member.objects.get_or_create(
+            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
+        )
 
         component = Component.objects.create(
             name="Private Component",
@@ -116,7 +118,9 @@ class TestComponentCanBeAccessedBy:
 
     def test_gated_component_owner(self, sample_user, team_with_business_plan):
         """Test gated component access for owner."""
-        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
+        Member.objects.get_or_create(
+            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
+        )
 
         component = Component.objects.create(
             name="Gated Component",
@@ -127,7 +131,9 @@ class TestComponentCanBeAccessedBy:
 
         assert component.can_be_accessed_by(sample_user, team_with_business_plan) is True
 
-    def test_gated_component_guest_with_access(self, guest_user, team_with_business_plan, company_nda_document):
+    def test_gated_component_guest_with_access(
+        self, guest_user, team_with_business_plan, company_nda_document
+    ):
         """Test gated component access for guest with approved request and signed NDA."""
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
         access_request = AccessRequest.objects.create(
@@ -164,7 +170,9 @@ class TestComponentCanBeAccessedBy:
 
     def test_uses_component_team_if_not_provided(self, sample_user, team_with_business_plan):
         """Test that method uses component.team if team parameter is not provided."""
-        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
+        Member.objects.get_or_create(
+            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
+        )
 
         component = Component.objects.create(
             name="Private Component",
@@ -193,7 +201,9 @@ class TestComponentUserHasGatedAccess:
 
     def test_owner_has_gated_access(self, sample_user, team_with_business_plan):
         """Test that owner has gated access."""
-        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
+        Member.objects.get_or_create(
+            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
+        )
 
         component = Component.objects.create(
             name="Gated Component",
@@ -204,7 +214,9 @@ class TestComponentUserHasGatedAccess:
 
         assert component.user_has_gated_access(sample_user, team_with_business_plan) is True
 
-    def test_guest_with_approved_request(self, guest_user, team_with_business_plan, company_nda_document):
+    def test_guest_with_approved_request(
+        self, guest_user, team_with_business_plan, company_nda_document
+    ):
         """Test that guest with approved request and signed NDA has gated access."""
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
         access_request = AccessRequest.objects.create(
@@ -241,7 +253,9 @@ class TestComponentUserHasGatedAccess:
 
     def test_uses_component_team_if_not_provided(self, sample_user, team_with_business_plan):
         """Test that method uses component.team if team parameter is not provided."""
-        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
+        Member.objects.get_or_create(
+            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
+        )
 
         component = Component.objects.create(
             name="Gated Component",

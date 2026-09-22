@@ -160,7 +160,9 @@ class TestComponentIsGlobalInvariants:
 
         component.refresh_from_db()
         assert component.is_global is True
-        assert component.products.count() == 0, "Component.save() must detach all products when is_global flips to True"
+        assert component.products.count() == 0, (
+            "Component.save() must detach all products when is_global flips to True"
+        )
 
     def test_save_does_not_touch_products_when_not_global(self, two_teams):
         team_a, _ = two_teams
@@ -202,7 +204,9 @@ class TestComponentIsGlobalInvariants:
         component.is_global = False
         component.save()
         component.refresh_from_db()
-        assert component.products.count() == 0, "Demoting from is_global=True back to False must NOT re-attach products"
+        assert component.products.count() == 0, (
+            "Demoting from is_global=True back to False must NOT re-attach products"
+        )
 
     def test_queryset_update_bypasses_save_invariant(self, two_teams):
         """Foot-gun pin: ``Component.objects.filter(...).update(is_global=True)``
@@ -283,4 +287,6 @@ class TestBulkCreateEscapeHatch:
         )
         # Confirms the cross-tenant row was inserted — proving the guard
         # is bypassed and that any caller using bulk_create *must* pre-filter.
-        assert ProductComponent.objects.filter(product=product, component=component).exists()
+        assert ProductComponent.objects.filter(
+            product=product, component=component
+        ).exists()

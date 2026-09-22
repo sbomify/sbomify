@@ -74,7 +74,10 @@ class TestBaseTemplate:
         session["user_teams"] = user_teams
 
         # Set current team to the team we just created
-        session["current_team"] = {"key": team.key, **user_teams[team.key]}
+        session["current_team"] = {
+            "key": team.key,
+            **user_teams[team.key]
+        }
         session.save()
 
         response = client.get(reverse("core:dashboard"))

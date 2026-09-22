@@ -61,7 +61,9 @@ class TestReleaseDetailsPublicSnapshot:
         width: int,
     ) -> None:
         # A real versioned release, not the synthetic auto-managed `latest`.
-        release = trust_center_product.releases.exclude(name=LATEST_RELEASE_NAME).filter(is_prerelease=False).first()
+        release = (
+            trust_center_product.releases.exclude(name=LATEST_RELEASE_NAME).filter(is_prerelease=False).first()
+        )
 
         authenticated_page.goto(f"/public/product/{trust_center_product.id}/release/{release.id}/")
         authenticated_page.wait_for_load_state("networkidle")

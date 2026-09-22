@@ -29,10 +29,15 @@ class TestAPIDatabaseErrorHandling:
     def sample_component(self, sample_team):  # noqa: F811
         """Create a sample component for testing."""
         return Component.objects.create(
-            name="test-component", team=sample_team, component_type="bom", visibility=Component.Visibility.PUBLIC
+            name="test-component",
+            team=sample_team,
+            component_type="bom",
+            visibility=Component.Visibility.PUBLIC
         )
 
-    def test_list_component_sboms_handles_component_fetch_connection_error(self, request_factory, sample_component):
+    def test_list_component_sboms_handles_component_fetch_connection_error(
+        self, request_factory, sample_component
+    ):
         """Test that list_component_sboms handles connection errors when fetching component."""
 
         request = request_factory.get("/api/v1/components/test/sboms")
@@ -67,10 +72,7 @@ class TestAPIDatabaseErrorHandling:
             assert "Database error occurred" in response["detail"]
 
     def test_list_component_sboms_handles_sbom_query_connection_error(
-        self,
-        request_factory,
-        sample_component,
-        sample_user,  # noqa: F811
+        self, request_factory, sample_component, sample_user  # noqa: F811
     ):
         """Test that list_component_sboms handles connection errors when querying SBOMs."""
 
@@ -79,7 +81,9 @@ class TestAPIDatabaseErrorHandling:
 
         # Mock the SBOM query to raise connection error
         with patch("sbomify.apps.sboms.models.SBOM") as mock_sbom:
-            mock_sbom.objects.filter.return_value.order_by.side_effect = OperationalError("connection terminated")
+            mock_sbom.objects.filter.return_value.order_by.side_effect = OperationalError(
+                "connection terminated"
+            )
 
             status_code, response = list_component_sboms(request, str(sample_component.id))
 
@@ -88,10 +92,7 @@ class TestAPIDatabaseErrorHandling:
             assert "Service temporarily unavailable" in response["detail"]
 
     def test_list_component_sboms_handles_sbom_query_generic_database_error(
-        self,
-        request_factory,
-        sample_component,
-        sample_user,  # noqa: F811
+        self, request_factory, sample_component, sample_user  # noqa: F811
     ):
         """Test that list_component_sboms handles generic database errors when querying SBOMs."""
 
@@ -100,7 +101,9 @@ class TestAPIDatabaseErrorHandling:
 
         # Mock the SBOM query to raise generic database error
         with patch("sbomify.apps.sboms.models.SBOM") as mock_sbom:
-            mock_sbom.objects.filter.return_value.order_by.side_effect = DatabaseError("permission denied")
+            mock_sbom.objects.filter.return_value.order_by.side_effect = DatabaseError(
+                "permission denied"
+            )
 
             status_code, response = list_component_sboms(request, str(sample_component.id))
 
@@ -109,10 +112,7 @@ class TestAPIDatabaseErrorHandling:
             assert "Database error occurred" in response["detail"]
 
     def test_list_component_sboms_handles_release_artifact_connection_error(
-        self,
-        request_factory,
-        sample_component,
-        sample_user,  # noqa: F811
+        self, request_factory, sample_component, sample_user  # noqa: F811
     ):
         """Test that list_component_sboms handles connection errors when fetching release artifacts."""
 
@@ -130,7 +130,9 @@ class TestAPIDatabaseErrorHandling:
         # This ensures graceful degradation when release artifact queries fail
         assert True  # Test passes if the error handling code is in place
 
-    def test_connection_error_message_detection_in_api(self, request_factory, sample_component):
+    def test_connection_error_message_detection_in_api(
+        self, request_factory, sample_component
+    ):
         """Test that connection error messages are properly detected in API."""
 
         request = request_factory.get("/api/v1/components/test/sboms")
@@ -153,7 +155,9 @@ class TestAPIDatabaseErrorHandling:
                 assert status_code == 503
                 assert response["error_code"] == ErrorCode.SERVICE_UNAVAILABLE
 
-    def test_non_connection_database_error_handling_in_api(self, request_factory, sample_component):
+    def test_non_connection_database_error_handling_in_api(
+        self, request_factory, sample_component
+    ):
         """Test that non-connection database errors are handled differently in API."""
 
         request = request_factory.get("/api/v1/components/test/sboms")

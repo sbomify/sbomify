@@ -267,7 +267,8 @@ class TestPermissionConsistencyPatterns:
             # Tight equality (rather than `!= 403`) so a regression to 401 or any
             # other non-success status is caught instead of silently passing.
             assert response.status_code == 200, (
-                f"Endpoint {endpoint} must remain reachable without auth for public items (got {response.status_code})"
+                f"Endpoint {endpoint} must remain reachable without auth for public items "
+                f"(got {response.status_code})"
             )
 
         for endpoint in (reverse("api-1:list_products"), reverse("api-1:list_components")):

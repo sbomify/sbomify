@@ -275,7 +275,9 @@ class TestComponentMetadataToCycloneDX:
                 name="Test Supplier Corp",
                 url=["https://supplier.example.com"],
                 address="100 Supplier Street, City, Country",
-                contacts=[{"name": "Supplier Contact", "email": "supplier@example.com", "phone": "+1-555-0100"}],
+                contacts=[
+                    {"name": "Supplier Contact", "email": "supplier@example.com", "phone": "+1-555-0100"}
+                ],
             ),
             manufacturer=SupplierSchema(
                 name="Test Manufacturer Inc",
@@ -670,7 +672,9 @@ class TestSPDXTestFixtures:
         """Test SPDX SBOM with checksums for CISA compliance."""
         from .fixtures import create_spdx_test_sbom
 
-        sbom = create_spdx_test_sbom(checksums=[{"algorithm": "SHA256", "checksumValue": "abc123"}])
+        sbom = create_spdx_test_sbom(
+            checksums=[{"algorithm": "SHA256", "checksumValue": "abc123"}]
+        )
 
         package = sbom["packages"][0]
         assert "checksums" in package
@@ -706,7 +710,9 @@ class TestSPDXTestFixtures:
 
         # Check relationships include the dependency
         assert "relationships" in sbom
-        dep_relationships = [r for r in sbom["relationships"] if r["relationshipType"] == "DEPENDS_ON"]
+        dep_relationships = [
+            r for r in sbom["relationships"] if r["relationshipType"] == "DEPENDS_ON"
+        ]
         assert len(dep_relationships) == 1
 
     def test_contact_entity_to_spdx_supplier(self):
@@ -828,9 +834,7 @@ class TestSPDXTestFixtures:
             result = plugin.assess("test-sbom-id", Path(f.name))
 
         # All 7 NTIA elements should pass
-        assert result.summary.fail_count == 0, (
-            f"Failed findings: {[f.id for f in result.findings if f.status == 'fail']}"
-        )
+        assert result.summary.fail_count == 0, f"Failed findings: {[f.id for f in result.findings if f.status == 'fail']}"
         assert result.summary.pass_count == 7  # 7 NTIA minimum elements
 
     def test_spdx_cisa_fixture_passes_cisa_plugin(self, spdx_sbom_cisa_compliant):
@@ -855,9 +859,7 @@ class TestSPDXTestFixtures:
                 context=SBOMContext(signature_blob_key="signatures/test.sig", signature_type="cosign-bundle"),
             )
 
-        assert result.summary.fail_count == 0, (
-            f"Failed findings: {[f.id for f in result.findings if f.status == 'fail']}"
-        )
+        assert result.summary.fail_count == 0, f"Failed findings: {[f.id for f in result.findings if f.status == 'fail']}"
         assert result.summary.pass_count == 17  # every CISA 2026 data field
 
     def test_spdx_minimal_fixture_fails_ntia_plugin(self, spdx_sbom_minimal):

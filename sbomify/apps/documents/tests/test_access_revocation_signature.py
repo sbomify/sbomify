@@ -1,3 +1,4 @@
+
 import hashlib
 
 import pytest
@@ -18,7 +19,7 @@ def nda_document(team_with_business_plan):
     component = team_with_business_plan.get_or_create_company_wide_component()
     content = b"Test NDA Content"
     content_hash = hashlib.sha256(content).hexdigest()
-
+    
     document = Document.objects.create(
         name="Company NDA",
         component=component,
@@ -30,12 +31,11 @@ def nda_document(team_with_business_plan):
         source="manual_upload",
         version="1.0",
     )
-
+    
     team_with_business_plan.branding_info["company_nda_document_id"] = document.id
     team_with_business_plan.save()
-
+    
     return document
-
 
 @pytest.fixture
 def signed_access_request(team_with_business_plan, guest_user, nda_document, sample_user):
@@ -49,7 +49,7 @@ def signed_access_request(team_with_business_plan, guest_user, nda_document, sam
     )
     # Add guest member
     Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
-
+    
     # Sign NDA
     NDASignature.objects.create(
         access_request=request,
@@ -58,7 +58,6 @@ def signed_access_request(team_with_business_plan, guest_user, nda_document, sam
         signed_name="Guest User",
     )
     return request
-
 
 @pytest.mark.django_db
 class TestAccessRevocationSignature:
@@ -84,13 +83,13 @@ class TestAccessRevocationSignature:
                 "active_tab": "trust-center",
             },
         )
-
+        
         assert response.status_code == 302
-
+        
         # Verify request is revoked
         signed_access_request.refresh_from_db()
         assert signed_access_request.status == AccessRequest.Status.REVOKED
-
+        
         # Verify signature is superseded (preserved as history)
         signature = NDASignature.objects.get(id=signature_id)
         assert signature.superseded_at is not None
@@ -113,7 +112,7 @@ class TestAccessRevocationSignature:
             nda_content_hash=nda_document.content_hash,
             signed_name="Guest User",
         )
-
+        
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
@@ -126,10 +125,10 @@ class TestAccessRevocationSignature:
                 "active_tab": "trust-center",
             },
         )
-
+        
         request.refresh_from_db()
         assert request.status == AccessRequest.Status.REJECTED
-
+        
         # Verify signature is superseded (preserved as history)
         signature.refresh_from_db()
         assert signature.superseded_at is not None
@@ -151,17 +150,17 @@ class TestAccessRevocationSignature:
             nda_content_hash=nda_document.content_hash,
             signed_name="Guest User",
         )
-
+        
         # Guest logs in and requests access again
         authenticated_web_client.force_login(guest_user)
         url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
         response = authenticated_web_client.post(url, {})
-
+        
         assert response.status_code in [200, 302]
-
+        
         request.refresh_from_db()
         assert request.status == AccessRequest.Status.PENDING
-
+        
         # Verify residual signature was deleted
         signature.refresh_from_db()
         assert signature.superseded_at is not None
@@ -182,14 +181,14 @@ class TestAccessRevocationSignature:
             nda_content_hash=nda_document.content_hash,
             signed_name="Guest User",
         )
-
+        
         authenticated_web_client.force_login(guest_user)
         url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
         authenticated_web_client.post(url, {})
-
+        
         request.refresh_from_db()
         assert request.status == AccessRequest.Status.PENDING
-
+        
         signature.refresh_from_db()
         assert signature.superseded_at is not None
         assert not NDASignature.objects.live().filter(id=signature.id).exists()

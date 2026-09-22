@@ -14,7 +14,7 @@ from sbomify.apps.teams.models import Invitation, Team
 def dashboard_stats_teams(db):
     """Create teams with various subscription statuses for testing."""
     teams = []
-
+    
     # Team with active subscription
     team_active = Team.objects.create(
         name="Active Team",
@@ -26,7 +26,7 @@ def dashboard_stats_teams(db):
         },
     )
     teams.append(team_active)
-
+    
     # Team with trialing subscription
     team_trialing = Team.objects.create(
         name="Trialing Team",
@@ -38,7 +38,7 @@ def dashboard_stats_teams(db):
         },
     )
     teams.append(team_trialing)
-
+    
     # Team with past_due subscription
     team_past_due = Team.objects.create(
         name="Past Due Team",
@@ -50,7 +50,7 @@ def dashboard_stats_teams(db):
         },
     )
     teams.append(team_past_due)
-
+    
     # Team with canceled subscription
     team_canceled = Team.objects.create(
         name="Canceled Team",
@@ -62,7 +62,7 @@ def dashboard_stats_teams(db):
         },
     )
     teams.append(team_canceled)
-
+    
     # Team with no billing (community)
     team_community = Team.objects.create(
         name="Community Team",
@@ -70,9 +70,9 @@ def dashboard_stats_teams(db):
         billing_plan_limits=None,
     )
     teams.append(team_community)
-
+    
     yield teams
-
+    
     # Cleanup
     for team in teams:
         team.delete()
@@ -132,7 +132,7 @@ def dashboard_stats_invitations(db, dashboard_stats_teams):
     """Create invitations for testing pending/expired metrics."""
     now = timezone.now()
     team = dashboard_stats_teams[0]
-
+    
     # Pending invitation (expires in future)
     pending_invitation = Invitation.objects.create(
         team=team,
@@ -140,7 +140,7 @@ def dashboard_stats_invitations(db, dashboard_stats_teams):
         role="admin",
         expires_at=now + timedelta(days=7),
     )
-
+    
     # Expired invitation (expired in past)
     expired_invitation = Invitation.objects.create(
         team=team,
@@ -148,12 +148,12 @@ def dashboard_stats_invitations(db, dashboard_stats_teams):
         role="admin",
         expires_at=now - timedelta(days=1),
     )
-
+    
     yield {
         "pending": pending_invitation,
         "expired": expired_invitation,
     }
-
+    
     # Cleanup
     pending_invitation.delete()
     expired_invitation.delete()
@@ -162,132 +162,122 @@ def dashboard_stats_invitations(db, dashboard_stats_teams):
 @pytest.mark.django_db
 class TestDashboardStats:
     """Tests for dashboard statistics."""
-
+    
     def test_teams_active_only_counts_active_subscriptions(self, dashboard_stats_teams):
         """Test that teams_active only counts teams with subscription_status='active'."""
         # Clear cache to ensure fresh stats
         from django.core.cache import cache
-
         cache.delete("admin_dashboard_stats")
-
+        
         stats = admin_site.get_dashboard_stats()
-
+        
         # Should only count the one team with "active" status
         assert stats["teams_active"] == 1
-
+    
     def test_teams_trialing_only_counts_trialing_subscriptions(self, dashboard_stats_teams):
         """Test that teams_trialing only counts teams with subscription_status='trialing'."""
         from django.core.cache import cache
-
         cache.delete("admin_dashboard_stats")
-
+        
         stats = admin_site.get_dashboard_stats()
-
+        
         # Should only count the one team with "trialing" status
         assert stats["teams_trialing"] == 1
-
+    
     def test_teams_past_due_only_counts_past_due_subscriptions(self, dashboard_stats_teams):
         """Test that teams_past_due only counts teams with subscription_status='past_due'."""
         from django.core.cache import cache
-
         cache.delete("admin_dashboard_stats")
-
+        
         stats = admin_site.get_dashboard_stats()
-
+        
         # Should only count the one team with "past_due" status
         assert stats["teams_past_due"] == 1
-
+    
     def test_teams_canceled_only_counts_canceled_subscriptions(self, dashboard_stats_teams):
         """Test that teams_canceled only counts teams with subscription_status='canceled'."""
         from django.core.cache import cache
-
         cache.delete("admin_dashboard_stats")
-
+        
         stats = admin_site.get_dashboard_stats()
-
+        
         # Should only count the one team with "canceled" status
         assert stats["teams_canceled"] == 1
-
+    
     def test_total_teams_counts_all_teams(self, dashboard_stats_teams):
         """Test that total teams count includes all teams."""
         from django.core.cache import cache
-
         cache.delete("admin_dashboard_stats")
-
+        
         stats = admin_site.get_dashboard_stats()
-
+        
         # Should count all 5 teams
         assert stats["teams"] == 5
-
+    
     def test_products_30d_only_counts_recent_products(self, dashboard_stats_content):
         """Test that products_30d only counts products created in last 30 days."""
         from django.core.cache import cache
-
         cache.delete("admin_dashboard_stats")
-
+        
         stats = admin_site.get_dashboard_stats()
-
+        
         # Should only count the recent product
         assert stats["products_30d"] == 1
         # Total products should be 2
         assert stats["products"] == 2
-
+    
     def test_components_30d_only_counts_recent_components(self, dashboard_stats_content):
         """Test that components_30d only counts components created in last 30 days."""
         from django.core.cache import cache
-
         cache.delete("admin_dashboard_stats")
-
+        
         stats = admin_site.get_dashboard_stats()
-
+        
         # Should only count the recent component
         assert stats["components_30d"] == 1
         # Total components should be 2
         assert stats["components"] == 2
-
+    
     def test_pending_invitations_only_counts_non_expired(self, dashboard_stats_invitations):
         """Test that pending_invitations only counts invitations that haven't expired."""
         from django.core.cache import cache
-
         cache.delete("admin_dashboard_stats")
-
+        
         stats = admin_site.get_dashboard_stats()
-
+        
         # Should only count the pending invitation
         assert stats["pending_invitations"] == 1
-
+    
     def test_expired_invitations_only_counts_expired(self, dashboard_stats_invitations):
         """Test that expired_invitations only counts invitations that have expired."""
         from django.core.cache import cache
-
         cache.delete("admin_dashboard_stats")
-
+        
         stats = admin_site.get_dashboard_stats()
-
+        
         # Should only count the expired invitation
         assert stats["expired_invitations"] == 1
-
+    
     def test_stats_are_cached(self, dashboard_stats_teams):
         """Test that stats are cached after first call."""
         from django.core.cache import cache
-
         cache.delete("admin_dashboard_stats")
-
+        
         # First call should populate cache
         stats1 = admin_site.get_dashboard_stats()
-
+        
         # Create a new team
         new_team = Team.objects.create(
             name="New Team",
             billing_plan="business",
             billing_plan_limits={"subscription_status": "active"},
         )
-
+        
         # Second call should return cached results
         stats2 = admin_site.get_dashboard_stats()
-
+        
         # Stats should be the same (cached)
         assert stats1["teams_active"] == stats2["teams_active"]
-
+        
         # Cleanup
         new_team.delete()

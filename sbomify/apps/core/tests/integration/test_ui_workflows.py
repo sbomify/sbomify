@@ -26,7 +26,9 @@ class TestUIWorkflows:
         team.save(update_fields=["has_selected_billing_plan"])
 
         # Setup billing plan
-        BillingPlan.objects.create(key="stats_plan", name="Stats Plan", max_components=10, max_products=10)
+        BillingPlan.objects.create(
+            key="stats_plan", name="Stats Plan", max_components=10, max_products=10
+        )
         team.billing_plan = "stats_plan"
         team.save()
 
@@ -56,7 +58,9 @@ class TestUIWorkflows:
         team = sample_team_with_owner_member.team
 
         # Setup billing plan
-        BillingPlan.objects.create(key="ui_workflow_plan", name="UI Workflow Plan", max_components=10, max_products=10)
+        BillingPlan.objects.create(
+            key="ui_workflow_plan", name="UI Workflow Plan", max_components=10, max_products=10
+        )
         team.billing_plan = "ui_workflow_plan"
         team.save()
 
@@ -104,7 +108,9 @@ class TestUIWorkflows:
         team = sample_team_with_owner_member.team
 
         # Setup billing plan
-        BillingPlan.objects.create(key="ui_workflow_plan", name="UI Workflow Plan", max_components=10, max_products=10)
+        BillingPlan.objects.create(
+            key="ui_workflow_plan", name="UI Workflow Plan", max_components=10, max_products=10
+        )
         team.billing_plan = "ui_workflow_plan"
         team.save()
 

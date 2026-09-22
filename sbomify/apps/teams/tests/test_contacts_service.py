@@ -128,7 +128,9 @@ class TestGetManufacturer:
         # Create secondary FIRST to prove insertion order doesn't decide
         secondary = _make_profile(team, name="Aaa Secondary")
         secondary_mfr = _make_manufacturer(secondary, "Secondary Mfr")
-        default_profile = ContactProfile.objects.create(team=team, name="Default Profile", is_default=True)
+        default_profile = ContactProfile.objects.create(
+            team=team, name="Default Profile", is_default=True
+        )
         default_mfr = _make_manufacturer(default_profile, "Default Mfr")
 
         assert get_manufacturer(team) == default_mfr

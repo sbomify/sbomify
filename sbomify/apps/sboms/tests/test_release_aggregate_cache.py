@@ -45,10 +45,7 @@ def _public_release(team, s3_mock, *, member_names=("alpha", "beta")) -> Release
 @pytest.mark.django_db
 class TestAggregateCache:
     def test_cache_hit_serves_without_refetching_members(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
         team = team_with_business_plan
         release = _public_release(team, s3_sboms_mock)
@@ -69,10 +66,7 @@ class TestAggregateCache:
         assert first == second
 
     def test_changed_artifact_set_busts_cache(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
         team = team_with_business_plan
         release = _public_release(team, s3_sboms_mock)
@@ -93,10 +87,7 @@ class TestAggregateCache:
         assert b"gamma" in rebuilt
 
     def test_member_visibility_change_busts_cache(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
         """A member flipping PUBLIC->PRIVATE drops out of a public aggregate, so
         the cache key MUST change — otherwise the stale doc would keep exposing a
@@ -121,10 +112,7 @@ class TestAggregateCache:
         assert rebuilt != first
 
     def test_product_rename_busts_cache(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
         """The aggregate embeds the product/release name, so a rename (same
         artifact set) must bust the cache and rebuild — not serve the old name.
@@ -144,10 +132,7 @@ class TestAggregateCache:
         assert b"Renamed Product" in rebuilt
 
     def test_private_member_change_does_not_bust_cache(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
         """A PRIVATE member never appears in a public aggregate, so changing it
         must NOT bust the public cache — only the included (public) members do.
@@ -175,10 +160,7 @@ class TestAggregateCache:
         assert "alpha.json" not in s3_sboms_mock.get_calls, "should have been a cache hit"
 
     def test_private_product_is_not_cached(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
         team = team_with_business_plan
         release = _public_release(team, s3_sboms_mock)
@@ -191,10 +173,7 @@ class TestAggregateCache:
         assert not [k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")]
 
     def test_incomplete_build_is_not_cached(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
         """If a member fetch fails (transient S3 error -> member skipped), the
         partial aggregate must NOT be cached — otherwise the incomplete document
@@ -208,15 +187,12 @@ class TestAggregateCache:
 
         get_release_sbom_package(release, tmp_path, output_format="cyclonedx")
 
-        assert not [k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")], (
-            "an incomplete build (skipped member) must not be cached"
-        )
+        assert not [
+            k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")
+        ], "an incomplete build (skipped member) must not be cached"
 
     def test_malicious_names_cannot_escape_target_folder(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
         """Product/release names are user-controlled; the built file must stay a
         basename inside target_folder even if a name contains path separators.
@@ -232,11 +208,7 @@ class TestAggregateCache:
         assert path.resolve().parent == tmp_path.resolve(), "build must not escape target_folder"
 
     def test_spdx_builder_no_redundant_per_artifact_sbom_get(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,
-        mocker,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock, mocker  # noqa: F811
     ):
         team = team_with_business_plan
         release = _public_release(team, s3_sboms_mock, member_names=("one", "two", "three"))
@@ -248,10 +220,7 @@ class TestAggregateCache:
         assert get_spy.call_count == 0
 
     def test_gc_preserves_other_formats(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
         """GC scopes to the format+version prefix, so busting cyclonedx must not
         delete the still-valid spdx aggregate (or vice versa)."""
@@ -272,11 +241,7 @@ class TestAggregateCache:
         assert spdx_after == spdx_before, "the spdx aggregate must survive a cyclonedx bust"
 
     def test_gc_is_best_effort(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,
-        mocker,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock, mocker  # noqa: F811
     ):
         """A delete failure during GC must never fail the download — the freshly
         built aggregate is still served."""
@@ -291,10 +256,7 @@ class TestAggregateCache:
         assert b"gamma" in rebuilt, "download must succeed even when GC delete fails"
 
     def test_parallel_member_fetch_includes_every_member(
-        self,
-        tmp_path,
-        team_with_business_plan,
-        s3_sboms_mock,  # noqa: F811
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
         """Members are fetched concurrently; every one must land in the aggregate
         exactly once (the parallel prefetch must not drop or duplicate members)."""

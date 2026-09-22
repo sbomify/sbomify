@@ -25,7 +25,9 @@ def other(db):
 @pytest.fixture
 def two_hatted_user(db, django_user_model, home, other):
     """Owner of one workspace, ordinary member of another."""
-    user = django_user_model.objects.create_user(username="twohats", email="twohats@test.com", password="password")
+    user = django_user_model.objects.create_user(
+        username="twohats", email="twohats@test.com", password="password"
+    )
     Member.objects.create(user=user, team=home, role="owner", is_default_team=True)
     Member.objects.create(user=user, team=other, role="member", is_default_team=False)
     return user
@@ -131,9 +133,7 @@ def test_a_member_cannot_delete_a_workspace_invitation(client, django_user_model
     Member.objects.create(user=member_user, team=home, role="member", is_default_team=True)
 
     invitation = Invitation.objects.create(
-        team=home,
-        email="incoming-owner@example.com",
-        role="owner",
+        team=home, email="incoming-owner@example.com", role="owner",
         expires_at=timezone.now() + timedelta(days=7),
     )
 

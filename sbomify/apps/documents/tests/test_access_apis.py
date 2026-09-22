@@ -273,6 +273,49 @@ class TestRevokeAccessRequestAPI:
         member = Member.objects.filter(team=team_with_business_plan, user=guest_user).first()
         assert member is None
 
+    def test_revoking_a_request_that_is_not_approved_is_a_400(
+        self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user
+    ):
+        """The handler's own 400, not a 500 from an undeclared status.
+
+        ninja validates the status code a handler returns against the
+        ``response`` map on the decorator. 400 was missing there, so the
+        "not approved" branch raised ConfigError and the caller saw an
+        opaque 500 with no detail.
+        """
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
+
+        client, access_token = authenticated_api_client
+        client.force_login(sample_user)
+
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        url = reverse("api-1:revoke_access_request", kwargs={"request_id": pending_access_request.id})
+
+        response = client.post(url, {}, content_type="application/json", **headers)
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Access request is not approved"
+
+        pending_access_request.refresh_from_db()
+        assert pending_access_request.status == AccessRequest.Status.PENDING
+
+    def test_rejecting_a_request_that_is_not_pending_is_a_400(
+        self, authenticated_api_client, team_with_business_plan, approved_access_request, sample_user
+    ):
+        """Same undeclared-status bug on the reject endpoint."""
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
+
+        client, access_token = authenticated_api_client
+        client.force_login(sample_user)
+
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        url = reverse("api-1:reject_access_request", kwargs={"request_id": approved_access_request.id})
+
+        response = client.post(url, {}, content_type="application/json", **headers)
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Access request is not pending"
+
 
 @pytest.mark.django_db
 class TestSignNDAAPI:

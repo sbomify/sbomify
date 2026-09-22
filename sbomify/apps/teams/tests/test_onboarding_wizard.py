@@ -336,6 +336,7 @@ class TestOnboardingWizard:
         # passed while exercising nothing.
         assert entity.email == "jane@example.com"
 
+
     def test_complete_step_shows_summary(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:

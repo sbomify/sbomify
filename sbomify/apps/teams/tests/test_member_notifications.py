@@ -13,7 +13,9 @@ def team(db):
 
 
 def _member(django_user_model, team, username, role):
-    user = django_user_model.objects.create_user(username=username, email=f"{username}@test.com", password="password")
+    user = django_user_model.objects.create_user(
+        username=username, email=f"{username}@test.com", password="password"
+    )
     Member.objects.create(user=user, team=team, role=role)
     return user
 

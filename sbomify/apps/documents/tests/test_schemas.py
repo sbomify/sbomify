@@ -133,16 +133,9 @@ class TestDocumentResponseSchema:
 
         errors = exc_info.value.errors()
         required_fields = [
-            "id",
-            "name",
-            "version",
-            "document_filename",
-            "created_at",
-            "component_id",
-            "document_type",
-            "description",
-            "content_type",
-            "source_display",
+            "id", "name", "version", "document_filename", "created_at",
+            "component_id", "document_type", "description", "content_type",
+            "source_display"
         ]
 
         error_fields = [error["loc"][0] for error in errors]

@@ -2,6 +2,7 @@
 Test cases for the external reference functionality in sboms/utils.py.
 """
 
+
 import pytest
 
 from sbomify.apps.core.models import Component, Product
@@ -14,7 +15,10 @@ from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F
 @pytest.fixture
 def sample_product(sample_team_with_owner_member):  # noqa: F811
     """Create a sample product for testing."""
-    product = Product.objects.create(name="Test Product", team=sample_team_with_owner_member.team)
+    product = Product.objects.create(
+        name="Test Product",
+        team=sample_team_with_owner_member.team
+    )
     yield product
     product.delete()
 
@@ -26,7 +30,7 @@ def sample_doc_component(sample_team_with_owner_member):  # noqa: F811
         name="Test Document Component",
         team=sample_team_with_owner_member.team,
         component_type="document",
-        is_public=True,
+        is_public=True
     )
     yield component
     component.delete()
@@ -58,7 +62,8 @@ class TestExternalReferenceUtils:
 
         for link_type, expected_category in test_cases:
             result = _get_spdx_category_for_product_link(link_type)
-            assert result == expected_category, f"Link type {link_type} should map to {expected_category}"
+            assert result == expected_category, \
+                f"Link type {link_type} should map to {expected_category}"
 
     def test_get_spdx_type_for_product_link(self):
         """Test SPDX type mapping for product links."""
@@ -82,7 +87,8 @@ class TestExternalReferenceUtils:
 
         for link_type, expected_type in test_cases:
             result = _get_spdx_type_for_product_link(link_type)
-            assert result == expected_type, f"Link type {link_type} should map to {expected_type}"
+            assert result == expected_type, \
+                f"Link type {link_type} should map to {expected_type}"
 
     def test_create_product_spdx_external_references_with_links(self, sample_product):
         """Test creating SPDX external references from product links."""
@@ -93,9 +99,13 @@ class TestExternalReferenceUtils:
             product=sample_product,
             link_type="security",
             url="https://example.com/security",
-            description="Security contact",
+            description="Security contact"
         )
-        ProductLink.objects.create(product=sample_product, link_type="download", url="https://example.com/download")
+        ProductLink.objects.create(
+            product=sample_product,
+            link_type="download",
+            url="https://example.com/download"
+        )
 
         external_refs = create_product_spdx_external_references(sample_product, user=None)
 
@@ -119,7 +129,6 @@ class TestExternalReferenceUtils:
 
         external_refs = create_product_spdx_external_references(sample_product, user=None)
         assert len(external_refs) == 0
-
 
 def test_every_document_type_resolves_to_a_real_cyclonedx_type():
     """The emitted CycloneDX type comes from the model property, and only from it.

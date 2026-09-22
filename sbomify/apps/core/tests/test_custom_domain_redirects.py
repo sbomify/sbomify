@@ -88,7 +88,10 @@ class TestPublicPagesOnMainDomain:
     def test_workspace_redirects_to_custom_domain(self, client, custom_domain_team):
         """Test that workspace page redirects to custom domain."""
         workspace_key = custom_domain_team.key
-        response = client.get(f"/public/workspace/{workspace_key}/", HTTP_HOST="app.sbomify.com")
+        response = client.get(
+            f"/public/workspace/{workspace_key}/",
+            HTTP_HOST="app.sbomify.com"
+        )
 
         # Should redirect to custom domain
         assert response.status_code == 302
@@ -97,7 +100,10 @@ class TestPublicPagesOnMainDomain:
     def test_product_redirects_to_custom_domain(self, client, product_with_custom_domain):
         """Test that product page redirects to custom domain."""
         product_id = product_with_custom_domain.id
-        response = client.get(f"/public/product/{product_id}/", HTTP_HOST="app.sbomify.com")
+        response = client.get(
+            f"/public/product/{product_id}/",
+            HTTP_HOST="app.sbomify.com"
+        )
 
         # Should redirect to custom domain with slug-based URL
         assert response.status_code == 302
@@ -107,7 +113,10 @@ class TestPublicPagesOnMainDomain:
     def test_no_redirect_without_custom_domain(self, client, product_without_custom_domain):
         """Test that products without custom domains work normally."""
         product_id = product_without_custom_domain.id
-        response = client.get(f"/public/product/{product_id}/", HTTP_HOST="app.sbomify.com")
+        response = client.get(
+            f"/public/product/{product_id}/",
+            HTTP_HOST="app.sbomify.com"
+        )
 
         # Should serve the page (no custom domain to redirect to)
         assert response.status_code == 200
@@ -115,7 +124,10 @@ class TestPublicPagesOnMainDomain:
     def test_works_on_custom_domain(self, client, product_with_custom_domain):
         """Test that clean URLs work on custom domain."""
         product_id = product_with_custom_domain.id
-        response = client.get(f"/product/{product_id}/", HTTP_HOST="trust.example.com")
+        response = client.get(
+            f"/product/{product_id}/",
+            HTTP_HOST="trust.example.com"
+        )
 
         # Should serve the page (already on custom domain)
         assert response.status_code == 200
@@ -136,7 +148,10 @@ class TestPublicPagesOnMainDomain:
             is_public=True,
         )
 
-        response = client.get(f"/public/product/{product.id}/", HTTP_HOST="app.sbomify.com")
+        response = client.get(
+            f"/public/product/{product.id}/",
+            HTTP_HOST="app.sbomify.com"
+        )
 
         # Should work normally
         assert response.status_code == 200
@@ -148,7 +163,10 @@ class TestPublicURLsOnCustomDomain:
 
     def test_public_workspace_redirects_to_clean_url_on_custom_domain(self, client, custom_domain_team):
         """Test that /public/workspace/* redirects to / on custom domain."""
-        response = client.get(f"/public/workspace/{custom_domain_team.key}/", HTTP_HOST="trust.example.com")
+        response = client.get(
+            f"/public/workspace/{custom_domain_team.key}/",
+            HTTP_HOST="trust.example.com"
+        )
 
         # Should redirect to clean URL (/)
         assert response.status_code == 302
@@ -157,7 +175,10 @@ class TestPublicURLsOnCustomDomain:
     def test_public_product_redirects_to_clean_url_on_custom_domain(self, client, product_with_custom_domain):
         """Test that /public/product/* redirects to /product/slug/ on custom domain."""
         product_id = product_with_custom_domain.id
-        response = client.get(f"/public/product/{product_id}/", HTTP_HOST="trust.example.com")
+        response = client.get(
+            f"/public/product/{product_id}/",
+            HTTP_HOST="trust.example.com"
+        )
 
         # Should redirect to clean URL (/product/slug/)
         assert response.status_code == 302
@@ -168,7 +189,10 @@ class TestPublicURLsOnCustomDomain:
     def test_main_domain_public_urls_redirect(self, client, product_with_custom_domain):
         """Test that /public/* URLs on main domain redirect to custom domain."""
         product_id = product_with_custom_domain.id
-        response = client.get(f"/public/product/{product_id}/", HTTP_HOST="app.sbomify.com")
+        response = client.get(
+            f"/public/product/{product_id}/",
+            HTTP_HOST="app.sbomify.com"
+        )
 
         # Should redirect to custom domain with clean URL
         assert response.status_code == 302
@@ -183,7 +207,10 @@ class TestPrivatePagesOnCustomDomain:
 
     def test_dashboard_not_accessible_on_custom_domain(self, client, custom_domain_team):
         """Test that dashboard is not accessible on custom domain."""
-        response = client.get("/dashboard", HTTP_HOST="trust.example.com")
+        response = client.get(
+            "/dashboard",
+            HTTP_HOST="trust.example.com"
+        )
 
         # Custom domain should not serve private pages
         assert response.status_code in [302, 404]
@@ -195,7 +222,10 @@ class TestPrivatePagesOnCustomDomain:
         client.login(username="testuser", password="testpass")
 
         product_id = product_with_custom_domain.id
-        response = client.get(f"/product/{product_id}/", HTTP_HOST="trust.example.com")
+        response = client.get(
+            f"/product/{product_id}/",
+            HTTP_HOST="trust.example.com"
+        )
 
         # Should show public content even when authenticated
         assert response.status_code == 200

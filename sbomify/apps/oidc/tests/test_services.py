@@ -125,7 +125,8 @@ class TestProvision:
 
         membership = Member.objects.get(team=component.team, user=bot_user)
         assert membership.role == "bot", (
-            f"Bot user retained elevated role={membership.role!r}; update_or_create must force role back to 'bot'."
+            f"Bot user retained elevated role={membership.role!r}; "
+            "update_or_create must force role back to 'bot'."
         )
 
     @pytest.mark.django_db

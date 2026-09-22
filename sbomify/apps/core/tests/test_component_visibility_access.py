@@ -17,14 +17,12 @@ def member_user(django_user_model):
         username="member", email="member@example.com", password="password", first_name="Member", last_name="User"
     )
 
-
 @pytest.fixture
 def owner_user(django_user_model):
     """Create an owner user."""
     return django_user_model.objects.create_user(
         username="owner", email="owner@example.com", password="password", first_name="Owner", last_name="User"
     )
-
 
 @pytest.fixture
 def public_component(team_with_business_plan):
@@ -36,7 +34,6 @@ def public_component(team_with_business_plan):
         visibility=Component.Visibility.PUBLIC,
     )
 
-
 @pytest.fixture
 def private_component(team_with_business_plan):
     """Create a private component."""
@@ -46,7 +43,6 @@ def private_component(team_with_business_plan):
         component_type=Component.ComponentType.BOM,
         visibility=Component.Visibility.PRIVATE,
     )
-
 
 @pytest.fixture
 def gated_component(team_with_business_plan):
@@ -58,13 +54,12 @@ def gated_component(team_with_business_plan):
         visibility=Component.Visibility.GATED,
     )
 
-
 @pytest.fixture
 def gated_component_with_nda(team_with_business_plan):
     """Create a gated component that requires NDA."""
     # Get or create company-wide component for NDA
     component = team_with_business_plan.get_or_create_company_wide_component()
-
+    
     # Create NDA document
     content = b"Company NDA Content"
     content_hash = hashlib.sha256(content).hexdigest()
@@ -89,7 +84,6 @@ def gated_component_with_nda(team_with_business_plan):
         component_type=Component.ComponentType.BOM,
         visibility=Component.Visibility.GATED,
     )
-
 
 @pytest.mark.django_db
 class TestComponentAccessMethods:
@@ -121,10 +115,12 @@ class TestComponentAccessMethods:
         assert private_component.can_be_accessed_by(owner_user) is True
         assert private_component.can_be_accessed_by(member_user) is True
 
-    def test_can_be_accessed_by_gated(self, gated_component, team_with_business_plan, owner_user, guest_user):
+    def test_can_be_accessed_by_gated(
+        self, gated_component, team_with_business_plan, owner_user, guest_user
+    ):
         """Gated components check for guest access or owner permissions."""
         assert gated_component.can_be_accessed_by(None) is False
-        assert gated_component.can_be_accessed_by(guest_user) is False  # Not member, no request
+        assert gated_component.can_be_accessed_by(guest_user) is False # Not member, no request
 
         # Add as owner
         Member.objects.create(team=team_with_business_plan, user=owner_user, role="owner")
@@ -133,20 +129,26 @@ class TestComponentAccessMethods:
         # Add guest as guest member
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
         assert gated_component.can_be_accessed_by(guest_user) is True
-
-    def test_can_be_accessed_by_gated_with_approved_request(self, gated_component, team_with_business_plan, guest_user):
+    
+    def test_can_be_accessed_by_gated_with_approved_request(
+        self, gated_component, team_with_business_plan, guest_user
+    ):
         """Gated component accessible via approved AccessRequest."""
         AccessRequest.objects.create(
-            team=team_with_business_plan, user=guest_user, status=AccessRequest.Status.APPROVED
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.APPROVED
         )
         # Even if not a member yet (though typically they become guest member on approval)
         assert gated_component.can_be_accessed_by(guest_user) is True
 
-    def test_user_has_gated_access_check(self, gated_component, team_with_business_plan, owner_user, guest_user):
+    def test_user_has_gated_access_check(
+        self, gated_component, team_with_business_plan, owner_user, guest_user
+    ):
         """Test specific user_has_gated_access logic."""
         # Unauthenticated
         assert gated_component.user_has_gated_access(None) is False
-
+        
         # User with no relation
         assert gated_component.user_has_gated_access(guest_user) is False
 
@@ -154,11 +156,13 @@ class TestComponentAccessMethods:
         Member.objects.create(team=team_with_business_plan, user=owner_user, role="owner")
         assert gated_component.user_has_gated_access(owner_user) is True
 
-    def test_user_has_gated_access_needs_nda(self, gated_component_with_nda, team_with_business_plan, guest_user):
+    def test_user_has_gated_access_needs_nda(
+        self, gated_component_with_nda, team_with_business_plan, guest_user
+    ):
         """Test gated access when NDA is required."""
         # User is guest member (implicit access usually)
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
-
+        
         # Without signature -> False
         assert gated_component_with_nda.user_has_gated_access(guest_user) is False
 
@@ -166,7 +170,9 @@ class TestComponentAccessMethods:
         # Need to create signature
         # Logic: user_has_signed_current_nda checks AccessRequest with signature
         access_request = AccessRequest.objects.create(
-            team=team_with_business_plan, user=guest_user, status=AccessRequest.Status.APPROVED
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.APPROVED
         )
         nda_doc = Document.objects.get(id=team_with_business_plan.branding_info["company_nda_document_id"])
         NDASignature.objects.create(
@@ -174,7 +180,8 @@ class TestComponentAccessMethods:
             nda_document=nda_doc,
             nda_content_hash=nda_doc.content_hash,
             signed_name="Test User",
-            ip_address="127.0.0.1",
+            ip_address="127.0.0.1"
         )
-
+        
         assert gated_component_with_nda.user_has_gated_access(guest_user) is True
+
