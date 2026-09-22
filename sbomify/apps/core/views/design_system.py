@@ -24,6 +24,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "forms", "label": "Form controls", "group": "Controls"},
     {"id": "choice-group", "label": "Choice group", "group": "Controls"},
     {"id": "search", "label": "Search input", "group": "Controls"},
+    {"id": "navigation-search", "label": "Navigation search", "group": "Controls"},
     {"id": "file-upload", "label": "File upload", "group": "Controls"},
     {"id": "date-picker", "label": "Date picker", "group": "Controls"},
     {"id": "cards", "label": "Cards", "group": "Containers"},

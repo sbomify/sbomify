@@ -7,7 +7,6 @@ import { initThemeManager } from './theme-manager';
 initThemeManager();
 
 import './layout-interactions';
-import './navbar-search';
 import './notifications-modal';
 
 // Shared Chart.js setup (makes window.Chart available)

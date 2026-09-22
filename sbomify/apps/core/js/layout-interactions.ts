@@ -225,30 +225,11 @@ function focusFirstInput(modal: HTMLElement): void {
   }
 }
 
-/**
- * Initialize Cmd+K / Ctrl+K keyboard shortcut to focus search
- */
-function initializeSearchShortcut() {
-  document.addEventListener('keydown', (e) => {
-    // Check for Cmd+K (Mac) or Ctrl+K (Windows/Linux)
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault();
-
-      const searchInput = document.getElementById('navbar-search-input') as HTMLInputElement;
-      if (searchInput) {
-        searchInput.focus();
-        searchInput.select();
-      }
-    }
-  });
-}
-
 function startLayoutInitialization() {
   initializeWorkspaceSelector();
   initializeSidebar();
   initializeSidebarKeyboardNavigation();
   initializeModalFocusHandlers();
-  initializeSearchShortcut();
 }
 
 if (!win.__sbomifyLayoutInitialized) {

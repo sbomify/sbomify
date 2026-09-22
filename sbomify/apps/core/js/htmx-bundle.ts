@@ -6,7 +6,6 @@ import '../../vulnerability_scanning/js/vulnerability-chart';
 import './layout-interactions';
 import './alerts-global';
 import './clipboard-global';
-import './navbar-search';
 
 // Centralized Alpine components and HTMX lifecycle
 import { registerHtmxBundleComponents } from './alpine-components';

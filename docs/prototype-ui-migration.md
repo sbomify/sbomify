@@ -26,8 +26,12 @@ The compact account menu uses the shared avatar as its trigger, links directly
 to account and API-token settings, and keeps theme, documentation, support and
 sign out together. The neutral New button and quiet bell share existing button
 bases. Notification rows and loading, empty and error states come from Cotton
-components; the notification script only fills data and manages refreshes. The
-search component is unchanged by this chrome-controls pass.
+components; the notification script only fills data and manages refreshes.
+The search dropdown now uses inset rows, a neutral selection and quiet keyboard
+hints. Its Cotton component owns presentation, with Alpine handling keyboard
+and pointer selection, focus and cancellation of pending searches. Results scroll
+inside the panel, which fits narrow and short screens. The live gallery includes
+a second instance to demonstrate the shared component.
 The onboarding component owns its setup and upload dialogs, so pages only place
 the component and load the existing SBOM entry point when needed.
 
@@ -62,7 +66,6 @@ their meaning. Missing SBOMs and missing freshness policies stay explicit.
 Product and component models do not record modification times, so the prototype's
 Modified at column is omitted. Created at shows the recorded creation time.
 Product details and release history now reuse this composition, as described below.
-The main search component is unchanged.
 
 ## Following slices
 
@@ -130,5 +133,3 @@ the upgrade link and empty state. Responsive screenshots cover four widths.
 | Posture | Product CRA list, scope screening and assessment steps, retaining the production classification and evidence workflow. |
 | Trust Center and advisories | Internal landing and management flows, advisory list/detail/editor, and customer-facing pages where they still differ from the prototype. |
 | Supporting pages | Workspace selection/invitations, onboarding, billing and creation flows that remain outside the migrated settings and inventory surfaces. |
-
-The main search remains outside the migration until requested.

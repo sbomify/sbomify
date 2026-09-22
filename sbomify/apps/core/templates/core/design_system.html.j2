@@ -558,6 +558,17 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-forms.search-input model="q" placeholder="Search products, components…" class="max-w-md" aria-label="Search" />
     </div>
     </c-cards.card>
+    <h2 id="navigation-search" class="text-xl font-semibold text-text">Navigation search</h2>
+    <c-cards.card>
+    <div class="flex flex-col gap-3">
+        <p class="text-sm text-text-muted">
+            Type a page or item name. The pointer and arrow keys share one selection. Escape closes the panel and keeps focus in the field.
+        </p>
+        <div class="max-w-md">
+            <c-chrome.search id="gallery-search" />
+        </div>
+    </div>
+    </c-cards.card>
     <h2 id="file-upload" class="text-xl font-semibold text-text">File upload</h2>
     <c-cards.card>
     {% comment %}

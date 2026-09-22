@@ -9,6 +9,7 @@ import Alpine from 'alpinejs';
 // ============================================
 // COMPONENT IMPORTS - Core
 // ============================================
+import { navbarSearch } from './navbar-search';
 import { scrollableTabs } from './components/scrollable-tabs';
 import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';
@@ -201,6 +202,7 @@ export function chartSelector(defaultChart = 'timeline') {
  * Register common inline components (dangerZone, modalState, etc.)
  */
 export function registerCommonComponents(): void {
+    registerAlpineComponent('navbarSearch', navbarSearch);
     registerAlpineComponent('scrollableTabs', scrollableTabs);
     registerAlpineComponent('dangerZone', dangerZone);
     registerAlpineComponent('modalState', modalState);
