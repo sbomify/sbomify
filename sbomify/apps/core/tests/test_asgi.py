@@ -28,6 +28,7 @@ async def test_asgi_lifespan_startup_shutdown(anyio_backend) -> None:
         return await receive_gen.__anext__()
 
     from sbomify.asgi import application
+
     await application(scope, receive, mock_send)
 
     assert {"type": "lifespan.startup.complete"} in sent_messages

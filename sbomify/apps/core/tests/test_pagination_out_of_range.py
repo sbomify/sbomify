@@ -103,8 +103,7 @@ class TestPaginateQuerysetUnit:
 
         assert items == []
         assert meta.has_previous is False, (
-            "Empty queryset cannot have a previous page — there's nothing "
-            "to step back to."
+            "Empty queryset cannot have a previous page — there's nothing to step back to."
         )
 
     @pytest.mark.django_db

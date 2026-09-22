@@ -438,9 +438,7 @@ class TestWorkspaceMembershipCheck:
         return raw(WorkspaceConsumer(), user, workspace_key)
 
     def _user(self, django_user_model, name):
-        return django_user_model.objects.create_user(
-            username=name, email=f"{name}@test.com", password="password"
-        )
+        return django_user_model.objects.create_user(username=name, email=f"{name}@test.com", password="password")
 
     def test_a_guest_cannot_listen_to_internal_workspace_events(self, django_user_model):
         """A guest is external. Holding a Member row is not permission to listen.

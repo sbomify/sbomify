@@ -156,9 +156,7 @@ class TestItAuthorizesTheWorkspaceInTheUrl:
     It is checked here so that it stays closed for a reason this endpoint owns.
     """
 
-    def test_a_member_of_another_workspace_cannot_mint_for_it(
-        self, sample_team_with_owner_member: Member
-    ) -> None:
+    def test_a_member_of_another_workspace_cannot_mint_for_it(self, sample_team_with_owner_member: Member) -> None:
         from sbomify.apps.core.utils import number_to_random_token
         from sbomify.apps.teams.models import Team
 
@@ -179,9 +177,7 @@ class TestItAuthorizesTheWorkspaceInTheUrl:
         assert response.status_code == 403
         assert not AccessToken.objects.filter(team=other).exists()
 
-    def test_an_owner_of_a_second_workspace_still_can(
-        self, sample_team_with_owner_member: Member
-    ) -> None:
+    def test_an_owner_of_a_second_workspace_still_can(self, sample_team_with_owner_member: Member) -> None:
         """The check must not break the legitimate case: minting for a
         workspace you own while another is selected."""
         from sbomify.apps.core.utils import number_to_random_token

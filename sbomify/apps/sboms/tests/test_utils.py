@@ -1208,9 +1208,7 @@ class TestSbomWasGeneratedBySbomifyAction:
         ttl_used = cache_set.call_args.args[2]
         assert ttl_used == _SBOMIFY_ACTION_CHECK_CACHE_TTL
 
-    def test_non_object_json_is_a_durable_clean_negative(
-        self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache
-    ):  # noqa: F811
+    def test_non_object_json_is_a_durable_clean_negative(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache):  # noqa: F811
         """A top-level JSON array decodes fine but is no SBOM; that is a fact
         about the document, so it caches at the long TTL instead of retrying
         on every page load through the transient path."""

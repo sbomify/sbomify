@@ -29,6 +29,7 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
+from sbomify.apps.core.htmx import HtmxFragmentMixin
 from sbomify.apps.core.models import User
 from sbomify.apps.security_advisories.forms import AdvisoryCreateForm
 from sbomify.apps.security_advisories.services.advisories import (
@@ -261,7 +262,7 @@ def _create_advisory(request: HttpRequest, *, on_error: str) -> HttpResponse:
     return redirect("core:security_advisory_detail", advisory_id=result.value)
 
 
-class SecurityAdvisoriesTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+class SecurityAdvisoriesTableView(GuestAccessBlockedMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """HTMX table refresh, mirroring ProductsTableView."""
 
     def get(self, request: HttpRequest) -> HttpResponse:

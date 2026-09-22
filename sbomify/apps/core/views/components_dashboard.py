@@ -11,6 +11,7 @@ from django.views import View
 from sbomify.apps.core.apis import create_component, list_components
 from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin
 from sbomify.apps.core.schemas import ComponentCreateSchema
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
@@ -125,7 +126,7 @@ class ComponentCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         return _create_component(request, on_error="core:component_new")
 
 
-class ComponentsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+class ComponentsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """View for HTMX table refresh."""
 
     def get(self, request: HttpRequest) -> HttpResponse:

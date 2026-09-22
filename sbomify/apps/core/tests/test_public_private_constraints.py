@@ -53,9 +53,7 @@ def test_can_make_product_public_with_private_components(
     setup_test_session(client, team, team.members.first())
 
     product = Product.objects.create(name="Test Product", team=team, is_public=False)
-    component = Component.objects.create(
-        name="Private Component", team=team, visibility=Component.Visibility.PRIVATE
-    )
+    component = Component.objects.create(name="Private Component", team=team, visibility=Component.Visibility.PRIVATE)
     product.components.add(component)
 
     url = reverse("api-1:patch_product", kwargs={"product_id": product.id})
@@ -318,9 +316,7 @@ def test_workspace_public_view_shows_gated_components(sample_team_with_owner_mem
     team.save()
 
     product = Product.objects.create(name="Product with Gated Component", team=team, is_public=True)
-    gated_component = Component.objects.create(
-        name="Gated Component", team=team, visibility=Component.Visibility.GATED
-    )
+    gated_component = Component.objects.create(name="Gated Component", team=team, visibility=Component.Visibility.GATED)
     product.components.add(gated_component)
 
     from sbomify.apps.core.views.workspace_public import _list_public_products
@@ -329,6 +325,5 @@ def test_workspace_public_view_shows_gated_components(sample_team_with_owner_mem
     product_names = [p["name"] for p in public_products]
 
     assert "Product with Gated Component" in product_names, (
-        "GATED components on public products must appear in the public listing "
-        "(post-PR-946 cascade rule)"
+        "GATED components on public products must appear in the public listing (post-PR-946 cascade rule)"
     )

@@ -47,8 +47,12 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         )
 
         # Create components
-        self.component1 = Component.objects.create(name="Test Component 1", team=self.team1, visibility=Component.Visibility.PRIVATE)
-        self.component2 = Component.objects.create(name="Test Component 2", team=self.team1, visibility=Component.Visibility.PUBLIC)
+        self.component1 = Component.objects.create(
+            name="Test Component 1", team=self.team1, visibility=Component.Visibility.PRIVATE
+        )
+        self.component2 = Component.objects.create(
+            name="Test Component 2", team=self.team1, visibility=Component.Visibility.PUBLIC
+        )
 
         # Create SBOMs
         self.sbom1_cdx = SBOM.objects.create(
@@ -344,9 +348,7 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         # First, add the SBOM
         artifact = ReleaseArtifact.objects.create(release=self.release1, sbom=self.sbom1_cdx)
 
-        response = client.delete(
-            f"/api/v1/sboms/{self.sbom1_cdx.id}/releases/{self.release1.id}", **headers
-        )
+        response = client.delete(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases/{self.release1.id}", **headers)
 
         assert response.status_code == 204
         assert not ReleaseArtifact.objects.filter(id=artifact.id).exists()
@@ -356,9 +358,7 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         client, access_token = authenticated_api_client
         headers = get_api_headers(access_token)
 
-        response = client.delete(
-            f"/api/v1/sboms/{self.sbom1_cdx.id}/releases/{self.release1.id}", **headers
-        )
+        response = client.delete(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases/{self.release1.id}", **headers)
 
         assert response.status_code == 404
         data = json.loads(response.content)
@@ -372,9 +372,7 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         # Add SBOM to latest release (this would normally be done automatically)
         ReleaseArtifact.objects.create(release=self.latest_release, sbom=self.sbom1_cdx)
 
-        response = client.delete(
-            f"/api/v1/sboms/{self.sbom1_cdx.id}/releases/{self.latest_release.id}", **headers
-        )
+        response = client.delete(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases/{self.latest_release.id}", **headers)
 
         assert response.status_code == 400
         data = json.loads(response.content)
@@ -388,9 +386,7 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         # Create release in different team
         other_release = Release.objects.create(name="v1.0.0", product=self.product2, is_latest=False)
 
-        response = client.delete(
-            f"/api/v1/sboms/{self.sbom1_cdx.id}/releases/{other_release.id}", **headers
-        )
+        response = client.delete(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases/{other_release.id}", **headers)
 
         assert response.status_code == 403
         data = json.loads(response.content)

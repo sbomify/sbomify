@@ -123,6 +123,5 @@ def test_models_and_migrations_agree():
         env={**os.environ, "DJANGO_SETTINGS_MODULE": "sbomify.test_settings"},
     )
     assert result.returncode == 0, (
-        "Models have changes with no migration. Run `manage.py makemigrations`.\n"
-        f"{result.stdout}\n{result.stderr}"
+        f"Models have changes with no migration. Run `manage.py makemigrations`.\n{result.stdout}\n{result.stderr}"
     )

@@ -77,10 +77,10 @@ class TestComponentVisibility:
     ):
         """Test gated component view for authenticated user WITHOUT access."""
         client.force_login(guest_user)
-        
+
         url = reverse("core:component_details_public", kwargs={"component_id": gated_component.id})
         response = client.get(url)
-        
+
         assert response.status_code == 200
         # Should show request access button
         assert b"Request Access" in response.content
@@ -96,12 +96,12 @@ class TestComponentVisibility:
             user=guest_user,
             status=AccessRequest.Status.PENDING,
         )
-        
+
         client.force_login(guest_user)
-        
+
         url = reverse("core:component_details_public", kwargs={"component_id": gated_component.id})
         response = client.get(url)
-        
+
         assert response.status_code == 200
         assert b"Access Request Pending" in response.content
 
@@ -116,17 +116,17 @@ class TestComponentVisibility:
             status=AccessRequest.Status.APPROVED,
         )
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
-        
+
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, guest_user)
-        
+
         url = reverse("core:component_details_public", kwargs={"component_id": gated_component.id})
         response = authenticated_web_client.get(url)
-        
+
         assert response.status_code == 200
         # Should NOT show request access buttons
         assert b"Request Access" not in response.content
         assert b"Access Request Pending" not in response.content
-        
+
         # Should show 'Access Granted' or simply render content without restriction overlay
         # Note: The specific UI verify depends on template implementation
         assert response.context["user_has_gated_access"] is True

@@ -21,9 +21,7 @@ class TestSearchView:
         response = client.get(reverse("core:search"), {"q": "test"})
         assert response.status_code == 302
 
-    def test_search_empty_query_returns_empty_results(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_search_empty_query_returns_empty_results(self, client: Client, sample_team_with_owner_member):
         """Test that empty query returns empty results."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
@@ -35,9 +33,7 @@ class TestSearchView:
         assert data["products"] == []
         assert data["components"] == []
 
-    def test_search_short_query_returns_empty_results(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_search_short_query_returns_empty_results(self, client: Client, sample_team_with_owner_member):
         """Test that query shorter than 2 characters returns empty results."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
@@ -49,9 +45,7 @@ class TestSearchView:
         assert data["products"] == []
         assert data["components"] == []
 
-    def test_search_products(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_search_products(self, client: Client, sample_team_with_owner_member):
         """Test searching for products."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
@@ -75,9 +69,7 @@ class TestSearchView:
         assert data["products"][0]["name"] == "Test Product"
         assert "test product description" in data["products"][0]["description"].lower()
 
-    def test_search_components(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_search_components(self, client: Client, sample_team_with_owner_member):
         """Test searching for components."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
@@ -101,9 +93,7 @@ class TestSearchView:
         assert data["components"][0]["name"] == "Test Component"
         assert data["components"][0]["component_type"] == "bom"
 
-    def test_search_respects_team_scope(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_search_respects_team_scope(self, client: Client, sample_team_with_owner_member):
         """Test that search only returns results from current team."""
         from sbomify.apps.teams.models import Member, Team
 
@@ -123,9 +113,7 @@ class TestSearchView:
         assert len(data["products"]) == 1
         assert data["products"][0]["name"] == "Team Product"
 
-    def test_search_limit_parameter(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_search_limit_parameter(self, client: Client, sample_team_with_owner_member):
         """Test that limit parameter works correctly."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
@@ -139,9 +127,7 @@ class TestSearchView:
         data = json.loads(response.content)
         assert len(data["products"]) == 5
 
-    def test_search_limit_validation_max(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_search_limit_validation_max(self, client: Client, sample_team_with_owner_member):
         """Test that limit is capped at maximum value."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
@@ -155,9 +141,7 @@ class TestSearchView:
         data = json.loads(response.content)
         assert len(data["products"]) <= 50
 
-    def test_search_limit_validation_min(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_search_limit_validation_min(self, client: Client, sample_team_with_owner_member):
         """Test that limit is enforced at minimum value."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
@@ -171,9 +155,7 @@ class TestSearchView:
         data = json.loads(response.content)
         assert len(data["products"]) >= 1
 
-    def test_search_limit_invalid_type(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_search_limit_invalid_type(self, client: Client, sample_team_with_owner_member):
         """Test that invalid limit type defaults to 10."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
@@ -187,9 +169,7 @@ class TestSearchView:
         data = json.loads(response.content)
         assert len(data["products"]) == 10
 
-    def test_search_case_insensitive(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_search_case_insensitive(self, client: Client, sample_team_with_owner_member):
         """Test that search is case insensitive."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
@@ -207,9 +187,7 @@ class TestSearchView:
         data = json.loads(response.content)
         assert len(data["products"]) == 1
 
-    def test_search_no_team_returns_empty(
-        self, client: Client, sample_user: AbstractBaseUser
-    ):
+    def test_search_no_team_returns_empty(self, client: Client, sample_user: AbstractBaseUser):
         """Test that search without team returns empty results."""
         client.force_login(sample_user)
 
@@ -218,4 +196,3 @@ class TestSearchView:
         data = json.loads(response.content)
         assert data["products"] == []
         assert data["components"] == []
-

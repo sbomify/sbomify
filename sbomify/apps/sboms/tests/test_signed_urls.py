@@ -412,9 +412,7 @@ class TestSignedURLs:
         with patch("sbomify.apps.documents.apis.StorageClient") as mock_s3_client:
             mock_s3_client.return_value.get_document_data.return_value = b"gated bytes"
             assert self.client.get(url, {"token": token}).status_code == 200
-            AccessRequest.objects.create(
-                team=self.team, user=guest_user, status=AccessRequest.Status.REVOKED
-            )
+            AccessRequest.objects.create(team=self.team, user=guest_user, status=AccessRequest.Status.REVOKED)
             assert self.client.get(url, {"token": token}).status_code == 403
 
     def test_signed_sbom_download_gated_guest_allowed_then_revoked(self, guest_user):
@@ -445,9 +443,7 @@ class TestSignedURLs:
         with patch("sbomify.apps.sboms.apis.StorageClient") as mock_s3_client:
             mock_s3_client.return_value.get_sbom_data.return_value = b'{"gated": "sbom"}'
             assert self.client.get(url, {"token": token}).status_code == 200
-            AccessRequest.objects.create(
-                team=self.team, user=guest_user, status=AccessRequest.Status.REVOKED
-            )
+            AccessRequest.objects.create(team=self.team, user=guest_user, status=AccessRequest.Status.REVOKED)
             assert self.client.get(url, {"token": token}).status_code == 403
 
 

@@ -268,7 +268,9 @@ def test_role_change_update_fields_without_role_skips_snapshot(
 
     UserModel = get_user_model()
     other_user = UserModel.objects.create_user(username="other_field", email="other@example.com", password="pw")
-    membership = Member.objects.create(team=team_with_business_plan, user=other_user, role="admin", is_default_team=False)
+    membership = Member.objects.create(
+        team=team_with_business_plan, user=other_user, role="admin", is_default_team=False
+    )
 
     mock_capture = patch_capture(mocker)
 

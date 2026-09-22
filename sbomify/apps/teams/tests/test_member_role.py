@@ -95,9 +95,7 @@ class TestMemberCannotOverstep:
     def test_member_cannot_publish_a_component(self, member_client):
         """The carve-out: editing is MANAGE, but making it public is ADMINISTER."""
         client, team = member_client
-        component = Component.objects.create(
-            name="stays-private", team=team, visibility=Component.Visibility.PRIVATE
-        )
+        component = Component.objects.create(name="stays-private", team=team, visibility=Component.Visibility.PRIVATE)
         response = client.patch(
             f"/api/v1/components/{component.id}",
             data=json.dumps({"visibility": "public"}),

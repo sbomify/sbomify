@@ -47,9 +47,7 @@ def test_session_mutation_with_csrf_token_passes_the_gate(sample_user):
     token = get_token(RequestFactory().get("/"))
     client.cookies["csrftoken"] = token
 
-    resp = client.patch(
-        BRANDING_URL, data=BODY, content_type="application/json", HTTP_X_CSRFTOKEN=token
-    )
+    resp = client.patch(BRANDING_URL, data=BODY, content_type="application/json", HTTP_X_CSRFTOKEN=token)
 
     assert resp.status_code != 403  # gate cleared (404 for the nonexistent team)
 
@@ -65,9 +63,7 @@ def test_bearer_mutation_without_csrf_token_is_exempt(authenticated_api_client):
     _, token = authenticated_api_client
     client = Client(enforce_csrf_checks=True)
 
-    resp = client.patch(
-        BRANDING_URL, data=BODY, content_type="application/json", **get_api_headers(token)
-    )
+    resp = client.patch(BRANDING_URL, data=BODY, content_type="application/json", **get_api_headers(token))
 
     # Exempt -> clears the CSRF gate, authenticates, and 404s on the nonexistent team.
     assert resp.status_code == 404

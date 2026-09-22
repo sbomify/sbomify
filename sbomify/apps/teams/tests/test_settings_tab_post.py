@@ -28,9 +28,7 @@ from sbomify.apps.teams.settings_tabs import SETTINGS_TABS
 def owner_client(sample_team_with_owner_member: Member) -> tuple[Client, Member]:  # noqa: F811
     client = Client()
     client.force_login(sample_team_with_owner_member.user)
-    setup_authenticated_client_session(
-        client, sample_team_with_owner_member.team, sample_team_with_owner_member.user
-    )
+    setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
     return client, sample_team_with_owner_member
 
 

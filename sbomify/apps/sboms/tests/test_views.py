@@ -546,7 +546,7 @@ class TestSbomsTableViewAnonymousAccess:
         sample_component.save()
 
         url = reverse("sboms:sboms_table", kwargs={"component_id": sample_component.id})
-        response = client.get(url)
+        response = client.get(url, headers={"hx-request": "true"})
 
         assert response.status_code == 302
 
@@ -556,7 +556,7 @@ class TestSbomsTableViewAnonymousAccess:
         sample_component.save()
 
         url = reverse("sboms:sboms_table_public", kwargs={"component_id": sample_component.id})
-        response = client.get(url)
+        response = client.get(url, headers={"hx-request": "true"})
 
         assert response.status_code == 200
 
@@ -568,6 +568,6 @@ class TestSbomsTableViewAnonymousAccess:
         setup_test_session(client, sample_component.team, sample_user)
 
         url = reverse("sboms:sboms_table", kwargs={"component_id": sample_component.id})
-        response = client.get(url)
+        response = client.get(url, headers={"hx-request": "true"})
 
         assert response.status_code == 200

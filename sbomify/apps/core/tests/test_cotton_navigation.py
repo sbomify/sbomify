@@ -507,14 +507,14 @@ def test_segmented_is_a_group_wearing_the_pills_tray(rendered: str) -> None:
     assert tray.startswith("<div ")
     assert 'role="group"' in tray
     assert "flex gap-0 bg-background p-1 rounded-lg mt-2" in tray
-    assert "role=\"tablist\"" not in tray
+    assert 'role="tablist"' not in tray
 
 
 def test_segment_states_hang_off_data_active(rendered: str) -> None:
     seg = _nav_probe(rendered, "segment")
     assert seg.startswith("<button ")
     assert 'data-active="false"' in seg
-    assert ':data-active="chart === \'timeline\'"' in seg
+    assert ":data-active=\"chart === 'timeline'\"" in seg
     assert "@click=\"pick('timeline')\"" in seg
     assert "data-[active=true]:text-primary data-[active=true]:bg-surface" in seg
     assert "data-[active=true]:hover:bg-surface" in seg

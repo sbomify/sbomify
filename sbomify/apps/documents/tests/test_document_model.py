@@ -14,9 +14,7 @@ from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F
 def sample_component(sample_team_with_owner_member):  # noqa: F811
     """Create a sample component for testing."""
     component = Component.objects.create(
-        name="Test Component",
-        team=sample_team_with_owner_member.team,
-        component_type="document"
+        name="Test Component", team=sample_team_with_owner_member.team, component_type="document"
     )
     yield component
     component.delete()
@@ -31,19 +29,14 @@ class TestDocumentModel:
         # Test all predefined document types
         for choice_value, choice_label in Document.DocumentType.choices:
             document = Document.objects.create(
-                name=f"Test Document {choice_value}",
-                component=sample_component,
-                document_type=choice_value
+                name=f"Test Document {choice_value}", component=sample_component, document_type=choice_value
             )
             assert document.document_type == choice_value
             assert document.get_document_type_display() == choice_label
 
     def test_default_document_type(self, sample_component):
         """Test that the default document type is 'other'."""
-        document = Document.objects.create(
-            name="Test Document",
-            component=sample_component
-        )
+        document = Document.objects.create(name="Test Document", component=sample_component)
         assert document.document_type == Document.DocumentType.OTHER
 
     def test_cyclonedx_external_ref_type_mapping(self, sample_component):
@@ -56,43 +49,37 @@ class TestDocumentModel:
             (Document.DocumentType.DOCUMENTATION, "documentation"),
             (Document.DocumentType.BUILD_INSTRUCTIONS, "build-meta"),
             (Document.DocumentType.CONFIGURATION, "configuration"),
-
             # Legal and Compliance
             (Document.DocumentType.LICENSE, "license"),
             (Document.DocumentType.NDA, "other"),
             (Document.DocumentType.COMPLIANCE, "certification-report"),
             (Document.DocumentType.EVIDENCE, "evidence"),
-
             # Release Information
             (Document.DocumentType.CHANGELOG, "release-notes"),
             (Document.DocumentType.RELEASE_NOTES, "release-notes"),
-
             # Security Documents
             (Document.DocumentType.SECURITY_ADVISORY, "advisories"),
             (Document.DocumentType.VULNERABILITY_REPORT, "vulnerability-assertion"),
             (Document.DocumentType.THREAT_MODEL, "threat-model"),
             (Document.DocumentType.RISK_ASSESSMENT, "risk-assessment"),
             (Document.DocumentType.PENTEST_REPORT, "pentest-report"),
-
             # Analysis Reports
             (Document.DocumentType.STATIC_ANALYSIS, "static-analysis-report"),
             (Document.DocumentType.DYNAMIC_ANALYSIS, "dynamic-analysis-report"),
             (Document.DocumentType.QUALITY_METRICS, "quality-metrics"),
             (Document.DocumentType.MATURITY_REPORT, "maturity-report"),
             (Document.DocumentType.REPORT, "other"),
-
             # Other
             (Document.DocumentType.OTHER, "other"),
         ]
 
         for document_type, expected_cyclonedx_type in test_cases:
             document = Document.objects.create(
-                name=f"Test Document {document_type}",
-                component=sample_component,
-                document_type=document_type
+                name=f"Test Document {document_type}", component=sample_component, document_type=document_type
             )
-            assert document.cyclonedx_external_ref_type == expected_cyclonedx_type, \
+            assert document.cyclonedx_external_ref_type == expected_cyclonedx_type, (
                 f"Document type {document_type} should map to {expected_cyclonedx_type}"
+            )
 
     def test_spdx_reference_category_mapping(self, sample_component):
         """Test SPDX reference category mapping."""
@@ -107,12 +94,11 @@ class TestDocumentModel:
 
         for doc_type in security_types:
             document = Document.objects.create(
-                name=f"Test Document {doc_type}",
-                component=sample_component,
-                document_type=doc_type
+                name=f"Test Document {doc_type}", component=sample_component, document_type=doc_type
             )
-            assert document.spdx_reference_category == "SECURITY", \
+            assert document.spdx_reference_category == "SECURITY", (
                 f"Document type {doc_type} should be in SECURITY category"
+            )
 
         # All other document types should be in OTHER category
         other_types = [
@@ -137,12 +123,9 @@ class TestDocumentModel:
 
         for doc_type in other_types:
             document = Document.objects.create(
-                name=f"Test Document {doc_type}",
-                component=sample_component,
-                document_type=doc_type
+                name=f"Test Document {doc_type}", component=sample_component, document_type=doc_type
             )
-            assert document.spdx_reference_category == "OTHER", \
-                f"Document type {doc_type} should be in OTHER category"
+            assert document.spdx_reference_category == "OTHER", f"Document type {doc_type} should be in OTHER category"
 
     def test_spdx_reference_type_mapping(self, sample_component):
         """Test SPDX reference type mapping."""
@@ -154,50 +137,42 @@ class TestDocumentModel:
             (Document.DocumentType.DOCUMENTATION, "documentation"),
             (Document.DocumentType.BUILD_INSTRUCTIONS, "build-instructions"),
             (Document.DocumentType.CONFIGURATION, "configuration"),
-
             # Legal and Compliance
             (Document.DocumentType.LICENSE, "license"),
             (Document.DocumentType.NDA, "nda"),
             (Document.DocumentType.COMPLIANCE, "compliance"),
             (Document.DocumentType.EVIDENCE, "evidence"),
-
             # Release Information
             (Document.DocumentType.CHANGELOG, "changelog"),
             (Document.DocumentType.RELEASE_NOTES, "release-notes"),
-
             # Security Documents
             (Document.DocumentType.SECURITY_ADVISORY, "advisory"),
             (Document.DocumentType.VULNERABILITY_REPORT, "vulnerability-report"),
             (Document.DocumentType.THREAT_MODEL, "threat-model"),
             (Document.DocumentType.RISK_ASSESSMENT, "risk-assessment"),
             (Document.DocumentType.PENTEST_REPORT, "pentest-report"),
-
             # Analysis Reports
             (Document.DocumentType.STATIC_ANALYSIS, "static-analysis-report"),
             (Document.DocumentType.DYNAMIC_ANALYSIS, "dynamic-analysis-report"),
             (Document.DocumentType.QUALITY_METRICS, "quality-metrics"),
             (Document.DocumentType.MATURITY_REPORT, "maturity-report"),
             (Document.DocumentType.REPORT, "report"),
-
             # Other
             (Document.DocumentType.OTHER, "other"),
         ]
 
         for document_type, expected_spdx_type in test_cases:
             document = Document.objects.create(
-                name=f"Test Document {document_type}",
-                component=sample_component,
-                document_type=document_type
+                name=f"Test Document {document_type}", component=sample_component, document_type=document_type
             )
-            assert document.spdx_reference_type == expected_spdx_type, \
+            assert document.spdx_reference_type == expected_spdx_type, (
                 f"Document type {document_type} should map to {expected_spdx_type}"
+            )
 
     def test_get_external_reference_url(self, sample_component):
         """Test external reference URL generation."""
         document = Document.objects.create(
-            name="Test Document",
-            component=sample_component,
-            document_type=Document.DocumentType.SPECIFICATION
+            name="Test Document", component=sample_component, document_type=Document.DocumentType.SPECIFICATION
         )
 
         expected_url = f"/api/v1/documents/{document.id}/download"
@@ -210,7 +185,7 @@ class TestDocumentModel:
             name="Test Document",
             component=sample_component,
             document_type=Document.DocumentType.SPECIFICATION,
-            description=description
+            description=description,
         )
 
         assert document.description == description
@@ -218,9 +193,7 @@ class TestDocumentModel:
     def test_document_string_representation(self, sample_component):
         """Test document string representation."""
         document = Document.objects.create(
-            name="Test Document",
-            component=sample_component,
-            document_type=Document.DocumentType.SPECIFICATION
+            name="Test Document", component=sample_component, document_type=Document.DocumentType.SPECIFICATION
         )
 
         assert str(document) == "Test Document"
@@ -231,11 +204,12 @@ class TestDocumentModel:
         document = Document.objects.create(
             name="Test Document",
             component=sample_component,
-            document_type="security-advisory"  # 17 chars, within 50 limit
+            document_type="security-advisory",  # 17 chars, within 50 limit
         )
 
         # Test that it's stored correctly
         assert document.document_type == "security-advisory"
+
 
 @pytest.mark.django_db
 def test_an_nda_still_counts_as_legal_paperwork(sample_component):

@@ -17,7 +17,7 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.core.forms import CreateAccessTokenForm
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
@@ -25,7 +25,7 @@ from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 
 
-class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """View for managing personal access tokens in workspace settings."""
 
     # Tokens are personal: this page only ever lists, creates and revokes the

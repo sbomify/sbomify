@@ -87,7 +87,6 @@ class TestSlugGeneration:
         """Test that product slug is generated correctly."""
         assert product_with_slug.slug == "my-test-product"
 
-
     def test_component_slug(self, component_with_slug):
         """Test that component slug is generated correctly."""
         assert component_with_slug.slug == "my-test-component"
@@ -121,37 +120,24 @@ class TestSlugRoutingOnCustomDomain:
 
     def test_product_by_slug(self, client, product_with_slug):
         """Test that /product/{slug}/ works on custom domain."""
-        response = client.get(
-            f"/product/{product_with_slug.slug}/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get(f"/product/{product_with_slug.slug}/", HTTP_HOST="trust.example.com")
         assert response.status_code == 200
         assert product_with_slug.name.encode() in response.content
 
-
     def test_component_by_slug(self, client, component_with_slug):
         """Test that /component/{slug}/ works on custom domain."""
-        response = client.get(
-            f"/component/{component_with_slug.slug}/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get(f"/component/{component_with_slug.slug}/", HTTP_HOST="trust.example.com")
         assert response.status_code == 200
 
     def test_product_id_fallback_on_custom_domain(self, client, product_with_slug):
         """Test that ID-based URLs still work on custom domain for backward compatibility."""
-        response = client.get(
-            f"/product/{product_with_slug.id}/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get(f"/product/{product_with_slug.id}/", HTTP_HOST="trust.example.com")
         assert response.status_code == 200
         assert product_with_slug.name.encode() in response.content
 
     def test_nonexistent_slug_returns_404(self, client, custom_domain_team):
         """Test that non-existent slug returns 404."""
-        response = client.get(
-            "/product/nonexistent-product-slug/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get("/product/nonexistent-product-slug/", HTTP_HOST="trust.example.com")
         assert response.status_code == 404
 
     def test_wrong_workspace_slug_returns_404(self, client, db, custom_domain_team):
@@ -169,10 +155,7 @@ class TestSlugRoutingOnCustomDomain:
         )
 
         # Try to access other team's product on custom domain using slug
-        response = client.get(
-            f"/product/{other_product.slug}/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get(f"/product/{other_product.slug}/", HTTP_HOST="trust.example.com")
 
         # Should return 404 since we're looking for the slug in the custom domain's team
         assert response.status_code == 404
@@ -190,7 +173,6 @@ class TestSlugRoutingOnMainDomain:
         assert parsed.netloc == "trust.example.com"
         assert f"/product/{product_with_slug.slug}/" in response.url
 
-
     def test_component_by_id_on_main_domain(self, client, component_with_slug):
         """Test that /public/component/{id}/ redirects to custom domain."""
         response = client.get(f"/public/component/{component_with_slug.id}/")
@@ -205,17 +187,13 @@ class TestProductReleasesSlug:
 
     def test_product_releases_by_slug(self, client, product_with_slug):
         """Test that /product/{slug}/releases/ works on custom domain."""
-        response = client.get(
-            f"/product/{product_with_slug.slug}/releases/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get(f"/product/{product_with_slug.slug}/releases/", HTTP_HOST="trust.example.com")
         assert response.status_code == 200
 
     def test_release_by_slug(self, client, product_with_slug, release_with_slug):
         """Test that /product/{product_slug}/release/{release_slug}/ works on custom domain."""
         response = client.get(
-            f"/product/{product_with_slug.slug}/release/{release_with_slug.slug}/",
-            HTTP_HOST="trust.example.com"
+            f"/product/{product_with_slug.slug}/release/{release_with_slug.slug}/", HTTP_HOST="trust.example.com"
         )
         assert response.status_code == 200
 

@@ -135,7 +135,7 @@ class TestTeamBrandingViewCustomDomain:
     @override_settings(APP_BASE_URL="https://app.sbomify.io")
     def test_business_team_sees_custom_domain_section(self, business_team, sample_user):
         """Business plan team should see the custom domain section."""
-        client = Client()
+        client = Client(headers={"hx-request": "true"})
         setup_authenticated_client_session(client, business_team, sample_user)
 
         response = client.get(f"/workspaces/{business_team.key}/custom-domain")
@@ -152,7 +152,7 @@ class TestTeamBrandingViewCustomDomain:
     @override_settings(APP_BASE_URL="https://app.sbomify.io")
     def test_community_team_sees_upgrade_prompt(self, community_team, sample_user):
         """Community plan team should see upgrade prompt instead of domain config."""
-        client = Client()
+        client = Client(headers={"hx-request": "true"})
         setup_authenticated_client_session(client, community_team, sample_user)
 
         response = client.get(f"/workspaces/{community_team.key}/custom-domain")
@@ -168,7 +168,7 @@ class TestTeamBrandingViewCustomDomain:
     @override_settings(APP_BASE_URL="https://app.sbomify.io")
     def test_team_with_verified_domain_shows_verified_status(self, team_with_domain, sample_user):
         """Team with a verified custom domain should show verified status."""
-        client = Client()
+        client = Client(headers={"hx-request": "true"})
         setup_authenticated_client_session(client, team_with_domain, sample_user)
 
         response = client.get(f"/workspaces/{team_with_domain.key}/custom-domain")
@@ -194,7 +194,7 @@ class TestTeamBrandingViewCustomDomain:
         team.save()
         Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
 
-        client = Client()
+        client = Client(headers={"hx-request": "true"})
         setup_authenticated_client_session(client, team, sample_user)
 
         response = client.get(f"/workspaces/{team.key}/custom-domain")
@@ -208,7 +208,7 @@ class TestTeamBrandingViewCustomDomain:
     @override_settings(APP_BASE_URL="https://app.sbomify.io")
     def test_no_domain_shows_empty_state(self, business_team, sample_user):
         """Team without domain should show empty domain field."""
-        client = Client()
+        client = Client(headers={"hx-request": "true"})
         setup_authenticated_client_session(client, business_team, sample_user)
 
         response = client.get(f"/workspaces/{business_team.key}/custom-domain")
@@ -223,7 +223,7 @@ class TestTeamBrandingViewCustomDomain:
     @override_settings(APP_BASE_URL="https://app.sbomify.io", CLOUDFLARE_DCV_HOSTNAME="abc123.dcv.cloudflare.com")
     def test_dcv_hostname_shown_when_configured(self, business_team, sample_user):
         """DCV delegation instructions should appear when CLOUDFLARE_DCV_HOSTNAME is configured."""
-        client = Client()
+        client = Client(headers={"hx-request": "true"})
         setup_authenticated_client_session(client, business_team, sample_user)
 
         response = client.get(f"/workspaces/{business_team.key}/custom-domain")
@@ -243,7 +243,7 @@ class TestTeamBrandingViewCustomDomain:
     @override_settings(APP_BASE_URL="https://app.sbomify.io", CLOUDFLARE_DCV_HOSTNAME="")
     def test_dcv_section_hidden_when_not_configured(self, business_team, sample_user):
         """DCV delegation section should be hidden when CLOUDFLARE_DCV_HOSTNAME is empty."""
-        client = Client()
+        client = Client(headers={"hx-request": "true"})
         setup_authenticated_client_session(client, business_team, sample_user)
 
         response = client.get(f"/workspaces/{business_team.key}/custom-domain")
@@ -261,7 +261,7 @@ class TestTeamBrandingViewCustomDomain:
     @override_settings(APP_BASE_URL="https://app.sbomify.io", CLOUDFLARE_DCV_HOSTNAME="test.dcv.cloudflare.com")
     def test_dcv_instructions_show_both_records(self, business_team, sample_user):
         """Both CNAME records should be displayed when DCV is configured."""
-        client = Client()
+        client = Client(headers={"hx-request": "true"})
         setup_authenticated_client_session(client, business_team, sample_user)
 
         response = client.get(f"/workspaces/{business_team.key}/custom-domain")
@@ -274,4 +274,3 @@ class TestTeamBrandingViewCustomDomain:
         # Check both targets are present (DCV target is <domain>.<dcv_hostname>)
         assert "app.sbomify.io" in content
         assert ".test.dcv.cloudflare.com" in content
-

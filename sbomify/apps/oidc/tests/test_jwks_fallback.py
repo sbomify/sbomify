@@ -346,9 +346,7 @@ class TestAnOutageDoesNotCostAFetchPerRequest:
 
         assert _fetch_github_jwks() == rotated
 
-    def test_traffic_during_the_outage_does_not_extend_the_window(
-        self, mocker, mock_github_jwks, rsa_keypair
-    ) -> None:
+    def test_traffic_during_the_outage_does_not_extend_the_window(self, mocker, mock_github_jwks, rsa_keypair) -> None:
         """The window is measured from the first failure, not from the last request.
 
         Every exchange served from the fallback comes back through the arming

@@ -915,9 +915,7 @@ class TestGetReleaseCLEDocument:
         assert result.status_code == 404
 
     def test_returns_cle_with_events(self, sample_release: Release) -> None:
-        create_release_cle_event(
-            sample_release, "released", datetime(2025, 3, 1, tzinfo=timezone.utc), version="1.0.0"
-        )
+        create_release_cle_event(sample_release, "released", datetime(2025, 3, 1, tzinfo=timezone.utc), version="1.0.0")
         result = get_release_cle_document(sample_release)
         assert result.ok
         cle = result.value
@@ -927,9 +925,7 @@ class TestGetReleaseCLEDocument:
 
     def test_includes_definitions(self, sample_release: Release) -> None:
         create_release_support_definition(sample_release, "extended", "Extended support")
-        create_release_cle_event(
-            sample_release, "released", datetime(2025, 3, 1, tzinfo=timezone.utc), version="1.0.0"
-        )
+        create_release_cle_event(sample_release, "released", datetime(2025, 3, 1, tzinfo=timezone.utc), version="1.0.0")
         result = get_release_cle_document(sample_release)
         assert result.ok
         cle = result.value

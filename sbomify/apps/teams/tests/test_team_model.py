@@ -14,17 +14,13 @@ class TestTeamPublicUrl:
         """Public team with key should return valid URL."""
         team = Team.objects.create(name="Public Team", is_public=True)
         # Key is auto-generated on save
-        
+
         assert team.public_url is not None
         expected_url = reverse("core:workspace_public", kwargs={"workspace_key": team.key})
         assert team.public_url == expected_url
 
     def test_private_team_returns_none(self):
         """Private team should return None."""
-        team = Team.objects.create(
-            name="Private Team",
-            billing_plan="business",
-            is_public=False
-        )
-        
+        team = Team.objects.create(name="Private Team", billing_plan="business", is_public=False)
+
         assert team.public_url is None

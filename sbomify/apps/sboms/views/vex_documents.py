@@ -6,11 +6,11 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.sboms.services.vex_documents import build_component_vex_context, delete_vex_from_request
 
 
-class ComponentVexDocumentsView(View):
+class ComponentVexDocumentsView(HtmxFragmentMixin, View):
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
         result = build_component_vex_context(request, component_id)
         if not result.ok:

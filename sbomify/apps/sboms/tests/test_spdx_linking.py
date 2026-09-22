@@ -214,7 +214,10 @@ class TestSPDX30Linking:
         assert any(r["relatedSpdxElement"] == "DocumentRef-1:SPDXRef-DOCUMENT" for r in contains)
 
     def test_import_entry_carries_the_external_map_shape(
-        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+        self,
+        tmp_path,
+        team_with_business_plan,
+        s3_sboms_mock,  # noqa: F811
     ):
         """The emitted import-map entry carries the ExternalMap fields the
         spec defines (the typed model it used to round-trip through is gone
@@ -239,12 +242,16 @@ def _spdx2_member_referencing(team, s3_mock, name, *, target_digest, algorithm, 
     """An SPDX 2.3 member that declares an externalDocumentRef toward another doc
     identified by (algorithm, target_digest)."""
     component = Component.objects.create(
-        name=f"{name}-comp", team=team, visibility=Component.Visibility.PUBLIC,
+        name=f"{name}-comp",
+        team=team,
+        visibility=Component.Visibility.PUBLIC,
         component_type=Component.ComponentType.BOM,
     )
     body = json.dumps(
         {
-            "spdxVersion": "SPDX-2.3", "SPDXID": "SPDXRef-DOCUMENT", "name": name,
+            "spdxVersion": "SPDX-2.3",
+            "SPDXID": "SPDXRef-DOCUMENT",
+            "name": name,
             "documentNamespace": f"https://member.example/{name}",
             "documentDescribes": [f"SPDXRef-Package-{name}"],
             "packages": [{"SPDXID": f"SPDXRef-Package-{name}", "name": name, "downloadLocation": "NOASSERTION"}],
@@ -266,22 +273,35 @@ def _spdx2_member_referencing(team, s3_mock, name, *, target_digest, algorithm, 
     ).encode()
     s3_mock.uploaded_files[f"{name}.spdx.json"] = body
     return SBOM.objects.create(
-        name=name, component=component, format="spdx", version="1.0.0",
-        sbom_filename=f"{name}.spdx.json", sha256_hash=sha,
+        name=name,
+        component=component,
+        format="spdx",
+        version="1.0.0",
+        sbom_filename=f"{name}.spdx.json",
+        sha256_hash=sha,
     )
 
 
 @pytest.mark.django_db
 class TestSPDX2InboundResolve:
     def test_inbound_ref_resolves_to_release_member(
-        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+        self,
+        tmp_path,
+        team_with_business_plan,
+        s3_sboms_mock,  # noqa: F811
     ):
         team = team_with_business_plan
         product = Product.objects.create(name="P", team=team, is_public=True)
         release = Release.objects.create(product=product, name="v1.0.0")
         b_sha = "a" * 64
-        b = _spdx2_member(team, s3_sboms_mock, "bbb", namespace="https://member.example/bbb",
-                          described="SPDXRef-Package-bbb", sha=b_sha)
+        b = _spdx2_member(
+            team,
+            s3_sboms_mock,
+            "bbb",
+            namespace="https://member.example/bbb",
+            described="SPDXRef-Package-bbb",
+            sha=b_sha,
+        )
         a = _spdx2_member_referencing(team, s3_sboms_mock, "aaa", target_digest=b_sha, algorithm="SHA256", sha="c" * 64)
         ReleaseArtifact.objects.create(release=release, sbom=a)
         ReleaseArtifact.objects.create(release=release, sbom=b)
@@ -295,15 +315,26 @@ class TestSPDX2InboundResolve:
         ), "A's inbound ref to B (by SHA-256) should become a DEPENDS_ON edge"
 
     def test_sha1_ref_not_resolved_and_not_fetched(
-        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+        self,
+        tmp_path,
+        team_with_business_plan,
+        s3_sboms_mock,  # noqa: F811
     ):
         team = team_with_business_plan
         product = Product.objects.create(name="P", team=team, is_public=True)
         release = Release.objects.create(product=product, name="v1.0.0")
-        b = _spdx2_member(team, s3_sboms_mock, "bbb", namespace="https://member.example/bbb",
-                          described="SPDXRef-Package-bbb", sha="a" * 64)
+        b = _spdx2_member(
+            team,
+            s3_sboms_mock,
+            "bbb",
+            namespace="https://member.example/bbb",
+            described="SPDXRef-Package-bbb",
+            sha="a" * 64,
+        )
         # A references via SHA1 (sbomify stores only SHA256) -> unresolvable, never fetched.
-        a = _spdx2_member_referencing(team, s3_sboms_mock, "aaa", target_digest="d" * 40, algorithm="SHA1", sha="c" * 64)
+        a = _spdx2_member_referencing(
+            team, s3_sboms_mock, "aaa", target_digest="d" * 40, algorithm="SHA1", sha="c" * 64
+        )
         ReleaseArtifact.objects.create(release=release, sbom=a)
         ReleaseArtifact.objects.create(release=release, sbom=b)
 
@@ -314,7 +345,10 @@ class TestSPDX2InboundResolve:
 @pytest.mark.django_db
 class TestSPDX3InboundResolve:
     def test_inbound_import_resolves_to_release_member(
-        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+        self,
+        tmp_path,
+        team_with_business_plan,
+        s3_sboms_mock,  # noqa: F811
     ):
         team = team_with_business_plan
         product = Product.objects.create(name="P", team=team, is_public=True)
@@ -322,7 +356,9 @@ class TestSPDX3InboundResolve:
         b_sha = "a" * 64
         b = _spdx3_member(team, s3_sboms_mock, "bbb", root_uri="https://member.example/bbb#root", sha=b_sha)
         a_comp = Component.objects.create(
-            name="aaa-comp", team=team, visibility=Component.Visibility.PUBLIC,
+            name="aaa-comp",
+            team=team,
+            visibility=Component.Visibility.PUBLIC,
             component_type=Component.ComponentType.BOM,
         )
         a_root = "https://member.example/aaa#root"
@@ -332,14 +368,20 @@ class TestSPDX3InboundResolve:
                 "@graph": [
                     {"type": "software_Package", "spdxId": a_root, "name": "aaa"},
                     {
-                        "type": "Relationship", "spdxId": f"{a_root}-rel",
-                        "relationshipType": "dependsOn", "from": a_root, "to": ["https://other/x"],
+                        "type": "Relationship",
+                        "spdxId": f"{a_root}-rel",
+                        "relationshipType": "dependsOn",
+                        "from": a_root,
+                        "to": ["https://other/x"],
                     },
                     {
-                        "type": "SpdxDocument", "spdxId": f"{a_root}-doc", "rootElement": [a_root],
+                        "type": "SpdxDocument",
+                        "spdxId": f"{a_root}-doc",
+                        "rootElement": [a_root],
                         "import": [
                             {
-                                "type": "ExternalMap", "externalSpdxId": "https://other/x",
+                                "type": "ExternalMap",
+                                "externalSpdxId": "https://other/x",
                                 "locationHint": "https://evil.example/never-fetched",
                                 "verifiedUsing": [{"type": "Hash", "algorithm": "sha256", "hashValue": b_sha}],
                             }
@@ -350,16 +392,19 @@ class TestSPDX3InboundResolve:
         ).encode()
         s3_sboms_mock.uploaded_files["aaa.spdx3.json"] = a_body
         a = SBOM.objects.create(
-            name="aaa", component=a_comp, format="spdx", version="1.0.0",
-            sbom_filename="aaa.spdx3.json", sha256_hash="c" * 64,
+            name="aaa",
+            component=a_comp,
+            format="spdx",
+            version="1.0.0",
+            sbom_filename="aaa.spdx3.json",
+            sha256_hash="c" * 64,
         )
         ReleaseArtifact.objects.create(release=release, sbom=a)
         ReleaseArtifact.objects.create(release=release, sbom=b)
 
         out = json.loads(get_release_sbom_package(release, tmp_path, output_format="spdx", version="3.0").read_bytes())
         deps = [
-            e for e in out["@graph"]
-            if e.get("type") == "Relationship" and e.get("relationshipType") == "dependsOn"
+            e for e in out["@graph"] if e.get("type") == "Relationship" and e.get("relationshipType") == "dependsOn"
         ]
         assert any(e["from"] == a_root and "https://member.example/bbb#root" in e["to"] for e in deps)
 
@@ -369,7 +414,10 @@ class TestAggregateSchemaValidity:
     """#357 AC: the aggregate is valid SPDX with referential integrity intact."""
 
     def test_spdx23_aggregate_validates_against_model(
-        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+        self,
+        tmp_path,
+        team_with_business_plan,
+        s3_sboms_mock,  # noqa: F811
     ):
         from sbomify.apps.sboms.sbom_format_schemas import spdx_2_3
 
@@ -378,15 +426,24 @@ class TestAggregateSchemaValidity:
         release = Release.objects.create(product=product, name="v1.0.0")
         ReleaseArtifact.objects.create(
             release=release,
-            sbom=_spdx2_member(team, s3_sboms_mock, "alpha", namespace="https://m/alpha",
-                               described="SPDXRef-Package-alpha", sha="a" * 64),
+            sbom=_spdx2_member(
+                team,
+                s3_sboms_mock,
+                "alpha",
+                namespace="https://m/alpha",
+                described="SPDXRef-Package-alpha",
+                sha="a" * 64,
+            ),
         )
         out = json.loads(get_release_sbom_package(release, tmp_path, output_format="spdx").read_bytes())
         doc = spdx_2_3.SPDXDocument.model_validate(out)  # raises if the serialized output is invalid
         assert doc.externalDocumentRefs  # native link survived serialization + revalidation
 
     def test_spdx3_aggregate_validates_against_model(
-        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+        self,
+        tmp_path,
+        team_with_business_plan,
+        s3_sboms_mock,  # noqa: F811
     ):
         from sbomify.apps.sboms.schemas import SPDX3Schema as SPDX3Document
 

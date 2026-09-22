@@ -73,9 +73,7 @@ class TestClockSkewExchange:
     ) -> None:
         now = int(time.time())
         # Simulate GitHub's issuer clock ~30s ahead of ours -> future iat/nbf.
-        token = github_claims_factory(
-            repository_owner_id=67890, repository_id=12345, iat=now + 30, nbf=now + 30
-        )
+        token = github_claims_factory(repository_owner_id=67890, repository_id=12345, iat=now + 30, nbf=now + 30)
         response = Client().post(
             EXCHANGE_URL,
             data=json.dumps({"component_id": component.id}),
@@ -94,9 +92,7 @@ class TestClockSkewExchange:
         production failure this fix removes."""
         settings.OIDC_GITHUB_LEEWAY_SECONDS = 0
         now = int(time.time())
-        token = github_claims_factory(
-            repository_owner_id=67890, repository_id=12345, iat=now + 30, nbf=now + 30
-        )
+        token = github_claims_factory(repository_owner_id=67890, repository_id=12345, iat=now + 30, nbf=now + 30)
         response = Client().post(
             EXCHANGE_URL,
             data=json.dumps({"component_id": component.id}),

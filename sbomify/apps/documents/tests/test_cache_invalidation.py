@@ -46,9 +46,7 @@ def company_nda_document(team_with_business_plan):
 @pytest.fixture
 def admin_member(team_with_business_plan, sample_user):
     """Create an admin member."""
-    return Member.objects.get_or_create(
-        user=sample_user, team=team_with_business_plan, defaults={"role": "admin"}
-    )[0]
+    return Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "admin"})[0]
 
 
 @pytest.mark.django_db
@@ -81,9 +79,7 @@ class TestCacheInvalidation:
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
-        admin2_user = User.objects.create_user(
-            username="admin2", email="admin2@example.com", password="testpass123"
-        )
+        admin2_user = User.objects.create_user(username="admin2", email="admin2@example.com", password="testpass123")
         admin2 = Member.objects.create(team=team_with_business_plan, user=admin2_user, role="owner")
 
         cache_key1 = f"pending_access_requests:{team_with_business_plan.key}:{admin1.user_id}"
@@ -174,9 +170,7 @@ class TestCacheInvalidation:
             "documents:access_request_queue",
             kwargs={"team_key": team_with_business_plan.key},
         )
-        response = authenticated_web_client.post(
-            url, {"action": "approve", "request_id": access_request.id}
-        )
+        response = authenticated_web_client.post(url, {"action": "approve", "request_id": access_request.id})
 
         # Verify request was approved
         access_request.refresh_from_db()

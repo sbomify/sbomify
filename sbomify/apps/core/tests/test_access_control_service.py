@@ -128,13 +128,9 @@ class TestCheckComponentAccess:
         assert result.reason == "private_requires_authentication"
         assert result.requires_authentication is True
 
-    def test_private_component_owner_access(
-        self, sample_user, team_with_business_plan, private_component
-    ):
+    def test_private_component_owner_access(self, sample_user, team_with_business_plan, private_component):
         """Test private component access for owner."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         factory = RequestFactory()
         request = factory.get("/")
@@ -148,9 +144,7 @@ class TestCheckComponentAccess:
         assert result.has_access is True
         assert result.reason == "private_access_granted"
 
-    def test_private_component_guest_denied(
-        self, guest_user, team_with_business_plan, private_component
-    ):
+    def test_private_component_guest_denied(self, guest_user, team_with_business_plan, private_component):
         """Test private component access denied for guest member."""
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
 
@@ -179,13 +173,9 @@ class TestCheckComponentAccess:
         assert result.reason == "gated_requires_authentication"
         assert result.requires_access_request is True
 
-    def test_gated_component_owner_access(
-        self, sample_user, team_with_business_plan, gated_component
-    ):
+    def test_gated_component_owner_access(self, sample_user, team_with_business_plan, gated_component):
         """Test gated component access for owner (no NDA required)."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         factory = RequestFactory()
         request = factory.get("/")
@@ -198,14 +188,10 @@ class TestCheckComponentAccess:
         assert result.has_access is True
         assert result.reason == "gated_access_granted"
 
-    def test_gated_component_denied_for_out_of_scope_token(
-        self, sample_user, team_with_business_plan, gated_component
-    ):
+    def test_gated_component_denied_for_out_of_scope_token(self, sample_user, team_with_business_plan, gated_component):
         """A workspace-scoped token must not read a gated component in a DIFFERENT workspace,
         even when the user's own membership would otherwise grant gated access."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
         other_team = Team.objects.create(name="Other WS", key="otherwsscopekey")
 
         factory = RequestFactory()
@@ -218,13 +204,9 @@ class TestCheckComponentAccess:
         assert result.has_access is False
         assert result.reason == "token_workspace_scope"
 
-    def test_gated_component_allowed_for_in_scope_token(
-        self, sample_user, team_with_business_plan, gated_component
-    ):
+    def test_gated_component_allowed_for_in_scope_token(self, sample_user, team_with_business_plan, gated_component):
         """A token scoped to the component's own workspace still grants gated access."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         factory = RequestFactory()
         request = factory.get("/")
@@ -236,9 +218,7 @@ class TestCheckComponentAccess:
         assert result.has_access is True
         assert result.reason == "gated_access_granted"
 
-    def test_gated_component_guest_with_approved_request(
-        self, guest_user, team_with_business_plan, gated_component
-    ):
+    def test_gated_component_guest_with_approved_request(self, guest_user, team_with_business_plan, gated_component):
         """Test gated component access for guest with approved request and signed NDA."""
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
         AccessRequest.objects.create(
@@ -302,9 +282,7 @@ class TestCheckComponentAccess:
         assert result.has_access is False
         assert result.reason == "gated_nda_re_sign_required"
 
-    def test_gated_component_pending_request(
-        self, guest_user, team_with_business_plan, gated_component
-    ):
+    def test_gated_component_pending_request(self, guest_user, team_with_business_plan, gated_component):
         """Test gated component access with pending request."""
         AccessRequest.objects.create(
             team=team_with_business_plan,
@@ -324,9 +302,7 @@ class TestCheckComponentAccess:
         assert result.reason == "gated_access_request_pending"
         assert result.access_request_status == AccessRequest.Status.PENDING
 
-    def test_gated_component_rejected_request(
-        self, guest_user, team_with_business_plan, gated_component
-    ):
+    def test_gated_component_rejected_request(self, guest_user, team_with_business_plan, gated_component):
         """Test gated component access with rejected request."""
         AccessRequest.objects.create(
             team=team_with_business_plan,
@@ -346,9 +322,7 @@ class TestCheckComponentAccess:
         assert result.reason == "gated_access_request_rejected"
         assert result.access_request_status == AccessRequest.Status.REJECTED
 
-    def test_gated_component_no_request(
-        self, guest_user, team_with_business_plan, gated_component
-    ):
+    def test_gated_component_no_request(self, guest_user, team_with_business_plan, gated_component):
         """Test gated component access with no request."""
         factory = RequestFactory()
         request = factory.get("/")
@@ -362,9 +336,7 @@ class TestCheckComponentAccess:
         assert result.reason == "gated_access_required"
         assert result.requires_access_request is True
 
-    def test_gated_component_revoked_request(
-        self, guest_user, team_with_business_plan, gated_component, sample_user
-    ):
+    def test_gated_component_revoked_request(self, guest_user, team_with_business_plan, gated_component, sample_user):
         """Test gated component access with revoked request."""
         # Create revoked access request
         AccessRequest.objects.create(
@@ -431,9 +403,7 @@ class TestCheckGatedAccess:
 
     def test_owner_access(self, sample_user, team_with_business_plan):
         """Test _check_gated_access for owner (no NDA required)."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         has_access, needs_nda_re_sign = _check_gated_access(sample_user, team_with_business_plan)
 
@@ -442,18 +412,14 @@ class TestCheckGatedAccess:
 
     def test_admin_access(self, sample_user, team_with_business_plan):
         """Test _check_gated_access for admin (no NDA required)."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "admin"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "admin"})
 
         has_access, needs_nda_re_sign = _check_gated_access(sample_user, team_with_business_plan)
 
         assert has_access is True
         assert needs_nda_re_sign is False
 
-    def test_guest_with_signed_nda(
-        self, guest_user, team_with_business_plan, company_nda_document
-    ):
+    def test_guest_with_signed_nda(self, guest_user, team_with_business_plan, company_nda_document):
         """Test _check_gated_access for guest with signed NDA."""
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
         access_request = AccessRequest.objects.create(
@@ -473,9 +439,7 @@ class TestCheckGatedAccess:
         assert has_access is True
         assert needs_nda_re_sign is False
 
-    def test_guest_without_signed_nda(
-        self, guest_user, team_with_business_plan, company_nda_document
-    ):
+    def test_guest_without_signed_nda(self, guest_user, team_with_business_plan, company_nda_document):
         """Test _check_gated_access for guest without signed NDA."""
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
 
@@ -493,9 +457,7 @@ class TestCheckGatedAccess:
         assert has_access is True
         assert needs_nda_re_sign is False
 
-    def test_approved_request_with_signed_nda(
-        self, guest_user, team_with_business_plan, company_nda_document
-    ):
+    def test_approved_request_with_signed_nda(self, guest_user, team_with_business_plan, company_nda_document):
         """Test _check_gated_access for non-member with approved request and signed NDA."""
         access_request = AccessRequest.objects.create(
             team=team_with_business_plan,
@@ -514,9 +476,7 @@ class TestCheckGatedAccess:
         assert has_access is True
         assert needs_nda_re_sign is False
 
-    def test_approved_request_without_signed_nda(
-        self, guest_user, team_with_business_plan, company_nda_document
-    ):
+    def test_approved_request_without_signed_nda(self, guest_user, team_with_business_plan, company_nda_document):
         """Test _check_gated_access for non-member with approved request but no signed NDA."""
         AccessRequest.objects.create(
             team=team_with_business_plan,
@@ -536,9 +496,7 @@ class TestCheckGatedAccess:
         assert has_access is False
         assert needs_nda_re_sign is False
 
-    def test_revoked_access_request_denies_access(
-        self, guest_user, team_with_business_plan, sample_user
-    ):
+    def test_revoked_access_request_denies_access(self, guest_user, team_with_business_plan, sample_user):
         """Test _check_gated_access denies access when request is revoked."""
         # Create revoked access request
         AccessRequest.objects.create(
@@ -558,9 +516,7 @@ class TestCheckGatedAccess:
         # Verify guest membership was cleaned up
         assert not Member.objects.filter(team=team_with_business_plan, user=guest_user, role="guest").exists()
 
-    def test_revoked_access_request_cleans_up_guest_membership(
-        self, guest_user, team_with_business_plan, sample_user
-    ):
+    def test_revoked_access_request_cleans_up_guest_membership(self, guest_user, team_with_business_plan, sample_user):
         """Test that revoked access request cleanup removes guest membership."""
         # Create revoked access request
         AccessRequest.objects.create(
@@ -571,9 +527,7 @@ class TestCheckGatedAccess:
             revoked_at=timezone.now(),
         )
         # Create guest member that should be cleaned up
-        guest_member = Member.objects.create(
-            team=team_with_business_plan, user=guest_user, role="guest"
-        )
+        guest_member = Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
 
         has_access, needs_nda_re_sign = _check_gated_access(guest_user, team_with_business_plan)
 
@@ -581,9 +535,7 @@ class TestCheckGatedAccess:
         # Verify guest membership was deleted
         assert not Member.objects.filter(id=guest_member.id).exists()
 
-    def test_revoked_request_checked_before_approved(
-        self, guest_user, team_with_business_plan, sample_user
-    ):
+    def test_revoked_request_checked_before_approved(self, guest_user, team_with_business_plan, sample_user):
         """Test that revoked requests are checked before approved requests in the access control logic."""
         # Create revoked access request
         revoked_request = AccessRequest.objects.create(
@@ -593,12 +545,12 @@ class TestCheckGatedAccess:
             revoked_by=sample_user,
             revoked_at=timezone.now(),
         )
-        
+
         # Verify revoked request denies access
         has_access, needs_nda_re_sign = _check_gated_access(guest_user, team_with_business_plan)
         assert has_access is False
         assert needs_nda_re_sign is False
-        
+
         # Update to approved status (simulating a state change)
         revoked_request.status = AccessRequest.Status.APPROVED
         revoked_request.decided_by = sample_user
@@ -606,7 +558,7 @@ class TestCheckGatedAccess:
         revoked_request.revoked_by = None
         revoked_request.revoked_at = None
         revoked_request.save()
-        
+
         # Now it should check for approved request (no revoked request exists)
         # This confirms the order: revoked check happens first, then approved check
         # Access depends on NDA/member status, but revoked check no longer blocks it
@@ -648,9 +600,7 @@ class TestUserHasSignedCurrentNDA:
 
         assert result is False
 
-    def test_old_nda_signed(
-        self, guest_user, team_with_business_plan, company_nda_document
-    ):
+    def test_old_nda_signed(self, guest_user, team_with_business_plan, company_nda_document):
         """Test when user has signed old NDA version but not current."""
         # Create old NDA document
         old_nda_content = b"Old NDA Content v0.9"
@@ -684,9 +634,7 @@ class TestUserHasSignedCurrentNDA:
 
         assert result is False
 
-    def test_multiple_nda_versions(
-        self, guest_user, team_with_business_plan, company_nda_document
-    ):
+    def test_multiple_nda_versions(self, guest_user, team_with_business_plan, company_nda_document):
         """Test when user has signed multiple NDA versions."""
         # Create old NDA
         old_nda_content = b"Old NDA Content v0.9"

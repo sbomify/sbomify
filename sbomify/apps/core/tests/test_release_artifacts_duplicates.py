@@ -111,7 +111,7 @@ def test_multiple_components_no_duplicates(
         sbom = SBOM.objects.create(
             component=component,
             format="cyclonedx",
-            format_version=f"1.{4+i}",
+            format_version=f"1.{4 + i}",
             name=f"{component.name} SBOM",
             version="1.0.0",
         )

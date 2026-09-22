@@ -49,10 +49,7 @@ class TestKeycloakAuthenticationFlows:
         """Test OAuth callback handles authentication errors."""
         # The callback URL pattern is /accounts/oidc/<provider_id>/login/callback/
         # Test with error parameter
-        response = client.get(
-            "/accounts/oidc/keycloak/login/callback/?error=access_denied",
-            follow=False
-        )
+        response = client.get("/accounts/oidc/keycloak/login/callback/?error=access_denied", follow=False)
         # Should handle error gracefully
         assert response.status_code in (200, 302, 400, 401)
 
@@ -68,16 +65,8 @@ class TestKeycloakAuthenticationFlows:
         from allauth.socialaccount.models import SocialAccount, SocialToken
 
         # Create social account and token
-        social_account = SocialAccount.objects.create(
-            user=sample_user,
-            provider="keycloak",
-            uid="test-uid"
-        )
-        SocialToken.objects.create(
-            account=social_account,
-            token="test-token",
-            token_secret="test-secret"
-        )
+        social_account = SocialAccount.objects.create(user=sample_user, provider="keycloak", uid="test-uid")
+        SocialToken.objects.create(account=social_account, token="test-token", token_secret="test-secret")
 
         # Token should exist
         assert SocialToken.objects.filter(account=social_account).exists()
@@ -95,18 +84,10 @@ class TestKeycloakSecurity:
 
     def test_open_redirect_protection(self, client: Client):
         """Test that open redirects are prevented."""
-        malicious_urls = [
-            "https://evil.com",
-            "//evil.com",
-            "javascript:alert(1)",
-            "http://attacker.net"
-        ]
+        malicious_urls = ["https://evil.com", "//evil.com", "javascript:alert(1)", "http://attacker.net"]
 
         for malicious_url in malicious_urls:
-            response = client.get(
-                reverse("core:keycloak_login") + f"?next={malicious_url}",
-                follow=False
-            )
+            response = client.get(reverse("core:keycloak_login") + f"?next={malicious_url}", follow=False)
             location = response.get("Location", "")
             # Should not contain malicious URL
             assert malicious_url not in location or location.startswith("/")
@@ -124,15 +105,9 @@ class TestKeycloakSecurity:
         """Test that tokens are stored securely."""
         from allauth.socialaccount.models import SocialAccount, SocialToken
 
-        social_account = SocialAccount.objects.create(
-            user=sample_user,
-            provider="keycloak",
-            uid="test-uid"
-        )
+        social_account = SocialAccount.objects.create(user=sample_user, provider="keycloak", uid="test-uid")
         token = SocialToken.objects.create(
-            account=social_account,
-            token="test-access-token",
-            token_secret="test-refresh-token"
+            account=social_account, token="test-access-token", token_secret="test-refresh-token"
         )
 
         # Tokens should be stored (encrypted at DB level)
@@ -149,8 +124,9 @@ class TestKeycloakTemplateSecurity:
         # This is a static check - templates should use ${kcSanitize()}
         # for all user-provided data
         import os
+
         template_dir = "keycloak/themes/sbomify/login"
-        
+
         if os.path.exists(template_dir):
             for filename in ["login.ftl", "register.ftl"]:
                 filepath = os.path.join(template_dir, filename)
@@ -170,8 +146,9 @@ class TestKeycloakTemplateSecurity:
         """Test that templates prevent XSS attacks."""
         # Check that templates don't use unsafe interpolation
         import os
+
         template_dir = "keycloak/themes/sbomify/login"
-        
+
         if os.path.exists(template_dir):
             for filename in ["login.ftl", "register.ftl"]:
                 filepath = os.path.join(template_dir, filename)
@@ -195,8 +172,9 @@ class TestKeycloakAccessibility:
     def test_aria_labels_present(self):
         """Test that ARIA labels are present in templates."""
         import os
+
         template_dir = "keycloak/themes/sbomify/login"
-        
+
         if os.path.exists(template_dir):
             for filename in ["login.ftl", "register.ftl"]:
                 filepath = os.path.join(template_dir, filename)
@@ -210,8 +188,9 @@ class TestKeycloakAccessibility:
     def test_keyboard_navigation(self):
         """Test that keyboard navigation is supported."""
         import os
+
         template_dir = "keycloak/themes/sbomify/login"
-        
+
         if os.path.exists(template_dir):
             for filename in ["login.ftl", "register.ftl"]:
                 filepath = os.path.join(template_dir, filename)
@@ -227,8 +206,9 @@ class TestKeycloakAccessibility:
     def test_screen_reader_support(self):
         """Test that screen reader support is present."""
         import os
+
         template_dir = "keycloak/themes/sbomify/login"
-        
+
         if os.path.exists(template_dir):
             for filename in ["login.ftl", "register.ftl"]:
                 filepath = os.path.join(template_dir, filename)
@@ -240,4 +220,3 @@ class TestKeycloakAccessibility:
                         # Check for aria-hidden on decorative icons
                         if "alert-icon" in content:
                             assert "aria-hidden" in content
-

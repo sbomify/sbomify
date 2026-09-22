@@ -162,9 +162,7 @@ class TestJWTLevelExpiry:
         User = get_user_model()
         user = User.objects.create_user(username="oidc-claims-1", password="x")
         future = timezone.now() + datetime.timedelta(seconds=900)
-        encoded = create_personal_access_token(
-            user, expires_at=future.timestamp(), token_type="oidc"
-        )
+        encoded = create_personal_access_token(user, expires_at=future.timestamp(), token_type="oidc")
 
         payload = jwt_decode(
             encoded,
@@ -208,9 +206,7 @@ class TestJWTLevelExpiry:
         User = get_user_model()
         user = User.objects.create_user(username="oidc-jwt-expired", password="x")
         past = timezone.now() - datetime.timedelta(seconds=60)
-        encoded = create_personal_access_token(
-            user, expires_at=past.timestamp(), token_type="oidc"
-        )
+        encoded = create_personal_access_token(user, expires_at=past.timestamp(), token_type="oidc")
 
         # Create the DB row WITHOUT expires_at — simulating the DB-tamper
         # / migration-bug scenario the JWT-level gate guards against.

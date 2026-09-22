@@ -289,6 +289,7 @@ class TestDocumentTaggingAPI(AuthenticationTestMixin):
 
         # Add guest user to team with guest role
         from sbomify.apps.teams.models import Member
+
         Member.objects.create(user=self.guest_user, team=self.team1, role="guest")
 
         payload = {"release_ids": [str(self.release1.id)]}
@@ -310,9 +311,7 @@ class TestDocumentTaggingAPI(AuthenticationTestMixin):
         # Add document to release first
         ReleaseArtifact.objects.create(release=self.release1, document=self.doc1_spec)
 
-        response = client.delete(
-            f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.release1.id}", **headers
-        )
+        response = client.delete(f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.release1.id}", **headers)
 
         assert response.status_code == 204
         assert not ReleaseArtifact.objects.filter(release=self.release1, document=self.doc1_spec).exists()
@@ -322,9 +321,7 @@ class TestDocumentTaggingAPI(AuthenticationTestMixin):
         client, access_token = authenticated_api_client
         headers = get_api_headers(access_token)
 
-        response = client.delete(
-            f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.release1.id}", **headers
-        )
+        response = client.delete(f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.release1.id}", **headers)
 
         assert response.status_code == 404
 
@@ -336,9 +333,7 @@ class TestDocumentTaggingAPI(AuthenticationTestMixin):
         # Add document to latest release first
         ReleaseArtifact.objects.create(release=self.latest_release, document=self.doc1_spec)
 
-        response = client.delete(
-            f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.latest_release.id}", **headers
-        )
+        response = client.delete(f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.latest_release.id}", **headers)
 
         assert response.status_code == 400
 
@@ -362,9 +357,7 @@ class TestDocumentTaggingAPI(AuthenticationTestMixin):
         assert response.status_code == 404
 
         # Test remove from release
-        response = client.delete(
-            f"/api/v1/documents/nonexistent/releases/{self.release1.id}", **headers
-        )
+        response = client.delete(f"/api/v1/documents/nonexistent/releases/{self.release1.id}", **headers)
         assert response.status_code == 404
 
     def test_unauthenticated_access_public_document(self):

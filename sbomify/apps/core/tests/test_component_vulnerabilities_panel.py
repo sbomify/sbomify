@@ -239,9 +239,7 @@ class TestPublishedComponentsAreNotOpen:
         return client
 
     @pytest.mark.parametrize("visibility", ["public", "gated", "private"])
-    def test_the_panel_endpoint_tells_an_outsider_nothing(
-        self, sample_team_with_owner_member, outsider, visibility
-    ):
+    def test_the_panel_endpoint_tells_an_outsider_nothing(self, sample_team_with_owner_member, outsider, visibility):
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=8, name=f"published-{visibility}")
         Component.objects.filter(pk=component.id).update(visibility=visibility)
@@ -255,9 +253,7 @@ class TestPublishedComponentsAreNotOpen:
         assert "CVE-2026-0000" not in response.content.decode()
 
     @pytest.mark.parametrize("visibility", ["public", "gated", "private"])
-    def test_the_component_page_tells_an_outsider_nothing(
-        self, sample_team_with_owner_member, outsider, visibility
-    ):
+    def test_the_component_page_tells_an_outsider_nothing(self, sample_team_with_owner_member, outsider, visibility):
         """The page has the same hole as the endpoint, so it takes the same fix."""
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=8, name=f"page-{visibility}")
@@ -305,9 +301,7 @@ class TestTheFiltersSurviveALeaveAndAReturn:
 
         assert 'hx-push-url="true"' in body
 
-    def test_what_it_pushes_is_something_a_plain_request_can_serve(
-        self, sample_team_with_owner_member, sample_user
-    ):
+    def test_what_it_pushes_is_something_a_plain_request_can_serve(self, sample_team_with_owner_member, sample_user):
         """Pushing a URL that only htmx can render would break the refresh it exists to fix."""
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=12)
@@ -319,9 +313,7 @@ class TestTheFiltersSurviveALeaveAndAReturn:
             params,
             headers={"hx-request": "true"},
         )
-        page = client.get(
-            reverse("core:component_details", kwargs={"component_id": component.id}), params
-        )
+        page = client.get(reverse("core:component_details", kwargs={"component_id": component.id}), params)
 
         assert panel.status_code == 200
         assert page.status_code == 200

@@ -99,9 +99,7 @@ class TestSignatureFailures:
         with pytest.raises(OIDCInvalidSignature, match="no JWK matches"):
             verify_github_oidc_token(token)
 
-    def test_double_miss_after_refresh_permanently_fails(
-        self, mocker, github_claims_factory, rsa_keypair
-    ) -> None:
+    def test_double_miss_after_refresh_permanently_fails(self, mocker, github_claims_factory, rsa_keypair) -> None:
         """Regression for test-automator P0: if both the initial fetch AND
         the forced refresh return JWKS without the token's kid, the call
         must fail with ``OIDCInvalidSignature("no JWK matches")`` — not
@@ -134,20 +132,26 @@ class TestSignatureFailures:
         import base64
         import json as json_mod
 
-        header = base64.urlsafe_b64encode(
-            json_mod.dumps({"alg": "none", "kid": "test-kid-1", "typ": "JWT"}).encode()
-        ).rstrip(b"=").decode()
-        payload = base64.urlsafe_b64encode(
-            json_mod.dumps(
-                {
-                    "iss": "https://token.actions.githubusercontent.com",
-                    "aud": "sbomify.com",
-                    "exp": int(time.time()) + 60,
-                    "iat": int(time.time()),
-                    "sub": "x",
-                }
-            ).encode()
-        ).rstrip(b"=").decode()
+        header = (
+            base64.urlsafe_b64encode(json_mod.dumps({"alg": "none", "kid": "test-kid-1", "typ": "JWT"}).encode())
+            .rstrip(b"=")
+            .decode()
+        )
+        payload = (
+            base64.urlsafe_b64encode(
+                json_mod.dumps(
+                    {
+                        "iss": "https://token.actions.githubusercontent.com",
+                        "aud": "sbomify.com",
+                        "exp": int(time.time()) + 60,
+                        "iat": int(time.time()),
+                        "sub": "x",
+                    }
+                ).encode()
+            )
+            .rstrip(b"=")
+            .decode()
+        )
         unsigned_token = f"{header}.{payload}."
 
         with pytest.raises(OIDCInvalidSignature):
@@ -172,20 +176,26 @@ class TestSignatureFailures:
 
         # Hand-construct an alg=HS256 JWT WITHOUT going through PyJWT's
         # encode (which refuses RSA-key-as-HMAC-secret in 2.x).
-        header = base64.urlsafe_b64encode(
-            json_mod.dumps({"alg": "HS256", "kid": "test-kid-1", "typ": "JWT"}).encode()
-        ).rstrip(b"=").decode()
-        payload = base64.urlsafe_b64encode(
-            json_mod.dumps(
-                {
-                    "iss": "https://token.actions.githubusercontent.com",
-                    "aud": "sbomify.com",
-                    "exp": int(time.time()) + 60,
-                    "iat": int(time.time()),
-                    "sub": "x",
-                }
-            ).encode()
-        ).rstrip(b"=").decode()
+        header = (
+            base64.urlsafe_b64encode(json_mod.dumps({"alg": "HS256", "kid": "test-kid-1", "typ": "JWT"}).encode())
+            .rstrip(b"=")
+            .decode()
+        )
+        payload = (
+            base64.urlsafe_b64encode(
+                json_mod.dumps(
+                    {
+                        "iss": "https://token.actions.githubusercontent.com",
+                        "aud": "sbomify.com",
+                        "exp": int(time.time()) + 60,
+                        "iat": int(time.time()),
+                        "sub": "x",
+                    }
+                ).encode()
+            )
+            .rstrip(b"=")
+            .decode()
+        )
         signing_input = f"{header}.{payload}".encode()
         # The attacker uses the public key (which they can fetch from JWKS) as
         # the HMAC secret. We simulate that by using a stand-in secret —

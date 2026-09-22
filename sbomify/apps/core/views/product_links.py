@@ -9,7 +9,7 @@ from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.core.services.product_links import (
     add_utm_params,
     build_links_context,
@@ -19,7 +19,7 @@ from sbomify.apps.core.services.product_links import (
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class ProductLinksView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+class ProductLinksView(GuestAccessBlockedMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """View for product links HTMX partial."""
 
     template_name = "core/components/product_links_card.html.j2"

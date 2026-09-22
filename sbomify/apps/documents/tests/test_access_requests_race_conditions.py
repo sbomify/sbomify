@@ -84,8 +84,9 @@ class TestAccessRequestRaceConditions:
         """Test that concurrent updates to access request are handled correctly."""
         # Ensure no Member exists for this user/team to avoid signal interference
         from sbomify.apps.teams.models import Member
+
         Member.objects.filter(team=team_with_business_plan, user=guest_user).delete()
-        
+
         # Create initial request
         access_request = AccessRequest.objects.create(
             team=team_with_business_plan,
@@ -100,10 +101,7 @@ class TestAccessRequestRaceConditions:
             try:
                 with transaction.atomic():
                     try:
-                        request = (
-                            AccessRequest.objects.select_for_update()
-                            .get(id=access_request.id)
-                        )
+                        request = AccessRequest.objects.select_for_update().get(id=access_request.id)
                     except AccessRequest.DoesNotExist:
                         # Request was deleted (possibly by a signal), skip this update
                         return None
@@ -116,6 +114,7 @@ class TestAccessRequestRaceConditions:
             except Exception:
                 # Log the exception for debugging
                 import traceback
+
                 traceback.print_exc()
                 return None
             finally:
@@ -134,11 +133,11 @@ class TestAccessRequestRaceConditions:
             # At least one update should have succeeded - verify status changed from REJECTED
             # The fact that status changed to PENDING proves at least one update succeeded
             # If failing consistently, the threads might be failing silently or transactions rolling back
-            
+
             # Check if any update claimed success
             successful_updates = [r for r in results if r is not None]
             assert len(successful_updates) >= 1, "No updates succeeded"
-            
+
             assert access_request.status == AccessRequest.Status.PENDING or access_request.status == "pending"
 
         except AccessRequest.DoesNotExist:
@@ -160,23 +159,23 @@ class TestAccessRequestAPIRaceConditions:
         """Test concurrent access request creation via API."""
         from django.test import Client
         from django.urls import reverse
-        
+
         # Don't use the fixture client in threads as it's not thread-safe
         # client, access_token = authenticated_api_client
         # Instead, we just use raw model creation for race testing or create new clients
         # But creating new clients with auth is hard without full setup
-        
+
         # Re-implement using simple loop for now, or use separate clients
         # Since we can't easily multithread django test client, verify logic via model test (already done above)
         # We'll skip the threaded API test or make it sequential just to cover the endpoint logic
         # OR we try to instantiate a new Client() in each thread.
-        
+
         _, access_token = authenticated_api_client
-        
+
         headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
         url = reverse("api-1:create_access_request", kwargs={"team_key": team_with_business_plan.key})
 
-        num_requests = 3 # Reduce threads
+        num_requests = 3  # Reduce threads
         responses = []
 
         def make_request():

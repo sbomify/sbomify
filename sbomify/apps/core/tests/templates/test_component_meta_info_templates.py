@@ -1,4 +1,3 @@
-
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.template.loader import render_to_string
@@ -8,27 +7,19 @@ from sbomify.apps.core.models import Component
 
 @pytest.mark.django_db
 class TestComponentMetaInfoTemplates:
-    
     def test_component_meta_info_wrapper_rendering(self, rf, component_factory, product_factory):
         # Setup
         request = rf.get("/")
         request.user = AnonymousUser()
         request.session = {"current_team": {"key": "test-team"}}
         product = product_factory("Test Product")
-        component = component_factory(
-            "Test Component",
-            Component.ComponentType.BOM,
-            product=product
-        )
-        
-        context = {
-            "component": component,
-            "request": request
-        }
-        
+        component = component_factory("Test Component", Component.ComponentType.BOM, product=product)
+
+        context = {"component": component, "request": request}
+
         # Test Rendering
         rendered = render_to_string("core/components/component_meta_info.html.j2", context)
-        
+
         # Assertions
         assert "componentMetaInfoWrapper" in rendered
         assert component.id in rendered
@@ -42,18 +33,18 @@ class TestComponentMetaInfoTemplates:
                 "name": "ACME Corp",
                 "url": ["https://acme.com"],
                 "address": "123 Main St",
-                "contacts": [{"name": "John Doe", "email": "john@acme.com"}]
+                "contacts": [{"name": "John Doe", "email": "john@acme.com"}],
             },
             "lifecycle_phase": "build",
             "licenses": ["MIT", {"name": "Custom License"}],
-            "authors": [{"name": "Jane Doe", "email": "jane@example.com"}]
+            "authors": [{"name": "Jane Doe", "email": "jane@example.com"}],
         }
-        
+
         context = {"metadata": metadata}
-        
+
         # Test Rendering
         rendered = render_to_string("core/components/component_meta_info_display.html.j2", context)
-        
+
         # Assertions - Check for Alpine directives as content is rendered on client side
         assert 'x-text="metadata.supplier.name"' in rendered
         assert 'x-text="formatLifecyclePhase(metadata.lifecycle_phase)"' in rendered
@@ -66,27 +57,21 @@ class TestComponentMetaInfoTemplates:
         request.session = {"current_team": {"key": "test-team"}}
         product = product_factory("Test Product")
         component = component_factory("Test Component", product=product)
-        
-        metadata = {
-            "supplier": {"name": "ACME Corp"},
-            "licenses": ["MIT"],
-            "authors": []
-        }
-        
-        contact_profiles = [
-            {"id": "cp1", "name": "Profile 1", "email": "p1@example.com"}
-        ]
-        
+
+        metadata = {"supplier": {"name": "ACME Corp"}, "licenses": ["MIT"], "authors": []}
+
+        contact_profiles = [{"id": "cp1", "name": "Profile 1", "email": "p1@example.com"}]
+
         context = {
             "component": component,
             "request": request,
             "metadata": metadata,
-            "contact_profiles": contact_profiles
+            "contact_profiles": contact_profiles,
         }
-        
+
         # Test Rendering
         rendered = render_to_string("core/components/component_meta_info_editor.html.j2", context)
-        
+
         # Assertions
         assert "componentMetaInfoEditor" in rendered
         assert "licensesEditor" in rendered
@@ -100,18 +85,12 @@ class TestComponentMetaInfoTemplates:
         # Setup
         product = product_factory("Test Product")
         component = component_factory("Test Component", product=product)
-        
-        context = {
-            "component": component,
-            "integration_status": {
-                "is_active": True,
-                "last_run": "2023-01-01"
-            }
-        }
-        
+
+        context = {"component": component, "integration_status": {"is_active": True, "last_run": "2023-01-01"}}
+
         # Test Rendering
         rendered = render_to_string("sboms/components/ci_cd_info.html.j2", context)
-        
+
         # Assertions
         assert "Get started" in rendered
         assert component.id in rendered
@@ -125,24 +104,21 @@ class TestComponentMetaInfoTemplates:
         # Setup
         licenses = ["MIT", "Apache-2.0"]
         unknown_tokens = ["UNKNOWN"]
-        
-        context = {
-            "licenses": licenses,
-            "unknown_tokens": unknown_tokens
-        }
-        
+
+        context = {"licenses": licenses, "unknown_tokens": unknown_tokens}
+
         # Test Rendering
         rendered = render_to_string("sboms/components/licenses_editor.html.j2", context)
-        
+
         # Assertions
         assert "licensesEditor" in rendered
         assert 'x-model="licenseExpression"' in rendered
-        
+
     @pytest.mark.skip(reason="Legacy template - supplier_editor is replaced by FormSet-based contact form")
     def test_supplier_editor_rendering(self):
         # Test Rendering (wrapper and base)
         rendered = render_to_string("sboms/components/supplier_editor.html.j2", {})
-        
+
         # Assertions
         assert "supplierEditor" in rendered
         # Check content from base, not filename
@@ -154,10 +130,10 @@ class TestComponentMetaInfoTemplates:
     def test_contacts_editor_rendering(self):
         # Test Rendering (wrapper and base)
         rendered = render_to_string("sboms/components/contacts_editor.html.j2", {})
-        
+
         # Assertions
         assert "contactsEditor" in rendered
-        
+
         # Check content from base
         rendered_base = render_to_string("sboms/components/contacts_editor_base.html.j2", {})
         assert "newContact.name" in rendered_base

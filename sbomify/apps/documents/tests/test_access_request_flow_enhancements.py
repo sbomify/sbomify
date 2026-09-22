@@ -19,6 +19,7 @@ def pending_access_request(team_with_business_plan, guest_user):
         status=AccessRequest.Status.PENDING,
     )
 
+
 @pytest.mark.django_db
 class TestAccessRequestFlowEnhancements:
     """Test specifics of the Access Request UI flow."""
@@ -40,12 +41,14 @@ class TestAccessRequestFlowEnhancements:
                 "active_tab": "trust-center",
             },
         )
-        
+
         # Check redirection
         assert response.status_code == 302
-        expected_url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = (
+            reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        )
         assert response.url == expected_url
-        
+
         # Check HX-Trigger header
         assert "HX-Trigger" in response.headers
         assert response.headers["HX-Trigger"] == "refreshAccessRequests"
@@ -66,12 +69,12 @@ class TestAccessRequestFlowEnhancements:
                 # No active_tab
             },
         )
-        
+
         # Check redirection
         assert response.status_code == 302
         expected_url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
         assert response.url == expected_url
-        
+
         # HX-Trigger usually not checking here, but key is logic difference
 
     def test_reject_redirects_to_trust_center_with_trigger(
@@ -90,9 +93,11 @@ class TestAccessRequestFlowEnhancements:
                 "active_tab": "trust-center",
             },
         )
-        
+
         assert response.status_code == 302
-        expected_url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = (
+            reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        )
         assert response.url == expected_url
         assert response.headers.get("HX-Trigger") == "refreshAccessRequests"
 
@@ -102,11 +107,11 @@ class TestAccessRequestFlowEnhancements:
         """Test revocation redirects to Trust Center with HX-Trigger."""
         # Create approved request
         approved_request = AccessRequest.objects.create(
-            team=team_with_business_plan,
-            user=guest_user,
-            status=AccessRequest.Status.APPROVED
+            team=team_with_business_plan, user=guest_user, status=AccessRequest.Status.APPROVED
         )
-        Member.objects.create(user=guest_user, team=team_with_business_plan, role="guest") # Needed for revocation logic usually
+        Member.objects.create(
+            user=guest_user, team=team_with_business_plan, role="guest"
+        )  # Needed for revocation logic usually
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
@@ -120,21 +125,21 @@ class TestAccessRequestFlowEnhancements:
                 "active_tab": "trust-center",
             },
         )
-        
+
         assert response.status_code == 302
-        expected_url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = (
+            reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        )
         assert response.url == expected_url
         assert response.headers.get("HX-Trigger") == "refreshAccessRequests"
 
-    def test_error_redirects_preserve_tab(
-        self, authenticated_web_client, team_with_business_plan, sample_user
-    ):
+    def test_error_redirects_preserve_tab(self, authenticated_web_client, team_with_business_plan, sample_user):
         """Test that errors (e.g. invalid action) also redirect to trust center if tab matches."""
         # We need a request to reference, even if action is invalid
         pending = AccessRequest.objects.create(
             team=team_with_business_plan, user=sample_user, status=AccessRequest.Status.PENDING
-        ) # Self request for simplicity, logic just needs valid ID usually or might fail earlier. 
-        # Actually logic is: get_object_or_404(AccessRequest...). 
+        )  # Self request for simplicity, logic just needs valid ID usually or might fail earlier.
+        # Actually logic is: get_object_or_404(AccessRequest...).
         # If we use valid ID but invalid ACTION...
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
@@ -149,9 +154,11 @@ class TestAccessRequestFlowEnhancements:
                 "active_tab": "trust-center",
             },
         )
-        
+
         # Logic says: message.error(...) and return redirect(...)
         assert response.status_code == 302
-        expected_url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = (
+            reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        )
         assert response.url == expected_url
         assert response.headers.get("HX-Trigger") == "refreshAccessRequests"

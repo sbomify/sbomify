@@ -74,9 +74,7 @@ class TestListAccessRequestsAPI:
         self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user
     ):
         """Test listing pending access requests."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -97,9 +95,7 @@ class TestListAccessRequestsAPI:
         self, authenticated_api_client, team_with_business_plan, approved_access_request, sample_user
     ):
         """Test listing approved access requests."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -118,17 +114,17 @@ class TestListAccessRequestsAPI:
         # Approved request should not be in pending list
         assert not any(item["id"] == str(approved_access_request.id) for item in data)
 
-    def test_list_requires_admin(
-        self, authenticated_api_client, team_with_business_plan, guest_user
-    ):
+    def test_list_requires_admin(self, authenticated_api_client, team_with_business_plan, guest_user):
         """Test that listing requires admin role."""
         # Guest user might not have access token, so create one
         from sbomify.apps.access_tokens.models import AccessToken
         from sbomify.apps.access_tokens.utils import create_personal_access_token
-        
+
         token_str = create_personal_access_token(guest_user)
-        access_token = AccessToken.objects.create(user=guest_user, encoded_token=token_str, description="Test API Token")
-        
+        access_token = AccessToken.objects.create(
+            user=guest_user, encoded_token=token_str, description="Test API Token"
+        )
+
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
 
         client, _ = authenticated_api_client
@@ -150,9 +146,7 @@ class TestApproveAccessRequestAPI:
         self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user
     ):
         """Test approving a pending access request."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -176,9 +170,7 @@ class TestApproveAccessRequestAPI:
         self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user, guest_user
     ):
         """Test that approving creates a guest member."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -202,9 +194,7 @@ class TestApproveAccessRequestAPI:
         self, authenticated_api_client, team_with_business_plan, approved_access_request, sample_user
     ):
         """Test that approving a non-pending request fails."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -229,9 +219,7 @@ class TestRejectAccessRequestAPI:
         self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user
     ):
         """Test rejecting a pending access request."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -260,9 +248,7 @@ class TestRevokeAccessRequestAPI:
         self, authenticated_api_client, team_with_business_plan, approved_access_request, sample_user, guest_user
     ):
         """Test revoking an approved access request."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
 
         client, access_token = authenticated_api_client
@@ -350,7 +336,7 @@ class TestSignNDAAPI:
         mock_s3 = MagicMock()
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
-        
+
         client, access_token = authenticated_api_client
         client.force_login(guest_user)
 
