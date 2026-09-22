@@ -90,6 +90,43 @@ TOLERATED: dict[tuple[int, str], int] = {
 
 
 @lru_cache(maxsize=1)
+def _routed_modules() -> tuple[pathlib.Path, ...]:
+    """Every module that binds a ninja ``Router``, found by what it contains.
+
+    The two gates below used to select their files by name — ``apis.py`` or
+    ``api.py``, reached through ``rglob("api*.py")``. That pattern is the file
+    naming convention rather than the thing being tested, and two routed
+    modules do not follow it: ``documents/access_apis.py`` (the trust-center
+    access-request and NDA endpoints) and ``core/cle_apis.py``. Neither has
+    ever been read by either gate, and four endpoints in the first one shipped
+    a status their decorator did not declare, which is exactly what the second
+    gate exists to catch.
+
+    Binding a ``Router`` is the property that makes a module's decorators
+    routes, so that is what this looks for. A new app calling its module
+    something else is covered on the day it is written.
+    """
+    modules: list[pathlib.Path] = []
+    for path in sorted(APPS_DIR.rglob("*.py")):
+        parts = set(path.parts)
+        if "tests" in parts or "migrations" in parts:
+            continue
+        try:
+            tree = ast.parse(path.read_text())
+        except SyntaxError:  # pragma: no cover - a parse failure is its own test's problem
+            continue
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)):
+                continue
+            func = node.value.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            if name == "Router":
+                modules.append(path)
+                break
+    return tuple(modules)
+
+
+@lru_cache(maxsize=1)
 def _literal_status_code_pairs() -> dict[tuple[int, str], list[str]]:
     """Every ``return <status>, {..., "error_code": ErrorCode.X}`` in the API layer.
 
@@ -101,9 +138,7 @@ def _literal_status_code_pairs() -> dict[tuple[int, str], list[str]]:
     they all share it.
     """
     found: dict[tuple[int, str], list[str]] = collections.defaultdict(list)
-    for path in sorted(APPS_DIR.rglob("api*.py")):
-        if path.name not in ("apis.py", "api.py"):
-            continue
+    for path in _routed_modules():
         for node in ast.walk(ast.parse(path.read_text())):
             if not (
                 isinstance(node, ast.Return)
@@ -170,9 +205,7 @@ def _undeclared_returned_statuses() -> list[str]:
     and never the decorator. Three views shipped that way.
     """
     offenders: list[str] = []
-    for path in sorted(APPS_DIR.rglob("api*.py")):
-        if path.name not in ("apis.py", "api.py"):
-            continue
+    for path in _routed_modules():
         tree = ast.parse(path.read_text())
         for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
             declared: set[int] | None = None
