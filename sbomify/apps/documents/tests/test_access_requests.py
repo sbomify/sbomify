@@ -1102,11 +1102,16 @@ class TestAccessRequestQueueView:
     def test_access_request_queue_shows_pending_requests(
         self, authenticated_web_client, team_with_business_plan, pending_access_request, sample_user
     ):
-        """Test that queue view shows pending requests."""
+        """Test that queue view shows pending requests.
+
+        Fetched the way the trust-center tab fetches it. The template is a
+        section with no page around it, so a plain browser GET is sent to the
+        tab that renders it instead.
+        """
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url)
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         assert str(pending_access_request.user.email).encode() in response.content
@@ -1118,7 +1123,7 @@ class TestAccessRequestQueueView:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url, {"partial": "true"})
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         # Should render the partial template
@@ -1139,7 +1144,7 @@ class TestAccessRequestQueueView:
         )
         
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url)
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         assert str(pending_access_request.user.email).encode() in response.content

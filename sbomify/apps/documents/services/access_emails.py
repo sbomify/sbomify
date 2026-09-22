@@ -106,7 +106,10 @@ def notify_admins_of_access_request(access_request: AccessRequest, team: Team, r
             f"{access_request.user.first_name} {access_request.user.last_name}".strip() or access_request.user.username
         )
         requester_email = access_request.user.email
-        review_url = reverse("documents:access_request_queue", kwargs={"team_key": team.key})
+        # The settings tab, not the queue endpoint: the endpoint renders a
+        # section with no page around it, so the button used to open unstyled
+        # markup that nothing on it worked from.
+        review_url = reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "trust-center"})
         nda_signed = NDASignature.objects.live().filter(access_request=access_request).exists()
 
         context = {

@@ -15,13 +15,24 @@ pytestmark = pytest.mark.django_db
 
 
 def _make_scan(sbom: SBOM, findings: list[dict], plugin: str = "osv") -> AssessmentRun:
-    return AssessmentRun.objects.create(
+    """A completed run, projected into the findings table the way one really is.
+
+    The digest reads that table now. In production nothing creates a completed
+    run without the orchestrator, which calls ``sync_findings_safely`` as part
+    of finishing it, so a fixture that writes the row and stops is not a state
+    the application can be in.
+    """
+    from sbomify.apps.vulnerability_scanning.findings import sync_findings
+
+    run = AssessmentRun.objects.create(
         sbom=sbom,
         plugin_name=plugin,
         category="security",
         status="completed",
         result={"findings": findings, "summary": {"total_findings": len(findings)}},
     )
+    sync_findings(run)
+    return run
 
 
 def _finding(advisory: str, severity: str, cvss: float | None = None, state: str = "") -> dict:
