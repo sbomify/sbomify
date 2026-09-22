@@ -109,6 +109,18 @@ Validation covers 574 component, service and navigation checks, plus 12 reviewed
 product and release-history snapshots across four widths. The frontend build,
 lint, template checks and targeted Python type checks pass.
 
+## Plugins
+
+Plugins now uses the shared stat cards, category card headers, selectable rows,
+form fields and feedback components. The page frame owns section spacing and
+each category is one card. Descriptions remain readable on touch screens.
+Checkboxes reflect the explicit Save changes workflow, with actions above and
+below the list. Configuration fields, plan restrictions and the summary refresh
+continue through the existing HTMX endpoints.
+
+Browser coverage checks saving and reloading every field type, keyboard selection,
+the upgrade link and empty state. Responsive screenshots cover four widths.
+
 ## Remaining migration order
 
 | Group | Remaining work |
@@ -117,6 +129,6 @@ lint, template checks and targeted Python type checks pass.
 | Security | Vulnerability queue, artifact vulnerability detail, scan history, crypto assessments and trends. |
 | Posture | Product CRA list, scope screening and assessment steps, retaining the production classification and evidence workflow. |
 | Trust Center and advisories | Internal landing and management flows, advisory list/detail/editor, and customer-facing pages where they still differ from the prototype. |
-| Supporting pages | Plugins, workspace selection/invitations, onboarding, billing and creation flows that remain outside the migrated settings and inventory surfaces. |
+| Supporting pages | Workspace selection/invitations, onboarding, billing and creation flows that remain outside the migrated settings and inventory surfaces. |
 
 The main search remains outside the migration until requested.

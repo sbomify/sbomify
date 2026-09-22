@@ -931,6 +931,15 @@ first-of-type rule that drops the leading hairline reads the section's position
         <code class="tw-code-inline">toggle_ref</code> names the switch the row toggles. Without it the row clicks
         the first input it contains, which is the wrong one once the body has fields of its own.
     </p>
+    <c-cards.card flush class="overflow-hidden">
+    <c-cards.header compact title="Divided selection rows" />
+    <c-layout.select-row divided>
+    <c-forms.checkbox id="ds-divided-security" checked>Security assessments</c-forms.checkbox>
+    </c-layout.select-row>
+    <c-layout.select-row divided>
+    <c-forms.checkbox id="ds-divided-compliance">Compliance assessments</c-forms.checkbox>
+    </c-layout.select-row>
+    </c-cards.card>
     <h2 id="empty-states" class="text-xl font-semibold text-text">Empty states</h2>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <c-cards.card>
