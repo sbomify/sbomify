@@ -206,11 +206,16 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             # next scan skips for the same reason.
             if provider_runs and all(result_scanned_nothing(run.result) for run in provider_runs):
                 skipped_scans = [run.result for run in provider_runs if run.result]
+            # Dated from the newest run that examined something. The page reads a
+            # date as "scanned, and this is what was found", and neither a skip
+            # nor a run with no result (the column is nullable) examined anything.
+            scanned_runs = [
+                run for run in provider_runs if isinstance(run.result, dict) and not result_scanned_nothing(run.result)
+            ]
 
             if latest_result:
-                scan_timestamp_str = (
-                    None if skipped_scans else latest_result.created_at.strftime("%B %d, %Y at %I:%M %p %Z")
-                )
+                if scanned_runs:
+                    scan_timestamp_str = scanned_runs[0].created_at.strftime("%B %d, %Y at %I:%M %p %Z")
 
                 sbom_version_info = {
                     "name": sbom.name,

@@ -3,8 +3,8 @@
 The page had no e2e referee, so it is added here before the template is
 migrated to the component library: the baselines capture the render as it is
 today. Two cases, because the page has two shapes that share nothing below the
-header: the merged scan-results table, and the "no scan data" notice a run with
-no findings falls back to.
+header: the merged scan-results table, and the "No vulnerabilities found"
+state a run with no findings shows.
 """
 
 import pytest

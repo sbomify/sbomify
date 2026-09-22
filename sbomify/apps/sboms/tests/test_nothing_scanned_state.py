@@ -145,7 +145,7 @@ class TestTheSbomPages:
     NO_PACKAGES = "None of the packages in this SBOM could be matched against an advisory source."
     NO_PRODUCT = "Dependency Track only scans components that belong to a product."
 
-    def _run(self, sbom, plugin_name: str, result: dict[str, Any]) -> None:
+    def _run(self, sbom, plugin_name: str, result: dict[str, Any] | None) -> None:
         from sbomify.apps.plugins.models import AssessmentRun
         from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 
@@ -199,6 +199,16 @@ class TestTheSbomPages:
         assert "No vulnerabilities found" in html
         assert "No Scan Data Available" not in html
         assert "Nothing scanned" not in html
+
+    def test_a_run_with_no_result_is_not_a_clean_scan(self, sample_sbom) -> None:
+        """The column is nullable. A run that came back with nothing examined
+        nothing, so it cannot vouch for the SBOM."""
+        self._run(sample_sbom, "osv", None)
+
+        html = self._open(sample_sbom).content.decode()
+
+        assert "No vulnerabilities found" not in html
+        assert "No Scan Data Available" in html
 
     def test_no_runs_at_all_still_has_no_data(self, sample_sbom) -> None:
         html = self._open(sample_sbom).content.decode()
