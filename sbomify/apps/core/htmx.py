@@ -65,13 +65,21 @@ class HtmxFragmentMixin:
     it took a customer report to find is that nothing else pointed at any of
     these. This says out loud that they are not pages.
 
-    Only GET is guarded. A POST arrives with a CSRF token from a form that
-    meant to submit, and refusing those would break any form that ever
-    submits without htmx.
+    GET and HEAD are guarded. HEAD matters as much as GET here: Django's
+    ``View.setup`` aliases ``head`` to ``get`` when a view defines no ``head``
+    of its own, so a HEAD that skipped this check answered 200 while the same
+    GET answered 404, and HEAD is what an uptime check sends.
+
+    POST is not guarded. It arrives with a CSRF token from a form that meant
+    to submit, and refusing those would break any form that ever submits
+    without htmx.
     """
 
+    #: Everything that reaches ``get`` and so would render the section.
+    _GUARDED_METHODS = frozenset({"GET", "HEAD"})
+
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        if request.method == "GET" and request.headers.get("HX-Request") != "true":
+        if request.method in self._GUARDED_METHODS and request.headers.get("HX-Request") != "true":
             raise Http404("This endpoint renders a section of a page, not a page.")
         # The mixin is declared standalone so it can be slotted in anywhere in a
         # view's bases; mypy cannot see the View underneath it from here.

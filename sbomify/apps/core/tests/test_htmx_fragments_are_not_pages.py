@@ -71,6 +71,18 @@ def test_a_direct_visit_is_refused(fixtures) -> None:
     assert not served, f"these answered a browser with a bare section: {served}"
 
 
+def test_a_head_request_is_refused_too(fixtures) -> None:
+    """Django's View.setup aliases head to get when a view defines no head of
+    its own, so a guard that reads only GET let HEAD through: 200 where the
+    same GET gave 404. HEAD is what an uptime check sends, which is the one
+    caller most likely to be reassured by the wrong answer."""
+    client, team, component, product, sbom = fixtures
+
+    served = [url for url in _urls(team, component, product, sbom) if client.head(url).status_code != 404]
+
+    assert not served, f"these answered a HEAD with 200: {served}"
+
+
 def test_htmx_still_gets_every_one_of_them(fixtures) -> None:
     """The guard keys on the header htmx always sends, so the pages that swap
     these in are untouched. Without this half the fix is indistinguishable from
