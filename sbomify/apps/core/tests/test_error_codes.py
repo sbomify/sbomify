@@ -116,7 +116,12 @@ def _routed_modules() -> tuple[pathlib.Path, ...]:
         except SyntaxError:  # pragma: no cover - a parse failure is its own test's problem
             continue
         for node in ast.walk(tree):
-            if not (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)):
+            # Assign is `router = Router()`; AnnAssign is `router: Router = Router()`.
+            # Both bind one, and matching only the first would leave the gate
+            # blind to a module for a reason that has nothing to do with routing.
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            if not isinstance(node.value, ast.Call):
                 continue
             func = node.value.func
             name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
