@@ -66,14 +66,14 @@
         </c-slot>
         </c-tables.toolbar>
         {# Artifacts Table #}
-        <c-tables.table>
+        <c-tables.table sized variant_class="min-w-256" aria-label="Release artifacts">
         <c-tables.head>
-        <c-tables.header-cell sort="type" class="w-10">Type</c-tables.header-cell>
+        <c-tables.header-cell sort="type" class="w-28">Type</c-tables.header-cell>
         <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-        <c-tables.header-cell sort="component">Component</c-tables.header-cell>
-        <c-tables.header-cell sort="format">Format</c-tables.header-cell>
-        <c-tables.header-cell sort="version">Version</c-tables.header-cell>
-        <c-tables.header-cell sort="created_at" date class="w-28">Created</c-tables.header-cell>
+        <c-tables.header-cell sort="component" class="w-40">Component</c-tables.header-cell>
+        <c-tables.header-cell sort="format" class="w-36">Format</c-tables.header-cell>
+        <c-tables.header-cell sort="version" class="w-28">Version</c-tables.header-cell>
+        <c-tables.header-cell sort="created_at" date class="w-40">Created</c-tables.header-cell>
         {% if can_edit and not is_latest %}<c-tables.actions-cell as="th" label="Actions" />{% endif %}
         </c-tables.head>
         <tbody>
@@ -110,7 +110,7 @@
                       x-text="getArtifactFormat(artifact)"></span>
                 <c-badges.format class="text-text-muted bg-border/20 border" style="border-color: color-mix(in srgb, var(--color-border) 60%, transparent)" x-show="!isArtifactTypeSbom(artifact)" x-text="getArtifactFormat(artifact)" />
                 </c-tables.cell>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <span x-show="getArtifactVersion(artifact)"
                       class="text-text"
                       :title="getArtifactVersion(artifact)"
@@ -212,17 +212,18 @@
                         x-text="allFilteredSelected ? 'Deselect All' : 'Select All Visible'"></button>
                 </c-slot>
                 </c-tables.toolbar>
-                <c-tables.table class="max-h-[50vh] overflow-y-auto">
+                {# Expose the picker's own sort state through the shared table contract. #}
+                <c-tables.table sized variant_class="min-w-256" class="max-h-[50vh] overflow-y-auto" aria-label="Available artifacts" x-data="{ get sortColumn() { return availableSortColumn }, get sortDirection() { return availableSortDirection }, sort(column) { setAvailableSort(column) } }">
                 <c-tables.head>
                 <c-tables.header-cell class="w-12">
                 <c-forms.checkbox aria-label="Select all artifacts" ::checked="allFilteredSelected" @change="toggleAllFiltered($event)" />
                 </c-tables.header-cell>
-                <c-tables.header-cell sort="type" class="w-16">Type</c-tables.header-cell>
+                <c-tables.header-cell sort="type" class="w-28">Type</c-tables.header-cell>
                 <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-                <c-tables.header-cell sort="component">Component</c-tables.header-cell>
-                <c-tables.header-cell sort="format">Format</c-tables.header-cell>
-                <c-tables.header-cell sort="version">Version</c-tables.header-cell>
-                <c-tables.header-cell sort="created" date class="w-28">Created</c-tables.header-cell>
+                <c-tables.header-cell sort="component" class="w-40">Component</c-tables.header-cell>
+                <c-tables.header-cell sort="format" class="w-36">Format</c-tables.header-cell>
+                <c-tables.header-cell sort="version" class="w-28">Version</c-tables.header-cell>
+                <c-tables.header-cell sort="created" date class="w-40">Created</c-tables.header-cell>
                 </c-tables.head>
                 <tbody>
                     <template x-for="artifact in filteredAvailableArtifacts" :key="artifact.id">
@@ -255,7 +256,7 @@
                               x-text="getAvailableArtifactFormat(artifact)"></span>
                         <c-badges.format class="text-text-muted bg-border/20 border" style="border-color: color-mix(in srgb, var(--color-border) 60%, transparent)" x-show="!isArtifactSbom(artifact)" x-text="getAvailableArtifactFormat(artifact)" />
                         </c-tables.cell>
-                        <c-tables.cell>
+                        <c-tables.cell nowrap>
                         <span x-show="artifact.version"
                               class="text-text font-mono text-sm"
                               :title="artifact.version"

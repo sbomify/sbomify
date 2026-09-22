@@ -18,14 +18,14 @@
             </c-forms.select>
             </c-slot>
             </c-tables.toolbar>
-            <c-tables.table>
+            <c-tables.table sized variant_class="min-w-80 md:min-w-192 lg:min-w-256" aria-label="Release artifacts">
             <c-tables.head>
-            <c-tables.header-cell sort="type" class="w-10">Type</c-tables.header-cell>
+            <c-tables.header-cell sort="type" class="w-24 md:w-28">Type</c-tables.header-cell>
             <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-            <c-tables.header-cell sort="component" class="hidden md:table-cell">Component</c-tables.header-cell>
-            <c-tables.header-cell sort="format" class="hidden md:table-cell">Format</c-tables.header-cell>
-            <c-tables.header-cell sort="version" class="hidden lg:table-cell">Version</c-tables.header-cell>
-            <c-tables.header-cell sort="created" date class="hidden lg:table-cell">Created</c-tables.header-cell>
+            <c-tables.header-cell sort="component" class="hidden md:table-cell w-48">Component</c-tables.header-cell>
+            <c-tables.header-cell sort="format" class="hidden md:table-cell w-40">Format</c-tables.header-cell>
+            <c-tables.header-cell sort="version" class="hidden lg:table-cell w-28">Version</c-tables.header-cell>
+            <c-tables.header-cell sort="created" date class="hidden lg:table-cell w-40">Created</c-tables.header-cell>
             </c-tables.head>
             <tbody>
                 <template x-for="artifact in filteredArtifacts" :key="artifact.id">
@@ -76,9 +76,10 @@
                     <span x-show="!artifact.sbom_format && !artifact.document_type"
                           class="text-text-muted">—</span>
                     </c-tables.cell>
-                    <c-tables.cell class="hidden lg:table-cell">
+                    <c-tables.cell nowrap class="hidden lg:table-cell">
                     <span x-show="getVersion(artifact)"
                           class="text-text"
+                          :title="getVersion(artifact)"
                           x-text="getVersion(artifact)"></span>
                     <span x-show="!getVersion(artifact)" class="text-text-muted">—</span>
                     </c-tables.cell>

@@ -285,7 +285,15 @@ class DesignSystemView(LoginRequiredMixin, View):
             "params": {"per_page": "10"},
             "products": [],
             "rows": [row],
-            "headers": [{"label": label, "href": inventory_url} for _, label in COLUMNS["products"]],
+            "headers": [
+                {
+                    "key": key,
+                    "label": label,
+                    "href": f"{inventory_url}?sort={key}&direction=desc",
+                    "order": "ascending" if key == "name" else "none",
+                }
+                for key, label in COLUMNS["products"]
+            ],
             "page": Paginator([row], 10).page(1),
             "page_range": [1],
         }

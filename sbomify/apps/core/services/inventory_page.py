@@ -314,6 +314,7 @@ def build_inventory_table(
     page = Paginator(rows, int(params["per_page"])).get_page(request.GET.get("page", 1))
     headers = [
         {
+            "key": key,
             "label": label,
             "href": _url(
                 params,

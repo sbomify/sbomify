@@ -33,16 +33,24 @@
         </c-slot>
     {% endif %}
     </c-tables.toolbar>
-    <c-tables.table>
+    <c-tables.table sized variant_class="
+    {% if is_public_view %}
+        min-w-144 md:min-w-192
+    {% else %}
+        min-w-192 md:min-w-224 lg:min-w-296
+    {% endif %}
+    " aria-label="Artifacts">
     <c-tables.head>
     <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-    <c-tables.header-cell>Type</c-tables.header-cell>
-    <c-tables.header-cell sort="version" class="hidden md:table-cell">Version</c-tables.header-cell>
-    {% if not is_public_view %}<c-tables.header-cell>Vulnerabilities</c-tables.header-cell>{% endif %}
+    <c-tables.header-cell class="w-28">Type</c-tables.header-cell>
+    <c-tables.header-cell sort="version" class="hidden md:table-cell w-28">Version</c-tables.header-cell>
     {% if not is_public_view %}
-        <c-tables.header-cell class="hidden lg:table-cell">Assessments</c-tables.header-cell>
+        <c-tables.header-cell class="w-56 lg:w-88">Vulnerabilities</c-tables.header-cell>
     {% endif %}
-    <c-tables.header-cell sort="created_at" date>Uploaded</c-tables.header-cell>
+    {% if not is_public_view %}
+        <c-tables.header-cell class="hidden lg:table-cell w-40">Assessments</c-tables.header-cell>
+    {% endif %}
+    <c-tables.header-cell sort="created_at" date class="w-36 sm:w-40">Uploaded</c-tables.header-cell>
     <c-tables.actions-cell as="th" />
     </c-tables.head>
     <tbody>
@@ -74,7 +82,7 @@
             {% endcomment %}
             <c-badges.dynamic ::data-variant="({ sbom: 'info', vex: 'violet', cbom: 'success' })[bomType] || 'secondary'" x-text="bomType.toUpperCase()" />
             </c-tables.cell>
-            <c-tables.cell class="hidden md:table-cell">
+            <c-tables.cell nowrap class="hidden md:table-cell">
             <span class="font-mono text-sm text-text"
                   x-text="item.sbom.version.length > 20 ? item.sbom.version.slice(0, 20) + '...' : item.sbom.version"
                   :title="item.sbom.version"></span>

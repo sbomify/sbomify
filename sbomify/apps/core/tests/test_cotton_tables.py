@@ -96,7 +96,8 @@ def test_page_size_select_recipe_and_options_slot(rendered: str) -> None:
 
 
 def test_table_scrolls_inside_its_own_box(rendered: str) -> None:
-    assert '<div class="overflow-x-auto">' in rendered
+    assert "data-table-viewport" in rendered
+    assert 'class="overflow-x-auto [overflow-anchor:none]"' in rendered
     assert "w-full border-separate border-spacing-0" in _element_holding(rendered, "table", 'data-probe="table"')
 
 
@@ -168,8 +169,8 @@ def test_sortable_header_keeps_the_table_state_names(rendered: str) -> None:
     assert ":data-sort=\"sortColumn === 'name' ? sortDirection : 'none'\"" in sortable
     assert "@click=\"sort('name')\"" in sortable
     assert 'data-sort="none"' in sortable
-    assert "inline-flex items-center gap-2 uppercase cursor-pointer select-none hover:text-primary" in sortable
-    assert "focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in sortable
+    assert "inline-flex max-w-full items-center gap-2 uppercase cursor-pointer select-none hover:text-text" in sortable
+    assert "focus-visible:ring-2 focus-visible:ring-primary/40" in sortable
 
 
 def test_sortable_header_label_is_uppercase_like_an_unsorted_one(rendered: str) -> None:
@@ -186,10 +187,10 @@ def test_sortable_header_label_is_uppercase_like_an_unsorted_one(rendered: str) 
 
 def test_sort_icon_states_are_mutually_exclusive(rendered: str) -> None:
     sortable = _element_holding(rendered, "th", "Name column")
-    assert "flex flex-col gap-px opacity-30" in sortable
+    assert "h-3.5 w-2 shrink-0 flex-col items-center justify-center gap-px opacity-30" in sortable
     assert "[[data-sort=none]:hover_&]:opacity-60" in sortable
-    assert "[[data-sort=asc]_&]:opacity-100 [[data-sort=asc]_&]:text-primary" in sortable
-    assert "[[data-sort=desc]_&]:opacity-100 [[data-sort=desc]_&]:text-primary" in sortable
+    assert "[[data-sort=asc]_&]:opacity-100 [[data-sort=asc]_&]:text-text" in sortable
+    assert "[[data-sort=desc]_&]:opacity-100 [[data-sort=desc]_&]:text-text" in sortable
     assert "fa-caret-up text-[0.5rem] leading-none [[data-sort=desc]_&]:opacity-25" in sortable
     assert "fa-caret-down text-[0.5rem] leading-none [[data-sort=asc]_&]:opacity-25" in sortable
 
@@ -330,3 +331,32 @@ def test_pager_arrows_render_through_the_shared_page_control(rendered: str) -> N
     for utility in ("bg-surface", "text-text", "hover:text-text", "border-border"):
         assert utility in pager
     assert '<i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>' in pager
+
+
+@pytest.mark.parametrize(
+    "label,order,state",
+    [
+        ("Server ascending", "ascending", "asc"),
+        ("Server descending", "descending", "desc"),
+        ("Server unsorted", "none", "none"),
+    ],
+)
+def test_server_and_client_headers_share_the_sort_control(rendered: str, label: str, order: str, state: str) -> None:
+    server = _element_holding(rendered, "th", label)
+    client = _element_holding(rendered, "th", "Name column")
+    assert f'aria-sort="{order}"' in server
+    assert f'data-sort="{state}"' in server
+    assert 'hx-boost="true"' in server
+    assert "@click" not in server
+    assert "<a " in server
+    assert "<button " in client
+    # Link and button carry exactly the same recipe and permanently reserve
+    # the same pair of carets, including the unsorted server state.
+    server_control = server.split("<a ", 1)[1]
+    client_control = client.split("<button ", 1)[1]
+    assert (
+        server_control.split('class="', 1)[1].split('"', 1)[0] == client_control.split('class="', 1)[1].split('"', 1)[0]
+    )
+    assert server.split('<span class="inline-flex', 1)[1] == client.split('<span class="inline-flex', 1)[1].replace(
+        "</button>", "</a>"
+    )

@@ -5,6 +5,7 @@
  * integration, focus management, and state preservation.
  */
 import Alpine from 'alpinejs';
+import { initTableSorting } from './components/table-sorting';
 
 // Track initialization state
 let isInitialized = false;
@@ -22,6 +23,7 @@ const pendingButtons = new WeakMap<XMLHttpRequest, PendingButton[]>();
 export function initHtmxLifecycle(): void {
     if (isInitialized) return;
     isInitialized = true;
+    initTableSorting();
 
     // ============================================
     // HTMX REQUEST LIFECYCLE

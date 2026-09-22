@@ -1,0 +1,21 @@
+{% comment %}
+One sort control for server links and Alpine buttons. Only the element and its
+behaviour differ; the label, focus ring and direction indicator share a recipe.
+Both carets always occupy the same box, so changing order never resizes a column.
+uppercase is explicit because form controls do not inherit text-transform.
+{% endcomment %}
+<c-vars href sort order="none" />
+{# djlint:off #}
+<{% if href %}a href="{{ href }}" hx-boost="true"{% else %}button type="button" @click="sort('{{ sort }}')"{% endif %}
+    class="inline-flex max-w-full items-center gap-2 uppercase cursor-pointer select-none hover:text-text focus-visible:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-primary/40"
+    data-table-sort="{{ sort }}"
+    data-sort="{% if order == 'ascending' %}asc{% elif order == 'descending' %}desc{% else %}none{% endif %}"
+    {% if not href %}:data-sort="sortColumn === '{{ sort }}' ? sortDirection : 'none'"{% endif %}>
+    <span>{{ slot }}</span>
+    <span class="inline-flex h-3.5 w-2 shrink-0 flex-col items-center justify-center gap-px opacity-30 transition-opacity duration-150 [[data-sort=none]:hover_&]:opacity-60 [[data-sort=asc]_&]:opacity-100 [[data-sort=asc]_&]:text-text [[data-sort=desc]_&]:opacity-100 [[data-sort=desc]_&]:text-text"
+          aria-hidden="true">
+        <i class="fas fa-caret-up text-[0.5rem] leading-none [[data-sort=desc]_&]:opacity-25"></i>
+        <i class="fas fa-caret-down text-[0.5rem] leading-none [[data-sort=asc]_&]:opacity-25"></i>
+    </span>
+</{% if href %}a{% else %}button{% endif %}>
+{# djlint:on #}

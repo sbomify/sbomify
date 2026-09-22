@@ -14,13 +14,13 @@
     </c-tables.page-size>
     </c-slot>
     </c-tables.toolbar>
-    <c-tables.table>
+    <c-tables.table sized variant_class="min-w-96 md:min-w-208 lg:min-w-256" aria-label="Documents">
     <c-tables.head>
     <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-    <c-tables.header-cell sort="document_type" class="hidden md:table-cell">Type</c-tables.header-cell>
-    <c-tables.header-cell sort="version" class="hidden md:table-cell">Version</c-tables.header-cell>
-    <c-tables.header-cell sort="created_at" date>Created</c-tables.header-cell>
-    <c-tables.header-cell class="hidden lg:table-cell">Releases</c-tables.header-cell>
+    <c-tables.header-cell sort="document_type" class="hidden md:table-cell w-40">Type</c-tables.header-cell>
+    <c-tables.header-cell sort="version" class="hidden md:table-cell w-28">Version</c-tables.header-cell>
+    <c-tables.header-cell sort="created_at" date class="w-32 sm:w-40">Created</c-tables.header-cell>
+    <c-tables.header-cell class="hidden lg:table-cell w-40">Releases</c-tables.header-cell>
     <c-tables.actions-cell as="th" label="Actions" />
     </c-tables.head>
     <tbody>
@@ -38,7 +38,7 @@
             <c-tables.cell class="hidden md:table-cell">
             <c-badges.warning x-text="item.document.document_type_display || 'Document'" />
             </c-tables.cell>
-            <c-tables.cell class="hidden md:table-cell">
+            <c-tables.cell nowrap class="hidden md:table-cell">
             <span class="text-text"
                   x-text="item.document.version.length > 20 ? item.document.version.slice(0, 20) + '...' : item.document.version"
                   :title="item.document.version"></span>

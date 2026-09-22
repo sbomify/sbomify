@@ -976,8 +976,11 @@ first-of-type rule that drops the leading hairline reads the section's position
         component, never on the page body. Inside a card, pass <code class="tw-code-inline">nested</code> and
         the shell drops its own frame. <c-code-inline>fixed</c-code-inline> gives every
         column an equal share and centres the middle ones; <c-code-inline>sized</c-code-inline> fixes the
-        layout and leaves alignment alone, for a table whose header cells state their own widths. The sortable header and the pager read the Alpine state a table page
-        already keeps, so the demo below really sorts and pages.
+        layout and leaves alignment alone. Use it for sortable tables: give the supporting columns widths
+        and leave the name column to fill the remaining space. Sorting then changes rows without moving columns.
+        The header uses the same sort control for Alpine buttons (<c-code-inline>sort</c-code-inline>)
+        and server links (<c-code-inline>href</c-code-inline> and <c-code-inline>order</c-code-inline>),
+        shown in the inventory above. Both keep space for the direction indicator in every state.
     </p>
     <p class="text-sm text-text-muted">
         Pass <c-code-inline>nowrap</c-code-inline> to the header cell and the body cell of the column that
@@ -995,12 +998,12 @@ first-of-type rule that drops the leading hairline reads the section's position
     </c-tables.page-size>
     </c-slot>
     </c-tables.toolbar>
-    <c-tables.table fixed>
+    <c-tables.table sized variant_class="min-w-208">
     <c-tables.head>
     <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-    <c-tables.header-cell>Format</c-tables.header-cell>
-    <c-tables.header-cell sort="updated" date>Updated</c-tables.header-cell>
-    <c-tables.header-cell sort="vulnerabilities" end>Vulnerabilities</c-tables.header-cell>
+    <c-tables.header-cell class="w-36">Format</c-tables.header-cell>
+    <c-tables.header-cell sort="updated" date class="w-40">Updated</c-tables.header-cell>
+    <c-tables.header-cell sort="vulnerabilities" end class="w-48">Vulnerabilities</c-tables.header-cell>
     <c-tables.actions-cell as="th" />
     </c-tables.head>
     <tbody>

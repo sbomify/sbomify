@@ -31,13 +31,13 @@
         </c-tables.page-size>
         </c-slot>
         </c-tables.toolbar>
-        <c-tables.table>
+        <c-tables.table sized variant_class="min-w-144 sm:min-w-192 md:min-w-256" aria-label="Security advisories">
         <c-tables.head>
-        <c-tables.header-cell sort="severity">Severity</c-tables.header-cell>
+        <c-tables.header-cell sort="severity" class="w-32">Severity</c-tables.header-cell>
         <c-tables.header-cell sort="title" nowrap>Advisory</c-tables.header-cell>
-        <c-tables.header-cell class="hidden md:table-cell">Products</c-tables.header-cell>
-        <c-tables.header-cell sort="status">Status</c-tables.header-cell>
-        <c-tables.header-cell sort="updated" date class="hidden sm:table-cell">Updated</c-tables.header-cell>
+        <c-tables.header-cell class="hidden md:table-cell w-48">Products</c-tables.header-cell>
+        <c-tables.header-cell sort="status" class="w-44">Status</c-tables.header-cell>
+        <c-tables.header-cell sort="updated" date class="hidden sm:table-cell w-40">Updated</c-tables.header-cell>
         <c-tables.actions-cell as="th" label="Actions" />
         </c-tables.head>
         <tbody>

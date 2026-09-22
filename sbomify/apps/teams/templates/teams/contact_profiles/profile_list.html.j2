@@ -13,11 +13,11 @@
     </c-buttons.primary>
     </c-feedback.empty-state>
 {% else %}
-    <c-tables.table>
+    <c-tables.table sized variant_class="min-w-128" aria-label="Contact profiles">
     <c-tables.head>
     <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
     <c-tables.header-cell class="w-[120px]">Status</c-tables.header-cell>
-    <c-tables.header-cell sort="updated_at" date class="w-[150px]">Last updated</c-tables.header-cell>
+    <c-tables.header-cell sort="updated_at" date class="w-40">Last updated</c-tables.header-cell>
     <c-tables.actions-cell as="th" />
     </c-tables.head>
     <tbody>
