@@ -16,6 +16,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+from sbomify.apps.vulnerability_scanning.services.finding_browse import matches_query
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,118 @@ PACKAGES_PER_PAGE = 25
 #: finding of the artifact with search and filters.
 MAX_ADVISORIES_PER_PACKAGE = 10
 
+#: This report's filter controls. Its own page, so nothing would collide with
+#: the component panel's ``vuln_`` or the assessment card's ``run_``, but naming
+#: them keeps a link carrying more than one readable.
+PARAM_PREFIX = "scan_"
+
+
+def _advisory_matches(advisory: dict[str, Any], package: dict[str, Any], query: Any) -> bool:
+    """Whether one merged advisory survives the toolbar.
+
+    The browse engine reads a flatter shape than this page builds, and this page
+    merges across providers into its own entries rather than using
+    ``extract_finding_rows``. So the few keys the predicates read are gathered
+    here, the same way the assessment card does it. The package arrives as its
+    own argument because it belongs to the entry rather than the advisory, and
+    copying it onto each advisory to pass it along is one dict per advisory on a
+    report that can hold thousands.
+    """
+    return matches_query(
+        {
+            "id": advisory.get("id") or "",
+            "aliases": advisory.get("aliases") or [],
+            "package": package.get("name") or "",
+            "ecosystem": package.get("ecosystem") or "",
+            "severity": advisory.get("severity") or "",
+            "vex_state": advisory.get("vex_state") or "",
+            "vex_suppressed": bool(advisory.get("vex_suppressed")),
+            "kev": bool(advisory.get("kev")),
+        },
+        query,
+    )
+
+
+def _narrows_rows(query: Any) -> bool:
+    """Whether the toolbar is hiding anything.
+
+    ``FindingQuery.is_filtered`` covers search, severity, state and KEV, but not
+    the suppressed toggle, and the public trust-center browse reads that same
+    property, so widening it there would change a page this has no business
+    changing. Hiding suppressed advisories is a filter from the reader's side,
+    though: unticking the box has to narrow the list, and the toolbar has to keep
+    offering a way back.
+    """
+    return bool(query.is_filtered) or not query.show_suppressed
+
+
+def _severity_options(packages: list[dict[str, Any]], query: Any) -> list[str]:
+    """The severities the dropdown offers, worst first.
+
+    Built from every advisory rather than the filtered set, so choosing one
+    severity does not empty the dropdown that chose it. The shared helper also
+    keeps the active token when no advisory carries it, which is what a
+    bookmarked ``scan_severity=moderate`` needs: without it the select renders
+    as "All Severities" over an empty report and the reader cannot see what
+    emptied it.
+    """
+    from sbomify.apps.vulnerability_scanning.services.finding_browse import SEVERITY_ORDER, present_options
+
+    return present_options(
+        [
+            str(advisory.get("severity") or "").lower()
+            for entry in packages
+            for advisory in entry["vulnerabilities"]
+            if advisory.get("severity")
+        ],
+        SEVERITY_ORDER,
+        query.severity,
+    )
+
+
+def _state_options(packages: list[dict[str, Any]], query: Any) -> list[dict[str, str]]:
+    """The VEX states the dropdown offers, with the labels the reader sees.
+
+    ``row_state`` is what the predicate filters on, so the options come from it
+    too: an advisory with no decision reads as "open" in both places rather than
+    as an empty value that the select cannot represent.
+    """
+    from sbomify.apps.vulnerability_scanning.services.finding_browse import (
+        STATE_LABELS,
+        STATE_ORDER,
+        present_options,
+        row_state,
+    )
+
+    values = [row_state(advisory) for entry in packages for advisory in entry["vulnerabilities"]]
+    return [
+        {"value": value, "label": STATE_LABELS.get(value, value)}
+        for value in present_options(values, STATE_ORDER, query.state)
+    ]
+
+
+def _kev_total(packages: list[dict[str, Any]]) -> int:
+    """How many advisories the catalog knows are exploited.
+
+    Counted over the whole scan rather than the filtered set, so the control
+    that reads "KEV only (3)" keeps saying three once it is ticked.
+    """
+    return sum(1 for entry in packages for advisory in entry["vulnerabilities"] if advisory.get("kev"))
+
+
+def _filtered_packages(packages: list[dict[str, Any]], query: Any) -> list[dict[str, Any]]:
+    """Packages whose advisories still have something to show."""
+    if not _narrows_rows(query):
+        return packages
+
+    kept: list[dict[str, Any]] = []
+    for entry in packages:
+        package = entry["package"]
+        surviving = [advisory for advisory in entry["vulnerabilities"] if _advisory_matches(advisory, package, query)]
+        if surviving:
+            kept.append({**entry, "vulnerabilities": surviving})
+    return kept
+
 
 class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest, sbom_id: str) -> HttpResponse:
@@ -49,6 +162,17 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             )
 
         vulnerabilities_data: dict[str, Any] | None = None
+        # Built before the try because the template reads it on every path. The
+        # toolbar itself only renders once there is something to render: an
+        # option list, or an active filter. That second half is why this is not
+        # inside the try, since a scan that fails while a filter is on would
+        # otherwise drop the control the reader needs to clear it.
+        from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query, query_string
+
+        scan_query = parse_finding_query(request.GET, prefix=PARAM_PREFIX)
+        scan_severity_options: list[str] = []
+        scan_state_options: list[dict[str, str]] = []
+        scan_kev_total = 0
         scan_timestamp_str = None
         error_message = None
         error_details = None
@@ -88,6 +212,8 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
 
                 from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as severity_rank
                 from sbomify.apps.vulnerability_scanning.utils import is_vulnerability
+
+                query = scan_query
 
                 def package_identity(component: dict[str, Any]) -> tuple[str, str, str, str, str]:
                     """(tail_key, purl_base, name, version, ecosystem) for a finding's component."""
@@ -151,6 +277,12 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 # S3 fetch and O(findings + statements) matching rather than a
                 # rebuilt index per finding.
                 vex_index: dict[str, list[tuple[int, dict[str, Any]]]] | None = None
+
+                # One catalog read for the whole report, matched per advisory
+                # once its merged id set is known.
+                from sbomify.apps.vulnerability_scanning.kev import finding_in_kev, kev_ids_for_serialization
+
+                kev_ids = kev_ids_for_serialization()
 
                 def vex_state_of(finding: dict[str, Any]) -> str:
                     """The finding's VEX state: stored first, live statements second.
@@ -290,6 +422,12 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                             )
                             merged["id"] = display_id
                             merged["aliases"] = [i for i in merged_ids if i != display_id]
+                            # Read from the catalog rather than stored, the way
+                            # every other view marks KEV. Stamped here because
+                            # this is where the merged advisory finally knows
+                            # every id it answers to, which is what the lookup
+                            # matches on.
+                            merged["kev"] = finding_in_kev(merged, kev_ids)
                         # Worst first: severity rank, then CVSS descending within a rank.
                         entry["vulnerabilities"].sort(
                             key=lambda v: (
@@ -321,6 +459,22 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     # reader who sees the first screen of it: 5.1s of render on
                     # the component page's smaller version of the same table,
                     # against a 30s gateway timeout.
+                    # Filter the advisories inside each package, then drop the
+                    # packages left holding nothing. The grouping is what this
+                    # page is for, so a severity filter answers "which packages
+                    # have a critical" rather than flattening into a list the
+                    # component panel already serves better.
+                    #
+                    # The counts computed above are deliberately not recomputed:
+                    # open_count and suppressed_count describe the whole package,
+                    # which is what the reader is deciding about. A row saying
+                    # "1 of 40" under a critical filter is the useful reading;
+                    # one saying "1 of 1" hides the other 39.
+                    scan_severity_options = _severity_options(packages, scan_query)
+                    scan_state_options = _state_options(packages, scan_query)
+                    scan_kev_total = _kev_total(packages)
+                    packages = _filtered_packages(packages, query)
+
                     paginator = Paginator(packages, PACKAGES_PER_PAGE)
                     package_page = paginator.get_page(request.GET.get("page"))
                     page_range = list(paginator.get_elided_page_range(package_page.number, on_each_side=1, on_ends=1))
@@ -379,6 +533,14 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             {"label": "Vulnerabilities"},
         ]
 
+        # The pager sits outside the filter form and pages packages, not
+        # findings, so its links carry the toolbar's state themselves or
+        # following one silently returns the reader to an unfiltered report.
+        # page=1 because the number in these links is the package page; the
+        # findings page this query would otherwise carry is not this pager's.
+        scan_is_narrowed = _narrows_rows(scan_query)
+        scan_query_string = query_string(scan_query, page=1, prefix=PARAM_PREFIX) if scan_is_narrowed else ""
+
         return render(
             request,
             "sboms/sbom_vulnerabilities.html.j2",
@@ -388,6 +550,12 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 "vulnerabilities": vulnerabilities_data,
                 "page_obj": package_page,
                 "page_range": page_range,
+                "scan_query": scan_query,
+                "scan_severity_options": scan_severity_options,
+                "scan_state_options": scan_state_options,
+                "scan_kev_total": scan_kev_total,
+                "scan_is_narrowed": scan_is_narrowed,
+                "scan_query_string": scan_query_string,
                 "scan_timestamp": scan_timestamp_str,
                 "sbom_version_info": sbom_version_info,
                 "error_message": error_message,
