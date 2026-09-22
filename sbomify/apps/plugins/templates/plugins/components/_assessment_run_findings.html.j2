@@ -52,7 +52,7 @@ filled.{% endcomment %}
                     </c-tables.select>
                 {% endif %}
                 {% if panel.kev_total %}
-                    <c-forms.checkbox name="run_kev" :checked="panel.query.kev_only">KEV only</c-forms.checkbox>
+                    <c-forms.checkbox name="run_kev" :checked="panel.query.kev_only">Known exploited ({{ panel.kev_total }})</c-forms.checkbox>
                 {% endif %}
                 {% comment %}Without this the card silently loses its suppressed
                 rows on the first filter change: the form always carries
