@@ -59,9 +59,8 @@ class InviteUserForm(forms.Form):
     )
     role = forms.ChoiceField(
         required=True,
-        # Replaced in __init__ by the roles the inviter may actually grant.
-        # Kept non-empty here so the field is valid when the form is built
-        # without an inviter, which only tests do.
+        # Replaced in __init__ by the roles the inviter may grant. Until then it
+        # is empty, so a form built without an inviter accepts no role at all.
         choices=[],
         # Least privilege by default: most people being invited need to do the
         # work, not configure the workspace.

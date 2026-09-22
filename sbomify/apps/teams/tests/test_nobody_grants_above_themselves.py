@@ -75,7 +75,7 @@ class TestTheInviteViewHoldsToIt:
         setup_authenticated_client_session(client, team, user)
         return client
 
-    def test_an_admin_cannot_create_an_owner_invitation(self, team_with_business_plan, sample_user, guest_user) -> None:
+    def test_an_admin_cannot_create_an_owner_invitation(self, team_with_business_plan, guest_user) -> None:
         team = team_with_business_plan
         Member.objects.create(user=guest_user, team=team, role="admin")
         client = self._client(team, guest_user)
@@ -87,7 +87,7 @@ class TestTheInviteViewHoldsToIt:
 
         assert not Invitation.objects.filter(team=team, email="escalated@example.test").exists()
 
-    def test_an_admin_can_still_invite_an_admin(self, team_with_business_plan, sample_user, guest_user) -> None:
+    def test_an_admin_can_still_invite_an_admin(self, team_with_business_plan, guest_user) -> None:
         """The half that proves the guard is a rule rather than a wall."""
         team = team_with_business_plan
         Member.objects.create(user=guest_user, team=team, role="admin")
