@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterEach } from 'bun:test'
+import { describe, test, expect, beforeAll, afterAll, afterEach } from 'bun:test'
 
 // Exercises the real initOpsCharts against fake DOM objects. The bun test env
 // has no DOM, and the function only touches root.querySelectorAll, the canvas
@@ -13,13 +13,21 @@ describe('Ops charts', () => {
     const destroyCalls = { count: 0 }
     let tokenValue = 'rgb(124 140 255)'
 
+    // bun runs every spec in one process, so a global set here is a global set
+    // for the whole suite. Assigning `window = globalThis` in particular leaves
+    // axios, imported by the table specs, reading `window.location.href` off an
+    // object that has no location. Stub exactly what the module needs, record
+    // what was there, and put it back.
+    const originalGlobals: Record<string, { existed: boolean; value: unknown }> = {}
+
+    const stub = (key: string, value: unknown) => {
+        const g = globalThis as unknown as Record<string, unknown>
+        originalGlobals[key] = { existed: key in g, value: g[key] }
+        g[key] = value
+    }
+
     beforeAll(async () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const g = globalThis as any
-        g.window = globalThis
-        g.document = { querySelectorAll: () => [] }
-        g.getComputedStyle = () => ({ getPropertyValue: () => tokenValue })
-        g.Chart = class {
+        class FakeChart {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             constructor(_canvas: any, config: any) {
                 built.push(config)
@@ -28,7 +36,27 @@ describe('Ops charts', () => {
                 destroyCalls.count++
             }
         }
+
+        // The module reads window.Chart and calls getComputedStyle. location is
+        // here so anything that peeks at window during this file still finds a
+        // browser-shaped object.
+        stub('window', { Chart: FakeChart, location: { href: 'http://localhost/' } })
+        // accentColor reads the token off document.documentElement.
+        stub('document', { documentElement: {}, querySelectorAll: () => [] })
+        stub('getComputedStyle', () => ({ getPropertyValue: () => tokenValue }))
+
         initOpsCharts = (await import('./ops-charts')).initOpsCharts
+    })
+
+    afterAll(() => {
+        const g = globalThis as unknown as Record<string, unknown>
+        for (const [key, { existed, value }] of Object.entries(originalGlobals)) {
+            if (existed) {
+                g[key] = value
+            } else {
+                delete g[key]
+            }
+        }
     })
 
     afterEach(() => {
