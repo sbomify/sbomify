@@ -22,7 +22,7 @@
             {% comment %}ADMINISTER, not MANAGE: a member maintains a component but does
             not decide the world can see it, so do not offer the control.{% endcomment %}
             {% if can_administer %}
-                {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
+                <c-forms.visibility-selector item_id="{{ component.id }}" visibility="{{ component.visibility }}" :gated_allowed="gated_visibility_allowed" />
             {% endif %}
             {# Meatball menu — moves secondary surfaces off the page body (design review p8/p9): upload, metadata, CI/CD integration, trusted publishers all open from here. #}
             <c-actions-menu label="Component actions" stretch>

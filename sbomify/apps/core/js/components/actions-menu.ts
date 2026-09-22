@@ -17,14 +17,15 @@ export interface Viewport {
 /**
  * Where to put a menu of `menuHeight` opened from `anchor`.
  *
- * Right-aligned to the trigger via `right` rather than `left`, so the menu's own
- * width never has to be measured. Vertically it prefers to hang below; when the
+ * Right-aligned to the trigger, clamped so a wide menu near the left edge stays
+ * inside the viewport. Vertically it prefers to hang below; when the
  * space below cannot hold it and there is more above, it flips and anchors its
  * bottom edge to the trigger's top — which needs no height either, and is what
  * keeps a menu on the last row of a long table on screen.
  */
-export function menuPosition(anchor: AnchorRect, menuHeight: number, viewport: Viewport): string {
-    const right = Math.max(VIEWPORT_MARGIN, viewport.width - anchor.right);
+export function menuPosition(anchor: AnchorRect, menuHeight: number, viewport: Viewport, menuWidth = 0): string {
+    const right = Math.max(VIEWPORT_MARGIN,
+        Math.min(viewport.width - anchor.right, viewport.width - menuWidth - VIEWPORT_MARGIN));
     const spaceBelow = viewport.height - anchor.bottom;
     const spaceAbove = anchor.top;
     const flip = spaceBelow < menuHeight + MENU_GAP && spaceAbove > spaceBelow;
@@ -38,6 +39,7 @@ export function menuPosition(anchor: AnchorRect, menuHeight: number, viewport: V
 interface MenuScope {
     open: boolean;
     focusPanel: boolean;
+    selectable: boolean;
     anchor: AnchorRect | undefined;
     viewport: Viewport | undefined;
     style: string;
@@ -57,10 +59,11 @@ interface MenuScope {
  * fixed positioning, which does not follow a scrolling ancestor — so a scroll
  * anywhere closes the menu rather than leaving it stranded beside another row.
  */
-export function actionsMenu(options: { focusPanel?: boolean } = {}) {
+export function actionsMenu(options: { focusPanel?: boolean; selectable?: boolean } = {}) {
     return {
         open: false,
         focusPanel: options.focusPanel ?? false,
+        selectable: options.selectable ?? false,
         anchor: undefined as AnchorRect | undefined,
         viewport: undefined as Viewport | undefined,
         /** Inline `right`/`top` offsets, recomputed each time the menu opens. */
@@ -74,7 +77,7 @@ export function actionsMenu(options: { focusPanel?: boolean } = {}) {
                 // A queued scroll from bringing the trigger into view can arrive
                 // after opening. Only movement since positioning dismisses it.
                 if (current.top !== this.anchor.top || current.bottom !== this.anchor.bottom ||
-                    current.right !== this.anchor.right || window.innerWidth !== this.viewport.width ||
+                    current.right !== this.anchor.right || document.documentElement.clientWidth !== this.viewport.width ||
                     window.innerHeight !== this.viewport.height) this.close();
             };
             // Capture phase: scroll does not bubble, so a listener on window
@@ -119,18 +122,24 @@ export function actionsMenu(options: { focusPanel?: boolean } = {}) {
             const menu = this.$refs.menu;
             if (!trigger || !menu) return;
             this.anchor = trigger.getBoundingClientRect();
-            this.viewport = { width: window.innerWidth, height: window.innerHeight };
-            this.style = menuPosition(this.anchor, menu.offsetHeight, this.viewport);
-            if (this.focusPanel) {
+            this.viewport = { width: document.documentElement.clientWidth, height: window.innerHeight };
+            this.style = menuPosition(this.anchor, menu.offsetHeight, this.viewport, menu.offsetWidth);
+            if (this.focusPanel || this.selectable) {
                 // Let Alpine publish the measured position before focusing.
                 setTimeout(() => {
-                    if (this.open) menu.focus({ preventScroll: true });
+                    if (!this.open) return;
+                    const enabledItem = '[role^=menuitem]:not([aria-disabled=true]):not(:disabled)';
+                    const target = this.selectable
+                        ? menu.querySelector<HTMLElement>(`${enabledItem}[aria-checked=true]`) ??
+                            menu.querySelector<HTMLElement>(enabledItem) ?? menu
+                        : menu;
+                    target.focus({ preventScroll: true });
                 });
             }
         },
 
         close(this: MenuScope) {
-            if (this.focusPanel && this.$refs.menu?.matches(':focus-within')) {
+            if ((this.focusPanel || this.selectable) && this.$refs.menu?.matches(':focus-within')) {
                 this.$refs.trigger?.focus({ preventScroll: true });
             }
             this.open = false;

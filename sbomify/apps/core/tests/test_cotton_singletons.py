@@ -473,7 +473,7 @@ def test_inline_copy_forwards_attrs_and_class(rendered: str) -> None:
 def test_actions_menu_wrapper_holds_the_alpine_component(rendered: str) -> None:
     wrapper = _probe(rendered, "menu-default")
     assert 'class="relative inline-flex shrink-0"' in wrapper
-    assert 'x-data="actionsMenu"' in wrapper
+    assert 'x-data="actionsMenu({ selectable: false })"' in wrapper
     assert '@keydown.escape.window="closeAndFocus()"' in wrapper
 
 
@@ -484,7 +484,7 @@ def test_actions_menu_trigger_is_the_library_icon_button(rendered: str) -> None:
     assert 'x-ref="trigger"' in section
     assert '@click.stop="toggle()"' in section
     assert ':aria-expanded="open"' in section
-    assert 'aria-haspopup="true"' in section
+    assert 'aria-haspopup="menu"' in section
 
 
 def test_actions_menu_stretch_trigger_swaps_the_shape(rendered: str) -> None:

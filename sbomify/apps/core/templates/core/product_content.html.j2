@@ -25,7 +25,7 @@
 </c-layout.page-header>
 <div class="flex flex-wrap items-center gap-3">
     {% if can_administer %}
-        {% include 'core/components/product_visibility_selector.html.j2' with item_id=product.id is_public=product.is_public %}
+        <c-forms.visibility-selector item_type="product" item_id="{{ product.id }}" visibility="{{ product.is_public|yesno:'public,private' }}" />
     {% elif product.is_public %}
         <c-badges.success size="sm">Public</c-badges.success>
     {% else %}

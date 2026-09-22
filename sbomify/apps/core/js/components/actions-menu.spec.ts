@@ -35,6 +35,11 @@ describe('positioning the menu', () => {
 
         expect(style).toBe('right: 8px; top: 148px;')
     })
+
+    test('keeps a wide menu inside the left edge on mobile', () => {
+        const style = menuPosition({ top: 100, bottom: 140, right: 155 }, 200, { width: 375, height: 750 }, 320)
+        expect(style).toBe('right: 47px; top: 148px;')
+    })
 })
 
 describe('opening and closing', () => {
@@ -60,6 +65,9 @@ describe('opening and closing', () => {
             addEventListener: () => {},
             removeEventListener: () => {},
         } as unknown as Window & typeof globalThis
+        globalThis.document = {
+            documentElement: { get clientWidth() { return window.innerWidth } },
+        } as unknown as Document
     })
 
     afterEach(async () => {
@@ -67,6 +75,7 @@ describe('opening and closing', () => {
         // or it lands in the next test with no window to measure against.
         await new Promise((resolve) => setTimeout(resolve))
         delete (globalThis as { window?: unknown }).window
+        delete (globalThis as { document?: unknown }).document
     })
 
     test('starts closed and unpositioned', () => {
@@ -80,6 +89,12 @@ describe('opening and closing', () => {
 
         expect(menu.open).toBe(true)
         expect(menu.style).toBe('right: 100px; top: 148px;')
+    })
+
+    test('positioning excludes the page scrollbar from the available width', () => {
+        globalThis.document = { documentElement: { clientWidth: 985 } } as unknown as Document
+        menu.position()
+        expect(menu.style).toBe('right: 85px; top: 148px;')
     })
 
     test('a disclosure receives focus after positioning and never after dismissal', async () => {
@@ -102,6 +117,26 @@ describe('opening and closing', () => {
         menu.close()
         expect(menu.open).toBe(false)
         expect(focused).toBe(1)
+    })
+
+    test('a choice menu focuses the saved option, or the first available choice', async () => {
+        const targets: string[] = []
+        let hasSelection = true
+        menu.selectable = true
+        menu.$refs.menu = {
+            offsetHeight: 200,
+            querySelector: (selector: string) => {
+                const selected = selector.includes('aria-checked')
+                if (selected && !hasSelection) return null
+                return { focus: () => targets.push(selected ? 'saved' : 'first') }
+            },
+        } as unknown as HTMLElement
+        menu.show()
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        hasSelection = false
+        menu.show()
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        expect(targets).toEqual(['saved', 'first'])
     })
 
     test('toggling again closes it', () => {

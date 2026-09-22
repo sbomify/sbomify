@@ -98,7 +98,7 @@ The result is a visible sharing action without a listener for ordinary members. 
 
 In the isolated member fixture, both menu items were visible. Dispatching their click events produced zero clipboard calls, and neither sharing listener existed in the rendered page. Clipboard access was replaced with a test recorder; no live clipboard content was inspected.
 
-Source: [component menu and permission gates](../sbomify/apps/core/templates/core/component_details_private_base.html.j2), [sharing listeners](../sbomify/apps/core/templates/core/components/component_visibility_selector.html.j2), [capability tiers](../sbomify/apps/core/authz.py).
+Source: [component menu and permission gates](../sbomify/apps/core/templates/core/component_details_private_base.html.j2), [sharing listeners](../sbomify/apps/core/js/components/public-sharing.ts), [capability tiers](../sbomify/apps/core/authz.py).
 
 - [x] Put sharing behaviour in a shared scope available wherever its menu items render.
 - [x] Keep visibility changes restricted to the existing administration capability.

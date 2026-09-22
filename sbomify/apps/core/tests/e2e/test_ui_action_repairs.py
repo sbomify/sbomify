@@ -137,7 +137,7 @@ def test_component_sharing_does_not_require_visibility_permission(
     public_path = reverse("core:component_details_public", args=[component.pk])
     assert copies[0].endswith(public_path)
     assert copies[1] == f"[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)]({copies[0]})"
-    assert page.locator('select[name="visibility"]').count() == (0 if role == "member" else 1)
+    assert page.get_by_role("button", name="Component visibility", exact=True).count() == (0 if role == "member" else 1)
     component.visibility = "private"
     component.save(update_fields=["visibility"])
     page.reload()
