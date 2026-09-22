@@ -66,4 +66,7 @@ def test_the_review_button_points_at_a_real_page(sample_team_with_owner_member: 
     assert mail.outbox, "no admin was notified"
     body = mail.outbox[0].body + "".join(part for part, _ in mail.outbox[0].alternatives)
     assert _settings_url(team) in body
-    assert f'{_queue_url(team)}"' not in body
+    # Both parts, and the URL anywhere in either of them: the text part quotes
+    # nothing, so a check that only matched a quoted one would pass on the very
+    # mail that was reported.
+    assert _queue_url(team) not in body
