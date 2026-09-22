@@ -24,7 +24,9 @@ from sbomify.apps.sboms.models import SBOM
 pytestmark = pytest.mark.django_db
 
 
-def _run(team, *, status: str, age: timedelta, plugin: str = "sbom-verification") -> AssessmentRun:
+def _run(
+    team, *, status: str, age: timedelta, started: timedelta | None = None, plugin: str = "sbom-verification"
+) -> AssessmentRun:
     component = Component.objects.create(name=f"c-{plugin}-{age.total_seconds()}", team=team)
     sbom = SBOM.objects.create(
         component=component, name="s", version="1.0", format="cyclonedx", format_version="1.6", sbom_filename="s.json"
@@ -39,7 +41,10 @@ def _run(team, *, status: str, age: timedelta, plugin: str = "sbom-verification"
         status=status,
     )
     # created_at is auto_now_add, so age it after the fact.
-    AssessmentRun.objects.filter(pk=run.pk).update(created_at=timezone.now() - age)
+    AssessmentRun.objects.filter(pk=run.pk).update(
+        created_at=timezone.now() - age,
+        started_at=timezone.now() - started if started else None,
+    )
     run.refresh_from_db()
     return run
 
@@ -74,6 +79,20 @@ class TestWhatTheSweepSettles:
         run.refresh_from_db()
         assert run.status not in (RunStatus.PENDING.value, RunStatus.RUNNING.value)
 
+    @pytest.mark.parametrize("status", [RunStatus.PENDING.value, RunStatus.RUNNING.value])
+    def test_the_clock_starts_at_the_first_attempt(self, sample_team_with_owner_member, status: str) -> None:
+        """A backed-up queue can hold a row for hours before a worker picks it
+        up. Timed from when the row was written, a run picked up ten minutes
+        ago would be settled while it runs or waits on its next retry."""
+        run = _run(
+            sample_team_with_owner_member.team, status=status, age=timedelta(hours=3), started=timedelta(minutes=10)
+        )
+
+        assert sweep_stranded_runs() == 0
+
+        run.refresh_from_db()
+        assert run.status == status
+
     def test_a_completed_run_is_not_touched(self, sample_team_with_owner_member) -> None:
         run = _run(sample_team_with_owner_member.team, status=RunStatus.COMPLETED.value, age=timedelta(hours=3))
         before = run.status
@@ -103,3 +122,17 @@ class TestWhatTheArtifactPageSeesAfterwards:
         run.refresh_from_db()
         assert run.status == RunStatus.COMPLETED.value
         assert run.result, "a settled run needs a result, or the page has nothing to show"
+
+    def test_the_settled_run_says_it_never_finished(self, sample_team_with_owner_member) -> None:
+        """Not that a retry budget ran out. A stranded run usually never
+        started, so it spent no retries."""
+        run = _run(sample_team_with_owner_member.team, status=RunStatus.PENDING.value, age=timedelta(hours=3))
+
+        sweep_stranded_runs()
+
+        run.refresh_from_db()
+        finding = run.result["findings"][0]
+        assert finding["id"] == "sbom-verification:stranded"
+        assert finding["title"] == "Assessment Never Completed"
+        assert run.result["metadata"] == {"stranded": True}
+        assert "Retry budget" not in (run.error_message or "")

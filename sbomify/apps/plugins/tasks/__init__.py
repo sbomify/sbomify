@@ -1422,7 +1422,7 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 @cron("*/20 * * * *")  # type: ignore[untyped-decorator]  # Every 20 minutes
 @dramatiq.actor(queue_name="plugins", max_retries=1, time_limit=600000)
 def sweep_stranded_runs_task() -> int:
-    """Settle assessment runs nothing is coming back for.
+    """Settle assessment runs that nothing will come back for.
 
     A run is written before its work is queued, so a lost message leaves a row
     in PENDING with nothing scheduled against it. overall_status is pending
