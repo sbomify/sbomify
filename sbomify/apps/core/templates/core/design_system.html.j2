@@ -140,8 +140,9 @@
     <h2 id="colors" class="text-xl font-semibold text-text">Colour tokens</h2>
     <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
-        Every colour in the app resolves to one of these. Swatches read the custom property directly,
-        so this grid is the tokens, not a copy of them.
+        Text and icons use these tokens directly. Backgrounds, borders and focus rings can use
+        transparent tints. Do not blend foreground colours with text or add local colour values.
+        Swatches read the custom properties directly in both themes.
     </p>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {% for token in demo_tokens %}
@@ -1005,21 +1006,21 @@ first-of-type rule that drops the leading hairline reads the section's position
     <tbody>
         <c-tables.row>
         <c-tables.cell nowrap class="font-medium">acme-gateway-core</c-tables.cell>
-        <c-tables.cell><span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span></c-tables.cell>
+        <c-tables.cell><c-badges.format format="cyclonedx">CycloneDX</c-badges.format></c-tables.cell>
         <c-tables.cell date>10 Aug 2026</c-tables.cell>
         <c-tables.cell end><c-badges.warning>3 high</c-badges.warning></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
         <c-tables.row>
         <c-tables.cell nowrap class="font-medium">acme-vault-core</c-tables.cell>
-        <c-tables.cell><span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span></c-tables.cell>
+        <c-tables.cell><c-badges.format format="spdx">SPDX</c-badges.format></c-tables.cell>
         <c-tables.cell date>2 Aug 2026</c-tables.cell>
         <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
         <c-tables.row>
         <c-tables.cell nowrap class="font-medium">acme-gateway-edge-proxy-transport-security-module</c-tables.cell>
-        <c-tables.cell><span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span></c-tables.cell>
+        <c-tables.cell><c-badges.format format="cyclonedx">CycloneDX</c-badges.format></c-tables.cell>
         <c-tables.cell date>28 Jul 2026</c-tables.cell>
         <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>

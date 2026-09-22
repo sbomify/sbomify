@@ -339,7 +339,7 @@ def test_code_inline_is_the_neutral_chip_by_default(rendered: str) -> None:
 def test_code_inline_accent_replaces_the_whole_tint(rendered: str) -> None:
     chip = _probe(rendered, "code-inline-primary")
     assert "bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]" in chip
-    assert "text-[color-mix(in_oklab,var(--color-primary)_70%,var(--color-text))]" in chip
+    assert "text-[color:var(--color-primary)]" in chip
     assert "var(--color-border)_35%" not in chip
     assert chip.count("bg-[color-mix") == 1
     assert "ml-1" in chip

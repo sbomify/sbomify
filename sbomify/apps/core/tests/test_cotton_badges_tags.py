@@ -38,7 +38,7 @@ def _badge(rendered: str, label: str) -> str:
         ("Danger", "text-danger bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)]"),
         ("Info", "text-info bg-[color-mix(in_oklab,var(--color-info)_12%,transparent)]"),
         ("Violet", "text-accent bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)]"),
-        ("Accent", "bg-[linear-gradient(135deg,var(--color-primary-dark)_0%,#CC58BB_100%)]"),
+        ("Accent", "bg-[linear-gradient(135deg,var(--color-primary-dark)_0%,var(--color-accent-pink)_100%)]"),
         ("KEV", "text-white bg-danger"),
     ],
 )
@@ -111,7 +111,7 @@ def test_badge_slot_carries_nested_markup(rendered: str) -> None:
 )
 def test_severity_level_prop_picks_the_band_accent(rendered: str, label: str, token: str) -> None:
     badge = _badge(rendered, label)
-    assert f"text-[color-mix(in_oklab,{token}_70%,var(--color-text))]" in badge
+    assert f"text-[color:{token}]" in badge
     assert f"bg-[color-mix(in_oklab,{token}_12%,transparent)]" in badge
     assert f"border-[color-mix(in_oklab,{token}_20%,transparent)]" in badge
 
@@ -145,7 +145,7 @@ def test_pill_rounds_the_severity_shape(rendered: str) -> None:
 def test_severity_dynamic_keys_every_band_off_the_attribute(rendered: str, label: str, level: str, token: str) -> None:
     badge = _badge(rendered, label)
     assert f'data-level="{level}"' in badge
-    assert f"data-[level={level}]:text-[color-mix(in_oklab,{token}_70%,var(--color-text))]" in badge
+    assert f"data-[level={level}]:text-[color:{token}]" in badge
     assert f"data-[level={level}]:bg-[color-mix(in_oklab,{token}_12%,transparent)]" in badge
     assert f"data-[level={level}]:border-[color-mix(in_oklab,{token}_20%,transparent)]" in badge
 
@@ -153,7 +153,7 @@ def test_severity_dynamic_keys_every_band_off_the_attribute(rendered: str, label
 def test_severity_dynamic_rests_on_the_unknown_band(rendered: str) -> None:
     badge = _badge(rendered, "Runtime unknown")
     assert 'data-level="unknown"' in badge
-    assert "text-[color-mix(in_oklab,var(--color-text-muted)_70%,var(--color-text))]" in badge
+    assert "text-[color:var(--color-text-muted)]" in badge
     assert "bg-[color-mix(in_oklab,var(--color-text-muted)_12%,transparent)]" in badge
 
 
@@ -173,8 +173,8 @@ def test_severity_dynamic_forwards_class_and_alpine_bindings(rendered: str) -> N
 @pytest.mark.parametrize(
     ("label", "fmt", "recipe_bit"),
     [
-        ("CycloneDX", "cyclonedx", "data-[format=cyclonedx]:text-[#0d9488]"),
-        ("SPDX", "spdx", "data-[format=spdx]:text-[#7c3aed]"),
+        ("CycloneDX", "cyclonedx", "data-[format=cyclonedx]:text-success"),
+        ("SPDX", "spdx", "data-[format=spdx]:text-accent"),
     ],
 )
 def test_format_prop_writes_the_attribute_that_picks_the_colour(
@@ -187,8 +187,12 @@ def test_format_prop_writes_the_attribute_that_picks_the_colour(
 
 
 def test_format_hover_tint_travels_with_the_variant(rendered: str) -> None:
-    assert "data-[format=cyclonedx]:hover:bg-[rgb(20_184_166/0.15)]" in _badge(rendered, "CycloneDX")
-    assert "data-[format=spdx]:hover:bg-[rgb(139_92_246/0.15)]" in _badge(rendered, "SPDX")
+    assert "data-[format=cyclonedx]:hover:bg-[color-mix(in_oklab,var(--color-success)_15%,transparent)]" in _badge(
+        rendered, "CycloneDX"
+    )
+    assert "data-[format=spdx]:hover:bg-[color-mix(in_oklab,var(--color-accent)_15%,transparent)]" in _badge(
+        rendered, "SPDX"
+    )
 
 
 def test_unknown_format_keeps_the_shape_without_a_tint(rendered: str) -> None:
@@ -198,15 +202,15 @@ def test_unknown_format_keeps_the_shape_without_a_tint(rendered: str) -> None:
     assert 'data-format="swid"' in swid
     classes = swid[swid.index('class="') + 7 :]
     classes = classes[: classes.index('"')]
-    unkeyed = [bit for bit in classes.split() if "rgb(" in bit and not bit.startswith("data-[format=")]
+    unkeyed = [bit for bit in classes.split() if "color-mix(" in bit and not bit.startswith("data-[format=")]
     assert not unkeyed, f"a format tint lands without its attribute: {unkeyed}"
 
 
 def test_format_badge_carries_both_recipes_so_a_bound_value_can_pick_either(rendered: str) -> None:
     """The rows of an artifacts table are built by Alpine, which binds data-format only."""
     badge = _badge(rendered, "SWID")
-    assert "data-[format=cyclonedx]:bg-[rgb(20_184_166/0.1)]" in badge
-    assert "data-[format=spdx]:bg-[rgb(139_92_246/0.1)]" in badge
+    assert "data-[format=cyclonedx]:bg-[color-mix(in_oklab,var(--color-success)_10%,transparent)]" in badge
+    assert "data-[format=spdx]:bg-[color-mix(in_oklab,var(--color-accent)_10%,transparent)]" in badge
 
 
 def test_format_badge_is_not_the_badge_shell(rendered: str) -> None:

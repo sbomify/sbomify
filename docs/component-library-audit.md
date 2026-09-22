@@ -100,3 +100,15 @@ section headers have no external margin; the page header has no `flush` option.
 Nested sections use flex/grid gaps for their internal spacing. Hidden state
 mounts and submission-only forms stay out of normal flow, so they cannot create
 empty rows. The gallery demonstrates the same composition.
+
+## Colour token audit
+
+Shared components use the existing palette for foregrounds. Stat values, change
+indicators, severity badges, assessment pills, format badges and metric chips no
+longer blend their ink with body text or define local hues. Surfaces and borders
+retain transparent token tints. The gallery now shows the existing severity,
+information and neutral tokens alongside the original swatches.
+
+Source checks reject local hues, undefined colour variables and mixed foregrounds
+across the component library. Browser checks compare the rendered components with
+the gallery swatches in both themes, including zero and reactive stat values.

@@ -16,5 +16,5 @@ loads the pre-Tailwind static/css/utilities.css, whose `.rounded` is an
 !important 0.375rem and would round this chip differently there.
 {% endcomment %}
 <c-vars accent class />
-<code class="px-1.5 py-0.5 font-mono text-[0.8125em] rounded-[0.25rem] {% if accent == 'primary' %}text-[color-mix(in_oklab,var(--color-primary)_70%,var(--color-text))] bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]{% else %}text-text bg-[color-mix(in_oklab,var(--color-border)_35%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+<code class="px-1.5 py-0.5 font-mono text-[0.8125em] rounded-[0.25rem] {% if accent == 'primary' %}text-[color:var(--color-primary)] bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]{% else %}text-text bg-[color-mix(in_oklab,var(--color-border)_35%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
       {{ attrs }}>{{ slot }}</code>

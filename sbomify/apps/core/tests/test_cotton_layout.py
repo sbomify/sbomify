@@ -286,7 +286,7 @@ def test_stat_label_and_value_recipes(rendered: str) -> None:
 )
 def test_change_variants_carry_their_ink(rendered: str, marker: str, token: str) -> None:
     change = _classes(rendered, STAT_CHANGE, marker)
-    assert f"text-[color-mix(in_oklab,var(--color-{token})_70%,var(--color-text))]" in change
+    assert f"text-[color:var(--color-{token})]" in change
 
 
 def test_the_card_aligns_changes_with_its_value_and_a_bare_change_keeps_its_margin(rendered: str) -> None:
