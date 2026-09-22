@@ -12,16 +12,16 @@
         {# The shell draws the frame itself, so the table needs no card around it. #}
         <c-tables.shell>
         <c-tables.toolbar>
-        <c-tables.search id="advisories-search" label="Search advisories" placeholder="Search advisories..." x-model="search" />
+        <c-forms.search-input size="sm" id="advisories-search" label="Search advisories" placeholder="Search advisories..." x-model="search" />
         {# Status filter #}
-        <c-tables.select id="advisories-status-filter" label="Filter by status" x-model="filter">
+        <c-forms.select size="md" id="advisories-status-filter" label="Filter by status" x-model="filter">
         <option value="all">All statuses</option>
         <option value="identified">Identified</option>
         <option value="investigating">Investigating</option>
         <option value="fix_in_progress">Fix in progress</option>
         <option value="resolved">Resolved</option>
         <option value="wont_fix">Won't fix</option>
-        </c-tables.select>
+        </c-forms.select>
         <c-slot name="right">
         <c-tables.page-size id="advisories-per-page" x-model.number="perPage">
         <option value="5">5</option>
@@ -47,10 +47,10 @@
                     Status and publication take their variant from the row Alpine
                     builds, so they bind data-variant rather than pick a variant
                     component. Severity is not a variant: it binds data-level and
-                    c-badges.severity-dynamic owns the five CVSS recipes.
+                    c-badges.severity owns the five CVSS recipes.
                 {% endcomment %}
                 <c-tables.cell nowrap>
-                <c-badges.severity-dynamic ::data-level="advisory.severity" x-text="advisory.severity || 'none'" />
+                <c-badges.severity ::data-level="advisory.severity" x-text="advisory.severity || 'none'" />
                 </c-tables.cell>
                 <c-tables.cell nowrap>
                 <div class="min-w-0">

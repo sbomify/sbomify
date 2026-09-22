@@ -110,6 +110,16 @@ class TeamGeneralSettingsForm(forms.Form):
     )
 
 
+class PatchSLAForm(forms.Form):
+    """Workspace patch targets, in days. Blank severities have no target."""
+
+    mode = forms.ChoiceField(choices=[("recommended", "Recommended"), ("custom", "Custom")])
+    critical = forms.IntegerField(required=False, min_value=0, max_value=3650)
+    high = forms.IntegerField(required=False, min_value=0, max_value=3650)
+    medium = forms.IntegerField(required=False, min_value=0, max_value=3650)
+    low = forms.IntegerField(required=False, min_value=0, max_value=3650)
+
+
 class OnboardingProductForm(forms.Form):
     """Form for creating a product during onboarding."""
 

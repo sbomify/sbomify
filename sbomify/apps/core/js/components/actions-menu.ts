@@ -37,6 +37,9 @@ export function menuPosition(anchor: AnchorRect, menuHeight: number, viewport: V
 /** The component's own state plus the `$refs` Alpine injects. */
 interface MenuScope {
     open: boolean;
+    focusPanel: boolean;
+    anchor: AnchorRect | undefined;
+    viewport: Viewport | undefined;
     style: string;
     dismiss: (() => void) | undefined;
     $refs: Record<string, HTMLElement | undefined>;
@@ -46,22 +49,34 @@ interface MenuScope {
 }
 
 /**
- * The row and header actions menu ("meatball") behind `components/tw/actions_menu.html.j2`.
+ * The floating controller shared by row menus and severity disclosures.
+ * focusPanel is for a disclosure whose panel has tabindex="-1".
  *
  * The menu is teleported to the body, because the tables that need one scroll
  * horizontally and would clip a menu positioned inside them. Teleporting means
  * fixed positioning, which does not follow a scrolling ancestor — so a scroll
  * anywhere closes the menu rather than leaving it stranded beside another row.
  */
-export function actionsMenu() {
+export function actionsMenu(options: { focusPanel?: boolean } = {}) {
     return {
         open: false,
+        focusPanel: options.focusPanel ?? false,
+        anchor: undefined as AnchorRect | undefined,
+        viewport: undefined as Viewport | undefined,
         /** Inline `right`/`top` offsets, recomputed each time the menu opens. */
         style: '',
         dismiss: undefined as (() => void) | undefined,
 
         init(this: MenuScope) {
-            this.dismiss = () => this.close();
+            this.dismiss = () => {
+                const current = this.$refs.trigger?.getBoundingClientRect();
+                if (!this.open || !current || !this.anchor || !this.viewport) return;
+                // A queued scroll from bringing the trigger into view can arrive
+                // after opening. Only movement since positioning dismisses it.
+                if (current.top !== this.anchor.top || current.bottom !== this.anchor.bottom ||
+                    current.right !== this.anchor.right || window.innerWidth !== this.viewport.width ||
+                    window.innerHeight !== this.viewport.height) this.close();
+            };
             // Capture phase: scroll does not bubble, so a listener on window
             // only sees the table's own scrolling this way.
             window.addEventListener('scroll', this.dismiss, true);
@@ -93,6 +108,7 @@ export function actionsMenu() {
             // background tab would stay invisible). This runs after Alpine's
             // reactive flush has applied x-show, and measuring forces the
             // layout it needs, so there is nothing to wait for a paint for.
+            this.anchor = undefined;
             this.style = 'visibility: hidden;';
             this.open = true;
             setTimeout(() => this.position());
@@ -102,13 +118,21 @@ export function actionsMenu() {
             const trigger = this.$refs.trigger;
             const menu = this.$refs.menu;
             if (!trigger || !menu) return;
-            this.style = menuPosition(trigger.getBoundingClientRect(), menu.offsetHeight, {
-                width: window.innerWidth,
-                height: window.innerHeight,
-            });
+            this.anchor = trigger.getBoundingClientRect();
+            this.viewport = { width: window.innerWidth, height: window.innerHeight };
+            this.style = menuPosition(this.anchor, menu.offsetHeight, this.viewport);
+            if (this.focusPanel) {
+                // Let Alpine publish the measured position before focusing.
+                setTimeout(() => {
+                    if (this.open) menu.focus({ preventScroll: true });
+                });
+            }
         },
 
         close(this: MenuScope) {
+            if (this.focusPanel && this.$refs.menu?.matches(':focus-within')) {
+                this.$refs.trigger?.focus({ preventScroll: true });
+            }
             this.open = false;
         },
 
@@ -116,7 +140,7 @@ export function actionsMenu() {
         closeAndFocus(this: MenuScope) {
             if (!this.open) return;
             this.close();
-            this.$refs.trigger?.focus();
+            this.$refs.trigger?.focus({ preventScroll: true });
         },
     };
 }

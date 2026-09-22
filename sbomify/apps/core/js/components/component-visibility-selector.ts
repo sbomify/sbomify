@@ -1,9 +1,7 @@
 import Alpine from 'alpinejs';
-import { showSuccess, showError } from '../alerts';
 
 interface ComponentVisibilitySelectorParams {
   itemId: string
-  publicUrl: string
   currentVisibility: string
   gatedVisibilityAllowed: boolean
 }
@@ -11,14 +9,12 @@ interface ComponentVisibilitySelectorParams {
 export function registerComponentVisibilitySelector() {
   Alpine.data('componentVisibilitySelector', ({ 
     itemId, 
-    publicUrl, 
     currentVisibility, 
     gatedVisibilityAllowed 
   }: ComponentVisibilitySelectorParams) => {
     const initialVisibility = currentVisibility || 'private'
     return {
       itemId,
-      publicUrl,
       visibility: initialVisibility,
       gatedVisibilityAllowed,
       isLoading: false,
@@ -94,32 +90,6 @@ export function registerComponentVisibilitySelector() {
         }
       },
 
-      async copyToClipboard(): Promise<void> {
-        try {
-          await navigator.clipboard.writeText(new URL(this.publicUrl, window.location.origin).href)
-          showSuccess('Public URL copied to clipboard')
-        } catch (error) {
-          console.error('Failed to copy to clipboard:', error)
-          showError('Failed to copy URL to clipboard')
-        }
-      },
-
-      copyBadgeToClipboard(): void {
-        const badgeSvgUrl = 'https://sbomify.com/assets/images/logo/badge.svg'
-        const publicUrl = new URL(this.publicUrl, window.location.origin).href
-        const markdown = `[![sbomified](${badgeSvgUrl})](${publicUrl})`
-
-        navigator.clipboard.writeText(markdown).then(() => {
-          this.$dispatch('messages', {
-            value: [{ type: 'success', message: 'Badge markdown copied to clipboard' }]
-          })
-        }).catch(err => {
-          console.error('Failed to copy badge:', err)
-          this.$dispatch('messages', {
-            value: [{ type: 'error', message: 'Failed to copy badge to clipboard' }]
-          })
-        })
-      }
     }
   })
 }

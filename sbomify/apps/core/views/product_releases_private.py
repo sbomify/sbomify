@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -11,9 +10,9 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views import View
 
-from sbomify.apps.core.apis import create_release, get_product, list_all_releases
-from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.apis import create_release
 from sbomify.apps.core.schemas import ReleaseCreateSchema
+from sbomify.apps.core.services.product_page import build_product_releases_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
@@ -27,31 +26,12 @@ class ProductReleasesPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
-        status_code, product = get_product(request, product_id)
-        if status_code != 200:
-            return error_response(
-                request, HttpResponse(status=status_code, content=product.get("detail", "Unknown error"))
-            )
-
-        status_code, releases = list_all_releases(request, product_id=product_id, page=1, page_size=-1)
-        if status_code != 200:
-            return error_response(
-                request, HttpResponse(status=status_code, content=releases.get("detail", "Unknown error"))
-            )
-
-        current_team = request.session.get("current_team", {})
-
-        return render(
-            request,
-            "core/product_releases_private.html.j2",
-            {
-                "APP_BASE_URL": settings.APP_BASE_URL,
-                "current_team": current_team,
-                "product": product,
-                "releases": releases.get("items"),
-                "default_release_datetime": timezone.localtime(),
-            },
-        )
+        result = build_product_releases_context(request, product_id)
+        if not result.ok:
+            return HttpResponse(result.error, status=result.status_code or 400)
+        partial = request.headers.get("HX-Target") == "product-releases-content"
+        template = "core/product_releases_content.html.j2" if partial else "core/product_releases_private.html.j2"
+        return render(request, template, result.value)
 
     def post(self, request: HttpRequest, product_id: str) -> HttpResponse:
         name = request.POST.get("name", "").strip()

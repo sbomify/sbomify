@@ -189,14 +189,14 @@
                         {# The card already draws the frame, so the shell nests inside it. #}
                         <c-tables.shell nested>
                         <c-tables.toolbar>
-                        <c-tables.search id="vex-suppression-search" label="Search suppressed vulnerabilities" placeholder="Search advisories..." class="max-w-xs" x-model="search" />
-                        <c-tables.select id="vex-status-filter" label="Filter by status" x-model="statusFilter">
+                        <c-forms.search-input size="sm" id="vex-suppression-search" label="Search suppressed vulnerabilities" placeholder="Search advisories..." class="max-w-xs" x-model="search" />
+                        <c-forms.select size="md" id="vex-status-filter" label="Filter by status" x-model="statusFilter">
                         <option value="all">All Statuses</option>
                         <template x-for="st in statusOptions" :key="st">
                             <option :value="st"
                                     x-text="st.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())"></option>
                         </template>
-                        </c-tables.select>
+                        </c-forms.select>
                         </c-tables.toolbar>
                         <c-tables.table fixed x-cloak>
                         <c-tables.head>

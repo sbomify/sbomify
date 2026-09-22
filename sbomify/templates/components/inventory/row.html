@@ -1,0 +1,82 @@
+{% comment %}
+One inventory row. The three entity kinds share compact cells, exposure, status
+and actions; only the columns that describe their domain differ. Links use real
+detail routes. No row is itself clickable, so menus and keyboard links stay independent.
+{% endcomment %}
+<c-vars row kind scope_product />
+<c-tables.row>
+<c-tables.cell compact>
+<div class="min-w-40 max-w-72">
+    <c-overview.record href="{{ row.url }}" title="{{ row.name }}" />
+    {% if not scope_product %}<p class="mt-1 mb-0 text-xs text-text-muted">
+        {% if kind == 'products' %}
+            {{ row.component_count }} component{{ row.component_count|pluralize }}
+        {% elif kind == 'releases' %}
+            <a class="hover:text-text hover:underline"
+               href="{% url 'core:product_details' row.product_id %}">{{ row.product_name }}</a>
+        {% else %}
+            {% for product in row.products %}
+                <a class="hover:text-text hover:underline"
+                   href="{% url 'core:product_details' product.id %}">{{ product.name }}</a>
+                {% if not forloop.last %},{% endif %}
+            {% empty %}Unassigned
+            {% endfor %}
+        {% endif %}
+    </p>{% endif %}
+</div>
+</c-tables.cell>
+<c-tables.cell compact><span class="tabular-nums">
+{% if kind == 'products' %}
+    {{ row.release_count }}
+{% else %}
+    {{ row.artifact_count }}
+{% endif %}
+</span></c-tables.cell>
+{% if kind == 'components' %}
+    <c-tables.cell compact>
+    {% if row.freshness_label == 'Current' %}
+        <c-feedback.status tone="success" label="Current" />
+    {% elif row.stale %}
+        <c-feedback.status tone="warning" label="Stale" />
+    {% else %}
+        <c-feedback.status label="{{ row.freshness_label }}" />
+    {% endif %}
+    </c-tables.cell>
+    <c-tables.cell compact>
+    {% if row.last_scan and row.scan_label == 'Scanned' %}
+        <c-feedback.status tone="success" label="Scanned" title="{{ row.last_scan|date:'j M Y, H:i' }}" />
+    {% else %}
+        <c-feedback.status label="{{ row.scan_label }}" />
+    {% endif %}
+    </c-tables.cell>
+{% endif %}
+<c-tables.cell compact>
+{% if row.security_applicable %}
+    <c-overview.exposure compact :counts="row.counts" :unassessed="row.unassessed" />
+{% else %}
+    <span class="text-xs text-text-muted">Not applicable</span>
+{% endif %}
+</c-tables.cell>
+{% if kind == 'products' %}
+    <c-tables.cell compact>
+    <span class="tabular-nums {% if row.past_sla %}font-semibold text-danger{% else %}text-text-muted{% endif %}">{{ row.past_sla }}</span>
+    </c-tables.cell>
+    <c-tables.cell compact><c-overview.evidence :product="row" /></c-tables.cell>
+{% elif kind == 'releases' %}
+    <c-tables.cell compact><span class="tabular-nums text-text-muted">v{{ row.collection_version }}</span></c-tables.cell>
+{% endif %}
+<c-tables.cell compact>
+{% if row.visibility == 'public' %}
+    <c-badges.success size="sm">Public</c-badges.success>
+{% elif row.visibility == 'gated' %}
+    <c-badges.warning size="sm">Gated</c-badges.warning>
+{% else %}
+    <c-badges.secondary size="sm">Private</c-badges.secondary>
+{% endif %}
+</c-tables.cell>
+{% if kind == 'releases' %}
+    <c-tables.cell compact><span class="whitespace-nowrap text-xs text-text-muted">{{ row.release_type }}</span></c-tables.cell>
+{% endif %}
+<c-tables.cell compact date muted><time datetime="{{ row.created_at|date:'c' }}">{{ row.created_at|date:'j M Y' }}</time></c-tables.cell>
+<c-tables.actions-cell compact><c-inventory.actions :row="row" kind="{{ kind }}" scope_product="{{ scope_product }}" /></c-tables.actions-cell>
+</c-tables.row>

@@ -15,9 +15,10 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team
-from sbomify.apps.teams.forms import TeamGeneralSettingsForm
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.forms import PatchSLAForm, TeamGeneralSettingsForm
+from sbomify.apps.teams.models import Member, Team, default_patch_sla_days
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.services.settings_page import general_context, update_patch_sla
 from sbomify.apps.teams.utils import (
     delete_workspace_with_billing_cleanup,
     refresh_current_team_session,
@@ -39,7 +40,6 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        user = cast(User, request.user)
         status_code, team = get_team(request, team_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
@@ -48,22 +48,32 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             initial={"name": team.name, "sbom_freshness_days": team.sbom_freshness_days},
         )
 
-        membership = Member.objects.filter(user=user, team__key=team_key).first()
-        is_default_team = membership.is_default_team if membership else False
-
         return render(
             request,
             "teams/team_general.html.j2",
             {
                 "team": team,
                 "form": form,
-                "is_default_team": is_default_team,
+                **(general_context(request, team_key).value or {}),
             },
         )
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         action = request.POST.get("action", "update_name")
 
+        if action == "update_patch_sla":
+            form = PatchSLAForm(request.POST)
+            if not form.is_valid():
+                return htmx_error_response(form.errors.as_text())
+            targets = (
+                default_patch_sla_days()
+                if form.cleaned_data["mode"] == "recommended"
+                else {severity: form.cleaned_data[severity] for severity in default_patch_sla_days()}
+            )
+            result = update_patch_sla(team_key, targets)
+            if not result.ok:
+                return htmx_error_response(result.error or "Unable to save patch targets")
+            return htmx_success_response("Patch targets updated", triggers={"refreshPatchSLA": True})
         if action == "set_default":
             return self._set_default(request, team_key)
         elif action == "delete_workspace" or action == "delete":

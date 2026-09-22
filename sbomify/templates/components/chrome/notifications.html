@@ -1,0 +1,42 @@
+{% comment %}
+The bell and notification panel share the profile menu's quiet controls. The
+count remains accessible inside the small dot. The existing script fills the
+row template and toggles state wrappers, never component layout classes.
+{% endcomment %}
+<div x-data="{ open: false, show() { this.open = true; this.$dispatch('notifications-open'); this.$nextTick(() => this.$focus.focus(this.$refs.panel)); }, close() { this.open = false; this.$refs.trigger.focus(); } }"
+     class="relative shrink-0"
+     @keydown.escape.stop.prevent="close()"
+     @focusout="if (!$el.contains($event.relatedTarget)) open = false"
+     id="notifications-dropdown-container">
+    <c-buttons.icon-quiet label="View notifications" class="relative" aria-haspopup="dialog" aria-controls="notifications-dropdown" aria-describedby="notifications-badge" x-ref="trigger" @click="open ? close() : show()" ::aria-expanded="open">
+    <i class="far fa-bell text-base" aria-hidden="true"></i>
+    <span id="notifications-badge"
+          class="absolute top-1.5 right-2 w-1.5 h-1.5 rounded-full bg-danger ring-2 ring-surface hidden">
+        <span data-notification-count class="sr-only"></span>
+    </span>
+    </c-buttons.icon-quiet>
+    <c-dropdowns.dropdown flush role="dialog" class="right-0 mt-2 w-[360px] max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-16 max-sm:w-auto focus:outline-none" aria-label="Notifications" id="notifications-dropdown" x-ref="panel" tabindex="-1" x-show="open" x-cloak x-transition.opacity.duration.100ms @click.outside="open = false">
+    <div class="flex items-center justify-between gap-3 min-h-14 px-4 py-2 border-b border-border">
+        <h2 class="text-sm font-semibold text-text">Notifications</h2>
+        <span id="notifications-clear" class="hidden">
+            <c-buttons.ghost size="sm" id="clearAllNotifications">Clear all</c-buttons.ghost>
+        </span>
+    </div>
+    <div class="max-h-[min(24rem,calc(100dvh-9rem))] overflow-y-auto">
+        <div id="notifications-loading" role="status">
+            <c-feedback.loading compact size="sm" message="Loading notifications..." />
+        </div>
+        <ul id="notifications-list" aria-label="Recent notifications">
+        </ul>
+        <div id="notifications-empty" class="hidden" role="status">
+            <c-feedback.empty-state size="sm" icon="far fa-bell" icon_variant="neutral" title="You're all caught up" message="No new notifications." />
+        </div>
+        <div id="notifications-error" class="hidden" role="status">
+            <c-feedback.empty-state size="sm" icon="fas fa-exclamation-triangle" icon_variant="neutral" title="Couldn't load notifications" message="Try again in a moment.">
+            <c-buttons.secondary size="sm" id="notifications-retry">Try again</c-buttons.secondary>
+            </c-feedback.empty-state>
+        </div>
+    </div>
+    <template id="notification-item-template"><c-chrome.notification-item /></template>
+    </c-dropdowns.dropdown>
+</div>

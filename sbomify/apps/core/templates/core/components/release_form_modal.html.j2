@@ -1,48 +1,32 @@
-{# Create/Edit release modal. Must render inside a productReleases Alpine scope. #}
-{% comment %}
-    The dialog's title is bound, so the heading goes in the body rather than
-    through the title prop, which is server-rendered text.
-{% endcomment %}
-<c-modal show="showModal" aria-labelledby="releaseModalLabel" @keydown.escape="if(showModal) closeModal()">
-<div class="space-y-4">
-    <div class="flex items-center justify-between -mt-1">
-        <h4 id="releaseModalLabel"
-            class="text-lg font-semibold text-text tracking-[-0.01em]"
-            x-text="form.id ? 'Edit Release' : 'Create New Release'"></h4>
-        <c-buttons.icon label="Close" class="-mr-2" @click="closeModal()">
-        <i class="fas fa-times" aria-hidden="true"></i>
-        </c-buttons.icon>
+{% comment %}One release editor for product detail and release history pages. State belongs to releaseEditor; every control comes from the shared library.{% endcomment %}
+<c-modal id="release-editor" show="showModal" close="closeModal()">
+<c-slot name="title"><span x-text="form.id ? 'Edit release' : 'Create release'"></span></c-slot>
+<form id="release-editor-form"
+      @submit.prevent="submitRelease()"
+      class="flex flex-col gap-4">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <c-forms.field label="Release name" for="release-name" required>
+        <c-forms.input id="release-name" placeholder="e.g. January release" required maxlength="255" x-model="form.name" />
+        </c-forms.field>
+        <c-forms.field label="Version" for="release-version">
+        <c-forms.input id="release-version" placeholder="e.g. v1.0.0" maxlength="255" x-model="form.version" />
+        </c-forms.field>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <c-forms.field label="Description" for="release-description">
+    <c-forms.textarea id="release-description" rows="3" maxlength="1000" x-model="form.description" />
+    </c-forms.field>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-            <c-forms.label for="release-name" required>Release Name</c-forms.label>
-            <c-forms.input id="release-name" placeholder="e.g., January Release" required x-model="form.name" />
+            {% include 'components/date_picker.html.j2' with value_binding='form.created_at' label='Created at' include_time='true' placeholder='Choose date and time' compact='true' %}
         </div>
         <div>
-            <c-forms.label for="release-version">Version</c-forms.label>
-            <c-forms.input id="release-version" placeholder="e.g., v1.0.0" x-model="form.version" />
+            {% include 'components/date_picker.html.j2' with value_binding='form.released_at' label='Released at' include_time='true' placeholder='Choose date and time' compact='true' %}
         </div>
     </div>
-    <div>
-        <c-forms.label for="release-description">Description</c-forms.label>
-        <c-forms.textarea id="release-description" rows="2" placeholder="Describe what's included in this release..." x-model="form.description" />
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-            {% include 'components/date_picker.html.j2' with value_binding='form.created_at' label='Created Date' include_time='true' placeholder='Select date and time...' compact='true' %}
-        </div>
-        <div>
-            {% include 'components/date_picker.html.j2' with value_binding='form.released_at' label='Release Date' include_time='true' placeholder='Select date and time...' compact='true' %}
-        </div>
-    </div>
-    <div>
-        <c-forms.checkbox x-model="form.is_prerelease">Mark as pre-release (alpha, beta, RC)</c-forms.checkbox>
-    </div>
-</div>
+    <c-forms.checkbox x-model="form.is_prerelease">Mark as prerelease</c-forms.checkbox>
+</form>
 <c-slot name="footer">
-<c-buttons.ghost @click="closeModal()">Cancel</c-buttons.ghost>
-<c-buttons.primary @click="submitRelease()">
-<span x-text="form.id ? 'Update' : 'Create'"></span>
-</c-buttons.primary>
+<c-buttons.secondary @click="closeModal()">Cancel</c-buttons.secondary>
+<c-buttons.primary type="submit" form="release-editor-form" ::disabled="saving"><span x-text="saving ? 'Saving…' : form.id ? 'Save release' : 'Create release'"></span></c-buttons.primary>
 </c-slot>
 </c-modal>

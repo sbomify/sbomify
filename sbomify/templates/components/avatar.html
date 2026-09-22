@@ -15,27 +15,33 @@ override, and it arrives through attrs untouched.
 Size carries every dimension, so it renders as one conditional segment; the
 status dot's colour is a second one.
 {% endcomment %}
-<c-vars initials src alt size status class />
-<div class="relative flex items-center justify-center shrink-0 rounded-full font-semibold bg-[linear-gradient(135deg,color-mix(in_oklab,var(--avatar-accent,var(--color-primary))_20%,transparent)_0%,color-mix(in_oklab,var(--avatar-accent,var(--color-primary))_10%,transparent)_100%)] text-[color:var(--avatar-accent,var(--color-primary))] {% if size == 'sm' %}w-8 h-8 text-xs{% elif size == 'lg' %}w-14 h-14 text-lg{% elif size == 'xl' %}w-20 h-20 text-2xl{% else %}w-10 h-10 text-sm{% endif %}{% if class %} {{ class }}{% endif %}"
-     {{ attrs }}>
-    {% if src %}
-        {% comment %}
+{% comment %}flat is the quiet account mark. button makes the mark itself the control, with its own focus and expanded states; supply an aria-label.{% endcomment %}
+<c-vars initials src alt size status flat button class />
+{# djlint:off #}
+{% if button %}<button type="button"{% else %}<div{% endif %}
+{# djlint:on #}
+class="relative flex items-center justify-center shrink-0 rounded-full font-semibold {% if flat %}bg-[color-mix(in_oklab,var(--color-text)_8%,transparent)] text-text-secondary{% else %}bg-[linear-gradient(135deg,color-mix(in_oklab,var(--avatar-accent,var(--color-primary))_20%,transparent)_0%,color-mix(in_oklab,var(--avatar-accent,var(--color-primary))_10%,transparent)_100%)] text-[color:var(--avatar-accent,var(--color-primary))]{% endif %} {% if size == 'sm' %}w-8 h-8 text-xs{% elif size == 'lg' %}w-14 h-14 text-lg{% elif size == 'xl' %}w-20 h-20 text-2xl{% else %}w-10 h-10 text-sm{% endif %}{% if button %} border-0 cursor-pointer transition-shadow duration-150 hover:ring-[3px] hover:ring-[color-mix(in_oklab,var(--color-primary)_12%,transparent)] aria-expanded:ring-[3px] aria-expanded:ring-[color-mix(in_oklab,var(--color-primary)_12%,transparent)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color-mix(in_oklab,var(--color-primary)_40%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+{{ attrs }}>
+{% if src %}
+    {% comment %}
             The intrinsic size is a CLS hint only. The utilities below size the
             image to the container, so the size segment still wins.
-        {% endcomment %}
-        <img src="{{ src }}"
-             alt="{{ alt }}"
-             width="40"
-             height="40"
-             class="w-full h-full object-cover rounded-full">
-    {% elif initials %}
-        {{ initials }}
-    {% elif slot.strip %}
-        {{ slot }}
-    {% else %}
-        <i class="fas fa-user" aria-hidden="true"></i>
-    {% endif %}
-    {% if status %}
-        <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-solid border-surface {% if status == 'online' %}bg-success{% elif status == 'busy' %}bg-danger{% else %}bg-text-muted{% endif %}"></span>
-    {% endif %}
-</div>
+    {% endcomment %}
+    <img src="{{ src }}"
+         alt="{{ alt }}"
+         width="40"
+         height="40"
+         class="w-full h-full object-cover rounded-full">
+{% elif initials %}
+    {{ initials }}
+{% elif slot.strip %}
+    {{ slot }}
+{% else %}
+    <i class="fas fa-user" aria-hidden="true"></i>
+{% endif %}
+{% if status %}
+    <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-solid border-surface {% if status == 'online' %}bg-success{% elif status == 'busy' %}bg-danger{% else %}bg-text-muted{% endif %}"></span>
+{% endif %}
+{# djlint:off #}
+{% if button %}</button>{% else %}</div>{% endif %}
+{# djlint:on #}

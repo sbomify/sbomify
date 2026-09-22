@@ -1,63 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
-
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
-from sbomify.apps.core.apis import create_component, list_components
+from sbomify.apps.core.apis import create_component
 from sbomify.apps.core.authz import MANAGE
-from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ComponentCreateSchema
+from sbomify.apps.core.views.products_dashboard import InventoryView, ProductsTableView
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
-
-
-def _get_components_context(request: HttpRequest) -> dict[str, Any] | None:
-    """Helper to get common context for components views."""
-    status_code, components = list_components(request, page=1, page_size=-1)
-    if status_code != 200:
-        return None
-
-    current_team = request.session.get("current_team") or {}
-    has_crud_permissions = get_member_role_by_key(request.user, current_team.get("key")) in MANAGE
-
-    # Sort components alphabetically by name
-    sorted_components = sorted(components.items, key=lambda c: c.name.lower())
-
-    # Compute stats for dashboard
-    public_count = sum(1 for c in sorted_components if c.visibility == "public")
-    gated_count = sum(1 for c in sorted_components if c.visibility == "gated")
-    private_count = len(sorted_components) - public_count - gated_count
-
-    # Serialize components for JSON (Alpine.js table)
-    components_json = [
-        {
-            "id": c.id,
-            "name": c.name,
-            "component_type": c.component_type,
-            "visibility": c.visibility,
-            "is_global": c.is_global,
-            "sbom_count": getattr(c, "sbom_count", 0) or 0,
-            # None when the workspace set no window or the component has no SBOM,
-            # which the table renders as no badge rather than as "fresh".
-            "freshness": getattr(c, "freshness", None),
-        }
-        for c in sorted_components
-    ]
-
-    return {
-        "current_team": current_team,
-        "has_crud_permissions": has_crud_permissions,
-        "components": components_json,
-        "components_count": len(sorted_components),
-        "public_count": public_count,
-        "gated_count": gated_count,
-        "private_count": private_count,
-    }
 
 
 def _create_component(request: HttpRequest, *, on_error: str) -> HttpResponse:
@@ -85,13 +39,8 @@ def _create_component(request: HttpRequest, *, on_error: str) -> HttpResponse:
     return redirect("core:component_details", component_id=response["id"])
 
 
-class ComponentsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
-    def get(self, request: HttpRequest) -> HttpResponse:
-        context = _get_components_context(request)
-        if context is None:
-            return error_response(request, HttpResponse(status=500, content="Failed to load components"))
-
-        return render(request, "core/components_dashboard.html.j2", context)
+class ComponentsDashboardView(InventoryView):
+    inventory_kind = "components"
 
     def post(self, request: HttpRequest) -> HttpResponse:
         # Kept so anything still posting the create form at the list URL keeps
@@ -125,12 +74,5 @@ class ComponentCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         return _create_component(request, on_error="core:component_new")
 
 
-class ComponentsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
-    """View for HTMX table refresh."""
-
-    def get(self, request: HttpRequest) -> HttpResponse:
-        context = _get_components_context(request)
-        if context is None:
-            return error_response(request, HttpResponse(status=500, content="Failed to load components"))
-
-        return render(request, "core/components_table.html.j2", context)
+class ComponentsTableView(ProductsTableView):
+    inventory_kind = "components"

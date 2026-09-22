@@ -1,28 +1,19 @@
 {% comment %}
-One cell of a pager: a page number, the current page, or a previous/next
-chevron. c-navigation.pagination builds a whole pager out of these.
-
-With an href it renders an anchor; without one it renders the span the current
-page is. The two branches differ only in element and in how each spells its
-dead state: a link can never match :disabled, so its real state is
-aria-disabled, exactly as the tw-pagination-btn rules had it.
-
-active, disabled and the plain state are one conditional segment, so the hover
-utilities are simply absent where the CSS excluded them with :not(). nav is the
-smaller type the chevrons take, and label is the accessible name they need.
+One pager control for server links and client buttons. href renders an anchor;
+button renders a button; otherwise the current page is a span. All three share
+one size and state recipe. Bind data-active for browser state; static active
+also publishes aria-current. Disabled links lose href and tab focus, while a
+button uses the native disabled attribute. page-button is a thin button adapter.
 {% endcomment %}
-<c-vars href active disabled nav label class />
-{% if href %}
-    <a href="{{ href }}"
-       class="flex items-center justify-center min-w-8 h-8 px-2 rounded-md border border-solid border-transparent transition-all duration-150 {% if nav %}text-xs{% else %}text-[0.8125rem]{% endif %} {% if active %}bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)] text-white font-semibold shadow-[0_2px_4px_color-mix(in_oklab,var(--color-primary)_30%,transparent)] cursor-pointer active:scale-95{% elif disabled %}bg-transparent text-text-muted font-medium opacity-40 cursor-not-allowed{% else %}bg-transparent text-text-muted font-medium cursor-pointer hover:bg-surface hover:border-border hover:text-text active:scale-95{% endif %}{% if class %} {{ class }}{% endif %}"
-       {% if label %}aria-label="{{ label }}"{% endif %}
-       {% if active %}aria-current="page"{% endif %}
-       {% if disabled %}aria-disabled="true" tabindex="-1"{% endif %}
-       {{ attrs }}>{{ slot }}</a>
-{% else %}
-    <span class="flex items-center justify-center min-w-8 h-8 px-2 rounded-md border border-solid border-transparent transition-all duration-150 {% if nav %}text-xs{% else %}text-[0.8125rem]{% endif %} {% if active %}bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)] text-white font-semibold shadow-[0_2px_4px_color-mix(in_oklab,var(--color-primary)_30%,transparent)] cursor-pointer active:scale-95{% elif disabled %}bg-transparent text-text-muted font-medium opacity-40 cursor-not-allowed{% else %}bg-transparent text-text-muted font-medium cursor-pointer hover:bg-surface hover:border-border hover:text-text active:scale-95{% endif %}{% if class %} {{ class }}{% endif %}"
-          {% if label %}aria-label="{{ label }}"{% endif %}
-          {% if active %}aria-current="page"{% endif %}
-          {% if disabled %}aria-disabled="true"{% endif %}
-          {{ attrs }}>{{ slot }}</span>
-{% endif %}
+<c-vars href button active disabled nav label class />
+{# djlint:off #}
+{% if button %}<button type="button"{% if disabled %} disabled{% endif %}{% elif href %}<a{% if not disabled %} href="{{ href }}"{% else %} role="link" tabindex="-1"{% endif %}{% else %}<span{% endif %}
+{# djlint:on #}
+data-active="{{ active|yesno:'true,false' }}"
+class="flex items-center justify-center min-w-8 h-8 px-2 rounded-md border border-solid border-transparent transition-all duration-150 {% if nav %}text-xs{% else %}text-[0.8125rem]{% endif %} bg-transparent text-[color:var(--color-text-muted)] font-medium cursor-pointer hover:bg-surface hover:border-border hover:text-text active:scale-95 data-[active=true]:bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)] data-[active=true]:text-white data-[active=true]:font-semibold data-[active=true]:shadow-[0_2px_4px_color-mix(in_oklab,var(--color-primary)_30%,transparent)] data-[active=true]:hover:border-transparent data-[active=true]:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-transparent disabled:hover:text-text-muted disabled:active:scale-100 aria-disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40{% if class %} {{ class }}{% endif %}"
+{% if label %}aria-label="{{ label }}"{% endif %}
+{% if active %}aria-current="page"{% endif %}
+{% if disabled and not button %}aria-disabled="true"{% endif %}
+{# djlint:off #}
+{{ attrs }}>{{ slot }}{% if button %}</button>{% elif href %}</a>{% else %}</span>{% endif %}
+{# djlint:on #}

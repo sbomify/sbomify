@@ -1,17 +1,18 @@
 """Snapshots for the workspace pages: settings sections, the workspace list,
 suppliers and the invite form.
 
-The settings sections are each their own URL, so one case per section rather
-than one case that clicks through them. General, tokens and branding load their
-body over HTMX, which is why every case waits for the network to go quiet before
-the shot is taken.
+Each settings section has its own URL. Snapshots cover the server-rendered
+panels and wait for the remaining Trust Center modules before capture.
 """
+
+from typing import Any
 
 import pytest
 from playwright.sync_api import Page
 
+from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
-from sbomify.apps.teams.models import Invitation, Supplier
+from sbomify.apps.teams.models import ContactProfile, Invitation, Supplier
 
 
 @pytest.fixture
@@ -54,6 +55,20 @@ def workspace_with_suppliers(team_with_business_plan):  # noqa: F811
 class TestWorkspaceSettingsSnapshot:
     """One case per settings section."""
 
+    @pytest.fixture(autouse=True)
+    def enable_billing(self, settings: Any, mocker: Any) -> None:
+        settings.BILLING = True
+        settings.APP_BASE_URL = "https://app.example.com"
+        mocker.patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe")
+        mocker.patch(
+            "sbomify.apps.billing.team_pricing_service.TeamPricingService.get_plan_pricing",
+            return_value={"amount": "$15", "period": "/month", "billing_period": "monthly"},
+        )
+        mocker.patch(
+            "sbomify.apps.billing.stripe_pricing_service.StripePricingService._refresh_pricing_from_stripe",
+            return_value={},
+        )
+
     def _shoot(self, page: Page, snapshot, width: int, url: str) -> None:
         page.goto(url)
         page.wait_for_load_state("networkidle")
@@ -90,6 +105,12 @@ class TestWorkspaceSettingsSnapshot:
         snapshot,
         width: int,
     ) -> None:
+        AccessToken.objects.create(
+            team=team_with_business_plan,
+            user=team_with_business_plan.member_set.get(role="owner").user,
+            description="CI publishing",
+            encoded_token="snapshot-token",
+        )
         self._shoot(authenticated_page, snapshot, width, f"/workspaces/{team_with_business_plan.key}/settings/tokens")
 
     def test_workspace_settings_branding_snapshot(
@@ -118,6 +139,24 @@ class TestWorkspaceSettingsSnapshot:
         width: int,
     ) -> None:
         self._shoot(authenticated_page, snapshot, width, f"/workspaces/{team_with_business_plan.key}/settings/account")
+
+    def test_workspace_settings_parties_snapshot(
+        self, authenticated_page: Page, team_with_business_plan: Any, snapshot: Any, width: int
+    ) -> None:
+        ContactProfile.objects.create(team=team_with_business_plan, name="Product contacts", is_default=True)
+        ContactProfile.objects.create(team=team_with_business_plan, name="Security contacts")
+        self._shoot(
+            authenticated_page, snapshot, width, f"/workspaces/{team_with_business_plan.key}/settings/contact-profiles"
+        )
+
+    def test_workspace_settings_trust_center_snapshot(
+        self, authenticated_page: Page, team_with_business_plan: Any, snapshot: Any, width: int
+    ) -> None:
+        team_with_business_plan.is_public = True
+        team_with_business_plan.save(update_fields=["is_public"])
+        self._shoot(
+            authenticated_page, snapshot, width, f"/workspaces/{team_with_business_plan.key}/settings/trust-center"
+        )
 
 
 @pytest.mark.django_db

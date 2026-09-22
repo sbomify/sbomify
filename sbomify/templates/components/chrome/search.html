@@ -1,0 +1,16 @@
+{% comment %}
+The navigation search field and results panel. IDs are the Spotlight script
+contract; the shared field and dropdown own the control and menu styling.
+{% endcomment %}
+<c-forms.search-input id="navbar-search-input" placeholder="Search products, components, pages" hint autocomplete="off" role="searchbox" aria-describedby="search-hint" aria-label="Search products, components and pages">
+<div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+    <kbd id="search-hint"
+         class="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-normal opacity-45 text-text-muted rounded border border-current">
+        <span aria-hidden="true">⌘</span><span class="sr-only">Command</span>K
+    </kbd>
+</div>
+{# The flush panel owns overflow; the inner list owns its scroll limit. #}
+<c-dropdowns.dropdown flush role="listbox" id="search-results-dropdown" class="top-full left-0 right-0 mt-2 hidden" aria-label="Search results">
+<div id="search-results-list" class="max-h-96 overflow-y-auto py-2"></div>
+</c-dropdowns.dropdown>
+</c-forms.search-input>

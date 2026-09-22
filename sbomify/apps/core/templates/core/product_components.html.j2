@@ -1,0 +1,10 @@
+<c-layout.frame id="product-components">
+<c-layout.section-header title="Components" level="2">
+<c-slot name="actions">
+{% if product.has_crud_permissions %}
+    <c-buttons.secondary size="sm" @click="assignOpen = true"><i class="fas fa-plus" aria-hidden="true"></i>Assign component</c-buttons.secondary>
+{% endif %}
+</c-slot>
+</c-layout.section-header>
+<c-inventory.table :inventory="inventory" />
+</c-layout.frame>

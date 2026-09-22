@@ -23,15 +23,22 @@ import { registerEditableSingleField } from './components/editable-single-field'
 import { registerProductIdentifiers } from './components/product-identifiers';
 import { registerItemsListTable } from './components/items-list-table';
 import { registerItemAssignmentManager } from './components/item-assignment-manager';
-import { registerProductReleases } from './components/product-releases';
+import { registerReleaseEditor } from './components/release-editor';
 import { registerReleaseArtifacts } from './components/release-artifacts';
 import { registerProductIdentifiersBarcodes } from './components/product-identifiers-barcodes';
 import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
+import { registerTeamGeneral } from '../../teams/js/team-general';
+import { registerSettingsNavigation } from '../../teams/js/settings-navigation';
+import { registerTeamBranding, registerCustomDomain } from '../../teams/js/team-branding';
+import { registerFileDragAndDrop } from './components/file-drag-and-drop';
 import { registerAccountDangerZone } from './components/account-danger-zone';
 import { registerDatePicker } from './components/date-picker';
 import { advisoryProductPicker } from './components/advisory-product-picker';
 import { actionsMenu } from './components/actions-menu';
+import { publicSharing } from './components/public-sharing';
+import { uploadDialog } from './components/upload-dialog';
+import { catalogImport } from '../../controls/js/catalog-import';
 
 // ============================================
 // COMPONENT IMPORTS - SBOM Module
@@ -200,6 +207,9 @@ export function registerCommonComponents(): void {
     registerAlpineComponent('chartSelector', chartSelector);
     registerAlpineComponent('advisoryProductPicker', advisoryProductPicker);
     registerAlpineComponent('actionsMenu', actionsMenu);
+    registerAlpineComponent('publicSharing', publicSharing);
+    registerAlpineComponent('uploadDialog', uploadDialog);
+    registerAlpineComponent('catalogImport', catalogImport);
 }
 
 /**
@@ -226,13 +236,18 @@ export function registerAllComponents(): void {
     registerProductIdentifiers();
     registerItemsListTable();
     registerItemAssignmentManager();
-    registerProductReleases();
+    registerReleaseEditor();
     registerReleaseArtifacts();
     registerProductIdentifiersBarcodes();
     registerReleaseList();
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
     registerAccountDangerZone();
+    registerTeamGeneral();
+    registerSettingsNavigation();
+    registerTeamBranding();
+    registerCustomDomain();
+    registerFileDragAndDrop();
     registerDatePicker();
 
     // SBOM module components
@@ -279,11 +294,16 @@ export function registerHtmxBundleComponents(): void {
     registerProductIdentifiers();
     registerItemsListTable();
     registerItemAssignmentManager();
-    registerProductReleases();
+    registerReleaseEditor();
     registerReleaseArtifacts();
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
     registerAccountDangerZone();
+    registerTeamGeneral();
+    registerSettingsNavigation();
+    registerTeamBranding();
+    registerCustomDomain();
+    registerFileDragAndDrop();
     registerDatePicker();
 
     // SBOM module components

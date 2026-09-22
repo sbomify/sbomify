@@ -4,7 +4,7 @@ on the output; it is not routed anywhere.
 {% endcomment %}
 <c-tables.shell class="mb-8" data-probe="shell">
 <c-tables.toolbar>
-<c-tables.search id="probe-search" label="Search components" placeholder="Search components" x-model="search" />
+<c-forms.search-input size="sm" id="probe-search" label="Search components" placeholder="Search components" x-model="search" />
 <c-slot name="right">
 <c-tables.page-size id="probe-per-page" x-model.number="perPage">
 <option value="10">Ten</option>

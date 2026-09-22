@@ -12,14 +12,13 @@ from django.template.loader import render_to_string
 
 PAGE_HEADER = "flex flex-wrap items-start justify-between gap-4"
 PAGE_ACTIONS = "flex flex-wrap items-center gap-2"
-SECTION_HEADER = "flex items-start gap-3 mb-4"
+SECTION_HEADER = "flex items-start gap-3"
 SECTION_BODY = "sm:ml-11"
 FORM_SECTION = "grid gap-y-4 gap-x-12 py-8"
-STAT_CARD = "flex flex-col bg-surface rounded-xl"
-STAT_ICON = "shrink-0 flex items-center justify-center w-10 h-10"
-STAT_LABEL = "block text-xs font-semibold uppercase"
-STAT_VALUE = "block text-4xl font-bold leading-none"
-STAT_ROW = "flex items-baseline gap-2.5"
+STAT_CARD = "relative grid m-0 min-w-0"
+STAT_ICON = "absolute flex items-center justify-center rounded-lg"
+STAT_LABEL = "row-start-2 m-0 font-medium"
+STAT_VALUE = "row-start-1 m-0 min-w-0"
 STAT_CHANGE = "inline-flex items-baseline gap-1 text-[0.8125rem]"
 CHOICE = "inline-flex items-center gap-2 px-3 py-2 rounded-[0.625rem]"
 CHOICE_GROUP = "flex flex-wrap gap-2"
@@ -66,16 +65,22 @@ def _opening(rendered: str, prefix: str, marker: str) -> str:
 # ── Page header ────────────────────────────────────────────────────────────
 
 
-def test_page_header_shell_carries_the_gap_under_the_title(rendered: str) -> None:
+def test_page_header_leaves_external_spacing_to_its_parent(rendered: str) -> None:
     header = _classes(rendered, PAGE_HEADER, "Acme Gateway")
-    assert header == f"{PAGE_HEADER} mb-6"
+    assert header == PAGE_HEADER
 
 
-def test_flush_replaces_the_gap_rather_than_stacking_on_it(rendered: str) -> None:
-    header = _classes(rendered, PAGE_HEADER, "Flush header")
-    assert "mb-0" in header
-    assert "mb-6" not in header
-    assert "max-w-3xl" in header
+def test_nested_page_header_preserves_caller_layout(rendered: str) -> None:
+    header = _classes(rendered, PAGE_HEADER, "Nested header")
+    assert header == f"{PAGE_HEADER} max-w-3xl"
+
+
+def test_frame_preserves_replacement_attributes_without_leaking_layout_to_children(rendered: str) -> None:
+    frame = rendered.split('id="probe-frame"')[0].rsplit("<div", 1)[1]
+    assert 'class="flex min-w-0 flex-col gap-6 max-w-5xl"' in frame
+    assert 'hx-target="this"' in rendered
+    nested = rendered.split('id="probe-nested-frame"')[0].rsplit("<div", 1)[1]
+    assert 'class="flex min-w-0 flex-col gap-6"' in nested
 
 
 def test_page_header_title_and_subtitle_recipes(rendered: str) -> None:
@@ -228,17 +233,17 @@ def test_form_section_merges_caller_class_and_forwards_attrs(rendered: str) -> N
 
 def test_stat_card_surface_and_padding(rendered: str) -> None:
     card = _classes(rendered, STAT_CARD, "Total products")
-    assert "border border-solid border-border shadow-[var(--shadow-card)]" in card
-    assert "px-6 py-5" in card
+    assert "border border-solid border-border" in card
+    assert "shadow-[var(--shadow-xs)]" in card
+    assert _opening(rendered, STAT_CARD, "Total products").startswith("<dl ")
 
 
 def test_compact_replaces_the_padding_and_retunes_the_parts(rendered: str) -> None:
     card = _classes(rendered, STAT_CARD, "Ready")
-    assert "px-4 py-3 items-center text-center" in card
-    assert "px-6" not in card
-    assert "py-5" not in card
-    assert "[--stat-value-color:var(--stat-accent,var(--color-text))]" in card
-    assert "[--stat-label-mt:0.25rem] [--stat-label-mb:0px]" in card
+    assert "gap-1 px-3 py-3" in card
+    assert "sm:px-5" not in card
+    assert "text-center" not in card
+    assert "[--stat-value-size:1.5rem]" in card
 
 
 @pytest.mark.parametrize(
@@ -248,27 +253,27 @@ def test_compact_replaces_the_padding_and_retunes_the_parts(rendered: str) -> No
 def test_accent_sets_exactly_one_custom_property(rendered: str, marker: str, token: str) -> None:
     card = _classes(rendered, STAT_CARD, marker)
     assert f"[--stat-accent:var(--color-{token})]" in card
-    assert card.count("[--stat-accent:") == 1
+    assert sum(part.startswith("[--stat-accent:") for part in card.split()) == 1
 
 
-def test_a_card_with_no_accent_leaves_the_property_unset(rendered: str) -> None:
-    assert "[--stat-accent:" not in _classes(rendered, STAT_CARD, "Total products")
+def test_a_card_with_no_accent_uses_neutral_value_ink(rendered: str) -> None:
+    assert "[--stat-ink:var(--color-text)]" in _classes(rendered, STAT_CARD, "Total products")
 
 
 def test_stat_icon_takes_the_cards_accent(rendered: str) -> None:
     icon = _classes(rendered, STAT_ICON, "fas fa-shield-halved")
-    assert "mb-1.5 rounded-[0.625rem]" in icon
-    assert "bg-[color-mix(in_oklab,var(--stat-accent,var(--color-primary))_12%,transparent)]" in icon
-    assert "text-[color:var(--stat-accent,var(--color-primary))]" in icon
+    assert "border-[color-mix(in_oklab,var(--stat-accent)_13%,transparent)]" in icon
+    assert "text-[color:var(--stat-accent)]" in icon
 
 
 def test_stat_label_and_value_recipes(rendered: str) -> None:
     label = _classes(rendered, STAT_LABEL, "Total products")
-    assert "tracking-[0.06em] text-text-muted" in label
-    assert "mt-[var(--stat-label-mt,0px)] mb-[var(--stat-label-mb,0.5rem)]" in label
+    assert "uppercase" not in label
+    assert _opening(rendered, STAT_LABEL, "Total products").startswith("<dt ")
     value = _classes(rendered, STAT_VALUE, "1,234")
-    assert "tracking-[-0.03em] tabular-nums" in value
-    assert "text-[color:var(--stat-value-color,var(--color-text))]" in value
+    assert "tabular-nums" in value
+    assert "text-[color:var(--stat-ink)]" in value
+    assert _opening(rendered, STAT_VALUE, "1,234").startswith("<dd ")
 
 
 @pytest.mark.parametrize(
@@ -280,8 +285,8 @@ def test_change_variants_carry_their_ink(rendered: str, marker: str, token: str)
     assert f"text-[color-mix(in_oklab,var(--color-{token})_70%,var(--color-text))]" in change
 
 
-def test_the_row_drops_the_changes_top_margin_and_a_bare_change_keeps_it(rendered: str) -> None:
-    assert "[--stat-change-mt:0px]" in _classes(rendered, STAT_ROW, "1,234")
+def test_the_card_aligns_changes_with_its_value_and_a_bare_change_keeps_its_margin(rendered: str) -> None:
+    assert "[--stat-change-mt:0px]" in _classes(rendered, STAT_VALUE, "1,234")
     bare = _classes(rendered, STAT_CHANGE, "unchanged")
     assert "mt-[var(--stat-change-mt,0.5rem)]" in bare
     assert "color-mix" not in bare
@@ -470,9 +475,10 @@ def test_action_tile_without_href_is_a_button_and_keeps_its_handler(rendered: st
     assert "[--tile-accent:var(--color-primary)]" in tile
 
 
-def test_action_tile_disabled_is_neither_a_link_nor_a_control(rendered: str) -> None:
+def test_action_tile_disabled_uses_the_native_button_state(rendered: str) -> None:
     tile = _layout_probe(rendered, "tile-disabled")
-    assert tile.startswith("<div ")
+    assert tile.startswith("<button ")
+    assert " disabled" in tile
     assert "cursor-not-allowed" in tile
     assert "opacity-60" in tile
     # The trailing slot replaces the chevron with whatever says why.
@@ -492,3 +498,17 @@ def test_data_box_renders_a_static_value_from_the_slot(rendered: str) -> None:
     static = rendered[rendered.index('data-probe="databox-static"') :][:400]
     assert "1.4.0" in static
     assert "x-text" not in static.split("</div>")[1]
+
+
+@pytest.mark.parametrize("label", ["Numeric zero", "Formatted zero"])
+def test_zero_stat_values_publish_the_neutral_state(rendered: str, label: str) -> None:
+    assert 'data-zero="true"' in _opening(rendered, STAT_CARD, label)
+
+
+def test_bound_stat_value_and_zero_state_use_the_same_expression(rendered: str) -> None:
+    start = rendered.index('data-probe="stat-bound"')
+    card = rendered[rendered.rindex("<dl ", 0, start) : rendered.index("</dl>", start)]
+    assert ':data-zero="Number(count) === 0"' in card
+    assert 'x-text="count"' in card
+    assert "Bound count" in card
+    assert "Updated" in card

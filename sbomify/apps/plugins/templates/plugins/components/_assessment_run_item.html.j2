@@ -96,32 +96,15 @@
                         {# Security Summary - Severity grid #}
                         <div class="mb-4">
                             <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
-                                <c-layout.stat-card compact accent="danger">
-                                <c-layout.stat.value>{{ sev.critical|default:0 }}</c-layout.stat.value>
-                                <c-layout.stat.label>Critical</c-layout.stat.label>
-                                </c-layout.stat-card>
-                                <c-layout.stat-card compact accent="warning">
-                                <c-layout.stat.value>{{ sev.high|default:0 }}</c-layout.stat.value>
-                                <c-layout.stat.label>High</c-layout.stat.label>
-                                </c-layout.stat-card>
-                                <c-layout.stat-card compact style="--stat-accent: var(--color-severity-medium)">
-                                <c-layout.stat.value>{{ sev.medium|default:0 }}</c-layout.stat.value>
-                                <c-layout.stat.label>Medium</c-layout.stat.label>
-                                </c-layout.stat-card>
-                                <c-layout.stat-card compact style="--stat-accent: var(--color-severity-low)">
-                                <c-layout.stat.value>{{ sev.low|default:0 }}</c-layout.stat.value>
-                                <c-layout.stat.label>Low</c-layout.stat.label>
-                                </c-layout.stat-card>
-                                <c-layout.stat-card compact>
+                                <c-layout.stat-card compact accent="danger" :value="sev.critical|default:0" label="Critical" />
+                                <c-layout.stat-card compact accent="warning" :value="sev.high|default:0" label="High" />
+                                <c-layout.stat-card compact accent="severity-medium" :value="sev.medium|default:0" label="Medium" />
+                                <c-layout.stat-card compact accent="severity-low" :value="sev.low|default:0" label="Low" />
+                                <c-layout.stat-card compact :value="skipped|yesno:'0,'|default:security_total" label="Total">
                                 {% comment %}A skipped run's summary counts its status marker, which is not a vulnerability.{% endcomment %}
-                                <c-layout.stat.value>{{ skipped|yesno:"0,"|default:security_total }}</c-layout.stat.value>
-                                <c-layout.stat.label>Total</c-layout.stat.label>
                                 </c-layout.stat-card>
                                 {% if run.result.summary.suppressed_count %}
-                                    <c-layout.stat-card compact style="--stat-accent: var(--color-info)" title="Findings suppressed by VEX (not_affected / false_positive)">
-                                    <c-layout.stat.value>{{ run.result.summary.suppressed_count }}</c-layout.stat.value>
-                                    <c-layout.stat.label>VEX suppressed</c-layout.stat.label>
-                                    </c-layout.stat-card>
+                                    <c-layout.stat-card compact accent="info" title="Findings suppressed by VEX (not_affected / false_positive)" :value="run.result.summary.suppressed_count" label="VEX suppressed" />
                                 {% endif %}
                             </div>
                         </div>
@@ -233,30 +216,12 @@
                     {# Compliance Findings Summary - Compact grid #}
                     <div class="mb-4">
                         <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
-                            <c-layout.stat-card compact accent="success">
-                            <c-layout.stat.value>{{ run.result.summary.pass_count|default:0 }}</c-layout.stat.value>
-                            <c-layout.stat.label>Pass</c-layout.stat.label>
-                            </c-layout.stat-card>
-                            <c-layout.stat-card compact accent="warning">
-                            <c-layout.stat.value>{{ run.result.summary.fail_count|default:0 }}</c-layout.stat.value>
-                            <c-layout.stat.label>Fail</c-layout.stat.label>
-                            </c-layout.stat-card>
-                            <c-layout.stat-card compact accent="danger">
-                            <c-layout.stat.value>{{ run.result.summary.error_count|default:0 }}</c-layout.stat.value>
-                            <c-layout.stat.label>Error</c-layout.stat.label>
-                            </c-layout.stat-card>
-                            <c-layout.stat-card compact style="--stat-accent: var(--color-info)">
-                            <c-layout.stat.value>{{ run.result.summary.warning_count|default:0 }}</c-layout.stat.value>
-                            <c-layout.stat.label>Warn</c-layout.stat.label>
-                            </c-layout.stat-card>
-                            <c-layout.stat-card compact accent="muted">
-                            <c-layout.stat.value>{{ run.result.summary.info_count|default:0 }}</c-layout.stat.value>
-                            <c-layout.stat.label>Info</c-layout.stat.label>
-                            </c-layout.stat-card>
-                            <c-layout.stat-card compact>
-                            <c-layout.stat.value>{{ run.result.summary.total_findings|default:0 }}</c-layout.stat.value>
-                            <c-layout.stat.label>Total</c-layout.stat.label>
-                            </c-layout.stat-card>
+                            <c-layout.stat-card compact accent="success" :value="run.result.summary.pass_count|default:0" label="Pass" />
+                            <c-layout.stat-card compact accent="warning" :value="run.result.summary.fail_count|default:0" label="Fail" />
+                            <c-layout.stat-card compact accent="danger" :value="run.result.summary.error_count|default:0" label="Error" />
+                            <c-layout.stat-card compact accent="info" :value="run.result.summary.warning_count|default:0" label="Warn" />
+                            <c-layout.stat-card compact accent="muted" :value="run.result.summary.info_count|default:0" label="Info" />
+                            <c-layout.stat-card compact :value="run.result.summary.total_findings|default:0" label="Total" />
                         </div>
                     </div>
                 {% endif %}

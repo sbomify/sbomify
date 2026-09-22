@@ -13,7 +13,7 @@
     </div>
 {% endblock sidebar_content %}
 {% block dashboard_content %}
-    {% page_header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act." icon="fas fa-scale-balanced" %}{% endpage_header %}
+    <c-layout.page-header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act." icon="fas fa-scale-balanced" />
     <div class="space-y-6">
         {% if not has_cra_access %}
             <c-cards.card flush>

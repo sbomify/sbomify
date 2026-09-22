@@ -1,7 +1,4 @@
-/**
- * Notifications Dropdown functionality
- * Handles fetching and displaying notifications in a header dropdown
- */
+/** Notification data and lifecycle. Cotton templates own all rendered markup. */
 import { getCsrfToken } from './csrf';
 import { formatCompactRelativeDate } from './utils';
 
@@ -15,300 +12,147 @@ interface Notification {
 }
 
 let notifications: Notification[] = [];
-let clearAllButtonInitialized = false;
+let initializedPanel: HTMLElement | null = null;
 
-function getSeverityIcon(severity: string): string {
-  switch (severity) {
-    case 'error':
-      return 'fas fa-exclamation-circle';
-    case 'warning':
-      return 'fas fa-exclamation-triangle';
-    case 'info':
-      return 'fas fa-info-circle';
-    default:
-      return 'fas fa-bell';
+function actionLabel(type: string): string {
+  if (type === 'pending_invitation') return 'Respond';
+  if (type === 'access_request_pending') return 'Review';
+  if (type === 'community_upgrade' || type.includes('billing')) return 'Upgrade';
+  if (type.includes('payment')) return 'Fix payment';
+  return 'View';
+}
+
+function renderNotification(notification: Notification, template: HTMLTemplateElement): DocumentFragment {
+  const row = template.content.cloneNode(true) as DocumentFragment;
+  const item = row.querySelector<HTMLElement>('li');
+  const message = row.querySelector<HTMLElement>('[data-notification-message]');
+  const time = row.querySelector<HTMLTimeElement>('[data-notification-time]');
+  const action = row.querySelector<HTMLAnchorElement>('[data-notification-action]');
+  if (item) {
+    item.dataset.notificationId = notification.id;
+    item.dataset.severity = notification.severity;
   }
-}
-
-function getSeverityColors(severity: string): {
-  bg: string;
-  icon: string;
-  iconBg: string;
-  accent: string;
-  btnBg: string;
-  btnHover: string;
-} {
-  switch (severity) {
-    case 'error':
-      return {
-        bg: 'bg-gradient-to-r from-danger/10 to-danger/5 hover:from-danger/15 hover:to-danger/10',
-        icon: 'text-danger',
-        iconBg: 'bg-danger/20',
-        accent: 'border-l-danger',
-        btnBg: 'bg-danger/10 text-danger',
-        btnHover: 'hover:bg-danger/25'
-      };
-    case 'warning':
-      return {
-        bg: 'bg-gradient-to-r from-warning/10 to-warning/5 hover:from-warning/15 hover:to-warning/10',
-        icon: 'text-warning',
-        iconBg: 'bg-warning/20',
-        accent: 'border-l-warning',
-        btnBg: 'bg-warning/10 text-warning',
-        btnHover: 'hover:bg-warning/25'
-      };
-    case 'info':
-      return {
-        bg: 'bg-gradient-to-r from-info/10 to-info/5 hover:from-info/15 hover:to-info/10',
-        icon: 'text-info',
-        iconBg: 'bg-info/20',
-        accent: 'border-l-info',
-        btnBg: 'bg-info/10 text-info',
-        btnHover: 'hover:bg-info/25'
-      };
-    default:
-      return {
-        bg: 'bg-surface hover:bg-border/20',
-        icon: 'text-text-muted',
-        iconBg: 'bg-border/30',
-        accent: 'border-l-border',
-        btnBg: 'bg-primary/10 text-primary',
-        btnHover: 'hover:bg-primary/20'
-      };
+  if (message) message.textContent = notification.message;
+  if (time) {
+    time.textContent = formatCompactRelativeDate(notification.created_at);
+    time.dateTime = notification.created_at;
   }
-}
-
-function formatNotificationDate(dateString: string): string {
-  return formatCompactRelativeDate(dateString);
-}
-
-function escapeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-function renderNotification(notification: Notification): string {
-  const icon = getSeverityIcon(notification.severity);
-  const colors = getSeverityColors(notification.severity);
-  const timeAgo = formatNotificationDate(notification.created_at);
-
-  let actionButton = '';
-  if (notification.action_url) {
-    let buttonText = 'View';
-    let buttonIcon = 'fa-arrow-right';
-    if (notification.type === 'pending_invitation') {
-      buttonText = 'Respond';
-      buttonIcon = 'fa-envelope-open-text';
-    } else if (notification.type === 'access_request_pending') {
-      buttonText = 'Review';
-      buttonIcon = 'fa-eye';
-    } else if (notification.type === 'community_upgrade' || notification.type.includes('billing')) {
-      buttonText = 'Upgrade';
-      buttonIcon = 'fa-rocket';
-    } else if (notification.type.includes('payment')) {
-      buttonText = 'Fix Payment';
-      buttonIcon = 'fa-credit-card';
-    }
-
-    actionButton = `
-      <a href="${escapeHtml(notification.action_url)}"
-         class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg ${colors.btnBg} ${colors.btnHover} transition-all duration-200 no-underline shadow-sm">
-        ${escapeHtml(buttonText)}
-        <i class="fas ${buttonIcon} text-[10px]"></i>
-      </a>
-    `;
+  // Only web links can become actions, even if an API response is malformed.
+  const url = notification.action_url ? new URL(notification.action_url, window.location.origin) : null;
+  if (action && url && ['http:', 'https:'].includes(url.protocol)) {
+    action.href = url.href;
+    action.textContent = actionLabel(notification.type);
+  } else {
+    row.querySelector('[data-notification-action-wrapper]')?.remove();
   }
+  return row;
+}
 
-  return `
-    <!-- No coloured side border: the design language keeps accent in the icon
-         chip, which this row already has, so the rail was a second, louder copy
-         of the same signal. -->
-    <div class="px-4 py-4 ${colors.bg} transition-all duration-200" data-notification-id="${escapeHtml(notification.id)}">
-      <div class="flex items-start gap-3">
-        <div class="w-10 h-10 rounded-xl ${colors.iconBg} flex items-center justify-center flex-shrink-0 shadow-sm">
-          <i class="${icon} ${colors.icon} text-base"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-sm text-text leading-relaxed mb-3">${escapeHtml(notification.message)}</p>
-          <div class="flex items-center justify-between gap-3">
-            <span class="text-[11px] text-text-muted flex items-center gap-1.5 bg-background/50 px-2 py-1 rounded-md">
-              <i class="far fa-clock text-[10px]"></i>
-              ${timeAgo}
-            </span>
-            ${actionButton}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+function setHidden(id: string, hidden: boolean): void {
+  document.getElementById(id)?.classList.toggle('hidden', hidden);
 }
 
 function renderNotifications(): void {
-  const listContainer = document.getElementById('notifications-list');
-  const emptyContainer = document.getElementById('notifications-empty');
-  const loadingContainer = document.getElementById('notifications-loading');
-  const clearAllButton = document.getElementById('clearAllNotifications');
-  const badge = document.getElementById('notifications-badge');
+  const list = document.getElementById('notifications-list');
+  const template = document.getElementById('notification-item-template');
+  if (!list || !(template instanceof HTMLTemplateElement)) return;
 
-  if (!listContainer || !emptyContainer || !loadingContainer) return;
-
-  // Hide loading state
-  loadingContainer.classList.add('hidden');
-
-  if (notifications.length === 0) {
-    listContainer.innerHTML = '';
-    // Show empty state
-    emptyContainer.classList.remove('hidden');
-    // The button carries tw-btn-ghost, which sets display itself, so a
-    // `hidden` class would lose to it; toggle the inline style instead.
-    if (clearAllButton) clearAllButton.style.display = 'none';
-    if (badge) {
-      badge.classList.add('hidden');
-      badge.textContent = '';
-    }
-    return;
-  }
-
-  emptyContainer.classList.add('hidden');
-  if (clearAllButton) clearAllButton.style.display = '';
-  // Update badge with count
-  if (badge) {
-    badge.classList.remove('hidden');
-    badge.textContent = notifications.length > 99 ? '99+' : String(notifications.length);
-  }
-
-  listContainer.innerHTML = notifications.map(renderNotification).join('');
+  list.replaceChildren(...notifications.map(notification => renderNotification(notification, template)));
+  setHidden('notifications-loading', true);
+  setHidden('notifications-error', true);
+  setHidden('notifications-empty', notifications.length > 0);
+  setHidden('notifications-clear', notifications.length === 0);
+  setHidden('notifications-badge', notifications.length === 0);
+  const count = document.querySelector('[data-notification-count]');
+  if (count) count.textContent = `${notifications.length} new notifications`;
 }
 
 async function fetchNotifications(): Promise<void> {
   try {
     const response = await fetch('/api/v1/notifications/', {
       method: 'GET',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-      },
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch notifications: ${response.status}`);
-    }
-
+    if (!response.ok) throw new Error(`Failed to fetch notifications: ${response.status}`);
     const data = await response.json();
     notifications = Array.isArray(data) ? data : [];
     renderNotifications();
   } catch {
-    const listContainer = document.getElementById('notifications-list');
-    const loadingContainer = document.getElementById('notifications-loading');
-    if (loadingContainer) loadingContainer.classList.add('hidden');
-    if (listContainer) {
-      // Static error message - no user input involved
-      listContainer.innerHTML = `
-        <div class="flex flex-col items-center justify-center py-12 px-6">
-          <div class="w-14 h-14 rounded-full bg-danger/10 flex items-center justify-center mb-4">
-            <i class="fas fa-exclamation-triangle text-xl text-danger"></i>
-          </div>
-          <p class="text-sm text-text font-semibold mb-1">Failed to load notifications</p>
-          <p class="text-xs text-text-muted text-center">Please try again later.</p>
-        </div>
-      `;
-    }
+    setHidden('notifications-loading', true);
+    setHidden('notifications-empty', true);
+    setHidden('notifications-clear', true);
+    setHidden('notifications-error', false);
+    document.getElementById('notifications-list')?.replaceChildren();
   }
 }
 
-function resetLoadingState(): void {
-  const loadingContainer = document.getElementById('notifications-loading');
-  const emptyContainer = document.getElementById('notifications-empty');
-  const listContainer = document.getElementById('notifications-list');
-
-  if (loadingContainer) loadingContainer.classList.remove('hidden');
-  if (emptyContainer) emptyContainer.classList.add('hidden');
-  if (listContainer) listContainer.innerHTML = '';
+function refreshNotifications(): void {
+  document.getElementById('notifications-dropdown')?.focus();
+  setHidden('notifications-loading', false);
+  setHidden('notifications-empty', true);
+  setHidden('notifications-error', true);
+  setHidden('notifications-clear', true);
+  document.getElementById('notifications-list')?.replaceChildren();
+  void fetchNotifications();
 }
 
-function initializeClearAllButton(): void {
-  if (clearAllButtonInitialized) return;
-
-  const clearAllButton = document.getElementById('clearAllNotifications');
-  if (clearAllButton) {
-    clearAllButton.addEventListener('click', async () => {
-      try {
-        const response = await fetch('/api/v1/notifications/clear/', {
-          method: 'POST',
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRFToken': getCsrfToken(),
-          },
-        });
-
-        if (response.ok) {
-          await fetchNotifications();
-        }
-      } catch {
-        // Silently fail - notifications will refresh on next poll
-      }
-    });
-    clearAllButtonInitialized = true;
-  }
-}
-
-const POLLING_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const POLLING_INTERVAL = 5 * 60 * 1000;
 let pollingIntervalId: ReturnType<typeof setInterval> | null = null;
 
 function startPolling(): void {
-  if (pollingIntervalId) return; // Already polling
-  pollingIntervalId = setInterval(fetchNotifications, POLLING_INTERVAL);
+  if (!pollingIntervalId) pollingIntervalId = setInterval(fetchNotifications, POLLING_INTERVAL);
 }
 
 function stopPolling(): void {
-  if (pollingIntervalId) {
-    clearInterval(pollingIntervalId);
-    pollingIntervalId = null;
-  }
+  if (pollingIntervalId) clearInterval(pollingIntervalId);
+  pollingIntervalId = null;
 }
 
 function initializeNotificationsDropdown(): void {
-  const dropdown = document.getElementById('notifications-dropdown');
-  if (!dropdown) return;
-
-  // Initialize clear all button
-  initializeClearAllButton();
-
-  // Listen for dropdown open event from Alpine.js
-  document.addEventListener('notifications-open', () => {
-    resetLoadingState();
-    fetchNotifications();
-  });
-
-  // Initial fetch to update badge
-  fetchNotifications();
-
-  // Start polling only when page is visible
-  if (!document.hidden) {
-    startPolling();
-  }
-
-  // Use Page Visibility API to pause polling when tab is not visible
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      stopPolling();
-    } else {
-      // Fetch immediately when tab becomes visible, then resume polling
-      fetchNotifications();
-      startPolling();
-    }
-  });
+  const panel = document.getElementById('notifications-dropdown');
+  if (!panel || panel === initializedPanel) return;
+  initializedPanel = panel;
+  void fetchNotifications();
+  if (!document.hidden) startPolling();
 }
 
-// Initialize on DOM ready
+// Register document listeners once; HTMX can replace the panel many times.
+document.addEventListener('notifications-open', refreshNotifications);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopPolling();
+  } else if (document.getElementById('notifications-dropdown')) {
+    void fetchNotifications();
+    startPolling();
+  }
+});
+document.addEventListener('click', async event => {
+  const target = event.target instanceof Element ? event.target.closest('button') : null;
+  if (target?.id === 'notifications-retry') {
+    refreshNotifications();
+  } else if (target?.id === 'clearAllNotifications') {
+    document.getElementById('notifications-dropdown')?.focus();
+    target.disabled = true;
+    try {
+      const response = await fetch('/api/v1/notifications/clear/', {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCsrfToken(),
+        },
+      });
+      if (response.ok) await fetchNotifications();
+    } catch {
+      // Keep the current notifications available until the next refresh.
+    } finally {
+      target.disabled = false;
+      document.getElementById('notifications-dropdown')?.focus();
+    }
+  }
+});
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializeNotificationsDropdown);
 } else {
   initializeNotificationsDropdown();
 }
-
-// Re-initialize after HTMX swaps
-document.body.addEventListener('htmx:afterSwap', () => {
-  clearAllButtonInitialized = false;
-  initializeNotificationsDropdown();
-});
+document.body.addEventListener('htmx:afterSwap', initializeNotificationsDropdown);

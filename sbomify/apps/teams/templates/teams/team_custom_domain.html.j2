@@ -1,8 +1,3 @@
-{% load static %}
-{% comment %}
-    The Alpine state stays on a plain wrapper: its initialiser spans several
-    lines and carries an {% if %}, which a component attribute is no place for.
-{% endcomment %}
 <div x-cloak x-data="customDomain({ teamKey: '{{ team.key }}', initialDomain: '{{ team.custom_domain|default:''|escapejs }}', isValidated: {{ team.custom_domain_validated|yesno:'true,false' }}, lastCheckedAt:
     {% if team.custom_domain_last_checked_at %}
         '{{ team.custom_domain_last_checked_at|date:'c'|escapejs }}'
@@ -10,159 +5,66 @@
         null
     {% endif %}
     , hasAccess: {{ has_custom_domain_access|yesno:'true,false' }} })">
-    {# Section heading, matching the settings-tab style: no card chrome. #}
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-            <h3 class="text-sm font-semibold text-text m-0">Custom domain</h3>
-            {% if not has_custom_domain_access %}
-                <c-badges.secondary size="sm">Business / Enterprise</c-badges.secondary>
-            {% endif %}
-        </div>
-        <div class="flex items-center gap-2" x-show="hasAccess">
-            <c-buttons.secondary size="sm" x-show="hasUnsavedChanges() && !isLoading" @click="cancelChanges()">
-            <i class="fas fa-undo mr-2"></i> Cancel
-            </c-buttons.secondary>
-            <c-buttons.primary size="sm" x-show="hasUnsavedChanges() && !isLoading" @click="saveDomain()" ::disabled="!canSave()">
-            <i class="fas fa-save mr-2"></i>
-            Save domain
-            </c-buttons.primary>
-            <c-buttons.outline-danger size="sm" x-show="currentDomain && !hasUnsavedChanges() && !isLoading" @click="removeDomain()">
-            <i class="fas fa-trash mr-2"></i>
-            Remove domain
-            </c-buttons.outline-danger>
-            <span x-show="isLoading" class="text-text-muted">
-                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
-                Saving...
-            </span>
-        </div>
-    </div>
+    <c-cards.card flush>
+    <c-cards.header compact title="Custom domain" hint="Serve your Trust Center from your own address." />
     {% if has_custom_domain_access %}
-        <p class="text-sm text-text-muted mt-1 mb-6">Serve your Trust Center from your own branded URL.</p>
-        <!-- Domain Configuration -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-                <c-forms.label for="custom-domain-input">Custom Domain</c-forms.label>
-                <c-forms.input id="custom-domain-input" placeholder="trust.yourcompany.com" x-model="localDomain" ::class="{ 'border-danger focus:ring-danger/30': error }" />
-                <div class="text-danger text-sm mt-1" x-show="error" x-text="error"></div>
-                <p class="text-text-muted text-xs mt-1">
-                    Enter a subdomain (e.g., trust.example.com). Do not include http:// or https://
-                </p>
-            </div>
-            <div>
-                <c-forms.label>Verification Status</c-forms.label>
-                <div class="flex items-center gap-2">
-                    <template x-if="!currentDomain">
-                        <c-chips.metric-chip>
-                        <i class="fas fa-minus-circle text-text-muted" aria-hidden="true"></i>
-                        <c-chips.metric.value>No domain configured</c-chips.metric.value>
-                        </c-chips.metric-chip>
-                    </template>
-                    <template x-if="currentDomain && validated">
-                        <c-chips.metric-chip accent="success">
-                        <i class="fas fa-check-circle" aria-hidden="true"></i>
-                        <c-chips.metric.value>Verified</c-chips.metric.value>
-                        </c-chips.metric-chip>
-                    </template>
-                    <template x-if="currentDomain && !validated">
-                        <c-chips.metric-chip accent="warning">
-                        <i class="fas fa-clock" aria-hidden="true"></i>
-                        <c-chips.metric.value>Pending verification</c-chips.metric.value>
-                        </c-chips.metric-chip>
-                    </template>
-                </div>
-                <template x-if="currentDomain && lastChecked">
-                    <p class="text-text-muted text-xs mt-2">
-                        Last checked: <span x-text="formatLastChecked()"></span>
-                    </p>
-                </template>
-            </div>
-        </div>
-        <!-- DNS Setup Instructions -->
-        <c-feedback.alert variant="info" title="DNS Configuration Required">
-        <span class="block text-text-muted text-sm mb-4">
-            To use a custom domain, create the following <strong>CNAME</strong>
-            {% if dcv_hostname %}
-                records
-            {% else %}
-                record
-            {% endif %}
-            in your DNS provider:
-        </span>
-        <!-- Primary CNAME Record -->
-        <h6 class="text-sm font-semibold text-text mb-2">1. Domain CNAME Record</h6>
-        <div class="bg-surface border border-border rounded-lg p-4 mb-4">
-            <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                <div>
-                    <span class="text-text-muted">Type:</span>
-                    <span class="text-text font-medium ml-2">CNAME</span>
-                </div>
-                <div>
-                    <span class="text-text-muted">Name:</span>
-                    <c-code-inline class="ml-2" x-text="localDomain || 'trust'" />
-                </div>
-                <div class="min-w-0">
-                    <span class="text-text-muted">Target:</span>
-                    <c-code-inline class="ml-2 break-all">{{ app_hostname }}</c-code-inline>
-                </div>
-            </div>
-        </div>
-        {% if dcv_hostname %}
-            <!-- DCV Delegation CNAME Record -->
-            <h6 class="text-sm font-semibold text-text mb-2">2. SSL Certificate CNAME Record (DCV Delegation)</h6>
-            <div class="bg-surface border border-border rounded-lg p-4 mb-4">
-                <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                    <div>
-                        <span class="text-text-muted">Type:</span>
-                        <span class="text-text font-medium ml-2">CNAME</span>
-                    </div>
-                    <div class="min-w-0">
-                        <span class="text-text-muted">Name:</span>
-                        <c-code-inline class="ml-2 break-all">_acme-challenge.<span x-text="localDomain || 'trust'"></span></c-code-inline>
-                    </div>
-                    <div class="min-w-0 max-w-full">
-                        <span class="text-text-muted">Target:</span>
-                        <c-code-inline class="ml-2 break-all"><span x-text="localDomain || 'trust.example.com'"></span>.{{ dcv_hostname }}</c-code-inline>
-                    </div>
-                </div>
-            </div>
-            <p class="text-text-muted text-xs mb-4">
-                <i class="fas fa-shield-alt mr-1"></i>
-                This record enables automatic SSL certificate issuance and renewal for your custom domain.
-            </p>
-        {% endif %}
-        <div class="space-y-2 text-sm text-text-muted">
-            <p class="flex items-start gap-2 m-0">
-                <i class="fas fa-lightbulb text-warning mt-0.5"></i>
-                <span><strong class="text-text">Note:</strong> The Name field shows the full domain. In your DNS provider, enter only the subdomain portion relative to your zone (e.g., for <c-code-inline>trust.example.com</c-code-inline> in zone <c-code-inline>example.com</c-code-inline>, enter <c-code-inline>trust</c-code-inline>).</span>
-            </p>
-            <p class="flex items-start gap-2 m-0">
-                <i class="fas fa-clock text-info mt-0.5"></i>
-                <span>DNS changes may take up to 48 hours to propagate. Verification happens automatically once the DNS is configured correctly.</span>
-            </p>
-        </div>
-        </c-feedback.alert>
-    {% else %}
-        <div class="flex items-start gap-4 p-6 mt-4 bg-border/20 rounded-xl">
-            <c-chips.icon-chip size="lg">
-            <i class="fas fa-globe text-xl" aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <div>
-                <h6 class="font-semibold text-text mb-2">Custom Domain Feature</h6>
-                <p class="text-text-muted text-sm mb-4">
-                    Custom domains allow you to serve your Trust Center from your own branded URL (e.g., trust.yourcompany.com).
-                    This feature is available on Business and Enterprise plans.
-                </p>
-                {% if can_administer %}
-                    <c-buttons.primary href="{% url 'billing:select_plan' team.key %}">
-                    <i class="fas fa-arrow-up mr-2"></i>Upgrade Plan
-                    </c-buttons.primary>
-                {% else %}
-                    <p class="text-text-muted text-sm m-0">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Ask a workspace owner to upgrade the plan.
-                    </p>
+        <c-forms.field horizontal label="Custom domain" for="custom-domain-input" hint="Enter a subdomain such as trust.example.com, without http:// or https://.">
+        <c-forms.input size="sm" id="custom-domain-input" placeholder="trust.example.com" x-model="localDomain" ::data-state="error ? 'error' : ''" />
+        <c-forms.error x-show="error" x-text="error" />
+        </c-forms.field>
+        <c-forms.field horizontal label="Verification status">
+        <c-feedback.status x-show="!currentDomain" label="No domain configured" />
+        <c-feedback.status tone="success" x-show="currentDomain && validated" label="Verified" />
+        <c-feedback.status tone="warning" x-show="currentDomain && !validated" label="Pending verification" />
+        <c-forms.hint x-show="currentDomain && lastChecked">Last checked: <span x-text="formatLastChecked()"></span></c-forms.hint>
+        </c-forms.field>
+        <c-cards.body>
+        <div class="flex flex-col gap-4">
+            <c-layout.section-header title="DNS configuration" subtitle="Add these records with your DNS provider." />
+            <c-tables.shell>
+            <c-tables.table>
+            <c-tables.head>
+            <c-tables.header-cell compact>Purpose</c-tables.header-cell>
+            <c-tables.header-cell compact>Type</c-tables.header-cell>
+            <c-tables.header-cell compact>Name</c-tables.header-cell>
+            <c-tables.header-cell compact>Target</c-tables.header-cell>
+            </c-tables.head>
+            <tbody>
+                <c-tables.row>
+                <c-tables.cell compact>Domain</c-tables.cell>
+                <c-tables.cell compact>CNAME</c-tables.cell>
+                <c-tables.cell compact><c-code-inline x-text="localDomain || 'trust'" /></c-tables.cell>
+                <c-tables.cell compact><c-code-inline>{{ app_hostname }}</c-code-inline></c-tables.cell>
+                </c-tables.row>
+                {% if dcv_hostname %}
+                    <c-tables.row>
+                    <c-tables.cell compact>Certificate (DCV delegation)</c-tables.cell>
+                    <c-tables.cell compact>CNAME</c-tables.cell>
+                    <c-tables.cell compact><c-code-inline>_acme-challenge.<span x-text="localDomain || 'trust'"></span></c-code-inline></c-tables.cell>
+                    <c-tables.cell compact><c-code-inline><span x-text="localDomain || 'trust.example.com'"></span>.{{ dcv_hostname }}</c-code-inline></c-tables.cell>
+                    </c-tables.row>
                 {% endif %}
+            </tbody>
+            </c-tables.table>
+            </c-tables.shell>
+            {% if dcv_hostname %}
+                <c-forms.hint>The second record enables automatic SSL certificate issuance and renewal.</c-forms.hint>
+            {% endif %}
+            <c-feedback.alert variant="info">Enter names relative to your DNS zone. For trust.example.com in the example.com zone, enter trust. DNS changes can take up to 48 hours. Verification runs automatically.</c-feedback.alert>
+            <div class="flex flex-wrap justify-end items-center gap-2">
+                <c-buttons.secondary size="sm" x-show="hasUnsavedChanges() && !isLoading" @click="cancelChanges()">Discard</c-buttons.secondary>
+                <c-buttons.primary size="sm" x-show="hasUnsavedChanges() && !isLoading" @click="saveDomain()" ::disabled="!canSave()">Save domain</c-buttons.primary>
+                <c-buttons.outline-danger size="sm" x-show="currentDomain && !hasUnsavedChanges() && !isLoading" @click="removeDomain()">Remove domain</c-buttons.outline-danger>
+                <c-feedback.loading row message="Saving..." x-show="isLoading" />
             </div>
         </div>
+        </c-cards.body>
+    {% else %}
+        <c-feedback.empty-state compact icon="fas fa-globe" title="Use your own domain" message="Custom domains are available on Business and Enterprise plans.">
+        {% if can_administer %}
+            <c-buttons.secondary size="sm" href="{% url 'billing:select_plan' team.key %}">Upgrade plan</c-buttons.secondary>
+        {% endif %}
+        </c-feedback.empty-state>
     {% endif %}
+    </c-cards.card>
 </div>

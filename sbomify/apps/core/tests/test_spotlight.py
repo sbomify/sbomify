@@ -226,8 +226,8 @@ class TestRootLevelCoverage:
     @pytest.mark.parametrize(
         "query,expected",
         [
-            ("cra", "CRA Compliance"),
-            ("compliance", "CRA Compliance"),
+            ("cra", "Posture"),
+            ("compliance", "Posture"),
             ("trends", "Vulnerability trends"),
             ("access request", "Access requests"),
             ("nda requests", "Access requests"),

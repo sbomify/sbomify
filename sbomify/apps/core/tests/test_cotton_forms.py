@@ -179,7 +179,9 @@ def test_select_default_segments_and_chevron(rendered: str) -> None:
     select = _open_tag(rendered, "select", 'id="probe-select"')
     assert "appearance-none cursor-pointer" in select
     assert CHEVRON in select
-    assert "bg-no-repeat bg-[position:right_0.75rem_center] bg-[length:1.25rem]" in select
+    assert all(
+        token in select for token in ("bg-no-repeat", "bg-[position:right_0.75rem_center]", "bg-[length:1.25rem]")
+    )
     assert "w-full py-3 pr-10 pl-4 text-sm" in select
     assert "bg-surface border-border text-text" in select
     assert PRIMARY_RING in select
@@ -349,7 +351,7 @@ def test_toggle_label_dims_from_the_input_state(rendered: str) -> None:
 def test_search_input_precedes_the_icon_so_peer_can_reach_it(rendered: str) -> None:
     field = _chunk(rendered, "div", 'placeholder="Search products, components…"')
     assert field.index('type="search"') < field.index("fa-search")
-    assert "peer w-full py-3 pl-11 pr-4" in field
+    assert all(token in field for token in ("peer", "w-full", "py-3", "pl-11", "pr-10"))
     # The old rule set only a font-size and inherited 1.5, so the field states it.
     assert "text-sm leading-[1.5]" in field
     assert "peer-focus:text-primary" in field
@@ -358,7 +360,7 @@ def test_search_input_precedes_the_icon_so_peer_can_reach_it(rendered: str) -> N
 
 def test_search_hint_segment_reserves_the_shortcut_room(rendered: str) -> None:
     field = _open_tag(rendered, "input", 'id="probe-search-hint"')
-    assert "pl-11 pr-14" in field
+    assert "pl-11" in field and "pr-14" in field
     assert "pr-4" not in field
 
 
@@ -385,7 +387,9 @@ def test_file_upload_active_swaps_the_whole_recipe_rather_than_adding_to_it(rend
     panel = _open_tag(rendered, "label", "@dragover.prevent")
     classes = _classes(rendered, "label", "@dragover.prevent")
     assert f":class=\"over ? '{ACTIVE_ZONE}' : '{REST_ZONE}'\"" in panel
-    assert "group flex flex-col items-center justify-center px-8 py-10 border-2 rounded-xl" in panel
+    assert set("group flex flex-col items-center justify-center px-8 py-10 border-2 rounded-xl".split()) <= set(
+        panel.split('class="', 1)[1].split('"', 1)[0].split()
+    )
     # Nothing static may fight the binding: border style, border colour and fill
     # come from whichever branch is live, never from two utilities at once.
     for utility in ("border-dashed", "border-solid", "border-border", "border-primary", "bg-background"):
@@ -410,7 +414,7 @@ def test_file_upload_icon_grows_with_the_panel(rendered: str) -> None:
     # The medallion is the span, not the mark: Font Awesome's unlayered
     # display:inline-block outranks a flex utility on the same element, and the
     # circle collapsed to a pill. The glyph is 1.5rem inside a 4rem circle.
-    assert '<span class="w-16 h-16 flex items-center justify-center rounded-full' in panel
+    assert 'class="w-16 h-16 flex items-center justify-center rounded-full' in panel
     assert '<i class="fas fa-cloud-arrow-up text-2xl"' in panel
     assert "group-hover:scale-110" in panel
     assert (
@@ -432,7 +436,9 @@ def test_file_upload_text_hint_and_hidden_input(rendered: str) -> None:
 def test_file_upload_static_is_the_panel_without_the_picker(rendered: str) -> None:
     """The upload-in-flight state keeps the zone's shape and drops the input."""
     panel = _chunk(rendered, "div", 'data-probe="upload-static"')
-    assert "group flex flex-col items-center justify-center px-8 py-10 border-2 rounded-xl" in panel
+    assert set("group flex flex-col items-center justify-center px-8 py-10 border-2 rounded-xl".split()) <= set(
+        panel.split('class="', 1)[1].split('"', 1)[0].split()
+    )
     assert REST_ZONE in panel
     # Nothing to pick, so nothing to click or type into.
     assert "cursor-pointer" not in panel

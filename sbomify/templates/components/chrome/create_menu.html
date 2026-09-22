@@ -1,0 +1,24 @@
+{% comment %}The creation menu follows live capabilities and uses the shared button and dropdown primitives.{% endcomment %}
+<c-vars can_manage />
+{% if request.session.current_team and can_manage %}
+    <div x-data="{ open: false, close() { this.open = false; this.$refs.trigger.focus(); }, first() { this.open = true; this.$nextTick(() => this.$focus.focus(this.$refs.menu.querySelector('[role=menuitem]'))); } }"
+         class="relative"
+         @keydown.escape.stop.prevent="close()"
+         @focusout="if (!$el.contains($event.relatedTarget)) open = false">
+        <c-buttons.secondary size="sm" aria-label="Create new item" aria-haspopup="menu" aria-controls="create-menu" x-ref="trigger" @keydown.arrow-down.prevent="first()" @click="open = !open" ::aria-expanded="open">
+        <i class="fas fa-plus" aria-hidden="true"></i>
+        <span class="hidden sm:inline">New</span>
+        </c-buttons.secondary>
+        <c-dropdowns.dropdown id="create-menu" x-ref="menu" class="right-0 mt-2 w-48" aria-label="Create options" x-show="open" x-cloak x-transition.opacity.duration.100ms @click.outside="open = false">
+        <c-dropdowns.item compact icon="fas fa-cube" href="{% url 'core:product_new' %}" @click="open = false">
+        Product
+        </c-dropdowns.item>
+        <c-dropdowns.item compact icon="fas fa-puzzle-piece" href="{% url 'core:component_new' %}" @click="open = false">
+        Component
+        </c-dropdowns.item>
+        <c-dropdowns.item compact icon="fas fa-shield-halved" href="{% url 'core:security_advisory_new' %}" @click="open = false">
+        Advisory
+        </c-dropdowns.item>
+        </c-dropdowns.dropdown>
+    </div>
+{% endif %}

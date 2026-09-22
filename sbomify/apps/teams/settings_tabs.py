@@ -82,7 +82,7 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
     ),
     SettingsTab(
         key="contact-profiles",
-        label="Contacts",
+        label="Parties",
         icon="fa-address-book",
         template="contact_profiles",
         description="The people and organisations named on your artifacts.",
@@ -93,6 +93,13 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         icon="fa-globe",
         template="trust_center",
         description="What the public sees, and who may be let past the gate.",
+    ),
+    SettingsTab(
+        key="controls",
+        label="Controls",
+        icon="fa-list-check",
+        template="controls",
+        description="Compliance frameworks and workspace control statuses.",
     ),
     SettingsTab(
         key="branding",

@@ -37,8 +37,9 @@ class TestUIWorkflows:
         content = response.content.decode()
 
         # Check dashboard page loads with expected content
-        assert "Dashboard" in content
-        assert "space-y-6" in content  # Main dashboard layout class
+        assert response.status_code == 200
+        assert "Overview" in content
+        assert 'aria-label="Key metrics"' in content
 
         # Test API endpoint for stats (new endpoint, no team_key needed in URL)
         response = client.get(reverse("api-1:get_dashboard_summary"))

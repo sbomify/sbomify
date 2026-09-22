@@ -142,9 +142,7 @@ def test_pill_rounds_the_severity_shape(rendered: str) -> None:
         ("Runtime low", "low", "var(--color-severity-low)"),
     ],
 )
-def test_severity_dynamic_keys_every_band_off_the_attribute(
-    rendered: str, label: str, level: str, token: str
-) -> None:
+def test_severity_dynamic_keys_every_band_off_the_attribute(rendered: str, label: str, level: str, token: str) -> None:
     badge = _badge(rendered, label)
     assert f'data-level="{level}"' in badge
     assert f"data-[level={level}]:text-[color-mix(in_oklab,{token}_70%,var(--color-text))]" in badge
@@ -328,7 +326,7 @@ def test_tag_remove_label_binds_the_accessible_name(rendered: str) -> None:
     button = section[section.index("<button") : section.index("</button>")]
     # Autoescaped, which the HTML parser decodes back before Alpine reads it.
     assert ':aria-label="&#x27;Remove &#x27; + tag.name"' in button
-    assert "aria-label=\"Remove \"" not in button
+    assert 'aria-label="Remove "' not in button
     assert 'title="Remove license"' in button
     assert '@click.stop="removeTag(index)"' in button
 
@@ -371,5 +369,5 @@ def test_action_badge_forwards_its_bindings(rendered: str) -> None:
 
 def test_the_other_badges_stay_spans(rendered: str) -> None:
     """type is what makes the shell a button; nothing else asks for one."""
-    assert _badge(rendered, "Secondary").startswith(" class=")
+    assert _badge(rendered, "Secondary").lstrip().startswith("class=")
     assert "<button" not in _badge(rendered, "Secondary")

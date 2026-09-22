@@ -35,22 +35,10 @@
         <!-- Summary -->
         <div class="mb-6">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <c-layout.stat-card compact accent="success">
-                <c-layout.stat.value x-text="passingCount" />
-                <c-layout.stat.label>Passing</c-layout.stat.label>
-                </c-layout.stat-card>
-                <c-layout.stat-card compact accent="warning">
-                <c-layout.stat.value x-text="failingCount" />
-                <c-layout.stat.label>Failing</c-layout.stat.label>
-                </c-layout.stat-card>
-                <c-layout.stat-card compact style="--stat-accent: var(--color-info)">
-                <c-layout.stat.value x-text="pendingCount" />
-                <c-layout.stat.label>Pending</c-layout.stat.label>
-                </c-layout.stat-card>
-                <c-layout.stat-card compact accent="muted">
-                <c-layout.stat.value x-text="totalAssessments" />
-                <c-layout.stat.label>Total</c-layout.stat.label>
-                </c-layout.stat-card>
+                <c-layout.stat-card compact accent="success" x_value="passingCount" label="Passing" />
+                <c-layout.stat-card compact accent="warning" x_value="failingCount" label="Failing" />
+                <c-layout.stat-card compact accent="info" x_value="pendingCount" label="Pending" />
+                <c-layout.stat-card compact accent="muted" x_value="totalAssessments" label="Total" />
             </div>
         </div>
         <!-- Per-plugin results -->

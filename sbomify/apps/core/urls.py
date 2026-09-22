@@ -13,6 +13,7 @@ app_name = "core"
 urlpatterns = [
     path("", views.home, name="home"),
     path("dashboard", views.DashboardView.as_view(), name="dashboard"),
+    path("dashboard/trends/", views.DashboardView.as_view(show_trends=True), name="dashboard_trends"),
     path("settings", views.user_settings, name="settings"),
     path(
         "settings/invitations/<int:invitation_id>/accept/",

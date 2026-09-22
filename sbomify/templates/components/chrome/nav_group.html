@@ -1,0 +1,6 @@
+{% comment %}A labelled set of rail destinations with consistent group spacing.{% endcomment %}
+<c-vars label />
+<div class="space-y-1">
+    <p class="px-3 pt-3 pb-1 text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-text-muted">{{ label }}</p>
+    {{ slot }}
+</div>

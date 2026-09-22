@@ -1,0 +1,8 @@
+{% comment %}A table subject (linked when href is supplied) with optional supporting detail, kept in one wrapping cell. Attributes apply to the title, including x-text for browser state.{% endcomment %}
+<c-vars href title detail mono />
+{# djlint:off #}
+{% if href %}<a href="{{ href }}"{% else %}<span{% endif %}
+   class="break-words font-semibold text-text{% if href %} hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40{% endif %} {% if mono %}font-mono text-xs{% else %}text-sm{% endif %}" {{ attrs }}>{{ title }}{% if href %}</a>{% else %}</span>{% endif %}
+{# djlint:on #}
+{% if detail %}<p class="mt-1 mb-0 text-xs text-text-muted break-words">{{ detail }}</p>{% endif %}
+{{ slot }}

@@ -4,9 +4,8 @@ it, and the page's actions on the right. Actions are the slot, because they are
 real controls (buttons, a filter form, a menu) and a parameter cannot describe
 them; a page with no actions just closes the tag.
 
-Put it above the page's content stack, not inside it. The gap under the title
-belongs here, so every page has the same one; inside a space-y-* stack pass
-flush, which replaces that gap instead of fighting it with a caller class.
+The parent c-layout.frame owns the gap before the next section. This header
+only arranges its own content and has no external margins or spacing switches.
 
 mark picks the mark's shape: the icon chip by default, the round avatar with
 mark="avatar". Both read their tint from an inherited custom property, so a
@@ -22,8 +21,8 @@ status the title is qualified by rather than an action, such as the stale badge
 on a component whose SBOM is past its freshness window. Actions belong in the
 default slot, on the right.
 {% endcomment %}
-<c-vars title subtitle icon mark copy_values breadcrumbs editable_item_type editable_item_id flush class />
-<div class="flex flex-wrap items-start justify-between gap-4 {% if flush %}mb-0{% else %}mb-6{% endif %}{% if class %} {{ class }}{% endif %}"
+<c-vars title subtitle icon mark copy_values breadcrumbs editable_item_type editable_item_id class />
+<div class="flex flex-wrap items-start justify-between gap-4{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>
     <div class="flex items-center gap-3.5 min-w-0">
         {% if icon %}

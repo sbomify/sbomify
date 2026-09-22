@@ -10,8 +10,8 @@ select panels.
 The recipe is the pills row's, so the two read as one control wherever they
 appear; c-navigation.segment carries the matching button.
 {% endcomment %}
-<c-vars class />
+<c-vars role="group" class />
 <div class="flex gap-0 bg-background p-1 rounded-lg{% if class %} {{ class }}{% endif %}"
-     role="group"
+     role="{{ role }}"
      {{ attrs }}>{{ slot }}
 </div>

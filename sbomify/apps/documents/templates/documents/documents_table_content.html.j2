@@ -5,7 +5,7 @@
     {# Inside the card on the private page the card draws the frame, so the shell drops its own. #}
     <c-tables.shell :nested="table_nested">
     <c-tables.toolbar>
-    <c-tables.search id="documents-search" label="Search documents" placeholder="Search documents..." x-model="search" @input="currentPage = 1" />
+    <c-forms.search-input size="sm" id="documents-search" label="Search documents" placeholder="Search documents..." x-model="search" @input="currentPage = 1" />
     <c-slot name="right">
     <c-tables.page-size id="documents-per-page" x-model.number="pageSize" @change="currentPage = 1">
     <template x-for="size in pageSizeOptions" :key="size">

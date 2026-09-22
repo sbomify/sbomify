@@ -7,15 +7,15 @@
             {# The shell draws the frame itself, so the table needs no card around it. #}
             <c-tables.shell>
             <c-tables.toolbar>
-            <c-tables.search id="release-artifacts-search" label="Search artifacts" placeholder="Search artifacts..." x-model="search" />
+            <c-forms.search-input size="sm" id="release-artifacts-search" label="Search artifacts" placeholder="Search artifacts..." x-model="search" />
             <c-slot name="right">
-            <c-tables.select id="release-artifacts-type" label="Filter by type" x-model="typeFilter">
+            <c-forms.select size="md" id="release-artifacts-type" label="Filter by type" x-model="typeFilter">
             <option value="">All Types</option>
             <option value="sbom">SBOMs Only</option>
             <option value="vex">VEX Only</option>
             <option value="cbom">CBOMs Only</option>
             <option value="document">Documents Only</option>
-            </c-tables.select>
+            </c-forms.select>
             </c-slot>
             </c-tables.toolbar>
             <c-tables.table>

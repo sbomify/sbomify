@@ -5,8 +5,9 @@
 {% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block content %}
+    {% url 'core:component_details_public' component.id as component_public_url %}
     {% comment %}The visibility state lives on the header because only its menu items read it. The freshness badge goes in the header's meta slot, beside the title.{% endcomment %}
-    <c-layout.page-header title="{{ component.name }}" subtitle="{{ component.component_type_display }} Component" icon="fas fa-puzzle-piece" mark="avatar" editable_item_type="{{ component.has_crud_permissions|yesno:'component,' }}" editable_item_id="{{ component.id }}" :copy_values="header_copy_values" x-data="{ visibility: '{{ component.visibility|escapejs }}' }" @public-status-changed.window="if ($event.detail.itemId === '{{ component.id|escapejs }}') visibility = $event.detail.visibility">
+    <c-layout.page-header title="{{ component.name }}" subtitle="{{ component.component_type_display }} Component" icon="fas fa-puzzle-piece" mark="avatar" editable_item_type="{{ component.has_crud_permissions|yesno:'component,' }}" editable_item_id="{{ component.id }}" :copy_values="header_copy_values" x-data="{ ...publicSharing('{{ component_public_url|escapejs }}'), visibility: '{{ component.visibility|escapejs }}' }" @public-status-changed.window="if ($event.detail.itemId === '{{ component.id|escapejs }}') visibility = $event.detail.visibility">
     {% comment %}Absent unless the workspace configures a window and the component has an SBOM, so an unconfigured workspace sees no badge.{% endcomment %}
     {% if component.freshness.is_stale %}
         <c-slot name="meta">
@@ -21,7 +22,6 @@
             {% comment %}ADMINISTER, not MANAGE: a member maintains a component but does
             not decide the world can see it, so do not offer the control.{% endcomment %}
             {% if can_administer %}
-                {% url 'core:component_details_public' component.id as component_public_url %}
                 {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
             {% endif %}
             {# Meatball menu — moves secondary surfaces off the page body (design review p8/p9): upload, metadata, CI/CD integration, trusted publishers all open from here. #}
@@ -47,8 +47,8 @@
                     <c-dropdowns.item icon="fas fa-shield-halved" @click="$dispatch('open-trusted-publishers')">Trusted publishers…</c-dropdowns.item>
                 {% endif %}
                 {# Public-only actions; visibility is reactive so these appear/disappear the moment it changes, no reload. #}
-                <c-dropdowns.item icon="fas fa-link" x-show="visibility === 'public' || visibility === 'gated'" @click="$dispatch('copy-url')">Copy public URL</c-dropdowns.item>
-                <c-dropdowns.item icon="fas fa-certificate" x-show="visibility === 'public' || visibility === 'gated'" @click="$dispatch('copy-badge')">Copy badge</c-dropdowns.item>
+                <c-dropdowns.item icon="fas fa-link" x-show="visibility === 'public' || visibility === 'gated'" @click="copyToClipboard()">Copy public URL</c-dropdowns.item>
+                <c-dropdowns.item icon="fas fa-certificate" x-show="visibility === 'public' || visibility === 'gated'" @click="copyBadgeToClipboard()">Copy badge</c-dropdowns.item>
             {% endif %}
             </c-actions-menu>
         </div>

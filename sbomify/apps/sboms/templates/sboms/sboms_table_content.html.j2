@@ -16,13 +16,13 @@
     {% endcomment %}
     <c-tables.shell nested>
     <c-tables.toolbar>
-    <c-tables.search id="sboms-search" label="Search artifacts" placeholder="Search artifacts..." x-model="search" @input="currentPage = 1" />
-    <c-tables.select id="sboms-type-filter" label="Filter by type" x-model="typeFilter" @change="currentPage = 1">
+    <c-forms.search-input size="sm" id="sboms-search" label="Search artifacts" placeholder="Search artifacts..." x-model="search" @input="currentPage = 1" />
+    <c-forms.select size="md" id="sboms-type-filter" label="Filter by type" x-model="typeFilter" @change="currentPage = 1">
     <option value="all">All Types</option>
     <template x-for="t in bomTypes" :key="t">
         <option :value="t" x-text="t.toUpperCase()"></option>
     </template>
-    </c-tables.select>
+    </c-forms.select>
     {% if full_view %}
         <c-slot name="right">
         <c-tables.page-size id="sboms-per-page" x-model.number="pageSize" @change="currentPage = 1">

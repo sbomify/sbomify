@@ -1,80 +1,8 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load static %}
 {% load django_vite %}
 {% block title %}sbomify Product: {{ product.name }} - Releases{% endblock %}
-{% block extra_styles %}
-    <link rel="stylesheet"
-          href="{% static 'css/product-releases-private.css' %}">
-{% endblock %}
 {% block content %}
-    <c-layout.page-header title="Releases" subtitle="Manage releases for {{ product.name }}" icon="fas fa-tag" mark="avatar">
-    {% if product.has_crud_permissions %}
-        <c-buttons.primary @click="$dispatch('open-createReleaseModal')">
-        <i class="fas fa-plus" aria-hidden="true"></i><span>New release</span>
-        </c-buttons.primary>
-    {% endif %}
-    </c-layout.page-header>
-    <div class="space-y-6">
-        {# Stats Badge #}
-        <div class="flex flex-wrap gap-2">
-            <c-chips.metric-chip>
-            <i class="fas fa-tag text-primary text-xs" aria-hidden="true"></i>
-            <c-chips.metric.value>{{ releases|length }}</c-chips.metric.value>
-            <c-chips.metric.label>Release{{ releases|length|pluralize }}</c-chips.metric.label>
-            </c-chips.metric-chip>
-        </div>
-        {# Product Releases #}
-        <div>
-            {% include 'core/components/product_releases.html.j2' with product_id=product.id is_public_view=False can_create=product.has_crud_permissions can_edit=product.has_crud_permissions can_delete=product.has_crud_permissions %}
-        </div>
-        {# Create Release Modal #}
-        {% if product.has_crud_permissions %}
-            <div x-data="{ open: false, createdAt: '{{ default_release_datetime|date:'Y-m-d\\TH:i' }}', releasedAt: '{{ default_release_datetime|date:'Y-m-d\\TH:i' }}' }"
-                 @open-createReleaseModal.window="open = true">
-                {% comment %} close carries the picker dismissal, so escape, the backdrop and the
-                X all put away an open calendar the way Cancel does. {% endcomment %}
-                <c-modal id="createReleaseModal" title="New Release" icon="fas fa-tag" close="open = false; $dispatch('close-all-pickers')">
-                <form id="createReleaseForm"
-                      method="post"
-                      action="{% url 'core:product_releases' product.id %}">
-                    {% csrf_token %}
-                    <div class="space-y-4">
-                        <div>
-                            <c-forms.label for="releaseName" required>Release Name</c-forms.label>
-                            <c-forms.input id="releaseName" name="name" required placeholder="e.g., v1.0.0, 2024.1, beta-3" />
-                            <c-forms.hint>Enter a unique name for this release</c-forms.hint>
-                        </div>
-                        <div>
-                            <c-forms.label for="releaseDescription">Description</c-forms.label>
-                            <c-forms.textarea id="releaseDescription" name="description" rows="3" placeholder="Describe what's included in this release..." />
-                            <c-forms.hint>Optional. A brief description of this release.</c-forms.hint>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <input type="hidden" name="created_at" :value="createdAt">
-                                {% include 'components/date_picker.html.j2' with value_binding='createdAt' label='Created Date' include_time='true' placeholder='Select date and time...' compact='true' %}
-                            </div>
-                            <div>
-                                <input type="hidden" name="released_at" :value="releasedAt">
-                                {% include 'components/date_picker.html.j2' with value_binding='releasedAt' label='Release Date' include_time='true' placeholder='Select date and time...' compact='true' %}
-                            </div>
-                        </div>
-                        <div>
-                            <c-forms.checkbox id="releaseIsPrerelease" name="is_prerelease">Mark as pre-release</c-forms.checkbox>
-                            <c-forms.hint class="ml-6">Pre-releases are typically alpha, beta, or release candidate versions</c-forms.hint>
-                        </div>
-                    </div>
-                </form>
-                <c-slot name="footer">
-                <c-buttons.ghost @click="open = false; $dispatch('close-all-pickers')">Cancel</c-buttons.ghost>
-                <c-buttons.primary type="submit" form="createReleaseForm">
-                <i class="fas fa-plus mr-2"></i>Create Release
-                </c-buttons.primary>
-                </c-slot>
-                </c-modal>
-            </div>
-        {% endif %}
-    </div>
+    {% include 'core/product_releases_content.html.j2' %}
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

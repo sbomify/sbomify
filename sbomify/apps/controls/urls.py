@@ -2,11 +2,18 @@
 
 from django.urls import path
 
-from .views import BulkCategoryUpdateView, ControlsCatalogView, ControlsStatusView, ProductControlsStatusView
+from .views import (
+    BulkCategoryUpdateView,
+    ControlsCatalogView,
+    ControlsStatusView,
+    ProductControlsStatusView,
+    ProductControlsView,
+)
 
 app_name = "controls"
 
 urlpatterns = [
+    path("<team_key>/product/<product_id>/", ProductControlsView.as_view(), name="product_controls"),
     path(
         "<team_key>/catalog",
         ControlsCatalogView.as_view(),

@@ -12,6 +12,8 @@ from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE,
 # The gallery's index and its section order come from here, so a component can
 # never be demoed without appearing in the index (or listed without a demo).
 GALLERY_SECTIONS: list[dict[str, str]] = [
+    {"id": "settings-controls", "label": "Settings controls", "group": "Layout"},
+    {"id": "app-overview", "label": "App chrome and overview", "group": "Layout"},
     {"id": "colors", "label": "Colour tokens", "group": "Foundations"},
     {"id": "typography", "label": "Typography", "group": "Foundations"},
     {"id": "icon-chips", "label": "Icon chips", "group": "Foundations"},
@@ -65,6 +67,10 @@ class DesignSystemView(LoginRequiredMixin, View):
         if not settings.DEBUG:
             raise Http404
         context = {
+            "overview_demo_counts": {"total": 6, "critical": 1, "high": 2, "medium": 2, "low": 1, "other": 3},
+            "overview_demo_sla": {"label": "3 days over", "overdue": True},
+            "overview_demo_evidence": {"component_count": 3, "stale": 1, "missing_sboms": 1},
+            "overview_demo_empty": {"is_first_visit": True, "metrics": {"open": 0}},
             "team": request.session.get("current_team", {}),
             "sections": GALLERY_SECTIONS,
             # One row per brand, chosen to show the ink switching rather than to
@@ -230,5 +236,43 @@ class DesignSystemView(LoginRequiredMixin, View):
                 '  -H "Authorization: Bearer $TOKEN" \\\n'
                 '  -F "file=@bom.cdx.json"'
             ),
+        }
+        from datetime import datetime, timezone
+
+        from django.core.paginator import Paginator
+        from django.urls import reverse
+
+        from sbomify.apps.core.services.inventory_page import COLUMNS
+
+        inventory_url = reverse("core:products_dashboard")
+        row = {
+            "id": "example",
+            "name": "Example product",
+            "url": inventory_url,
+            "component_count": 3,
+            "security_component_count": 3,
+            "security_applicable": True,
+            "release_count": 2,
+            "counts": context["overview_demo_counts"],
+            "unassessed": 1,
+            "past_sla": 2,
+            "stale": 1,
+            "missing_sboms": 0,
+            "no_policy": 0,
+            "visibility": "public",
+            "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+        }
+        context["inventory_demo"] = {
+            "base_url": inventory_url,
+            "content_id": "example-inventory",
+            "total": 1,
+            "singular": "product",
+            "kind": "products",
+            "params": {"per_page": "10"},
+            "products": [],
+            "rows": [row],
+            "headers": [{"label": label, "href": inventory_url} for _, label in COLUMNS["products"]],
+            "page": Paginator([row], 10).page(1),
+            "page_range": [1],
         }
         return render(request, "core/design_system.html.j2", context)

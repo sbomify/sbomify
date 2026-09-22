@@ -1,0 +1,50 @@
+{% comment %}
+The workspace picker uses live workspace membership from the teams tag.
+Dropdown keyboard navigation stays with c-dropdowns; current workspace is
+identified by its external key.
+{% endcomment %}
+{% load teams %}
+{% user_workspaces as available_workspaces %}
+{% with workspace=request.session.current_team %}
+    {% if workspace %}
+        <div class="relative"
+             x-data="{ open: false }"
+             @keydown.escape.window="open = false">
+            <button type="button"
+                    @click="open = !open"
+                    :aria-expanded="open"
+                    aria-haspopup="menu"
+                    aria-label="Switch workspace"
+                    title="Switch workspace"
+                    class="flex items-center gap-2.5 w-full px-2 py-2.5 rounded-xl border border-border text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                <span class="shrink-0 flex items-center justify-center w-7 h-7 rounded-md bg-surface-hover text-text text-[0.625rem] font-bold"
+                      aria-hidden="true">{{ workspace.name|slice:':2'|upper }}</span>
+                <span class="flex-1 min-w-0">
+                    <span class="block text-[0.625rem] uppercase tracking-[0.08em] text-text-muted">Workspace</span>
+                    <span class="block text-xs font-semibold text-text truncate">{{ workspace.name }}</span>
+                </span>
+                <i class="fas fa-chevron-down text-[0.625rem] text-text-muted"
+                   aria-hidden="true"></i>
+            </button>
+            <c-dropdowns.dropdown class="left-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)]" x-show="open" x-cloak @click.outside="open = false" aria-label="Workspaces">
+            <c-dropdowns.header>Switch workspace</c-dropdowns.header>
+            <div class="max-h-64 overflow-y-auto">
+                {% for workspace_key, workspace_info in available_workspaces.items %}
+                    {% if workspace_key == current_workspace_key %}
+                        {% firstof 'true' as workspace_current %}
+                    {% else %}
+                        {% firstof 'false' as workspace_current %}
+                    {% endif %}
+                    <c-dropdowns.item href="{% url 'teams:switch_team' workspace_key %}?next={% url 'core:dashboard' %}" icon="fas fa-briefcase" aria-current="{{ workspace_current }}">
+                    {{ workspace_info.name }}
+                    {% if workspace_key == current_workspace_key %}<c-badges.secondary size="sm">Current</c-badges.secondary>{% endif %}
+                    </c-dropdowns.item>
+                {% endfor %}
+            </div>
+            <c-dropdowns.divider />
+            <c-dropdowns.item icon="fas fa-plus" @click="open = false; $dispatch('open-add-workspace-modal')">Create workspace</c-dropdowns.item>
+            <c-dropdowns.item icon="fas fa-gear" href="{% url 'teams:teams_dashboard' %}">Manage workspaces</c-dropdowns.item>
+            </c-dropdowns.dropdown>
+        </div>
+    {% endif %}
+{% endwith %}

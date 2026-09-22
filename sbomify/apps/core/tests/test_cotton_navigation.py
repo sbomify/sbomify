@@ -217,7 +217,7 @@ def test_pager_class_never_falls_through_to_its_cells(rendered: str) -> None:
 def test_page_links_carry_the_cell_recipe_and_their_page(rendered: str) -> None:
     link = _chunk(rendered, "a", ">1</a>")
     assert CELL in link
-    assert "bg-transparent text-text-muted font-medium cursor-pointer" in link
+    assert "bg-transparent text-[color:var(--color-text-muted)] font-medium cursor-pointer" in link
     assert "hover:bg-surface hover:border-border hover:text-text active:scale-95" in link
     assert 'href="/components?page=1"' in link
 
@@ -226,11 +226,11 @@ def test_current_page_is_a_span_that_says_so(rendered: str) -> None:
     current = _chunk(rendered, "span", ">3</span>")
     assert 'aria-current="page"' in current
     assert "bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)]" in current
-    assert "text-white font-semibold" in current
+    assert 'data-active="true"' in current
+    assert "data-[active=true]:text-white" in current
+    assert "data-[active=true]:font-semibold" in current
     assert "shadow-[0_2px_4px_color-mix(in_oklab,var(--color-primary)_30%,transparent)]" in current
-    classes = _classes(rendered, ">3</span>")
-    assert "hover:" not in classes
-    assert "text-text-muted" not in classes
+    assert "data-[active=true]:hover:text-white" in current
 
 
 def test_ellipsis_is_a_bare_cell(rendered: str) -> None:
@@ -252,13 +252,11 @@ def test_nav_cells_take_the_smaller_type_and_never_both_sizes(rendered: str) -> 
 def test_a_dead_nav_cell_says_aria_disabled_not_disabled(rendered: str) -> None:
     single = _between(rendered, 'data-probe="single"', 'data-probe="numbers"')
     dead = _chunk(single, "a", 'aria-label="Previous page"')
-    assert 'href="#"' in dead
+    assert "href=" not in dead.split(">", 1)[0]
     assert 'aria-disabled="true"' in dead
     assert 'tabindex="-1"' in dead
-    assert "opacity-40 cursor-not-allowed" in dead
-    classes = _classes(single, 'aria-label="Previous page"')
-    assert "hover:" not in classes
-    assert "active:scale-95" not in classes
+    assert "aria-disabled:opacity-40" in dead
+    assert "aria-disabled:pointer-events-none" in dead
 
 
 def test_numbers_only_pager_drops_the_chevrons(rendered: str) -> None:
@@ -423,7 +421,8 @@ def test_disclosure_is_a_details_element_divided_like_an_accordion_item(rendered
 
 def test_disclosure_summary_carries_the_trigger_recipe_and_the_density_hook(rendered: str) -> None:
     section = _chunk(rendered, "details", "Configure the workflow")
-    assert "flex w-full cursor-pointer items-center justify-between px-6 py-5 text-left" in section
+    assert "flex w-full items-center justify-between px-6 py-5 text-left" in section
+    assert "cursor-pointer" in section
     assert "hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)]" in section
     assert "focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in section
     assert "[[data-accordion-sm]_&]:px-4 [[data-accordion-sm]_&]:py-3" in section
@@ -507,14 +506,14 @@ def test_segmented_is_a_group_wearing_the_pills_tray(rendered: str) -> None:
     assert tray.startswith("<div ")
     assert 'role="group"' in tray
     assert "flex gap-0 bg-background p-1 rounded-lg mt-2" in tray
-    assert "role=\"tablist\"" not in tray
+    assert 'role="tablist"' not in tray
 
 
 def test_segment_states_hang_off_data_active(rendered: str) -> None:
     seg = _nav_probe(rendered, "segment")
     assert seg.startswith("<button ")
     assert 'data-active="false"' in seg
-    assert ':data-active="chart === \'timeline\'"' in seg
+    assert ":data-active=\"chart === 'timeline'\"" in seg
     assert "@click=\"pick('timeline')\"" in seg
     assert "data-[active=true]:text-primary data-[active=true]:bg-surface" in seg
     assert "data-[active=true]:hover:bg-surface" in seg

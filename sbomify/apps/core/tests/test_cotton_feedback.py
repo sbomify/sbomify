@@ -49,11 +49,11 @@ def test_alert_variant_sets_its_accent(rendered: str, probe: str, accent: str) -
     assert accent in _probe(rendered, probe)
 
 
-def test_alert_shell_reads_the_accent_for_tint_border_and_text(rendered: str) -> None:
+def test_alert_shell_tints_the_surface_and_keeps_neutral_text(rendered: str) -> None:
     info = _probe(rendered, "alert-info")
-    assert "bg-[linear-gradient(135deg,color-mix(in_oklab,var(--alert-accent)_10%,transparent)_0%," in info
+    assert "bg-[color-mix(in_oklab,var(--alert-accent)_6%,var(--color-surface))]" in info
     assert "border-[color-mix(in_oklab,var(--alert-accent)_20%,transparent)]" in info
-    assert "text-[color-mix(in_oklab,var(--alert-accent)_60%,var(--color-text))]" in info
+    assert "text-text" in info
     assert 'role="alert"' in info
 
 
@@ -76,11 +76,11 @@ def test_alert_icon_follows_the_variant_unless_overridden(rendered: str, probe: 
 
 def test_alert_padding_segments_never_conflict(rendered: str) -> None:
     plain = _probe(rendered, "alert-info")
-    assert "px-5" in plain
-    assert "pr-12" not in plain
+    assert "px-4" in plain
+    assert "pr-14" not in plain
     dismissible = _probe(rendered, "alert-warning")
-    assert "relative pl-5 pr-12" in dismissible
-    assert "px-5" not in dismissible
+    assert "relative pl-4 pr-14" in dismissible
+    assert "px-4" not in dismissible
 
 
 def test_alert_dismiss_keeps_its_alpine_hook_and_label(rendered: str) -> None:
@@ -92,17 +92,17 @@ def test_alert_dismiss_keeps_its_alpine_hook_and_label(rendered: str) -> None:
 def test_alert_action_slot_is_the_rows_last_item(rendered: str) -> None:
     """The control that resolves the notice sits after the message, not in it."""
     body = _section(rendered, "alert-actioned")
-    message = body.index('<p class="text-sm m-0">')
+    message = body.index('<p class="text-sm leading-6 m-0">')
     action = body.index("Manage")
     assert message < action
-    # Outside the content column, so the row's flex puts it at the end.
+    # Outside the message column, so the action has its own space.
     assert body.index("</div>", message) < action
 
 
 def test_alert_body_slot_replaces_the_paragraph(rendered: str) -> None:
     """A notice that explains itself at length cannot live inside a p element."""
     body = _section(rendered, "alert-body")
-    assert '<p class="text-sm m-0">' not in body
+    assert '<p class="text-sm leading-6 m-0">' not in body
     assert '<p class="mb-2">No vulnerability scan data found for this SBOM.</p>' in body
     assert "<pre" in body
     # The title still leads the column.
@@ -115,7 +115,7 @@ def test_alert_mark_slot_replaces_the_glyph(rendered: str) -> None:
     assert "brand-loader-stand-in" in marked
     assert "fa-info-circle" not in marked
     # It keeps the glyph's box and ink, so the row does not shift under it.
-    assert "shrink-0 w-5 h-5 mt-0.5 text-[var(--alert-accent,currentColor)]" in marked
+    assert "w-5 h-6 text-base leading-none text-[var(--alert-accent,currentColor)]" in marked
 
 
 def test_alert_without_an_action_renders_nothing_after_the_message(rendered: str) -> None:
@@ -127,8 +127,8 @@ def test_alert_without_an_action_renders_nothing_after_the_message(rendered: str
 
 def test_alert_title_and_slot_render(rendered: str) -> None:
     body = _section(rendered, "alert-success")
-    assert '<p class="font-semibold mb-1">Saved</p>' in body
-    assert '<p class="text-sm m-0">Success body</p>' in body
+    assert '<p class="font-semibold leading-6 mt-0 mb-1">Saved</p>' in body
+    assert '<p class="text-sm leading-6 m-0">Success body</p>' in body
 
 
 def test_alert_forwards_attrs_and_caller_class(rendered: str) -> None:

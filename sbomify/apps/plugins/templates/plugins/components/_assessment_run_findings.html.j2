@@ -25,7 +25,7 @@ filled.{% endcomment %}
               class="mb-3">
             <input type="hidden" name="run_submitted" value="1">
             <c-tables.toolbar class="[&>div:first-child]:flex-wrap">
-            <c-tables.search id="run-search-{{ run.id }}" label="Search findings" placeholder="Search findings..." class="max-w-xs" name="run_search" value="{{ panel.query.search }}" hx-preserve="true" />
+            <c-forms.search-input size="sm" id="run-search-{{ run.id }}" label="Search findings" placeholder="Search findings..." class="max-w-xs" name="run_search" value="{{ panel.query.search }}" hx-preserve="true" />
             {% comment %}Severity, VEX state and KEV belong to vulnerabilities.
             A compliance run reports checks, which carry none of the three, so
             offering them there gives a severity dropdown with a blank option, a
@@ -33,7 +33,7 @@ filled.{% endcomment %}
             for a concept that does not apply. Search is the filter that means
             something for a list of checks.{% endcomment %}
             {% if is_security %}
-                <c-tables.select id="run-sev-{{ run.id }}" label="Filter by severity" name="run_severity">
+                <c-forms.select size="md" id="run-sev-{{ run.id }}" label="Filter by severity" name="run_severity">
                 <option value="all">All Severities</option>
                 {% for severity in panel.severity_options %}
                     <option value="{{ severity }}"
@@ -41,15 +41,15 @@ filled.{% endcomment %}
                         {{ severity|capfirst }}
                     </option>
                 {% endfor %}
-                </c-tables.select>
+                </c-forms.select>
                 {% if panel.state_options %}
-                    <c-tables.select id="run-state-{{ run.id }}" label="Filter by VEX analysis state" name="run_state">
+                    <c-forms.select size="md" id="run-state-{{ run.id }}" label="Filter by VEX analysis state" name="run_state">
                     <option value="all">All States</option>
                     {% for state in panel.state_options %}
                         <option value="{{ state.value }}"
                                 {% if state.value == panel.query.state %}selected{% endif %}>{{ state.label }}</option>
                     {% endfor %}
-                    </c-tables.select>
+                    </c-forms.select>
                 {% endif %}
                 {% if panel.kev_total %}
                     <c-forms.checkbox name="run_kev" :checked="panel.query.kev_only">Known exploited ({{ panel.kev_total }})</c-forms.checkbox>

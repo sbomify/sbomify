@@ -227,11 +227,17 @@ utilities (grid, flex, spacing) and nothing else. The moment you write a
 styled control, a repeated visual pattern, or anything wanting its own class,
 it belongs in `sbomify/templates/components/`.
 
+The app canvas is a `<c-layout.frame>` with a default vertical gap. Use the same
+frame for an HTMX replacement root or a page group that needs its own width.
+Parents own spacing between components through flex/grid gaps; components do
+not supply external margins or switches to remove them. Nested groups can use
+a smaller gap for their internal layout.
+
 ```html
 {# No load tag needed: <c-dir.name> works in any template #}
 <c-tables.shell>
   <c-tables.toolbar>
-    <c-tables.search id="things-search" label="Search things" x-model="search" />
+    <c-forms.search-input size="sm" id="things-search" label="Search things" x-model="search" />
   </c-tables.toolbar>
   <c-tables.table fixed>…</c-tables.table>
 </c-tables.shell>

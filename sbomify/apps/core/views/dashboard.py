@@ -9,7 +9,6 @@ from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.authz import MANAGE
-from sbomify.apps.teams.models import Member
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
 
@@ -23,7 +22,7 @@ class ValidateWorkspaceMixin:
 
         if team_key:
             # Check if user is still a member of this workspace
-            is_member = Member.objects.filter(user=request.user, team__key=team_key).exists()
+            is_member = get_member_role_by_key(request.user, team_key) is not None
 
             if not is_member:
                 # User was removed from this workspace, recover their session
@@ -35,6 +34,8 @@ class ValidateWorkspaceMixin:
 
 
 class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequiredMixin, View):
+    show_trends: bool = False
+
     def get(self, request: HttpRequest) -> HttpResponse:
         current_team = request.session.get("current_team", {})
 
@@ -42,41 +43,34 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
             return redirect("teams:onboarding_wizard")
 
         from sbomify.apps.billing.config import needs_plan_selection
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.core.services.dashboard_page import get_dashboard_workspace
 
-        team = None
-        team_key = current_team.get("key")
-        if team_key:
-            team = Team.objects.filter(key=team_key).first()
+        workspace_result = get_dashboard_workspace(current_team.get("key"))
+        if not workspace_result.ok:
+            return HttpResponse(workspace_result.error, status=workspace_result.status_code or 400)
+        team = workspace_result.value
 
         if needs_plan_selection(team, request.user):
             return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
 
-        has_crud_permissions = get_member_role_by_key(request.user, current_team.get("key")) in MANAGE
+        if self.show_trends:
+            return render(request, "core/dashboard_trends.html.j2")
 
-        from django.utils import timezone
+        has_crud_permissions = get_member_role_by_key(request.user, current_team.get("key")) in MANAGE
 
         from sbomify.apps.core.services.dashboard_page import build_dashboard_context, get_first_component
 
-        hour = timezone.localtime().hour
-        daypart = "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
-        greeting = f"Good {daypart}"
-        first_name = getattr(request.user, "first_name", "")
-        if first_name:
-            greeting += f", {first_name}"
-
-        dashboard = build_dashboard_context(team.id) if team else {"is_first_visit": True}
-        # Built here rather than in the template: it names the workspace, and the
-        # page header takes its subtitle as one string.
+        result = build_dashboard_context(team.id) if team else None
+        if result is not None and not result.ok:
+            return HttpResponse(result.error, status=result.status_code or 400)
+        dashboard = result.value if result and result.value else {"is_first_visit": True}
+        subtitle = "Prioritise vulnerabilities and keep your product evidence current."
         if dashboard.get("is_first_visit"):
-            subtitle = "Let's get your first component reporting."
-        else:
-            subtitle = f"The security picture across {current_team.get('name', 'your workspace')}."
+            subtitle = "Your workspace at a glance. Add your first artifact to start tracking exposure."
 
         context = {
             "current_team": current_team,
             "has_crud_permissions": has_crud_permissions,
-            "greeting": greeting,
             "page_subtitle": subtitle,
             "dashboard": dashboard,
         }
@@ -87,7 +81,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         # upload-a-file alternative (an upload needs somewhere to land).
         if team and context["dashboard"].get("is_first_visit"):
             context["onboarding"] = {
-                "first_component": get_first_component(team.id),
+                "first_component": get_first_component(team.id).value,
             }
 
         return render(request, "core/dashboard.html.j2", context)

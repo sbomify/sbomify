@@ -1,0 +1,30 @@
+{% comment %}The first-artifact state reuses the app's existing setup and upload dialogs. Actions follow live capabilities.{% endcomment %}
+<c-vars can_manage first_component />
+<c-cards.card flush>
+<div class="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+    <div>
+        <h2 class="m-0 text-sm font-semibold text-text">Connect your first repository</h2>
+        <p class="mt-1 mb-0 text-xs text-text-muted">
+            Bring your first SBOM into this workspace to start tracking vulnerabilities.
+        </p>
+    </div>
+    {% if can_manage %}
+        <div class="flex flex-wrap items-center gap-3">
+            <c-buttons.primary size="sm" @click="$dispatch('open-cicd')"><i class="fas fa-rocket" aria-hidden="true"></i>Connect repository</c-buttons.primary>
+            {% if first_component %}
+                <c-buttons.secondary size="sm" @click="$dispatch('open-upload')">Upload SBOM</c-buttons.secondary>
+            {% endif %}
+        </div>
+    {% else %}
+        <p class="m-0 text-xs text-text-muted">A workspace contributor can connect a repository or upload an artifact.</p>
+    {% endif %}
+</div>
+</c-cards.card>
+{% if can_manage %}
+    {% with component=first_component %}
+        {% include 'sboms/components/ci_cd_info.html.j2' %}
+        {% if component %}
+            {% include 'sboms/components/sbom_upload.html.j2' with component_id=component.id %}
+        {% endif %}
+    {% endwith %}
+{% endif %}

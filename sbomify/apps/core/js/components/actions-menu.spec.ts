@@ -82,6 +82,28 @@ describe('opening and closing', () => {
         expect(menu.style).toBe('right: 100px; top: 148px;')
     })
 
+    test('a disclosure receives focus after positioning and never after dismissal', async () => {
+        let panelFocus = 0
+        menu.focusPanel = true
+        menu.$refs.menu = { offsetHeight: 200, matches: () => false, focus: () => { panelFocus += 1 } } as unknown as HTMLElement
+        menu.show()
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        expect(panelFocus).toBe(1)
+        menu.show()
+        menu.close()
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        expect(panelFocus).toBe(1)
+    })
+
+    test('dismissing a focused disclosure returns focus without scrolling', () => {
+        menu.focusPanel = true
+        menu.$refs.menu = { matches: () => true } as unknown as HTMLElement
+        menu.open = true
+        menu.close()
+        expect(menu.open).toBe(false)
+        expect(focused).toBe(1)
+    })
+
     test('toggling again closes it', () => {
         menu.toggle()
         menu.toggle()
@@ -129,6 +151,10 @@ describe('opening and closing', () => {
 
         menu.init()
         menu.toggle()
+        menu.position()
+        menu.dismiss?.()
+        expect(menu.open).toBe(true) // A queued scroll with no further movement.
+        globalThis.window.innerWidth = 900
         menu.dismiss?.()
         expect(menu.open).toBe(false)
 

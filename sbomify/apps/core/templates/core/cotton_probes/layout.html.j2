@@ -3,12 +3,16 @@ Render probe for the cotton layout set. Unit tests render this file with the
 few lists a view would build (breadcrumbs, copy values, choice options) and
 assert on the output; it is not routed anywhere.
 {% endcomment %}
+<c-layout.frame id="probe-frame" class="max-w-5xl" hx-target="this">
 <c-layout.page-header title="Acme Gateway" subtitle="Quantum readiness across all components." icon="fas fa-box" hx-get="/probe/header" data-probe="page-header">
 <c-buttons.secondary size="sm">Assign component</c-buttons.secondary>
 <c-buttons.primary size="sm">New release</c-buttons.primary>
 </c-layout.page-header>
 <c-layout.page-header mark="avatar" icon="fas fa-cube" title="Acme Vault" :breadcrumbs="probe_breadcrumbs" :copy_values="probe_copy_values" editable_item_type="product" editable_item_id="probe-product"></c-layout.page-header>
-<c-layout.page-header title="Flush header" flush class="max-w-3xl"></c-layout.page-header>
+<c-layout.frame id="probe-nested-frame">
+<c-layout.page-header title="Nested header" class="max-w-3xl" />
+<c-feedback.alert>Nested content</c-feedback.alert>
+</c-layout.frame>
 <c-layout.page-header title="Acme Registry" icon="fas fa-puzzle-piece" mark="avatar" subtitle="Container Component">
 <c-slot name="meta">
 <c-badges.danger data-probe="header-meta">Stale</c-badges.danger>
@@ -33,32 +37,18 @@ assert on the output; it is not routed anywhere.
 <c-layout.form-section title="No mark" data-probe="form-section-bare">
 <p class="m-0">Bare step fields</p>
 </c-layout.form-section>
-<c-layout.stat-card data-probe="stat-plain">
-<c-layout.stat.label>Total products</c-layout.stat.label>
-<c-layout.stat.row>
-<c-layout.stat.value>1,234</c-layout.stat.value>
+<c-layout.stat-card data-probe="stat-plain" value="1,234" label="Total products">
 <c-layout.stat.change-up><i class="fas fa-arrow-up" aria-hidden="true"></i> 12%</c-layout.stat.change-up>
-</c-layout.stat.row>
 </c-layout.stat-card>
-<c-layout.stat-card accent="danger" icon="fas fa-shield-halved">
-<c-layout.stat.label>Vulnerabilities</c-layout.stat.label>
-<c-layout.stat.row>
-<c-layout.stat.value>17</c-layout.stat.value>
+<c-layout.stat-card accent="danger" icon="fas fa-shield-halved" value="17" label="Vulnerabilities">
 <c-layout.stat.change-down><i class="fas fa-arrow-down" aria-hidden="true"></i> 5</c-layout.stat.change-down>
-</c-layout.stat.row>
 </c-layout.stat-card>
-<c-layout.stat-card accent="warning" icon="fas fa-clock" class="lg:col-span-2" @click="drill()">
-<c-layout.stat.label>Stale scans</c-layout.stat.label>
-<c-layout.stat.value>4</c-layout.stat.value>
-</c-layout.stat-card>
-<c-layout.stat-card compact accent="success">
-<c-layout.stat.value>41</c-layout.stat.value>
-<c-layout.stat.label>Ready</c-layout.stat.label>
-</c-layout.stat-card>
-<c-layout.stat-card compact>
-<c-layout.stat.value>51</c-layout.stat.value>
-<c-layout.stat.label>Total</c-layout.stat.label>
-</c-layout.stat-card>
+<c-layout.stat-card accent="warning" icon="fas fa-clock" class="lg:col-span-2" @click="drill()" value="4" label="Stale scans" />
+<c-layout.stat-card compact accent="success" value="41" label="Ready" />
+<c-layout.stat-card compact value="51" label="Total" />
+<c-layout.stat-card :value="0" label="Numeric zero" accent="danger" />
+<c-layout.stat-card value="0" label="Formatted zero" accent="warning" />
+<c-layout.stat-card x_value="count" label="Bound count" accent="danger" data-probe="stat-bound"><c-layout.stat.change>Updated</c-layout.stat.change></c-layout.stat-card>
 <c-layout.stat.change data-probe="bare-change">unchanged</c-layout.stat.change>
 <c-layout.choice-group name="probe-severity" label="Severity" :options="probe_choices" selected="medium" hint="Pick the band it reports under." required data-probe="choice-options"></c-layout.choice-group>
 <c-layout.choice-group name="probe-visibility" class="max-w-md">
@@ -99,3 +89,4 @@ assert on the output; it is not routed anywhere.
 </c-layout.action-tile>
 <c-layout.data-box label="Release" value_x_text="fmt(item.released)" data-probe="databox-bound" />
 <c-layout.data-box label="Version" data-probe="databox-static">1.4.0</c-layout.data-box>
+</c-layout.frame>

@@ -1,36 +1,20 @@
-{% extends "./base.html.j2" %}
-{% load static %}
-{% load cache %}
+{% extends './base.html.j2' %}
 {% block title %}sbomify{% endblock %}
 {% block main %}
-    {# WebSocket connection for real-time updates #}
-    {% if team and team.key %}<div x-data x-init="$store.ws.connect('{{ team.key }}')" class="hidden"></div>{% endif %}
-    {# Layout Container #}
-    <div class="min-h-screen flex flex-col bg-background"
-         x-data="{ sidebarCollapsed: $persist(false).as('sidebar-collapsed'), sidebarMobileOpen: false }"
-         @keydown.escape.window="sidebarMobileOpen = false">
-        {# Sidebar #}
-        {% cache 300 'sidebar' request.user.id request.session.current_team.id request.session.user_teams_version request.resolver_match.url_name %}
-        {% include "core/components/sidebar.html.j2" %}
-    {% endcache %}
-    {# Header #}
-    {% cache 300 'header' request.user.id request.session.current_team.id has_pending_invitations request.session.user_teams_version %}
-    {% include "core/components/header.html.j2" %}
-{% endcache %}
-{# Main Content #}
-<main id="main-content"
-      class="flex-1 pt-16 pl-0 lg:pl-[var(--sidebar-width)] transition-all duration-300">
-    <div class="p-6 max-w-7xl mx-auto">
-        {# Messages #}
-        <div class="mb-4">{% include "core/components/messages.html.j2" %}</div>
-        {# Site Notifications #}
-        {% include "core/components/site_notifications.html.j2" %}
-        {# Page Content #}
-        {% block dashboard_content %}{% endblock %}
-        {% block content %}{% endblock %}
-    </div>
-</main>
-{# Footer #}
-{% include "core/components/footer.html.j2" %}
-</div>
+    {% if request.session.current_team.key %}
+        <div x-data
+             x-init="$store.ws.connect('{{ request.session.current_team.key }}')"
+             class="hidden"></div>
+    {% endif %}
+    <c-chrome.shell>
+    <c-slot name="sidebar_content">
+    {% block sidebar_content %}{% endblock %}
+    </c-slot>
+    {% block dashboard_messages %}
+        {% include 'core/components/messages.html.j2' %}
+    {% endblock %}
+    {% include 'core/components/site_notifications.html.j2' %}
+    {% block dashboard_content %}{% endblock %}
+    {% block content %}{% endblock %}
+    </c-chrome.shell>
 {% endblock %}

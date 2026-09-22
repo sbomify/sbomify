@@ -61,13 +61,22 @@ def test_toolbar_renders_the_right_group_only_when_it_is_filled(rendered: str) -
 
 def test_search_field_recipe_and_label_pairing(rendered: str) -> None:
     field = _element_holding(rendered, "input", 'id="probe-search"')
-    for bit in ("py-2 pr-3 pl-9", "min-w-[240px]", "bg-surface", "rounded-[0.5rem]", "placeholder:text-text-muted"):
+    for bit in (
+        "py-2",
+        "pr-3",
+        "pl-9",
+        "min-w-[240px]",
+        "bg-surface",
+        "rounded-[0.5rem]",
+        "placeholder:text-text-muted",
+    ):
         assert bit in field
     assert "focus:outline-none focus:border-primary" in field
     assert "focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_10%,transparent)]" in field
     assert 'placeholder="Search components"' in field
     assert '<label for="probe-search" class="sr-only">Search components</label>' in rendered
-    assert '<i class="fas fa-search absolute left-3 text-sm text-text-muted pointer-events-none"' in rendered
+    assert "fas fa-search absolute top-1/2 -translate-y-1/2" in rendered
+    assert "left-3 text-sm" in rendered
 
 
 def test_search_forwards_its_binding_to_the_input(rendered: str) -> None:
@@ -78,7 +87,7 @@ def test_page_size_select_recipe_and_options_slot(rendered: str) -> None:
     select = _element_holding(rendered, "select", 'id="probe-per-page"')
     for bit in ("py-1.5 pr-8 pl-3", "appearance-none", "bg-[position:right_0.5rem_center]", "bg-[length:1.25rem]"):
         assert bit in select
-    assert "bg-[url(data:image/svg+xml," in select
+    assert "data:image/svg+xml," in select
     assert 'x-model.number="perPage"' in select
     assert '<option value="10">Ten</option>' in select
     assert '<label for="probe-per-page" class="sr-only">Entries per page</label>' in rendered

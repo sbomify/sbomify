@@ -63,18 +63,9 @@
                 </div>
                 </c-slot>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <c-layout.stat-card compact icon="fas fa-users">
-                    <c-layout.stat.value x-text="usage.users || 0" />
-                    <c-layout.stat.label>Users</c-layout.stat.label>
-                    </c-layout.stat-card>
-                    <c-layout.stat-card compact icon="fas fa-cube">
-                    <c-layout.stat.value x-text="usage.products" />
-                    <c-layout.stat.label>Products</c-layout.stat.label>
-                    </c-layout.stat-card>
-                    <c-layout.stat-card compact icon="fas fa-puzzle-piece">
-                    <c-layout.stat.value x-text="usage.components" />
-                    <c-layout.stat.label>Components</c-layout.stat.label>
-                    </c-layout.stat-card>
+                    <c-layout.stat-card compact icon="fas fa-users" x_value="usage.users || 0" label="Users" />
+                    <c-layout.stat-card compact icon="fas fa-cube" x_value="usage.products" label="Products" />
+                    <c-layout.stat-card compact icon="fas fa-puzzle-piece" x_value="usage.components" label="Components" />
                 </div>
                 </c-cards.dashboard>
             </section>

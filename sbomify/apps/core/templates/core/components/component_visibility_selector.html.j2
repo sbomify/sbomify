@@ -1,9 +1,7 @@
 {% load static %}
 <link rel="stylesheet"
       href="{% static 'css/components/public-status-toggle.css' %}">
-<div x-data="componentVisibilitySelector({ itemId: '{{ component.id|escapejs }}', publicUrl: '{{ component_public_url|escapejs }}', currentVisibility: '{{ component.visibility|escapejs }}', gatedVisibilityAllowed: {{ gated_visibility_allowed|yesno:'true,false' }} })"
-     @copy-url.window="copyToClipboard()"
-     @copy-badge.window="copyBadgeToClipboard()"
+<div x-data="componentVisibilitySelector({ itemId: '{{ component.id|escapejs }}', currentVisibility: '{{ component.visibility|escapejs }}', gatedVisibilityAllowed: {{ gated_visibility_allowed|yesno:'true,false' }} })"
      class="inline-flex items-center gap-3 flex-wrap px-3 py-2 bg-background border border-border rounded-lg">
     <div class="relative" :class="{ 'opacity-50': isLoading }">
         {% comment %}
@@ -34,5 +32,4 @@
           x-tooltip="'Control who can access this component'">
         <i class="fas fa-info-circle"></i>
     </span>
-    {# Copy URL / Copy Badge moved into the header ⋮ menu (design review p8/p9); triggered via copy-url / copy-badge window events. #}
 </div>

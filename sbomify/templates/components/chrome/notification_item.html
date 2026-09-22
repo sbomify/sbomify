@@ -1,0 +1,20 @@
+{% comment %}
+A notification row, cloned from a template by notifications-modal.ts. The script
+fills text, links and data-severity; all presentation stays here. Props also let
+the gallery render the same row. Severity colours only the shared icon chip.
+{% endcomment %}
+<c-vars severity="info" message timestamp href action="View" />
+<li data-severity="{{ severity }}"
+    class="flex items-start gap-3 px-4 py-4 border-b border-border last:border-b-0 [--chip-accent:var(--color-info)] data-[severity=warning]:[--chip-accent:var(--color-warning)] data-[severity=error]:[--chip-accent:var(--color-danger)]">
+    <c-chips.icon-chip size="sm"><i class="far fa-bell" aria-hidden="true"></i></c-chips.icon-chip>
+    <div class="min-w-0 flex-1">
+        <p data-notification-message
+           class="text-[13px] leading-5 text-text break-words">{{ message }}</p>
+        <div class="flex items-center justify-between gap-3 mt-2">
+            <time data-notification-time class="text-xs text-text-muted">{{ timestamp }}</time>
+            <span data-notification-action-wrapper>
+                <c-buttons.ghost size="sm" href="{{ href|default:'#' }}" data-notification-action>{{ action }}</c-buttons.ghost>
+            </span>
+        </div>
+    </div>
+</li>

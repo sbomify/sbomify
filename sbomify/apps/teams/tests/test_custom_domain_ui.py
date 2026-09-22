@@ -142,10 +142,10 @@ class TestTeamBrandingViewCustomDomain:
         assert response.status_code == 200
 
         content = response.content.decode()
-        assert "Custom Domain" in content
+        assert "Custom domain" in content
         # Check app_hostname appears in the CNAME target instructions
         assert "app.sbomify.io" in content
-        assert "Target:" in content or "dns-record-label" in content
+        assert "Target" in content
         # Check that the upgrade badge is NOT shown (hasAccess should be true)
         assert "hasAccess: true" in content
 
@@ -159,9 +159,9 @@ class TestTeamBrandingViewCustomDomain:
         assert response.status_code == 200
 
         content = response.content.decode()
-        assert "Custom Domain Feature" in content
+        assert "Use your own domain" in content
         # Check for upgrade prompt with billing link (owner sees Upgrade Plan button)
-        assert "Upgrade Plan" in content
+        assert "Upgrade plan" in content
         assert f"/billing/select-plan/{community_team.key}" in content
         assert "Business and Enterprise plans" in content
 
@@ -235,8 +235,8 @@ class TestTeamBrandingViewCustomDomain:
         # Check _acme-challenge prefix is shown
         assert "_acme-challenge." in content
         # Check the DCV section title is present
-        assert "SSL Certificate CNAME Record" in content
-        assert "DCV Delegation" in content
+        assert "Certificate (DCV delegation)" in content
+        assert "DCV delegation" in content
         # Check the explanatory note is present
         assert "automatic SSL certificate issuance" in content
 
@@ -252,8 +252,8 @@ class TestTeamBrandingViewCustomDomain:
         content = response.content.decode()
         # DCV-specific content should not appear
         assert "_acme-challenge." not in content
-        assert "SSL Certificate CNAME Record" not in content
-        assert "DCV Delegation" not in content
+        assert "Certificate (DCV delegation)" not in content
+        assert "DCV delegation" not in content
         # But regular CNAME instructions should still be present
         assert "CNAME" in content
         assert "app.sbomify.io" in content
@@ -269,9 +269,8 @@ class TestTeamBrandingViewCustomDomain:
 
         content = response.content.decode()
         # Check both record titles are present
-        assert "1. Domain CNAME Record" in content
-        assert "2. SSL Certificate CNAME Record" in content
+        assert "Purpose" in content
+        assert "Certificate (DCV delegation)" in content
         # Check both targets are present (DCV target is <domain>.<dcv_hostname>)
         assert "app.sbomify.io" in content
         assert ".test.dcv.cloudflare.com" in content
-

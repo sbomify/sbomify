@@ -17,8 +17,10 @@ stretch makes the trigger as tall as the control beside it, for the action row
 of a page header. The two branches below differ only in the trigger's shape and
 must stay in lockstep: they cannot be one call because the stretch recipe
 replaces the size one rather than adding to it.
+caption gives a primary menu a visible text trigger, such as Download SBOM.
+It uses the same button, panel and keyboard behaviour as the icon-only menu.
 {% endcomment %}
-<c-vars label="Actions" icon="fas fa-ellipsis-vertical" width="w-60" stretch class />
+<c-vars label="Actions" caption icon="fas fa-ellipsis-vertical" width="w-60" stretch class />
 <div class="relative inline-flex shrink-0{% if class %} {{ class }}{% endif %}"
      x-data="actionsMenu"
      @keydown.escape.window="closeAndFocus()"
@@ -31,7 +33,11 @@ replaces the size one rather than adding to it.
         the panel would otherwise take it as their own.
     {% endcomment %}
     {% with class="" %}
-        {% if stretch %}
+        {% if caption %}
+            <c-buttons.secondary size="sm" aria-label="{{ label }}" x-ref="trigger" @click.stop="toggle()" ::aria-expanded="open" aria-haspopup="true">
+            <i class="{{ icon }}" aria-hidden="true"></i>{{ caption }}<i class="fas fa-chevron-down text-xs" aria-hidden="true"></i>
+            </c-buttons.secondary>
+        {% elif stretch %}
             <c-buttons.icon label="{{ label }}" stretch x-ref="trigger" @click.stop="toggle()" ::aria-expanded="open" aria-haspopup="true">
             <i class="{{ icon }}" aria-hidden="true"></i>
             </c-buttons.icon>

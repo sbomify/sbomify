@@ -1,0 +1,25 @@
+{% comment %}
+The shared top bar lays out the mobile navigation trigger, search and menus.
+Each control owns its state and composes the shared component library.
+{% endcomment %}
+<header class="fixed top-0 right-0 left-0 lg:left-[var(--sidebar-width)] h-16 bg-surface/95 backdrop-blur-sm border-b border-border z-40"
+        role="banner">
+    <div class="flex items-center h-full w-full max-w-7xl mx-auto px-4 sm:px-8 gap-4">
+        {# The wrapper owns responsive display because the button sets its own. #}
+        <div class="lg:hidden">
+            <c-buttons.icon-quiet label="Toggle sidebar navigation" aria-controls="sidebar" @click="sidebarMobileOpen = !sidebarMobileOpen" ::aria-expanded="sidebarMobileOpen">
+            <i class="fas fa-bars text-base" aria-hidden="true"></i>
+            </c-buttons.icon-quiet>
+        </div>
+        <div class="flex-1 min-w-0 max-w-[420px]">
+            <c-chrome.search />
+        </div>
+        <div class="flex items-center gap-3 ml-auto shrink-0"
+             role="toolbar"
+             aria-label="Quick actions">
+            <c-chrome.create-menu :can_manage="can_manage" />
+            <c-chrome.notifications />
+            <c-chrome.account-menu :can_manage="can_manage" />
+        </div>
+    </div>
+</header>

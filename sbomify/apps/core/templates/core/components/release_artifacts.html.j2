@@ -1,6 +1,6 @@
 {% load static %}
 {# The @ws:message handler repaints when someone pins or unpins in another tab or session. #}
-<div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], totalCount: 0, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }} })"
+<div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], routes: { sbom: '{% url 'core:component_item' '__COMPONENT__' 'sboms' '__ARTIFACT__' %}', cbom: '{% url 'core:component_item' '__COMPONENT__' 'cbom' '__ARTIFACT__' %}', vex: '{% url 'core:component_item' '__COMPONENT__' 'vex' '__ARTIFACT__' %}', document: '{% url 'core:component_item' '__COMPONENT__' 'documents' '__ARTIFACT__' %}', component: '{% url 'core:component_details' '__COMPONENT__' %}' }, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }} })"
      @ws:message.window="if ($event.detail.type === 'release_updated' && $event.detail.release_id === '{{ release_id }}') { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => loadArtifacts(), 500); }">
     {# The shell draws the frame itself, so the table needs no card around it. #}
     <c-tables.shell>
@@ -43,19 +43,19 @@
         <c-tables.shell nested>
         {# Search and Filter Controls #}
         <c-tables.toolbar>
-        <c-tables.search id="artifact-search" label="Search artifacts" placeholder="Search artifacts by name, component, or format..." x-model="search" @input.debounce="handleSearch()" />
-        <c-tables.select id="artifact-type-filter" label="Filter by type" x-model="typeFilter" @change="handleTypeFilter()">
+        <c-forms.search-input size="sm" id="artifact-search" label="Search artifacts" placeholder="Search artifacts by name, component, or format..." x-model="search" @input.debounce="handleSearch()" />
+        <c-forms.select size="md" id="artifact-type-filter" label="Filter by type" x-model="typeFilter" @change="handleTypeFilter()">
         <option value="">All Types</option>
         <option value="sbom">SBOMs Only</option>
         <option value="vex">VEX Only</option>
         <option value="document">Documents Only</option>
-        </c-tables.select>
-        <c-tables.select id="artifact-component-filter" label="Filter by component" x-model="componentFilter" @change="handleComponentFilter()">
+        </c-forms.select>
+        <c-forms.select size="md" id="artifact-component-filter" label="Filter by component" x-model="componentFilter" @change="handleComponentFilter()">
         <option value="">All Components</option>
         <template x-for="comp in uniqueComponents" :key="comp">
             <option :value="comp" x-text="comp"></option>
         </template>
-        </c-tables.select>
+        </c-forms.select>
         <c-slot name="right">
         <c-tables.page-size id="artifact-page-size" x-model="pageSize" @change="currentPage = 1">
         <option value="10">10</option>

@@ -1,0 +1,23 @@
+<c-tables.row x-data="{ showDeleteModal: false }">
+<c-tables.cell compact>
+<c-forms.checkbox value="{{ token.id }}" x-model.number="selected" aria-label="Select token {{ token.description }}" />
+</c-tables.cell>
+<c-tables.cell compact>
+<c-overview.record title="{{ token.description }}" />
+{% if unscoped %}<c-badges.warning>Unscoped</c-badges.warning>{% endif %}
+</c-tables.cell>
+<c-tables.cell compact date muted>
+{% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
+</c-tables.cell>
+<c-tables.cell compact date muted>
+{% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='Never' %}
+</c-tables.cell>
+<c-tables.cell compact>
+{% include 'teams/components/token_expiry.html.j2' with token=token %}
+</c-tables.cell>
+<c-tables.actions-cell>
+<c-buttons.icon-quiet size="sm" label="Delete token {{ token.description }}" @click="showDeleteModal = true"><i class="fas fa-trash" aria-hidden="true"></i></c-buttons.icon-quiet>
+{% url 'core:delete_access_token' token_id=token.id as delete_url %}
+{% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' dialog_id=token.id title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
+</c-tables.actions-cell>
+</c-tables.row>

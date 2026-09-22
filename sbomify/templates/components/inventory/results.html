@@ -1,0 +1,37 @@
+{% comment %}
+The shared inventory table, including rows, empty states and server pagination.
+A preview uses the same columns and actions without interactive sorting or a
+pager. Its parent supplies the link to the full list. Empty tables omit column
+headings so their minimum widths cannot clip the empty state on a small screen.
+{% endcomment %}
+<c-vars inventory preview />
+    <c-tables.shell>
+    <c-tables.table aria-label="{{ inventory.kind|title }}">
+    {% if inventory.rows %}
+    <thead>
+        <tr>
+            {% for header in inventory.headers %}
+                <c-tables.header-cell compact nowrap href="{% if not preview %}{{ header.href }}{% endif %}" order="{{ header.order }}">{{ header.label }}</c-tables.header-cell>
+            {% endfor %}
+            <c-tables.actions-cell as="th" compact />
+        </tr>
+    </thead>
+    {% endif %}
+    <tbody>
+        {% for row in inventory.rows %}
+            <c-inventory.row :row="row" kind="{{ inventory.kind }}" scope_product="{{ inventory.scope_product }}" />
+        {% empty %}
+            <c-tables.row><c-tables.cell colspan="8">
+            {% if inventory.total %}
+                <c-feedback.empty-state compact icon_size="sm" icon="fas fa-cube" title="No matching {{ inventory.kind }}" message="Try another search or clear the filters.">
+                <c-buttons.secondary href="{{ inventory.reset_url }}" hx-boost="true">Clear filters</c-buttons.secondary>
+                </c-feedback.empty-state>
+            {% else %}
+                <c-feedback.empty-state compact icon_size="sm" icon="fas fa-cube" title="No {{ inventory.kind }} yet" message="Create a {{ inventory.singular }} to get started." />
+            {% endif %}
+            </c-tables.cell></c-tables.row>
+        {% endfor %}
+    </tbody>
+    </c-tables.table>
+    {% if not preview %}<c-inventory.footer :inventory="inventory" />{% endif %}
+    </c-tables.shell>

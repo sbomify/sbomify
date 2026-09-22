@@ -1,0 +1,26 @@
+{% comment %}
+A proportional severity bar used by the shared exposure disclosure at both sizes. The accessible description includes the count independently
+of colour; unknown severities belong in the other band.
+{% endcomment %}
+<c-vars counts compact />
+<span class="inline-flex items-center gap-3"
+      role="img"
+      aria-label="{{ counts.total }} open occurrences: {{ counts.critical }} critical, {{ counts.high }} high, {{ counts.other }} other"
+      {{ attrs }}>
+    <span class="flex gap-0.5 {% if compact %}w-24 h-2{% else %}w-40 h-2.5{% endif %} max-w-full overflow-hidden rounded-full bg-surface-hover"
+          aria-hidden="true">
+        {% if counts.critical %}
+            <span class="bg-severity-critical rounded-full basis-0"
+                  style="flex-grow: {{ counts.critical }}"></span>
+        {% endif %}
+        {% if counts.high %}
+            <span class="bg-severity-high rounded-full basis-0"
+                  style="flex-grow: {{ counts.high }}"></span>
+        {% endif %}
+        {% if counts.other %}
+            <span class="bg-text-muted/60 rounded-full basis-0"
+                  style="flex-grow: {{ counts.other }}"></span>
+        {% endif %}
+    </span>
+    <span class="text-sm font-semibold tabular-nums text-text">{{ counts.total }}</span>
+</span>

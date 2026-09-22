@@ -11,7 +11,9 @@ from django.db.models import Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.cache import never_cache
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
@@ -23,8 +25,10 @@ from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.services.settings_page import tokens_context
 
 
+@method_decorator(never_cache, name="dispatch")
 class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing personal access tokens in workspace settings."""
 
@@ -37,20 +41,7 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _get_team_tokens_context(
         self, team: Any, request: HttpRequest, extra_context: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        user = cast(User, request.user)
-        team_id = token_to_number(team.key)
-
-        # Show tokens scoped to this team + any unscoped legacy tokens
-        scoped_tokens = AccessToken.objects.filter(user=user, team_id=team_id).order_by("-created_at")
-        unscoped_tokens = AccessToken.objects.filter(user=user, team__isnull=True).order_by("-created_at")
-
-        context = {
-            "team": team,
-            "create_access_token_form": CreateAccessTokenForm(),
-            "access_tokens": scoped_tokens,
-            "unscoped_tokens": unscoped_tokens,
-            "has_unscoped_tokens": unscoped_tokens.exists(),
-        }
+        context = {"team": team, **(tokens_context(request, team.key).value or {})}
         if extra_context:
             context.update(extra_context)
         return context

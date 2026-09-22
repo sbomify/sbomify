@@ -1,5 +1,5 @@
 {% load static utils %}
-<c-cards.card id="product-lifecycle-card" class="shadow" x-data="{ editing: false, releaseDate: '{{ product.release_date|default:'' }}', endOfSupport: '{{ product.end_of_support|default:'' }}', endOfLife: '{{ product.end_of_life|default:'' }}', saving: false, saveLifecycle() { this.saving = true; const formData = new FormData(); formData.append('release_date', this.releaseDate || ''); formData.append('end_of_support', this.endOfSupport || ''); formData.append('end_of_life', this.endOfLife || ''); fetch('{% url 'core:product_lifecycle' product.id %}', { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, body: formData }) .then(response => response.text()) .then(html => { document.getElementById('product-lifecycle-card').outerHTML = html; }) .catch(err => { console.error('Error saving lifecycle:', err); this.saving = false; }); }, cancelEdit() { this.editing = false; this.releaseDate = '{{ product.release_date|default:'' }}'; this.endOfSupport = '{{ product.end_of_support|default:'' }}'; this.endOfLife = '{{ product.end_of_life|default:'' }}'; }, formatDisplayDate(dateStr) { if (!dateStr) return ''; const date = new Date(dateStr); if (isNaN(date.getTime())) return dateStr; return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } }">
+<c-cards.card id="product-lifecycle-card" class="shadow" x-data="{ editing: false, releaseDate: '{{ product.release_date|default:'' }}', endOfSupport: '{{ product.end_of_support|default:'' }}', endOfLife: '{{ product.end_of_life|default:'' }}', saving: false, cancelEdit() { this.editing = false; this.releaseDate = '{{ product.release_date|default:'' }}'; this.endOfSupport = '{{ product.end_of_support|default:'' }}'; this.endOfLife = '{{ product.end_of_life|default:'' }}'; }, formatDisplayDate(dateStr) { if (!dateStr) return ''; const date = new Date(dateStr); if (isNaN(date.getTime())) return dateStr; return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } }">
 <c-slot name="header">
 <c-cards.header class="flex justify-between items-center gap-3">
 <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
@@ -64,33 +64,41 @@
 </template>
 {# Edit Mode #}
 {% if can_edit %}
-    <template x-if="editing">
-        <form @submit.prevent="saveLifecycle()">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                {% include 'components/date_picker.html.j2' with value_binding='releaseDate' label='Release Date' format_fn='formatDisplayDate' %}
-                {% include 'components/date_picker.html.j2' with value_binding='endOfSupport' label='End of Support' format_fn='formatDisplayDate' %}
-                {% include 'components/date_picker.html.j2' with value_binding='endOfLife' label='End of Life' format_fn='formatDisplayDate' %}
-            </div>
-            <p class="text-text-muted text-sm mb-4">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</p>
-            <div class="flex gap-2">
-                {% comment %}
+    <form x-show="editing"
+          x-cloak
+          hx-post="{% url 'core:product_lifecycle' product.id %}"
+          hx-target="#product-lifecycle-card"
+          hx-swap="outerHTML"
+          @htmx:before-request="saving = true"
+          @htmx:after-request="saving = false">
+        {% csrf_token %}
+        <input type="hidden" name="release_date" :value="releaseDate">
+        <input type="hidden" name="end_of_support" :value="endOfSupport">
+        <input type="hidden" name="end_of_life" :value="endOfLife">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {% include 'components/date_picker.html.j2' with value_binding='releaseDate' label='Release Date' format_fn='formatDisplayDate' %}
+            {% include 'components/date_picker.html.j2' with value_binding='endOfSupport' label='End of Support' format_fn='formatDisplayDate' %}
+            {% include 'components/date_picker.html.j2' with value_binding='endOfLife' label='End of Life' format_fn='formatDisplayDate' %}
+        </div>
+        <p class="text-text-muted text-sm mb-4">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</p>
+        <div class="flex gap-2">
+            {% comment %}
                     The mark stays the brand loader include: it takes the
                     button's own ink, where c-feedback.spinner would tint it
                     primary on a primary button.
-                {% endcomment %}
-                <c-buttons.primary type="submit" ::disabled="saving">
-                <template x-if="saving">
-                    <span>
-                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
-                    Saving...</span>
-                </template>
-                <template x-if="!saving">
-                    <span><i class="fas fa-check mr-1"></i>Save</span>
-                </template>
-                </c-buttons.primary>
-                <c-buttons.secondary @click="cancelEdit()" ::disabled="saving">Cancel</c-buttons.secondary>
-            </div>
-        </form>
-    </template>
+            {% endcomment %}
+            <c-buttons.primary type="submit" ::disabled="saving">
+            <template x-if="saving">
+                <span>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                Saving...</span>
+            </template>
+            <template x-if="!saving">
+                <span><i class="fas fa-check mr-1"></i>Save</span>
+            </template>
+            </c-buttons.primary>
+            <c-buttons.secondary @click="cancelEdit()" ::disabled="saving">Cancel</c-buttons.secondary>
+        </div>
+    </form>
 {% endif %}
 </c-cards.card>

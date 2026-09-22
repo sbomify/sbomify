@@ -77,8 +77,8 @@
             <div class="px-6 pt-4">
                 <form method="get" class="flex flex-wrap items-end gap-3">
                     <input type="hidden" name="scan_submitted" value="1">
-                    <c-tables.search id="scan-search" label="Search advisories and packages" placeholder="Search advisories, packages..." class="max-w-xs" name="scan_search" value="{{ scan_query.search }}" />
-                    <c-tables.select id="scan-severity" label="Filter by severity" name="scan_severity">
+                    <c-forms.search-input size="sm" id="scan-search" label="Search advisories and packages" placeholder="Search advisories, packages..." class="max-w-xs" name="scan_search" value="{{ scan_query.search }}" />
+                    <c-forms.select size="md" id="scan-severity" label="Filter by severity" name="scan_severity">
                     <option value="all">All Severities</option>
                     {% for severity in scan_severity_options %}
                         <option value="{{ severity }}"
@@ -86,9 +86,9 @@
                             {{ severity|capfirst }}
                         </option>
                     {% endfor %}
-                    </c-tables.select>
+                    </c-forms.select>
                     {% if scan_state_options %}
-                        <c-tables.select id="scan-state" label="Filter by triage state" name="scan_state">
+                        <c-forms.select size="md" id="scan-state" label="Filter by triage state" name="scan_state">
                         <option value="all">All States</option>
                         {% for state in scan_state_options %}
                             <option value="{{ state.value }}"
@@ -96,7 +96,7 @@
                                 {{ state.label }}
                             </option>
                         {% endfor %}
-                        </c-tables.select>
+                        </c-forms.select>
                     {% endif %}
                     {% if scan_kev_total %}
                         <c-forms.checkbox name="scan_kev" :checked="scan_query.kev_only">Known exploited ({{ scan_kev_total }})</c-forms.checkbox>

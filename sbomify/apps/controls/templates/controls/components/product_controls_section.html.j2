@@ -1,118 +1,13 @@
-{# Product-level compliance controls section for private product detail page #}
-{# Expects: product_controls (dict with catalog, summary, categories), product (dict), is_admin_or_owner (bool) #}
-{% if product_controls %}
-    <c-cards.card id="product-controls-section">
-    <c-slot name="header">
-    <div class="px-6 py-4 border-b border-border">
-        <div class="flex items-center justify-between">
-            <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                <i class="fas fa-list-check text-primary"></i>Compliance Controls
-            </h4>
-            <c-badges.primary>{{ product_controls.catalog.name }} {{ product_controls.catalog.version }}</c-badges.primary>
-        </div>
-    </div>
-    </c-slot>
-    {# Summary bar #}
-    {% with summary=product_controls.summary %}
-        {% if summary %}
-            <div class="flex items-center gap-4 mb-4 pb-4 border-b border-border/50">
-                <div class="flex items-center gap-2">
-                    <span class="text-2xl font-bold {% if summary.percentage >= 80 %}text-success{% elif summary.percentage >= 50 %}text-warning{% else %}text-danger{% endif %}">
-                        {{ summary.percentage|floatformat:0 }}%
-                    </span>
-                    <span class="text-sm text-text-muted">addressed</span>
-                </div>
-                {# djlint:off #}
-                <c-progress :value="summary.percentage" variant="{% if summary.percentage >= 80 %}success{% elif summary.percentage >= 50 %}warning{% else %}danger{% endif %}" class="flex-1" />
-                {# djlint:on #}
-                <div class="flex gap-2 text-xs">
-                    {% if summary.by_status.compliant %}
-                        <span class="text-success font-medium">{{ summary.by_status.compliant }} Compliant</span>
-                    {% endif %}
-                    {% if summary.by_status.partial %}
-                        <span class="text-warning font-medium">{{ summary.by_status.partial }} Partial</span>
-                    {% endif %}
-                </div>
-            </div>
-        {% endif %}
-    {% endwith %}
-    {# Info about overrides #}
-    <c-feedback.alert class="mb-4">
-    Set product-specific control statuses below. Controls without an override inherit the
-    <a href="{% url 'teams:team_settings' product_controls.team_key %}#controls"
-       class="text-primary hover:underline">workspace-level status</a>.
-    </c-feedback.alert>
-    {# Category accordion with inline status dropdowns #}
-    {% comment %}
-        One open flag per category, held by the rail rather than by each section:
-        the trigger and the panel are siblings inside the item, so the state they
-        share has to live above them.
-    {% endcomment %}
-    <c-navigation.accordion density="sm" x-data="{ open: {} }">
-    {% for category in product_controls.categories %}
-        <c-navigation.accordion-item state="open['{{ category.name|escapejs }}']" label_class="flex flex-1 items-center justify-between gap-3 mr-3" @click="open['{{ category.name|escapejs }}'] = !open['{{ category.name|escapejs }}']">
-        <c-slot name="label">
-        <span class="flex items-center gap-2 min-w-0">
-            <i class="fas {{ category.icon }} text-primary text-sm"
-               aria-hidden="true"></i>
-            <span class="font-medium text-text text-sm">{{ category.name }}</span>
-            <span class="text-text-muted text-xs">({{ category.controls|length }})</span>
-        </span>
-        <span class="flex items-center gap-3 flex-shrink-0">
-            {# The rail owns the width; the bar fills it, so no two width utilities land on the track. #}
-            <span class="w-16 hidden sm:block">
-                {# djlint:off #}
-                <c-progress :value="category.percentage" size="sm" variant="{% if category.percentage >= 80 %}success{% elif category.percentage >= 50 %}warning{% else %}danger{% endif %}" />
-                {# djlint:on #}
-            </span>
-            <span class="text-xs text-text-muted w-8 text-right">{{ category.percentage|floatformat:0 }}%</span>
-        </span>
-        </c-slot>
-        {% for control in category.controls %}
-            <div class="py-2.5 flex items-center gap-3 border-b border-border/30 last:border-b-0 hover:bg-background/50">
-                <c-code-inline accent="primary" class="flex-shrink-0">{{ control.control_id }}</c-code-inline>
-                <span class="text-sm text-text flex-1 min-w-0 truncate"
-                      title="{{ control.title }}">{{ control.title }}</span>
-                {% if is_admin_or_owner %}
-                    <form method="post"
-                          action="{% url 'controls:product_status_update' product_controls.team_key product_controls.product_id %}"
-                          hx-post="{% url 'controls:product_status_update' product_controls.team_key product_controls.product_id %}"
-                          hx-target="#product-controls-section"
-                          hx-select="#product-controls-section"
-                          hx-swap="outerHTML"
-                          class="flex-shrink-0">
-                        {% csrf_token %}
-                        <input type="hidden" name="control_id" value="{{ control.id }}">
-                        {# djlint:off #}
-                        <c-forms.select name="status" size="sm" accent="{% if control.status == 'compliant' %}success{% elif control.status == 'partial' %}warning{% elif control.status == 'not_implemented' %}danger{% endif %}" @change="$el.form.requestSubmit()">
-                        {# djlint:on #}
-                        <option value="compliant"
-                                {% if control.status == "compliant" %}selected{% endif %}>Compliant</option>
-                        <option value="partial"
-                                {% if control.status == "partial" %}selected{% endif %}>Partial</option>
-                        <option value="not_implemented"
-                                {% if control.status == "not_implemented" %}selected{% endif %}>
-                            Not Implemented
-                        </option>
-                        <option value="not_applicable"
-                                {% if control.status == "not_applicable" %}selected{% endif %}>Not Applicable</option>
-                        </c-forms.select>
-                    </form>
-                {% else %}
-                    {% if control.status == "compliant" %}
-                        <c-badges.success>Compliant</c-badges.success>
-                    {% elif control.status == "partial" %}
-                        <c-badges.warning>Partial</c-badges.warning>
-                    {% elif control.status == "not_applicable" %}
-                        <c-badges.badge>N/A</c-badges.badge>
-                    {% else %}
-                        <c-badges.badge>Not Met</c-badges.badge>
-                    {% endif %}
-                {% endif %}
-            </div>
-        {% endfor %}
-        </c-navigation.accordion-item>
-    {% endfor %}
-    </c-navigation.accordion>
-    </c-cards.card>
+<c-layout.frame>
+<c-feedback.alert>
+Controls use workspace defaults unless a product override is set.
+{% if can_manage_controls %}
+    <c-buttons.ghost size="sm" href="{{ controls_settings_url }}">Manage workspace controls</c-buttons.ghost>
 {% endif %}
+</c-feedback.alert>
+{% for controls in active_controls_tables %}
+    {% include 'controls/controls_table.html.j2' %}
+{% empty %}
+    <c-feedback.empty-state title="No active compliance frameworks" icon="fas fa-list-check" message="Activate a framework in workspace settings to track compliance controls." />
+{% endfor %}
+</c-layout.frame>

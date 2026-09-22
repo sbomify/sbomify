@@ -42,7 +42,7 @@
                     Manufacturer
                     <c-badges.danger class="ml-2" x-show="manufacturerIsPlaceholder" data-testid="mfr-placeholder-badge">Not configured</c-badges.danger>
                 </h2>
-                <a href="{% url 'teams:contact_profiles_list' team_key=team.key %}"
+                <a href="{% url 'teams:team_settings_tab' team_key=team.key tab='contact-profiles' %}"
                    class="text-sm text-primary hover:underline"
                    data-testid="mfr-settings-link">
                     <i class="fas fa-up-right-from-square mr-1"></i>
