@@ -447,3 +447,58 @@ class TestThePanelEndpoint:
 
         assert response.status_code in (302, 403, 404)
         assert "CVE-2026-0000" not in response.content.decode()
+
+
+class TestTheKevControlIsOfferedOnlyWhenItCanMatch:
+    """A filter that can only ever return nothing is not a filter.
+
+    The assessment card and the scan report both hide this control when the run
+    holds no catalogued finding. The panel used to render it regardless, so on
+    the common scan, which has none, ticking it emptied the list and nothing on
+    the page said why.
+    """
+
+    def test_a_scan_with_none_does_not_offer_it(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        component, _ = _component_with_findings(team, count=3)
+        client = _client(team, sample_team_with_owner_member.user)
+
+        body = client.get(
+            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
+            headers={"hx-request": "true"},
+        ).content.decode()
+
+        assert "vuln_kev" not in body
+
+    def test_a_scan_with_one_offers_it_and_counts_it(self, sample_team_with_owner_member, monkeypatch) -> None:
+        """KEV is read from the catalog on every request, never stored, so the
+        feed is what decides whether the control appears."""
+        from sbomify.apps.vulnerability_scanning import kev
+
+        team = sample_team_with_owner_member.team
+        component, _ = _component_with_findings(team, count=3)
+        monkeypatch.setattr(kev, "kev_ids_for_serialization", lambda: frozenset({"cve-2026-0001"}))
+        client = _client(team, sample_team_with_owner_member.user)
+
+        body = client.get(
+            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
+            headers={"hx-request": "true"},
+        ).content.decode()
+
+        assert "vuln_kev" in body
+        assert "Known exploited (1)" in body
+
+    def test_the_three_views_say_the_same_thing(self) -> None:
+        """Three templates offer this filter. They drifted into two spellings,
+        and "KEV" is the catalog's acronym rather than a word a reader has."""
+        from pathlib import Path
+
+        roots = [
+            "sbomify/apps/core/templates/core/components/component_vulnerabilities_table.html.j2",
+            "sbomify/apps/plugins/templates/plugins/components/_assessment_run_findings.html.j2",
+            "sbomify/apps/sboms/templates/sboms/sbom_vulnerabilities.html.j2",
+        ]
+        for path in roots:
+            text = Path(path).read_text()
+            assert "KEV only" not in text, f"{path} still says KEV only"
+            assert "Known exploited (" in text, f"{path} lost the label"
