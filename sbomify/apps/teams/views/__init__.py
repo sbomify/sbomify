@@ -322,18 +322,12 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             captured_role = invite_user_form.cleaned_data["role"]
             captured_team_key = team.key
 
-            # Admins may invite at any level, including owner. That makes the
-            # "admins cannot remove an owner" rule bypassable in principle — an
-            # admin could mint an owner they control. The boundary is about
-            # preventing accidents, not defending against a malicious admin, so
-            # rather than forbidding it we make it visible: tell the existing
-            # owners whenever an owner-level invitation is created.
-            actor_role = (
-                Member.objects.filter(user=cast(User, request.user), team=team).values_list("role", flat=True).first()
-                or ""
-            )
+            # The form refuses a role above the inviter's own, so a non-owner
+            # cannot reach here with an owner-level invitation. The notice stays
+            # as a backstop: if another path ever lets one through, the existing
+            # owners still hear about it.
             if captured_role in OWNER_ONLY and actor_role not in OWNER_ONLY:
-                notify_owners_of_owner_invitation(team, cast(User, request.user), invited_email)
+                notify_owners_of_owner_invitation(team, actor, invited_email)
             transaction.on_commit(
                 lambda: capture_for_request(
                     request,
