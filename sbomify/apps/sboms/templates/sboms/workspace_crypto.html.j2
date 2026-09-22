@@ -15,10 +15,10 @@
     </div>
     {% if rollup.has_crypto_data %}
         <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <c-layout.stat-card compact accent="danger" :value="rollup.verdict_counts.at_risk|default:0" label="At risk" />
-            <c-layout.stat-card compact accent="warning" :value="rollup.verdict_counts.needs_review|default:0" label="Needs review" />
-            <c-layout.stat-card compact accent="success" :value="rollup.verdict_counts.ready|default:0" label="Quantum-ready" />
-            <c-layout.stat-card compact accent="muted" :value="rollup.verdict_counts.no_crypto|default:0" label="No crypto" />
+            <c-layout.stat-card compact accent="danger" value="{{ rollup.verdict_counts.at_risk|default:0 }}" label="At risk" />
+            <c-layout.stat-card compact accent="warning" value="{{ rollup.verdict_counts.needs_review|default:0 }}" label="Needs review" />
+            <c-layout.stat-card compact accent="success" value="{{ rollup.verdict_counts.ready|default:0 }}" label="Quantum-ready" />
+            <c-layout.stat-card compact accent="muted" value="{{ rollup.verdict_counts.no_crypto|default:0 }}" label="No crypto" />
             {% if rollup.certificates.expired %}
                 <c-layout.stat-card compact accent="danger" :value="rollup.certificates.expired" label="Expired certs" />
             {% else %}
