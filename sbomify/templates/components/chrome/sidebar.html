@@ -43,9 +43,6 @@ release and component inventory tabs. Capability flags are live, so this compone
         <c-chrome.nav-group label="Prove">
         {% if can_administer %}
             <c-chrome.nav-item href="{% url 'compliance:cra_product_list' %}" label="Posture" icon="fas fa-scale-balanced" match="compliance:" />
-            <c-chrome.nav-item href="{% url 'teams:team_settings' request.session.current_team.key %}#trust-center" label="Trust Center" icon="fas fa-globe" />
-        {% else %}
-            <c-chrome.nav-item href="{% url 'core:workspace_public_current' %}" label="Trust Center" icon="fas fa-globe" />
         {% endif %}
         <c-chrome.nav-item href="{% url 'core:security_advisories_dashboard' %}" label="Security advisories" icon="fas fa-shield-halved" match="core:security_advisor" />
         </c-chrome.nav-group>

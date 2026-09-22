@@ -30,7 +30,7 @@ def test_sidebar_initial_render(authenticated_page: Page, collapsed: bool, viewp
         expect(page.locator("#sidebar")).to_have_css("width", f"{expected_width}px")
         expect(page.locator("header[role=banner]")).to_have_css("left", f"{expected_offset}px")
         expect(page.locator("#main-content")).to_have_css("padding-left", f"{expected_offset}px")
-        expect(page.locator("#sidebar nav a:visible")).to_have_count(6 if viewport_width == 1920 else 0)
+        expect(page.locator("#sidebar nav a:visible")).to_have_count(5 if viewport_width == 1920 else 0)
         expect(page.locator("#sidebar nav a[aria-current=page]")).to_have_attribute("aria-label", "Products")
         product_label = page.locator("#sidebar nav a").filter(has_text="Products").locator("span")
         if viewport_width != 1920:
