@@ -127,7 +127,7 @@ class TestSbomVulnerabilitiesSnapshot:
 @pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestSbomVulnerabilitiesEmptySnapshot:
-    """A completed run with no findings: the stats strip plus the no-data notice."""
+    """A completed run with no findings: the stats strip plus "No vulnerabilities found"."""
 
     def test_sbom_vulnerabilities_no_data_snapshot(
         self,

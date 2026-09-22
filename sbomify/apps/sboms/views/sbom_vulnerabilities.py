@@ -182,6 +182,7 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         latest_result = None
         package_page = None
         page_range: list[Any] = []
+        skipped_scans: list[dict[str, Any]] = []
 
         try:
             # One section per provider: the latest completed run of each scanner
@@ -198,8 +199,18 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             provider_runs.sort(key=lambda run: run.created_at, reverse=True)
             latest_result = provider_runs[0] if provider_runs else None
 
+            from sbomify.apps.vulnerability_scanning.utils import result_scanned_nothing
+
+            # Every scanner skipped this SBOM. Each skip keeps its reason as its one
+            # finding, and the page shows it: waiting will not help, because the
+            # next scan skips for the same reason.
+            if provider_runs and all(result_scanned_nothing(run.result) for run in provider_runs):
+                skipped_scans = [run.result for run in provider_runs if run.result]
+
             if latest_result:
-                scan_timestamp_str = latest_result.created_at.strftime("%B %d, %Y at %I:%M %p %Z")
+                scan_timestamp_str = (
+                    None if skipped_scans else latest_result.created_at.strftime("%B %d, %Y at %I:%M %p %Z")
+                )
 
                 sbom_version_info = {
                     "name": sbom.name,
@@ -557,6 +568,7 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 "scan_is_narrowed": scan_is_narrowed,
                 "scan_query_string": scan_query_string,
                 "scan_timestamp": scan_timestamp_str,
+                "skipped_scans": skipped_scans,
                 "sbom_version_info": sbom_version_info,
                 "error_message": error_message,
                 "error_details": error_details,
