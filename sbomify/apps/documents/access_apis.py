@@ -284,7 +284,11 @@ def create_access_request(
 
 @router.get(
     "/teams/{team_key}/access-request/{request_id}/nda",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the NDA file itself, an HttpResponse ninja passes through
+    # unvalidated. 400 and 500 are the two catch-alls at the bottom of the
+    # body: undeclared, ninja raised ConfigError on them and the caller got an
+    # opaque 500 instead of the status the handler chose.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
 )
 def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) -> Any:
@@ -350,7 +354,14 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
 
 @router.post(
     "/teams/{team_key}/access-request/{request_id}/sign-nda",
-    response={200: NDASignatureResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: NDASignatureResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        # Storage is unreachable or the NDA will not read back.
+        500: ErrorResponse,
+    },
     auth=None,
 )
 def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDASignRequest) -> Any:
@@ -620,7 +631,8 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
 
 @router.post(
     "/access-requests/{request_id}/reject",
-    response={200: AccessRequestResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 400 is "not pending" below.
+    response={200: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def reject_access_request(request: HttpRequest, request_id: str) -> Any:
     """Reject access request (admin/owner only)."""
@@ -692,7 +704,8 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
 
 @router.post(
     "/access-requests/{request_id}/revoke",
-    response={200: AccessRequestResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 400 is "not approved" below.
+    response={200: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
     """Revoke access request and remove guest membership (admin/owner only)."""

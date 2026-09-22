@@ -69,9 +69,7 @@ def test_posture_collapses_for_component_without_sboms(sample_team_with_owner_me
 @pytest.mark.django_db
 def test_posture_does_not_leak_private_to_anonymous(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
-    response = Client(headers={"hx-request": "true"}).get(
-        _posture_url(sample_sbom.component.id)
-    )  # anon, component private
+    response = Client(headers={"hx-request": "true"}).get(_posture_url(sample_sbom.component.id))  # anon, component private
     assert response.status_code == 200
     assert "At risk" not in response.content.decode()
 

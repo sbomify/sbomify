@@ -85,9 +85,7 @@ def test_inventory_card_renders_tabs_and_drilldown(sample_sbom: SBOM, mocker: Mo
     team = sample_sbom.component.team
     setup_test_session(client, team, team.members.first())
 
-    response = client.get(
-        reverse("sboms:sbom_crypto_inventory", kwargs={"sbom_id": sample_sbom.id}), headers={"hx-request": "true"}
-    )
+    response = client.get(reverse("sboms:sbom_crypto_inventory", kwargs={"sbom_id": sample_sbom.id}), headers={"hx-request": "true"})
 
     assert response.status_code == 200
     html = response.content.decode()
@@ -138,14 +136,8 @@ def test_workspace_crypto_rollup_aggregates_runs(sample_sbom: SBOM):  # noqa: F8
                 "certificates": {"count": 2, "expired": 1, "expiring_soon": 0, "soonest_not_valid_after": None},
             },
             "findings": [
-                {
-                    "title": "RSA-2048: Quantum-vulnerable",
-                    "metadata": {"pqc_status": "quantum_vulnerable", "asset_name": "RSA-2048"},
-                },
-                {
-                    "title": "ML-KEM-768: Quantum-safe",
-                    "metadata": {"pqc_status": "quantum_safe", "asset_name": "ML-KEM-768"},
-                },
+                {"title": "RSA-2048: Quantum-vulnerable", "metadata": {"pqc_status": "quantum_vulnerable", "asset_name": "RSA-2048"}},
+                {"title": "ML-KEM-768: Quantum-safe", "metadata": {"pqc_status": "quantum_safe", "asset_name": "ML-KEM-768"}},
             ],
         },
     )
@@ -231,7 +223,9 @@ def test_crypto_endpoints_return_declared_503_on_storage_outage(sample_sbom: SBO
     team = sample_sbom.component.team
     setup_test_session(client, team, team.members.first())
 
-    csv_response = client.get(reverse("api-1:download_cipher_suite_inventory_csv", kwargs={"sbom_id": sample_sbom.id}))
+    csv_response = client.get(
+        reverse("api-1:download_cipher_suite_inventory_csv", kwargs={"sbom_id": sample_sbom.id})
+    )
     assert csv_response.status_code == 503
 
 

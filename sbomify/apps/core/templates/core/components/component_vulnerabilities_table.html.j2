@@ -56,7 +56,9 @@ gets pushed is a URL the server already renders on its own.
                     {% if state.value == vuln_panel.query.state %}selected{% endif %}>{{ state.label }}</option>
         {% endfor %}
         </c-tables.select>
-        <c-forms.checkbox name="vuln_kev" :checked="vuln_panel.query.kev_only">KEV only</c-forms.checkbox>
+        {% if vuln_panel.kev_total %}
+            <c-forms.checkbox name="vuln_kev" :checked="vuln_panel.query.kev_only">Known exploited ({{ vuln_panel.kev_total }})</c-forms.checkbox>
+        {% endif %}
         <c-tables.select id="vuln-per-page" label="Rows per page" name="vuln_per_page">
         {% for size in vuln_panel.per_page_choices %}
             <option value="{{ size }}"

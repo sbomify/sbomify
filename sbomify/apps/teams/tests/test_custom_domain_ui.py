@@ -274,3 +274,4 @@ class TestTeamBrandingViewCustomDomain:
         # Check both targets are present (DCV target is <domain>.<dcv_hostname>)
         assert "app.sbomify.io" in content
         assert ".test.dcv.cloudflare.com" in content
+
