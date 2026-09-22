@@ -14,70 +14,178 @@ from django.core.cache import cache as django_cache
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as _SEVERITY_RANK
 
 _CACHE_TTL_SECONDS = 60
 _DIGEST_LIMIT = 3
 
 
-def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> list[dict[str, Any]]:
-    """Worst non-suppressed findings across the given components."""
-    from sbomify.apps.plugins.models import AssessmentRun
-    from sbomify.apps.vulnerability_scanning.utils import extract_finding_rows, merge_findings_by_alias
-    from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
+#: How many ranked rows to fold before taking the digest's three.
+#:
+#: The fold is by alias and cannot go into SQL, so something has to bound what
+#: it runs over. The database returns the worst rows first, and folding the top
+#: few is enough: two rows can only merge into one, so the worst three survivors
+#: are always inside the worst few candidates by a wide margin.
+_DIGEST_CANDIDATES = 60
 
-    latest_sboms = (
+
+def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> list[dict[str, Any]]:
+    """Worst non-suppressed findings across the given components.
+
+    Read from the findings table rather than from scan results. The old shape
+    loaded every current run's whole ``result`` for every component in the
+    workspace, merged and extracted in Python, sorted the lot, and returned
+    three rows. The work scaled with the workspace while the answer never grew.
+
+    Ranking and bounding now happen in SQL. What stays in Python is the
+    cross-provider fold, because it is by alias and transitive, and it runs over
+    the ranked candidates rather than over everything.
+    """
+    from django.db.models import F, Value
+    from django.db.models.functions import Coalesce
+
+    from sbomify.apps.vulnerability_scanning.models import Finding
+
+    # ``is_current`` is scoped per SBOM, not per component: it means the newest
+    # run per (sbom, plugin). A component that has since uploaded a newer
+    # artifact still has current rows against the superseded one, and the
+    # dashboard must not resurface those, so the newest SBOM per component is
+    # resolved first and the findings are narrowed to it.
+    latest_sbom_ids = (
         SBOM.objects.filter(component_id__in=component_ids, bom_type=SBOM.BomType.SBOM)
         .order_by("component_id", "-created_at")
         .distinct("component_id")
-        .values("id", "component_id", "version")
+        .values_list("id", flat=True)
     )
-    sbom_meta = {str(row["id"]): row for row in latest_sboms}
-    runs = (
-        AssessmentRun.objects.filter(sbom_id__in=sbom_meta.keys(), category="security", status="completed")
-        .order_by("sbom_id", "plugin_name", "-created_at")
-        .distinct("sbom_id", "plugin_name")
-        .values("sbom_id", "result", "created_at")
-    )
-    results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
-    scanned_at_by_sbom: dict[str, Any] = {}
-    for run in runs:
-        sbom_key = str(run["sbom_id"])
-        results_by_sbom.setdefault(sbom_key, []).append(run["result"])
-        if sbom_key not in scanned_at_by_sbom or run["created_at"] > scanned_at_by_sbom[sbom_key]:
-            scanned_at_by_sbom[sbom_key] = run["created_at"]
 
-    vex_cache: dict[Any, list[dict[str, Any]]] = {}
-    findings: list[dict[str, Any]] = []
-    for sbom_id, provider_results in results_by_sbom.items():
-        meta = sbom_meta[sbom_id]
-        component_id = meta["component_id"]
-        merged = merge_findings_by_alias(provider_results)
-        # VEX lives in S3; skip the fetch entirely for clean components.
-        statements = load_vex_suppressions(component_id, cache=vex_cache) if merged["findings"] else []
-        for row in extract_finding_rows(merged, statements):
-            if row.get("vex_suppressed"):
-                continue
-            findings.append(
-                {
-                    **row,
-                    "component_id": component_id,
-                    "component_name": component_names.get(component_id, ""),
-                    "sbom_version": meta["version"],
-                    "scanned_at": scanned_at_by_sbom.get(sbom_id),
-                }
-            )
-    # Worst severity first; within a severity band, the most recently updated
-    # component leads, so a critical from today's scan outranks one from last
-    # month's.
-    findings.sort(
-        key=lambda r: (
-            _SEVERITY_RANK.get(r["severity"], 5),
-            -(r["scanned_at"].timestamp() if r["scanned_at"] else 0.0),
-            -(r.get("cvss_score") or 0),
+    candidates = (
+        Finding.objects.filter(
+            component_id__in=component_ids,
+            sbom_id__in=latest_sbom_ids,
+            # Rows accumulate per run, so one advisory seen by fifty scans is
+            # fifty rows. Every reader has to narrow to the current ones.
+            is_current=True,
+            vex_suppressed=False,
         )
+        .annotate(scanned_at=F("run__created_at"), sbom_version=F("sbom__version"))
+        # Exactly the columns of vuln_finding_current_rank_idx, in its order, so
+        # this walks the index instead of sorting the workspace's findings.
+        #
+        # Malicious leads, ahead of severity, for the reason the model records:
+        # a malicious package carries no severity of its own, so ranking on
+        # severity alone buries it in the unranked bucket below every real CVE,
+        # and it is a remove-now decision rather than a patch-later one. The old
+        # Python sort had that gap; porting it unchanged would have kept it.
+        #
+        # Recency is deliberately not here. It lives on the run, so ordering by
+        # it joins another table and gives up the index, which on a large
+        # workspace means sorting many rows to slice sixty. It is applied to the
+        # window below instead, which honours it among the candidates rather
+        # than across every finding: for a digest of three that is the right
+        # trade, and the alternative is a sort that grows with the workspace.
+        .order_by(
+            F("malicious").desc(),
+            "severity_rank",
+            # The display rule is ``or 0``, so a missing score ties with an
+            # explicit 0.0 rather than sorting above or below every score.
+            Coalesce("cvss_score", Value(0.0)).desc(),
+        )
+        .values(
+            "severity_rank",
+            "malicious",
+            "advisory_id",
+            "aliases",
+            "severity",
+            "cvss_score",
+            "package_name",
+            "package_version",
+            "ecosystem",
+            "vex_state",
+            "component_id",
+            "scanned_at",
+            "sbom_version",
+        )[:_DIGEST_CANDIDATES]
     )
-    return findings[:_DIGEST_LIMIT]
+
+    # Recency restored as the tiebreak the digest has always used: within a
+    # severity band the freshly scanned component leads, so a critical from
+    # today outranks one from last month. Stable, so rows that tie on it keep
+    # the database's order.
+    ranked = sorted(
+        candidates,
+        key=lambda row: (
+            not row["malicious"],
+            row["severity_rank"],
+            -(row["scanned_at"].timestamp() if row["scanned_at"] else 0.0),
+            -(row["cvss_score"] or 0),
+        ),
+    )
+
+    folded: list[dict[str, Any]] = []
+    for row in _fold_by_alias(ranked)[:_DIGEST_LIMIT]:
+        folded.append(
+            {
+                "id": row["advisory_id"],
+                "severity": row["severity"],
+                "cvss_score": row["cvss_score"],
+                "package": row["package_name"],
+                "version": row["package_version"],
+                "ecosystem": row["ecosystem"],
+                "vex_state": row["vex_state"],
+                "malicious": row["malicious"],
+                "component_id": row["component_id"],
+                "component_name": component_names.get(row["component_id"], ""),
+                "sbom_version": row["sbom_version"],
+                "scanned_at": row["scanned_at"],
+            }
+        )
+    return folded
+
+
+def _fold_by_alias(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per advisory, however many ids the scanners reported it under.
+
+    Transitive, which is the whole difficulty. OSV can report ``GHSA-a`` aliased
+    to ``CVE-1``, Dependency Track can report ``CVE-1`` aliased to ``CVE-2``, and
+    a third can report ``CVE-2`` alone. All three are one vulnerability, and no
+    pair of them shares an id with the third. A single pass that claims ids as it
+    goes folds the first two and then emits the third beside them, because by the
+    time the bridging row arrives the earlier ones have already been written out.
+
+    So the groups are built first and emitted afterwards. ``rows`` arrives in the
+    order the database ranked it, and each group is represented by its earliest
+    member, so folding never promotes a finding above one that outranks it.
+
+    Scoped to the package, as ``merge_findings_by_alias`` is. A finding is stored
+    per advisory *and* package, and a digest entry names the package it found, so
+    folding one CVE across two of them would print one line naming whichever
+    package ranked first and say nothing about the other.
+    """
+    group_of: dict[tuple[Any, ...], int] = {}
+    groups: list[list[int]] = []
+
+    for position, row in enumerate(rows):
+        scope = (row["package_name"], row["package_version"], row["ecosystem"])
+        keys = {(scope, str(one).lower()) for one in (row["advisory_id"], *(row.get("aliases") or [])) if one}
+        joined = sorted({group_of[key] for key in keys if key in group_of})
+        if not joined:
+            groups.append([position])
+            target = len(groups) - 1
+        else:
+            # This row bridges groups that had no id in common until now, so they
+            # are one vulnerability after all and have to be merged rather than
+            # left as separate entries.
+            target = joined[0]
+            groups[target].append(position)
+            for other in joined[1:]:
+                groups[target].extend(groups[other])
+                groups[other] = []
+            for key, index in list(group_of.items()):
+                if index in joined[1:]:
+                    group_of[key] = target
+        for key in keys:
+            group_of[key] = target
+
+    return [rows[min(members)] for members in groups if members]
 
 
 def get_first_component(team_id: int) -> Component | None:
