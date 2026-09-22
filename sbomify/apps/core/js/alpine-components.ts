@@ -9,6 +9,7 @@ import Alpine from 'alpinejs';
 // ============================================
 // COMPONENT IMPORTS - Core
 // ============================================
+import { scrollableTabs } from './components/scrollable-tabs';
 import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';
 import { registerComponentVisibilitySelector } from './components/component-visibility-selector';
@@ -200,6 +201,7 @@ export function chartSelector(defaultChart = 'timeline') {
  * Register common inline components (dangerZone, modalState, etc.)
  */
 export function registerCommonComponents(): void {
+    registerAlpineComponent('scrollableTabs', scrollableTabs);
     registerAlpineComponent('dangerZone', dangerZone);
     registerAlpineComponent('modalState', modalState);
     registerAlpineComponent('collapsible', collapsible);

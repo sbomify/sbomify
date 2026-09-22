@@ -60,6 +60,7 @@ from sbomify.apps.core.views.product_releases_public import ProductReleasesPubli
 from sbomify.apps.core.views.products_dashboard import ProductCreateView as ProductCreateView
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
 from sbomify.apps.core.views.products_dashboard import ProductsTableView as ProductsTableView
+from sbomify.apps.core.views.release_create import ReleaseCreateView as ReleaseCreateView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView

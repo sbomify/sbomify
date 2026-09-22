@@ -6,13 +6,10 @@
     {% elif inventory.kind == 'components' %}
         <c-buttons.primary size="sm" href="{% url 'core:component_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create component</c-buttons.primary>
     {% else %}
-        <c-buttons.primary size="sm" @click="$dispatch('open-release-picker')"><i class="fas fa-plus" aria-hidden="true"></i>Create release</c-buttons.primary>
+        <c-buttons.primary size="sm" href="{% url 'core:release_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create release</c-buttons.primary>
     {% endif %}
 {% endif %}
 </c-layout.page-header>
 <c-navigation.tabs links :tabs="inventory.tabs" active="{{ inventory.kind }}" aria-label="Product inventory" hx-boost="true" hx-target="#inventory-content" />
 <c-inventory.table :inventory="inventory" />
-{% if can_manage and inventory.kind == 'releases' %}
-    <c-overview.release-picker :products="inventory.products" />
-{% endif %}
 </c-layout.frame>

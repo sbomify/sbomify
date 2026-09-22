@@ -75,7 +75,7 @@ def _classes(rendered: str, marker: str) -> str:
 def test_tab_row_is_a_tablist_with_the_underline_recipe(rendered: str) -> None:
     row = _chunk(rendered, "div", 'data-probe="tabs"')
     assert 'role="tablist"' in row
-    assert "flex gap-1 border-b border-solid border-border" in row
+    assert "flex w-max min-w-full gap-1 border-b border-solid border-border" in row
 
 
 def test_tab_row_carries_the_arrow_home_and_end_keys(rendered: str) -> None:
@@ -92,7 +92,7 @@ def test_tab_row_carries_the_arrow_home_and_end_keys(rendered: str) -> None:
 
 def test_pills_variant_swaps_the_recipe_and_marks_the_row(rendered: str) -> None:
     row = _open_tag(rendered, "div", 'data-probe="pills"')
-    assert "flex gap-0 bg-background p-1 rounded-lg" in row
+    assert "flex w-max min-w-full gap-0 bg-background p-1 rounded-lg" in row
     assert "data-tabs-pills" in row
     assert "border-b" not in row
     assert "gap-1" not in row
@@ -100,7 +100,8 @@ def test_pills_variant_swaps_the_recipe_and_marks_the_row(rendered: str) -> None
 
 def test_row_class_never_falls_through_to_its_tabs(rendered: str) -> None:
     row = _chunk(rendered, "div", 'data-probe="tabs"')
-    assert row.count("mb-4") == 1
+    assert "mb-4" not in row
+    assert rendered.count("max-w-full mb-4") == 2
 
 
 def test_selected_tab_segment(rendered: str) -> None:
@@ -218,19 +219,19 @@ def test_page_links_carry_the_cell_recipe_and_their_page(rendered: str) -> None:
     link = _chunk(rendered, "a", ">1</a>")
     assert CELL in link
     assert "bg-transparent text-[color:var(--color-text-muted)] font-medium cursor-pointer" in link
-    assert "hover:bg-surface hover:border-border hover:text-text active:scale-95" in link
+    assert "hover:bg-surface hover:border-border hover:text-text" in link
     assert 'href="/components?page=1"' in link
 
 
 def test_current_page_is_a_span_that_says_so(rendered: str) -> None:
     current = _chunk(rendered, "span", ">3</span>")
     assert 'aria-current="page"' in current
-    assert "bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)]" in current
+    assert "data-[active=true]:bg-surface-hover" in current
     assert 'data-active="true"' in current
-    assert "data-[active=true]:text-white" in current
+    assert "data-[active=true]:text-text" in current
     assert "data-[active=true]:font-semibold" in current
-    assert "shadow-[0_2px_4px_color-mix(in_oklab,var(--color-primary)_30%,transparent)]" in current
-    assert "data-[active=true]:hover:text-white" in current
+    assert "data-[active=true]:border-border" in current
+    assert "linear-gradient" not in current
 
 
 def test_ellipsis_is_a_bare_cell(rendered: str) -> None:
@@ -463,7 +464,7 @@ def test_page_button_states_hang_off_data_active_and_disabled(rendered: str) -> 
     btn = _nav_probe(rendered, "page-btn")
     assert btn.startswith("<button ")
     assert 'data-active="false"' in btn
-    assert "data-[active=true]:text-white" in btn
+    assert "data-[active=true]:text-text" in btn
     assert "disabled:opacity-40" in btn
 
 

@@ -97,6 +97,7 @@ urlpatterns = [
         views.ComponentVulnerabilitiesPanelView.as_view(),
         name="component_vulnerabilities_panel",
     ),
+    path("releases/new/", views.ReleaseCreateView.as_view(), name="release_new"),
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
     path("releases/table/", views.ReleasesTableView.as_view(), name="releases_table"),
     path(

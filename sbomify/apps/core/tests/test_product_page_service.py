@@ -138,3 +138,4 @@ def test_product_partial_is_a_single_frame_and_hides_unavailable_actions(sample_
     assert "Assign component" in html
     assert "Product visibility" not in html
     assert "Delete Product" not in html
+    assert "HX-Target" in response["Vary"]

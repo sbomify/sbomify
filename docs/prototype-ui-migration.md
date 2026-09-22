@@ -10,7 +10,7 @@ model, HTML injection and stylesheets are not dependencies of the app.
 | Rail and top bar | A fixed 240px rail, neutral active state, Monitor / Ship / Prove groups, compact search, account menu and sticky footer. Mobile navigation uses a drawer. |
 | Workspace picker | Existing workspace switching and creation, composed with the dropdown library. |
 | Metrics | Open occurrences, occurrences past the workspace patch SLA, known exploited occurrences, and components with stale SBOMs. Zero values stay neutral. |
-| Quick actions | Product, release, component and advisory creation. A release picker chooses a workspace product and opens its existing release form. |
+| Quick actions | Product, release, component and advisory creation. The release page selects a workspace product and preserves form input on validation errors. |
 | What to fix first | The latest completed provider results for each component's latest SBOM, merged by advisory alias and filtered by VEX. Malicious packages and known exploitation lead, followed by a breached patch SLA, severity and the nearest deadline. Rows show the current VEX decision and product membership. |
 | Exposure by product | The same workspace snapshot grouped through product membership, with severity bars and an explicit unassessed state. Shared components count once in workspace totals and appear under each product that contains them. Evidence distinguishes stale SBOMs, missing SBOMs and current uploads. |
 | First visit | Metrics, actions and both panels remain visible with honest empty states. A compact callout opens the existing repository setup and upload dialogs. A workspace containing documents is not mistaken for an empty workspace. |
@@ -84,9 +84,9 @@ metrics. Document components do not acquire a security assessment status. Each
 release preview uses the assessment results for its own artifact collection.
 
 The complete release history uses the same inventory filters, rows, sorting,
-pagination and vulnerability dropdowns. Its creation and editing dialog is also
-the product page's dialog. The old table template, its client-side pagination and
-its second creation form have been removed. The editor reads server-supplied
+pagination and vulnerability dropdowns. Release creation uses one full-page form
+from the navbar, dashboard, inventory and product pages. Product links preselect
+the product. Editing remains a shared dialog. The editor reads server-supplied
 records, writes through the existing release API and refreshes its owning frame
 through HTMX. Empty versions can be cleared without clearing the release name.
 

@@ -398,30 +398,19 @@ def test_token_display_with_nothing_to_do_drops_the_action_rail(rendered: str) -
 # --- copy button ----------------------------------------------------------
 
 
-def test_copy_button_recipe_and_copied_binding(rendered: str) -> None:
+def test_copy_button_uses_the_shared_controller_and_quiet_button(rendered: str) -> None:
     button = _probe(rendered, "copy-default")
-    assert "group inline-flex items-center gap-2 px-3.5 py-2 text-[0.8125rem] font-medium rounded-lg" in button
-    assert "focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in button
-    assert ":class=\"copied ? 'bg-success border-success text-white' : 'bg-surface border-border text-text" in button
+    assert "copyableValue({ value: 'https://sbomify.com/t/acme' })" in button
+    assert '@click="copyToClipboard()"' in button
+    assert ':data-copied="copied"' in button
+    assert "bg-success" not in button
 
 
-def test_copy_button_writes_its_value_and_confirms(rendered: str) -> None:
-    button = _probe(rendered, "copy-default")
-    assert "navigator.clipboard.writeText('https://sbomify.com/t/acme')" in button
-    assert "setTimeout(() => copied = false, 2000)" in button
-
-
-def test_copy_button_labels_are_server_rendered_and_bound(rendered: str) -> None:
+def test_copy_button_labels_reserve_both_states(rendered: str) -> None:
     section = _section(rendered, "copy-labelled")
-    assert "x-text=\"copied ? 'Copied ID' : 'Copy ID'\">Copy ID</span>" in section
-    assert ":aria-label=\"copied ? 'Copied ID' : 'Copy ID'\"" in _probe(rendered, "copy-labelled")
-
-
-def test_copy_button_icons_carry_their_own_colour(rendered: str) -> None:
-    section = _section(rendered, "copy-default")
-    assert 'class="fas fa-copy text-xs text-text-muted transition-all duration-200 group-hover:text-primary"' in section
-    assert 'class="fas fa-check text-xs text-white"' in section
-    assert "x-cloak" in section
+    assert 'group-data-[copied=true]:invisible">Copy ID</span>' in section
+    assert 'group-data-[copied=true]:visible">Copied ID</span>' in section
+    assert "Copied to clipboard" in section
 
 
 def test_copy_button_forwards_attrs_and_class(rendered: str) -> None:
@@ -449,15 +438,14 @@ def test_inline_copy_confirms_from_a_data_attribute_not_a_class(rendered: str) -
     chip = _probe(rendered, "inline-copy")
     assert 'data-copied="false"' in chip
     assert ':data-copied="copied"' in chip
-    assert "data-[copied=true]:bg-success" in chip
-    assert "data-[copied=true]:border-success" in chip
-    assert "data-[copied=true]:text-white" in chip
+    assert "data-[copied=true]:bg-success" not in chip
+    assert "data-[copied=true]:text-white" not in chip
 
 
 def test_inline_copy_icon_reads_the_same_marker_from_the_group(rendered: str) -> None:
     section = _section(rendered, "inline-copy")
-    assert "text-[0.6875rem] text-text-muted transition-all duration-150 group-hover:text-primary" in section
-    assert "group-data-[copied=true]:text-white" in section
+    assert "text-[0.6875rem] text-[color:var(--color-text-muted)]" in section
+    assert "group-data-[copied=true]:text-success" in section
     assert ":class=\"copied ? 'fa-check' : 'fa-copy'\"" in section
 
 

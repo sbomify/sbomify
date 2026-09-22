@@ -1,11 +1,11 @@
 <c-layout.frame id="product-releases-content" hx-get="{{ inventory.refresh_url }}" hx-trigger="refresh-product-releases from:body" hx-target="this" hx-swap="outerHTML show:none" hx-sync="this:replace">
 <c-layout.page-header title="Releases" :breadcrumbs="breadcrumb_items">
 {% if product.has_crud_permissions %}
-    <c-buttons.primary size="sm" @click="$dispatch('open-create-release')"><i class="fas fa-plus" aria-hidden="true"></i>Create release</c-buttons.primary>
+    <c-buttons.primary size="sm" href="{% url 'core:release_new' %}?product={{ product.id }}"><i class="fas fa-plus" aria-hidden="true"></i>Create release</c-buttons.primary>
 {% endif %}
 </c-layout.page-header>
 <c-inventory.table :inventory="inventory" />
 {% if product.has_crud_permissions %}
-    {% include 'core/components/product_release_dialogs.html.j2' with refresh_event='refresh-product-releases' open_from_hash=True %}
+    {% include 'core/components/product_release_dialogs.html.j2' with refresh_event='refresh-product-releases' %}
 {% endif %}
 </c-layout.frame>

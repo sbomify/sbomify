@@ -1,0 +1,67 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}New release · sbomify{% endblock %}
+{% block dashboard_content %}
+    <c-layout.frame id="release-create-page" class="max-w-5xl">
+    <c-layout.page-header title="New release" subtitle="Bring a product version's artifacts together." icon="fas fa-tag">
+    <c-buttons.ghost href="{{ back_url }}" size="sm"><i class="fas fa-arrow-left" aria-hidden="true"></i>Back to releases</c-buttons.ghost>
+    </c-layout.page-header>
+    {% if products %}
+        {% if form.non_field_errors %}
+            <c-feedback.alert variant="danger" title="Release could not be created">{{ form.non_field_errors|join:' ' }}</c-feedback.alert>
+        {% endif %}
+        <form method="post"
+              action="{% url 'core:release_new' %}"
+              hx-post="{% url 'core:release_new' %}"
+              hx-target="#release-create-page"
+              hx-select="#release-create-page"
+              hx-swap="outerHTML show:none"
+              hx-disabled-elt="find button[type='submit']">
+            {% csrf_token %}
+            <c-layout.form-section step="1" title="Product and release" description="Choose a product and give its release a name.">
+            <div class="flex flex-col gap-5">
+                <c-forms.field label="Product" for="release-product" required error="{{ form.product_id.errors|join:' ' }}">
+                <c-forms.select id="release-product" name="product_id" required state="{{ form.product_id.errors|yesno:'error,' }}" aria-invalid="{{ form.product_id.errors|yesno:'true,false' }}">
+                {% for value, label in form.fields.product_id.choices %}
+                    <option value="{{ value }}"
+                            {% if value == form.product_id.value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+                </c-forms.select>
+                </c-forms.field>
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <c-forms.field label="Release name" for="release-name" required error="{{ form.name.errors|join:' ' }}">
+                    <c-forms.input id="release-name" name="name" value="{{ form.name.value|default:'' }}" placeholder="e.g. January release" maxlength="255" required state="{{ form.name.errors|yesno:'error,' }}" aria-invalid="{{ form.name.errors|yesno:'true,false' }}" />
+                    </c-forms.field>
+                    <c-forms.field label="Version" for="release-version" error="{{ form.version.errors|join:' ' }}">
+                    <c-forms.input id="release-version" name="version" value="{{ form.version.value|default:'' }}" placeholder="e.g. v1.0.0" maxlength="255" state="{{ form.version.errors|yesno:'error,' }}" aria-invalid="{{ form.version.errors|yesno:'true,false' }}" />
+                    </c-forms.field>
+                </div>
+                <c-forms.checkbox name="is_prerelease" :checked="form.is_prerelease.value">Mark as prerelease</c-forms.checkbox>
+            </div>
+            </c-layout.form-section>
+            <c-layout.form-section step="2" accent="neutral" title="Details" description="Optional. Add context and dates.">
+            <div class="flex flex-col gap-5">
+                <c-forms.field label="Description" for="release-description" error="{{ form.description.errors|join:' ' }}">
+                <c-forms.textarea id="release-description" name="description" value="{{ form.description.value|default:'' }}" rows="4" maxlength="1000" state="{{ form.description.errors|yesno:'error,' }}" aria-invalid="{{ form.description.errors|yesno:'true,false' }}" />
+                </c-forms.field>
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <c-forms.field label="Created at" for="release-created-at" hint="Dates use {{ timezone_name }}. Leave blank to use the current time." error="{{ form.created_at.errors|join:' ' }}">
+                    <c-forms.input id="release-created-at" name="created_at" type="datetime-local" value="{{ form.created_at.value|default:'' }}" state="{{ form.created_at.errors|yesno:'error,' }}" aria-invalid="{{ form.created_at.errors|yesno:'true,false' }}" />
+                    </c-forms.field>
+                    <c-forms.field label="Released at" for="release-released-at" hint="Leave blank to use the creation time." error="{{ form.released_at.errors|join:' ' }}">
+                    <c-forms.input id="release-released-at" name="released_at" type="datetime-local" value="{{ form.released_at.value|default:'' }}" state="{{ form.released_at.errors|yesno:'error,' }}" aria-invalid="{{ form.released_at.errors|yesno:'true,false' }}" />
+                    </c-forms.field>
+                </div>
+            </div>
+            </c-layout.form-section>
+            <div class="flex flex-wrap items-center justify-end gap-2">
+                <c-buttons.ghost href="{{ back_url }}">Cancel</c-buttons.ghost>
+                <c-buttons.primary type="submit"><i class="fas fa-plus" aria-hidden="true"></i>Create release</c-buttons.primary>
+            </div>
+        </form>
+    {% else %}
+        <c-feedback.empty-state icon="fas fa-cube" title="Add a product first" message="A release brings together artifacts for one product.">
+        <c-buttons.primary href="{% url 'core:product_new' %}">Add product</c-buttons.primary>
+        </c-feedback.empty-state>
+    {% endif %}
+    </c-layout.frame>
+{% endblock %}

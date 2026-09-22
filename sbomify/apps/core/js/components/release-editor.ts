@@ -24,7 +24,6 @@ interface ReleaseForm {
 }
 
 interface ReleaseEditorParams {
-    productId: string;
     initialReleases?: Release[];
     refreshEvent: string;
     canDelete?: boolean;
@@ -47,9 +46,8 @@ function formatDateTimeForInput(value?: string): string {
 // The server owns the table. This controller only edits its supplied records
 // through the existing API, then asks the owning HTMX frame to refresh.
 export function registerReleaseEditor() {
-    Alpine.data('releaseEditor', ({ productId, initialReleases = [], refreshEvent, canDelete = false }: ReleaseEditorParams) => ({
+    Alpine.data('releaseEditor', ({ initialReleases = [], refreshEvent, canDelete = false }: ReleaseEditorParams) => ({
         releases: initialReleases,
-        productId,
         canDelete,
         saving: false,
         showModal: false,
@@ -59,20 +57,6 @@ export function registerReleaseEditor() {
             id: null, name: '', version: '', description: '', is_prerelease: false,
             created_at: '', released_at: ''
         } as ReleaseForm,
-
-        openCreateModal() {
-            const now = getDefaultDateTime();
-            this.form = {
-                id: null,
-                name: '',
-                version: '',
-                description: '',
-                is_prerelease: false,
-                created_at: now,
-                released_at: now
-            };
-            this.showModal = true;
-        },
 
         openEditModal(release: Release) {
             this.form = {
@@ -104,7 +88,7 @@ export function registerReleaseEditor() {
         },
 
         async submitRelease() {
-            if (this.saving) return;
+            if (this.saving || !this.form.id) return;
             if (!this.form.name || !this.form.name.trim()) {
                 showError('Release name is required');
                 return;
@@ -115,32 +99,17 @@ export function registerReleaseEditor() {
                 const createdAt = this.form.created_at ? new Date(this.form.created_at).toISOString() : null;
                 const releasedAt = this.form.released_at ? new Date(this.form.released_at).toISOString() : null;
 
-                if (this.form.id) {
-                    const data: Record<string, unknown> = {
-                        name: this.form.name.trim(),
-                        description: this.form.description?.trim() || null,
-                        version: this.form.version.trim(),
-                        is_prerelease: this.form.is_prerelease
-                    };
-                    if (createdAt) data.created_at = createdAt;
-                    if (releasedAt) data.released_at = releasedAt;
+                const data: Record<string, unknown> = {
+                    name: this.form.name.trim(),
+                    description: this.form.description?.trim() || null,
+                    version: this.form.version.trim(),
+                    is_prerelease: this.form.is_prerelease
+                };
+                if (createdAt) data.created_at = createdAt;
+                if (releasedAt) data.released_at = releasedAt;
 
-                    await $axios.patch(`/api/v1/releases/${this.form.id}`, data);
-                    showSuccess('Release updated');
-                } else {
-                    const data: Record<string, unknown> = {
-                        name: this.form.name.trim(),
-                        description: this.form.description?.trim() || null,
-                        is_prerelease: this.form.is_prerelease,
-                        product_id: this.productId
-                    };
-                    if (this.form.version?.trim()) data.version = this.form.version.trim();
-                    if (createdAt) data.created_at = createdAt;
-                    if (releasedAt) data.released_at = releasedAt;
-
-                    await $axios.post('/api/v1/releases', data);
-                    showSuccess('Release created');
-                }
+                await $axios.patch(`/api/v1/releases/${this.form.id}`, data);
+                showSuccess('Release updated');
 
                 this.closeModal();
                 this.$dispatch(refreshEvent);

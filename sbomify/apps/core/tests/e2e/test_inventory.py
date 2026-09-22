@@ -39,7 +39,8 @@ def test_inventory_navigation_and_filters(
         expect(page.locator("#inventory-content")).not_to_have_class(re.compile("htmx-settling"))
         assert page.evaluate("window.scrollY") == scroll_before
         assert navigation.evaluate(
-            "el => el.getBoundingClientRect().top - el.previousElementSibling.getBoundingClientRect().bottom"
+            "el => { const row = el.closest('[x-data=scrollableTabs]'); "
+            "return row.getBoundingClientRect().top - row.previousElementSibling.getBoundingClientRect().bottom; }"
         ) == pytest.approx(24)
         expect(navigation.get_by_role("link", name=re.compile(f"^{kind}"))).to_have_attribute("aria-current", "page")
     page.get_by_role("link", name="Next page", exact=True).click()
@@ -76,11 +77,11 @@ def test_inventory_navigation_and_filters(
     expect(components).to_contain_text("Unassigned")
     page.get_by_role("navigation", name="Product inventory").get_by_role("link", name=re.compile("^Releases")).click()
     expect(page.get_by_role("table", name="Releases", exact=True)).to_be_visible()
-    page.get_by_role("button", name="Create release", exact=True).click()
-    expect(
-        page.get_by_role("dialog").filter(has=page.get_by_text("Choose the product for this release.", exact=True))
-    ).to_be_visible()
-    page.keyboard.press("Escape")
+    page.get_by_role("link", name="Create release", exact=True).click()
+    expect(page.get_by_role("heading", name="New release", exact=True)).to_be_visible()
+    page.go_back(wait_until="networkidle")
+    expect(page.get_by_role("table", name="Releases", exact=True)).to_be_visible()
+    expect(page.locator("#sidebar")).to_have_count(1)
     # Browser history restores the right inventory fragment, not another app shell.
     page.go_back()
     expect(page.get_by_role("table", name="Components", exact=True)).to_be_visible()

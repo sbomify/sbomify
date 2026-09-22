@@ -3,7 +3,7 @@
 <c-layout.page-header title="Settings" subtitle="{{ team.name|workspace_display }}. Manage your workspace and personal preferences.">
 <c-buttons.secondary size="sm" href="{% url 'teams:teams_dashboard' %}">Workspaces</c-buttons.secondary>
 </c-layout.page-header>
-<c-navigation.tabs links scrollable aria-label="Settings sections" hx-boost="true" hx-target="#settings-content" hx-select="#settings-content" hx-swap="outerHTML show:none settle:0" hx-sync="this:replace">
+<c-navigation.tabs links aria-label="Settings sections" hx-boost="true" hx-target="#settings-content" hx-select="#settings-content" hx-swap="outerHTML show:none settle:0" hx-sync="this:replace">
 {% for tab in settings_tabs %}
     {% if tab.key == active_tab.key %}
         <c-navigation.tab href="{% url 'teams:team_settings_tab' team_key=team.key tab=tab.key %}" active data-settings-tab="{{ tab.key }}">{{ tab.label }}</c-navigation.tab>

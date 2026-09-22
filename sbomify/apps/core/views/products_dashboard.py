@@ -4,7 +4,9 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.vary import vary_on_headers
 
 from sbomify.apps.core.apis import create_product
 from sbomify.apps.core.authz import MANAGE
@@ -39,6 +41,7 @@ def _create_product(request: HttpRequest, *, on_error: str) -> HttpResponse:
 class InventoryView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     inventory_kind: str | None = None
 
+    @method_decorator(vary_on_headers("HX-Target"))
     def get(self, request: HttpRequest) -> HttpResponse:
         result = build_inventory_context(request, kind=self.inventory_kind)
         if not result.ok:

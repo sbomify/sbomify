@@ -1,6 +1,5 @@
 {% comment %}One release editor for product detail and release history pages. State belongs to releaseEditor; every control comes from the shared library.{% endcomment %}
-<c-modal id="release-editor" show="showModal" close="closeModal()">
-<c-slot name="title"><span x-text="form.id ? 'Edit release' : 'Create release'"></span></c-slot>
+<c-modal id="release-editor" title="Edit release" show="showModal" close="closeModal()">
 <form id="release-editor-form"
       @submit.prevent="submitRelease()"
       class="flex flex-col gap-4">
@@ -27,6 +26,6 @@
 </form>
 <c-slot name="footer">
 <c-buttons.secondary @click="closeModal()">Cancel</c-buttons.secondary>
-<c-buttons.primary type="submit" form="release-editor-form" ::disabled="saving"><span x-text="saving ? 'Saving…' : form.id ? 'Save release' : 'Create release'"></span></c-buttons.primary>
+<c-buttons.primary type="submit" form="release-editor-form" ::disabled="saving"><span x-text="saving ? 'Saving…' : 'Save release'"></span></c-buttons.primary>
 </c-slot>
 </c-modal>

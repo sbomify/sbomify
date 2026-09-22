@@ -2,16 +2,16 @@ import Alpine from 'alpinejs';
 
 interface CopyableValueParams {
     value: string;
-    hideValue: boolean;
-    copyFrom: string;
-    title: string;
+    hideValue?: boolean;
+    copyFrom?: string;
+    title?: string;
 }
 
 /** How long the chip stays in its "copied" state before reverting. */
 const COPIED_RESET_MS = 1600;
 
 export function registerCopyableValue() {
-    Alpine.data('copyableValue', ({ value, hideValue, copyFrom, title }: CopyableValueParams) => {
+    Alpine.data('copyableValue', ({ value, hideValue = false, copyFrom = '', title = '' }: CopyableValueParams) => {
         return {
             value,
             hideValue,

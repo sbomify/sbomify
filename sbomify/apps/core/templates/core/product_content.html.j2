@@ -17,7 +17,7 @@
 <c-buttons.secondary size="sm" href="{{ product_public_url }}" x-show="isPublic"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>View Trust Center</c-buttons.secondary>
 {% if product.has_crud_permissions %}
     <c-actions-menu label="Product actions" icon="fas fa-ellipsis">
-    <c-dropdowns.item compact icon="fas fa-plus" @click="$dispatch('open-create-release')">Create release</c-dropdowns.item>
+    <c-dropdowns.item compact icon="fas fa-plus" href="{% url 'core:release_new' %}?product={{ product.id }}">Create release</c-dropdowns.item>
     <c-dropdowns.item compact icon="fas fa-link" x-show="isPublic" @click="navigator.clipboard.writeText('{{ APP_BASE_URL }}{{ product_public_url }}').then(() => $dispatch('messages', { value: [{ type: 'success', message: 'Public URL copied' }] }))">Copy public URL</c-dropdowns.item>
     <c-dropdowns.item compact icon="fas fa-certificate" x-show="isPublic" @click="navigator.clipboard.writeText('[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)]({{ APP_BASE_URL }}{{ product_public_url }})').then(() => $dispatch('messages', { value: [{ type: 'success', message: 'Badge copied' }] }))">Copy badge</c-dropdowns.item>
     </c-actions-menu>

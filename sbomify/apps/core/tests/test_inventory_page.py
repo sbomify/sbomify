@@ -146,6 +146,8 @@ def test_inventory_renders_full_and_partial_pages(
     assert partial.status_code == 200
     assert b"<html" not in partial.content
     assert b'id="inventory-content"' in partial.content
+    assert "HX-Target" in response["Vary"]
+    assert "HX-Target" in partial["Vary"]
     if view == "releases":
         assert client.post(reverse("core:releases_dashboard")).status_code == 405
 

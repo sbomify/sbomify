@@ -16,6 +16,9 @@
         <c-dropdowns.item compact icon="fas fa-puzzle-piece" href="{% url 'core:component_new' %}" @click="open = false">
         Component
         </c-dropdowns.item>
+        <c-dropdowns.item compact icon="fas fa-tag" href="{% url 'core:release_new' %}" @click="open = false">
+        Add release
+        </c-dropdowns.item>
         <c-dropdowns.item compact icon="fas fa-shield-halved" href="{% url 'core:security_advisory_new' %}" @click="open = false">
         Advisory
         </c-dropdowns.item>

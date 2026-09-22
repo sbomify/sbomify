@@ -38,7 +38,7 @@
     </c-cards.dashboard>
     <c-layout.frame id="settings-controls">
     <c-layout.page-header title="Settings controls" subtitle="Shared fields and compact controls, with one responsive row layout." />
-    <c-navigation.tabs links scrollable aria-label="Example settings sections">
+    <c-navigation.tabs links aria-label="Example settings sections">
     <c-navigation.tab href="#settings-controls" active>General</c-navigation.tab>
     <c-navigation.tab href="#settings-controls">Members</c-navigation.tab>
     <c-navigation.tab href="#settings-controls">API tokens</c-navigation.tab>
@@ -86,11 +86,10 @@
     </p>
     <c-overview.quick-actions>
     <c-layout.action-tile flush accent="info" href="{% url 'core:product_new' %}" title="Add product" description="Organise components and artifacts" icon="fas fa-cube" />
-    <c-layout.action-tile flush accent="info" title="Add release" description="Bring a version's artifacts together" icon="fas fa-tag" @click="$dispatch('open-release-picker')" aria-haspopup="dialog" />
+    <c-layout.action-tile flush accent="info" title="Add release" description="Bring a version's artifacts together" icon="fas fa-tag" href="{% url 'core:release_new' %}" />
     <c-layout.action-tile flush accent="info" href="{% url 'core:component_new' %}" title="Add component" description="Store SBOMs and documents" icon="fas fa-puzzle-piece" />
     <c-layout.action-tile flush accent="info" href="{% url 'core:security_advisory_new' %}" title="Add advisory" description="Create a draft security advisory" icon="fas fa-shield-halved" />
     </c-overview.quick-actions>
-    <c-overview.release-picker />
     <c-cards.card flush>
     <c-cards.header compact title="Exposure by product" hint="Example data" />
     <c-overview.table aria-label="Example product exposure">
@@ -1357,6 +1356,9 @@ first-of-type rule that drops the leading hairline reads the section's position
     </div>
     {# ── Navigation ────────────────────────────────────────────────────────── #}
     <h2 id="tabs" class="text-xl font-semibold text-text">Tabs</h2>
+    <p class="text-sm text-text-muted">
+        Long rows scroll without a scrollbar. Arrows appear when there are more tabs to reach; touch scrolling and keyboard navigation still work.
+    </p>
     <c-cards.card>
     <c-navigation.tabs :tabs="demo_tabs" active="overview" />
     <div class="mt-6">
@@ -1620,9 +1622,12 @@ first-of-type rule that drops the leading hairline reads the section's position
         <p class="tw-data-label mt-6 mb-2">Copy button</p>
         <p class="text-sm text-text-muted mb-3">
             The standalone control, for a value that is already on the page. It confirms in place for two
-            seconds rather than raising a toast.
+            seconds with a checkmark. Its surface and width stay steady.
         </p>
-        <c-copy-button value="https://sbomify.com/t/acme-corp" />
+        <div class="flex flex-col gap-4">
+            <c-copy-button value="https://sbomify.com/t/acme-corp" />
+            <c-copy-field id="ds-copy-url" label="Public URL" value="https://trust.example.com/public/workspace/example-enterprise/software-transparency" />
+        </div>
         <p class="tw-data-label mt-6 mb-2">Inline copy</p>
         <p class="text-sm text-text-muted mb-3">
             An identifier you click to copy. It confirms in place with its own

@@ -83,7 +83,8 @@ def test_settings_controls_and_navigation(
         expect(page.locator("#settings-content")).not_to_have_class(re.compile("htmx-settling"))
         # The replacement frame retains the canvas gap after every tab swap.
         assert navigation.evaluate(
-            "el => el.getBoundingClientRect().top - el.previousElementSibling.getBoundingClientRect().bottom"
+            "el => { const row = el.closest('[x-data=scrollableTabs]'); "
+            "return row.getBoundingClientRect().top - row.previousElementSibling.getBoundingClientRect().bottom; }"
         ) == pytest.approx(24)
         assert page.locator("body").evaluate("el => el.scrollWidth <= innerWidth")
         assert page.locator("#main-content").evaluate("el => el.scrollTop") == 0

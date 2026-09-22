@@ -137,6 +137,11 @@ def test_mobile_cra_actions_and_tabs(authenticated_page: Page, cra_assessment, w
     page.goto(f"/compliance/cra/{cra_assessment.id}/step/3/")
     tabs = page.get_by_role("tablist", name="Security assessment sections")
     expect(tabs.get_by_role("tab", name="Security checklist")).to_have_attribute("aria-selected", "true")
+    # An oversized tab keeps the start of its label visible on narrow screens.
+    assert tabs.evaluate(
+        "el => el.querySelector('[aria-selected=true]').getBoundingClientRect().left "
+        ">= el.parentElement.getBoundingClientRect().left - 1"
+    )
     tabs.get_by_role("tab", name="Incident reporting").click()
     expect(page.get_by_role("tabpanel", name="Incident reporting")).to_be_visible()
     assert page.locator("html").evaluate("el => el.scrollWidth <= el.clientWidth")

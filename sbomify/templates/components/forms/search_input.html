@@ -8,7 +8,7 @@ as the shortcut, so a hidden shortcut does not crowd the field on phones.
 The field comes first so the icon can respond to its focus through peer.
 {% endcomment %}
 <c-vars name id label model icon="fas fa-search" placeholder hint size class />
-<div class="relative min-w-0{% if size == 'sm' %} flex items-center w-[min(240px,100%)]{% endif %}{% if class %} {{ class }}{% endif %}">
+<div class="relative min-w-0{% if size == 'sm' %} flex items-center w-60 max-w-full{% endif %}{% if class %} {{ class }}{% endif %}">
     {% if label %}
         <label for="{% firstof id name %}" class="sr-only">{{ label }}</label>
     {% endif %}

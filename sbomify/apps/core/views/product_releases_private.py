@@ -8,7 +8,9 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.vary import vary_on_headers
 
 from sbomify.apps.core.apis import create_release
 from sbomify.apps.core.schemas import ReleaseCreateSchema
@@ -25,6 +27,7 @@ class ProductReleasesPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
             return ProductReleasesPublicView.as_view()(request, *args, **kwargs)
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(vary_on_headers("HX-Target"))
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
         result = build_product_releases_context(request, product_id)
         if not result.ok:

@@ -6,7 +6,7 @@
         {{ step_urls|json_script:"step-urls" }}
         {# Step content #}
         <div class="space-y-6">
-            <c-navigation.tabs-pills class="overflow-x-auto" aria-label="Security assessment sections">
+            <c-navigation.tabs-pills aria-label="Security assessment sections">
             <c-navigation.segment class="shrink-0" role="tab" id="tab-checklist" aria-controls="panel-checklist" ::aria-selected="activeTab === 'checklist'" ::tabindex="activeTab === 'checklist' ? 0 : -1" ::data-active="activeTab === 'checklist'" @click="activeTab = 'checklist'">
             <i class="fas fa-clipboard-check" aria-hidden="true"></i>
             Security checklist

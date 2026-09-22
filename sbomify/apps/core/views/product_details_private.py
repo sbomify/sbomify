@@ -6,7 +6,9 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.vary import vary_on_headers
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
@@ -23,6 +25,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             return ProductDetailsPublicView.as_view()(request, *args, **kwargs)
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(vary_on_headers("HX-Target"))
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
         result = build_product_page_context(request, product_id)
         if not result.ok:

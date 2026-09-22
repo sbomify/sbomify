@@ -37,7 +37,7 @@ def test_shell_frames_the_table(rendered: str) -> None:
 
 
 def test_nested_shell_drops_its_own_frame(rendered: str) -> None:
-    nested = _element_holding(rendered, "div", "bg-transparent")
+    nested = _element_holding(rendered, "div", 'data-probe="nested-shell"')
     assert "flex flex-col overflow-hidden" in nested
     assert "border-border" not in nested
     assert "rounded-xl" not in nested
@@ -323,11 +323,10 @@ def test_pager_drives_the_current_page_state(rendered: str) -> None:
     assert '<span x-text="currentPage"></span> / <span x-text="totalPages"></span>' in pager
 
 
-def test_pager_arrows_render_through_the_buttons_set(rendered: str) -> None:
+def test_pager_arrows_render_through_the_shared_page_control(rendered: str) -> None:
     pager = [part for part in rendered.split('<div class="flex items-center gap-2"') if "Previous page" in part][0]
-    assert "px-3.5 py-2 min-h-9 text-xs rounded-md" in pager
-    # Asserted as separate utilities, not one substring: secondary restates its
-    # resting colour on hover, which sits between them in the class list.
+    assert "min-w-8 h-8 px-2 rounded-md" in pager
+    # Arrows use the same neutral hover recipe as numbered pages.
     for utility in ("bg-surface", "text-text", "hover:text-text", "border-border"):
         assert utility in pager
     assert '<i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>' in pager

@@ -16,11 +16,10 @@
     {% if can_manage %}
         <c-overview.quick-actions>
         <c-layout.action-tile flush accent="info" href="{% url 'core:product_new' %}" icon="fas fa-cube" title="Add product" description="Organise components and artifacts" />
-        <c-layout.action-tile flush accent="info" icon="fas fa-tag" title="Add release" description="Bring a version's artifacts together" @click="$dispatch('open-release-picker')" aria-haspopup="dialog" />
+        <c-layout.action-tile flush accent="info" icon="fas fa-tag" title="Add release" description="Bring a version's artifacts together" href="{% url 'core:release_new' %}" />
         <c-layout.action-tile flush accent="info" href="{% url 'core:component_new' %}" icon="fas fa-puzzle-piece" title="Add component" description="Store SBOMs and documents" />
         <c-layout.action-tile flush accent="info" href="{% url 'core:security_advisory_new' %}" icon="fas fa-shield-halved" title="Add advisory" description="Create a draft security advisory" />
         </c-overview.quick-actions>
-        <c-overview.release-picker :products="dashboard.release_products" />
     {% endif %}
     {% if dashboard.is_first_visit %}
         <c-overview.onboarding :can_manage="can_manage" :first_component="onboarding.first_component" />

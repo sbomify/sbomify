@@ -144,8 +144,7 @@
     },
     {
       "title": "Add release",
-      "url_name": "core:dashboard",
-      "fragment": "add-release",
+      "url_name": "core:release_new",
       "section": "create",
       "icon": "fa-tag",
       "keywords": ["new release", "create release", "version"],

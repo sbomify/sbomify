@@ -7,10 +7,9 @@
     {% if team.is_public %}
         {% trust_center_absolute_url team as public_url %}
         <c-forms.field horizontal label="Public URL" hint="The address you can share with customers.">
-        <div class="flex flex-wrap items-center gap-2">
-            {% include 'core/components/copyable_value.html.j2' with value=public_url title='Copy public URL' only %}
-            <c-buttons.icon-quiet size="sm" href="{{ public_url }}" target="_blank" rel="noopener" label="Open Trust Center"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.icon-quiet>
-        </div>
+        <c-copy-field value="{{ public_url }}" label="public URL" id="trust-center-public-url">
+        <c-buttons.icon-quiet size="sm" href="{{ public_url }}" target="_blank" rel="noopener" label="Open Trust Center"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.icon-quiet>
+        </c-copy-field>
         </c-forms.field>
     {% endif %}
     </c-cards.card>
@@ -46,11 +45,11 @@
             <c-forms.field horizontal label="TEA discovery endpoint">
             {% if team_obj.custom_domain and team_obj.custom_domain_validated %}
                 {% with tea_url='https://'|add:team_obj.custom_domain|add:'/.well-known/tea' %}
-                    {% include 'core/components/copyable_value.html.j2' with value=tea_url title='Copy TEA discovery URL' only %}
+                    <c-copy-field value="{{ tea_url }}" label="TEA discovery URL" id="tea-discovery-url" />
                 {% endwith %}
             {% elif trust_center_domain and team_obj.slug %}
                 {% with tea_url='https://'|add:team_obj.slug|add:'.'|add:trust_center_domain|add:'/.well-known/tea' %}
-                    {% include 'core/components/copyable_value.html.j2' with value=tea_url title='Copy TEA discovery URL' only %}
+                    <c-copy-field value="{{ tea_url }}" label="TEA discovery URL" id="tea-discovery-url" />
                 {% endwith %}
             {% else %}
                 <c-forms.hint>Configure a custom domain or Trust Center slug to enable discovery.</c-forms.hint>
