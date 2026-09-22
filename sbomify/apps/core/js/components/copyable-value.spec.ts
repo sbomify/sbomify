@@ -22,7 +22,7 @@ interface Component {
     value: string
     copyFrom: string
     copied: boolean
-    copyToClipboard(): void
+    copyToClipboard(): Promise<void>
     destroy(): void
     $dispatch: ReturnType<typeof mock>
 }
@@ -57,6 +57,22 @@ describe('Copyable Value', () => {
     })
 
     describe('Copy confirmation', () => {
+        test('reports an unavailable clipboard without claiming success', async () => {
+            const { component } = build()
+            Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true, writable: true })
+            const consoleError = console.error
+            console.error = () => undefined
+            try {
+                await component.copyToClipboard()
+            } finally {
+                console.error = consoleError
+            }
+            expect(component.copied).toBe(false)
+            expect(component.$dispatch).toHaveBeenCalledWith('messages', {
+                value: [{ type: 'error', message: 'Failed to copy to clipboard' }]
+            })
+        })
+
         // The chip confirms in place. It used to dispatch a success toast, which was
         // far too loud for something that sits in every page header.
         test('enters the copied state and dispatches no toast on success', async () => {

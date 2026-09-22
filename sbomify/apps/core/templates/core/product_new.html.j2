@@ -14,19 +14,22 @@
     <i class="fas fa-arrow-left" aria-hidden="true"></i><span>Back to products</span>
     </c-buttons.ghost>
     </c-layout.page-header>
+    {% if form.non_field_errors %}
+        <c-feedback.alert variant="danger" title="Product could not be created">{{ form.non_field_errors|join:' ' }}</c-feedback.alert>
+    {% endif %}
     <form method="post" action="{% url 'core:product_new' %}">
         {% csrf_token %}
         <c-layout.form-section step="1" title="What it is" description="A name is all a product needs.">
         <div class="space-y-5">
-            <c-forms.field label="Name" for="name" required>
-            <c-forms.input name="name" required placeholder="e.g. Acme Router" />
+            <c-forms.field label="Name" for="name" required error="{{ form.name.errors|join:' ' }}">
+            <c-forms.input name="name" required maxlength="255" value="{{ form.name.value|default:'' }}" state="{{ form.name.errors|yesno:'error,' }}" aria-invalid="{{ form.name.errors|yesno:'true,false' }}" placeholder="e.g. Acme Router" />
             </c-forms.field>
         </div>
         </c-layout.form-section>
         <c-layout.form-section step="2" accent="neutral" title="What else is known" description="Optional. You can add this later.">
         <div class="space-y-5">
-            <c-forms.field label="Description" for="description">
-            <c-forms.textarea name="description" rows="4" placeholder="What is this product, and who is it for?" />
+            <c-forms.field label="Description" for="description" error="{{ form.description.errors|join:' ' }}">
+            <c-forms.textarea name="description" rows="4" maxlength="1000" value="{{ form.description.value|default:'' }}" state="{{ form.description.errors|yesno:'error,' }}" aria-invalid="{{ form.description.errors|yesno:'true,false' }}" placeholder="What is this product, and who is it for?" />
             </c-forms.field>
         </div>
         </c-layout.form-section>

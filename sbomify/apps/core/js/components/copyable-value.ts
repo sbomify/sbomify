@@ -22,12 +22,13 @@ export function registerCopyableValue() {
             // exercisable outside a browser.
             copiedTimer: undefined as ReturnType<typeof setTimeout> | undefined,
 
-            copyToClipboard() {
+            async copyToClipboard() {
                 const valueToCopy = this.copyFrom
                     ? document.getElementById(this.copyFrom)?.innerText || ''
                     : this.value;
 
-                navigator.clipboard.writeText(valueToCopy).then(() => {
+                try {
+                    await navigator.clipboard.writeText(valueToCopy);
                     // Success is confirmed by the chip itself, not a toast — these
                     // sit in page headers and identifier tables where a toast per
                     // click is far too loud.
@@ -36,7 +37,7 @@ export function registerCopyableValue() {
                     this.copiedTimer = setTimeout(() => {
                         this.copied = false;
                     }, COPIED_RESET_MS);
-                }).catch(err => {
+                } catch (err) {
                     // A failure is worth interrupting for: the value is not on the
                     // clipboard and the user has no other way to tell.
                     console.error('Failed to copy:', err);
@@ -46,7 +47,7 @@ export function registerCopyableValue() {
                             message: 'Failed to copy to clipboard'
                         }]
                     });
-                });
+                }
             },
 
             destroy() {

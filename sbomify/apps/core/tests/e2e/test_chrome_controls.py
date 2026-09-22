@@ -39,6 +39,14 @@ def test_chrome_menus(authenticated_page: Page, width: int, theme: str) -> None:
             "action_url": "javascript:alert(1)",
             "created_at": "2020-01-01T12:00:00Z",
         },
+        {
+            "id": "invalid-url",
+            "type": "alert",
+            "message": "A notification with an invalid action is still readable.",
+            "severity": "info",
+            "action_url": "http://[",
+            "created_at": "2020-01-01T12:00:00Z",
+        },
     ]
     failing = False
 
@@ -83,13 +91,13 @@ def test_chrome_menus(authenticated_page: Page, width: int, theme: str) -> None:
 
     bell = page.get_by_role("button", name="View notifications")
     expect(page.locator("#notifications-badge")).to_be_visible()
-    expect(page.locator("[data-notification-count]")).to_have_text("3 new notifications")
+    expect(page.locator("[data-notification-count]")).to_have_text("4 new notifications")
     bell.click()
     panel = page.get_by_role("dialog", name="Notifications", exact=True)
     expect(panel).to_be_focused()
     expect(panel.get_by_role("link", name="Respond", exact=True)).to_be_visible()
     expect(panel.get_by_role("link", name="Review", exact=True)).to_be_visible()
-    expect(panel.locator("li")).to_have_count(3)
+    expect(panel.locator("li")).to_have_count(4)
     expect(panel.locator("img")).to_have_count(0)
     expect(panel.get_by_text("Literal <img src=x onerror=alert(1)> text", exact=True)).to_be_visible()
     expect(panel.get_by_role("link", name="View", exact=True)).to_have_count(0)
@@ -113,3 +121,53 @@ def test_chrome_menus(authenticated_page: Page, width: int, theme: str) -> None:
     account.click()
     expect(panel).to_be_hidden()
     assert page.locator("html").evaluate("el => el.scrollWidth <= innerWidth")
+
+
+@pytest.mark.django_db
+def test_notification_refresh_ignores_an_older_response(authenticated_page: Page) -> None:
+    page = authenticated_page
+    page.add_init_script("""(() => {
+        const originalFetch = window.fetch;
+        let first = true;
+        window.fetch = (input, options) => {
+            if (input === '/api/v1/notifications/' && first) {
+                first = false;
+                return new Promise(resolve => {
+                    window.finishOldNotifications = () => resolve(new Response(JSON.stringify([{
+                        id: 'old', type: 'alert', message: 'Old response', severity: 'info',
+                        created_at: '2020-01-01T12:00:00Z'
+                    }]), {headers: {'Content-Type': 'application/json'}}));
+                });
+            }
+            return originalFetch(input, options);
+        };
+    })();""")
+    page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=[]))
+    page.goto("/dashboard")
+    page.wait_for_function("typeof window.finishOldNotifications === 'function'")
+    page.get_by_role("button", name="View notifications").click()
+    panel = page.get_by_role("dialog", name="Notifications", exact=True)
+    expect(panel.get_by_text("You're all caught up", exact=True)).to_be_visible()
+    page.evaluate("async () => { window.finishOldNotifications(); await new Promise(requestAnimationFrame); }")
+    expect(panel.locator("li")).to_have_count(0)
+    expect(panel.get_by_text("You're all caught up", exact=True)).to_be_visible()
+
+
+@pytest.mark.django_db
+def test_clearing_notifications_reports_failure_and_keeps_the_list(authenticated_page: Page) -> None:
+    page = authenticated_page
+    records = [{
+        "id": "example", "type": "alert", "message": "Example notification", "severity": "info",
+        "created_at": "2020-01-01T12:00:00Z",
+    }]
+    page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=records))
+    page.route("**/api/v1/notifications/clear/", lambda route: route.fulfill(status=503))
+    page.goto("/dashboard")
+    page.get_by_role("button", name="View notifications").click()
+    panel = page.get_by_role("dialog", name="Notifications", exact=True)
+    clear = panel.get_by_role("button", name="Clear all")
+    clear.click()
+    expect(page.get_by_text("Could not clear notifications. Try again.", exact=True)).to_be_visible()
+    expect(panel.get_by_text("Example notification", exact=True)).to_be_visible()
+    expect(clear).to_be_enabled()
+    expect(page.locator("[data-notification-count]")).to_have_text("1 new notification")

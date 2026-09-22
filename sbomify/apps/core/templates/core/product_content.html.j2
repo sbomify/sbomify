@@ -1,5 +1,6 @@
 <c-layout.frame id="product-content" x-data="{ assignOpen: false, removeTarget: null, isPublic: {{ product.is_public|yesno:'true,false' }} }" @remove-product-component.window="removeTarget = $event.detail" @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic" hx-get="{{ inventory.base_url }}" hx-include="#product-components-filters" hx-trigger="refresh-product from:body" hx-target="this" hx-swap="outerHTML show:none" hx-sync="this:replace">
-<c-layout.page-header title="{{ product.name }}" editable_item_type="{{ product.has_crud_permissions|yesno:'product,' }}" editable_item_id="{{ product.id }}" :copy_values="header_copy_values">
+{% url 'core:product_details_public' product.id as product_public_url %}
+<c-layout.page-header title="{{ product.name }}" editable_item_type="{{ product.has_crud_permissions|yesno:'product,' }}" editable_item_id="{{ product.id }}" :copy_values="header_copy_values" x-data="publicSharing('{{ product_public_url|escapejs }}')">
 <c-slot name="subtitle">
 {% if product.has_crud_permissions %}
     {% include 'core/components/editable_single_field.html.j2' with item_type='product' item_id=product.id item_value=product.description|default:'' field_name='description' field_type='textarea' placeholder='Add a description' %}
@@ -13,13 +14,12 @@
     <c-dropdowns.item compact icon="fas fa-download" href="{% url 'core:sbom_download_product' product.id %}?format=spdx">Download SPDX</c-dropdowns.item>
     </c-actions-menu>
 {% endif %}
-{% url 'core:product_details_public' product.id as product_public_url %}
 <c-buttons.secondary size="sm" href="{{ product_public_url }}" x-show="isPublic"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>View Trust Center</c-buttons.secondary>
 {% if product.has_crud_permissions %}
     <c-actions-menu label="Product actions" icon="fas fa-ellipsis">
     <c-dropdowns.item compact icon="fas fa-plus" href="{% url 'core:release_new' %}?product={{ product.id }}">Create release</c-dropdowns.item>
-    <c-dropdowns.item compact icon="fas fa-link" x-show="isPublic" @click="navigator.clipboard.writeText('{{ APP_BASE_URL }}{{ product_public_url }}').then(() => $dispatch('messages', { value: [{ type: 'success', message: 'Public URL copied' }] }))">Copy public URL</c-dropdowns.item>
-    <c-dropdowns.item compact icon="fas fa-certificate" x-show="isPublic" @click="navigator.clipboard.writeText('[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)]({{ APP_BASE_URL }}{{ product_public_url }})').then(() => $dispatch('messages', { value: [{ type: 'success', message: 'Badge copied' }] }))">Copy badge</c-dropdowns.item>
+    <c-dropdowns.item compact icon="fas fa-link" x-show="isPublic" @click="copyToClipboard()">Copy public URL</c-dropdowns.item>
+    <c-dropdowns.item compact icon="fas fa-certificate" x-show="isPublic" @click="copyBadgeToClipboard()">Copy badge</c-dropdowns.item>
     </c-actions-menu>
 {% endif %}
 </c-layout.page-header>

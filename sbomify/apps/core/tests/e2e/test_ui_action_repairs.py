@@ -349,3 +349,35 @@ def test_controls_settings_snapshot(
     baseline = snapshot.get_or_create_baseline_screenshot(page, width=width)
     current = snapshot.take_screenshot(page, width=width)
     snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_product_sharing_uses_the_shared_clipboard_flow(
+    authenticated_page: Page, product_factory: Callable[..., Product], fails: bool
+) -> None:
+    product = product_factory("Example shared product", is_public=True)
+    page = authenticated_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.add_init_script("""window.auditCopies = []; Object.defineProperty(navigator, 'clipboard', {
+        configurable: true, value: {writeText: async text => {
+            if (window.failCopy) throw new Error('Clipboard unavailable');
+            window.auditCopies.push(text);
+        }}
+    });""")
+    page.goto(reverse("core:product_details", args=[product.pk]))
+    page.evaluate("value => { window.failCopy = value; }", fails)
+    for index, label in enumerate(["Copy public URL", "Copy badge"], start=1):
+        page.get_by_role("button", name="Product actions", exact=True).click()
+        page.get_by_role("menuitem", name=label, exact=True).click()
+        if fails:
+            message = "Failed to copy URL to clipboard" if index == 1 else "Failed to copy badge to clipboard"
+            expect(page.get_by_text(message, exact=True)).to_be_visible()
+        else:
+            page.wait_for_function(f"window.auditCopies.length === {index}")
+    if not fails:
+        copies = page.evaluate("window.auditCopies")
+        public_path = reverse("core:product_details_public", args=[product.pk])
+        assert copies[0] == page.evaluate("location.origin") + public_path
+        assert copies[1] == f"[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)]({copies[0]})"
+    assert not errors

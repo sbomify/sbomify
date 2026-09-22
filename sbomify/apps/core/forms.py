@@ -142,6 +142,22 @@ class TogglePublicStatusForm(forms.Form):
     is_public = forms.BooleanField(required=False)
 
 
+class ProductCreateForm(forms.Form):
+    name = forms.CharField(max_length=255)
+    description = forms.CharField(max_length=1000, required=False)
+
+
+class ComponentCreateForm(forms.Form):
+    name = forms.CharField(max_length=255)
+    component_type = forms.ChoiceField(
+        choices=[("bom", "BOM"), ("document", "Document")], initial="bom", required=False
+    )
+    is_global = forms.BooleanField(required=False)
+
+    def clean_component_type(self) -> str:
+        return self.cleaned_data["component_type"] or "bom"
+
+
 class ReleaseCreateForm(forms.Form):
     product_id = forms.ChoiceField(label="Product")
     name = forms.CharField(max_length=255, label="Release name")

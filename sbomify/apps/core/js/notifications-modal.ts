@@ -1,5 +1,6 @@
 /** Notification data and lifecycle. Cotton templates own all rendered markup. */
 import { getCsrfToken } from './csrf';
+import { showError } from './alerts';
 import { formatCompactRelativeDate } from './utils';
 
 interface Notification {
@@ -13,6 +14,7 @@ interface Notification {
 
 let notifications: Notification[] = [];
 let initializedPanel: HTMLElement | null = null;
+let pendingRequest: AbortController | null = null;
 
 function actionLabel(type: string): string {
   if (type === 'pending_invitation') return 'Respond';
@@ -38,7 +40,12 @@ function renderNotification(notification: Notification, template: HTMLTemplateEl
     time.dateTime = notification.created_at;
   }
   // Only web links can become actions, even if an API response is malformed.
-  const url = notification.action_url ? new URL(notification.action_url, window.location.origin) : null;
+  let url: URL | null = null;
+  try {
+    if (notification.action_url) url = new URL(notification.action_url, window.location.origin);
+  } catch {
+    // A malformed action must not hide the notification or the rest of the list.
+  }
   if (action && url && ['http:', 'https:'].includes(url.protocol)) {
     action.href = url.href;
     action.textContent = actionLabel(notification.type);
@@ -64,25 +71,33 @@ function renderNotifications(): void {
   setHidden('notifications-clear', notifications.length === 0);
   setHidden('notifications-badge', notifications.length === 0);
   const count = document.querySelector('[data-notification-count]');
-  if (count) count.textContent = `${notifications.length} new notifications`;
+  if (count) count.textContent = `${notifications.length} new ${notifications.length === 1 ? 'notification' : 'notifications'}`;
 }
 
 async function fetchNotifications(): Promise<void> {
+  pendingRequest?.abort();
+  const request = new AbortController();
+  pendingRequest = request;
   try {
     const response = await fetch('/api/v1/notifications/', {
       method: 'GET',
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      signal: request.signal,
     });
     if (!response.ok) throw new Error(`Failed to fetch notifications: ${response.status}`);
     const data = await response.json();
+    if (request.signal.aborted) return;
     notifications = Array.isArray(data) ? data : [];
     renderNotifications();
   } catch {
+    if (request.signal.aborted) return;
     setHidden('notifications-loading', true);
     setHidden('notifications-empty', true);
     setHidden('notifications-clear', true);
     setHidden('notifications-error', false);
     document.getElementById('notifications-list')?.replaceChildren();
+  } finally {
+    if (pendingRequest === request) pendingRequest = null;
   }
 }
 
@@ -133,6 +148,7 @@ document.addEventListener('click', async event => {
   } else if (target?.id === 'clearAllNotifications') {
     document.getElementById('notifications-dropdown')?.focus();
     target.disabled = true;
+    pendingRequest?.abort();
     try {
       const response = await fetch('/api/v1/notifications/clear/', {
         method: 'POST',
@@ -141,9 +157,10 @@ document.addEventListener('click', async event => {
           'X-CSRFToken': getCsrfToken(),
         },
       });
-      if (response.ok) await fetchNotifications();
+      if (!response.ok) throw new Error('Unable to clear notifications');
+      await fetchNotifications();
     } catch {
-      // Keep the current notifications available until the next refresh.
+      showError('Could not clear notifications. Try again.');
     } finally {
       target.disabled = false;
       document.getElementById('notifications-dropdown')?.focus();
