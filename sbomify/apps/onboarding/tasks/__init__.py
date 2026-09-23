@@ -275,15 +275,27 @@ def requeue_missed_welcome_emails_task() -> None:
     """
     from django.utils import timezone
 
-    from ..models import OnboardingStatus
+    from ..models import OnboardingEmail, OnboardingStatus
+    from ..services import refused_at_current_address
 
     cutoff = timezone.now() - datetime.timedelta(days=WELCOME_RECOVERY_WINDOW_DAYS)
-    missed = OnboardingStatus.objects.filter(
-        welcome_email_sent=False,
-        user__date_joined__gte=cutoff,
-        user__is_active=True,
-        user__deleted_at__isnull=True,
-    ).values_list("user_id", flat=True)
+    # A refused welcome leaves welcome_email_sent false forever, so without
+    # this the sweep re-queues every permanently refused address daily for the
+    # length of the window. The service would refuse each one, but only after a
+    # task had been queued and its template rendered.
+    refused = OnboardingEmail.objects.filter(email_type=OnboardingEmail.EmailType.WELCOME).filter(
+        refused_at_current_address()
+    )
+    missed = (
+        OnboardingStatus.objects.filter(
+            welcome_email_sent=False,
+            user__date_joined__gte=cutoff,
+            user__is_active=True,
+            user__deleted_at__isnull=True,
+        )
+        .exclude(user_id__in=refused.values("user_id"))
+        .values_list("user_id", flat=True)
+    )
 
     queued = 0
     for user_id in missed:

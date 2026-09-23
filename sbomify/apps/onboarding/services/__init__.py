@@ -11,7 +11,7 @@ from typing import Any
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, OperationalError
-from django.db.models import QuerySet
+from django.db.models import F, Q, QuerySet
 from django.utils import timezone
 
 from sbomify.logging import getLogger
@@ -89,6 +89,19 @@ def _is_transient_send_error(exc: BaseException) -> bool:
 #: and the send. Generous on purpose, because the cost of guessing early is two
 #: copies of one email and the cost of guessing late is an hour's delay.
 ABANDONED_PENDING_AFTER = timedelta(hours=1)
+
+
+def refused_at_current_address() -> Q:
+    """Rows whose ``UNDELIVERABLE`` still applies to the user's address now.
+
+    The ORM half of :meth:`OnboardingEmail.suppresses`, for the queries that
+    decide what to queue. Keeping the blank case here as well is what stops the
+    two disagreeing: a row from before ``attempted_address`` existed suppresses
+    in both.
+    """
+    return Q(status=OnboardingEmail.EmailStatus.UNDELIVERABLE) & (
+        Q(attempted_address="") | Q(attempted_address=F("user__email"))
+    )
 
 
 def _is_abandoned(record: OnboardingEmail) -> bool:
@@ -452,17 +465,22 @@ class OnboardingEmailService:
             is_default_team=True,
         ).select_related("user", "team")
 
-        # Get all successfully sent emails to avoid re-sending
-        sent_emails = set(
-            OnboardingEmail.objects.filter(
-                email_type__in=[
-                    OnboardingEmail.EmailType.QUICK_START,
-                    OnboardingEmail.EmailType.FIRST_COMPONENT,
-                    OnboardingEmail.EmailType.FIRST_SBOM,
-                    OnboardingEmail.EmailType.COLLABORATION,
-                ],
-                status=OnboardingEmail.EmailStatus.SENT,
-            ).values_list("user_id", "email_type")
+        sequence_types = [
+            OnboardingEmail.EmailType.QUICK_START,
+            OnboardingEmail.EmailType.FIRST_COMPONENT,
+            OnboardingEmail.EmailType.FIRST_SBOM,
+            OnboardingEmail.EmailType.COLLABORATION,
+        ]
+        # Emails that need no further attempt: sent, or refused by an address
+        # the user still has. The send path checks the second one too, but only
+        # after a task has been queued, its eligibility recomputed and its
+        # template rendered — daily, for an address that is not going to start
+        # working. Excluding it here is what makes that state stop costing
+        # anything.
+        settled_emails = set(
+            OnboardingEmail.objects.filter(email_type__in=sequence_types)
+            .filter(Q(status=OnboardingEmail.EmailStatus.SENT) | refused_at_current_address())
+            .values_list("user_id", "email_type")
         )
 
         backfilled_status = 0
@@ -510,28 +528,28 @@ class OnboardingEmailService:
                 if (
                     user_id,
                     OnboardingEmail.EmailType.QUICK_START,
-                ) not in sent_emails and status.should_receive_quick_start(days_threshold=1):
+                ) not in settled_emails and status.should_receive_quick_start(days_threshold=1):
                     results[OnboardingEmail.EmailType.QUICK_START].append(user_id)
 
                 # First Component (day 3, no component)
                 if (
                     user_id,
                     OnboardingEmail.EmailType.FIRST_COMPONENT,
-                ) not in sent_emails and status.should_receive_component_reminder(days_threshold=3):
+                ) not in settled_emails and status.should_receive_component_reminder(days_threshold=3):
                     results[OnboardingEmail.EmailType.FIRST_COMPONENT].append(user_id)
 
                 # First SBOM (day 7, component but no SBOM)
                 if (
                     user_id,
                     OnboardingEmail.EmailType.FIRST_SBOM,
-                ) not in sent_emails and status.should_receive_sbom_reminder(days_threshold=7):
+                ) not in settled_emails and status.should_receive_sbom_reminder(days_threshold=7):
                     results[OnboardingEmail.EmailType.FIRST_SBOM].append(user_id)
 
                 # Collaboration (day 10, solo workspace)
                 if (
                     user_id,
                     OnboardingEmail.EmailType.COLLABORATION,
-                ) not in sent_emails and status.should_receive_collaboration(days_threshold=10):
+                ) not in settled_emails and status.should_receive_collaboration(days_threshold=10):
                     results[OnboardingEmail.EmailType.COLLABORATION].append(user_id)
             except Exception as e:
                 skipped_errors += 1

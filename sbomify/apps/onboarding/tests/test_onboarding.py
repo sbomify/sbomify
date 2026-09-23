@@ -1955,6 +1955,40 @@ class TestWelcomeRecoverySweep:
             assert OnboardingEmailService.send_welcome_email(user) is False
             mock_email_cls.assert_not_called()
 
+    def test_a_refused_address_is_not_re_queued_daily(self) -> None:
+        """welcome_email_sent stays false forever after a refusal.
+
+        The service would refuse each attempt anyway, but only after a task had
+        been queued and its template rendered — every day, for an address that
+        is not going to start working.
+        """
+        import smtplib
+
+        user = self._owner("refuseddaily", welcome_sent=False)
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {user.email: (550, b"No such user here")}
+            )
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+        assert user.id not in self._run_sweep()
+
+    def test_a_refusal_of_an_old_address_does_not_block_the_sweep(self) -> None:
+        """The exclusion has to track the address, like the send guard does."""
+        import smtplib
+
+        user = self._owner("refusedthenfixed", welcome_sent=False)
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {user.email: (550, b"No such user here")}
+            )
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+        User.objects.filter(pk=user.pk).update(email="fixed@example.com")
+        assert user.id in self._run_sweep()
+
     def test_a_signup_who_is_not_a_workspace_owner_is_still_swept(self) -> None:
         """The signal queues a welcome for every human user, not just owners.
 
@@ -1995,3 +2029,57 @@ class TestWelcomeRecoverySweep:
         mail.outbox = []
         assert OnboardingEmailService.send_welcome_email(user) is True
         assert len(mail.outbox) == 1
+
+
+@pytest.mark.django_db
+class TestRefusedAddressesLeaveTheBatch:
+    """A settled refusal should stop costing a render every day.
+
+    The send path refuses these anyway, but only once a task has been queued,
+    its eligibility recomputed and its template rendered.
+    """
+
+    @staticmethod
+    def _eligible_quick_start(user: Any) -> bool:
+        eligible = OnboardingEmailService.get_users_for_onboarding_sequence()
+        return user.id in [u.id for u in eligible[OnboardingEmail.EmailType.QUICK_START]]
+
+    def _user_due_for_quick_start(self, name: str) -> Any:
+        user = User.objects.create_user(username=name, email=f"{name}@example.com", password="test123")
+        team = Team.objects.create(name=f"{name} Team", key=f"{name}-team")
+        Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+        OnboardingStatus.objects.filter(pk=status.pk).update(created_at=timezone.now() - timedelta(days=2))
+        return user
+
+    def test_a_due_user_is_eligible(self) -> None:
+        user = self._user_due_for_quick_start("duequick")
+        assert self._eligible_quick_start(user)
+
+    def test_a_refused_address_drops_out(self) -> None:
+        import smtplib
+
+        user = self._user_due_for_quick_start("refusedquick")
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {user.email: (550, b"No such user here")}
+            )
+            assert OnboardingEmailService.send_quick_start_email(user) is False
+
+        assert not self._eligible_quick_start(user)
+
+    def test_a_corrected_address_comes_back(self) -> None:
+        import smtplib
+
+        user = self._user_due_for_quick_start("fixedquick")
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {user.email: (550, b"No such user here")}
+            )
+            assert OnboardingEmailService.send_quick_start_email(user) is False
+
+        User.objects.filter(pk=user.pk).update(email="fixedquick2@example.com")
+        assert self._eligible_quick_start(user)
