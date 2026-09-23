@@ -4,6 +4,7 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
+import sentry_sdk
 from django.db import transaction
 from django.utils import timezone
 
@@ -21,6 +22,11 @@ class StripePricingService:
 
     # Cache TTL for pricing data
     CACHE_TTL = timedelta(hours=CACHE_TTL_HOURS)
+
+    # Past this, the cached copy has stopped standing in for Stripe: the prices
+    # on the page are old enough that they may no longer be the ones Stripe
+    # would charge.
+    STALE_AFTER = timedelta(hours=24)
 
     def __init__(self) -> None:
         self.stripe_client = get_stripe_client()
@@ -56,47 +62,60 @@ class StripePricingService:
         if not needs_refresh:
             return self._build_pricing_from_db(db_plans)
 
-        # Fetch from Stripe and update DB
-        try:
-            return self._refresh_pricing_from_stripe(db_plans)
-        except StripeError as e:
-            # Warning, not error: Sentry's logging integration turns an error
-            # into an event, and this branch is the fallback working. The
-            # caller gets the prices it asked for, from the copy this service
-            # keeps for exactly this reason, and the page renders. A Stripe
-            # blip used to page on-call from here, from the line below it, and
-            # from the client that raised — three alerts for one request that
-            # succeeded.
-            logger.warning("Failed to fetch Stripe products: %s. Returning cached data.", e)
-            # Past the threshold the fallback stops covering for the outage:
-            # the prices on the page are a day old and may no longer be the
-            # ones Stripe would charge. That is worth an alert, which is why
-            # it is the branch logged at error level rather than the one above.
-            #
-            # One line for the refresh, not one per plan. The plans go stale
-            # together — they share a sync and they share the outage that
-            # stopped it — and a line per plan is the same alert once per
-            # billing plan, which is the volume this change exists to remove.
-            stale_threshold = timedelta(hours=24)
-            now = timezone.now()
-            stale = {
-                plan.key: now - plan.last_synced_at
-                for plan in db_plans
-                if plan.last_synced_at and now - plan.last_synced_at > stale_threshold
-            }
+        # How old the cached copy already is, read before the call rather than
+        # after it fails. A failed refresh is reported by the Stripe client,
+        # which logs at error and so raises a Sentry issue on its own; putting
+        # the staleness on the scope that call runs under means that issue
+        # carries the answer to "are the prices on the page still any good"
+        # instead of a second issue arriving to say so separately.
+        stale = self._stale_plans(db_plans)
+        with sentry_sdk.new_scope() as scope:
+            # Scoped to this call only, so no later event inherits the tag.
+            scope.set_tag("pricing_cache_stale", bool(stale))
             if stale:
-                # %-style rather than an f-string so the template is what
-                # Sentry groups on. Interpolating the age into the message
-                # makes every refresh a new group, which is the one-alert goal
-                # lost a second way.
-                logger.error(
-                    "Pricing cache is stale for %d plan(s): %s (oldest %s). "
-                    "Stripe sync failed. Consider investigating Stripe API issues.",
-                    len(stale),
-                    ", ".join(sorted(key or "" for key in stale)),
-                    max(stale.values()),
+                scope.set_context(
+                    "pricing_cache",
+                    {
+                        "stale_plans": sorted(stale),
+                        "oldest_age": str(max(stale.values())),
+                        "stale_after_hours": self.STALE_AFTER.total_seconds() / 3600,
+                    },
                 )
-            return self._build_pricing_from_db(db_plans)
+            try:
+                return self._refresh_pricing_from_stripe(db_plans)
+            except StripeError as e:
+                # Warning, not error, on both paths: the logging integration
+                # turns an error into an event, and this branch is the fallback
+                # working — the caller gets the prices it asked for and the page
+                # renders. A Stripe blip used to page on-call from here, from
+                # the helper below, and from the client that raised: three
+                # issues for one request that succeeded.
+                if stale:
+                    logger.warning(
+                        "Failed to fetch Stripe products: %s. Returning cached data, "
+                        "stale for %d plan(s): %s (oldest %s).",
+                        e,
+                        len(stale),
+                        ", ".join(sorted(stale)),
+                        max(stale.values()),
+                    )
+                else:
+                    logger.warning("Failed to fetch Stripe products: %s. Returning cached data.", e)
+                return self._build_pricing_from_db(db_plans)
+
+    @classmethod
+    def _stale_plans(cls, db_plans: list[BillingPlan]) -> dict[str, timedelta]:
+        """Cached plans old enough that their prices are no longer trustworthy.
+
+        Keyed by plan so the report names them; a plan that has never synced is
+        not stale, it is unpopulated, and there is nothing here to distrust.
+        """
+        now = timezone.now()
+        return {
+            plan.key or "": now - plan.last_synced_at
+            for plan in db_plans
+            if plan.last_synced_at and now - plan.last_synced_at > cls.STALE_AFTER
+        }
 
     def _build_pricing_from_db(self, db_plans: list[BillingPlan]) -> dict[str, dict[str, Any]]:
         """Build pricing dict from database plans (cached data)."""
