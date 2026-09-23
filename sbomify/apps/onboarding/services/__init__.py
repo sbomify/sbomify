@@ -81,6 +81,24 @@ def _is_transient_send_error(exc: BaseException) -> bool:
     return isinstance(exc, OSError)
 
 
+def _is_refused_address(exc: BaseException) -> bool:
+    """Whether the server refused this recipient for good.
+
+    Narrower than "permanent" on purpose. A 552 over-size, a 535 bad
+    credential and a refused *sender* are all terminal for the attempt, but
+    they are faults on our side: fix the template or the relay config and the
+    next batch pass delivers. Marking those undeliverable would strand every
+    user behind one misconfiguration, and nothing would clear it.
+
+    A 5xx against the recipient is the one that says the address will not exist
+    on the next attempt either, so it is the only one worth remembering.
+    """
+    if not isinstance(exc, smtplib.SMTPRecipientsRefused):
+        return False
+    refusals = (exc.recipients or {}).values()
+    return bool(refusals) and all(isinstance(code, int) and 500 <= code < 600 for code, _ in refusals)
+
+
 def _render_or_report(template_name: str, context: dict[str, Any], user_id: Any) -> tuple[str, str] | None:
     """Render a message, or report the failure and answer ``None``.
 
@@ -163,6 +181,14 @@ class OnboardingEmailService:
         if existing and existing.status == OnboardingEmail.EmailStatus.SENT:
             logger.info("Welcome email record already sent for user %s", user.id)
             return True
+        # An undeliverable row is kept and honoured. The FAILED row below is
+        # deleted so the next pass can try again, which is what a batch
+        # re-queue is for; doing that to a refused address would re-send to a
+        # mailbox that does not exist, every day, for as long as the user
+        # exists.
+        if existing and existing.status == OnboardingEmail.EmailStatus.UNDELIVERABLE:
+            logger.info("Welcome email address previously refused for user %s, not retrying", user.id)
+            return False
         if existing and existing.status == OnboardingEmail.EmailStatus.FAILED:
             existing.delete()
 
@@ -199,6 +225,10 @@ class OnboardingEmailService:
             logger.info("Welcome email sent successfully to user %s", user.id)
             return True
         except Exception as e:
+            if _is_refused_address(e):
+                email_record.mark_undeliverable(f"Address refused: {type(e).__name__}")
+                logger.error("Welcome email address refused for user %s: %s", user.id, e)
+                return False
             email_record.mark_failed(f"SMTP send failure: {type(e).__name__}")
             if _is_transient_send_error(e):
                 logger.warning("Transient failure sending welcome email to user %s: %s", user.id, e)
@@ -251,7 +281,11 @@ class OnboardingEmailService:
             return False
         html_content, plain_text_content = rendered
 
-        # Delete any previous failed record so we can create a fresh one
+        # A refused address is remembered; a failed one is deleted so the next
+        # pass can create a fresh record and try again.
+        if existing and existing.status == OnboardingEmail.EmailStatus.UNDELIVERABLE:
+            logger.info("%s email address previously refused for user %s, not retrying", email_type, user.id)
+            return False
         if existing and existing.status == OnboardingEmail.EmailStatus.FAILED:
             existing.delete()
 
@@ -280,6 +314,10 @@ class OnboardingEmailService:
             logger.info("%s email sent successfully to user %s", email_type, user.id)
             return True
         except Exception as e:
+            if _is_refused_address(e):
+                email_record.mark_undeliverable(f"Address refused: {type(e).__name__}")
+                logger.error("%s email address refused for user %s: %s", email_type, user.id, e)
+                return False
             email_record.mark_failed(f"SMTP send failure: {type(e).__name__}")
             if _is_transient_send_error(e):
                 logger.warning("Transient failure sending %s email to user %s: %s", email_type, user.id, e)

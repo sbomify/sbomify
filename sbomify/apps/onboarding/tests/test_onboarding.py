@@ -1538,6 +1538,96 @@ class TestTransientSendFailuresRetry:
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
+    def test_a_refused_address_is_remembered_and_not_re_sent(self) -> None:
+        """The daily batch must not keep re-sending to a mailbox that is gone.
+
+        A FAILED row is deleted and recreated on the next pass, which is right
+        for a broken template and wrong for a 550: nothing we fix makes the
+        address exist, and re-sending daily only earns bounces.
+        """
+        import smtplib
+
+        user = self._user("refusedremembered")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {"gone@example.com": (550, b"No such user here")}
+            )
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.UNDELIVERABLE
+
+        # The next batch pass: the mailer must not be reached at all.
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            assert OnboardingEmailService.send_welcome_email(user) is False
+            mock_email_cls.assert_not_called()
+
+        assert OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.WELCOME).count() == 1
+
+    def test_a_refused_address_is_remembered_on_the_sequence_emails_too(self) -> None:
+        import smtplib
+
+        user = self._user("seqrefused")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {"gone@example.com": (550, b"No such user here")}
+            )
+            assert OnboardingEmailService.send_quick_start_email(user) is False
+
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)
+        assert record.status == OnboardingEmail.EmailStatus.UNDELIVERABLE
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            assert OnboardingEmailService.send_quick_start_email(user) is False
+            mock_email_cls.assert_not_called()
+
+    def test_a_fault_on_our_side_is_still_retried_by_a_later_pass(self) -> None:
+        """Only the recipient's own refusal is remembered.
+
+        A 552 over-size or a 535 bad credential is terminal for the attempt but
+        ours to fix, and the address is fine. Marking those undeliverable would
+        strand every user behind one misconfiguration with nothing to clear it.
+        """
+        import smtplib
+
+        for name, error in (
+            ("oursize", smtplib.SMTPDataError(552, b"Message size exceeds limit")),
+            ("ourauth", smtplib.SMTPAuthenticationError(535, b"authentication failed")),
+        ):
+            user = self._user(name)
+            with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+                mock_email_cls.return_value.send.side_effect = error
+                assert OnboardingEmailService.send_welcome_email(user) is False
+
+            record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+            assert record.status == OnboardingEmail.EmailStatus.FAILED, name
+
+            # The config is fixed; the next pass delivers.
+            mail.outbox = []
+            assert OnboardingEmailService.send_welcome_email(user) is True, name
+            assert len(mail.outbox) == 1
+
+    def test_a_refused_sender_does_not_strand_the_recipient(self) -> None:
+        """Our envelope was wrong, not their address."""
+        import smtplib
+
+        user = self._user("senderrefused")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPSenderRefused(
+                550, b"Sender rejected", "us@example.com"
+            )
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.FAILED
+
     def test_a_broken_template_is_reported_as_permanent(self) -> None:
         """Rendering happens before the send block, so it needs its own answer.
 

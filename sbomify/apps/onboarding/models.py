@@ -295,6 +295,13 @@ class OnboardingEmail(models.Model):
         PENDING = "pending", "Pending"
         SENT = "sent", "Sent"
         FAILED = "failed", "Failed"
+        #: The address itself was refused with a 5xx. Distinct from FAILED
+        #: because the two want opposite things from the next batch pass: a
+        #: FAILED row is deleted and tried again, which is right for a broken
+        #: template or a misconfigured relay and wrong here. Nothing we fix on
+        #: our side makes a nonexistent mailbox exist, so re-sending daily only
+        #: earns bounces against our sending reputation.
+        UNDELIVERABLE = "undeliverable", "Undeliverable"
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     user = models.ForeignKey("core.User", on_delete=models.CASCADE, related_name="onboarding_emails")
@@ -331,6 +338,13 @@ class OnboardingEmail(models.Model):
     def mark_failed(self, error_message: str = "") -> None:
         """Mark email as failed with optional error message."""
         self.status = self.EmailStatus.FAILED
+        self.error_message = error_message
+        self.retry_count += 1
+        self.save(update_fields=["status", "error_message", "retry_count"])
+
+    def mark_undeliverable(self, error_message: str = "") -> None:
+        """Mark the address as refused, so nothing tries this one again."""
+        self.status = self.EmailStatus.UNDELIVERABLE
         self.error_message = error_message
         self.retry_count += 1
         self.save(update_fields=["status", "error_message", "retry_count"])
