@@ -76,6 +76,34 @@ def test_header_resizes_without_crowding_controls(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("motion", ["reduce", "no-preference"])
+@pytest.mark.parametrize("menu_id", ["create-menu", "notifications-dropdown", "account-menu"])
+def test_header_menu_dismissal_cancels_pending_focus(authenticated_page: Page, motion: str, menu_id: str) -> None:
+    page = authenticated_page
+    page.emulate_media(reduced_motion=motion)
+    page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=[]))
+    page.goto("/products/")
+    trigger = page.get_by_role("banner").locator(f'button[aria-controls="{menu_id}"]')
+    expect(trigger).to_have_attribute("aria-expanded", "false")
+
+    # Dismiss during the opening transition, before Alpine releases the queued focus.
+    trigger.evaluate("""async trigger => {
+        trigger.focus();
+        if (trigger.getAttribute('aria-haspopup') === 'dialog') {
+            trigger.click();
+        } else {
+            trigger.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown', bubbles: true}));
+        }
+        await new Promise(requestAnimationFrame);
+        trigger.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+    }""")
+
+    expect(page.locator(f"#{menu_id}")).to_be_hidden()
+    expect(trigger).to_have_attribute("aria-expanded", "false")
+    expect(trigger).to_be_focused()
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("width", [1280, 375])
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_chrome_menus(authenticated_page: Page, width: int, theme: str) -> None:

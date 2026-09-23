@@ -3,7 +3,7 @@ The bell and notification panel share the profile menu's quiet controls. The
 count remains accessible inside the small dot. The existing script fills the
 row template and toggles state wrappers, never component layout classes.
 {% endcomment %}
-<div x-data="{ open: false, show() { this.open = true; this.$dispatch('notifications-open'); this.$nextTick(() => this.$focus.focus(this.$refs.panel)); }, close() { this.open = false; this.$refs.trigger.focus(); } }"
+<div x-data="{ open: false, show() { this.open = true; this.$dispatch('notifications-open'); this.$nextTick(() => setTimeout(() => { if (this.open) this.$refs.panel.focus({ preventScroll: true }); })); }, close() { this.open = false; this.$refs.trigger.focus(); } }"
      class="relative shrink-0"
      @keydown.escape.stop.prevent="close()"
      @focusout="if (!$el.contains($event.relatedTarget)) open = false"

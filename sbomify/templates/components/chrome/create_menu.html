@@ -1,7 +1,7 @@
 {% comment %}The creation menu follows live capabilities and uses the shared button and dropdown primitives.{% endcomment %}
 <c-vars can_manage />
 {% if request.session.current_team and can_manage %}
-    <div x-data="{ open: false, close() { this.open = false; this.$refs.trigger.focus(); }, first() { this.open = true; this.$nextTick(() => this.$focus.focus(this.$refs.menu.querySelector('[role=menuitem]'))); } }"
+    <div x-data="{ open: false, close() { this.open = false; this.$refs.trigger.focus(); }, first() { this.open = true; this.$nextTick(() => setTimeout(() => { if (this.open) this.$refs.menu.querySelector('[role=menuitem]')?.focus({ preventScroll: true }); })); } }"
          class="relative"
          @keydown.escape.stop.prevent="close()"
          @focusout="if (!$el.contains($event.relatedTarget)) open = false">

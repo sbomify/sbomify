@@ -1,7 +1,7 @@
 {% comment %}The compact profile menu groups account settings, appearance, help and sign out. Shared avatar, dropdown and segmented controls own the recipes and keyboard navigation.{% endcomment %}
 {% load teams %}
 <c-vars can_manage />
-<div x-data="{ open: false, close() { this.open = false; this.$refs.trigger.focus(); }, first() { this.open = true; this.$nextTick(() => this.$focus.focus(this.$refs.menu.querySelector('[role=menuitem]'))); } }"
+<div x-data="{ open: false, close() { this.open = false; this.$refs.trigger.focus(); }, first() { this.open = true; this.$nextTick(() => setTimeout(() => { if (this.open) this.$refs.menu.querySelector('[role=menuitem]')?.focus({ preventScroll: true }); })); } }"
      class="relative shrink-0"
      @keydown.escape.stop.prevent="close()"
      @focusout="if (!$el.contains($event.relatedTarget)) open = false">

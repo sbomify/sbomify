@@ -42,6 +42,11 @@ all as design regressions in GitHub CI.
   reduced-motion settings during loading-state checks. Run E2E tests sequentially
   against the shared CDP browser. Exercise both skeletons and the content that
   replaces them, including public stylesheets. See [loading-state tests](../sbomify/apps/core/tests/e2e/test_loading_states.py).
+- **Dismissal can overtake queued focus.** Header menus could steal focus back
+  after Escape because their opening callback ran during the closing transition.
+  Check the current open state inside the deferred callback and focus directly;
+  Alpine's `$focus.focus()` schedules another callback beyond that check. Test
+  dismissal during opening with both motion preferences. See [header controls](../sbomify/apps/core/tests/e2e/test_chrome_controls.py).
 - **Bundle startup order.** The empty dashboard loads an upload bundle that can
   start Alpine before the main bundle. Register shared components in
   [the central initializer](../sbomify/apps/core/js/alpine-init.ts), before
