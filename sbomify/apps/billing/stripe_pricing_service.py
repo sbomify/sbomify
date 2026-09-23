@@ -92,6 +92,20 @@ class StripePricingService:
 
         Keyed by plan so the report names them; a plan that has never synced is
         not stale, it is unpopulated, and there is nothing here to distrust.
+
+        What this can and cannot see follows from ``last_synced_at``, which the
+        refresh loop stamps on every plan it writes — including one Stripe
+        returned no product for, whose prices it has just written as ``None``.
+        So the field records when we last *talked to Stripe about* a plan, not
+        when we last *got prices for* it.
+
+        That makes this an accurate signal for the case it exists for, a
+        refresh that has stopped happening at all, and a blind one for a Stripe
+        that answers while omitting a plan: that plan keeps looking fresh.
+        Telling those apart needs a second timestamp and a migration, which is
+        a change to sync semantics rather than to alert routing — not stopping
+        the stamp, which would make ``needs_refresh`` true forever for such a
+        plan and put a Stripe call on every render of the pricing page.
         """
         now = timezone.now()
         return {

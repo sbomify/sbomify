@@ -158,6 +158,38 @@ class TestStaleCacheRidesOnTheStripeEvent:
         assert "pricing_cache_stale" not in (captured_events[0].get("tags") or {})
         assert "pricing_cache" not in (captured_events[0].get("contexts") or {})
 
+    def test_the_real_save_failure_does_not_inherit_the_tag(
+        self, mock_stripe_client: MagicMock, captured_events: list[Event], db: None
+    ) -> None:
+        """The save loop's own error handler is the realistic post-fetch fault.
+
+        It catches a failed ``save()`` per plan and logs at error — a Sentry
+        issue raised from inside ``_refresh_pricing_from_stripe``, after Stripe
+        has answered. The previous test forces the fault in the processing
+        step; this one drives the code that actually reports in production.
+        """
+        import datetime
+
+        BillingPlan.objects.create(key="community", name="Community", description="Community")
+        BillingPlan.objects.create(
+            key="business",
+            name="Business",
+            description="Business",
+            stripe_product_id="prod_business",
+            monthly_price=Decimal("199.00"),
+            last_synced_at=timezone.now() - datetime.timedelta(hours=25),
+        )
+        mock_stripe_client.get_all_products_with_prices.return_value = []
+
+        with patch.object(BillingPlan, "save", side_effect=RuntimeError("database is read-only")):
+            StripePricingService().get_all_plans_pricing(force_refresh=True)
+
+        saves = [e for e in captured_events if "Failed to save synced plan data" in str(e.get("logentry", {}))]
+        assert saves, "the save loop should have reported"
+        for event in saves:
+            assert "pricing_cache_stale" not in (event.get("tags") or {})
+            assert "pricing_cache" not in (event.get("contexts") or {})
+
     def test_the_tag_does_not_leak_past_the_stripe_call(
         self, mock_stripe_client: MagicMock, captured_events: list[Event], db: None
     ) -> None:
