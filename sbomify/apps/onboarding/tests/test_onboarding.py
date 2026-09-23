@@ -1876,11 +1876,18 @@ class TestWelcomeRecoverySweep:
         user = self._owner("notanowner", welcome_sent=False, owner=False)
         assert user.id in self._run_sweep()
 
-    def test_an_unsubscribed_user_is_not_requeued(self) -> None:
+    def test_a_drip_opt_out_does_not_suppress_the_welcome_email(self) -> None:
+        """The opt-out covers the scheduled sequence, not this.
+
+        The welcome email confirms an account the user just created, so it is
+        transactional: ``send_welcome_email`` does not check the flag, and the
+        model says so where the field is declared. Filtering on it here would
+        suppress a welcome that failed before the opt-out, permanently.
+        """
         user = self._owner("optedout", welcome_sent=False)
         status = OnboardingStatus.objects.get(user=user)
         status.unsubscribe_from_drip()
-        assert user.id not in self._run_sweep()
+        assert user.id in self._run_sweep()
 
     def test_a_broken_template_is_recoverable_once_it_is_fixed(self) -> None:
         """The whole point: the render failure is no longer the end of it."""

@@ -251,9 +251,15 @@ def requeue_missed_welcome_emails_task() -> None:
 
     ``welcome_email_sent`` is set only on a successful send, so it is the whole
     of the eligibility test. The service still applies its own gates — bot
-    identities, unsubscribes, and an address already refused — so this only
-    reaches users a send would legitimately go to, and it is the right place
-    for those rules to live rather than duplicated into this query.
+    identities and an address already refused — so this only reaches users a
+    send would legitimately go to, and it is the right place for those rules to
+    live rather than duplicated into this query.
+
+    The drip opt-out is deliberately *not* one of them. It covers the scheduled
+    sequence; the welcome email confirms an account the user just created, so
+    it stays transactional and ``send_welcome_email`` does not check the flag.
+    Filtering on it here would suppress a welcome that failed before the opt-out
+    and could then never be sent, which is stricter than the send path itself.
 
     The window is measured on the account, not on its status row. A status row
     is created by ``get_or_create`` from the component and SBOM tracking paths
@@ -272,7 +278,6 @@ def requeue_missed_welcome_emails_task() -> None:
     cutoff = timezone.now() - datetime.timedelta(days=WELCOME_RECOVERY_WINDOW_DAYS)
     missed = OnboardingStatus.objects.filter(
         welcome_email_sent=False,
-        drip_unsubscribed_at__isnull=True,
         user__date_joined__gte=cutoff,
     ).values_list("user_id", flat=True)
 
