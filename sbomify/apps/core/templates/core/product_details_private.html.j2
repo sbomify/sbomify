@@ -172,7 +172,7 @@
                         <span class="text-text-muted text-sm">Not scanned</span>
                     {% elif row.vuln.total == 0 and row.vuln.scanned_nothing %}
                         {# A scan ran and matched nothing, which is not the same as finding nothing. #}
-                        <c-badges.warning title="A scan ran but matched no packages, so nothing was checked against any advisory source.">Nothing scanned</c-badges.warning>
+                        <c-badges.warning title="Every scanner skipped the latest SBOM. Open the component to see why.">Nothing scanned</c-badges.warning>
                     {% elif row.vuln.total == 0 %}
                         <c-badges.success>Clean</c-badges.success>
                     {% else %}

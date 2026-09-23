@@ -28,6 +28,11 @@
                     {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
                     Processing
                     </c-badges.secondary>
+                {% elif status.skipped_count %}
+                    {# Every run skipped and none is pending, so "Pending" would never clear. #}
+                    <c-badges.secondary class="gap-1">
+                    <i class="fas fa-ban"></i>Skipped
+                    </c-badges.secondary>
                 {% else %}
                     <c-badges.secondary class="gap-1">
                     <i class="fas fa-clock"></i>Pending

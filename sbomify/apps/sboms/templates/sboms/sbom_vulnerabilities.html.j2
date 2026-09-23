@@ -318,6 +318,22 @@
             {% endif %}
             </c-slot>
             </c-feedback.alert>
+        {% elif skipped_scans %}
+            <c-feedback.alert variant="warning" icon="fas fa-ban" title="Nothing scanned">
+            <c-slot name="body">
+            <div class="mt-3 space-y-3">
+                {% for scan in skipped_scans %}
+                    <p>
+                        <strong>{{ scan.findings.0.title }}</strong>
+                        <br>
+                        {{ scan.findings.0.description }}
+                    </p>
+                {% endfor %}
+            </div>
+            </c-slot>
+            </c-feedback.alert>
+        {% elif scan_timestamp %}
+            <c-feedback.empty-state compact icon="fas fa-check" title="No vulnerabilities found" message="The latest scan found no known vulnerabilities in this SBOM." />
         {% else %}
             {% if is_processing %}
                 <c-feedback.alert variant="info" title="Processing Vulnerability Scan">

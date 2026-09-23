@@ -3,8 +3,8 @@
 The page had no e2e referee, so it is added here before the template is
 migrated to the component library: the baselines capture the render as it is
 today. Two cases, because the page has two shapes that share nothing below the
-header: the merged scan-results table, and the "no scan data" notice a run with
-no findings falls back to.
+header: the merged scan-results table, and the "No vulnerabilities found"
+state a run with no findings shows.
 """
 
 import pytest
@@ -127,7 +127,7 @@ class TestSbomVulnerabilitiesSnapshot:
 @pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestSbomVulnerabilitiesEmptySnapshot:
-    """A completed run with no findings: the stats strip plus the no-data notice."""
+    """A completed run with no findings: the stats strip plus "No vulnerabilities found"."""
 
     def test_sbom_vulnerabilities_no_data_snapshot(
         self,
