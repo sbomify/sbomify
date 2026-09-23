@@ -94,18 +94,20 @@ def test_page_header_title_and_subtitle_recipes(rendered: str) -> None:
     ) in rendered
 
 
-def test_chip_mark_is_the_icon_chip_at_its_large_size(rendered: str) -> None:
-    chip = _classes(rendered, "shrink-0 flex items-center justify-center w-12 h-12", "fas fa-box")
-    assert "text-lg rounded-[0.625rem]" in chip
-    assert "var(--chip-accent,var(--color-primary))" in chip
+def test_page_headers_share_one_unadorned_heading(rendered: str) -> None:
+    headers = rendered[: rendered.index("Generate a new token")]
+    assert headers.count("data-page-header") == 5
+    assert "--avatar-accent" not in headers
+    assert "fas fa-box" not in headers
+    assert "fas fa-cube" not in headers
 
 
-def test_avatar_mark_is_the_avatar_component_wearing_the_icon(rendered: str) -> None:
-    mark = _classes(rendered, "relative flex items-center justify-center shrink-0", "fas fa-cube")
-    assert "rounded-full" in mark
-    assert "w-14 h-14 text-lg" in mark
-    assert "var(--avatar-accent,var(--color-primary))" in mark
-    assert "w-12 h-12" not in mark
+def test_description_disclosure_is_scoped_and_accessible(rendered: str) -> None:
+    header = rendered[rendered.index('data-probe="header-description"') :].split("</header>")[0]
+    assert "A description with more context." in header
+    assert ':aria-expanded="expanded"' in header
+    assert ':aria-controls="$id(\'page-description\')"' in header
+    assert "Show more" in header
 
 
 def test_meta_slot_sits_on_the_title_line(rendered: str) -> None:

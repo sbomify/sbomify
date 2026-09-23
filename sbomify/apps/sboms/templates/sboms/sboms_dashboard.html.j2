@@ -4,22 +4,11 @@
 {% load django_vite %}
 {% block title %}sbomify SBOMs{% endblock %}
 {% block content %}
-    <div>
-        {# Page Header #}
-        <div class="mb-6">
-            <div class="flex items-center gap-3">
-                <c-chips.icon-chip>
-                <i class="fas fa-file-code text-lg" aria-hidden="true"></i>
-                </c-chips.icon-chip>
-                <div>
-                    <h1 class="text-2xl font-bold text-text">SBOMs</h1>
-                    <p class="text-text-muted text-sm">Software Bill of Materials across all components</p>
-                </div>
-            </div>
-        </div>
+    <c-layout.frame>
+        <c-layout.page-header title="SBOMs" subtitle="Software Bill of Materials across all components" />
         {# Upload Card #}
         {% if has_crud_permissions %}
-            <c-cards.card class="mb-6">
+            <c-cards.card>
             <c-slot name="header">
             {% comment %}
                 The band the app's cards carry: shorter than the library header
@@ -91,5 +80,5 @@
             </div>
             </c-cards.card>
         {% endif %}
-    </div>
+    </c-layout.frame>
 {% endblock %}

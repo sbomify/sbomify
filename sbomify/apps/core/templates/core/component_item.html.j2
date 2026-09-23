@@ -25,7 +25,7 @@
     {% else %}
         {% firstof "SBOM" as item_kind_label %}
     {% endif %}
-    <c-layout.page-header title="{{ item.name }}" icon="{{ header_icon }}" mark="avatar" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items">
+    <c-layout.page-header title="{{ item.name }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items">
     {% if is_sbom_backed %}
         <c-buttons.secondary href="{% url 'sboms:sbom_download' item.id %}" title="Download {{ item_format_label }} {{ item_kind_label }}">
         {% if item.format == 'cyclonedx' %}
@@ -49,7 +49,7 @@
         </c-buttons.primary>
     {% endif %}
     </c-layout.page-header>
-    <div class="space-y-6">
+    <c-layout.frame>
         {# Stats Badges #}
         <div class="flex flex-wrap gap-2">
             {% if is_sbom_backed %}
@@ -267,7 +267,8 @@
                 </div>
             {% endif %}
             {# Cryptographic Assets (CBOM) — lazy-loaded; collapses when there are none #}
-            <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
+            <div class="contents"
+             hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
                  hx-trigger="load"
                  hx-swap="outerHTML"></div>
             {# Assessment Results Section — not shown for VEX (a VEX isn't an SBOM to verify) #}
@@ -301,7 +302,7 @@
             </div>
             </c-cards.card>
         {% endif %}
-    </div>
+    </c-layout.frame>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

@@ -1,7 +1,8 @@
 {% comment %}
 The vertical page layout. A frame owns the 1.5rem gap between its children;
 headers, navigation and content supply no external margins. Hidden elements
-and dialogs outside normal flow do not consume a gap.
+and dialogs outside normal flow do not consume a gap. State-only wrappers
+around teleported dialogs use class="contents" so they do not create a box.
 
 The app canvas uses this by default. Use another frame when a group needs its
 own container, such as an HTMX replacement root or a form page with a narrower

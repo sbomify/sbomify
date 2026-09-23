@@ -2,8 +2,8 @@
 {% load design_system %}
 {% block title %}CRA Compliance - sbomify{% endblock %}
 {% block dashboard_content %}
-    <c-layout.page-header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act." icon="fas fa-scale-balanced" />
-    <div class="space-y-6">
+    <c-layout.page-header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act." />
+    <c-layout.frame>
         {% if not has_cra_access %}
             <c-cards.card flush>
             <div class="p-8 text-center">
@@ -64,5 +64,5 @@
             <c-feedback.empty-state icon="fas fa-shield-halved" title="No CRA assessments" message="Start a CRA compliance assessment from any product's detail page." />
             </c-cards.card>
         {% endif %}
-    </div>
+    </c-layout.frame>
 {% endblock dashboard_content %}

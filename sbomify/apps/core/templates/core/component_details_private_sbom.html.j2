@@ -24,7 +24,9 @@
     {% if component.has_crud_permissions %}
         {# Modals opened from the header ⋮ menu — nothing here renders in the page flow. #}
         {% include "sboms/components/ci_cd_info.html.j2" %}
-        <div id="upload-section">{% include 'sboms/components/sbom_upload.html.j2' with component_id=component.id %}</div>
+        <div id="upload-section" class="contents">
+            {% include 'sboms/components/sbom_upload.html.j2' with component_id=component.id %}
+        </div>
         {% include "core/components/trusted_publishers_modal.html.j2" %}
     {% endif %}
 {% endblock %}

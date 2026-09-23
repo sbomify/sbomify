@@ -1,24 +1,6 @@
 {% load widget_tweaks %}
-<div class="bg-gradient-to-r from-primary to-primary-dark py-12 mb-8">
-    <div class="max-w-3xl mx-auto px-4 text-center">
-        <h1 class="text-3xl md:text-4xl font-bold text-white mb-4">Let's Talk Enterprise</h1>
-        <p class="text-lg text-white/80 mb-6">
-            Ready to scale your security and product artifact management? Our enterprise team will work with you to create a custom solution that meets your organization's specific needs.
-        </p>
-        <div class="flex flex-wrap justify-center gap-3">
-            <span class="inline-flex items-center gap-2 bg-white/20 text-white px-4 py-2 rounded-full text-sm font-medium">
-                <i class="fas fa-users"></i>Unlimited Users
-            </span>
-            <span class="inline-flex items-center gap-2 bg-white/20 text-white px-4 py-2 rounded-full text-sm font-medium">
-                <i class="fas fa-shield-alt"></i>Advanced Security
-            </span>
-            <span class="inline-flex items-center gap-2 bg-white/20 text-white px-4 py-2 rounded-full text-sm font-medium">
-                <i class="fas fa-headset"></i>Dedicated Support
-            </span>
-        </div>
-    </div>
-</div>
-<div class="max-w-3xl mx-auto px-4 pb-12">
+<c-layout.frame class="max-w-5xl">
+<c-layout.page-header title="Contact sales" subtitle="Tell us what your organization needs from sbomify." />
     {% if messages %}
         {% for message in messages %}
             {% if message.tags == 'success' %}
@@ -221,4 +203,4 @@
         </div>
     </form>
     </c-cards.card>
-</div>
+</c-layout.frame>

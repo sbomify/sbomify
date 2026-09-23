@@ -10,14 +10,7 @@
     Sections and the index come from GALLERY_SECTIONS in views/design_system.py.
 {% endcomment %}
 {% block dashboard_content %}
-    <div>
-        <h1 class="text-2xl font-bold text-text mb-2">sbomify Design System</h1>
-        <p class="text-text-muted">
-            Every shared component, rendered through its own tag. Dev-only. Each component's own file in
-            <code class="tw-code-inline">sbomify/templates/components/</code> is its parameter contract; the
-            rules live in <code class="tw-code-inline">AGENTS.md</code>.
-        </p>
-    </div>
+    <c-layout.page-header title="sbomify Design System" subtitle="Every shared component, rendered through its own tag. Available in development." />
     {# ── Index ─────────────────────────────────────────────────────────────── #}
     <c-cards.dashboard title="Component index">
     {% regroup sections by group as section_groups %}
@@ -302,18 +295,18 @@
     (sbomify/templates/components/layout/). The actions are the slot, so they
     are real button components.
     {% endcomment %}
-    <c-layout.page-header title="Acme Gateway" subtitle="Quantum readiness across all components." icon="fas fa-box">
+    <c-layout.page-header title="Acme Gateway" subtitle="Quantum readiness across all components.">
     <c-buttons.secondary size="sm"><i class="fas fa-plus" aria-hidden="true"></i> <span>Assign component</span></c-buttons.secondary>
     <c-buttons.primary size="sm">New release</c-buttons.primary>
     </c-layout.page-header>
     <p class="text-sm text-text-muted">
-        Every main page opens with this, called as <code class="tw-code-inline">c-layout.page-header</code>. The
+        Every app page opens with the same icon-free <code class="tw-code-inline">c-layout.page-header</code>. The
         slot becomes the actions on the right. The app canvas is a <c-code-inline>c-layout.frame</c-code-inline>:
         it gives its children a 1.5rem vertical gap. Headers have no external margin. Use the same frame for
         a tab replacement root or a narrower form page. This demo and Settings controls above compose
         headers and content in that frame, without spacing switches on their children.
     </p>
-    <c-layout.page-header mark="avatar" icon="fas fa-cube" title="Acme Gateway Enterprise Edition" :breadcrumbs="demo_breadcrumbs" :copy_values="demo_copy_values" editable_item_type="product" editable_item_id="ds-demo">
+    <c-layout.page-header title="Acme Gateway Enterprise Edition" :breadcrumbs="demo_breadcrumbs" :copy_values="demo_copy_values" editable_item_type="product" editable_item_id="ds-demo">
     <c-slot name="meta">
     <c-badges.danger>
     <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
@@ -322,15 +315,15 @@
     <c-buttons.primary size="sm">New release</c-buttons.primary>
     </c-layout.page-header>
     <p class="text-sm text-text-muted">
-        Long titles, identifiers and breadcrumbs wrap within the available width. The detail-page shape
-        uses the same header. <code class="tw-code-inline">mark="avatar"</code> swaps the
-        chip for the avatar mark, which is <code class="tw-code-inline">c-avatar</code> wearing the page's icon.
+        Long titles, identifiers and breadcrumbs wrap within the available width. Detail pages
+        use the same header and title alignment as list pages.
         <code class="tw-code-inline">copy_values</code> adds click-to-copy identifiers beside the title, and the
         named <code class="tw-code-inline">meta</code> slot puts a status the title is qualified by on the same
         line. <code class="tw-code-inline">breadcrumbs</code> replaces the subtitle. Set
         <code class="tw-code-inline">editable_item_type</code> and
         <code class="tw-code-inline">editable_item_id</code> to render the title as the inline editable field.
     </p>
+    <c-layout.page-header title="An advisory with supporting detail" subtitle="Security advisory" description="Supporting descriptions use the same header. Longer text can be expanded without clipping the page title. This keeps the complete title readable while leaving the page's actions available at every screen size." />
     <hr class="border-border">
     <div class="flex flex-col gap-4">
         <c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />

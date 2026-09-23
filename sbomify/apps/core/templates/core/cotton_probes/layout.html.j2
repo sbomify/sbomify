@@ -4,20 +4,21 @@ few lists a view would build (breadcrumbs, copy values, choice options) and
 assert on the output; it is not routed anywhere.
 {% endcomment %}
 <c-layout.frame id="probe-frame" class="max-w-5xl" hx-target="this">
-<c-layout.page-header title="Acme Gateway" subtitle="Quantum readiness across all components." icon="fas fa-box" hx-get="/probe/header" data-probe="page-header">
+<c-layout.page-header title="Acme Gateway" subtitle="Quantum readiness across all components." hx-get="/probe/header" data-probe="page-header">
 <c-buttons.secondary size="sm">Assign component</c-buttons.secondary>
 <c-buttons.primary size="sm">New release</c-buttons.primary>
 </c-layout.page-header>
-<c-layout.page-header mark="avatar" icon="fas fa-cube" title="Acme Vault" :breadcrumbs="probe_breadcrumbs" :copy_values="probe_copy_values" editable_item_type="product" editable_item_id="probe-product"></c-layout.page-header>
+<c-layout.page-header title="Acme Vault" :breadcrumbs="probe_breadcrumbs" :copy_values="probe_copy_values" editable_item_type="product" editable_item_id="probe-product"></c-layout.page-header>
 <c-layout.frame id="probe-nested-frame">
 <c-layout.page-header title="Nested header" class="max-w-3xl" />
 <c-feedback.alert>Nested content</c-feedback.alert>
 </c-layout.frame>
-<c-layout.page-header title="Acme Registry" icon="fas fa-puzzle-piece" mark="avatar" subtitle="Container Component">
+<c-layout.page-header title="Acme Registry" subtitle="Container Component">
 <c-slot name="meta">
 <c-badges.danger data-probe="header-meta">Stale</c-badges.danger>
 </c-slot>
 </c-layout.page-header>
+<c-layout.page-header title="Supporting detail" description="A description with more context." data-probe="header-description" />
 <c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />
 <c-layout.section-header level="2" accent="success" icon="fas fa-envelope-open-text" title="Pending invitations" data-probe="section-h2" />
 <c-layout.section-header icon="fas fa-building" accent="success" title="Entities" subtitle="Organizations (Manufacturer, Supplier, Author)" data-probe="section-actioned">

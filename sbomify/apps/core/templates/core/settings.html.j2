@@ -1,7 +1,7 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% block title %}sbomify Settings{% endblock %}
 {% block content %}
-    <c-layout.page-header title="Settings" subtitle="Your API tokens and workspace invitations." icon="fas fa-gear" />
+    <c-layout.page-header title="Settings" subtitle="Your API tokens and workspace invitations." />
     {% if pending_invitations %}
         <div class="flex flex-col gap-4">
             <c-layout.section-header level="2" accent="success" icon="fas fa-envelope-open-text" title="Pending invitations" subtitle="Accept or decline the workspaces you have been invited to." />

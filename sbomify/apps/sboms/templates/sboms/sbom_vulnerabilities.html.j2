@@ -6,7 +6,7 @@
 {% load plugins_extras %}
 {% block title %}sbomify SBOM Vulnerabilities{% endblock %}
 {% block content %}
-    <c-layout.page-header title="Vulnerabilities" icon="fas fa-shield-alt" mark="avatar" :breadcrumbs="breadcrumb_items" style="--avatar-accent: var(--color-warning)">
+    <c-layout.page-header title="Vulnerabilities" :breadcrumbs="breadcrumb_items">
     <c-buttons.secondary href="{% url 'core:component_item' component_id=sbom.component.id item_type='sboms' item_id=sbom.id %}">
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to SBOM
     </c-buttons.secondary>

@@ -3,7 +3,6 @@
       href="{% static 'css/components/assessment-results-card.css' %}">
 {# WebSocket listener for real-time assessment updates #}
 <div id="assessment-results"
-     class="mt-4"
      x-data
      @ws:message.window=" if ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ sbom_id }}') { location.reload(); } ">
     <c-cards.card flush>

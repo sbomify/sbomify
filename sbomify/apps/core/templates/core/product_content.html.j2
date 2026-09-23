@@ -8,6 +8,13 @@
     {{ product.description }}
 {% endif %}
 </c-slot>
+{% if can_administer %}
+    <c-forms.visibility-selector item_type="product" item_id="{{ product.id }}" visibility="{{ product.is_public|yesno:'public,private' }}" />
+{% elif product.is_public %}
+    <c-badges.success size="sm">Public</c-badges.success>
+{% else %}
+    <c-badges.secondary size="sm">Private</c-badges.secondary>
+{% endif %}
 {% if has_sboms %}
     <c-actions-menu label="Download SBOM" caption="Download SBOM" icon="fas fa-download">
     <c-dropdowns.item compact icon="fas fa-download" href="{% url 'core:sbom_download_product' product.id %}">Download CycloneDX</c-dropdowns.item>
@@ -23,16 +30,7 @@
     </c-actions-menu>
 {% endif %}
 </c-layout.page-header>
-<div class="flex flex-wrap items-center gap-3">
-    {% if can_administer %}
-        <c-forms.visibility-selector item_type="product" item_id="{{ product.id }}" visibility="{{ product.is_public|yesno:'public,private' }}" />
-    {% elif product.is_public %}
-        <c-badges.success size="sm">Public</c-badges.success>
-    {% else %}
-        <c-badges.secondary size="sm">Private</c-badges.secondary>
-    {% endif %}
-    <c-forms.hint compact>Current components and their latest assessments. Releases keep their own artifact collections.</c-forms.hint>
-</div>
+<c-forms.hint compact>Current components and their latest assessments. Releases keep their own artifact collections.</c-forms.hint>
 <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
     <c-layout.stat-card label="Components" :value="metrics.components" icon="fas fa-cube" />
     <c-layout.stat-card label="Artifacts" :value="metrics.artifacts" icon="fas fa-file-lines" />

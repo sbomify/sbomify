@@ -2,14 +2,14 @@
 {% load design_system %}
 {% block title %}CRA Scope Screening - {{ product.name }} - sbomify{% endblock %}
 {% block dashboard_content %}
-    <div x-data="craScopeScreening()">
+    <c-layout.frame x-data="craScopeScreening()">
         {{ screening_data|json_script:"screening-data" }}
         {# Server-resolved POST target so JS doesn't need window.location.href. #}
         {{ screening_urls|json_script:"screening-urls" }}
         {% with screening_subtitle="Determine whether "|add:product.name|add:" falls within Regulation (EU) 2024/2847 (Cyber Resilience Act)." %}
-            {% page_header title="CRA Scope Screening" subtitle=screening_subtitle icon="fas fa-scale-balanced" mark="avatar" %}
+            <c-layout.page-header title="CRA scope screening" subtitle="{{ screening_subtitle }}">
             <c-badges.secondary size="sm">FAQ §1</c-badges.secondary>
-        {% endpage_header %}
+            </c-layout.page-header>
     {% endwith %}
     <div class="space-y-6">
         {# Questions — pill sits inline with the title; legal-basis is a footnote under the description. #}
@@ -202,5 +202,5 @@
             </div>
         </div>
     </div>
-</div>
+</c-layout.frame>
 {% endblock dashboard_content %}

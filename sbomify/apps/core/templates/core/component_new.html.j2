@@ -9,7 +9,7 @@
 {% block dashboard_content %}
     {% url 'core:components_dashboard' as components_url %}
     <c-layout.frame class="max-w-5xl">
-    <c-layout.page-header title="New component" subtitle="A container for the SBOMs and documents you track." icon="fas fa-puzzle-piece">
+    <c-layout.page-header title="New component" subtitle="A container for the SBOMs and documents you track.">
     <c-buttons.ghost href="{{ components_url }}" size="sm">
     <i class="fas fa-arrow-left" aria-hidden="true"></i><span>Back to components</span>
     </c-buttons.ghost>

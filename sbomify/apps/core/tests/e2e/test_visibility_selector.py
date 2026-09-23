@@ -85,13 +85,27 @@ def test_component_visibility_menu(
 
 @pytest.mark.parametrize("width", [1280, 375])
 def test_product_uses_the_same_visibility_menu(
-    authenticated_page: Page, product_factory: Callable[..., Product], width: int
+    authenticated_page: Page,
+    product_factory: Callable[..., Product],
+    component_factory: Callable[..., Component],
+    sbom_factory: Callable,
+    width: int,
 ) -> None:
     product = product_factory("Visibility product", is_public=False)
+    component = component_factory("Downloadable component", product=product)
+    sbom_factory(component)
     page = authenticated_page
     page.set_viewport_size({"width": width, "height": 750})
     page.goto(reverse("core:product_details", args=[product.pk]))
-    trigger = page.get_by_role("button", name="Product visibility", exact=True)
+    header = page.locator("[data-page-header]")
+    trigger = header.get_by_role("button", name="Product visibility", exact=True)
+    download = header.get_by_role("button", name="Download SBOM", exact=True)
+    expect(trigger).to_be_visible()
+    expect(download).to_be_visible()
+    trigger_bounds, download_bounds = trigger.bounding_box(), download.bounding_box()
+    assert trigger_bounds and download_bounds
+    assert abs(trigger_bounds["y"] - download_bounds["y"]) < 1
+    assert 0 < download_bounds["x"] - (trigger_bounds["x"] + trigger_bounds["width"]) <= 16
     trigger.click()
     menu = page.get_by_role("menu", name="Product visibility", exact=True)
     expect(menu.get_by_role("menuitemradio")).to_have_count(2)

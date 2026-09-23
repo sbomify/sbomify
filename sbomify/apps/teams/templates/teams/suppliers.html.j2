@@ -3,7 +3,7 @@
 {% block content %}
     {# dashboard_base already pads and centres the page; a second wrapper doubled it. #}
     <c-layout.frame x-data="{ open: false, form: { supplierId: '', name: '', contactName: '', contactEmail: '', website: '', notes: '' }, add() { this.form = { supplierId: '', name: '', contactName: '', contactEmail: '', website: '', notes: '' }; this.open = true; }, edit(data) { this.form = { supplierId: data.supplierId, name: data.supplierName, contactName: data.supplierContactName, contactEmail: data.supplierContactEmail, website: data.supplierWebsite, notes: data.supplierNotes, }; this.open = true; }, }" x-init="if (new URLSearchParams(location.search).has('new')) { add(); history.replaceState(null, '', location.pathname) }" @refresh-suppliers.window="open = false">
-    <c-layout.page-header title="Suppliers" subtitle="The vendors you collect SBOMs and documents from." icon="fas fa-truck-field">
+    <c-layout.page-header title="Suppliers" subtitle="The vendors you collect SBOMs and documents from.">
     {# The page's own entry point: suppliers are reachable by URL only while the feature matures, so there is no New-menu entry to lean on. #}
     <c-buttons.primary @click="add()">
     <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add supplier

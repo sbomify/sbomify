@@ -9,7 +9,8 @@
     Include it at page level, outside any HTMX-swapped region: a swap while
     the dialog is open would tear it out from under the reader.
 {% endcomment %}
-<div x-data="{ open: false, advisory: { id: '', title: '' } }"
+<div class="contents"
+     x-data="{ open: false, advisory: { id: '', title: '' } }"
      @open-delete-advisory-modal.window="open = true; advisory = $event.detail">
     <c-modal id="deleteAdvisoryModal" title="Delete advisory" icon="fas fa-trash" size="sm" role="alertdialog" style="--chip-accent: var(--color-danger)">
     <form id="deleteAdvisoryForm"

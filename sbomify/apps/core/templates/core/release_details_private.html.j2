@@ -3,11 +3,7 @@
 {% load django_vite %}
 {% block title %}sbomify Product: {{ release.product.name }} - {{ release.name }}{% endblock %}
 {% block content %}
-    {# The latest release wears the success accent on its mark; the property inherits, so it rides on the header. #}
-    {% if release.is_latest %}
-        {% firstof "--avatar-accent: var(--color-success)" as header_style %}
-    {% endif %}
-    <c-layout.page-header title="{{ release.name }}" icon="fas fa-tag" mark="avatar" editable_item_type="{{ header_editable_type }}" editable_item_id="{{ release.id }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items" style="{{ header_style }}">
+    <c-layout.page-header title="{{ release.name }}" editable_item_type="{{ header_editable_type }}" editable_item_id="{{ release.id }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items">
     {# The latest flag qualifies the title, so it sits in the meta slot, not among the metrics. #}
     {% if release.is_latest %}
         <c-slot name="meta">
@@ -52,7 +48,7 @@
         </div>
     {% endif %}
     </c-layout.page-header>
-    <div class="space-y-6">
+    <c-layout.frame>
         {# Description. The wrapper takes the stack's rhythm; the paragraph's own m-0 would cancel it. #}
         {% if release.description %}
             <div>
@@ -168,7 +164,7 @@
                 {% include 'components/release_danger_zone.html.j2' with release_id=release.id product_id=release.product.id release_name=release.name %}
             </div>
         {% endif %}
-    </div>
+    </c-layout.frame>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

@@ -1,5 +1,6 @@
 {# Upload artifact — a modal opened from the component header ⋮ menu (open-upload window event), not a body card. #}
-<div x-data="uploadDialog"
+<div class="contents"
+     x-data="uploadDialog"
      @hashchange.window="openFromHash()"
      @open-upload.window="uploadOpen = true"
      @close-upload.window="uploadOpen = false"

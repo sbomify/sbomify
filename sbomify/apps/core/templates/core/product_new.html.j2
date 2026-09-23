@@ -9,7 +9,7 @@
 {% block dashboard_content %}
     {% url 'core:products_dashboard' as products_url %}
     <c-layout.frame class="max-w-5xl">
-    <c-layout.page-header title="New product" subtitle="A deliverable you ship to customers, such as an application or service." icon="fas fa-cube">
+    <c-layout.page-header title="New product" subtitle="A deliverable you ship to customers, such as an application or service.">
     <c-buttons.ghost href="{{ products_url }}" size="sm">
     <i class="fas fa-arrow-left" aria-hidden="true"></i><span>Back to products</span>
     </c-buttons.ghost>

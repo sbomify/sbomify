@@ -13,7 +13,7 @@
 {% block dashboard_content %}
     {% url 'core:security_advisories_dashboard' as advisories_url %}
     <c-layout.frame class="max-w-5xl">
-    <c-layout.page-header title="New advisory" subtitle="Opens as a draft. The first timeline entry shows this status." icon="fas fa-shield-halved">
+    <c-layout.page-header title="New advisory" subtitle="Opens as a draft. The first timeline entry shows this status.">
     <c-buttons.ghost href="{{ advisories_url }}" size="sm">
     <i class="fas fa-arrow-left" aria-hidden="true"></i><span>Back to advisories</span>
     </c-buttons.ghost>

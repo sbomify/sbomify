@@ -2,7 +2,7 @@
 {% load django_vite %}
 {% block title %}sbomify Artifacts: {{ component.name }}{% endblock %}
 {% block content %}
-    <c-layout.page-header title="{{ page_title }}" icon="fas fa-shield-halved" mark="avatar" :breadcrumbs="breadcrumb_items">
+    <c-layout.page-header title="{{ page_title }}" :breadcrumbs="breadcrumb_items">
     <c-buttons.secondary href="{% url 'core:component_details' component.id %}">
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to component
     </c-buttons.secondary>

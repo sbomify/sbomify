@@ -2,60 +2,11 @@
 {% load static public_url_tags %}
 {% block title %}{{ advisory.title }} · sbomify{% endblock %}
 {% block dashboard_content %}
-    <div class="space-y-6">
-        {# Back link #}
-        <a href="{% url 'core:security_advisories_dashboard' %}"
-           class="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text transition-colors">
-            <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i>
-            Security advisories
-        </a>
-        {% comment %}A draft is invisible outside the workspace, which is not obvious from the page itself, so it is said once at the top. The action opens the same publish modal the actions menu opens, so there is one publish flow and one confirmation, and it is gated on has_crud_permissions because that is what renders that modal.{% endcomment %}
-        {% if advisory.publication_status == 'draft' %}
-            <c-feedback.alert icon="fas fa-file-pen" title="This advisory is a draft">
-            Only your workspace can see it. Publish it to put it on your Trust Center.
-            {% if has_crud_permissions %}
-                <c-slot name="action">
-                <c-buttons.primary size="sm" class="shrink-0" @click="$dispatch('open-publish-advisory-modal')">
-                <i class="fas fa-bullhorn" aria-hidden="true"></i>
-                Publish advisory
-                </c-buttons.primary>
-                </c-slot>
-            {% endif %}
-            </c-feedback.alert>
-        {% endif %}
-        {% comment %}Header — same shape as the product and component detail pages: the actions drop below the title on narrow viewports rather than squeezing it.{% endcomment %}
-        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-            <div class="flex items-start gap-4 min-w-0">
-                <c-avatar size="lg">
-                <i class="fas fa-shield-halved"></i>
-                </c-avatar>
-                {% comment %}Both clamps are line-based, so the cut follows the rendered width and the ellipsis is the browser's — a wide screen shows more of the same title than a narrow one. One disclosure governs both, because a title long enough to clip usually comes with a description long enough to clip too. clipped is only re-measured while collapsed: expanding removes the clamp, so a measurement taken then would report nothing overflowing and the button would vanish mid-use. break-words keeps an unbroken string (a pasted identifier, a hostname) from running under the header actions.{% endcomment %}
-                <div class="flex-1 min-w-0"
-                     x-data="{ expanded: false, clipped: false, measure() { this.clipped = [$refs.title, $refs.summary].some((el) => el && el.scrollHeight > el.clientHeight) } }"
-                     x-init="$nextTick(() => measure())"
-                     @resize.window.debounce="expanded || measure()">
-                    <h1 x-ref="title"
-                        class="text-2xl font-bold text-text break-words"
-                        :class="expanded ? '' : 'line-clamp-1'"
-                        title="{{ advisory.title }}">{{ advisory.title }}</h1>
-                    <p class="text-text-muted text-sm m-0 mt-1">{{ advisory.type_label }} advisory</p>
-                    {% if advisory.description %}
-                        <p x-ref="summary"
-                           class="text-text-muted leading-relaxed break-words whitespace-pre-line mt-2 max-w-3xl"
-                           :class="expanded ? '' : 'line-clamp-2'">{{ advisory.description }}</p>
-                    {% endif %}
-                    <button type="button"
-                            x-show="clipped || expanded"
-                            x-cloak
-                            @click="expanded = !expanded"
-                            :aria-expanded="expanded"
-                            class="mt-1 text-sm text-primary hover:underline">
-                        <span x-text="expanded ? 'Show less' : 'Show more'"></span>
-                    </button>
-                </div>
-            </div>
-            {# Header actions #}
-            <div class="flex items-center gap-2 shrink-0 flex-wrap">
+    <c-layout.frame>
+        <c-layout.page-header title="{{ advisory.title }}" subtitle="{{ advisory.type_label }} advisory" description="{{ advisory.description }}">
+        <c-buttons.ghost size="sm" href="{% url 'core:security_advisories_dashboard' %}">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to advisories
+        </c-buttons.ghost>
                 {% comment %}
                     Straight to this advisory on the trust centre, not the trust
                     centre's front page. A draft is not published there at all,
@@ -106,8 +57,21 @@
                     </c-dropdowns.item-danger>
                     </c-actions-menu>
                 {% endif %}
-            </div>
-        </div>
+        </c-layout.page-header>
+        {% comment %}A draft is invisible outside the workspace, which is not obvious from the page itself, so it is said once at the top. The action opens the same publish modal the actions menu opens, so there is one publish flow and one confirmation, and it is gated on has_crud_permissions because that is what renders that modal.{% endcomment %}
+        {% if advisory.publication_status == 'draft' %}
+            <c-feedback.alert icon="fas fa-file-pen" title="This advisory is a draft">
+            Only your workspace can see it. Publish it to put it on your Trust Center.
+            {% if has_crud_permissions %}
+                <c-slot name="action">
+                <c-buttons.primary size="sm" class="shrink-0" @click="$dispatch('open-publish-advisory-modal')">
+                <i class="fas fa-bullhorn" aria-hidden="true"></i>
+                Publish advisory
+                </c-buttons.primary>
+                </c-slot>
+            {% endif %}
+            </c-feedback.alert>
+        {% endif %}
         {# Timeline + info sidebar #}
         <div class="flex flex-col lg:flex-row gap-8 lg:gap-10">
             {# Main: timeline #}
@@ -326,7 +290,7 @@
         </div>
         {% comment %}Publish Advisory Modal. Disclosure is irreversible in the sense that matters — the tracking id is allocated here and immutable, and made_public_at records when disclosure happened — so this asks rather than firing from the menu.{% endcomment %}
         {% if has_crud_permissions and advisory.publication_status == 'draft' %}
-            <div x-data="{ open: false }"
+            <div class="contents" x-data="{ open: false }"
                  @open-publish-advisory-modal.window="open = true">
                 <c-modal id="publishAdvisoryModal" title="Publish advisory" icon="fas fa-bullhorn">
                 <form id="publishAdvisoryForm"
@@ -335,7 +299,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="intent" value="publish" />
                     <div class="space-y-4">
-                        {# Clamped like the page header: a pasted identifier for a title would otherwise run past the modal's edge. #}
+                        {# Keep long advisory titles within the dialog. #}
                         <p class="text-sm text-text-muted m-0">
                             <strong class="text-text block break-words line-clamp-2"
                                     title="{{ advisory.title }}">{{ advisory.title }}</strong>
@@ -376,7 +340,7 @@
         {% endif %}
         {# Edit Advisory Modal (Alpine.js) #}
         {% if has_crud_permissions %}
-            <div x-data="{ open: false, showRef:
+            <div class="contents" x-data="{ open: false, showRef:
                 {% if advisory.vulnerability_id %}
                     true
                 {% else %}
@@ -453,7 +417,7 @@
                 </c-modal>
             </div>
             {# Link a VEX Modal (Alpine.js) — front-end preview, does not persist yet (#1172) #}
-            <div x-data="{ open: false, sel: [], search: '', candidates: [], init() { this.candidates = window.parseJsonScript('vex-candidates') || []; if (window.location.hash === '#link-vex') this.open = true; }, get filtered() { if (!this.search) return this.candidates; const s = this.search.toLowerCase(); return this.candidates.filter(v => (v.product + ' ' + v.coverage + ' ' + v.format).toLowerCase().includes(s)); } }"
+            <div class="contents" x-data="{ open: false, sel: [], search: '', candidates: [], init() { this.candidates = window.parseJsonScript('vex-candidates') || []; if (window.location.hash === '#link-vex') this.open = true; }, get filtered() { if (!this.search) return this.candidates; const s = this.search.toLowerCase(); return this.candidates.filter(v => (v.product + ' ' + v.coverage + ' ' + v.format).toLowerCase().includes(s)); } }"
                  @open-link-vex-modal.window="open = true; sel = []; search = ''">
                 {{ vex_candidates|json_script:"vex-candidates" }}
                 <c-modal id="linkVexModal" title="Link a VEX" icon="fas fa-file-shield">
@@ -519,6 +483,6 @@
         {% if has_crud_permissions %}
             {% include 'core/components/advisory_delete_modal.html.j2' %}
         {% endif %}
-    </div>
+    </c-layout.frame>
 {% endblock %}
 {% block scripts %}{% endblock %}

@@ -2,7 +2,7 @@
 {% load teams %}
 {% block title %}Workspaces · sbomify{% endblock %}
 {% block content %}
-    <c-layout.page-header title="Workspaces" subtitle="Switch workspaces or choose the one that opens when you sign in." icon="fas fa-building" mark="avatar">
+    <c-layout.page-header title="Workspaces" subtitle="Switch workspaces or choose the one that opens when you sign in.">
     <c-buttons.primary @click="$dispatch('open-add-workspace-modal')"><i class="fas fa-plus" aria-hidden="true"></i>Add workspace</c-buttons.primary>
     </c-layout.page-header>
     {% if teams %}
