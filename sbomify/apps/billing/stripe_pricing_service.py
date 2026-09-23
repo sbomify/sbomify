@@ -62,13 +62,12 @@ class StripePricingService:
         if not needs_refresh:
             return self._build_pricing_from_db(db_plans)
 
-        # Read once, before the call, and handed down: the staleness reported
-        # on the failure and the staleness named in the log line have to be the
-        # same reading, and ``timezone.now()`` moves between two calls.
-        stale = self._stale_plans(db_plans)
         try:
-            return self._refresh_pricing_from_stripe(db_plans, stale)
+            return self._refresh_pricing_from_stripe(db_plans)
         except StripeError as e:
+            # Only needed to describe the failure, so it is not computed on the
+            # path where there isn't one.
+            stale = self._stale_plans(db_plans)
             # Warning, not error, on both paths: the logging integration turns
             # an error into an event, and this branch is the fallback working —
             # the caller gets the prices it asked for and the page renders. A
@@ -101,7 +100,7 @@ class StripePricingService:
             if plan.last_synced_at and now - plan.last_synced_at > cls.STALE_AFTER
         }
 
-    def _fetch_products_reporting_staleness(self, stale: dict[str, timedelta]) -> Any:
+    def _fetch_products_reporting_staleness(self, db_plans: list[BillingPlan]) -> Any:
         """The Stripe call, under a scope saying how stale the cache already is.
 
         A failed call is reported by the client, which logs at error and so
@@ -113,6 +112,7 @@ class StripePricingService:
         own database work, and an error logged there is a different fault that
         must not inherit a tag describing the Stripe one.
         """
+        stale = self._stale_plans(db_plans)
         with sentry_sdk.new_scope() as scope:
             # Set either way: reading the event, an absent tag cannot be told
             # apart from a build that predates the tag.
@@ -162,20 +162,13 @@ class StripePricingService:
 
         return plans_pricing
 
-    def _refresh_pricing_from_stripe(
-        self, db_plans: list[BillingPlan], stale: dict[str, timedelta] | None = None
-    ) -> dict[str, dict[str, Any]]:
+    def _refresh_pricing_from_stripe(self, db_plans: list[BillingPlan]) -> dict[str, dict[str, Any]]:
         """
         Refresh pricing from Stripe API and update database.
 
         Fetches Stripe data outside transaction to avoid holding locks during API calls.
         Uses select_for_update only for the final database update to prevent race conditions.
-
-        ``stale`` is the caller's reading of how old the cached copy already is,
-        passed down so both it and the Stripe call describe the same instant.
         """
-        if stale is None:
-            stale = self._stale_plans(db_plans)
         plan_keys = [p.key for p in db_plans]
 
         # Fetch all products and prices from Stripe OUTSIDE transaction
@@ -184,7 +177,7 @@ class StripePricingService:
         # line, and the failure is already written twice — by the client that
         # classified the error, and by the caller that decides what to do about
         # it. A third copy is a third Sentry issue for one failure.
-        stripe_products = self._fetch_products_reporting_staleness(stale)
+        stripe_products = self._fetch_products_reporting_staleness(db_plans)
 
         # Process Stripe data into pricing dicts
         plans_pricing: dict[str, dict[str, Any]] = {}
