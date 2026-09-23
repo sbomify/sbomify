@@ -2071,6 +2071,27 @@ class TestWelcomeRecoverySweep:
 
         assert user.id in self._run_sweep()
 
+    def test_a_user_with_no_address_yet_is_deferred_not_retired(self) -> None:
+        """An empty address must not count as a delivered welcome.
+
+        ``to=[""]`` is a one-element recipient list, so the send reports
+        success and the flag gets set — retiring the user from this sweep for
+        an email that went nowhere. They stay eligible until a profile sync
+        supplies an address, and are picked up on the next pass.
+        """
+        user = self._owner("noaddress", welcome_sent=False)
+        User.objects.filter(pk=user.pk).update(email="")
+        user.refresh_from_db()
+
+        mail.outbox = []
+        assert OnboardingEmailService.send_welcome_email(user) is False
+        assert mail.outbox == []
+        assert OnboardingStatus.objects.get(user=user).welcome_email_sent is False
+        assert user.id not in self._run_sweep()
+
+        User.objects.filter(pk=user.pk).update(email="arrived@example.com")
+        assert user.id in self._run_sweep()
+
     def test_a_synthetic_bot_is_not_swept(self) -> None:
         """Driving from users brings bot identities into range; they stay out.
 

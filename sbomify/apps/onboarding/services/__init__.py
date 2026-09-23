@@ -198,6 +198,14 @@ def _is_mailable(user: Any) -> bool:
     if not user.is_active or user.deleted_at is not None:
         logger.info("Suppressing onboarding email for closed account %s", user.id)
         return False
+    if not (getattr(user, "email", "") or "").strip():
+        # Not a no-op: ``to=[""]`` is a one-element recipient list, so the send
+        # reports success, the row is marked SENT and ``welcome_email_sent`` is
+        # set — retiring the user from the recovery sweep for an email that was
+        # never delivered anywhere. Refusing keeps them eligible until a profile
+        # sync supplies an address.
+        logger.info("Deferring onboarding email for user %s: no address yet", user.id)
+        return False
     return True
 
 

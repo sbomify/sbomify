@@ -300,6 +300,8 @@ def requeue_missed_welcome_emails_task() -> None:
     # when the send runs.
     missed = (
         User.objects.filter(date_joined__gte=cutoff, is_active=True, deleted_at__isnull=True)
+        .exclude(email="")
+        .exclude(email__isnull=True)
         .filter(Q(onboarding_status__isnull=True) | Q(onboarding_status__welcome_email_sent=False))
         .exclude(username__startswith=BOT_USERNAME_PREFIX)
         .exclude(email__iendswith=f"@{BOT_EMAIL_DOMAIN}")
