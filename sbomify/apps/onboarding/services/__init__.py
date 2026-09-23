@@ -4,6 +4,7 @@ Onboarding email services.
 
 from __future__ import annotations
 
+import smtplib
 from typing import Any
 
 from django.conf import settings
@@ -17,6 +18,41 @@ from ..models import OnboardingEmail, OnboardingStatus
 from ..utils import get_email_context, render_email_templates
 
 logger = getLogger(__name__)
+
+
+class TransientEmailError(Exception):
+    """A send that failed for a reason another attempt could survive.
+
+    The sending tasks are dramatiq actors declaring ``max_retries=3``, and
+    that budget only exists if something raises. Reporting a failed send as a
+    ``False`` return — which is what every path here used to do — spends it on
+    nothing: the actor sees a clean return, the message is acknowledged, and a
+    welcome email lost to a thirty-second mail outage is lost for good,
+    because nothing schedules another attempt.
+
+    Carrying the classification on the exception rather than re-deriving it in
+    the task keeps one answer to "is this worth retrying" instead of two that
+    can drift.
+    """
+
+
+# Refused addresses are the failures a retry cannot fix: the server has read
+# the envelope and rejected it, and it will reject the same envelope again.
+# Everything else that reaches the mailer as an OSError — SMTPException is one,
+# so are ConnectionError, TimeoutError and the raw socket errors underneath
+# them — is the transport, not the message.
+_PERMANENT_SEND_ERRORS = (
+    smtplib.SMTPRecipientsRefused,
+    smtplib.SMTPSenderRefused,
+    smtplib.SMTPNotSupportedError,
+)
+
+
+def _is_transient_send_error(exc: BaseException) -> bool:
+    """Whether another attempt at this send could plausibly succeed."""
+    if isinstance(exc, _PERMANENT_SEND_ERRORS):
+        return False
+    return isinstance(exc, OSError)
 
 
 def _is_mailable(user: Any) -> bool:
@@ -119,6 +155,9 @@ class OnboardingEmailService:
             return True
         except Exception as e:
             email_record.mark_failed(f"SMTP send failure: {type(e).__name__}")
+            if _is_transient_send_error(e):
+                logger.warning("Transient failure sending welcome email to user %s: %s", user.id, e)
+                raise TransientEmailError(f"welcome email to user {user.id}") from e
             logger.error("Failed to send welcome email to user %s: %s", user.id, e, exc_info=True)
             return False
 
@@ -194,6 +233,9 @@ class OnboardingEmailService:
             return True
         except Exception as e:
             email_record.mark_failed(f"SMTP send failure: {type(e).__name__}")
+            if _is_transient_send_error(e):
+                logger.warning("Transient failure sending %s email to user %s: %s", email_type, user.id, e)
+                raise TransientEmailError(f"{email_type} email to user {user.id}") from e
             logger.error("Failed to send %s email to user %s: %s", email_type, user.id, e, exc_info=True)
             return False
 

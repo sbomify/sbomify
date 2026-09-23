@@ -3,6 +3,7 @@ Tests for onboarding functionality using pytest and existing fixtures.
 """
 
 from datetime import timedelta
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -201,6 +202,7 @@ class TestOnboardingStatusModel:
         status.drip_started_at = timezone.now() - timedelta(days=10)
         status.save()
         assert status.should_receive_collaboration()
+
 
 @pytest.mark.django_db
 class TestOnboardingEmailModel:
@@ -1349,3 +1351,153 @@ class TestEdgeCasesAndErrorHandling:
         # user2 should still be eligible for quick_start despite user1's error
         quick_start_ids = [u.id for u in result[OnboardingEmail.EmailType.QUICK_START]]
         assert user2.id in quick_start_ids
+
+
+@pytest.mark.django_db
+class TestTransientSendFailuresRetry:
+    """A mail outage must not cost a user their email.
+
+    The sending actors declare ``max_retries=3``, and that budget is only
+    reachable if something raises. Every send path used to report a failure as
+    a ``False`` return, so the actor saw a clean return, acknowledged the
+    message, and nothing ever tried again — a welcome email lost to a brief
+    unreachable mail host was lost permanently.
+    """
+
+    @staticmethod
+    def _user(name: str) -> Any:
+        user = User.objects.create_user(username=name, email=f"{name}@example.com", password="test123")
+        team = Team.objects.create(name=f"{name} Team", key=f"{name}-team")
+        Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
+        return user
+
+    def test_unreachable_mail_host_raises_so_the_actor_retries(self) -> None:
+        """This is the failure Sentry recorded: OSError 113, no route to host."""
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("transient")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.FAILED
+
+    def test_smtp_connect_failure_raises(self) -> None:
+        import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("smtpdown")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPConnectError(421, "try later")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_refused_recipient_does_not_retry(self) -> None:
+        """The server read the envelope and rejected it; it will again."""
+        import smtplib
+
+        user = self._user("refused")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused({})
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+    def test_a_template_error_does_not_retry(self) -> None:
+        """Not a transport failure — retrying runs the same broken render."""
+        user = self._user("template")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = ValueError("bad template")
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+    def test_the_sequence_emails_retry_too(self) -> None:
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("seqtransient")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_quick_start_email(user)
+
+    def test_the_task_lets_a_transient_failure_out_so_dramatiq_sees_it(self) -> None:
+        """The actor has to receive the exception, or the retry never happens."""
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("tasktransient")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+            with pytest.raises(TransientEmailError):
+                send_welcome_email_task(user.id)
+
+    def test_a_transient_failure_is_not_logged_at_error_on_every_attempt(self) -> None:
+        """event_level=ERROR means an error line here is a Sentry issue.
+
+        Four attempts would be four issues for one outage. The attempt that
+        exhausts the retries still reports, via the unhandled exception.
+        """
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("quiettransient")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(TransientEmailError):
+                    send_welcome_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_a_permanent_failure_still_reports_and_does_not_raise(self) -> None:
+        """Unchanged behaviour: the service reports it, the actor stops.
+
+        The error-level record — the one that becomes the Sentry issue — comes
+        from the service, which is where the failure is understood. The task
+        sees a ``False`` return, says so at warning level, and does not raise,
+        because retrying a broken render just runs it again.
+        """
+        from sbomify.apps.onboarding import services as onboarding_services
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+
+        user = self._user("permanentloud")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = ValueError("bad template")
+            with (
+                patch.object(onboarding_services, "logger", MagicMock()) as service_logger,
+                patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger,
+            ):
+                send_welcome_email_task(user.id)
+
+        assert service_logger.error.call_count == 1
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_a_retry_after_a_transient_failure_delivers(self) -> None:
+        """The FAILED record must not block the attempt that succeeds."""
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("eventually")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+        mail.outbox = []
+        assert OnboardingEmailService.send_welcome_email(user) is True
+        assert len(mail.outbox) == 1
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.SENT
