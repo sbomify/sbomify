@@ -55,83 +55,83 @@
     {% endif %}
     </c-layout.page-header>
     <c-layout.frame>
-        {# Stats Badges #}
-        <div class="flex flex-wrap gap-2">
-            <c-chips.metric-chip>
-            <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"
-               aria-hidden="true"></i>
-            <c-chips.metric.value>
-            {% if component.component_type == 'bom' %}
-                {{ component.sbom_count|default:0 }}
-            {% else %}
-                {{ component.document_count|default:0 }}
-            {% endif %}
-            </c-chips.metric.value>
-            <c-chips.metric.label>
-            {% if component.component_type == 'bom' %}
-                BOMs
-            {% else %}
-                Documents
-            {% endif %}
-            </c-chips.metric.label>
-            </c-chips.metric-chip>
-            <c-chips.metric-chip>
-            <span class="inline-flex items-center gap-1 {% if component.is_global %}text-primary{% else %}text-text-muted{% endif %}">
-                <i class="fas fa-{% if component.is_global %}building{% else %}cube{% endif %} text-xs"></i>
-                <span>
-                    {% if component.is_global %}
-                        Workspace-wide
-                    {% else %}
-                        Product-scoped
-                    {% endif %}
-                </span>
-            </span>
-            </c-chips.metric-chip>
-            {# Latest-scan vulnerability summary (design review / mock). #}
-            {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low or vuln_summary.suppressed %}
-                {% comment %}The accent is settled first: a prop written as an inline {% if %} is one djlint reformat away from arriving with newlines in it, and a padded value matches no branch in the component.{% endcomment %}
-                {% if vuln_summary.critical or vuln_summary.high %}
-                    {% firstof "danger" as vuln_chip_accent %}
-                {% else %}
-                    {% firstof "warning" as vuln_chip_accent %}
-                {% endif %}
-                <c-chips.metric-chip accent="{{ vuln_chip_accent }}">
-                <i class="fas fa-triangle-exclamation text-xs" aria-hidden="true"></i>
-                {% if vuln_summary.critical %}
-                    <c-chips.metric.value>{{ vuln_summary.critical }} Critical</c-chips.metric.value>
-                {% endif %}
-                {% if vuln_summary.high %}
-                    {% if vuln_summary.critical %}<span class="text-text-muted">·</span>{% endif %}
-                    <c-chips.metric.value>{{ vuln_summary.high }} High</c-chips.metric.value>
-                {% endif %}
-                {% if vuln_summary.medium %}
-                    {% if vuln_summary.critical or vuln_summary.high %}<span class="text-text-muted">·</span>{% endif %}
-                    <c-chips.metric.value>{{ vuln_summary.medium }} Medium</c-chips.metric.value>
-                {% endif %}
-                {% if vuln_summary.low %}
-                    {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium %}
-                        <span class="text-text-muted">·</span>
-                    {% endif %}
-                    <c-chips.metric.value>{{ vuln_summary.low }} Low</c-chips.metric.value>
-                {% endif %}
-                {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
-                {% if vuln_summary.suppressed %}
-                    <c-chips.metric.label>· {{ vuln_summary.suppressed }} suppressed</c-chips.metric.label>
-                {% endif %}
-                <c-chips.metric.label>· latest scan</c-chips.metric.label>
-                </c-chips.metric-chip>
-            {% endif %}
-        </div>
-        {% block header_after_meta %}{% endblock %}
-        {% block content_after_header %}{% endblock %}
-        {% block upload_section %}{% endblock %}
-        {% block table_section %}{% endblock %}
-        {# Danger Zone #}
-        {% if component.has_crud_permissions %}
-            <div>
-                {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name can_delete=can_delete %}
-            </div>
+    {# Stats Badges #}
+    <div class="flex flex-wrap gap-2">
+        <c-chips.metric-chip>
+        <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"
+           aria-hidden="true"></i>
+        <c-chips.metric.value>
+        {% if component.component_type == 'bom' %}
+            {{ component.sbom_count|default:0 }}
+        {% else %}
+            {{ component.document_count|default:0 }}
         {% endif %}
+        </c-chips.metric.value>
+        <c-chips.metric.label>
+        {% if component.component_type == 'bom' %}
+            BOMs
+        {% else %}
+            Documents
+        {% endif %}
+        </c-chips.metric.label>
+        </c-chips.metric-chip>
+        <c-chips.metric-chip>
+        <span class="inline-flex items-center gap-1 {% if component.is_global %}text-primary{% else %}text-text-muted{% endif %}">
+            <i class="fas fa-{% if component.is_global %}building{% else %}cube{% endif %} text-xs"></i>
+            <span>
+                {% if component.is_global %}
+                    Workspace-wide
+                {% else %}
+                    Product-scoped
+                {% endif %}
+            </span>
+        </span>
+        </c-chips.metric-chip>
+        {# Latest-scan vulnerability summary (design review / mock). #}
+        {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low or vuln_summary.suppressed %}
+            {% comment %}The accent is settled first: a prop written as an inline {% if %} is one djlint reformat away from arriving with newlines in it, and a padded value matches no branch in the component.{% endcomment %}
+            {% if vuln_summary.critical or vuln_summary.high %}
+                {% firstof "danger" as vuln_chip_accent %}
+            {% else %}
+                {% firstof "warning" as vuln_chip_accent %}
+            {% endif %}
+            <c-chips.metric-chip accent="{{ vuln_chip_accent }}">
+            <i class="fas fa-triangle-exclamation text-xs" aria-hidden="true"></i>
+            {% if vuln_summary.critical %}
+                <c-chips.metric.value>{{ vuln_summary.critical }} Critical</c-chips.metric.value>
+            {% endif %}
+            {% if vuln_summary.high %}
+                {% if vuln_summary.critical %}<span class="text-text-muted">·</span>{% endif %}
+                <c-chips.metric.value>{{ vuln_summary.high }} High</c-chips.metric.value>
+            {% endif %}
+            {% if vuln_summary.medium %}
+                {% if vuln_summary.critical or vuln_summary.high %}<span class="text-text-muted">·</span>{% endif %}
+                <c-chips.metric.value>{{ vuln_summary.medium }} Medium</c-chips.metric.value>
+            {% endif %}
+            {% if vuln_summary.low %}
+                {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium %}
+                    <span class="text-text-muted">·</span>
+                {% endif %}
+                <c-chips.metric.value>{{ vuln_summary.low }} Low</c-chips.metric.value>
+            {% endif %}
+            {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
+            {% if vuln_summary.suppressed %}
+                <c-chips.metric.label>· {{ vuln_summary.suppressed }} suppressed</c-chips.metric.label>
+            {% endif %}
+            <c-chips.metric.label>· latest scan</c-chips.metric.label>
+            </c-chips.metric-chip>
+        {% endif %}
+    </div>
+    {% block header_after_meta %}{% endblock %}
+    {% block content_after_header %}{% endblock %}
+    {% block upload_section %}{% endblock %}
+    {% block table_section %}{% endblock %}
+    {# Danger Zone #}
+    {% if component.has_crud_permissions %}
+        <div>
+            {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name can_delete=can_delete %}
+        </div>
+    {% endif %}
     </c-layout.frame>
 {% endblock %}
 {% block scripts %}

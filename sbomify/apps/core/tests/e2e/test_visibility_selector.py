@@ -125,7 +125,10 @@ def test_visibility_failure_keeps_saved_choice(
     component = component_factory("Visibility failure", "document", visibility="gated")
     page = authenticated_page
     pending: list[Route] = []
-    page.route(f"**{reverse('core:toggle_public_status', args=['component', component.pk])}", lambda route: pending.append(route))
+    page.route(
+        f"**{reverse('core:toggle_public_status', args=['component', component.pk])}",
+        lambda route: pending.append(route),
+    )
     page.goto(reverse("core:component_details", args=[component.pk]))
     trigger = page.get_by_role("button", name="Component visibility", exact=True)
     menu = page.get_by_role("menu", name="Component visibility", exact=True)
