@@ -6,6 +6,12 @@ Date: 2025-02-02
 
 Accepted
 
+Current implementation guidance lives in [AGENTS.md](../../AGENTS.md#frontend-ui)
+and the `/design-system/` gallery. The `tw-*` and macro examples below describe
+the earlier implementation; new UI uses shared Cotton components. Read
+[UI change considerations and CI](../ui-change-considerations.md) when changing
+components or page structure.
+
 ## Context
 
 sbomify's frontend was built on Bootstrap 5.3.8+ with custom CSS. As the application grew, several challenges emerged:

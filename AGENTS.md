@@ -33,7 +33,7 @@ Always run tests in Docker:
 # Start test services
 docker compose -f docker-compose.tests.yml up -d
 
-# All tests (parallel). Use this one: ~2 minutes on 6 cores, against ~12 sequential.
+# All backend tests (parallel). If Docker runs out of memory, use -n 4 instead.
 docker compose -f docker-compose.tests.yml exec tests uv run pytest -n auto --ignore=sbomify/apps/core/tests/e2e
 
 # All tests (sequential). For --pdb, which xdist cannot support.
@@ -83,6 +83,10 @@ Frontend tests:
 bun test
 bun test path/to/file.spec.ts
 ```
+
+For UI work, read [UI change considerations and CI](docs/ui-change-considerations.md)
+before choosing tests. A page can render components owned by several apps;
+testing only the app containing the edited template can miss a failing consumer.
 
 ### Key Test Fixtures
 
@@ -299,6 +303,33 @@ in a diff is a review blocker.
 - **Referencing a class that does not exist fails silently.** Grep before shipping.
 - **Copy is part of the component.** See Copy under Key Conventions; in UI it is a
   review blocker, same as a raw hex.
+
+#### UI change considerations and CI
+
+`CLAUDE.md` links to this file. Keep one set of agent rules here. The
+[UI change considerations](docs/ui-change-considerations.md) record failures
+from the UI migration and link to the tests that protect each affected behavior.
+Read them when changing shared components, page structure or interaction flows.
+
+- **Small visual changes can affect many test suites.** Search component callers,
+  template includes, labels, selectors and old assertions across `sbomify/apps/`.
+  Follow the app groups in [CI](.github/workflows/ci-cd.yml), including the backend
+  tests that render HTML. The design-system gallery and a browser screenshot are
+  only part of validation.
+- **Keep behavior and accessibility intact.** Preserve routes, permissions, IDs,
+  HTMX targets, Alpine state and filter parameters. When presentation intentionally
+  changes, update tests to verify the user-visible result and interaction. Do not
+  remove accessibility attributes or restore duplicate UI to satisfy old markup
+  assertions. Exact style assertions still belong in component contract tests.
+- **Inspect visual failures before accepting them.** Shared table wrapping once
+  crushed short labels; that needed a component fix. Intended header, card, modal
+  and spacing changes need reviewed baselines at every affected viewport. Never
+  widen screenshot tolerances or skip tests to hide a difference.
+- **Validate the production path and all affected consumers before committing.**
+  Build assets before browser tests, check Docker source copies when adding app
+  assets, and use the guide's validation scope. Shared component changes require
+  broader checks than a few selected tests on the page being edited. Report local
+  results and GitHub status separately; an unfinished or crashed run is not a pass.
 
 #### Other
 
