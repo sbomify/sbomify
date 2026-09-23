@@ -45,6 +45,8 @@ detail routes. No row is itself clickable, so menus and keyboard links stay inde
     <c-tables.cell compact>
     {% if row.last_scan and row.scan_label == 'Scanned' %}
         <c-feedback.status tone="success" label="Scanned" title="{{ row.last_scan|date:'j M Y, H:i' }}" />
+    {% elif row.scan_label == 'Nothing scanned' %}
+        <c-feedback.status tone="warning" label="Nothing scanned" title="Every scanner skipped the latest SBOM. Open the component to see why." />
     {% else %}
         <c-feedback.status label="{{ row.scan_label }}" />
     {% endif %}

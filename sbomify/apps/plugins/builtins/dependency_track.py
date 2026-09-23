@@ -186,11 +186,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
         if not has_product:
             return self.create_skipped_result(
                 finding_id="dependency-track:no-product",
-                title="Skipped — component has no product membership",
+                title="Component Not in a Product",
                 description=(
-                    "Dependency Track scanning requires the component to be linked "
-                    "to a product. This component has no product membership, so no "
-                    "release context exists for DT project tags."
+                    "Dependency Track only scans components that belong to a product. "
+                    "Add this component to a product so Dependency Track can scan it."
                 ),
             )
 

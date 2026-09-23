@@ -102,7 +102,7 @@
                 scanner could read renders as "Clean".
                 {% endcomment %}
                 <template x-if="item.vuln && item.vuln.total === 0 && item.vuln.scanned_nothing">
-                    <c-badges.warning title="A scan ran but matched no packages, so nothing was checked against any advisory source.">
+                    <c-badges.warning title="Every scanner skipped this artifact. Open it to see why.">
                     Nothing scanned
                     </c-badges.warning>
                 </template>

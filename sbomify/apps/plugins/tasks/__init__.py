@@ -1419,6 +1419,23 @@ def hourly_dt_scan_task() -> dict[str, Any]:
     )
 
 
+@cron("*/20 * * * *")  # type: ignore[untyped-decorator]  # Every 20 minutes
+@dramatiq.actor(queue_name="plugins", max_retries=1, time_limit=600000)
+def sweep_stranded_runs_task() -> int:
+    """Settle assessment runs that nothing will come back for.
+
+    A run is written before its work is queued, so a lost message leaves a row
+    in PENDING with nothing scheduled against it. overall_status is pending
+    while any run is, and the artifact page renders that as "Processing", so
+    one such row spins the page forever. Runs often enough that nobody watches
+    a spinner for long, and the cutoff inside is well clear of the legitimate
+    retry ladder.
+    """
+    from sbomify.apps.plugins.stranded import sweep_stranded_runs
+
+    return sweep_stranded_runs()
+
+
 @cron("15 3 * * *")  # type: ignore[untyped-decorator]  # Daily, before the other sweeps
 @dramatiq.actor(queue_name="assessment_retention", max_retries=1, time_limit=1800000)
 def prune_assessment_runs_task() -> int:
