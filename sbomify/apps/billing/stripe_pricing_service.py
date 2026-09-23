@@ -116,7 +116,12 @@ class StripePricingService:
         with sentry_sdk.new_scope() as scope:
             # Set either way: reading the event, an absent tag cannot be told
             # apart from a build that predates the tag.
-            scope.set_tag("pricing_cache_stale", bool(stale))
+            #
+            # Lowercase strings rather than a bool: Sentry matches tags as
+            # strings, so a bool arrives as "True" and the alert rule an
+            # operator would actually write — pricing_cache_stale:true — would
+            # silently match nothing.
+            scope.set_tag("pricing_cache_stale", "true" if stale else "false")
             if stale:
                 scope.set_context(
                     "pricing_cache",

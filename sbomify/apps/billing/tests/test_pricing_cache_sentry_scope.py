@@ -99,9 +99,9 @@ class TestStaleCacheRidesOnTheStripeEvent:
         assert len(captured_events) == 1, "one failed refresh must not produce two issues"
         event = captured_events[0]
         assert event["logentry"]["message"] == "Stripe API connection error"
-        # str(): the SDK holds the tag as the bool it was given and stringifies it
-        # on serialisation, so this reads the same either side of that.
-        assert str(event["tags"]["pricing_cache_stale"]) == "True"
+        # Lowercase, and asserted exactly: this is the literal an operator's
+        # alert rule matches on, and Sentry compares tags as strings.
+        assert event["tags"]["pricing_cache_stale"] == "true"
         assert event["contexts"]["pricing_cache"]["stale_plans"] == ["business"]
 
     def test_a_fresh_cache_says_so_on_the_same_event(
@@ -123,7 +123,7 @@ class TestStaleCacheRidesOnTheStripeEvent:
         StripePricingService().get_all_plans_pricing(force_refresh=True)
 
         assert len(captured_events) == 1
-        assert str(captured_events[0]["tags"]["pricing_cache_stale"]) == "False"
+        assert captured_events[0]["tags"]["pricing_cache_stale"] == "false"
         assert "pricing_cache" not in captured_events[0].get("contexts", {})
 
     def test_a_failure_saving_the_result_does_not_inherit_the_tag(

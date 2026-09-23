@@ -1,6 +1,7 @@
 import datetime
 from contextlib import AbstractContextManager
 from decimal import Decimal
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -119,7 +120,7 @@ class TestStripePricingService:
     @staticmethod
     def _scope_of(sentry: MagicMock) -> MagicMock:
         """The scope the service pushed around the Stripe call."""
-        return sentry.new_scope.return_value.__enter__.return_value
+        return cast(MagicMock, sentry.new_scope.return_value.__enter__.return_value)
 
     def test_stripe_failure_with_fresh_cache_is_not_an_error(
         self, service: StripePricingService, mock_stripe_client: MagicMock, mock_plans: list[BillingPlan], db: None
@@ -184,7 +185,7 @@ class TestStripePricingService:
             service.get_all_plans_pricing(force_refresh=True)
 
         scope = self._scope_of(sentry)
-        scope.set_tag.assert_called_once_with("pricing_cache_stale", True)
+        scope.set_tag.assert_called_once_with("pricing_cache_stale", "true")
         name, context = scope.set_context.call_args.args
         assert name == "pricing_cache"
         assert context["stale_plans"] == ["business"]
@@ -205,7 +206,7 @@ class TestStripePricingService:
             service.get_all_plans_pricing(force_refresh=True)
 
         scope = self._scope_of(sentry)
-        scope.set_tag.assert_called_once_with("pricing_cache_stale", False)
+        scope.set_tag.assert_called_once_with("pricing_cache_stale", "false")
         scope.set_context.assert_not_called()
 
     def test_every_stale_plan_is_named_in_the_one_context(
@@ -246,7 +247,7 @@ class TestStripePricingService:
         with self._watch_sentry() as sentry:
             service.get_all_plans_pricing(force_refresh=True)
 
-        self._scope_of(sentry).set_tag.assert_called_once_with("pricing_cache_stale", False)
+        self._scope_of(sentry).set_tag.assert_called_once_with("pricing_cache_stale", "false")
 
 
 class TestCreateCheckoutSession:
