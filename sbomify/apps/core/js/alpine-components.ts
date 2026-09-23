@@ -184,17 +184,6 @@ export function formState() {
     };
 }
 
-/**
- * Chart Selector Component
- */
-export function chartSelector(defaultChart = 'timeline') {
-    return {
-        activeChart: defaultChart,
-        setChart(chartType: string): void { this.activeChart = chartType; },
-        isActive(chartType: string): boolean { return this.activeChart === chartType; }
-    };
-}
-
 // ============================================
 // REGISTRATION FUNCTIONS
 // ============================================
@@ -210,7 +199,6 @@ export function registerCommonComponents(): void {
     registerAlpineComponent('modalState', modalState);
     registerAlpineComponent('collapsible', collapsible);
     registerAlpineComponent('formState', formState);
-    registerAlpineComponent('chartSelector', chartSelector);
     registerAlpineComponent('advisoryProductPicker', advisoryProductPicker);
     registerAlpineComponent('actionsMenu', actionsMenu);
     registerAlpineComponent('publicSharing', publicSharing);
@@ -344,6 +332,5 @@ export default {
     dangerZone,
     modalState,
     collapsible,
-    formState,
-    chartSelector
+    formState
 };
