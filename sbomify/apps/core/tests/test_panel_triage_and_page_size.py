@@ -13,6 +13,9 @@ list so long.
 
 from __future__ import annotations
 
+import re
+from html import unescape
+
 import pytest
 from django.test import Client
 from django.urls import reverse
@@ -244,7 +247,20 @@ class TestTheReaderChoosesHowMuchToSee:
 
         response = _panel(client, component.id, vuln_per_page=25)
 
-        assert "vuln_per_page=25" in response.context["vuln_next_url"]
+        next_link = re.search(r'<a\s[^>]*href="([^"]+)"[^>]*aria-label="Next page"', response.content.decode())
+        assert next_link is not None
+        next_response = client.get(unescape(next_link.group(1)), headers={"hx-request": "true"})
+
+        assert next_response.status_code == 200
+        panel = next_response.context["vuln_panel"]
+        assert panel["page"] == 2
+        assert panel["per_page"] == 25
+        assert len(panel["rows"]) == 25
+        next_html = next_response.content.decode()
+        assert "CVE-2026-0025" in next_html
+        assert "CVE-2026-0049" in next_html
+        assert "CVE-2026-0024" not in next_html
+        assert "CVE-2026-0050" not in next_html
 
     def test_a_bigger_page_reaches_findings_the_default_does_not(self, sample_team_with_owner_member, sample_user):
         """The point of the control, from the reader's side."""
