@@ -1,7 +1,10 @@
+import datetime
+from contextlib import AbstractContextManager
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_pricing_service import StripePricingService
@@ -84,6 +87,78 @@ class TestStripePricingService:
         assert "business" in pricing
         assert pricing["business"]["monthly_price"] == Decimal("199.00")
         assert pricing["business"]["annual_price"] == Decimal("1908.00")
+
+    @staticmethod
+    def _fail_with_cache_aged(mock_stripe_client: MagicMock, age: datetime.timedelta) -> None:
+        """Prime a plan synced ``age`` ago and make the next Stripe call fail."""
+        from sbomify.apps.billing.stripe_client import StripeError
+
+        plan = BillingPlan.objects.get(key="business")
+        plan.monthly_price = Decimal("199.00")
+        plan.last_synced_at = timezone.now() - age
+        plan.save(update_fields=["monthly_price", "last_synced_at"])
+
+        mock_stripe_client.get_all_products_with_prices.side_effect = StripeError("API Error")
+
+    # The calls are asserted rather than captured text: the ``sbomify`` logger
+    # does not propagate to root, so caplog sees nothing (see
+    # ``test_stripe_timeout.py``).
+    @staticmethod
+    def _watch_logger() -> AbstractContextManager[MagicMock]:
+        from sbomify.apps.billing import stripe_pricing_service
+
+        return patch.object(stripe_pricing_service, "logger", MagicMock())
+
+    def test_stripe_failure_with_fresh_cache_is_not_an_error(
+        self, service: StripePricingService, mock_stripe_client: MagicMock, mock_plans: list[BillingPlan], db: None
+    ) -> None:
+        """A recovered fetch must not reach Sentry.
+
+        Sentry's logging integration is wired with ``event_level=ERROR``, so
+        every error-level line here becomes an issue someone is paged for. This
+        path served the caller the prices it asked for, so the outage is worth
+        a line in the log and nothing louder.
+        """
+        self._fail_with_cache_aged(mock_stripe_client, datetime.timedelta(minutes=5))
+
+        with self._watch_logger() as logger:
+            pricing = service.get_all_plans_pricing(force_refresh=True)
+
+        assert pricing["business"]["monthly_price"] == Decimal("199.00")
+        assert logger.warning.call_count == 1
+        assert logger.error.call_count == 0
+
+    def test_the_pricing_service_writes_one_line_for_one_failure(
+        self, service: StripePricingService, mock_stripe_client: MagicMock, mock_plans: list[BillingPlan], db: None
+    ) -> None:
+        """The refresh helper used to log the failure and re-raise it into the
+        caller, which logged it again — two Sentry issues from this module for
+        one outage, on top of the one the client already raised.
+        """
+        self._fail_with_cache_aged(mock_stripe_client, datetime.timedelta(minutes=5))
+
+        with self._watch_logger() as logger:
+            service.get_all_plans_pricing(force_refresh=True)
+
+        written = logger.warning.call_args_list + logger.error.call_args_list
+        assert len([call for call in written if "Failed to fetch Stripe products" in call.args[0]]) == 1
+
+    def test_stripe_failure_with_stale_cache_is_an_error(
+        self, service: StripePricingService, mock_stripe_client: MagicMock, mock_plans: list[BillingPlan], db: None
+    ) -> None:
+        """Past 24 hours the fallback stops covering for the outage.
+
+        The prices being served are more than a day old and may not be the ones
+        Stripe would charge, so this is the branch that has to raise an alert.
+        """
+        self._fail_with_cache_aged(mock_stripe_client, datetime.timedelta(hours=25))
+
+        with self._watch_logger() as logger:
+            pricing = service.get_all_plans_pricing(force_refresh=True)
+
+        assert pricing["business"]["monthly_price"] == Decimal("199.00")
+        assert logger.error.call_count == 1
+        assert "is stale" in logger.error.call_args.args[0]
 
 
 class TestCreateCheckoutSession:

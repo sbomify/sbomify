@@ -60,14 +60,24 @@ class StripePricingService:
         try:
             return self._refresh_pricing_from_stripe(db_plans)
         except StripeError as e:
-            logger.error(f"Failed to fetch Stripe products: {e}. Returning cached data.")
-            # Check cache staleness - fail if cache is too old (24 hours)
+            # Warning, not error: Sentry's logging integration turns an error
+            # into an event, and this branch is the fallback working. The
+            # caller gets the prices it asked for, from the copy this service
+            # keeps for exactly this reason, and the page renders. A Stripe
+            # blip used to page on-call from here, from the line below it, and
+            # from the client that raised — three alerts for one request that
+            # succeeded.
+            logger.warning(f"Failed to fetch Stripe products: {e}. Returning cached data.")
+            # Past the threshold the fallback stops covering for the outage:
+            # the prices on the page are a day old and may no longer be the
+            # ones Stripe would charge. That is worth an alert, which is why
+            # it is the branch logged at error level rather than the one above.
             stale_threshold = timedelta(hours=24)
             for plan in db_plans:
                 if plan.last_synced_at:
                     age = timezone.now() - plan.last_synced_at
                     if age > stale_threshold:
-                        logger.warning(
+                        logger.error(
                             f"Pricing cache for plan {plan.key} is stale ({age}). "
                             f"Stripe sync failed. Consider investigating Stripe API issues."
                         )
@@ -118,11 +128,11 @@ class StripePricingService:
 
         # Fetch all products and prices from Stripe OUTSIDE transaction
         # This prevents holding database locks during potentially slow API calls
-        try:
-            stripe_products = self.stripe_client.get_all_products_with_prices()
-        except StripeError as e:
-            logger.error(f"Failed to fetch Stripe products: {e}")
-            raise
+        # No try/except around this call: the only thing one could add is a log
+        # line, and the failure is already written twice — by the client that
+        # classified the error, and by the caller that decides what to do about
+        # it. A third copy is a third Sentry issue for one failure.
+        stripe_products = self.stripe_client.get_all_products_with_prices()
 
         # Process Stripe data into pricing dicts
         plans_pricing: dict[str, dict[str, Any]] = {}
