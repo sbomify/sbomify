@@ -13,7 +13,7 @@ from sbomify.apps.core.apis import _build_item_response, get_component
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
-    build_custom_domain_url,
+    custom_domain_redirect,
     get_component_public_slug,
     get_public_path,
     get_workspace_public_url,
@@ -195,7 +195,9 @@ class ComponentItemPublicView(View):
                 item_type=item_type,
                 item_id=item_id,
             )
-            return HttpResponseRedirect(build_custom_domain_url(component.team, path, request.is_secure()))
+            redirect = custom_domain_redirect(component.team, path, request.is_secure())
+            if redirect is not None:
+                return redirect
 
         # After the redirect, so a gated artifact lands on the workspace's own
         # domain exactly as a public one does; a gate served from the app domain

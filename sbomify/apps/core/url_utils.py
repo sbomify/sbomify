@@ -13,9 +13,12 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.db.models import Model
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
+
+from sbomify.apps.teams.validators import validate_custom_domain
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Component, Product, Release
@@ -223,6 +226,25 @@ def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
         return f"{protocol}://{slug}.{trust_center_domain}{path}"
 
     return ""
+
+
+def custom_domain_redirect(team: Team, path: str, secure: bool = True) -> HttpResponseRedirect | None:
+    """Redirect only to a valid, verified public host belonging to this workspace."""
+    allowed_hosts = set()
+    if team.custom_domain and team.custom_domain_validated:
+        if validate_custom_domain(team.custom_domain)[0]:
+            allowed_hosts.add(team.custom_domain)
+
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    if team.slug and trust_center_domain:
+        host = f"{team.slug}.{trust_center_domain}"
+        if validate_custom_domain(host)[0]:
+            allowed_hosts.add(host)
+
+    target = build_custom_domain_url(team, path, secure)
+    if not url_has_allowed_host_and_scheme(target, allowed_hosts=allowed_hosts, require_https=secure):
+        return None
+    return HttpResponseRedirect(target)
 
 
 def get_component_public_slug(component: BaseComponent, request: HttpRequest) -> str:

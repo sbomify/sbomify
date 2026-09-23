@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.db.models import Count, Exists, OuterRef, Q
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
@@ -14,6 +14,7 @@ from sbomify.apps.core.models import LATEST_RELEASE_NAME, Release, ReleaseArtifa
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
+    custom_domain_redirect,
     get_back_url_from_referrer,
     get_component_public_slug,
     get_public_path,
@@ -211,7 +212,9 @@ class ProductDetailsPublicView(View):
         # OR redirect from /public/ URL to clean URL on custom domain
         if team and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
             path = get_public_path("product", resolved_id, is_custom_domain=True, slug=product_obj.slug)
-            return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
+            redirect = custom_domain_redirect(team, path, request.is_secure())
+            if redirect is not None:
+                return redirect
 
         brand = build_branding_context(team)
         is_custom_domain = getattr(request, "is_custom_domain", False)

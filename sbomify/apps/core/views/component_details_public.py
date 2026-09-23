@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import cast
 
 from django.conf import settings
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
 
@@ -13,7 +13,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
-    build_custom_domain_url,
+    custom_domain_redirect,
     get_back_url_from_referrer,
     get_component_public_slug,
     get_public_path,
@@ -60,7 +60,9 @@ class ComponentDetailsPublicView(View):
             path = get_public_path(
                 "component", resolved_id, is_custom_domain=True, slug=get_component_public_slug(component_obj, request)
             )
-            return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
+            redirect = custom_domain_redirect(team, path, request.is_secure())
+            if redirect is not None:
+                return redirect
 
         # Get assessment status for this component (only passing assessments)
         assessment_status = get_component_assessment_status(component_obj)

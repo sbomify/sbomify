@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
 
@@ -10,7 +10,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
-    build_custom_domain_url,
+    custom_domain_redirect,
     get_public_path,
     get_workspace_public_url,
     resolve_product_identifier,
@@ -57,7 +57,9 @@ class ReleaseDetailsPublicView(View):
                 product_slug=product_obj.slug,
                 release_slug=release_obj.slug,
             )
-            return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
+            redirect = custom_domain_redirect(team, path, request.is_secure())
+            if redirect is not None:
+                return redirect
 
         brand = build_branding_context(team)
 
