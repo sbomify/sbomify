@@ -186,10 +186,15 @@ class OnboardingEmailService:
         # re-queue is for; doing that to a refused address would re-send to a
         # mailbox that does not exist, every day, for as long as the user
         # exists.
-        if existing and existing.status == OnboardingEmail.EmailStatus.UNDELIVERABLE:
+        if existing and existing.suppresses(user.email):
             logger.info("Welcome email address previously refused for user %s, not retrying", user.id)
             return False
-        if existing and existing.status == OnboardingEmail.EmailStatus.FAILED:
+        if existing and existing.status in (
+            OnboardingEmail.EmailStatus.FAILED,
+            OnboardingEmail.EmailStatus.UNDELIVERABLE,
+        ):
+            # UNDELIVERABLE only reaches here when the address has changed
+            # since; the guard above kept the row when it still applies.
             existing.delete()
 
         try:
@@ -226,7 +231,7 @@ class OnboardingEmailService:
             return True
         except Exception as e:
             if _is_refused_address(e):
-                email_record.mark_undeliverable(f"Address refused: {type(e).__name__}")
+                email_record.mark_undeliverable(user.email, f"Address refused: {type(e).__name__}")
                 logger.error("Welcome email address refused for user %s: %s", user.id, e)
                 return False
             email_record.mark_failed(f"SMTP send failure: {type(e).__name__}")
@@ -283,10 +288,15 @@ class OnboardingEmailService:
 
         # A refused address is remembered; a failed one is deleted so the next
         # pass can create a fresh record and try again.
-        if existing and existing.status == OnboardingEmail.EmailStatus.UNDELIVERABLE:
+        if existing and existing.suppresses(user.email):
             logger.info("%s email address previously refused for user %s, not retrying", email_type, user.id)
             return False
-        if existing and existing.status == OnboardingEmail.EmailStatus.FAILED:
+        if existing and existing.status in (
+            OnboardingEmail.EmailStatus.FAILED,
+            OnboardingEmail.EmailStatus.UNDELIVERABLE,
+        ):
+            # UNDELIVERABLE only reaches here when the address has changed
+            # since; the guard above kept the row when it still applies.
             existing.delete()
 
         try:
@@ -315,7 +325,7 @@ class OnboardingEmailService:
             return True
         except Exception as e:
             if _is_refused_address(e):
-                email_record.mark_undeliverable(f"Address refused: {type(e).__name__}")
+                email_record.mark_undeliverable(user.email, f"Address refused: {type(e).__name__}")
                 logger.error("%s email address refused for user %s: %s", email_type, user.id, e)
                 return False
             email_record.mark_failed(f"SMTP send failure: {type(e).__name__}")

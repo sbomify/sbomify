@@ -313,6 +313,11 @@ class OnboardingEmail(models.Model):
     # Email metadata
     subject = models.CharField(max_length=255, blank=True)
     error_message = models.TextField(blank=True)
+    #: The address the refusal in ``UNDELIVERABLE`` was about. A user can
+    #: correct a mistyped address, and the profile sync writes a new one from
+    #: Keycloak; without this the guard would go on suppressing onboarding for
+    #: an address that is no longer theirs and that nobody ever refused.
+    attempted_address = models.CharField(max_length=254, blank=True)
     retry_count = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -342,9 +347,24 @@ class OnboardingEmail(models.Model):
         self.retry_count += 1
         self.save(update_fields=["status", "error_message", "retry_count"])
 
-    def mark_undeliverable(self, error_message: str = "") -> None:
-        """Mark the address as refused, so nothing tries this one again."""
+    def mark_undeliverable(self, address: str, error_message: str = "") -> None:
+        """Record that ``address`` was refused, so nothing tries *it* again."""
         self.status = self.EmailStatus.UNDELIVERABLE
         self.error_message = error_message
+        self.attempted_address = address or ""
         self.retry_count += 1
-        self.save(update_fields=["status", "error_message", "retry_count"])
+        self.save(update_fields=["status", "error_message", "attempted_address", "retry_count"])
+
+    def suppresses(self, address: str) -> bool:
+        """Whether this row is a standing refusal of ``address``.
+
+        A refusal is about an address, not about a user. An older row with no
+        address recorded is honoured as-is rather than reopened: it predates
+        this field, and guessing that it referred to the current address would
+        re-send to whatever refused it.
+        """
+        if self.status != self.EmailStatus.UNDELIVERABLE:
+            return False
+        if not self.attempted_address:
+            return True
+        return self.attempted_address == address

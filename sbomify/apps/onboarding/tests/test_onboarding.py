@@ -1587,6 +1587,53 @@ class TestTransientSendFailuresRetry:
             assert OnboardingEmailService.send_quick_start_email(user) is False
             mock_email_cls.assert_not_called()
 
+    def test_a_corrected_address_is_tried_again(self) -> None:
+        """A refusal is about an address, not about a user.
+
+        The profile sync writes a new address from Keycloak, and a user can fix
+        a typo. Suppressing on the user alone would silence onboarding forever
+        for an address nobody ever refused.
+        """
+        import smtplib
+
+        user = self._user("typo")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {user.email: (550, b"No such user here")}
+            )
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.UNDELIVERABLE
+        assert record.attempted_address == "typo@example.com"
+
+        user.email = "corrected@example.com"
+        user.save(update_fields=["email"])
+
+        mail.outbox = []
+        assert OnboardingEmailService.send_welcome_email(user) is True
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == ["corrected@example.com"]
+
+    def test_an_address_recorded_before_this_field_still_suppresses(self) -> None:
+        """A blank attempted_address is an older row, not a cleared one.
+
+        Treating it as "no address recorded, so try again" would re-send to
+        whatever refused it in the first place.
+        """
+        user = self._user("legacyrefusal")
+        record = OnboardingEmail.create_email(
+            user=user, email_type=OnboardingEmail.EmailType.WELCOME, subject="Welcome"
+        )
+        record.status = OnboardingEmail.EmailStatus.UNDELIVERABLE
+        record.attempted_address = ""
+        record.save(update_fields=["status", "attempted_address"])
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            assert OnboardingEmailService.send_welcome_email(user) is False
+            mock_email_cls.assert_not_called()
+
     def test_a_fault_on_our_side_is_still_retried_by_a_later_pass(self) -> None:
         """Only the recipient's own refusal is remembered.
 
@@ -1752,3 +1799,75 @@ class TestTransientSendFailuresRetry:
         assert len(mail.outbox) == 1
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
         assert record.status == OnboardingEmail.EmailStatus.SENT
+
+
+@pytest.mark.django_db
+class TestWelcomeRecoverySweep:
+    """The welcome email's only second chance.
+
+    It is queued once, by a signal on user creation, so a send that failed had
+    nothing else to pick it up: a broken template or an exhausted retry budget
+    cost the message outright rather than delaying it.
+    """
+
+    @staticmethod
+    def _owner(name: str, *, welcome_sent: bool, age_days: int = 0) -> Any:
+        user = User.objects.create_user(username=name, email=f"{name}@example.com", password="test123")
+        team = Team.objects.create(name=f"{name} Team", key=f"{name}-team")
+        Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
+        status = OnboardingStatus.objects.get(user=user)
+        if welcome_sent:
+            status.mark_welcome_email_sent()
+        if age_days:
+            OnboardingStatus.objects.filter(pk=status.pk).update(created_at=timezone.now() - timedelta(days=age_days))
+        return user
+
+    @staticmethod
+    def _run_sweep() -> list[int]:
+        from sbomify.apps.onboarding.tasks import requeue_missed_welcome_emails_task, send_welcome_email_task
+
+        with patch.object(send_welcome_email_task, "send_with_options") as sender:
+            requeue_missed_welcome_emails_task()
+        return [call.kwargs["args"][0] for call in sender.call_args_list]
+
+    def test_a_recent_signup_without_a_welcome_email_is_requeued(self) -> None:
+        user = self._owner("missedwelcome", welcome_sent=False)
+        assert user.id in self._run_sweep()
+
+    def test_a_user_who_got_one_is_left_alone(self) -> None:
+        user = self._owner("gotwelcome", welcome_sent=True)
+        assert user.id not in self._run_sweep()
+
+    def test_the_sweep_does_not_reach_back_past_its_window(self) -> None:
+        """Without the bound, the first run mails every account that predates
+        the onboarding sequence. The welcome email goes out within seconds of
+        signup, so anything that will fail has failed long before the cutoff.
+        """
+        from sbomify.apps.onboarding.tasks import WELCOME_RECOVERY_WINDOW_DAYS
+
+        user = self._owner("ancient", welcome_sent=False, age_days=WELCOME_RECOVERY_WINDOW_DAYS + 1)
+        assert user.id not in self._run_sweep()
+
+    def test_an_unsubscribed_user_is_not_requeued(self) -> None:
+        user = self._owner("optedout", welcome_sent=False)
+        status = OnboardingStatus.objects.get(user=user)
+        status.unsubscribe_from_drip()
+        assert user.id not in self._run_sweep()
+
+    def test_a_broken_template_is_recoverable_once_it_is_fixed(self) -> None:
+        """The whole point: the render failure is no longer the end of it."""
+        from django.template import TemplateDoesNotExist
+
+        user = self._owner("templatebroken", welcome_sent=False)
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=TemplateDoesNotExist("welcome.html"),
+        ):
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+        assert user.id in self._run_sweep()
+
+        mail.outbox = []
+        assert OnboardingEmailService.send_welcome_email(user) is True
+        assert len(mail.outbox) == 1

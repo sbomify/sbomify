@@ -4,6 +4,7 @@ Dramatiq tasks for onboarding email processing.
 
 from __future__ import annotations
 
+import datetime
 from typing import Any
 
 import dramatiq
@@ -215,18 +216,66 @@ def process_all_onboarding_reminders_task() -> None:
     Designed to be run on a schedule (e.g., daily via cron or periodic task).
     Fans out to ``process_onboarding_sequence_batch_task``, which queues
     quick-start / first-component / first-sbom / collaboration emails for
-    users at the right point in their drip clock. The welcome email is NOT
-    part of this fan-out — it is signal-driven via ``queue_welcome_email``
-    on user creation, not on a daily cron.
+    users at the right point in their drip clock, and to
+    ``requeue_missed_welcome_emails_task``, which is the welcome email's only
+    second chance: that one is signal-driven via ``queue_welcome_email`` on
+    user creation, so a send that failed has nothing else to pick it up.
     """
     try:
         logger.info("[TASK_process_all_onboarding_reminders] Starting onboarding email processing")
         process_onboarding_sequence_batch_task.send_with_options(args=(), delay=0)
+        requeue_missed_welcome_emails_task.send_with_options(args=(), delay=0)
         logger.info("[TASK_process_all_onboarding_reminders] Successfully queued sequence processing")
 
     except Exception as e:
         logger.error("[TASK_process_all_onboarding_reminders] Error: %s", e)
         raise
+
+
+#: How far back the welcome sweep looks. The welcome email is sent within
+#: seconds of signup, so anything that is going to fail has failed long before
+#: this. The bound is what keeps the sweep a recovery rather than a backfill:
+#: without it, its first run would mail every account that predates the
+#: onboarding sequence entirely.
+WELCOME_RECOVERY_WINDOW_DAYS = 7
+
+
+@dramatiq.actor(queue_name="onboarding_emails", max_retries=1, time_limit=300000)
+def requeue_missed_welcome_emails_task() -> None:
+    """Re-queue welcome emails for recent signups that never got one.
+
+    Everything else in onboarding gets another pass from the daily batch, so a
+    broken template or an exhausted retry budget costs a delay rather than the
+    message. The welcome email had no such path: it is queued once, by a signal
+    on user creation, and a send that failed was simply gone.
+
+    ``welcome_email_sent`` is set only on a successful send, so it is the whole
+    of the eligibility test. The service still applies its own gates — bot
+    identities, unsubscribes, and an address already refused — so this only
+    reaches users a send would legitimately go to.
+    """
+    from django.utils import timezone
+
+    from sbomify.apps.teams.models import Member
+
+    from ..models import OnboardingStatus
+
+    cutoff = timezone.now() - datetime.timedelta(days=WELCOME_RECOVERY_WINDOW_DAYS)
+    owner_ids = Member.objects.filter(role="owner", is_default_team=True).values_list("user_id", flat=True)
+    missed = OnboardingStatus.objects.filter(
+        user_id__in=owner_ids,
+        welcome_email_sent=False,
+        drip_unsubscribed_at__isnull=True,
+        created_at__gte=cutoff,
+    ).values_list("user_id", flat=True)
+
+    queued = 0
+    for user_id in missed:
+        send_welcome_email_task.send_with_options(args=(user_id,), delay=0)
+        queued += 1
+
+    if queued:
+        logger.info("[TASK_requeue_missed_welcome] Re-queued %d welcome email(s)", queued)
 
 
 # Convenience functions for triggering tasks from signals or other parts of the application
