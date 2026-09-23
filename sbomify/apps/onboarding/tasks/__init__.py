@@ -251,9 +251,11 @@ def requeue_missed_welcome_emails_task() -> None:
 
     ``welcome_email_sent`` is set only on a successful send, so it is the whole
     of the eligibility test. The service still applies its own gates — bot
-    identities and an address already refused — so this only reaches users a
-    send would legitimately go to, and it is the right place for those rules to
-    live rather than duplicated into this query.
+    identities, deactivated or soft-deleted accounts, and an address already
+    refused — so this only reaches users a send would legitimately go to, and it
+    is the right place for those rules to live rather than duplicated into this
+    query. The liveness pair is repeated here anyway, to avoid queueing a task
+    per deleted account for the service to throw away.
 
     The drip opt-out is deliberately *not* one of them. It covers the scheduled
     sequence; the welcome email confirms an account the user just created, so
@@ -279,6 +281,8 @@ def requeue_missed_welcome_emails_task() -> None:
     missed = OnboardingStatus.objects.filter(
         welcome_email_sent=False,
         user__date_joined__gte=cutoff,
+        user__is_active=True,
+        user__deleted_at__isnull=True,
     ).values_list("user_id", flat=True)
 
     queued = 0

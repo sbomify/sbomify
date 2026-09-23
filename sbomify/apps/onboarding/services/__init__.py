@@ -118,15 +118,25 @@ def _render_or_report(template_name: str, context: dict[str, Any], user_id: Any)
 def _is_mailable(user: Any) -> bool:
     """Return False for recipients that must never be handed to the mailer.
 
-    Currently that means synthetic OIDC bot identities. This is the last gate
-    before ``EmailMultiAlternatives``, deliberately duplicating the check in
-    ``onboarding.signals`` so a bot reaching any send path — a backfill, an
-    admin action, a future sender — still can't produce a message.
+    Synthetic OIDC bot identities, and accounts that are deactivated or
+    soft-deleted. This is the last gate before ``EmailMultiAlternatives``,
+    deliberately duplicating the check in ``onboarding.signals`` so a bot
+    reaching any send path — a backfill, an admin action, a future sender —
+    still can't produce a message.
+
+    The liveness pair is the one used everywhere else an account has to be
+    live (``core/services/account_deletion.py``, ``access_tokens/utils.py``).
+    It belongs here rather than in each caller's query: a send queued before a
+    deletion runs after it, so the check has to be at the send, not at the
+    point something decided to send.
     """
     from sbomify.apps.oidc.services import is_synthetic_bot_user
 
     if is_synthetic_bot_user(user):
         logger.debug("Suppressing onboarding email for synthetic bot user %s", user.id)
+        return False
+    if not user.is_active or user.deleted_at is not None:
+        logger.info("Suppressing onboarding email for closed account %s", user.id)
         return False
     return True
 

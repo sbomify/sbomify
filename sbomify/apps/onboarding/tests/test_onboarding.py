@@ -1866,6 +1866,36 @@ class TestWelcomeRecoverySweep:
 
         assert user.id not in self._run_sweep()
 
+    def test_a_closed_account_is_not_swept(self) -> None:
+        """An account can be deleted between the failed send and the sweep.
+
+        Same liveness pair the rest of the codebase uses for "is this account
+        still a thing": ``is_active`` and ``deleted_at``.
+        """
+        deactivated = self._owner("deactivated", welcome_sent=False)
+        User.objects.filter(pk=deactivated.pk).update(is_active=False)
+
+        soft_deleted = self._owner("softdeleted", welcome_sent=False)
+        User.objects.filter(pk=soft_deleted.pk).update(deleted_at=timezone.now())
+
+        swept = self._run_sweep()
+        assert deactivated.id not in swept
+        assert soft_deleted.id not in swept
+
+    def test_the_send_itself_refuses_a_closed_account(self) -> None:
+        """The query filter is an optimisation; this is the guarantee.
+
+        A send queued before a deletion runs after it, so the check has to be
+        at the send rather than only where something decided to send.
+        """
+        user = self._owner("closedatsend", welcome_sent=False)
+        User.objects.filter(pk=user.pk).update(is_active=False)
+        user.refresh_from_db()
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            assert OnboardingEmailService.send_welcome_email(user) is False
+            mock_email_cls.assert_not_called()
+
     def test_a_signup_who_is_not_a_workspace_owner_is_still_swept(self) -> None:
         """The signal queues a welcome for every human user, not just owners.
 
