@@ -27,26 +27,13 @@
     {% endif %}
     <c-layout.page-header title="{{ item.name }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items">
     {% if is_sbom_backed %}
-        <c-buttons.secondary href="{% url 'sboms:sbom_download' item.id %}" title="Download {{ item_format_label }} {{ item_kind_label }}">
-        {% if item.format == 'cyclonedx' %}
-            <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                 alt="CycloneDX"
-                 class="h-4 w-auto dark:brightness-0 dark:invert"
-                 width="16"
-                 height="16">
-        {% elif item.format == 'spdx' %}
-            <img src="{% static 'img/spdx-logo.svg' %}"
-                 alt="SPDX"
-                 class="h-4 w-auto dark:brightness-0 dark:invert"
-                 width="16"
-                 height="16">
-        {% endif %}
-        <i class="fas fa-download"></i>
+        <c-buttons.secondary size="sm" href="{% url 'sboms:sbom_download' item.id %}" title="Download {{ item_format_label }} {{ item_kind_label }}">
+        <i class="fas fa-download" aria-hidden="true"></i>Download {{ item_format_label }}
         </c-buttons.secondary>
     {% elif item_type == 'documents' %}
-        <c-buttons.primary href="{% url 'documents:document_download' item.id %}">
-        <i class="fas fa-download"></i>Download
-        </c-buttons.primary>
+        <c-buttons.secondary size="sm" href="{% url 'documents:document_download' item.id %}">
+        <i class="fas fa-download" aria-hidden="true"></i>Download
+        </c-buttons.secondary>
     {% endif %}
     </c-layout.page-header>
     <c-layout.frame>
@@ -143,32 +130,22 @@
     {% if is_sbom_backed %}
         {# Vulnerability Summary Section #}
         {% if vulnerability_summary %}
-            <c-cards.card flush>
-            <c-cards.header class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-wrap items-center gap-3 min-w-0">
-                <c-layout.section-header level="2" title="Vulnerability scan" subtitle="{{ vulnerability_summary.scan_date|date:'j M Y' }}" />
-                <c-badges.secondary size="sm">{{ vulnerability_summary.provider|upper }}</c-badges.secondary>
-            </div>
-            <c-buttons.secondary href="{% url 'sboms:sbom_vulnerabilities' item.id %}">
-            <i class="fas fa-shield-alt" aria-hidden="true"></i>Vulnerabilities
-            <i class="fas fa-arrow-right text-xs" aria-hidden="true"></i>
-            </c-buttons.secondary>
-            </c-cards.header>
-            <div class="p-6">
-                <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-3xl font-bold text-text leading-none">{{ vulnerability_summary.total }}</span>
-                        <span class="text-sm text-text-muted">total findings</span>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
-                        <c-badges.severity level="critical">{{ vulnerability_summary.critical }} Critical</c-badges.severity>
-                        <c-badges.severity level="high">{{ vulnerability_summary.high }} High</c-badges.severity>
-                        <c-badges.severity level="medium">{{ vulnerability_summary.medium }} Medium</c-badges.severity>
-                        <c-badges.severity level="low">{{ vulnerability_summary.low }} Low</c-badges.severity>
-                    </div>
+            <div class="flex flex-col gap-4">
+                <c-layout.section-header level="2" title="Vulnerability scan">
+                <c-slot name="subtitle">{{ vulnerability_summary.total }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider|upper }}</c-slot>
+                <c-slot name="actions">
+                <c-buttons.secondary size="sm" href="{% url 'sboms:sbom_vulnerabilities' item.id %}">
+                Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i>
+                </c-buttons.secondary>
+                </c-slot>
+                </c-layout.section-header>
+                <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <c-layout.stat-card label="Critical" :value="vulnerability_summary.critical" accent="severity-critical" />
+                    <c-layout.stat-card label="High" :value="vulnerability_summary.high" accent="severity-high" />
+                    <c-layout.stat-card label="Medium" :value="vulnerability_summary.medium" accent="severity-medium" />
+                    <c-layout.stat-card label="Low" :value="vulnerability_summary.low" accent="severity-low" />
                 </div>
             </div>
-            </c-cards.card>
         {% endif %}
         {# VEX suppressions — the vulnerabilities this VEX artifact clears #}
         {% if vex_suppressions is not None %}
