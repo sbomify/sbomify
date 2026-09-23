@@ -233,8 +233,11 @@ def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, se
     copy_prompt.click()
     page.wait_for_function("window.setupCopiedText?.includes('Create everything as public.')")
     copied = page.evaluate("window.setupCopiedText")
+    assert copied == page.locator("#repository-setup-prompt").text_content()
     assert "YOUR_SETUP_TOKEN" not in copied
     assert original.encoded_token in copied
+    page.locator("#panel-setup-agent").get_by_role("button", name="Copy code", exact=True).click()
+    assert page.evaluate("window.setupCopiedText") == copied
     agent_tab = page.get_by_role("tab", name="Coding agent", exact=True)
     agent_tab.focus()
     agent_tab.press("ArrowRight")

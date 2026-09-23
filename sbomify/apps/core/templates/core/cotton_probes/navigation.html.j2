@@ -9,6 +9,9 @@ small context of lists and assert on the output; it is not routed anywhere.
 <c-navigation.tab panel="quiet">Quiet tab</c-navigation.tab>
 <c-navigation.tab panel="settings" icon="fas fa-gear" aria-label="Settings" />
 </c-navigation.tabs>
+<c-navigation.tabs inset aria-label="Live tabs">
+<c-navigation.tab panel="live" active_binding="view === 'live'" @click="view = 'live'" data-probe="live-tab">Live tab</c-navigation.tab>
+</c-navigation.tabs>
 <c-navigation.breadcrumbs :items="probe_crumbs" class="mb-2" data-probe="crumbs" />
 <c-navigation.breadcrumbs :items="probe_marked_crumbs" data-probe="marked-crumbs" />
 <c-navigation.pagination :current="3" :total="8" :page_range="probe_page_range" base_url="/components" class="mt-2" data-probe="pager" />

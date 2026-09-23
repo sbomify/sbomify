@@ -16,8 +16,10 @@ this row holds (its class, above all) can fall through into it.
 The pills look is a variant file (c-navigation.tabs-pills): it swaps the recipe
 and marks the row with data-tabs-pills, the attribute each tab reads to drop its
 underline, the same descendant relationship the .tw-tabs-pills rules had.
+inset gives a card's tab row internal gutters without interrupting its rule.
+The optional trailing slot holds a caption or recommendation beside the tabs.
 {% endcomment %}
-<c-vars links variant_class tabs active class />
+<c-vars links inset variant_class tabs active class />
 <div class="flex items-center min-w-0 max-w-full{% if class %} {{ class }}{% endif %}"
      x-data="scrollableTabs">
     <c-buttons.icon-quiet label="Scroll tabs left" x-show="overflow" x-cloak ::disabled="!canScrollBack" @click="scroll(-1)" only><i class="fas fa-chevron-left text-xs" aria-hidden="true"></i></c-buttons.icon-quiet>
@@ -25,7 +27,7 @@ underline, the same descendant relationship the .tw-tabs-pills rules had.
          @scroll.passive="measure()"
          @focusin="reveal($event.target)"
          class="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div x-ref="tabItems" class="flex w-max min-w-full {% if variant_class %}{{ variant_class }}{% else %}gap-1 border-b border-solid border-border{% endif %}" role="{% if links %}navigation{% else %}tablist{% endif %}" {% if not links %} @keydown.arrow-right.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx < tabs.length - 1) { tabs[idx + 1].focus({ preventScroll: true }); tabs[idx + 1].click(); }" @keydown.arrow-left.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx > 0) { tabs[idx - 1].focus({ preventScroll: true }); tabs[idx - 1].click(); }" @keydown.home.prevent="const tab = $el.querySelector('[role=tab]'); if (tab) { tab.focus({ preventScroll: true }); tab.click(); }" @keydown.end.prevent="const tabs = $el.querySelectorAll('[role=tab]'); const tab = tabs[tabs.length - 1]; if (tab) { tab.focus({ preventScroll: true }); tab.click(); }"
+        <div x-ref="tabItems" class="flex w-max min-w-full items-center {% if variant_class %}{{ variant_class }}{% else %}{% if links %}gap-1{% else %}gap-6{% endif %} border-b border-solid border-border{% endif %}{% if inset %} px-5 sm:px-6{% endif %}" role="{% if links %}navigation{% else %}tablist{% endif %}" {% if not links %} @keydown.arrow-right.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx < tabs.length - 1) { tabs[idx + 1].focus({ preventScroll: true }); tabs[idx + 1].click(); }" @keydown.arrow-left.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx > 0) { tabs[idx - 1].focus({ preventScroll: true }); tabs[idx - 1].click(); }" @keydown.home.prevent="const tab = $el.querySelector('[role=tab]'); if (tab) { tab.focus({ preventScroll: true }); tab.click(); }" @keydown.end.prevent="const tabs = $el.querySelectorAll('[role=tab]'); const tab = tabs[tabs.length - 1]; if (tab) { tab.focus({ preventScroll: true }); tab.click(); }"
         {% endif %}
         {{ attrs }}>
         {% for tab in tabs %}
@@ -36,6 +38,7 @@ underline, the same descendant relationship the .tw-tabs-pills rules had.
             {% endif %}
         {% endfor %}
         {{ slot }}
+        {% if trailing %}<div class="ml-auto shrink-0">{{ trailing }}</div>{% endif %}
     </div>
 </div>
 <c-buttons.icon-quiet label="Scroll tabs right" x-show="overflow" x-cloak ::disabled="!canScrollForward" @click="scroll(1)" only><i class="fas fa-chevron-right text-xs" aria-hidden="true"></i></c-buttons.icon-quiet>

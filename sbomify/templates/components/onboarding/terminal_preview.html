@@ -1,21 +1,40 @@
-{% comment %}A static preview of the terminal setup journey. Uses platform tokens and shows no invented repository results.{% endcomment %}
-<c-layout.frame>
-<c-forms.hint>What you will see</c-forms.hint>
-<div class="overflow-hidden rounded-xl border border-solid border-border bg-background" aria-label="Terminal wizard preview">
-    <div class="flex items-center gap-2 border-b border-solid border-border px-4 py-3">
-        <i class="fas fa-terminal text-xs text-text-muted" aria-hidden="true"></i>
-        <span class="font-mono text-xs text-text-muted">sbomify wizard</span>
-    </div>
-    <div class="flex flex-col gap-5 px-5 py-5">
-        <div class="flex flex-col gap-1">
-            <span class="font-mono text-base font-semibold text-text">sbomify wizard</span>
-            <span class="font-mono text-xs text-text-muted">From zero to SBOM hero</span>
+{% comment %}
+An illustrative TUI preview, explicitly marked as an example. It is not live
+workspace data and has no pretend buttons. Invariant navy and light palette
+ink make the terminal recognisable in both themes; accents use the app tokens.
+{% endcomment %}
+<div class="flex min-w-0 flex-col gap-3">
+    <c-typography.eyebrow>What you will see · Example</c-typography.eyebrow>
+    <div class="overflow-hidden rounded-[0.625rem] border border-solid border-primary-lighter/20 bg-navy font-mono text-[0.6875rem] leading-[1.65] text-white shadow-[var(--shadow-lg)]" aria-hidden="true">
+        <div class="flex h-7 items-center gap-1.5 border-b border-solid border-primary-lighter/20 bg-[color-mix(in_oklab,var(--color-navy)_75%,var(--color-accent))] px-3">
+            <span class="h-2 w-2 rounded-full bg-danger"></span><span class="h-2 w-2 rounded-full bg-warning"></span><span class="h-2 w-2 rounded-full bg-success"></span>
+            <span class="flex-1 pr-8 text-center text-[0.625rem] text-primary-lighter">sbomify wizard</span>
         </div>
-        <c-chips.neutral>01 / 09 · Welcome</c-chips.neutral>
-        <c-forms.hint>Scan your repository for lockfiles, choose your components and review a release-ready workflow.</c-forms.hint>
-        <div class="flex flex-wrap gap-4 font-mono text-xs text-text-muted" aria-hidden="true">
-            <span>↵ Continue</span><span>Ctrl+C Cancel</span><span>? Help</span>
+        <div class="flex flex-col gap-2.5 px-3.5 py-3.5">
+            <div class="flex flex-wrap justify-center gap-x-1.5 text-center"><strong class="text-info-light">sbomify wizard</strong><em class="text-primary-lighter">From zero to SBOM hero</em></div>
+            <div class="flex items-center gap-2 text-[0.625rem]">
+                <span><strong>01</strong><span class="text-primary-lighter"> / 09</span></span>
+                <span class="flex flex-1 items-center gap-1">
+                    <span class="h-1.5 w-1.5 rounded-full bg-accent ring-2 ring-accent/25"></span><span class="h-px flex-1 bg-primary-lighter/20"></span>
+                    <span class="h-1 w-1 rounded-full bg-primary-lighter/30"></span><span class="h-px flex-1 bg-primary-lighter/20"></span>
+                    <span class="h-1 w-1 rounded-full bg-primary-lighter/30"></span><span class="h-px flex-1 bg-primary-lighter/20"></span>
+                    <span class="h-1 w-1 rounded-full bg-primary-lighter/30"></span>
+                </span>
+                <strong>Welcome</strong>
+            </div>
+            <div class="flex flex-col gap-1 rounded-md border border-solid border-accent/70 bg-accent/10 px-3 py-2.5">
+                <span class="text-warning">◆ sbomify</span>
+                <span>Scan your repository for lockfiles, choose your components and review a release-ready workflow.</span>
+            </div>
+            <dl class="m-0 grid grid-cols-[5.5rem_minmax(0,1fr)] gap-y-1 rounded-md border border-solid border-primary-lighter/20 px-3 py-2.5">
+                <dt class="text-primary-lighter">Repository</dt><dd class="m-0 font-semibold">example-app</dd>
+                <dt class="text-primary-lighter">Branch</dt><dd class="m-0 font-semibold">main</dd>
+                <dt class="text-primary-lighter">Lockfiles</dt><dd class="m-0 font-semibold">3 found</dd>
+            </dl>
+            <div class="flex justify-center gap-2"><span class="rounded-sm bg-warning px-4 py-0.5 font-semibold text-navy">Start ▸</span><span class="rounded-sm bg-primary-lighter/10 px-4 py-0.5 text-primary-lighter">Cancel</span></div>
+            <div class="flex flex-wrap gap-x-3 gap-y-1 border-t border-solid border-primary-lighter/20 pt-2 text-[0.625rem] text-primary-lighter">
+                <span><b class="text-warning">↵</b> Continue</span><span><b class="text-warning">^C</b> Cancel</span><span><b class="text-warning">?</b> Help</span>
+            </div>
         </div>
     </div>
 </div>
-</c-layout.frame>

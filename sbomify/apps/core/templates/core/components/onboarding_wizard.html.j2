@@ -72,9 +72,9 @@
                     {% endif %}
                     </c-forms.hint>
                     <c-layout.page-header title="Set up your security workspace" subtitle="Add your organisation and security commitments once. Use them when generating artifacts and preparing product assessments." />
-                    <c-onboarding.reason number="01" title="Who you are" description="Record your organisation and the person responsible for your artifacts. These details form your default contact profile." />
-                    <c-onboarding.reason number="02" title="Where to report a vulnerability" description="Give security researchers a contact email. You can publish it through your Trust Center's security.txt." />
-                    <c-onboarding.reason number="03" title="How you support your software" description="Choose a default support period and patch targets so you can track progress against your commitments." />
+                    <c-onboarding.reason number="01" icon="fas fa-building" title="Who you are" description="Record your organisation and the person responsible for your artifacts. These details form your default contact profile." />
+                    <c-onboarding.reason number="02" icon="fas fa-shield-halved" title="Where to report a vulnerability" description="Give security researchers a contact email. You can publish it through your Trust Center's security.txt." />
+                    <c-onboarding.reason number="03" icon="fas fa-clock" title="How you support your software" description="Choose a default support period and patch targets so you can track progress against your commitments." />
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <c-buttons.primary href="{% url 'teams:onboarding_wizard' %}?step=setup">Start <i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.primary>
                         <c-forms.hint>Takes about two minutes.</c-forms.hint>

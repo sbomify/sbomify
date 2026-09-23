@@ -100,7 +100,7 @@ def test_flush_card_drops_the_padded_body(rendered: str) -> None:
 
 def test_footer_slot_renders_the_footer_band(rendered: str) -> None:
     footer = _open_tag(rendered, "Footer actions")
-    assert "px-6 py-4 border-t border-solid" in footer
+    assert "px-5 py-4 sm:px-6 border-t border-solid" in footer
     assert "bg-[color-mix(in_oklab,var(--color-background)_30%,transparent)]" in footer
 
 
@@ -138,7 +138,7 @@ def test_dashboard_clips_the_surface(rendered: str) -> None:
 
 def test_variant_forwards_a_named_slot_to_the_card(rendered: str) -> None:
     footer = _open_tag(rendered, "Dashboard footer")
-    assert "px-6 py-4 border-t border-solid" in footer
+    assert "px-5 py-4 sm:px-6 border-t border-solid" in footer
 
 
 @pytest.mark.parametrize(

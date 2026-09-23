@@ -1,0 +1,3 @@
+{% comment %}Supporting prose for panels and actions, distinct from a form field's help text. The parent owns spacing; small copy is for captions and footnotes.{% endcomment %}
+<c-vars size class />
+<p class="m-0 text-text-muted {% if size == 'sm' %}text-[0.78125rem] leading-[1.6]{% else %}text-[0.84375rem] leading-[1.6]{% endif %}{% if class %} {{ class }}{% endif %}" {{ attrs }}>{{ slot }}</p>

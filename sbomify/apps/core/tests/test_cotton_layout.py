@@ -153,7 +153,7 @@ def test_editable_params_render_the_inline_field_instead_of_plain_text(rendered:
 def test_section_header_shell_and_parts(rendered: str) -> None:
     assert _classes(rendered, SECTION_HEADER, "Generate a new token") == SECTION_HEADER
     assert '<h3 class="text-base font-semibold text-text m-0">Generate a new token</h3>' in rendered
-    assert '<p class="text-sm leading-[1.5] text-text-muted mt-0.5">Tokens are shown once' in rendered
+    assert '<p class="text-sm leading-[1.5] text-text-muted mt-0.5 mb-0">Tokens are shown once' in rendered
 
 
 def test_section_header_chip_is_the_icon_chip_at_its_small_size(rendered: str) -> None:
@@ -171,7 +171,7 @@ def test_section_header_actions_sit_after_the_title_block(rendered: str) -> None
     block only claims the free space when there is an action to push against."""
     header = rendered.index('data-probe="section-actioned"')
     assert rendered.index("Entities", header) < rendered.index("Add entity", header)
-    assert '<div class="flex-1">' in rendered[header : rendered.index("Add entity", header)]
+    assert '<div class="min-w-0 flex-1">' in rendered[header : rendered.index("Add entity", header)]
 
 
 def test_section_header_without_actions_leaves_the_title_block_unstretched(rendered: str) -> None:

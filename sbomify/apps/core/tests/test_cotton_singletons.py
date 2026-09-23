@@ -270,52 +270,48 @@ def test_progress_without_a_label_has_no_header_row(rendered: str) -> None:
 
 def test_code_block_shell_recipe(rendered: str) -> None:
     block = _probe(rendered, "code-named")
-    assert "relative overflow-hidden bg-background border border-solid border-border rounded-[0.625rem]" in block
-    assert 'x-data="{ copied: false }"' in _section(rendered, "code-named")
+    assert "relative min-w-0 overflow-hidden border border-solid rounded-[0.625rem] border-border" in block
+    assert "data-copy-container" in block
 
 
 def test_code_block_named_header_carries_the_filename(rendered: str) -> None:
     section = _section(rendered, "code-named")
-    assert "flex items-center justify-between px-4 py-2.5 bg-surface border-b border-solid" in section
-    assert "text-xs font-semibold uppercase tracking-[0.05em] text-text-muted" in section
+    assert "flex items-center justify-between gap-3 border-b border-solid border-border px-4 py-2.5" in section
+    assert "font-mono text-xs text-text-muted" in section
     assert "upload.sh" in section
 
 
 def test_code_block_without_a_filename_floats_the_copy_control(rendered: str) -> None:
     section = _section(rendered, "code-bare")
-    assert '<div class="flex items-center absolute top-2 right-2 z-10">' in section
+    assert '<div class="absolute right-2 top-2 z-10">' in section
     assert "px-4 py-2.5 bg-surface" not in section
 
 
-def test_code_block_copy_state_is_one_complete_binding(rendered: str) -> None:
+def test_code_block_uses_the_shared_copy_state_without_repainting_the_surface(rendered: str) -> None:
     section = _section(rendered, "code-named")
-    assert (
-        ":class=\"copied ? 'bg-success border-success text-white' : 'bg-transparent border-transparent "
-        "text-text-muted" in section
-    )
-    # The resting colours live only in the binding, never beside it.
-    assert "border border-solid cursor-pointer" in section
-    assert (
-        'class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-solid'
-    ) in section
+    assert ':data-copied="copied"' in section
+    assert "group-data-[copied=true]:text-success" in section
+    assert "bg-success" not in section
+    assert 'role="status"' in section
+    assert '@click="copyToClipboard()"' in section
 
 
 def test_code_block_copies_from_its_own_root(rendered: str) -> None:
     section = _section(rendered, "code-named")
-    assert "$root.querySelector('code').textContent" in section
+    assert "copyableValue({ value: '', copySelector: 'code' })" in section
     assert ":aria-label=\"copied ? 'Copied' : 'Copy code'\"" in section
 
 
 def test_code_block_language_and_code_reach_the_pre(rendered: str) -> None:
     section = _section(rendered, "code-named")
     assert '<code class="font-mono language-bash">echo hello</code>' in section
-    assert '<pre class="m-0 font-mono text-[0.8125rem] leading-[1.6] text-text">' in section
+    assert '<pre class="m-0 font-mono text-[0.78125rem] leading-[1.8]' in section
     assert '<code class="font-mono">print(1)</code>' in _section(rendered, "code-bare")
 
 
 def test_code_block_cap_swaps_the_overflow_segment_and_sets_the_height(rendered: str) -> None:
     section = _section(rendered, "code-capped")
-    assert "p-4 overflow-auto" in section
+    assert "px-5 py-4 overflow-auto" in section
     assert "overflow-x-auto" not in section
     assert 'style="max-height: 12rem"' in section
 

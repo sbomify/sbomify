@@ -7,11 +7,11 @@ aria-selected to keep and no roving tab stop to manage; every segment stays in
 the tab order. Reach for c-navigation.tabs-pills where the buttons really do
 select panels.
 
-The recipe is the pills row's, so the two read as one control wherever they
-appear; c-navigation.segment carries the matching button.
+Compact choices sit in a bordered tray. Selection uses neutral ink rather
+than an accent, keeping secondary choices quieter than the page's main action.
 {% endcomment %}
 <c-vars role="group" class />
-<div class="flex gap-0 bg-background p-1 rounded-lg{% if class %} {{ class }}{% endif %}"
+<div class="inline-flex w-fit max-w-full items-center gap-0.5 rounded-lg border border-solid border-border bg-surface-hover p-0.5{% if class %} {{ class }}{% endif %}"
      role="{{ role }}"
      {{ attrs }}>{{ slot }}
 </div>

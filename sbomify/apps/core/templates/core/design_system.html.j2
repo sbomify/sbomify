@@ -1697,22 +1697,25 @@ first-of-type rule that drops the leading hairline reads the section's position
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/code_block.html, token_display.html and
-    copy_button.html). Each owns its own copied state, which is why the copied
-    look is one whole Alpine binding rather than a class laid over the resting
-    one.
+    copy_button.html). Every copy action uses the same clipboard controller and
+    confirms without changing the button's surface or width.
     {% endcomment %}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <c-cards.card title="Code block">
-        <c-code-block :code="demo_code" language="bash" filename="upload.sh" />
-        <p class="text-sm text-text-muted mt-4 mb-0">
-            Without a filename the copy control sits in the block's top-right corner instead of a header band.
-        </p>
-        <p class="text-sm text-text-muted mt-4 mb-0">
+        <div class="flex flex-col gap-4">
+            <c-code-block :code="demo_code" language="bash" filename="upload.sh" />
+            <div class="flex flex-col gap-3">
+                <c-typography.eyebrow>Terminal variant</c-typography.eyebrow>
+                <c-code-terminal :code="demo_code" />
+            </div>
+            <c-typography.description size="sm">Without a filename the copy control sits in the block's top-right corner instead of a header band.</c-typography.description>
+            <c-typography.description size="sm">
             Its inline twin is <c-code-inline>c-code-inline</c-code-inline>, for a path or a flag set in running
             text: <c-code-inline>/.well-known/security.txt</c-code-inline>. Pass
             <c-code-inline>accent="primary"</c-code-inline> for the identifier chip
             (<c-code-inline accent="primary">CRA-13-4</c-code-inline>).
-        </p>
+            </c-typography.description>
+        </div>
         </c-cards.card>
         <c-cards.card title="Token display">
         <c-token-display label="Personal access token" token="sbom_pat_9f2Ac41ZzQ0m7Ktb" masked />
@@ -1723,6 +1726,10 @@ first-of-type rule that drops the leading hairline reads the section's position
         </p>
         <div class="flex flex-col gap-4">
             <c-copy-button value="https://sbomify.com/t/acme-corp" />
+            <div class="flex flex-wrap items-center gap-3">
+                <c-copy-button-primary value="Example setup instructions" label="Copy prompt" />
+                <c-copy-button-icon value="Example setup instructions" copy_label="Copy example" />
+            </div>
             <c-copy-field id="ds-copy-url" label="Public URL" value="https://trust.example.com/public/workspace/example-enterprise/software-transparency" />
         </div>
         <p class="tw-data-label mt-6 mb-2">Inline copy</p>

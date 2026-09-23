@@ -4,6 +4,7 @@ interface CopyableValueParams {
     value: string;
     hideValue?: boolean;
     copyFrom?: string;
+    copySelector?: string;
     title?: string;
 }
 
@@ -11,7 +12,7 @@ interface CopyableValueParams {
 const COPIED_RESET_MS = 1600;
 
 export function registerCopyableValue() {
-    Alpine.data('copyableValue', ({ value, hideValue = false, copyFrom = '', title = '' }: CopyableValueParams) => {
+    Alpine.data('copyableValue', ({ value, hideValue = false, copyFrom = '', copySelector = '', title = '' }: CopyableValueParams) => {
         return {
             value,
             hideValue,
@@ -23,7 +24,9 @@ export function registerCopyableValue() {
             copiedTimer: undefined as ReturnType<typeof setTimeout> | undefined,
 
             async copyToClipboard() {
-                const valueToCopy = this.copyFrom
+                const valueToCopy = copySelector
+                    ? this.$el.closest('[data-copy-container]')?.querySelector(copySelector)?.textContent || ''
+                    : this.copyFrom
                     ? document.getElementById(this.copyFrom)?.innerText || ''
                     : this.value;
 

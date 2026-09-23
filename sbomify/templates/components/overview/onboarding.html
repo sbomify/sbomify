@@ -1,93 +1,95 @@
 {% comment %}
-The prototype's first-repository setup, composed from shared tabs, code, copy,
-card and onboarding components. Credentials are created only by an explicit
-admin action and never persisted in browser storage. The upload alternative
-uses the existing dialog and only targets a BOM component.
+The first-repository journey follows the prototype's continuous card sections:
+underline tabs, a prompt or command with compact choices, and a shared token
+footer. All controls, typography and surfaces come from the component library.
+Credentials remain an explicit admin action; no token is stored in the browser.
 {% endcomment %}
 <c-vars can_manage can_administer first_component setup_config />
 {{ setup_config|default_if_none:""|json_script:"repository-setup-config" }}
 <c-layout.frame x-data="repositorySetup(window.parseJsonScript('repository-setup-config') || {})">
-<c-cards.card>
-<c-layout.frame>
-<c-navigation.tabs-pills aria-label="Setup method">
-<c-navigation.segment role="tab" id="tab-setup-agent" aria-controls="panel-setup-agent" ::aria-selected="method === 'agent'" ::tabindex="method === 'agent' ? 0 : -1" ::data-active="method === 'agent'" @click="method = 'agent'">Coding agent</c-navigation.segment>
-<c-navigation.segment role="tab" id="tab-setup-terminal" aria-controls="panel-setup-terminal" ::aria-selected="method === 'terminal'" ::tabindex="method === 'terminal' ? 0 : -1" ::data-active="method === 'terminal'" @click="method = 'terminal'">Terminal</c-navigation.segment>
-</c-navigation.tabs-pills>
-<c-layout.frame id="panel-setup-agent" role="tabpanel" aria-labelledby="tab-setup-agent" x-show="method === 'agent'">
-<c-forms.hint>Paste this into Claude Code, Cursor or another coding agent in your repository. Open the instructions to review them first.</c-forms.hint>
-<c-code-block code_id="repository-setup-prompt" code_binding="agentPrompt" copyable="false" />
-<div class="flex flex-wrap items-center gap-3">
-    <c-copy-button copy_from="repository-setup-prompt" label="Copy prompt" ::disabled="!token || minting" />
-    <c-forms.hint>Create everything as</c-forms.hint>
-    <c-navigation.segmented aria-label="Visibility of new products and components">
-    <c-navigation.segment ::data-active="visibility === 'private'" ::aria-pressed="visibility === 'private'" @click="visibility = 'private'">Private</c-navigation.segment>
-    <c-navigation.segment ::data-active="visibility === 'public'" ::aria-pressed="visibility === 'public'" @click="visibility = 'public'">Public</c-navigation.segment>
-    </c-navigation.segmented>
-    <c-buttons.ghost size="sm" href="{% url 'core:repository_setup_instructions' %}" target="_blank" rel="noopener">Open instructions <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.ghost>
-</div>
-</c-layout.frame>
-<c-layout.frame id="panel-setup-terminal" role="tabpanel" aria-labelledby="tab-setup-terminal" x-show="method === 'terminal'" x-cloak>
-<div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-    <c-layout.frame>
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <c-forms.hint>Run this in your repository</c-forms.hint>
-        <c-navigation.segmented aria-label="How to run the wizard">
-        <c-navigation.segment ::data-active="runtime === 'docker'" ::aria-pressed="runtime === 'docker'" @click="runtime = 'docker'">Docker</c-navigation.segment>
-        <c-navigation.segment ::data-active="runtime === 'uv'" ::aria-pressed="runtime === 'uv'" @click="runtime = 'uv'">uv</c-navigation.segment>
-        </c-navigation.segmented>
+<c-cards.dashboard flush>
+    <c-navigation.tabs inset aria-label="Setup method">
+        <c-navigation.tab panel="setup-agent" active_binding="method === 'agent'" @click="method = 'agent'">Coding agent</c-navigation.tab>
+        <c-navigation.tab panel="setup-terminal" active_binding="method === 'terminal'" @click="method = 'terminal'">Terminal</c-navigation.tab>
+        <c-slot name="trailing"><c-badges.info size="sm" class="max-sm:hidden" x-show="method === 'agent'">Recommended</c-badges.info></c-slot>
+    </c-navigation.tabs>
+    <div id="panel-setup-agent" role="tabpanel" aria-labelledby="tab-setup-agent" x-show="method === 'agent'">
+        <c-cards.body density="compact">
+            <c-typography.description class="max-w-[78ch]">Paste this into Claude Code, Cursor or another coding agent in your repository. Open the instructions to review them first.</c-typography.description>
+        </c-cards.body>
+        <c-code-prompt code_id="repository-setup-prompt" code_binding="agentPrompt" copy_disabled="!token || minting" />
+        <c-cards.body density="compact">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
+                <c-copy-button-primary copy_from="repository-setup-prompt" label="Copy prompt" ::disabled="!token || minting" />
+                <div class="flex flex-wrap items-center gap-2">
+                    <c-typography.description size="sm">Create everything as</c-typography.description>
+                    <c-navigation.segmented aria-label="Visibility of new products and components">
+                        <c-navigation.segment ::data-active="visibility === 'private'" ::aria-pressed="visibility === 'private'" @click="visibility = 'private'">Private</c-navigation.segment>
+                        <c-navigation.segment ::data-active="visibility === 'public'" ::aria-pressed="visibility === 'public'" @click="visibility = 'public'">Public</c-navigation.segment>
+                    </c-navigation.segmented>
+                </div>
+                <c-buttons.ghost size="sm" href="{% url 'core:repository_setup_instructions' %}" target="_blank" rel="noopener">Open instructions <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.ghost>
+            </div>
+        </c-cards.body>
     </div>
-    <c-code-block code_id="repository-setup-command" code_binding="command" copyable="false" />
-    <c-forms.hint x-show="runtime === 'docker'">Run in a Bash-compatible shell with Docker running. Local Docker connections use <c-code-inline>host.docker.internal</c-code-inline>.</c-forms.hint>
-    <c-forms.hint x-show="runtime === 'uv'" x-cloak>uv downloads the wizard and runs it locally. Use the command in a Bash-compatible shell.</c-forms.hint>
-    <div class="flex flex-wrap items-center gap-3">
-        <c-copy-button copy_from="repository-setup-command" label="Copy command" ::disabled="!token || minting" />
-        <c-buttons.ghost size="sm" href="https://docs.astral.sh/uv/getting-started/installation/" target="_blank" rel="noopener" x-show="runtime === 'uv'" x-cloak>Install uv <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.ghost>
+    <div id="panel-setup-terminal" role="tabpanel" aria-labelledby="tab-setup-terminal" x-show="method === 'terminal'" x-cloak>
+        <c-cards.split>
+            <div class="flex flex-wrap items-center gap-4">
+                <c-typography.eyebrow>Run this in your repository</c-typography.eyebrow>
+                <c-navigation.segmented aria-label="How to run the wizard">
+                    <c-navigation.segment ::data-active="runtime === 'docker'" ::aria-pressed="runtime === 'docker'" @click="runtime = 'docker'">Docker</c-navigation.segment>
+                    <c-navigation.segment ::data-active="runtime === 'uv'" ::aria-pressed="runtime === 'uv'" @click="runtime = 'uv'">uv</c-navigation.segment>
+                </c-navigation.segmented>
+            </div>
+            <c-code-terminal code_id="repository-setup-command" code_binding="command" copy_disabled="!token || minting" />
+            <c-typography.description size="sm" x-show="runtime === 'docker'">Run in a Bash-compatible shell with Docker running. Local Docker connections use <c-code-inline>host.docker.internal</c-code-inline>.</c-typography.description>
+            <c-typography.description size="sm" x-show="runtime === 'uv'" x-cloak>uv downloads the wizard and runs it locally. Use the command in a Bash-compatible shell.</c-typography.description>
+            <div class="flex flex-wrap items-center gap-3">
+                <c-copy-button-primary copy_from="repository-setup-command" label="Copy command" ::disabled="!token || minting" />
+                <c-buttons.ghost size="sm" href="https://docs.astral.sh/uv/getting-started/installation/" target="_blank" rel="noopener" x-show="runtime === 'uv'" x-cloak>Install uv <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.ghost>
+            </div>
+            <c-slot name="aside"><c-onboarding.terminal-preview /></c-slot>
+        </c-cards.split>
     </div>
-    </c-layout.frame>
-    <c-onboarding.terminal-preview />
-</div>
-</c-layout.frame>
-<c-feedback.alert title="Use an authorised setup token" icon="fas fa-key">
-<c-slot name="body">
-<c-forms.hint>Setup can create products and components, update contact profiles, set visibility and configure trusted publishers. Review the proposed changes, then revoke the token in Settings. It expires after seven days.</c-forms.hint>
-<c-forms.hint x-show="token" x-cloak>Expires <span x-text="expiresAt"></span>. Resetting revokes this token before creating its replacement.</c-forms.hint>
-{% if not can_administer %}<c-forms.hint>Ask a workspace owner or admin to connect the repository.</c-forms.hint>{% endif %}
-</c-slot>
-{% if can_administer %}
-    <c-slot name="action">
-    <c-buttons.secondary size="sm" @click="mint()" ::disabled="minting" ::aria-busy="minting">
-    <span x-text="minting ? 'Creating…' : token ? 'Reset token' : 'Create setup token'">Create setup token</span>
-    </c-buttons.secondary>
-    </c-slot>
-{% endif %}
-</c-feedback.alert>
+    <c-cards.footer-success>
+        <c-layout.section-header density="compact" title="Use an authorised setup token" icon="fas fa-key" accent="success" subtitle="Setup can create products and components, update contact profiles, set visibility and configure trusted publishers. Review the changes, then revoke the token in Settings. It expires after seven days.">
+            <c-typography.description size="sm" x-show="token" x-cloak>Expires <span x-text="expiresAt"></span>. Resetting revokes this token.</c-typography.description>
+            {% if not can_administer %}<c-typography.description size="sm">Ask a workspace owner or admin to connect the repository.</c-typography.description>{% endif %}
+            {% if can_administer %}
+                <c-slot name="actions">
+                    <c-buttons.secondary size="sm" @click="mint()" ::disabled="minting" ::aria-busy="minting"><span x-text="minting ? 'Creating…' : token ? 'Reset token' : 'Create setup token'">Create setup token</span></c-buttons.secondary>
+                </c-slot>
+            {% endif %}
+        </c-layout.section-header>
+    </c-cards.footer-success>
+</c-cards.dashboard>
 <c-feedback.alert variant="danger" x-show="error" x-cloak><span x-text="error"></span></c-feedback.alert>
-</c-layout.frame>
-</c-cards.card>
-<c-cards.card>
-<c-layout.frame>
-<c-layout.section-header level="2" title="What gets set up" subtitle="Review the proposed changes before anything is created." />
-<div class="grid gap-6 md:grid-cols-3">
-    <c-onboarding.reason number="01" title="Find your lockfiles" description="Detect lockfiles that can produce an SBOM. You choose which ones to track." />
-    <c-onboarding.reason number="02" title="Create the components" description="One product and a component for each selected lockfile. Existing records are reused." />
-    <c-onboarding.reason number="03" title="Add the workflow" description="Generate the SBOM workflow. Review it alongside your existing workflows." />
-</div>
-<c-layout.section-header level="2" title="Then, commit and push" subtitle="Your workflow uploads the first SBOM to this workspace." icon="fas fa-arrow-right" />
-</c-layout.frame>
-</c-cards.card>
+<c-cards.dashboard flush>
+    <c-cards.body>
+        <div class="flex flex-col gap-5">
+            <c-layout.section-header level="2" title="What gets set up" subtitle="Review the proposed changes before anything is created." />
+            <div class="grid gap-3 lg:grid-cols-3">
+                <c-onboarding.reason number="01" icon="fas fa-magnifying-glass" title="Find your lockfiles" description="Detect lockfiles that can produce an SBOM. You choose which ones to track." />
+                <c-onboarding.reason number="02" icon="fas fa-cube" title="Create the components" description="One product and a component for each selected lockfile. Existing records are reused." />
+                <c-onboarding.reason number="03" icon="fas fa-file-code" title="Add the workflow" description="Generate the SBOM workflow. Review it alongside your existing workflows." />
+            </div>
+        </div>
+    </c-cards.body>
+    <c-cards.footer>
+        <c-layout.section-header density="compact" title="Then, commit and push" subtitle="Your workflow uploads the first SBOM to this workspace." icon="fas fa-arrow-right" accent="neutral" />
+    </c-cards.footer>
+</c-cards.dashboard>
 {% if can_manage %}
     <div class="flex flex-wrap items-center gap-3">
-        <c-forms.hint>Already have an artifact?</c-forms.hint>
+        <c-typography.description size="sm">Already have an artifact?</c-typography.description>
         {% if first_component %}
             <c-buttons.secondary size="sm" @click="$dispatch('open-upload')">Upload SBOM</c-buttons.secondary>
-            <c-forms.hint>Uploads to {{ first_component.name }}.</c-forms.hint>
+            <c-typography.description size="sm">Uploads to {{ first_component.name }}.</c-typography.description>
         {% else %}
             <c-buttons.secondary size="sm" href="{% url 'core:component_new' %}">Add component</c-buttons.secondary>
-            <c-forms.hint>Create a component, then upload your artifact.</c-forms.hint>
+            <c-typography.description size="sm">Create a component, then upload your artifact.</c-typography.description>
         {% endif %}
     </div>
-    {% if first_component %}
-        {% include 'sboms/components/sbom_upload.html.j2' with component=first_component component_id=first_component.id %}
-    {% endif %}
+    {% if first_component %}{% include 'sboms/components/sbom_upload.html.j2' with component=first_component component_id=first_component.id %}{% endif %}
 {% endif %}
 </c-layout.frame>
