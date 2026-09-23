@@ -17,14 +17,14 @@ id allows a live gallery example; only the navbar instance owns the shortcut.
      {% if id == 'navbar-search' %}@keydown.window="shortcut($event)"{% endif %}>
     {% search_suggestions request as suggestions %}
     {% with suggestions_id=id|add:"-suggestions" %}{{ suggestions|json_script:suggestions_id }}{% endwith %}
-    <c-forms.search-input id="{{ id }}-input" placeholder="Search products, components, pages" hint autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="{{ id }}-list" aria-describedby="{{ id }}-instructions" aria-label="Search products, components and pages" ::aria-expanded="open" ::aria-activedescendant="activeId" x-ref="input" @input="update($event.target.value, $event.isComposing)" @compositionend="update($event.target.value)" @focus="show()" @click="show()">
+    <c-forms.search-input id="{{ id }}-input" placeholder="Search or jump to a page" hint autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="{{ id }}-list" aria-describedby="{{ id }}-instructions" aria-label="Search products, components and pages" ::aria-expanded="open" ::aria-activedescendant="activeId" x-ref="input" @input="update($event.target.value, $event.isComposing)" @compositionend="update($event.target.value)" @focus="show()" @click="show()">
     <span class="absolute inset-y-0 right-0 pr-3 hidden sm:flex items-center pointer-events-none"
           aria-hidden="true">
         <kbd class="inline-flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[10px] leading-4 font-normal text-text-muted">
             <span x-text="shortcutLabel"></span>K
         </kbd>
     </span>
-    <c-dropdowns.dropdown flush role="" id="{{ id }}-dropdown" class="top-full left-0 right-0 mt-2 max-sm:fixed max-sm:left-3 max-sm:right-3 max-sm:top-16 max-sm:mt-0" x-show="open" x-cloak>
+    <c-dropdowns.dropdown flush role="" id="{{ id }}-dropdown" class="top-full left-0 right-0 mt-2 max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-[var(--app-header-height,4rem)] max-sm:mt-0" x-show="open" x-cloak>
     <p x-show="status === 'suggested'"
        class="px-5 pt-4 pb-1 text-xs leading-5 text-text-muted">Jump to a page or try a search below.</p>
     <div id="{{ id }}-list"
@@ -32,7 +32,7 @@ id allows a live gallery example; only the navbar instance owns the shortcut.
          role="listbox"
          aria-label="Search results"
          :aria-busy="status === 'loading'"
-         class="max-h-[min(26rem,calc(100dvh-9rem))] overflow-y-auto overscroll-contain scroll-py-2 [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [overflow-anchor:none]">
+         class="max-h-[min(26rem,calc(100dvh-var(--app-header-height,4rem)-5rem))] overflow-y-auto overscroll-contain scroll-py-2 [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [overflow-anchor:none]">
         <template x-for="section in sections" :key="section.key">
             <div role="group"
                  :aria-labelledby="'{{ id }}-section-' + section.key"

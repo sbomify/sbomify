@@ -1,10 +1,78 @@
 """Header menus keep keyboard, theme and notification behaviour at both sizes."""
 
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
 from playwright.sync_api import Page, Route, expect
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("motion", ["reduce", "no-preference"])
+def test_header_resizes_without_crowding_controls(
+    authenticated_page: Page, theme: str, motion: str, tmp_path: Path
+) -> None:
+    page = authenticated_page
+    page.emulate_media(reduced_motion=motion)
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=[]))
+    page.goto("/products/")
+    header = page.get_by_role("banner")
+    search = header.get_by_role("combobox")
+
+    for width in (320, 375, 639, 640, 768, 1024, 1280):
+        page.set_viewport_size({"width": width, "height": 640})
+        mobile = width < 640
+        expect(header).to_have_css("height", "120px" if mobile else "64px")
+        expect(search).to_have_css("font-size", "16px" if mobile else "14px")
+        assert page.locator("html").evaluate("el => el.scrollWidth <= innerWidth")
+        assert header.evaluate("el => el.scrollWidth <= el.clientWidth")
+        assert page.locator("#main-content > div").evaluate(
+            "el => el.getBoundingClientRect().top + parseFloat(getComputedStyle(el).paddingTop) "
+            "- document.querySelector('[role=banner]').getBoundingClientRect().bottom"
+        ) == pytest.approx(24 if mobile else 32)
+        if mobile:
+            controls = header.locator("button[aria-controls], a[aria-label='sbomify home']")
+            boxes = controls.evaluate_all("els => els.map(el => el.getBoundingClientRect().toJSON())")
+            assert len(boxes) == 5
+            assert all(box["width"] >= 44 and box["height"] >= 44 for box in boxes)
+            assert all(current["left"] - previous["right"] >= 4 for previous, current in zip(boxes, boxes[1:]))
+            bounds = search.bounding_box()
+            assert bounds is not None
+            assert bounds["x"] == 16
+            assert bounds["width"] == header.evaluate("el => el.clientWidth - 32")
+            assert bounds["y"] >= max(box["bottom"] for box in boxes) + 8
+            assert bounds["y"] + bounds["height"] <= 112
+        if width in (375, 1280):
+            page.screenshot(path=str(tmp_path / f"header-{theme}-{width}.png"))
+
+    # A short phone viewport still leaves the suggested pages scrollable and reachable.
+    page.set_viewport_size({"width": 320, "height": 360})
+    search.focus()
+    panel = page.locator("#navbar-search-dropdown")
+    expect(panel.get_by_role("option", name="Products", exact=True)).to_be_visible()
+    search.press("ArrowUp")
+    expect(panel.get_by_role("option", name="api key", exact=True)).to_be_in_viewport(ratio=1)
+    assert panel.evaluate("el => el.getBoundingClientRect().bottom <= innerHeight")
+    search.press("Escape")
+    expect(search).to_be_focused()
+    for label, role, name in (
+        ("Create new item", "menu", "Create options"),
+        ("View notifications", "dialog", "Notifications"),
+        ("Your account", "menu", "User options"),
+    ):
+        trigger = header.get_by_role("button", name=label)
+        trigger.click()
+        menu = page.get_by_role(role, name=name, exact=True)
+        expect(menu).to_be_visible()
+        assert menu.evaluate("""el => {
+            const box = el.getBoundingClientRect();
+            return box.left >= 0 && box.right <= innerWidth && box.bottom <= innerHeight;
+        }""")
+        menu.press("Escape")
+        expect(trigger).to_be_focused()
 
 
 @pytest.mark.django_db

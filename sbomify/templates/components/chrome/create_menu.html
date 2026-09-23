@@ -5,11 +5,11 @@
          class="relative"
          @keydown.escape.stop.prevent="close()"
          @focusout="if (!$el.contains($event.relatedTarget)) open = false">
-        <c-buttons.secondary size="sm" class="max-sm:min-h-11" aria-label="Create new item" aria-haspopup="menu" aria-controls="create-menu" x-ref="trigger" @keydown.arrow-down.prevent="first()" @click="open = !open" ::aria-expanded="open">
+        <c-buttons.secondary size="sm" class="max-sm:min-h-11 max-sm:min-w-11" aria-label="Create new item" aria-haspopup="menu" aria-controls="create-menu" x-ref="trigger" @keydown.arrow-down.prevent="first()" @click="open = !open" ::aria-expanded="open">
         <i class="fas fa-plus" aria-hidden="true"></i>
         <span class="hidden sm:inline">New</span>
         </c-buttons.secondary>
-        <c-dropdowns.dropdown id="create-menu" x-ref="menu" class="right-0 mt-2 w-48" aria-label="Create options" x-show="open" x-cloak x-transition.opacity.duration.100ms @click.outside="open = false">
+        <c-dropdowns.dropdown id="create-menu" x-ref="menu" class="right-0 mt-2 w-48 max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-16 max-sm:mt-0 max-sm:w-auto" aria-label="Create options" x-show="open" x-cloak x-transition.opacity.duration.100ms @click.outside="open = false">
         <c-dropdowns.item compact icon="fas fa-cube" href="{% url 'core:product_new' %}" @click="open = false">
         Product
         </c-dropdowns.item>

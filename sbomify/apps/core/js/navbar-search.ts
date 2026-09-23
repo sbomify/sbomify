@@ -221,9 +221,13 @@ export function navbarSearch(): AlpineComponent<NavbarSearch> {
       if (!option) return;
       const bounds = list.getBoundingClientRect();
       const row = option.getBoundingClientRect();
+      // The opening animation scales the panel, but scroll offsets use CSS pixels.
+      const scale = list.clientHeight ? bounds.height / list.clientHeight : 1;
+      const top = (row.top - bounds.top) / scale;
+      const bottom = (row.bottom - bounds.top) / scale;
       // Scroll only the result list. scrollIntoView also moves the page behind it.
-      if (row.top < bounds.top + 8) list.scrollTop += row.top - bounds.top - 8;
-      else if (row.bottom > bounds.bottom - 8) list.scrollTop += row.bottom - bounds.bottom + 8;
+      if (top < 8) list.scrollTop += top - 8;
+      else if (bottom > list.clientHeight - 8) list.scrollTop += bottom - list.clientHeight + 8;
     },
 
     destroy() {
