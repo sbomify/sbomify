@@ -68,7 +68,7 @@
                 <c-cards.collapsible-body state="expanded">
                 {% if run.status == 'completed' or run.status == 'failed' %}
                     {# Run Metadata #}
-                    <div class="flex flex-wrap gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
+                    <div class="flex flex-wrap items-center gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
                         <span>
                             <i class="fas fa-code-branch mr-1"></i>
                             v{{ run.plugin_version }}
@@ -187,7 +187,7 @@
             <c-cards.collapsible-body state="expanded">
             {% if run.status == 'completed' or run.status == 'failed' %}
                 {# Run Metadata #}
-                <div class="flex flex-wrap gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
+                <div class="flex flex-wrap items-center gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
                     <span>
                         <i class="fas fa-code-branch mr-1"></i>
                         v{{ run.plugin_version }}
