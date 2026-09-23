@@ -90,13 +90,14 @@ class TestStripePricingService:
 
     @staticmethod
     def _fail_with_cache_aged(mock_stripe_client: MagicMock, age: datetime.timedelta) -> None:
-        """Prime a plan synced ``age`` ago and make the next Stripe call fail."""
+        """Prime every priced plan as synced ``age`` ago, then fail the Stripe call."""
         from sbomify.apps.billing.stripe_client import StripeError
 
-        plan = BillingPlan.objects.get(key="business")
-        plan.monthly_price = Decimal("199.00")
-        plan.last_synced_at = timezone.now() - age
-        plan.save(update_fields=["monthly_price", "last_synced_at"])
+        synced_at = timezone.now() - age
+        for plan in BillingPlan.objects.exclude(key="community"):
+            plan.monthly_price = Decimal("199.00")
+            plan.last_synced_at = synced_at
+            plan.save(update_fields=["monthly_price", "last_synced_at"])
 
         mock_stripe_client.get_all_products_with_prices.side_effect = StripeError("API Error")
 
@@ -159,6 +160,32 @@ class TestStripePricingService:
         assert pricing["business"]["monthly_price"] == Decimal("199.00")
         assert logger.error.call_count == 1
         assert "is stale" in logger.error.call_args.args[0]
+        assert logger.error.call_args.args[2] == "business"
+
+    def test_several_stale_plans_still_raise_one_alert(
+        self, service: StripePricingService, mock_stripe_client: MagicMock, mock_plans: list[BillingPlan], db: None
+    ) -> None:
+        """The plans go stale together, so they are worth one alert between them.
+
+        They share a sync and they share the outage that stopped it. A line per
+        plan would be the same alert once per billing plan — the volume this
+        change exists to remove, reintroduced on the branch that alerts.
+        """
+        BillingPlan.objects.create(
+            key="enterprise",
+            name="Enterprise",
+            description="Enterprise Plan",
+            stripe_product_id="prod_enterprise",
+        )
+        self._fail_with_cache_aged(mock_stripe_client, datetime.timedelta(hours=25))
+
+        with self._watch_logger() as logger:
+            service.get_all_plans_pricing(force_refresh=True)
+
+        assert logger.error.call_count == 1
+        written = logger.error.call_args.args[0] % logger.error.call_args.args[1:]
+        assert "business" in written
+        assert "enterprise" in written
 
 
 class TestCreateCheckoutSession:

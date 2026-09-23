@@ -67,20 +67,35 @@ class StripePricingService:
             # blip used to page on-call from here, from the line below it, and
             # from the client that raised — three alerts for one request that
             # succeeded.
-            logger.warning(f"Failed to fetch Stripe products: {e}. Returning cached data.")
+            logger.warning("Failed to fetch Stripe products: %s. Returning cached data.", e)
             # Past the threshold the fallback stops covering for the outage:
             # the prices on the page are a day old and may no longer be the
             # ones Stripe would charge. That is worth an alert, which is why
             # it is the branch logged at error level rather than the one above.
+            #
+            # One line for the refresh, not one per plan. The plans go stale
+            # together — they share a sync and they share the outage that
+            # stopped it — and a line per plan is the same alert once per
+            # billing plan, which is the volume this change exists to remove.
             stale_threshold = timedelta(hours=24)
-            for plan in db_plans:
-                if plan.last_synced_at:
-                    age = timezone.now() - plan.last_synced_at
-                    if age > stale_threshold:
-                        logger.error(
-                            f"Pricing cache for plan {plan.key} is stale ({age}). "
-                            f"Stripe sync failed. Consider investigating Stripe API issues."
-                        )
+            now = timezone.now()
+            stale = {
+                plan.key: now - plan.last_synced_at
+                for plan in db_plans
+                if plan.last_synced_at and now - plan.last_synced_at > stale_threshold
+            }
+            if stale:
+                # %-style rather than an f-string so the template is what
+                # Sentry groups on. Interpolating the age into the message
+                # makes every refresh a new group, which is the one-alert goal
+                # lost a second way.
+                logger.error(
+                    "Pricing cache is stale for %d plan(s): %s (oldest %s). "
+                    "Stripe sync failed. Consider investigating Stripe API issues.",
+                    len(stale),
+                    ", ".join(sorted(key or "" for key in stale)),
+                    max(stale.values()),
+                )
             return self._build_pricing_from_db(db_plans)
 
     def _build_pricing_from_db(self, db_plans: list[BillingPlan]) -> dict[str, dict[str, Any]]:
