@@ -250,7 +250,10 @@ def requeue_missed_welcome_emails_task() -> None:
     on user creation, and a send that failed was simply gone.
 
     ``welcome_email_sent`` is set only on a successful send, so it is the whole
-    of the eligibility test. The service still applies its own gates — bot
+    of the eligibility test, along with its own absence: a user with no
+    ``OnboardingStatus`` row at all is the case where the welcome is most
+    certainly missing, because the signal that creates the row is the signal
+    that queues the email. The service still applies its own gates — bot
     identities, deactivated or soft-deleted accounts, and an address already
     refused — so this only reaches users a send would legitimately go to, and it
     is the right place for those rules to live rather than duplicated into this
@@ -273,9 +276,12 @@ def requeue_missed_welcome_emails_task() -> None:
     welcome for every human user, so an owner-only sweep would leave a failed
     send lost for exactly the accounts that are not primary owners.
     """
+    from django.db.models import Q
     from django.utils import timezone
 
-    from ..models import OnboardingEmail, OnboardingStatus
+    from sbomify.apps.oidc.services import BOT_EMAIL_DOMAIN, BOT_USERNAME_PREFIX
+
+    from ..models import OnboardingEmail
     from ..services import refused_at_current_address
 
     cutoff = timezone.now() - datetime.timedelta(days=WELCOME_RECOVERY_WINDOW_DAYS)
@@ -286,15 +292,19 @@ def requeue_missed_welcome_emails_task() -> None:
     refused = OnboardingEmail.objects.filter(email_type=OnboardingEmail.EmailType.WELCOME).filter(
         refused_at_current_address()
     )
+    # Driven from the user, not from OnboardingStatus. The post-save signal
+    # creates that row and queues the welcome, so a failure there leaves a user
+    # with neither — invisible to a query that starts at the status table, and
+    # the one case where the welcome is most certainly missing.
+    # ``send_welcome_email`` calls ``get_or_create`` on it, so the row appears
+    # when the send runs.
     missed = (
-        OnboardingStatus.objects.filter(
-            welcome_email_sent=False,
-            user__date_joined__gte=cutoff,
-            user__is_active=True,
-            user__deleted_at__isnull=True,
-        )
-        .exclude(user_id__in=refused.values("user_id"))
-        .values_list("user_id", flat=True)
+        User.objects.filter(date_joined__gte=cutoff, is_active=True, deleted_at__isnull=True)
+        .filter(Q(onboarding_status__isnull=True) | Q(onboarding_status__welcome_email_sent=False))
+        .exclude(username__startswith=BOT_USERNAME_PREFIX)
+        .exclude(email__iendswith=f"@{BOT_EMAIL_DOMAIN}")
+        .exclude(id__in=refused.values("user_id"))
+        .values_list("id", flat=True)
     )
 
     queued = 0

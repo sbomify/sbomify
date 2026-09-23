@@ -2016,6 +2016,39 @@ class TestWelcomeRecoverySweep:
         assert status.welcome_email_sent is True
         assert user.id not in self._run_sweep(), "and not be picked up again"
 
+    def test_a_user_with_no_onboarding_status_is_swept(self) -> None:
+        """The signal that creates the status row is the one that queues the email.
+
+        So a user with no row is not an edge case to skip, it is the case where
+        the welcome is most certainly missing. A query starting at the status
+        table cannot see them at all.
+        """
+        user = User.objects.create_user(username="nostatus", email="nostatus@example.com", password="test123")
+        OnboardingStatus.objects.filter(user=user).delete()
+        assert not OnboardingStatus.objects.filter(user=user).exists()
+
+        assert user.id in self._run_sweep()
+
+    def test_a_synthetic_bot_is_not_swept(self) -> None:
+        """Driving from users brings bot identities into range; they stay out.
+
+        ``_is_mailable`` refuses them at the send, but only after a task has
+        been queued and a template rendered for an address at a domain that
+        does not resolve.
+        """
+        from sbomify.apps.oidc.services import BOT_EMAIL_DOMAIN, BOT_USERNAME_PREFIX
+
+        by_username = User.objects.create_user(
+            username=f"{BOT_USERNAME_PREFIX}abc", email="bot1@example.com", password="test123"
+        )
+        by_domain = User.objects.create_user(
+            username="looks-human", email=f"bot2@{BOT_EMAIL_DOMAIN}", password="test123"
+        )
+
+        swept = self._run_sweep()
+        assert by_username.id not in swept
+        assert by_domain.id not in swept
+
     def test_a_signup_who_is_not_a_workspace_owner_is_still_swept(self) -> None:
         """The signal queues a welcome for every human user, not just owners.
 
