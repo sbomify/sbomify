@@ -277,6 +277,7 @@ def requeue_missed_welcome_emails_task() -> None:
     send lost for exactly the accounts that are not primary owners.
     """
     from django.db.models import Q
+    from django.db.models.functions import Trim
     from django.utils import timezone
 
     from sbomify.apps.oidc.services import BOT_EMAIL_DOMAIN, BOT_USERNAME_PREFIX
@@ -299,8 +300,11 @@ def requeue_missed_welcome_emails_task() -> None:
     # ``send_welcome_email`` calls ``get_or_create`` on it, so the row appears
     # when the send runs.
     missed = (
+        # Trimmed, because _is_mailable strips before deciding: without this a
+        # whitespace-only address is queued every day for the service to refuse.
         User.objects.filter(date_joined__gte=cutoff, is_active=True, deleted_at__isnull=True)
-        .exclude(email="")
+        .annotate(_trimmed_email=Trim("email"))
+        .exclude(_trimmed_email="")
         .exclude(email__isnull=True)
         .filter(Q(onboarding_status__isnull=True) | Q(onboarding_status__welcome_email_sent=False))
         .exclude(username__startswith=BOT_USERNAME_PREFIX)

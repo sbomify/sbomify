@@ -1525,6 +1525,13 @@ class TestTransientSendFailuresRetry:
             )
             assert OnboardingEmailService.send_welcome_email(user) is False
 
+        # And it is remembered rather than left FAILED: the 550 recipient will
+        # refuse the next attempt too, so the batch must stop re-sending. This
+        # is why the refusal rule is "any 5xx" while the retry rule is
+        # "all 4xx" — anything else leaves a mix in neither branch.
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.UNDELIVERABLE
+
     def test_a_dropped_connection_retries(self) -> None:
         """No server answer at all, so there is no code to read — transport."""
         import smtplib
@@ -2091,6 +2098,15 @@ class TestWelcomeRecoverySweep:
 
         User.objects.filter(pk=user.pk).update(email="arrived@example.com")
         assert user.id in self._run_sweep()
+
+    def test_a_whitespace_only_address_is_not_queued_daily(self) -> None:
+        """``_is_mailable`` strips before deciding, so the query must too."""
+        user = self._owner("blankish", welcome_sent=False)
+        User.objects.filter(pk=user.pk).update(email="   ")
+        user.refresh_from_db()
+
+        assert OnboardingEmailService.send_welcome_email(user) is False
+        assert user.id not in self._run_sweep()
 
     def test_a_synthetic_bot_is_not_swept(self) -> None:
         """Driving from users brings bot identities into range; they stay out.

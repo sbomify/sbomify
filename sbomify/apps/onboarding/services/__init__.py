@@ -152,11 +152,17 @@ def _is_refused_address(exc: BaseException) -> bool:
 
     A 5xx against the recipient is the one that says the address will not exist
     on the next attempt either, so it is the only one worth remembering.
+
+    Any 5xx, not all of them: this is the exact complement of the all-4xx rule
+    in :func:`_is_transient_send_error`. A mix of a greylisted 450 and a
+    permanent 550 is not retryable — another attempt is refused by the same
+    recipient — and reading it as all-5xx too would leave it in neither branch,
+    marked ``FAILED`` and re-sent by the batch forever.
     """
     if not isinstance(exc, smtplib.SMTPRecipientsRefused):
         return False
     refusals = (exc.recipients or {}).values()
-    return bool(refusals) and all(isinstance(code, int) and 500 <= code < 600 for code, _ in refusals)
+    return any(isinstance(code, int) and 500 <= code < 600 for code, _ in refusals)
 
 
 def _render_or_report(template_name: str, context: dict[str, Any], user_id: Any) -> tuple[str, str] | None:
