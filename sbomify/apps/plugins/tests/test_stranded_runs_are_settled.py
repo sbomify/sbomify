@@ -93,6 +93,17 @@ class TestWhatTheSweepSettles:
         run.refresh_from_db()
         assert run.status == status
 
+    def test_a_run_its_worker_finished_first_is_not_counted(self, sample_team_with_owner_member, mocker) -> None:
+        """finalize_stranded hands back the row even when a worker completed it
+        between the sweep's query and the update, so only a row carrying the
+        sweep's own marker counts as settled."""
+        run = _run(sample_team_with_owner_member.team, status=RunStatus.PENDING.value, age=timedelta(hours=3))
+        run.status = RunStatus.COMPLETED.value
+        run.result = {"summary": {"total_findings": 0}, "findings": [], "metadata": {}}
+        mocker.patch("sbomify.apps.plugins.orchestrator.PluginOrchestrator.finalize_stranded", return_value=run)
+
+        assert sweep_stranded_runs() == 0
+
     def test_a_completed_run_is_not_touched(self, sample_team_with_owner_member) -> None:
         run = _run(sample_team_with_owner_member.team, status=RunStatus.COMPLETED.value, age=timedelta(hours=3))
         before = run.status

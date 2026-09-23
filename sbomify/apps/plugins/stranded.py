@@ -76,7 +76,10 @@ def sweep_stranded_runs() -> int:
     settled = 0
     for run_id, plugin_name, sbom_id in stale.iterator():
         try:
-            if orchestrator.finalize_stranded(str(run_id), _STRANDED_MESSAGE) is not None:
+            run = orchestrator.finalize_stranded(str(run_id), _STRANDED_MESSAGE)
+            # It hands back the row even when a worker finished the run between
+            # the query above and the update, so count only this sweep's marker.
+            if run is not None and ((run.result or {}).get("metadata") or {}).get("stranded"):
                 settled += 1
                 logger.info(
                     "[PLUGIN] settled stranded run %s (%s) for SBOM %s",
