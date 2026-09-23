@@ -677,7 +677,7 @@ class TestFinalizeRetryExhausted:
         run.refresh_from_db()
         assert run.status == RunStatus.COMPLETED.value
         assert run.completed_at is not None
-        assert run.error_message and "Retry budget exhausted" in run.error_message
+        assert run.error_message and run.error_message.startswith("Retry budget exhausted: ")
 
         # Synthesised payload shape — exactly what BSI's gate consumes.
         assert run.result is not None
@@ -694,9 +694,11 @@ class TestFinalizeRetryExhausted:
 
         finding = run.result["findings"][0]
         assert finding["id"] == "sbom-verification:retry-exhausted"
+        assert finding["title"] == "Assessment Retry Budget Exhausted"
         assert finding["status"] == "error"
         assert "GitHub returned 404" in finding["description"]
-        assert finding["metadata"]["retry_exhausted"] is True
+        assert finding["metadata"] == {"retry_exhausted": True, "last_error": "GitHub returned 404 for sha256:abc..."}
+        assert run.result["metadata"] == {"retry_exhausted": True}
 
     def test_finalised_run_satisfies_check_one_of_query(self, test_sbom, db) -> None:
         """After finalising, BSI's ``_check_one_of`` sees the run as failed_plugins.
