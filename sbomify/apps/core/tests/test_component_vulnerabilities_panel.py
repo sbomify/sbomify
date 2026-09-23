@@ -350,7 +350,8 @@ class TestThePanelEndpoint:
 
         assert "CVE-2026-0005" in body
         assert "CVE-2026-0004" not in body
-        assert "Page 2 / 3" in body
+        assert 'aria-current="page"' in body
+        assert "Showing 6 to 10 of 12" in body
 
     def test_it_filters_before_it_slices(self, sample_team_with_owner_member, sample_user):
         """Searching for row 30 of 40 has to find it, though it is not rendered."""
@@ -480,22 +481,14 @@ class TestTheKevControlIsOfferedOnlyWhenItCanMatch:
         assert "vuln_kev" in body
         assert "Known exploited (1)" in body
 
-    def test_the_three_views_say_the_same_thing(self) -> None:
-        """Three templates offer this filter. They drifted into two spellings,
-        and "KEV" is the catalog's acronym rather than a word a reader has.
-
-        Resolved from BASE_DIR rather than the working directory, so this holds
-        wherever pytest is started from.
-        """
+    def test_the_three_views_share_the_filter_component(self) -> None:
         from django.conf import settings
 
         roots = [
             "core/templates/core/components/component_vulnerabilities_table.html.j2",
             "plugins/templates/plugins/components/_assessment_run_findings.html.j2",
-            "sboms/templates/sboms/sbom_vulnerabilities.html.j2",
+            "sboms/templates/sboms/components/scan_vulnerabilities.html.j2",
         ]
         for relative in roots:
             path = settings.BASE_DIR / "sbomify" / "apps" / relative
-            text = path.read_text(encoding="utf-8")
-            assert "KEV only" not in text, f"{relative} still says KEV only"
-            assert "Known exploited (" in text, f"{relative} lost the label"
+            assert "<c-vulnerabilities.filters" in path.read_text(encoding="utf-8")

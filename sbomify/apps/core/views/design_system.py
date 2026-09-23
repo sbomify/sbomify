@@ -71,7 +71,27 @@ class DesignSystemView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         if not settings.DEBUG:
             raise Http404
+        from sbomify.apps.vulnerability_scanning.services.finding_browse import browse_finding_rows, parse_finding_query
+
+        vulnerability_demo = browse_finding_rows(
+            [
+                {
+                    "id": "CVE-2026-10001",
+                    "title": "Request parser vulnerability",
+                    "severity": "high",
+                    "package": "example-parser",
+                    "version": "1.0",
+                    "purl": "pkg:pypi/example-parser@1.0",
+                    "kev": True,
+                    "aliases": [],
+                    "vex_state": "in_triage",
+                    "fixed": "1.1",
+                }
+            ],
+            parse_finding_query(request.GET, prefix="demo_"),
+        )
         context = {
+            "vulnerability_demo": vulnerability_demo,
             "plan_card_demos": [
                 {
                     "key": "community",
@@ -342,4 +362,6 @@ class DesignSystemView(LoginRequiredMixin, View):
             "page": Paginator([row], 10).page(1),
             "page_range": [1],
         }
+        if request.headers.get("HX-Target") == "ds-vulnerability-report":
+            return render(request, "core/components/vulnerability_demo.html.j2", context)
         return render(request, "core/design_system.html.j2", context)

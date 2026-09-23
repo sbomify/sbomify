@@ -224,8 +224,6 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         query = found.panel["query"]
         # The pager sits outside the filter form, so its links carry the active
         # filters themselves; following one must not silently clear the search.
-        prev_qs = query_string(query, page=found.page - 1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE)
-        next_qs = query_string(query, page=found.page + 1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE)
         return render(
             request,
             "plugins/components/_assessment_run_findings.html.j2",
@@ -234,13 +232,8 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "is_security": found.is_security,
                 "findings": found.findings,
                 "can_triage": can(request, "artifact:publish_vex", found.sbom.component),
-                "page": found.page,
-                "page_count": found.page_count,
-                "has_prev": found.has_prev,
-                "has_next": found.has_next,
-                "prev_url": f"{base_url}?{prev_qs}" if found.has_prev else "",
-                "next_url": f"{base_url}?{next_qs}" if found.has_next else "",
                 "findings_url": base_url,
+                "findings_query": query_string(query, page=1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
                 "panel": found.panel,
             },
         )

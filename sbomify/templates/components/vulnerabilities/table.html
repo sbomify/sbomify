@@ -1,0 +1,119 @@
+{% comment %}The flat vulnerability list shared by component and artifact reports. Each row is one advisory/package occurrence. Only the page of filtered rows reaches this component; triage uses the shared action and host modal.{% endcomment %}
+{% load advisory_tags plugins_extras %}
+<c-vars rows can_triage />
+<c-tables.table aria-label="Vulnerabilities">
+<c-tables.head>
+<c-tables.header-cell>Severity</c-tables.header-cell>
+<c-tables.header-cell nowrap>Advisory</c-tables.header-cell>
+<c-tables.header-cell>Package</c-tables.header-cell>
+<c-tables.header-cell>Fixed in</c-tables.header-cell>
+<c-tables.header-cell>Status</c-tables.header-cell>
+{% if can_triage %}<c-tables.header-cell nowrap>Triage</c-tables.header-cell>{% endif %}
+</c-tables.head>
+<tbody>
+    {% for vuln in rows %}
+        <c-tables.row>
+        <c-tables.cell nowrap>
+        {% if vuln.severity == 'critical' or vuln.severity == 'high' or vuln.severity == 'medium' or vuln.severity == 'low' %}
+            <c-badges.severity level="{{ vuln.severity|lower }}" class="
+            {% if vuln.vex_suppressed %}line-through{% endif %}
+            ">
+            {{ vuln.severity|capfirst }}
+            </c-badges.severity>
+        {% else %}
+            <c-badges.severity level="unknown" class="
+            {% if vuln.vex_suppressed %}line-through{% endif %}
+            ">
+            {{ vuln.severity|title }}
+            </c-badges.severity>
+        {% endif %}
+        {% if vuln.cvss_score != None %}<div class="text-xs text-text-muted pt-1">CVSS {{ vuln.cvss_score }}</div>{% endif %}
+        </c-tables.cell>
+        <c-tables.cell nowrap>
+        {% with vuln_url=vuln.id|advisory_url %}
+            {% if vuln_url %}
+                <a href="{{ vuln_url }}"
+                   target="_blank"
+                   rel="noopener"
+                   class="font-medium text-primary hover:underline inline-flex items-center gap-1">
+                    {{ vuln.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
+                </a>
+            {% else %}
+                <span class="font-medium text-text-muted">{{ vuln.id }}</span>
+            {% endif %}
+        {% endwith %}
+        {% if vuln.kev %}
+            <c-badges.solid-danger size="sm" class="ml-1.5 align-middle" title="In CISA's Known Exploited Vulnerabilities catalog">KEV</c-badges.solid-danger>
+        {% endif %}
+        {% if vuln.title %}
+            <div class="text-xs text-text-muted mt-1 whitespace-normal max-w-md">
+                {{ vuln.title|advisory_prose|truncatewords:20 }}
+            </div>
+        {% endif %}
+        {% if vuln.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ vuln.aliases|join:", " }}</div>{% endif %}
+        {% if vuln.details or vuln.references %}
+            <details class="text-xs text-text-muted mt-2 whitespace-normal max-w-md">
+                <summary class="cursor-pointer text-text hover:underline">Details and references</summary>
+                <div class="flex flex-col gap-2 pt-2">
+                    {% if vuln.details %}<p class="break-words">{{ vuln.details|advisory_prose }}</p>{% endif %}
+                    {% for reference in vuln.references %}
+                        <c-buttons.ghost href="{{ reference }}" target="_blank" rel="noopener noreferrer" size="sm">Reference {{ forloop.counter }}<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.ghost>
+                    {% endfor %}
+                </div>
+            </details>
+        {% endif %}
+        </c-tables.cell>
+        <c-tables.cell>
+        <span class="font-medium text-text">{{ vuln.package }}</span>
+        {% if vuln.version %}<span class="text-text-muted">· {{ vuln.version }}</span>{% endif %}
+        {% if vuln.ecosystem %}<c-badges.secondary class="ml-2">{{ vuln.ecosystem }}</c-badges.secondary>{% endif %}
+        </c-tables.cell>
+        <c-tables.cell>
+        {% if vuln.fixed %}
+            <span class="font-mono text-sm text-success">{{ vuln.fixed }}</span>
+        {% else %}
+            <span class="text-text-muted">Not reported</span>
+        {% endif %}
+        </c-tables.cell>
+        <c-tables.cell>
+        {% if vuln.vex_suppressed %}
+            <span class="text-info">
+                {% if vuln.vex_state == 'false_positive' %}
+                    False positive
+                {% elif vuln.vex_state == 'resolved' %}
+                    Fixed
+                {% else %}
+                    Not affected
+                {% endif %}
+                ·
+                {% if vuln.vex_manual %}
+                    manually
+                {% else %}
+                    VEX
+                {% endif %}
+            </span>
+            {% if vuln.vex_justification %}
+                <div class="text-xs text-text-muted mt-1">{{ vuln.vex_justification_label }}</div>
+            {% endif %}
+        {% elif vuln.vex_state == 'in_triage' %}
+            <span class="text-warning">Under investigation</span>
+        {% else %}
+            <span class="text-text-muted">Affected</span>
+        {% endif %}
+        </c-tables.cell>
+        {% if can_triage %}
+            <c-tables.cell nowrap>
+            <c-vulnerabilities.triage-action :id="vuln.id" :purl="vuln.purl" :state="vuln.vex_state" :justification="vuln.vex_justification" :detail="vuln.vex_detail" :aliases="vuln.aliases" />
+            </c-tables.cell>
+        {% endif %}
+        </c-tables.row>
+    {% empty %}
+        <tr>
+            <td colspan="{% if can_triage %}6{% else %}5{% endif %}"
+                class="text-center">
+                <span class="text-text-muted">No vulnerabilities match these filters.</span>
+            </td>
+        </tr>
+    {% endfor %}
+</tbody>
+</c-tables.table>

@@ -1091,6 +1091,10 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-tables.pager />
     </c-tables.footer>
     </c-tables.shell>
+    <c-cards.card flush>
+    <c-cards.header title="Vulnerability reports" />
+    {% include "core/components/vulnerability_demo.html.j2" %}
+    </c-cards.card>
     <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
     <c-cards.card>
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />
