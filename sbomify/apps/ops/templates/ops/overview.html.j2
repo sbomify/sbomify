@@ -1,0 +1,120 @@
+{% extends "ops/base.html.j2" %}
+{% load humanize %}
+{% load django_vite %}
+{% block title %}sbomify Ops{% endblock %}
+{% block ops_content %}
+    <c-layout.page-header title="Overview" subtitle="How the business is doing right now." icon="fas fa-chart-line" />
+    {% if error %}
+        <c-feedback.empty-state icon="fas fa-triangle-exclamation" title="These numbers are unavailable" message="{{ error }}" />
+    {% else %}
+        <div class="space-y-6">
+            {# Money #}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <c-layout.stat-card icon="fas fa-sack-dollar">
+                <c-layout.stat.label>Monthly recurring revenue</c-layout.stat.label>
+                <c-layout.stat.value>${{ overview.revenue.mrr|floatformat:0|intcomma }}</c-layout.stat.value>
+                <c-layout.stat.note>
+                From plan list prices.
+                {% if overview.revenue.unpriced_workspaces %}
+                    {{ overview.revenue.unpriced_workspaces }} workspace{{ overview.revenue.unpriced_workspaces|pluralize }} not priced here.
+                {% endif %}
+                </c-layout.stat.note>
+                </c-layout.stat-card>
+                <c-layout.stat-card accent="success" icon="fas fa-circle-check">
+                <c-layout.stat.label>Paying workspaces</c-layout.stat.label>
+                <c-layout.stat.value>{{ overview.paying_workspaces|intcomma }}</c-layout.stat.value>
+                <c-layout.stat.note>
+                Of {{ overview.total_workspaces|intcomma }} total. Paid plan, live subscription.
+                </c-layout.stat.note>
+                </c-layout.stat-card>
+                <c-layout.stat-card icon="fas fa-hourglass-half">
+                <c-layout.stat.label>In trial</c-layout.stat.label>
+                <c-layout.stat.value>{{ overview.trialing_workspaces|intcomma }}</c-layout.stat.value>
+                <c-layout.stat.note>Not counted as revenue yet.</c-layout.stat.note>
+                </c-layout.stat-card>
+                <c-layout.stat-card accent="danger" icon="fas fa-credit-card">
+                <c-layout.stat.label>Payment failing</c-layout.stat.label>
+                <c-layout.stat.value>{{ overview.past_due_workspaces|intcomma }}</c-layout.stat.value>
+                <c-layout.stat.note>Past due, in dunning.</c-layout.stat.note>
+                </c-layout.stat-card>
+            </div>
+            {# People and use #}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <c-layout.stat-card compact icon="fas fa-users">
+                <c-layout.stat.value>{{ overview.people|intcomma }}</c-layout.stat.value>
+                <c-layout.stat.label>People</c-layout.stat.label>
+                </c-layout.stat-card>
+                <c-layout.stat-card compact icon="fas fa-user-plus">
+                <c-layout.stat.value>{{ overview.new_people_30d|intcomma }}</c-layout.stat.value>
+                <c-layout.stat.label>New in 30 days</c-layout.stat.label>
+                </c-layout.stat-card>
+                <c-layout.stat-card compact icon="fas fa-bolt">
+                <c-layout.stat.value>{{ overview.active_workspaces_7d|intcomma }}</c-layout.stat.value>
+                <c-layout.stat.label>Active in 7 days</c-layout.stat.label>
+                </c-layout.stat-card>
+                <c-layout.stat-card compact icon="fas fa-file-code">
+                <c-layout.stat.value>{{ overview.artifacts_30d|intcomma }}</c-layout.stat.value>
+                <c-layout.stat.label>Artifacts in 30 days</c-layout.stat.label>
+                </c-layout.stat-card>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {# Signups #}
+                <c-cards.card title="Signups" subtitle="Last 30 days, every day shown.">
+                <div class="h-72">
+                    <canvas class="ops-chart"
+                            data-chart="signups"
+                            data-labels="{{ charts.signup_days }}"
+                            data-values="{{ charts.signup_counts }}"
+                            aria-label="Daily signups over the last 30 days"
+                            role="img"></canvas>
+                </div>
+                </c-cards.card>
+                {# Plans #}
+                <c-cards.card title="Workspaces by plan" subtitle="Every workspace, paid or not.">
+                <div class="h-72">
+                    <canvas class="ops-chart"
+                            data-chart="plans"
+                            data-labels="{{ charts.plan_labels }}"
+                            data-values="{{ charts.plan_counts }}"
+                            aria-label="Workspaces by billing plan"
+                            role="img"></canvas>
+                </div>
+                </c-cards.card>
+            </div>
+            {# Activation #}
+            <c-cards.card title="Activation" subtitle="Share of people who reached each step. Publishing identities are excluded from both sides. The last step counts BOMs only, not documents." flush>
+            <c-tables.shell nested>
+            <c-tables.table>
+            <c-tables.head>
+            <c-tables.header-cell>Step</c-tables.header-cell>
+            <c-tables.header-cell>People</c-tables.header-cell>
+            <c-tables.header-cell>Share</c-tables.header-cell>
+            </c-tables.head>
+            <tbody>
+                {% for step in overview.funnel %}
+                    <c-tables.row>
+                    <c-tables.cell>
+                    <span class="font-medium text-text">{{ step.label }}</span>
+                    </c-tables.cell>
+                    <c-tables.cell>
+                    <span class="tabular-nums text-text">{{ step.count|intcomma }}</span>
+                    </c-tables.cell>
+                    <c-tables.cell>
+                    <div class="flex items-center gap-3">
+                        <c-progress :value="step.percent_of_signups" class="flex-1" aria-label="{{ step.label }}" />
+                        <span class="tabular-nums text-sm text-text-muted w-14 text-right">{{ step.percent_of_signups }}%</span>
+                    </div>
+                    </c-tables.cell>
+                    </c-tables.row>
+                {% endfor %}
+            </tbody>
+            </c-tables.table>
+            </c-tables.shell>
+            </c-cards.card>
+        </div>
+    {% endif %}
+{% endblock %}
+{% block scripts %}
+    {{ block.super }}
+    {% vite_asset 'sbomify/apps/ops/js/main.ts' %}
+{% endblock %}

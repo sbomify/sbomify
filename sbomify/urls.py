@@ -11,7 +11,7 @@ Class-based views
     1. Add an import:  from other_app.views import Home
     2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
 Including another URLconf
-    1. Import the include() function: from django.urls import include, path
+    1. Import the include() function: from django.urls import include, path, re_path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 
 Custom Domain Routing:
@@ -21,12 +21,13 @@ The views check request.is_custom_domain to determine appropriate behavior.
 """
 
 from django.conf import settings
-from django.urls import include, path
+from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
 from sbomify.apis import api, api_v2
 from sbomify.apps.billing.views import PublicEnterpriseContactView
 from sbomify.apps.core.admin import admin_site
+from sbomify.apps.ops.views import StaffOnlyOverviewRedirectView
 from sbomify.apps.security_advisories.wellknown import (
     ProviderMetadataView,
     WhiteDocumentView,
@@ -40,6 +41,20 @@ from sbomify.apps.teams.views.security_txt import SecurityTxtView
 urlpatterns = [
     # Favicon redirect for browsers requesting /favicon.ico at root
     path("favicon.ico", RedirectView.as_view(url="/static/img/favicons/favicon.ico", permanent=True)),
+    path("ops/", include("sbomify.apps.ops.urls")),
+    # Every alias of the overview is staff-gated like the overview itself, so
+    # none of them can answer a customer where /ops/ would 404. That includes
+    # the slashless spellings: APPEND_SLASH decides its 301 from the URLconf
+    # before any view runs, so without a route of their own they announce the
+    # surface to anybody who guesses the path.
+    re_path(r"^ops$", StaffOnlyOverviewRedirectView.as_view()),
+    # The ops dashboard used to live at /admin/dashboard/. Anyone who
+    # bookmarked it keeps working, with or without the trailing slash.
+    re_path(r"^admin/dashboard/?$", StaffOnlyOverviewRedirectView.as_view()),
+    re_path(
+        r"^admin/dashboard/(?:billing|growth|funnel|health)/?$",
+        StaffOnlyOverviewRedirectView.as_view(),
+    ),
     path("admin/", admin_site.urls),
     # Redirect old accounts/login to our Keycloak login
     path("accounts/login/", RedirectView.as_view(url="/login/", permanent=True)),
