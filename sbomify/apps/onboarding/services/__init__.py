@@ -314,10 +314,6 @@ class OnboardingEmailService:
             )
             email.attach_alternative(html_content, "text/html")
             email.send(fail_silently=False)
-            email_record.mark_sent()
-            onboarding_status.mark_welcome_email_sent()
-            logger.info("Welcome email sent successfully to user %s", user.id)
-            return True
         except Exception as e:
             if _is_refused_address(e):
                 email_record.mark_undeliverable(user.email, f"Address refused: {type(e).__name__}")
@@ -329,6 +325,16 @@ class OnboardingEmailService:
                 raise TransientEmailError(f"welcome email to user {user.id}") from e
             logger.error("Failed to send welcome email to user %s: %s", user.id, e, exc_info=True)
             return False
+
+        # Past the send, so nothing below may rewrite the record to FAILED: a
+        # delivered email recorded as failed makes the recovery sweep send a
+        # second copy instead of letting _reconcile_welcome_flag repair the
+        # flag. If the bookkeeping itself fails, the row is already SENT and
+        # the next attempt reconciles.
+        email_record.mark_sent()
+        onboarding_status.mark_welcome_email_sent()
+        logger.info("Welcome email sent successfully to user %s", user.id)
+        return True
 
     @staticmethod
     def _send_onboarding_email(
@@ -369,12 +375,10 @@ class OnboardingEmailService:
                 logger.info("%s email not eligible for user %s", email_type, user.id)
                 return False
 
-        context = get_email_context(user)
-        rendered = _render_or_report(template_name, context, user.id)
-        if rendered is None:
-            return False
-        html_content, plain_text_content = rendered
-
+        # Settled before rendering, as on the welcome path: an address the
+        # server has refused should not cost a context build and a template
+        # render on every direct retry.
+        #
         # A refused address is remembered; a failed one is deleted so the next
         # pass can create a fresh record and try again.
         if existing and existing.suppresses(user.email):
@@ -391,6 +395,12 @@ class OnboardingEmailService:
             # UNDELIVERABLE only reaches here when the address has changed
             # since; the guard above kept the row when it still applies.
             existing.delete()
+
+        context = get_email_context(user)
+        rendered = _render_or_report(template_name, context, user.id)
+        if rendered is None:
+            return False
+        html_content, plain_text_content = rendered
 
         try:
             email_record = OnboardingEmail.create_email(user=user, email_type=email_type, subject=subject)
@@ -413,9 +423,6 @@ class OnboardingEmailService:
             )
             email.attach_alternative(html_content, "text/html")
             email.send(fail_silently=False)
-            email_record.mark_sent()
-            logger.info("%s email sent successfully to user %s", email_type, user.id)
-            return True
         except Exception as e:
             if _is_refused_address(e):
                 email_record.mark_undeliverable(user.email, f"Address refused: {type(e).__name__}")
@@ -427,6 +434,12 @@ class OnboardingEmailService:
                 raise TransientEmailError(f"{email_type} email to user {user.id}") from e
             logger.error("Failed to send %s email to user %s: %s", email_type, user.id, e, exc_info=True)
             return False
+
+        # See the welcome path: the record must not go back to FAILED once the
+        # message has left.
+        email_record.mark_sent()
+        logger.info("%s email sent successfully to user %s", email_type, user.id)
+        return True
 
     @staticmethod
     def send_quick_start_email(user: Any) -> bool:

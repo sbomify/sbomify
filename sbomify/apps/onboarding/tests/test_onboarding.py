@@ -2194,6 +2194,21 @@ class TestRefusedAddressesLeaveTheBatch:
 
         assert not self._eligible_quick_start(user)
 
+    def test_a_refused_sequence_address_is_not_rendered_for(self) -> None:
+        """Direct retries of a refused address must not render either."""
+        import smtplib
+
+        user = self._user_due_for_quick_start("norenderseq")
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {user.email: (550, b"No such user here")}
+            )
+            assert OnboardingEmailService.send_quick_start_email(user) is False
+
+        with patch("sbomify.apps.onboarding.services.render_email_templates") as render:
+            assert OnboardingEmailService.send_quick_start_email(user) is False
+            render.assert_not_called()
+
     def test_a_corrected_address_comes_back(self) -> None:
         import smtplib
 
@@ -2206,3 +2221,25 @@ class TestRefusedAddressesLeaveTheBatch:
 
         User.objects.filter(pk=user.pk).update(email="fixedquick2@example.com")
         assert self._eligible_quick_start(user)
+
+
+@pytest.mark.django_db
+class TestOnboardingFanOut:
+    """The daily cron has to reach both children.
+
+    Every sweep test here calls ``requeue_missed_welcome_emails_task``
+    directly, so dropping it from the fan-out would leave all of them green
+    while the cron quietly stopped recovering missed welcomes.
+    """
+
+    def test_the_daily_task_queues_both_children(self) -> None:
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+
+        with (
+            patch.object(onboarding_tasks.process_onboarding_sequence_batch_task, "send_with_options") as sequence,
+            patch.object(onboarding_tasks.requeue_missed_welcome_emails_task, "send_with_options") as welcome,
+        ):
+            onboarding_tasks.process_all_onboarding_reminders_task()
+
+        sequence.assert_called_once()
+        welcome.assert_called_once()
