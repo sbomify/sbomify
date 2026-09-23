@@ -1473,6 +1473,52 @@ class TestTransientSendFailuresRetry:
             mock_email_cls.return_value.send.side_effect = smtplib.SMTPNotSupportedError("no SMTPUTF8")
             assert OnboardingEmailService.send_welcome_email(user) is False
 
+    def test_a_permanent_response_error_does_not_burn_the_budget(self) -> None:
+        """A 5xx the server answered will answer the same way four times.
+
+        These are the ones a class check gets wrong in the expensive direction:
+        both subclass SMTPResponseException and would otherwise fall through to
+        the OSError transport rule and retry.
+        """
+        import smtplib
+
+        over_quota = self._user("quota552")
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPDataError(552, b"Message size exceeds limit")
+            assert OnboardingEmailService.send_welcome_email(over_quota) is False
+
+        bad_credential = self._user("auth535")
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPAuthenticationError(
+                535, b"authentication failed"
+            )
+            assert OnboardingEmailService.send_welcome_email(bad_credential) is False
+
+    def test_a_temporary_response_error_still_retries(self) -> None:
+        import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("data451")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPDataError(451, b"Local error, try again")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_dropped_connection_retries(self) -> None:
+        """No server answer at all, so there is no code to read — transport."""
+        import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("disconnected")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPServerDisconnected("connection lost")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
     def test_a_broken_template_does_not_reach_the_retry_budget(self) -> None:
         """Rendering happens before the send block, so it needs its own answer.
 

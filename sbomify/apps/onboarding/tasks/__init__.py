@@ -28,7 +28,10 @@ def _report_send_failure(log_prefix: str, task_name: str, user_id: int, exc: Exc
     dramatiq's integration sends it once, which is the one worth reading.
     """
     if isinstance(exc, TransientEmailError):
-        logger.warning("%s Transient failure for user %s, will retry: %s", log_prefix, user_id, exc.__cause__ or exc)
+        # "Retryable", not "will retry": the attempt that exhausts the budget
+        # reaches this line too, and a log promising another try when there is
+        # none sends whoever reads it looking for a delivery that never comes.
+        logger.warning("%s Retryable failure for user %s: %s", log_prefix, user_id, exc.__cause__ or exc)
         record_task_breadcrumb(task_name, "retryable_error", level="warning", data={"user_id": user_id})
     else:
         logger.error("%s Error for user %s: %s", log_prefix, user_id, exc)
