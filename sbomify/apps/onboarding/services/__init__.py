@@ -77,10 +77,14 @@ def _is_transient_send_error(exc: BaseException) -> bool:
         # class instead would burn the retry budget on a 5xx that will not move
         # and drop the 4xx that would have gone through.
         return _is_temporary_smtp_code(exc.smtp_code)
-    # What is left never reached a server that answered: a dropped connection,
-    # a DNS failure, a timeout, an unroutable host. SMTPException subclasses
-    # OSError, and so do ConnectionError and TimeoutError.
-    return isinstance(exc, OSError)
+    # What is left never reached a server that answered: a dropped connection
+    # (SMTPServerDisconnected), a DNS failure, a timeout, an unroutable host.
+    #
+    # SMTPException is named alongside OSError rather than left to inherit from
+    # it. It does subclass OSError, so the tuple is not two rules — but that
+    # relationship surprises most readers, and a check that looks like it
+    # misses every smtplib error is worth one redundant name.
+    return isinstance(exc, (smtplib.SMTPException, OSError))
 
 
 #: After this, a ``PENDING`` row is assumed to belong to nobody. The sending
