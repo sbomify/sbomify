@@ -181,6 +181,28 @@ describe('Theme Manager', () => {
             expect(fakeWindow.dispatchEvent).not.toHaveBeenCalled()
         })
 
+        test('system appearance changes notify mounted components', async () => {
+            const fakeHtml = makeFakeHtml({})
+            const fakeWindow = installMocks(fakeHtml, { 'sbomify-theme': 'system' })
+            let onChange = () => {}
+            let dark = false
+            fakeWindow.matchMedia.mockImplementation(() => ({
+                matches: dark,
+                addEventListener: (_event: string, callback: () => void) => { onChange = callback },
+            }))
+            const initThemeManager = await loadFreshInitThemeManager()
+            initThemeManager()
+            fakeWindow.dispatchEvent.mockClear()
+
+            dark = true
+            onChange()
+
+            expect(fakeHtml.style.colorScheme).toBe('dark')
+            expect(fakeWindow.dispatchEvent).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'theme-changed', detail: { theme: 'system' } }),
+            )
+        })
+
         test('runs normally on auth pages (no data-theme attribute)', async () => {
             const fakeHtml = makeFakeHtml({})
             const fakeWindow = installMocks(fakeHtml, { 'sbomify-theme': 'dark' })

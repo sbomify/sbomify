@@ -87,7 +87,7 @@ function initThemeManager(): void {
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     const currentTheme = getStoredTheme();
     if (currentTheme === 'system') {
-      applyTheme('system');
+      setTheme('system');
     }
   });
 

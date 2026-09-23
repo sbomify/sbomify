@@ -29,8 +29,6 @@ import { initHtmxLifecycle } from './htmx-lifecycle';
 import { registerHtmxConfig } from './htmx-config';
 import { initializeAlpine } from './alpine-init';
 
-import '../../vulnerability_scanning/js/vulnerability-chart';
-
 // Make globals available
 declare global {
   interface Window {

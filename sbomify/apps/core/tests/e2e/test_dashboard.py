@@ -159,6 +159,17 @@ def test_dashboard_view_switch_and_trend_filters(
     assert page.locator("html").evaluate("el => el.scrollWidth <= innerWidth")
     chart = page.locator(".vulnerability-chart-canvas")
     expect(chart).to_be_visible()
+    chart_matches_theme = """() => {
+        const canvas = document.querySelector('.vulnerability-chart-canvas');
+        const chart = Chart.getChart(canvas);
+        if (!chart) return false;
+        const styles = getComputedStyle(canvas);
+        const token = name => styles.getPropertyValue(`--color-${name}`).trim();
+        return chart.options.scales.x.ticks.color === token('text-muted')
+            && chart.options.plugins.tooltip.backgroundColor === token('surface-elevated')
+            && chart.data.datasets[0].borderColor === token('severity-critical');
+    }"""
+    page.wait_for_function(chart_matches_theme)
     page.wait_for_function(
         "Chart.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'line'"
     )
@@ -167,6 +178,15 @@ def test_dashboard_view_switch_and_trend_filters(
 
     page.get_by_role("button", name="Severity", exact=True).click()
     expect(page.get_by_role("button", name="Severity", exact=True)).to_have_attribute("aria-pressed", "true")
+    # Theme changes repaint the canvas and preserve the selected chart view.
+    for selected_theme in ("dark" if theme == "light" else "light", theme):
+        page.evaluate("theme => window.themeManager.setTheme(theme)", selected_theme)
+        page.wait_for_function("""() => {
+            const canvas = document.querySelector('.vulnerability-chart-canvas');
+            const chart = Chart.getChart(canvas);
+            return chart?.config.type === 'bar' && chart.options.scales.x.ticks.color ===
+                getComputedStyle(canvas).getPropertyValue('--color-text-muted').trim();
+        }""")
     page.get_by_role("combobox", name="Time range").select_option("7")
     expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
     page.wait_for_function(
@@ -176,6 +196,7 @@ def test_dashboard_view_switch_and_trend_filters(
     # A filter with no scans must leave its controls available to recover.
     page.get_by_role("combobox", name="Product", exact=True).select_option(dashboard["products"][2].id)
     expect(page.get_by_role("heading", name="No vulnerability data")).to_be_visible()
+    page.wait_for_function("Object.keys(Chart.instances).length === 0")
     expect(page.get_by_role("combobox", name="Product", exact=True)).to_be_visible()
     page.get_by_role("combobox", name="Product", exact=True).select_option(dashboard["products"][0].id)
     expect(chart).to_be_visible()
@@ -191,6 +212,9 @@ def test_dashboard_view_switch_and_trend_filters(
     scans.get_by_role("link", name="sbom-0.json", exact=True).first.click()
     expect(page.locator("h1")).to_contain_text("sbom-0.json")
     page.go_back()
+    page.wait_for_function("Object.keys(Chart.instances).length === 1")
+    page.locator('[x-data="vulnerabilityTrends"]').evaluate("element => element.remove()")
+    page.wait_for_function("Object.keys(Chart.instances).length === 0")
     navigation.get_by_role("link", name="Summary").click()
     expect(navigation.locator('[aria-current="page"]')).to_have_text("Summary")
     expect(page.get_by_role("group", name="Key metrics")).to_be_visible()

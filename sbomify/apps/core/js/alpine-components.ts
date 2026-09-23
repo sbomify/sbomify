@@ -57,6 +57,7 @@ import { registerSupplierEditor } from '../../sboms/js/supplier-editor';
 import { registerDocumentUpload } from '../../documents/js/document-upload';
 import { registerPlanSelection } from '../../billing/js/plan-selection';
 import { registerAssessmentBadge } from '../../plugins/js/assessment-badge';
+import { vulnerabilityTrends } from '../../vulnerability_scanning/js/vulnerability-chart';
 
 // ============================================
 // COMPONENT IMPORTS - Compliance Module
@@ -204,6 +205,7 @@ export function chartSelector(defaultChart = 'timeline') {
 export function registerCommonComponents(): void {
     registerAlpineComponent('navbarSearch', navbarSearch);
     registerAlpineComponent('scrollableTabs', scrollableTabs);
+    registerAlpineComponent('vulnerabilityTrends', vulnerabilityTrends);
     registerAlpineComponent('dangerZone', dangerZone);
     registerAlpineComponent('modalState', modalState);
     registerAlpineComponent('collapsible', collapsible);
