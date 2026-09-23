@@ -1989,6 +1989,33 @@ class TestWelcomeRecoverySweep:
         User.objects.filter(pk=user.pk).update(email="fixed@example.com")
         assert user.id in self._run_sweep()
 
+    def test_a_half_written_success_is_repaired_and_stops_being_swept(self) -> None:
+        """The send writes the row, then the flag. A crash between them strands both.
+
+        The sweep keys on the flag, so it would re-queue this user daily; the
+        send's own SENT fast path would return early each time without ever
+        fixing it. The drip gates on the same flag, so the whole sequence stays
+        blocked behind an email that did go out.
+        """
+        user = self._owner("halfwritten", welcome_sent=False)
+        OnboardingEmail.objects.create(
+            user=user,
+            email_type=OnboardingEmail.EmailType.WELCOME,
+            subject="Welcome",
+            status=OnboardingEmail.EmailStatus.SENT,
+        )
+        assert user.id in self._run_sweep(), "the sweep should pick it up once"
+
+        mail.outbox = []
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            assert OnboardingEmailService.send_welcome_email(user) is True
+            mock_email_cls.assert_not_called()
+        assert mail.outbox == [], "the email already went out; it must not go out twice"
+
+        status = OnboardingStatus.objects.get(user=user)
+        assert status.welcome_email_sent is True
+        assert user.id not in self._run_sweep(), "and not be picked up again"
+
     def test_a_signup_who_is_not_a_workspace_owner_is_still_swept(self) -> None:
         """The signal queues a welcome for every human user, not just owners.
 

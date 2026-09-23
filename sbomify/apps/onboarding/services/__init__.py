@@ -91,6 +91,24 @@ def _is_transient_send_error(exc: BaseException) -> bool:
 ABANDONED_PENDING_AFTER = timedelta(hours=1)
 
 
+def _reconcile_welcome_flag(onboarding_status: OnboardingStatus, user: Any) -> None:
+    """Catch ``welcome_email_sent`` up to a row that is already ``SENT``.
+
+    The send writes the row and then the flag, so a worker dying between the
+    two leaves a delivered email recorded as not sent. That is not cosmetic:
+    the recovery sweep keys on the flag and would re-queue the user every day,
+    and ``should_receive_quick_start`` and its siblings gate on it, so the whole
+    drip stays blocked behind an email that did go out.
+
+    Nothing else closes the window. Whoever next asks to send this email is the
+    only code that sees both facts at once.
+    """
+    if onboarding_status.welcome_email_sent:
+        return
+    logger.info("Welcome email was sent for user %s but the status flag was not; repairing", user.id)
+    onboarding_status.mark_welcome_email_sent()
+
+
 def refused_at_current_address() -> Q:
     """Rows whose ``UNDELIVERABLE`` still applies to the user's address now.
 
@@ -228,6 +246,7 @@ class OnboardingEmailService:
         existing = OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.WELCOME).first()
         if existing and existing.status == OnboardingEmail.EmailStatus.SENT:
             logger.info("Welcome email record already sent for user %s", user.id)
+            _reconcile_welcome_flag(onboarding_status, user)
             return True
         # An undeliverable row is kept and honoured. The FAILED row below is
         # deleted so the next pass can try again, which is what a batch
@@ -258,6 +277,7 @@ class OnboardingEmailService:
         except IntegrityError:
             concurrent = OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.WELCOME).first()
             if concurrent and concurrent.status == OnboardingEmail.EmailStatus.SENT:
+                _reconcile_welcome_flag(onboarding_status, user)
                 return True
             logger.warning("Welcome email being processed by another worker for user %s", user.id)
             return False
