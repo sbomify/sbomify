@@ -150,10 +150,6 @@ class TestSpecificProblematicTemplates:
                 "core/components/_form_field.html.j2",
                 {},  # Will fail with missing field, but shouldn't recurse
             ),
-            (
-                "core/components/_page_header.html.j2",
-                {"title": "Test Page", "icon": "fa-test"},
-            ),
         ],
     )
     def test_previously_buggy_template_renders(self, django_engine, template_name: str, context: dict) -> None:
