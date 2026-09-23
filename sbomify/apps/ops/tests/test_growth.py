@@ -101,6 +101,22 @@ class TestActivationFunnel:
         assert steps[1].count == 1
         assert steps[1].percent_of_signups == 50.0
 
+    def test_the_upload_step_says_bom_because_that_is_what_the_flag_records(self):
+        """has_uploaded_sbom is set by a post_save on the BOM table only.
+
+        A document upload never touches it, and populations.artifact_count
+        counts documents, so calling this step "artifact" would put two
+        definitions of the word on one page.
+        """
+        steps = activation_funnel()
+
+        assert [step.label for step in steps] == [
+            "Signed up",
+            "Finished the wizard",
+            "Created a component",
+            "Uploaded a BOM",
+        ]
+
     def test_an_empty_install_does_not_divide_by_zero(self):
         steps = activation_funnel()
 

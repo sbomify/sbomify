@@ -107,6 +107,45 @@ class TestLegacyUrls:
 
 
 @pytest.mark.django_db
+class TestSlashlessUrls:
+    """APPEND_SLASH answers 301 from the URLconf, before any view runs.
+
+    So /ops told anybody who guessed it that the surface exists, while an
+    unknown URL answered 404. The gate on the destination could not help:
+    the redirect was already decided.
+    """
+
+    @pytest.mark.parametrize(
+        "url",
+        ["/ops", "/admin/dashboard", "/admin/dashboard/billing"],
+    )
+    def test_a_customer_cannot_tell_these_apart_from_a_dead_url(self, client: Client, customer, url):
+        client.force_login(customer)
+
+        assert client.get(url).status_code == client.get("/no-such-page-at-all").status_code == 404
+
+    @pytest.mark.parametrize(
+        "url",
+        ["/ops", "/admin/dashboard", "/admin/dashboard/billing"],
+    )
+    def test_an_anonymous_visitor_cannot_either(self, client: Client, url):
+        assert client.get(url).status_code == 404
+
+    @pytest.mark.parametrize(
+        "url",
+        ["/ops", "/admin/dashboard", "/admin/dashboard/growth"],
+    )
+    def test_staff_still_land_on_the_overview(self, client: Client, staff_user, url):
+        """Closing the hole must not break the spelling people actually type."""
+        client.force_login(staff_user)
+
+        response = client.get(url)
+
+        assert response.status_code == 302
+        assert response["Location"] == reverse("ops:overview")
+
+
+@pytest.mark.django_db
 class TestRendering:
     def test_chart_series_are_json_in_data_attributes(self, client: Client, staff_user):
         """Not values pasted into a script body, which is what broke labels before."""

@@ -92,6 +92,18 @@ def _build_activation_funnel() -> list[ActivationStep]:
 
     Bots are excluded because ``people()`` excludes them, not because they
     happen to lack a status row.
+
+    The last step says BOM rather than artifact, deliberately. Every step
+    above the denominator is an ``OnboardingStatus`` flag, and
+    ``has_uploaded_sbom`` is set by a ``post_save`` on the BOM table only:
+    a document upload never touches it. ``populations.artifact_count`` counts
+    documents, so calling this step "artifact" would put two different
+    definitions of the word on one page. The narrow name is the honest one
+    until the flag itself covers both, which is a change to the onboarding
+    app rather than to this panel.
+
+    The flag is also only ever set for a workspace's primary owner, so this
+    step under-counts anyone else in a publishing workspace.
     """
     signed_up = people().count()
     statuses = OnboardingStatus.objects.filter(user__in=people())
@@ -100,7 +112,7 @@ def _build_activation_funnel() -> list[ActivationStep]:
         ("Signed up", signed_up),
         ("Finished the wizard", statuses.filter(has_completed_wizard=True).count()),
         ("Created a component", statuses.filter(has_created_component=True).count()),
-        ("Uploaded an artifact", statuses.filter(has_uploaded_sbom=True).count()),
+        ("Uploaded a BOM", statuses.filter(has_uploaded_sbom=True).count()),
     )
 
     return [

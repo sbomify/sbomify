@@ -27,7 +27,7 @@ from django.views.generic import RedirectView
 from sbomify.apis import api, api_v2
 from sbomify.apps.billing.views import PublicEnterpriseContactView
 from sbomify.apps.core.admin import admin_site
-from sbomify.apps.ops.views import LegacyDashboardRedirectView
+from sbomify.apps.ops.views import StaffOnlyOverviewRedirectView
 from sbomify.apps.security_advisories.wellknown import (
     ProviderMetadataView,
     WhiteDocumentView,
@@ -42,13 +42,18 @@ urlpatterns = [
     # Favicon redirect for browsers requesting /favicon.ico at root
     path("favicon.ico", RedirectView.as_view(url="/static/img/favicons/favicon.ico", permanent=True)),
     path("ops/", include("sbomify.apps.ops.urls")),
+    # Every alias of the overview is staff-gated like the overview itself, so
+    # none of them can answer a customer where /ops/ would 404. That includes
+    # the slashless spellings: APPEND_SLASH decides its 301 from the URLconf
+    # before any view runs, so without a route of their own they announce the
+    # surface to anybody who guesses the path.
+    re_path(r"^ops$", StaffOnlyOverviewRedirectView.as_view()),
     # The ops dashboard used to live at /admin/dashboard/. Anyone who
-    # bookmarked it keeps working. Staff-gated like its destination, so the
-    # alias cannot answer a customer where /ops/ would 404.
-    path("admin/dashboard/", LegacyDashboardRedirectView.as_view()),
+    # bookmarked it keeps working, with or without the trailing slash.
+    re_path(r"^admin/dashboard/?$", StaffOnlyOverviewRedirectView.as_view()),
     re_path(
-        r"^admin/dashboard/(?:billing|growth|funnel|health)/$",
-        LegacyDashboardRedirectView.as_view(),
+        r"^admin/dashboard/(?:billing|growth|funnel|health)/?$",
+        StaffOnlyOverviewRedirectView.as_view(),
     ),
     path("admin/", admin_site.urls),
     # Redirect old accounts/login to our Keycloak login

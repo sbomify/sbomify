@@ -52,14 +52,22 @@ class OverviewView(StaffRequiredMixin, View):
         return render(request, "ops/overview.html.j2", context)
 
 
-class LegacyDashboardRedirectView(StaffRequiredMixin, RedirectView):
-    """``/admin/dashboard/`` and its old sub-pages, kept working for bookmarks.
+class StaffOnlyOverviewRedirectView(StaffRequiredMixin, RedirectView):
+    """Every other spelling of the overview's URL, behind the overview's gate.
 
-    Behind the same staff gate as the page it points at. An ungated redirect
-    would answer 302 where a non-existent URL answers 404, which tells a
-    signed-in customer the surface is there: exactly what the 404 on ``/ops/``
-    is for. The alias has to be as quiet as its destination or it is not an
-    alias, it is a disclosure.
+    Two groups of them: ``/admin/dashboard/`` and its old sub-pages, where the
+    page used to live and bookmarks still point, and the slashless forms of
+    both those and ``/ops`` itself.
+
+    The slashless ones need a route rather than the middleware's help.
+    ``APPEND_SLASH`` turns a slashless request into a 301 by resolving the
+    URLconf, not by asking the view, so ``/ops`` answered 301 for anybody at
+    all while an unknown URL answers 404. That difference is the disclosure,
+    and it survives the gate on the destination because the redirect is
+    decided before any view runs.
+
+    An alias has to be exactly as quiet as what it points at. Otherwise it is
+    not an alias, it is an announcement that the surface exists.
     """
 
     pattern_name = "ops:overview"
