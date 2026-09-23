@@ -63,6 +63,8 @@ def sweep_stranded_runs() -> int:
         # counts from that pickup, not from when the row was written.
         .annotate(since=Coalesce("started_at", "created_at"))
         .filter(since__lt=cutoff)
+        # The sweep takes rows in any order; the model's default would sort them.
+        .order_by()
         .values_list("id", "plugin_name", "sbom_id")
     )
 

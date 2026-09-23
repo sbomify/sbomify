@@ -43,7 +43,7 @@ def _run(
     # created_at is auto_now_add, so age it after the fact.
     AssessmentRun.objects.filter(pk=run.pk).update(
         created_at=timezone.now() - age,
-        started_at=timezone.now() - started if started else None,
+        started_at=timezone.now() - started if started is not None else None,
     )
     run.refresh_from_db()
     return run
