@@ -27,7 +27,17 @@ from sbomify.apps.billing.stripe_pricing_service import StripePricingService
 
 @pytest.fixture
 def captured_events() -> Iterator[list[Event]]:
-    """A live Sentry client whose events land in a list instead of the network."""
+    """A live Sentry client whose events land in a list instead of the network.
+
+    ``sentry_sdk.init`` replaces the global scope's client, so the original has
+    to be put back rather than replaced with a bare one: every later test in
+    the same worker would otherwise run without the integrations ``settings.py``
+    wired up. Same requirement, and the same remedy, as the
+    ``sentry_client_isolation`` fixture in ``sbomify/apps/core/tests/test_sentry_config.py``
+    — only the global scope is restored, because setting a client on the current
+    or isolation scope pins it there and breaks the SDK's scope fallback chain.
+    """
+    original = sentry_sdk.Scope.get_global_scope().client
     events: list[Event] = []
     sentry_sdk.init(
         dsn="https://public@example.ingest.sentry.io/1",
@@ -40,7 +50,13 @@ def captured_events() -> Iterator[list[Event]]:
     try:
         yield events
     finally:
-        sentry_sdk.init(dsn=None, default_integrations=False)
+        sentry_sdk.Scope.get_global_scope().set_client(original)
+
+
+def _log_then_raise(*_args: Any, **_kwargs: Any) -> None:
+    """Stand in for a post-fetch failure that reports to Sentry on its own."""
+    logging.getLogger("sbomify.apps.billing.save").error("could not persist refreshed pricing")
+    raise RuntimeError("save failed")
 
 
 @pytest.mark.django_db
@@ -109,6 +125,38 @@ class TestStaleCacheRidesOnTheStripeEvent:
         assert len(captured_events) == 1
         assert str(captured_events[0]["tags"]["pricing_cache_stale"]) == "False"
         assert "pricing_cache" not in captured_events[0].get("contexts", {})
+
+    def test_a_failure_saving_the_result_does_not_inherit_the_tag(
+        self, mock_stripe_client: MagicMock, captured_events: list[Event], db: None
+    ) -> None:
+        """The scope covers the Stripe call, not the database work after it.
+
+        Stripe answering and the save then failing is a different fault. Tagging
+        it ``pricing_cache_stale`` would put it in front of whoever is looking
+        for Stripe outages, describing a cache that the successful call just
+        refreshed anyway.
+        """
+        import datetime
+
+        BillingPlan.objects.create(key="community", name="Community", description="Community")
+        BillingPlan.objects.create(
+            key="business",
+            name="Business",
+            description="Business",
+            stripe_product_id="prod_business",
+            monthly_price=Decimal("199.00"),
+            last_synced_at=timezone.now() - datetime.timedelta(hours=25),
+        )
+        mock_stripe_client.get_all_products_with_prices.return_value = []
+
+        service = StripePricingService()
+        with patch.object(service, "_process_stripe_data", side_effect=_log_then_raise):
+            with pytest.raises(RuntimeError):
+                service.get_all_plans_pricing(force_refresh=True)
+
+        assert len(captured_events) == 1
+        assert "pricing_cache_stale" not in (captured_events[0].get("tags") or {})
+        assert "pricing_cache" not in (captured_events[0].get("contexts") or {})
 
     def test_the_tag_does_not_leak_past_the_stripe_call(
         self, mock_stripe_client: MagicMock, captured_events: list[Event], db: None

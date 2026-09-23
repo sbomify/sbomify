@@ -62,46 +62,30 @@ class StripePricingService:
         if not needs_refresh:
             return self._build_pricing_from_db(db_plans)
 
-        # How old the cached copy already is, read before the call rather than
-        # after it fails. A failed refresh is reported by the Stripe client,
-        # which logs at error and so raises a Sentry issue on its own; putting
-        # the staleness on the scope that call runs under means that issue
-        # carries the answer to "are the prices on the page still any good"
-        # instead of a second issue arriving to say so separately.
+        # Read once, before the call, and handed down: the staleness reported
+        # on the failure and the staleness named in the log line have to be the
+        # same reading, and ``timezone.now()`` moves between two calls.
         stale = self._stale_plans(db_plans)
-        with sentry_sdk.new_scope() as scope:
-            # Scoped to this call only, so no later event inherits the tag.
-            scope.set_tag("pricing_cache_stale", bool(stale))
+        try:
+            return self._refresh_pricing_from_stripe(db_plans, stale)
+        except StripeError as e:
+            # Warning, not error, on both paths: the logging integration turns
+            # an error into an event, and this branch is the fallback working —
+            # the caller gets the prices it asked for and the page renders. A
+            # Stripe blip used to page on-call from here, from the refresh
+            # helper, and from the client that raised: three issues for one
+            # request that succeeded.
             if stale:
-                scope.set_context(
-                    "pricing_cache",
-                    {
-                        "stale_plans": sorted(stale),
-                        "oldest_age": str(max(stale.values())),
-                        "stale_after_hours": self.STALE_AFTER.total_seconds() / 3600,
-                    },
+                logger.warning(
+                    "Failed to fetch Stripe products: %s. Returning cached data, stale for %d plan(s): %s (oldest %s).",
+                    e,
+                    len(stale),
+                    ", ".join(sorted(stale)),
+                    max(stale.values()),
                 )
-            try:
-                return self._refresh_pricing_from_stripe(db_plans)
-            except StripeError as e:
-                # Warning, not error, on both paths: the logging integration
-                # turns an error into an event, and this branch is the fallback
-                # working — the caller gets the prices it asked for and the page
-                # renders. A Stripe blip used to page on-call from here, from
-                # the helper below, and from the client that raised: three
-                # issues for one request that succeeded.
-                if stale:
-                    logger.warning(
-                        "Failed to fetch Stripe products: %s. Returning cached data, "
-                        "stale for %d plan(s): %s (oldest %s).",
-                        e,
-                        len(stale),
-                        ", ".join(sorted(stale)),
-                        max(stale.values()),
-                    )
-                else:
-                    logger.warning("Failed to fetch Stripe products: %s. Returning cached data.", e)
-                return self._build_pricing_from_db(db_plans)
+            else:
+                logger.warning("Failed to fetch Stripe products: %s. Returning cached data.", e)
+            return self._build_pricing_from_db(db_plans)
 
     @classmethod
     def _stale_plans(cls, db_plans: list[BillingPlan]) -> dict[str, timedelta]:
@@ -116,6 +100,33 @@ class StripePricingService:
             for plan in db_plans
             if plan.last_synced_at and now - plan.last_synced_at > cls.STALE_AFTER
         }
+
+    def _fetch_products_reporting_staleness(self, stale: dict[str, timedelta]) -> Any:
+        """The Stripe call, under a scope saying how stale the cache already is.
+
+        A failed call is reported by the client, which logs at error and so
+        raises a Sentry issue on its own. Tagging the scope it runs under means
+        that issue answers "are the prices on the page still any good" rather
+        than a second issue arriving to say so separately.
+
+        The scope wraps the call and nothing else. Everything after it is our
+        own database work, and an error logged there is a different fault that
+        must not inherit a tag describing the Stripe one.
+        """
+        with sentry_sdk.new_scope() as scope:
+            # Set either way: reading the event, an absent tag cannot be told
+            # apart from a build that predates the tag.
+            scope.set_tag("pricing_cache_stale", bool(stale))
+            if stale:
+                scope.set_context(
+                    "pricing_cache",
+                    {
+                        "stale_plans": sorted(stale),
+                        "oldest_age": str(max(stale.values())),
+                        "stale_after_hours": self.STALE_AFTER.total_seconds() / 3600,
+                    },
+                )
+            return self.stripe_client.get_all_products_with_prices()
 
     def _build_pricing_from_db(self, db_plans: list[BillingPlan]) -> dict[str, dict[str, Any]]:
         """Build pricing dict from database plans (cached data)."""
@@ -151,13 +162,20 @@ class StripePricingService:
 
         return plans_pricing
 
-    def _refresh_pricing_from_stripe(self, db_plans: list[BillingPlan]) -> dict[str, dict[str, Any]]:
+    def _refresh_pricing_from_stripe(
+        self, db_plans: list[BillingPlan], stale: dict[str, timedelta] | None = None
+    ) -> dict[str, dict[str, Any]]:
         """
         Refresh pricing from Stripe API and update database.
 
         Fetches Stripe data outside transaction to avoid holding locks during API calls.
         Uses select_for_update only for the final database update to prevent race conditions.
+
+        ``stale`` is the caller's reading of how old the cached copy already is,
+        passed down so both it and the Stripe call describe the same instant.
         """
+        if stale is None:
+            stale = self._stale_plans(db_plans)
         plan_keys = [p.key for p in db_plans]
 
         # Fetch all products and prices from Stripe OUTSIDE transaction
@@ -166,7 +184,7 @@ class StripePricingService:
         # line, and the failure is already written twice — by the client that
         # classified the error, and by the caller that decides what to do about
         # it. A third copy is a third Sentry issue for one failure.
-        stripe_products = self.stripe_client.get_all_products_with_prices()
+        stripe_products = self._fetch_products_reporting_staleness(stale)
 
         # Process Stripe data into pricing dicts
         plans_pricing: dict[str, dict[str, Any]] = {}
