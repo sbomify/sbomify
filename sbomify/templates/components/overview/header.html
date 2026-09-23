@@ -1,0 +1,16 @@
+{% comment %}
+The dashboard keeps one heading and view switch. Both views compose the same
+page header and navigation tabs; the surrounding frame owns their spacing.
+The first-visit summary can supply its onboarding subtitle.
+{% endcomment %}
+<c-vars active="summary" subtitle="Prioritise vulnerabilities and keep your product evidence current." />
+<c-layout.page-header title="Overview" subtitle="{{ subtitle }}" />
+<c-navigation.tabs links aria-label="Dashboard views">
+{% if active == "trends" %}
+    <c-navigation.tab href="{% url 'core:dashboard' %}" only>Summary</c-navigation.tab>
+    <c-navigation.tab href="{% url 'core:dashboard_trends' %}" active only>Trends</c-navigation.tab>
+{% else %}
+    <c-navigation.tab href="{% url 'core:dashboard' %}" active only>Summary</c-navigation.tab>
+    <c-navigation.tab href="{% url 'core:dashboard_trends' %}" only>Trends</c-navigation.tab>
+{% endif %}
+</c-navigation.tabs>

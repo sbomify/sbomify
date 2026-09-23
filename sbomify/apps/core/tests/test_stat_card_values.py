@@ -18,7 +18,7 @@ def stat_values(template: str, context: dict[str, Any]) -> dict[str, str]:
 
 def test_trend_stats_keep_formatted_counts() -> None:
     values = stat_values(
-        "vulnerability_scanning/components/_vulnerability_trends_results.html.j2",
+        "vulnerability_scanning/components/_vulnerability_trends_body.html.j2",
         {"has_data": True, "summary": {"total": 1234, "critical": 12, "high": 34, "medium": 1188, "low": 0}},
     )
     assert values == {"Total": "1,234", "Critical": "12", "High": "34", "Medium": "1,188", "Low": "0"}
@@ -51,7 +51,7 @@ def test_security_assessment_stats_keep_severity_counts_and_skip_marker_out_of_t
                     "metadata": {"skipped": skipped},
                     "summary": {"by_severity": {"critical": 2, "high": 3, "low": 1}},
                 },
-            }
+            },
         },
     )
     assert values == {"Critical": "2", "High": "3", "Medium": "0", "Low": "1", "Total": "0" if skipped else "6"}
@@ -68,7 +68,7 @@ def test_compliance_assessment_stats_keep_nonzero_counts() -> None:
                 "category": "compliance",
                 "status": "completed",
                 "result": {"summary": {"pass_count": 8, "fail_count": 2, "warning_count": 1, "total_findings": 11}},
-            }
+            },
         },
     )
     assert values == {"Pass": "8", "Fail": "2", "Error": "0", "Warn": "1", "Info": "0", "Total": "11"}

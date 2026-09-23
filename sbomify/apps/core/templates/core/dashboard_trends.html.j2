@@ -1,14 +1,8 @@
 {% extends 'core/dashboard_base.htmx.j2' %}
-{% block title %}Vulnerability trends · sbomify{% endblock %}
+{% block title %}Trends · Overview · sbomify{% endblock %}
 {% block dashboard_content %}
-    <c-layout.page-header title="Vulnerability trends" subtitle="See how exposure changes across products and releases.">
-    <c-buttons.secondary size="sm" href="{% url 'core:dashboard' %}">Back to overview</c-buttons.secondary>
-    </c-layout.page-header>
-    <c-cards.card flush>
-    <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true"
-         hx-trigger="load"
-         hx-swap="innerHTML">
-        <c-feedback.loading-chart message="Loading vulnerability trends..." />
-    </div>
-    </c-cards.card>
+    <c-overview.header active="trends" />
+    <c-layout.frame hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true" hx-trigger="load" hx-swap="innerHTML">
+    <c-feedback.loading-chart message="Loading vulnerability trends..." />
+    </c-layout.frame>
 {% endblock %}

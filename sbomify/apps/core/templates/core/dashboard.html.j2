@@ -2,9 +2,7 @@
 {% load django_vite %}
 {% block title %}Overview · sbomify{% endblock %}
 {% block dashboard_content %}
-    <c-layout.page-header title="Overview" subtitle="{{ page_subtitle }}">
-    <c-buttons.secondary size="sm" href="{% url 'core:dashboard_trends' %}">View trends</c-buttons.secondary>
-    </c-layout.page-header>
+    <c-overview.header subtitle="{{ page_subtitle }}" />
     <div role="group"
          class="grid grid-cols-2 xl:grid-cols-4 gap-3"
          aria-label="Key metrics">

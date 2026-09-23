@@ -1,4 +1,5 @@
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -6,6 +7,7 @@ from django.utils import timezone
 from playwright.sync_api import Page, expect
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
+from sbomify.apps.core.tests.e2e.utils import take_screenshot
 
 
 @pytest.mark.django_db
@@ -124,6 +126,71 @@ def test_empty_overview_and_trends(authenticated_page: Page) -> None:
     page.get_by_role("link", name="Add release", exact=False).click()
     expect(page.get_by_role("heading", name="Add a product first")).to_be_visible()
     page.go_back()
-    page.get_by_role("link", name="View trends", exact=True).click()
-    expect(page.get_by_role("heading", name="Vulnerability trends", exact=True).first).to_be_visible()
+    page.get_by_role("navigation", name="Dashboard views").get_by_role("link", name="Trends", exact=True).click()
+    expect(page.get_by_role("heading", name="Overview", exact=True)).to_be_visible()
     expect(page.locator("#vuln-trends-body")).to_be_visible()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1280, 390])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_dashboard_view_switch_and_trend_filters(
+    authenticated_page: Page, dashboard: dict[str, Any], width: int, theme: str, tmp_path: Path
+) -> None:
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto("/dashboard")
+    navigation = page.get_by_role("navigation", name="Dashboard views")
+    expect(navigation.get_by_role("link", name="Summary")).to_have_attribute("aria-current", "page")
+    summary_metrics = page.get_by_role("group", name="Key metrics").bounding_box()
+    assert summary_metrics is not None
+    navigation.get_by_role("link", name="Trends").click()
+
+    expect(page.locator("h1")).to_have_text("Overview")
+    expect(navigation.locator('[aria-current="page"]')).to_have_text("Trends")
+    metrics = page.get_by_role("group", name="Vulnerability metrics")
+    expect(metrics).to_be_visible()
+    trends_metrics = metrics.bounding_box()
+    assert trends_metrics is not None
+    assert trends_metrics["x"] == pytest.approx(summary_metrics["x"])
+    assert trends_metrics["y"] == pytest.approx(summary_metrics["y"])
+    assert trends_metrics["width"] == pytest.approx(summary_metrics["width"])
+    assert page.locator("html").evaluate("el => el.scrollWidth <= innerWidth")
+    chart = page.locator(".vulnerability-chart-canvas")
+    expect(chart).to_be_visible()
+    page.wait_for_function(
+        "Chart.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'line'"
+    )
+    take_screenshot(page, "trends", width=width, path=tmp_path / f"trends-{theme}-{width}.png")
+    page.set_viewport_size({"width": width, "height": 900})
+
+    page.get_by_role("button", name="Severity", exact=True).click()
+    expect(page.get_by_role("button", name="Severity", exact=True)).to_have_attribute("aria-pressed", "true")
+    page.get_by_role("combobox", name="Time range").select_option("7")
+    expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
+    page.wait_for_function(
+        "Chart.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
+    )
+
+    # A filter with no scans must leave its controls available to recover.
+    page.get_by_role("combobox", name="Product", exact=True).select_option(dashboard["products"][2].id)
+    expect(page.get_by_role("heading", name="No vulnerability data")).to_be_visible()
+    expect(page.get_by_role("combobox", name="Product", exact=True)).to_be_visible()
+    page.get_by_role("combobox", name="Product", exact=True).select_option(dashboard["products"][0].id)
+    expect(chart).to_be_visible()
+    expect(page.get_by_role("button", name="Severity", exact=True)).to_have_attribute("aria-pressed", "true")
+    page.wait_for_function(
+        "Chart.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
+    )
+    expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
+    scans = page.get_by_role("table", name="Recent SBOM scans")
+    scans.get_by_role("button", name="Vulnerability breakdown:").first.click()
+    expect(page.get_by_role("dialog", name="Vulnerability breakdown", exact=True)).to_be_visible()
+    page.keyboard.press("Escape")
+    scans.get_by_role("link", name="sbom-0.json", exact=True).first.click()
+    expect(page.locator("h1")).to_contain_text("sbom-0.json")
+    page.go_back()
+    navigation.get_by_role("link", name="Summary").click()
+    expect(navigation.locator('[aria-current="page"]')).to_have_text("Summary")
+    expect(page.get_by_role("group", name="Key metrics")).to_be_visible()
