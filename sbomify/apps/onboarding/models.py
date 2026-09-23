@@ -317,7 +317,7 @@ class OnboardingEmail(models.Model):
     #: correct a mistyped address, and the profile sync writes a new one from
     #: Keycloak; without this the guard would go on suppressing onboarding for
     #: an address that is no longer theirs and that nobody ever refused.
-    attempted_address = models.CharField(max_length=254, blank=True)
+    attempted_address = models.CharField(max_length=254, blank=True, default="")
     retry_count = models.PositiveIntegerField(default=0)
 
     class Meta:

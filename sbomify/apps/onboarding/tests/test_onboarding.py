@@ -1811,15 +1811,17 @@ class TestWelcomeRecoverySweep:
     """
 
     @staticmethod
-    def _owner(name: str, *, welcome_sent: bool, age_days: int = 0) -> Any:
+    def _owner(name: str, *, welcome_sent: bool, age_days: int = 0, owner: bool = True) -> Any:
         user = User.objects.create_user(username=name, email=f"{name}@example.com", password="test123")
-        team = Team.objects.create(name=f"{name} Team", key=f"{name}-team")
-        Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
-        status = OnboardingStatus.objects.get(user=user)
+        if owner:
+            team = Team.objects.create(name=f"{name} Team", key=f"{name}-team")
+            Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
+        status = OnboardingStatus.objects.get_or_create(user=user)[0]
         if welcome_sent:
             status.mark_welcome_email_sent()
         if age_days:
-            OnboardingStatus.objects.filter(pk=status.pk).update(created_at=timezone.now() - timedelta(days=age_days))
+            # The account's own age is what the sweep measures.
+            User.objects.filter(pk=user.pk).update(date_joined=timezone.now() - timedelta(days=age_days))
         return user
 
     @staticmethod
@@ -1847,6 +1849,32 @@ class TestWelcomeRecoverySweep:
 
         user = self._owner("ancient", welcome_sent=False, age_days=WELCOME_RECOVERY_WINDOW_DAYS + 1)
         assert user.id not in self._run_sweep()
+
+    def test_an_old_account_with_a_new_status_row_is_not_swept(self) -> None:
+        """The window is the account's age, not its status row's.
+
+        A status row is created by ``get_or_create`` from the component and
+        SBOM tracking paths, so a long-lived user can acquire a brand-new one
+        this week. Keying the cutoff to that row would mail someone who signed
+        up years ago.
+        """
+        from sbomify.apps.onboarding.tasks import WELCOME_RECOVERY_WINDOW_DAYS
+
+        user = self._owner("oldaccount", welcome_sent=False, age_days=WELCOME_RECOVERY_WINDOW_DAYS + 400)
+        status = OnboardingStatus.objects.get(user=user)
+        OnboardingStatus.objects.filter(pk=status.pk).update(created_at=timezone.now())
+
+        assert user.id not in self._run_sweep()
+
+    def test_a_signup_who_is_not_a_workspace_owner_is_still_swept(self) -> None:
+        """The signal queues a welcome for every human user, not just owners.
+
+        An owner-only sweep would leave a failed send lost for exactly the
+        accounts that are not primary owners — an invitee, or someone whose
+        workspace setup has not completed.
+        """
+        user = self._owner("notanowner", welcome_sent=False, owner=False)
+        assert user.id in self._run_sweep()
 
     def test_an_unsubscribed_user_is_not_requeued(self) -> None:
         user = self._owner("optedout", welcome_sent=False)

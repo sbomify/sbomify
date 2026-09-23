@@ -232,11 +232,11 @@ def process_all_onboarding_reminders_task() -> None:
         raise
 
 
-#: How far back the welcome sweep looks. The welcome email is sent within
-#: seconds of signup, so anything that is going to fail has failed long before
-#: this. The bound is what keeps the sweep a recovery rather than a backfill:
-#: without it, its first run would mail every account that predates the
-#: onboarding sequence entirely.
+#: How far back the welcome sweep looks, measured from ``User.date_joined``.
+#: The welcome email is sent within seconds of signup, so anything that is
+#: going to fail has failed long before this. The bound is what keeps the sweep
+#: a recovery rather than a backfill: without it, its first run would mail every
+#: account that predates the onboarding sequence entirely.
 WELCOME_RECOVERY_WINDOW_DAYS = 7
 
 
@@ -252,21 +252,28 @@ def requeue_missed_welcome_emails_task() -> None:
     ``welcome_email_sent`` is set only on a successful send, so it is the whole
     of the eligibility test. The service still applies its own gates — bot
     identities, unsubscribes, and an address already refused — so this only
-    reaches users a send would legitimately go to.
+    reaches users a send would legitimately go to, and it is the right place
+    for those rules to live rather than duplicated into this query.
+
+    The window is measured on the account, not on its status row. A status row
+    is created by ``get_or_create`` from the component and SBOM tracking paths
+    too, so a long-lived user can acquire one this week; keying the cutoff to
+    that would mail someone who signed up years ago. ``date_joined`` is the
+    signup, and the welcome email is sent seconds after it.
+
+    Not restricted to workspace owners either: the post-save signal queues a
+    welcome for every human user, so an owner-only sweep would leave a failed
+    send lost for exactly the accounts that are not primary owners.
     """
     from django.utils import timezone
-
-    from sbomify.apps.teams.models import Member
 
     from ..models import OnboardingStatus
 
     cutoff = timezone.now() - datetime.timedelta(days=WELCOME_RECOVERY_WINDOW_DAYS)
-    owner_ids = Member.objects.filter(role="owner", is_default_team=True).values_list("user_id", flat=True)
     missed = OnboardingStatus.objects.filter(
-        user_id__in=owner_ids,
         welcome_email_sent=False,
         drip_unsubscribed_at__isnull=True,
-        created_at__gte=cutoff,
+        user__date_joined__gte=cutoff,
     ).values_list("user_id", flat=True)
 
     queued = 0
