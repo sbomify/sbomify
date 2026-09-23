@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from django.conf import settings
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -39,16 +38,11 @@ logger = getLogger(__name__)
 #: 10 and 15 minute RetryLaterError ladder and a five minute final attempt ahead
 #: of it, about 37 minutes from its first start. An hour leaves room for a slow
 #: external service without settling a run that is still legitimately waiting.
-DEFAULT_STRANDED_AFTER = timedelta(hours=1)
+STRANDED_AFTER = timedelta(hours=1)
 
 _STRANDED_MESSAGE = (
     "This assessment never finished, so its result is unknown rather than failed. Re-run the plugin to try again."
 )
-
-
-def _stranded_after() -> timedelta:
-    minutes = getattr(settings, "PLUGIN_STRANDED_RUN_MINUTES", None)
-    return timedelta(minutes=minutes) if minutes else DEFAULT_STRANDED_AFTER
 
 
 def sweep_stranded_runs() -> int:
@@ -61,7 +55,7 @@ def sweep_stranded_runs() -> int:
     """
     from sbomify.apps.plugins.orchestrator import PluginOrchestrator
 
-    cutoff = timezone.now() - _stranded_after()
+    cutoff = timezone.now() - STRANDED_AFTER
     stale = (
         AssessmentRun.objects.filter(status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value))
         # Timed from the first attempt when there was one. A backed-up queue can
