@@ -36,23 +36,58 @@ class TransientEmailError(Exception):
     """
 
 
-# Refused addresses are the failures a retry cannot fix: the server has read
-# the envelope and rejected it, and it will reject the same envelope again.
-# Everything else that reaches the mailer as an OSError — SMTPException is one,
-# so are ConnectionError, TimeoutError and the raw socket errors underneath
-# them — is the transport, not the message.
-_PERMANENT_SEND_ERRORS = (
-    smtplib.SMTPRecipientsRefused,
-    smtplib.SMTPSenderRefused,
-    smtplib.SMTPNotSupportedError,
-)
+def _is_temporary_smtp_code(code: object) -> bool:
+    """Whether an SMTP reply code is a 4xx, which means "not now" rather than "no".
+
+    RFC 5321 splits refusals by leading digit: 4yz is a transient negative
+    reply the sender is invited to try again, 5yz is permanent. A greylisting
+    server answering 450, or a box over quota answering 452, refuses the
+    recipient exactly as a nonexistent address does — the code is the only
+    thing that tells them apart.
+    """
+    return isinstance(code, int) and 400 <= code < 500
 
 
 def _is_transient_send_error(exc: BaseException) -> bool:
-    """Whether another attempt at this send could plausibly succeed."""
-    if isinstance(exc, _PERMANENT_SEND_ERRORS):
+    """Whether another attempt at this send could plausibly succeed.
+
+    Refusals are read by their reply code rather than by their class. An
+    ``SMTPRecipientsRefused`` is not intrinsically permanent: smtplib raises
+    the same class for a greylisted 450 and for a 550 that will never be
+    anything else, so treating the class as terminal drops a message the
+    server explicitly asked us to send again.
+    """
+    if isinstance(exc, smtplib.SMTPRecipientsRefused):
+        # One recipient here, but the rule generalises: a retry sends the whole
+        # message again, so it only helps if nothing was permanently refused.
+        refusals = (exc.recipients or {}).values()
+        return bool(refusals) and all(_is_temporary_smtp_code(code) for code, _ in refusals)
+    if isinstance(exc, smtplib.SMTPSenderRefused):
+        return _is_temporary_smtp_code(getattr(exc, "smtp_code", None))
+    if isinstance(exc, smtplib.SMTPNotSupportedError):
+        # The server does not speak something we asked for. It will not have
+        # learned it by the next attempt.
         return False
+    # Everything else reaching the mailer as an OSError is the transport rather
+    # than the message: SMTPException subclasses OSError, and so do
+    # ConnectionError, TimeoutError and the raw socket errors underneath them.
     return isinstance(exc, OSError)
+
+
+def _render_or_report(template_name: str, context: dict[str, Any], user_id: Any) -> tuple[str, str] | None:
+    """Render a message, or report the failure and answer ``None``.
+
+    Rendering sits outside the send block, so without this a missing or broken
+    template left the service as an ordinary exception, and the task re-raised
+    it into dramatiq's retry budget. Three more attempts run the same template
+    against the same context and fail the same way: a template is not a
+    transport, and no amount of waiting repairs one.
+    """
+    try:
+        return render_email_templates(template_name, context)
+    except Exception as e:
+        logger.error("Failed to render %s email for user %s: %s", template_name, user_id, e, exc_info=True)
+        return None
 
 
 def _is_mailable(user: Any) -> bool:
@@ -111,7 +146,10 @@ class OnboardingEmailService:
             return True
 
         context = get_email_context(user)
-        html_content, plain_text_content = render_email_templates("welcome", context)
+        rendered = _render_or_report("welcome", context, user.id)
+        if rendered is None:
+            return False
+        html_content, plain_text_content = rendered
 
         # Handle concurrent creation with IntegrityError
         existing = OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.WELCOME).first()
@@ -201,7 +239,10 @@ class OnboardingEmailService:
                 return False
 
         context = get_email_context(user)
-        html_content, plain_text_content = render_email_templates(template_name, context)
+        rendered = _render_or_report(template_name, context, user.id)
+        if rendered is None:
+            return False
+        html_content, plain_text_content = rendered
 
         # Delete any previous failed record so we can create a fresh one
         if existing and existing.status == OnboardingEmail.EmailStatus.FAILED:
