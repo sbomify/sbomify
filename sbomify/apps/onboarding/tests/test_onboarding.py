@@ -2016,6 +2016,48 @@ class TestWelcomeRecoverySweep:
         assert status.welcome_email_sent is True
         assert user.id not in self._run_sweep(), "and not be picked up again"
 
+    def test_a_half_written_success_is_repaired_even_when_the_template_is_broken(self) -> None:
+        """The repair must not sit behind the render.
+
+        This is the two failures compounding: a worker died after writing the
+        row and before the flag, and the template is broken when the recovery
+        task runs. Rendering first meant returning before the repair, so the
+        sweep kept re-queueing a delivered email and the drip stayed blocked.
+        """
+        from django.template import TemplateDoesNotExist
+
+        user = self._owner("halfwrittenbroken", welcome_sent=False)
+        OnboardingEmail.objects.create(
+            user=user,
+            email_type=OnboardingEmail.EmailType.WELCOME,
+            subject="Welcome",
+            status=OnboardingEmail.EmailStatus.SENT,
+        )
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=TemplateDoesNotExist("welcome.html"),
+        ):
+            assert OnboardingEmailService.send_welcome_email(user) is True
+
+        assert OnboardingStatus.objects.get(user=user).welcome_email_sent is True
+        assert user.id not in self._run_sweep()
+
+    def test_a_refused_address_is_not_rendered_for(self) -> None:
+        """Nothing is rendered for a send that was never going to happen."""
+        import smtplib
+
+        user = self._owner("norenderrefused", welcome_sent=False)
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {user.email: (550, b"No such user here")}
+            )
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+        with patch("sbomify.apps.onboarding.services.render_email_templates") as render:
+            assert OnboardingEmailService.send_welcome_email(user) is False
+            render.assert_not_called()
+
     def test_a_user_with_no_onboarding_status_is_swept(self) -> None:
         """The signal that creates the status row is the one that queues the email.
 

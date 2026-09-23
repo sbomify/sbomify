@@ -236,13 +236,12 @@ class OnboardingEmailService:
             logger.info("Welcome email already sent to user %s", user.id)
             return True
 
-        context = get_email_context(user)
-        rendered = _render_or_report("welcome", context, user.id)
-        if rendered is None:
-            return False
-        html_content, plain_text_content = rendered
-
-        # Handle concurrent creation with IntegrityError
+        # Every reason not to send is settled before anything is rendered. The
+        # ordering is load-bearing for the first of them: a row already SENT
+        # with the flag unset is the crash window ``_reconcile_welcome_flag``
+        # exists to close, and rendering first meant a broken template returned
+        # before the repair, leaving the sweep re-queueing a delivered email
+        # and the drip blocked behind it.
         existing = OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.WELCOME).first()
         if existing and existing.status == OnboardingEmail.EmailStatus.SENT:
             logger.info("Welcome email record already sent for user %s", user.id)
@@ -267,6 +266,12 @@ class OnboardingEmailService:
             # UNDELIVERABLE only reaches here when the address has changed
             # since; the guard above kept the row when it still applies.
             existing.delete()
+
+        context = get_email_context(user)
+        rendered = _render_or_report("welcome", context, user.id)
+        if rendered is None:
+            return False
+        html_content, plain_text_content = rendered
 
         try:
             email_record = OnboardingEmail.create_email(
