@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.utils.html import strip_tags
 
 from sbomify.apps.vulnerability_scanning.utils import result_scanned_nothing
 
@@ -256,7 +257,7 @@ class TestTheSbomPages:
 
         html = self._open(sample_sbom, url).content.decode()
 
-        # "Skipped" and "Pending" both appear elsewhere on this page (the run
-        # cards, a zero count), so match the card header's own markup.
-        assert '<i class="fas fa-ban"></i>Skipped' in html
-        assert '<i class="fas fa-clock"></i>Pending' not in html
+        # Match the heading and its adjacent status, not the run badges or zero-count chips.
+        page_text = " ".join(strip_tags(html).split())
+        assert "Assessments Skipped" in page_text
+        assert "Assessments Pending" not in page_text
