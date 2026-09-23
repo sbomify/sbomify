@@ -58,19 +58,26 @@ def _is_transient_send_error(exc: BaseException) -> bool:
     server explicitly asked us to send again.
     """
     if isinstance(exc, smtplib.SMTPRecipientsRefused):
-        # One recipient here, but the rule generalises: a retry sends the whole
-        # message again, so it only helps if nothing was permanently refused.
+        # The one response error that carries no ``smtp_code``: the codes are
+        # per recipient. One recipient here, but the rule generalises — a retry
+        # sends the whole message again, so it only helps if nothing was
+        # permanently refused.
         refusals = (exc.recipients or {}).values()
         return bool(refusals) and all(_is_temporary_smtp_code(code) for code, _ in refusals)
-    if isinstance(exc, smtplib.SMTPSenderRefused):
-        return _is_temporary_smtp_code(getattr(exc, "smtp_code", None))
     if isinstance(exc, smtplib.SMTPNotSupportedError):
         # The server does not speak something we asked for. It will not have
-        # learned it by the next attempt.
+        # learned it by the next attempt, and it carries no code to read.
         return False
-    # Everything else reaching the mailer as an OSError is the transport rather
-    # than the message: SMTPException subclasses OSError, and so do
-    # ConnectionError, TimeoutError and the raw socket errors underneath them.
+    if isinstance(exc, smtplib.SMTPResponseException):
+        # Everything the server answered, classified alike: refused senders,
+        # a 552 over quota, a 535 bad credential, a 421 shutting the channel.
+        # The code is the whole of the difference between them, so reading the
+        # class instead would burn the retry budget on a 5xx that will not move
+        # and drop the 4xx that would have gone through.
+        return _is_temporary_smtp_code(exc.smtp_code)
+    # What is left never reached a server that answered: a dropped connection,
+    # a DNS failure, a timeout, an unroutable host. SMTPException subclasses
+    # OSError, and so do ConnectionError and TimeoutError.
     return isinstance(exc, OSError)
 
 
