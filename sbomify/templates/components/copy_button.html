@@ -1,10 +1,11 @@
 {% comment %}
 A quiet copy action using the same clipboard controller as inline identifiers.
 The label reserves both states' width. Only a successful copy shows the check;
-clipboard errors remain visible and never claim success.
+clipboard errors remain visible and never claim success. copy_from reads the
+current text of an element by ID, for commands that change with selections.
 {% endcomment %}
-<c-vars value label="Copy" copied_text="Copied" copy_label class />
-<c-buttons.secondary size="sm" class="group shrink-0 {{ class }}" x-data="copyableValue({ value: '{{ value|escapejs }}' })" ::data-copied="copied" @click="copyToClipboard()" ::aria-label="copied ? '{{ copied_text|escapejs }}' : '{{ copy_label|default:label|escapejs }}'" :attrs="attrs">
+<c-vars value copy_from label="Copy" copied_text="Copied" copy_label class />
+<c-buttons.secondary size="sm" class="group shrink-0 {{ class }}" x-data="copyableValue({ value: '{{ value|escapejs }}'{% if copy_from %}, copyFrom: '{{ copy_from|escapejs }}'{% endif %} })" ::data-copied="copied" @click="copyToClipboard()" ::aria-label="copied ? '{{ copied_text|escapejs }}' : '{{ copy_label|default:label|escapejs }}'" :attrs="attrs">
 <i class="fas text-xs text-[color:var(--color-text-muted)] group-data-[copied=true]:text-success"
    :class="copied ? 'fa-check' : 'fa-copy'"
    aria-hidden="true"></i>

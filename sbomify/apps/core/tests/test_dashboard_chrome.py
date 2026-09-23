@@ -30,7 +30,8 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
     assert owner_page.status_code == 200
     assert b'aria-label="Posture"' in owner_page.content
     assert b'aria-label="Plugins"' in owner_page.content
-    assert b'aria-label="Quick actions"' in owner_page.content
+    assert b"Set up your first repository" in owner_page.content
+    assert reverse("core:component_new").encode() in owner_page.content
     owner_suggestions = re.search(
         rb'<script id="navbar-search-suggestions" type="application/json">(.*?)</script>', owner_page.content
     )
@@ -43,7 +44,8 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
     assert contributor_page.status_code == 200
     assert b'aria-label="Posture"' not in contributor_page.content
     assert b'aria-label="Plugins"' not in contributor_page.content
-    assert b'aria-label="Quick actions"' in contributor_page.content
+    assert b"Set up your first repository" in contributor_page.content
+    assert reverse("core:component_new").encode() in contributor_page.content
     assert b'aria-current="page"' in contributor_page.content
     assert b"<c-" not in contributor_page.content
     member_suggestions = re.search(

@@ -1,42 +1,52 @@
 {% extends 'core/dashboard_base.htmx.j2' %}
 {% load django_vite %}
-{% block title %}Overview · sbomify{% endblock %}
+{% block title %}
+    {% if show_repository_setup %}
+        Repository setup
+    {% else %}
+        Overview
+    {% endif %}
+    · sbomify
+{% endblock %}
 {% block dashboard_content %}
-    <c-overview.header subtitle="{{ page_subtitle }}" />
-    <div role="group"
-         class="grid grid-cols-2 xl:grid-cols-4 gap-3"
-         aria-label="Key metrics">
-        <c-layout.stat-card :value="dashboard.metrics.open" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
-        <c-layout.stat-card :value="dashboard.metrics.past_sla" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
-        <c-layout.stat-card :value="dashboard.metrics.known_exploited" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
-        <c-layout.stat-card :value="dashboard.metrics.stale" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
-    </div>
-    {% if can_manage %}
-        <c-overview.quick-actions>
-        <c-layout.action-tile flush accent="info" href="{% url 'core:product_new' %}" icon="fas fa-cube" title="Add product" description="Organise components and artifacts" />
-        <c-layout.action-tile flush accent="info" icon="fas fa-tag" title="Add release" description="Bring a version's artifacts together" href="{% url 'core:release_new' %}" />
-        <c-layout.action-tile flush accent="info" href="{% url 'core:component_new' %}" icon="fas fa-puzzle-piece" title="Add component" description="Store SBOMs and documents" />
-        <c-layout.action-tile flush accent="info" href="{% url 'core:security_advisory_new' %}" icon="fas fa-shield-halved" title="Add advisory" description="Create a draft security advisory" />
-        </c-overview.quick-actions>
-    {% endif %}
-    {% if dashboard.is_first_visit %}
-        <c-overview.onboarding :can_manage="can_manage" :first_component="onboarding.first_component" />
-    {% elif dashboard.unassessed or dashboard.metrics.sla_unknown %}
-        <c-feedback.alert variant="info">
-        {% if dashboard.unassessed %}
-            {{ dashboard.unassessed }} component{{ dashboard.unassessed|pluralize }} still need{{ dashboard.unassessed|pluralize:'s,' }} a completed security assessment.
+    {% if show_repository_setup %}
+        <c-layout.page-header title="{{ onboarding.title|default:'Set up your first repository' }}" subtitle="Choose a coding agent or the terminal wizard. Find your lockfiles, create components and add a workflow." />
+        <c-overview.onboarding :can_manage="can_manage" :can_administer="can_administer" :first_component="onboarding.first_component" :setup_config="onboarding.setup_config" />
+    {% else %}
+        <c-overview.header subtitle="{{ page_subtitle }}" />
+        <div role="group"
+             class="grid grid-cols-2 xl:grid-cols-4 gap-3"
+             aria-label="Key metrics">
+            <c-layout.stat-card :value="dashboard.metrics.open" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
+            <c-layout.stat-card :value="dashboard.metrics.past_sla" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
+            <c-layout.stat-card :value="dashboard.metrics.known_exploited" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
+            <c-layout.stat-card :value="dashboard.metrics.stale" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
+        </div>
+        {% if can_manage %}
+            <c-overview.quick-actions>
+            <c-layout.action-tile flush accent="info" href="{% url 'core:product_new' %}" icon="fas fa-cube" title="Add product" description="Organise components and artifacts" />
+            <c-layout.action-tile flush accent="info" icon="fas fa-tag" title="Add release" description="Bring a version's artifacts together" href="{% url 'core:release_new' %}" />
+            <c-layout.action-tile flush accent="info" href="{% url 'core:component_new' %}" icon="fas fa-puzzle-piece" title="Add component" description="Store SBOMs and documents" />
+            <c-layout.action-tile flush accent="info" href="{% url 'core:security_advisory_new' %}" icon="fas fa-shield-halved" title="Add advisory" description="Create a draft security advisory" />
+            </c-overview.quick-actions>
         {% endif %}
-        {% if dashboard.metrics.sla_unknown %}
-            Patch SLA is unavailable for {{ dashboard.metrics.sla_unknown }} occurrence{{ dashboard.metrics.sla_unknown|pluralize }} without scan history.
+        {% if dashboard.unassessed or dashboard.metrics.sla_unknown %}
+            <c-feedback.alert variant="info">
+            {% if dashboard.unassessed %}
+                {{ dashboard.unassessed }} component{{ dashboard.unassessed|pluralize }} still need{{ dashboard.unassessed|pluralize:'s,' }} a completed security assessment.
+            {% endif %}
+            {% if dashboard.metrics.sla_unknown %}
+                Patch SLA is unavailable for {{ dashboard.metrics.sla_unknown }} occurrence{{ dashboard.metrics.sla_unknown|pluralize }} without scan history.
+            {% endif %}
+            </c-feedback.alert>
         {% endif %}
-        </c-feedback.alert>
+        <c-overview.priority :dashboard="dashboard" workspace_key="{{ current_team.key }}" />
+        <c-overview.products :products="dashboard.products" />
     {% endif %}
-    <c-overview.priority :dashboard="dashboard" workspace_key="{{ current_team.key }}" />
-    <c-overview.products :products="dashboard.products" />
 {% endblock %}
 {% block scripts %}
     {{ block.super }}
-    {% if dashboard.is_first_visit and can_manage %}
+    {% if show_repository_setup and can_manage and onboarding.first_component %}
         {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
     {% endif %}
 {% endblock %}

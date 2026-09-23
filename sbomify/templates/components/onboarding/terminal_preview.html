@@ -1,0 +1,21 @@
+{% comment %}A static preview of the terminal setup journey. Uses platform tokens and shows no invented repository results.{% endcomment %}
+<c-layout.frame>
+<c-forms.hint>What you will see</c-forms.hint>
+<div class="overflow-hidden rounded-xl border border-solid border-border bg-background" aria-label="Terminal wizard preview">
+    <div class="flex items-center gap-2 border-b border-solid border-border px-4 py-3">
+        <i class="fas fa-terminal text-xs text-text-muted" aria-hidden="true"></i>
+        <span class="font-mono text-xs text-text-muted">sbomify wizard</span>
+    </div>
+    <div class="flex flex-col gap-5 px-5 py-5">
+        <div class="flex flex-col gap-1">
+            <span class="font-mono text-base font-semibold text-text">sbomify wizard</span>
+            <span class="font-mono text-xs text-text-muted">From zero to SBOM hero</span>
+        </div>
+        <c-chips.neutral>01 / 09 · Welcome</c-chips.neutral>
+        <c-forms.hint>Scan your repository for lockfiles, choose your components and review a release-ready workflow.</c-forms.hint>
+        <div class="flex flex-wrap gap-4 font-mono text-xs text-text-muted" aria-hidden="true">
+            <span>↵ Continue</span><span>Ctrl+C Cancel</span><span>? Help</span>
+        </div>
+    </div>
+</div>
+</c-layout.frame>

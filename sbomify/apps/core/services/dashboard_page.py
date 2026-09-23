@@ -25,7 +25,9 @@ _DIGEST_LIMIT = 4
 def get_first_component(team_id: int) -> ServiceResult[Component]:
     """Uncached on purpose: the digest cache may lag a just-created component,
     and the onboarding hero must reflect it immediately."""
-    return ServiceResult.success(Component.objects.filter(team_id=team_id).first())
+    return ServiceResult.success(
+        Component.objects.filter(team_id=team_id, component_type=Component.ComponentType.BOM).first()
+    )
 
 
 def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Team]:
@@ -141,5 +143,8 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
         "products": products[:8],
         "product_count": len(products),
     }
-    django_cache.set(cache_key, context, _CACHE_TTL_SECONDS)
+    # The first upload must replace setup immediately, without waiting for a
+    # cached empty snapshot to expire.
+    if has_artifacts:
+        django_cache.set(cache_key, context, _CACHE_TTL_SECONDS)
     return ServiceResult.success(context)

@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from django.utils import timezone
 from playwright.sync_api import Page, expect
+from pytest_django.fixtures import SettingsWrapper
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.core.tests.e2e.utils import take_screenshot
@@ -119,16 +120,138 @@ def test_overview_priority_table_and_mobile_drawer(
 def test_empty_overview_and_trends(authenticated_page: Page) -> None:
     page = authenticated_page
     page.goto("/dashboard")
-    expect(page.get_by_role("group", name="Key metrics", exact=True)).to_be_visible()
-    expect(page.get_by_role("heading", name="What to fix first")).to_be_visible()
-    expect(page.get_by_role("heading", name="Exposure by product")).to_be_visible()
-    expect(page.get_by_role("heading", name="Waiting for security scans")).to_be_visible()
-    page.get_by_role("link", name="Add release", exact=False).click()
-    expect(page.get_by_role("heading", name="Add a product first")).to_be_visible()
+    expect(page.get_by_role("group", name="Key metrics", exact=True)).to_have_count(0)
+    expect(page.get_by_role("heading", name="What to fix first")).to_have_count(0)
+    expect(page.get_by_role("heading", name="Exposure by product")).to_have_count(0)
+    expect(page.get_by_role("heading", name="Set up your first repository")).to_be_visible()
+    page.locator("#main-content").get_by_role("link", name="Add component", exact=True).click()
+    expect(page.get_by_role("heading", name="New component", exact=True)).to_be_visible()
     page.go_back()
-    page.get_by_role("navigation", name="Dashboard views").get_by_role("link", name="Trends", exact=True).click()
+    page.goto("/dashboard/trends/")
     expect(page.get_by_role("heading", name="Overview", exact=True)).to_be_visible()
     expect(page.locator("#vuln-trends-body")).to_be_visible()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 992, 576, 375])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_empty_dashboard_snapshot(
+    authenticated_page: Page, snapshot: Any, width: int, theme: str, settings: SettingsWrapper
+) -> None:
+    settings.APP_BASE_URL = "https://app.example.com"
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto("/dashboard")
+    expect(page.get_by_role("heading", name="Set up your first repository")).to_be_visible()
+    expect(page.locator("#navbar-search-dropdown")).to_be_hidden()
+    page.wait_for_load_state("networkidle")
+    assert page.locator("html").evaluate("el => el.scrollWidth <= innerWidth")
+
+    baseline = snapshot.get_or_create_baseline_screenshot(page, width=width)
+    current = snapshot.take_screenshot(page, width=width)
+    snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+    page.get_by_role("tab", name="Terminal", exact=True).click()
+    expect(page.locator("#repository-setup-command")).to_contain_text("sbomify-action wizard")
+    page.get_by_role("button", name="uv", exact=True).click()
+    expect(page.locator("#repository-setup-command")).to_contain_text("uvx sbomify-action wizard")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("component_type", ["bom", "document"])
+def test_empty_dashboard_manual_upload_and_first_artifact(
+    authenticated_page: Page, team_with_business_plan: Any, component_type: str
+) -> None:
+    from sbomify.apps.core.models import Component
+    from sbomify.apps.documents.models import Document
+    from sbomify.apps.sboms.models import SBOM
+
+    component = Component.objects.create(
+        name="First component", team=team_with_business_plan, component_type=component_type
+    )
+    page = authenticated_page
+    page.goto("/dashboard")
+    main = page.locator("#main-content")
+    if component_type == "bom":
+        main.get_by_role("button", name="Upload SBOM", exact=True).click()
+        expect(page.get_by_role("dialog")).to_be_visible()
+        page.keyboard.press("Escape")
+        SBOM.objects.create(name="First SBOM", component=component, format="cyclonedx")
+    else:
+        expect(main.get_by_role("button", name="Upload SBOM", exact=True)).to_have_count(0)
+        expect(main.get_by_role("link", name="Add component", exact=True)).to_be_visible()
+        Document.objects.create(name="Architecture", component=component)
+
+    page.reload()
+    expect(page.get_by_role("heading", name="Set up your first repository")).to_have_count(0)
+    expect(page.get_by_role("group", name="Key metrics", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="Exposure by product")).to_be_visible()
+    page.goto("/getting-started/")
+    expect(page.get_by_role("tab", name="Coding agent", exact=True)).to_be_visible()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1280, 375])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("runtime", ["docker", "uv"])
+def test_repository_terminal_snapshot(
+    authenticated_page: Page, snapshot: Any, width: int, theme: str, runtime: str, settings: SettingsWrapper
+) -> None:
+    settings.APP_BASE_URL = "https://app.example.com"
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto("/dashboard")
+    page.get_by_role("tab", name="Terminal", exact=True).click()
+    if runtime == "uv":
+        page.get_by_role("button", name="uv", exact=True).click()
+    page.wait_for_load_state("networkidle")
+    assert page.locator("html").evaluate("el => el.scrollWidth <= innerWidth")
+    baseline = snapshot.get_or_create_baseline_screenshot(page, width=width)
+    current = snapshot.take_screenshot(page, width=width)
+    snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, settings: SettingsWrapper) -> None:
+    from sbomify.apps.access_tokens.models import AccessToken
+
+    settings.APP_BASE_URL = "http://localhost:8000"
+    page = authenticated_page
+    page.add_init_script("""Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: async value => { window.setupCopiedText = value; } }
+    });""")
+    page.goto("/dashboard")
+    copy_prompt = page.get_by_role("button", name="Copy prompt", exact=True)
+    expect(copy_prompt).to_be_disabled()
+    assert not AccessToken.objects.exists()
+    page.get_by_role("button", name="Create setup token", exact=True).click()
+    expect(copy_prompt).to_be_enabled()
+    original = AccessToken.objects.get()
+    page.get_by_role("button", name="Public", exact=True).click()
+    copy_prompt.click()
+    page.wait_for_function("window.setupCopiedText?.includes('Create everything as public.')")
+    copied = page.evaluate("window.setupCopiedText")
+    assert "YOUR_SETUP_TOKEN" not in copied
+    assert original.encoded_token in copied
+    agent_tab = page.get_by_role("tab", name="Coding agent", exact=True)
+    agent_tab.focus()
+    agent_tab.press("ArrowRight")
+    expect(page.get_by_role("tab", name="Terminal", exact=True)).to_have_attribute("aria-selected", "true")
+    page.get_by_role("button", name="uv", exact=True).click()
+    page.get_by_role("button", name="Copy command", exact=True).click()
+    page.wait_for_function("window.setupCopiedText?.includes('uvx sbomify-action wizard')")
+    assert original.encoded_token in page.evaluate("window.setupCopiedText")
+    page.get_by_role("button", name="Reset token", exact=True).click()
+    expect(page.get_by_role("button", name="Reset token", exact=True)).to_be_enabled()
+    assert not AccessToken.objects.filter(pk=original.pk).exists()
+    replacement = AccessToken.objects.get()
+    assert replacement.pk != original.pk
+    expect(page.locator("#repository-setup-command")).to_contain_text(replacement.encoded_token)
+    page.get_by_role("tab", name="Terminal", exact=True).press("ArrowLeft")
+    expect(agent_tab).to_have_attribute("aria-selected", "true")
+    expect(page.locator("#repository-setup-prompt")).to_contain_text("Create everything as public.")
 
 
 @pytest.mark.django_db

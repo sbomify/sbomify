@@ -87,7 +87,7 @@ def test_onboarding_saves_security_choices(
         entity__profile__team=team_with_business_plan, email="security@example.com", is_security_contact=True
     ).exists()
     page.get_by_role("link", name="Go to dashboard", exact=True).click()
-    expect(page.get_by_role("heading", name="Overview", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="Set up your first repository", exact=True)).to_be_visible()
     expect(page.locator("#navbar-search-dropdown")).to_be_hidden()
     assert errors == []
 
@@ -139,7 +139,7 @@ def test_onboarding_community_plan_finishes_without_checkout(
     page.get_by_role("button", name="Annual", exact=True).click()
     expect(page.locator("form input[name=billing_period]").first).to_have_value("annual")
     page.get_by_role("button", name="Continue with Community", exact=True).click()
-    expect(page.get_by_role("heading", name="Overview", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="Set up your first repository", exact=True)).to_be_visible()
     priced_plans.refresh_from_db()
     assert priced_plans.has_completed_wizard
     assert priced_plans.has_selected_billing_plan

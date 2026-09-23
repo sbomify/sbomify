@@ -8,12 +8,20 @@ from sbomify.apps.tea.mappers import TEA_API_VERSION
 
 from . import views
 from .views.component_metadata import ComponentMetadataFormView
+from .views.repository_setup import RepositorySetupInstructionsView, RepositorySetupTokenView
 
 app_name = "core"
 urlpatterns = [
     path("", views.home, name="home"),
     path("dashboard", views.DashboardView.as_view(), name="dashboard"),
     path("dashboard/trends/", views.DashboardView.as_view(show_trends=True), name="dashboard_trends"),
+    path("getting-started/", views.DashboardView.as_view(show_setup=True), name="repository_setup"),
+    path("setup.md", RepositorySetupInstructionsView.as_view(), name="repository_setup_instructions"),
+    path(
+        "workspaces/<str:workspace_key>/setup-token/",
+        RepositorySetupTokenView.as_view(),
+        name="repository_setup_token",
+    ),
     path("settings", views.user_settings, name="settings"),
     path(
         "settings/invitations/<int:invitation_id>/accept/",

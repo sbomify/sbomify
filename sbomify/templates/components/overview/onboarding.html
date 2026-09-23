@@ -1,30 +1,93 @@
-{% comment %}The first-artifact state reuses the app's existing setup and upload dialogs. Actions follow live capabilities.{% endcomment %}
-<c-vars can_manage first_component />
-<c-cards.card flush>
-<div class="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-    <div>
-        <h2 class="m-0 text-sm font-semibold text-text">Connect your first repository</h2>
-        <p class="mt-1 mb-0 text-xs text-text-muted">
-            Bring your first SBOM into this workspace to start tracking vulnerabilities.
-        </p>
-    </div>
-    {% if can_manage %}
-        <div class="flex flex-wrap items-center gap-3">
-            <c-buttons.primary size="sm" @click="$dispatch('open-cicd')"><i class="fas fa-rocket" aria-hidden="true"></i>Connect repository</c-buttons.primary>
-            {% if first_component %}
-                <c-buttons.secondary size="sm" @click="$dispatch('open-upload')">Upload SBOM</c-buttons.secondary>
-            {% endif %}
-        </div>
-    {% else %}
-        <p class="m-0 text-xs text-text-muted">A workspace contributor can connect a repository or upload an artifact.</p>
-    {% endif %}
+{% comment %}
+The prototype's first-repository setup, composed from shared tabs, code, copy,
+card and onboarding components. Credentials are created only by an explicit
+admin action and never persisted in browser storage. The upload alternative
+uses the existing dialog and only targets a BOM component.
+{% endcomment %}
+<c-vars can_manage can_administer first_component setup_config />
+{{ setup_config|default_if_none:""|json_script:"repository-setup-config" }}
+<c-layout.frame x-data="repositorySetup(window.parseJsonScript('repository-setup-config') || {})">
+<c-cards.card>
+<c-layout.frame>
+<c-navigation.tabs-pills aria-label="Setup method">
+<c-navigation.segment role="tab" id="tab-setup-agent" aria-controls="panel-setup-agent" ::aria-selected="method === 'agent'" ::tabindex="method === 'agent' ? 0 : -1" ::data-active="method === 'agent'" @click="method = 'agent'">Coding agent</c-navigation.segment>
+<c-navigation.segment role="tab" id="tab-setup-terminal" aria-controls="panel-setup-terminal" ::aria-selected="method === 'terminal'" ::tabindex="method === 'terminal' ? 0 : -1" ::data-active="method === 'terminal'" @click="method = 'terminal'">Terminal</c-navigation.segment>
+</c-navigation.tabs-pills>
+<c-layout.frame id="panel-setup-agent" role="tabpanel" aria-labelledby="tab-setup-agent" x-show="method === 'agent'">
+<c-forms.hint>Paste this into Claude Code, Cursor or another coding agent in your repository. Open the instructions to review them first.</c-forms.hint>
+<c-code-block code_id="repository-setup-prompt" code_binding="agentPrompt" copyable="false" />
+<div class="flex flex-wrap items-center gap-3">
+    <c-copy-button copy_from="repository-setup-prompt" label="Copy prompt" ::disabled="!token || minting" />
+    <c-forms.hint>Create everything as</c-forms.hint>
+    <c-navigation.segmented aria-label="Visibility of new products and components">
+    <c-navigation.segment ::data-active="visibility === 'private'" ::aria-pressed="visibility === 'private'" @click="visibility = 'private'">Private</c-navigation.segment>
+    <c-navigation.segment ::data-active="visibility === 'public'" ::aria-pressed="visibility === 'public'" @click="visibility = 'public'">Public</c-navigation.segment>
+    </c-navigation.segmented>
+    <c-buttons.ghost size="sm" href="{% url 'core:repository_setup_instructions' %}" target="_blank" rel="noopener">Open instructions <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.ghost>
 </div>
+</c-layout.frame>
+<c-layout.frame id="panel-setup-terminal" role="tabpanel" aria-labelledby="tab-setup-terminal" x-show="method === 'terminal'" x-cloak>
+<div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+    <c-layout.frame>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <c-forms.hint>Run this in your repository</c-forms.hint>
+        <c-navigation.segmented aria-label="How to run the wizard">
+        <c-navigation.segment ::data-active="runtime === 'docker'" ::aria-pressed="runtime === 'docker'" @click="runtime = 'docker'">Docker</c-navigation.segment>
+        <c-navigation.segment ::data-active="runtime === 'uv'" ::aria-pressed="runtime === 'uv'" @click="runtime = 'uv'">uv</c-navigation.segment>
+        </c-navigation.segmented>
+    </div>
+    <c-code-block code_id="repository-setup-command" code_binding="command" copyable="false" />
+    <c-forms.hint x-show="runtime === 'docker'">Run in a Bash-compatible shell with Docker running. Local Docker connections use <c-code-inline>host.docker.internal</c-code-inline>.</c-forms.hint>
+    <c-forms.hint x-show="runtime === 'uv'" x-cloak>uv downloads the wizard and runs it locally. Use the command in a Bash-compatible shell.</c-forms.hint>
+    <div class="flex flex-wrap items-center gap-3">
+        <c-copy-button copy_from="repository-setup-command" label="Copy command" ::disabled="!token || minting" />
+        <c-buttons.ghost size="sm" href="https://docs.astral.sh/uv/getting-started/installation/" target="_blank" rel="noopener" x-show="runtime === 'uv'" x-cloak>Install uv <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.ghost>
+    </div>
+    </c-layout.frame>
+    <c-onboarding.terminal-preview />
+</div>
+</c-layout.frame>
+<c-feedback.alert title="Use an authorised setup token" icon="fas fa-key">
+<c-slot name="body">
+<c-forms.hint>Setup can create products and components, update contact profiles, set visibility and configure trusted publishers. Review the proposed changes, then revoke the token in Settings. It expires after seven days.</c-forms.hint>
+<c-forms.hint x-show="token" x-cloak>Expires <span x-text="expiresAt"></span>. Resetting revokes this token before creating its replacement.</c-forms.hint>
+{% if not can_administer %}<c-forms.hint>Ask a workspace owner or admin to connect the repository.</c-forms.hint>{% endif %}
+</c-slot>
+{% if can_administer %}
+    <c-slot name="action">
+    <c-buttons.secondary size="sm" @click="mint()" ::disabled="minting" ::aria-busy="minting">
+    <span x-text="minting ? 'Creating…' : token ? 'Reset token' : 'Create setup token'">Create setup token</span>
+    </c-buttons.secondary>
+    </c-slot>
+{% endif %}
+</c-feedback.alert>
+<c-feedback.alert variant="danger" x-show="error" x-cloak><span x-text="error"></span></c-feedback.alert>
+</c-layout.frame>
+</c-cards.card>
+<c-cards.card>
+<c-layout.frame>
+<c-layout.section-header level="2" title="What gets set up" subtitle="Review the proposed changes before anything is created." />
+<div class="grid gap-6 md:grid-cols-3">
+    <c-onboarding.reason number="01" title="Find your lockfiles" description="Detect lockfiles that can produce an SBOM. You choose which ones to track." />
+    <c-onboarding.reason number="02" title="Create the components" description="One product and a component for each selected lockfile. Existing records are reused." />
+    <c-onboarding.reason number="03" title="Add the workflow" description="Generate the SBOM workflow. Review it alongside your existing workflows." />
+</div>
+<c-layout.section-header level="2" title="Then, commit and push" subtitle="Your workflow uploads the first SBOM to this workspace." icon="fas fa-arrow-right" />
+</c-layout.frame>
 </c-cards.card>
 {% if can_manage %}
-    {% with component=first_component %}
-        {% include 'sboms/components/ci_cd_info.html.j2' %}
-        {% if component %}
-            {% include 'sboms/components/sbom_upload.html.j2' with component_id=component.id %}
+    <div class="flex flex-wrap items-center gap-3">
+        <c-forms.hint>Already have an artifact?</c-forms.hint>
+        {% if first_component %}
+            <c-buttons.secondary size="sm" @click="$dispatch('open-upload')">Upload SBOM</c-buttons.secondary>
+            <c-forms.hint>Uploads to {{ first_component.name }}.</c-forms.hint>
+        {% else %}
+            <c-buttons.secondary size="sm" href="{% url 'core:component_new' %}">Add component</c-buttons.secondary>
+            <c-forms.hint>Create a component, then upload your artifact.</c-forms.hint>
         {% endif %}
-    {% endwith %}
+    </div>
+    {% if first_component %}
+        {% include 'sboms/components/sbom_upload.html.j2' with component=first_component component_id=first_component.id %}
+    {% endif %}
 {% endif %}
+</c-layout.frame>

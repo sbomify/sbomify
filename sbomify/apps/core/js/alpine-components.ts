@@ -11,6 +11,7 @@ import Alpine from 'alpinejs';
 // ============================================
 import { navbarSearch } from './navbar-search';
 import { scrollableTabs } from './components/scrollable-tabs';
+import { repositorySetup } from './components/repository-setup';
 import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';
 import { registerVisibilitySelector } from './components/visibility-selector';
@@ -211,6 +212,7 @@ export function registerCommonComponents(): void {
  * Called once by initializeAlpine(), including when a page bundle starts first.
  */
 export function registerAllComponents(): void {
+    Alpine.data('repositorySetup', repositorySetup);
     // Common inline components
     registerCiCdToken();
     registerCommonComponents();

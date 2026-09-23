@@ -113,7 +113,8 @@
     </c-cards.card>
     <c-overview.priority :dashboard="overview_demo_empty" />
     <c-overview.products />
-    <c-overview.onboarding :can_manage="False" />
+    <c-forms.hint>An empty workspace shows setup in place of metrics and tables, using the onboarding explanations and existing upload controls.</c-forms.hint>
+    <c-overview.onboarding :can_manage="False" :can_administer="False" />
     </c-layout.frame>
     <c-layout.frame>
     <c-layout.page-header title="Product inventory" subtitle="Linked tabs, compact server-sorted cells, severity breakdowns and shared filters." />

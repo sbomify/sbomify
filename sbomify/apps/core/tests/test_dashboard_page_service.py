@@ -8,7 +8,7 @@ from django.core.cache import cache
 from pytest_mock import MockerFixture
 
 from sbomify.apps.core.models import Component
-from sbomify.apps.core.services.dashboard_page import build_dashboard_context
+from sbomify.apps.core.services.dashboard_page import build_dashboard_context, get_first_component
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member
@@ -58,6 +58,44 @@ def test_first_visit_when_no_artifacts(sample_team_with_owner_member: Member) ->
 
     assert context["is_first_visit"] is True
     assert context["needs_attention"] == []
+
+
+@pytest.mark.parametrize("artifact_kind", ["sbom", "document"])
+def test_first_upload_replaces_empty_dashboard_immediately(
+    sample_team_with_owner_member: Member, artifact_kind: str
+) -> None:
+    from sbomify.apps.documents.models import Document
+
+    workspace = sample_team_with_owner_member.team
+    cache.clear()
+    before = build_dashboard_context(workspace.id)
+    assert before.ok and before.value is not None
+    assert before.value["is_first_visit"] is True
+
+    component = Component.objects.create(
+        name="First component", team=workspace, component_type="document" if artifact_kind == "document" else "bom"
+    )
+    if artifact_kind == "document":
+        Document.objects.create(name="Architecture", component=component)
+    else:
+        SBOM.objects.create(name="First SBOM", component=component, format="cyclonedx")
+
+    after = build_dashboard_context(workspace.id)
+    assert after.ok and after.value is not None
+    assert after.value["is_first_visit"] is False
+
+
+def test_onboarding_upload_only_targets_workspace_bom_components(sample_team_with_owner_member: Member) -> None:
+    from sbomify.apps.teams.models import Team
+
+    workspace = sample_team_with_owner_member.team
+    Component.objects.create(name="Documents", team=workspace, component_type="document")
+    other_workspace = Team.objects.create(name="Another workspace")
+    Component.objects.create(name="Other workspace component", team=other_workspace)
+    assert get_first_component(workspace.id).value is None
+
+    component = Component.objects.create(name="First BOM component", team=workspace)
+    assert get_first_component(workspace.id).value == component
 
 
 def test_digest_ranks_worst_first_and_excludes_suppressed(sample_team_with_owner_member: Member) -> None:
@@ -263,7 +301,14 @@ def test_overview_and_inventory_agree_on_product_evidence(sample_team_with_owner
     assert dashboard is not None
     inventory = {row["id"]: row for row in build_inventory_snapshot(workspace, "products")["rows"]}
     for row in dashboard["products"]:
-        for field in ("component_count", "security_component_count", "unassessed", "stale", "missing_sboms", "no_policy"):
+        for field in (
+            "component_count",
+            "security_component_count",
+            "unassessed",
+            "stale",
+            "missing_sboms",
+            "no_policy",
+        ):
             assert row[field] == inventory[row["id"]][field], field
     assert dashboard["unassessed"] == 1
     mixed = next(row for row in dashboard["products"] if row["name"] == "Mixed")

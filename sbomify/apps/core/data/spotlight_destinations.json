@@ -300,6 +300,14 @@
       "keywords": ["view public page", "customer view", "what customers see"]
     },
     {
+      "title": "Connect a repository",
+      "url_name": "core:repository_setup",
+      "section": "actions",
+      "icon": "fa-code-branch",
+      "keywords": ["repository setup", "coding agent", "terminal", "TUI", "Docker", "uv", "workflow", "lockfile"],
+      "roles": ["owner", "admin", "member"]
+    },
+    {
       "title": "Get started wizard",
       "url_name": "teams:onboarding_wizard",
       "section": "actions",

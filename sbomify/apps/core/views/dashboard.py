@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -34,6 +35,7 @@ class ValidateWorkspaceMixin:
 
 class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequiredMixin, View):
     show_trends: bool = False
+    show_setup: bool = False
 
     def get(self, request: HttpRequest) -> HttpResponse:
         current_team = request.session.get("current_team", {})
@@ -61,23 +63,27 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         if result is not None and not result.ok:
             return HttpResponse(result.error, status=result.status_code or 400)
         dashboard = result.value if result and result.value else {"is_first_visit": True}
-        subtitle = "Prioritise vulnerabilities and keep your product evidence current."
-        if dashboard.get("is_first_visit"):
-            subtitle = "Your workspace at a glance. Add your first artifact to start tracking exposure."
+        show_repository_setup = self.show_setup or dashboard.get("is_first_visit", False)
 
         context = {
             "current_team": current_team,
-            "page_subtitle": subtitle,
+            "page_subtitle": "Prioritise vulnerabilities and keep your product evidence current.",
             "dashboard": dashboard,
+            "show_repository_setup": show_repository_setup,
         }
 
-        # The hero is one Get-started action, not a checklist — the wizard
-        # command sets a repository up end to end. The only per-request lookup
-        # left is whether a component exists yet, which gates the
-        # upload-a-file alternative (an upload needs somewhere to land).
-        if team and context["dashboard"].get("is_first_visit"):
+        # An SBOM upload needs a BOM component. Without one, the empty state
+        # links to component creation instead.
+        if team and show_repository_setup:
+            base_url = (settings.APP_BASE_URL or request.build_absolute_uri("/")).rstrip("/")
             context["onboarding"] = {
+                "title": "Set up your first repository" if dashboard.get("is_first_visit") else "Set up a repository",
                 "first_component": get_first_component(team.id).value,
+                "setup_config": {
+                    "baseUrl": base_url,
+                    "instructionsUrl": base_url + reverse("core:repository_setup_instructions"),
+                    "tokenUrl": reverse("core:repository_setup_token", kwargs={"workspace_key": team.key}),
+                },
             }
 
         return render(request, "core/dashboard.html.j2", context)

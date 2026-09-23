@@ -1,7 +1,13 @@
-import { describe, test, expect, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, test, expect, mock } from 'bun:test';
 
 mock.module('alpinejs', () => ({ default: { data: mock() } }));
 const { onboardingWizard } = await import('./onboarding-wizard');
+
+const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+beforeEach(() => {
+    globalThis.requestAnimationFrame = callback => { callback(0); return 1; };
+});
+afterEach(() => { globalThis.requestAnimationFrame = originalRequestAnimationFrame; });
 
 function build() {
     const organisationField = { disabled: false, checkValidity: mock(() => true), reportValidity: mock() };
@@ -37,7 +43,7 @@ describe('Onboarding flow', () => {
         expect(wizard.step).toBe('security');
         expect(refs.securityEmail.value).toBe('author@example.com');
         expect(refs.securityTitle.focus).toHaveBeenCalled();
-        expect(refs.securityTitle.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+        expect(refs.securityTitle.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
     });
 
     test('Back retains a separately chosen security email', () => {
@@ -45,7 +51,7 @@ describe('Onboarding flow', () => {
         wizard.next();
         refs.securityEmail.value = 'security@example.com';
         wizard.back();
-        expect(refs.organisationTitle.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+        expect(refs.organisationTitle.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
         refs.email.value = 'new-author@example.com';
         wizard.next();
         expect(refs.securityEmail.value).toBe('security@example.com');

@@ -1,6 +1,9 @@
 {% comment %}
 A block of code with a copy control.
 
+code_binding optionally names an Alpine expression for a live command; code_id
+lets the shared copy button read its current text. Neither changes static blocks.
+
 code is a prop, not the slot: whitespace inside a pre element is content, and a
 slot would fold the template's own indentation into the snippet. language names
 the highlighter class the page's highlighter looks for.
@@ -17,7 +20,7 @@ two utilities for the same property would be resolved by stylesheet order, not
 by which is "on". The focus ring is the library floor; the tw-* rules never had
 one here.
 {% endcomment %}
-<c-vars code language filename max_height copyable="true" class />
+<c-vars code code_id code_binding language filename max_height copyable="true" class />
 <div class="relative overflow-hidden bg-background border border-solid border-border rounded-[0.625rem]{% if class %} {{ class }}{% endif %}"
      x-data="{ copied: false }"
      {{ attrs }}>
@@ -40,6 +43,6 @@ one here.
     {% endif %}
     <div class="p-4 {% if max_height %}overflow-auto{% else %}overflow-x-auto{% endif %}"
          {% if max_height %}style="max-height: {{ max_height }}"{% endif %}>
-        <pre class="m-0 font-mono text-[0.8125rem] leading-[1.6] text-text"><code class="font-mono{% if language %} language-{{ language }}{% endif %}">{{ code }}</code></pre>
+        <pre class="m-0 font-mono text-[0.8125rem] leading-[1.6] text-text"><code class="font-mono{% if language %} language-{{ language }}{% endif %}"{% if code_id %} id="{{ code_id }}"{% endif %}{% if code_binding %} x-text="{{ code_binding }}"{% endif %}>{{ code }}</code></pre>
     </div>
 </div>

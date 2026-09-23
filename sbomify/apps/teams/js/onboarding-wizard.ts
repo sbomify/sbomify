@@ -37,9 +37,13 @@ export function onboardingWizard(config: OnboardingWizardConfig): AlpineComponen
 
         focusStep() {
             this.$nextTick(() => {
-                const title = this.$refs[`${this.step}Title`];
-                title.focus({ preventScroll: true });
-                title.scrollIntoView({ block: 'start' });
+                // Let the hidden step leave layout before changing the scroll
+                // position, otherwise browser scroll anchoring can undo it.
+                requestAnimationFrame(() => {
+                    const title = this.$refs[`${this.step}Title`];
+                    title.focus({ preventScroll: true });
+                    title.scrollIntoView({ block: 'start', behavior: 'instant' });
+                });
             });
         },
 
