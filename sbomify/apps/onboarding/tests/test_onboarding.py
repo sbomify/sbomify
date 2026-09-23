@@ -1506,6 +1506,25 @@ class TestTransientSendFailuresRetry:
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
+    def test_one_permanent_refusal_among_temporary_ones_does_not_retry(self) -> None:
+        """A retry re-sends the whole message, so all-4xx is the rule, not any.
+
+        With a mix, another attempt would redeliver to the greylisted recipient
+        and be refused again by the one that does not exist.
+        """
+        import smtplib
+
+        user = self._user("mixedrefusal")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {
+                    "greylisted@example.com": (450, b"Greylisted, try again later"),
+                    "gone@example.com": (550, b"No such user here"),
+                }
+            )
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
     def test_a_dropped_connection_retries(self) -> None:
         """No server answer at all, so there is no code to read — transport."""
         import smtplib
@@ -1519,7 +1538,7 @@ class TestTransientSendFailuresRetry:
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
-    def test_a_broken_template_does_not_reach_the_retry_budget(self) -> None:
+    def test_a_broken_template_is_reported_as_permanent(self) -> None:
         """Rendering happens before the send block, so it needs its own answer.
 
         Left to escape, the task re-raises it and dramatiq runs the same
