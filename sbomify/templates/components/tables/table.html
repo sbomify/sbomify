@@ -18,8 +18,9 @@ can never take both recipes.
 
 Sortable tables use sized and give their non-name headers widths. The remaining
 space belongs to the name. Set a minimum table width when those columns need
-horizontal scrolling on a phone. Rows never participate in column sizing. Long unbroken values wrap inside
-their cells; use the cell's nowrap prop for values that should ellipsise instead.
+horizontal scrolling on a phone. Rows never participate in column sizing. Long
+unbroken values wrap inside their cells without shrinking badges and flex items
+below their word width. Use the cell's nowrap prop for values that should ellipsise instead.
 
 The viewport opts out of scroll anchoring so reordering rows cannot move the
 page. Its marker lets the shared sort behaviour retain horizontal position and
@@ -31,7 +32,7 @@ attrs land on the table.
      class="overflow-x-auto [overflow-anchor:none]{% if class %} {{ class }}{% endif %}">
     {# djlint:off #}
     {# The child combinator in the fixed recipe reads as a tag close to the formatter. #}
-    <table class="w-full border-separate border-spacing-0{% if variant_class %} {{ variant_class }}{% endif %}{% if fixed or sized %} table-fixed [&_td]:[overflow-wrap:anywhere]{% if fixed %} [&_th:not(:first-child):not(:last-child):not([data-cell-end])]:text-center [&_td:not(:first-child):not(:last-child):not([data-cell-end])]:text-center [&_td:not(:first-child):not(:last-child):not([data-cell-end])>.flex]:justify-center{% endif %}{% endif %}"
+    <table class="w-full border-separate border-spacing-0{% if variant_class %} {{ variant_class }}{% endif %}{% if fixed or sized %} table-fixed [&_td]:[overflow-wrap:break-word]{% if fixed %} [&_th:not(:first-child):not(:last-child):not([data-cell-end])]:text-center [&_td:not(:first-child):not(:last-child):not([data-cell-end])]:text-center [&_td:not(:first-child):not(:last-child):not([data-cell-end])>.flex]:justify-center{% endif %}{% endif %}"
            {{ attrs }}>{{ slot }}</table>
     {# djlint:on #}
 </div>

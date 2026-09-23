@@ -148,8 +148,9 @@ def test_component_sharing_does_not_require_visibility_permission(
 
 @pytest.mark.parametrize("component_type", ["bom", "document"])
 def test_upload_menu_and_deep_links(
-    authenticated_page: Page, component_factory: Callable[..., Component], component_type: str, snapshot: Any
+    authenticated_page: Page, component_factory: Callable[..., Component], component_type: str, snapshot: Any, settings: Any
 ) -> None:
+    settings.ARTIFACT_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
     component = component_factory("Upload destination", component_type)
     page = authenticated_page
     page.add_init_script("localStorage.setItem('document-upload-expanded', 'false')")
