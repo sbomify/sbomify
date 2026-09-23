@@ -1675,6 +1675,65 @@ class TestTransientSendFailuresRetry:
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
         assert record.status == OnboardingEmail.EmailStatus.FAILED
 
+    def test_an_abandoned_pending_row_is_reclaimed(self) -> None:
+        """A worker that died between create_email() and the send strands a row.
+
+        The unique constraint then makes every later attempt raise
+        ``IntegrityError``, the handler reads that as a concurrent worker and
+        answers ``False``, and the recovery sweep can never get the signup back.
+        Nothing else clears it, because nothing else knows the worker is gone.
+        """
+        from sbomify.apps.onboarding.services import ABANDONED_PENDING_AFTER
+
+        user = self._user("abandoned")
+        stranded = OnboardingEmail.create_email(
+            user=user, email_type=OnboardingEmail.EmailType.WELCOME, subject="Welcome"
+        )
+        assert stranded.status == OnboardingEmail.EmailStatus.PENDING
+        OnboardingEmail.objects.filter(pk=stranded.pk).update(
+            created_at=timezone.now() - ABANDONED_PENDING_AFTER - timedelta(minutes=1)
+        )
+
+        mail.outbox = []
+        assert OnboardingEmailService.send_welcome_email(user) is True
+        assert len(mail.outbox) == 1
+        assert OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.WELCOME).count() == 1
+
+    @pytest.mark.django_db(transaction=True)
+    def test_a_live_pending_row_is_left_to_its_worker(self) -> None:
+        """Inside the lease it is another worker's, not a leftover.
+
+        ``transaction=True`` because the collision this exercises is a real
+        ``IntegrityError``, and outside autocommit that leaves the test's own
+        transaction unusable for the query the handler makes next.
+        """
+        user = self._user("liveworker")
+        OnboardingEmail.create_email(user=user, email_type=OnboardingEmail.EmailType.WELCOME, subject="Welcome")
+
+        mail.outbox = []
+        assert OnboardingEmailService.send_welcome_email(user) is False
+        assert mail.outbox == []
+
+    def test_an_abandoned_pending_sequence_row_is_reclaimed_too(self) -> None:
+        from sbomify.apps.onboarding.services import ABANDONED_PENDING_AFTER
+
+        user = self._user("abandonedseq")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        stranded = OnboardingEmail.create_email(
+            user=user, email_type=OnboardingEmail.EmailType.QUICK_START, subject="Quick start"
+        )
+        OnboardingEmail.objects.filter(pk=stranded.pk).update(
+            created_at=timezone.now() - ABANDONED_PENDING_AFTER - timedelta(minutes=1)
+        )
+
+        mail.outbox = []
+        assert OnboardingEmailService.send_quick_start_email(user) is True
+        assert len(mail.outbox) == 1
+
     def test_a_broken_template_is_reported_as_permanent(self) -> None:
         """Rendering happens before the send block, so it needs its own answer.
 

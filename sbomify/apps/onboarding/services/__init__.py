@@ -5,12 +5,14 @@ Onboarding email services.
 from __future__ import annotations
 
 import smtplib
+from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, OperationalError
 from django.db.models import QuerySet
+from django.utils import timezone
 
 from sbomify.logging import getLogger
 
@@ -79,6 +81,29 @@ def _is_transient_send_error(exc: BaseException) -> bool:
     # a DNS failure, a timeout, an unroutable host. SMTPException subclasses
     # OSError, and so do ConnectionError and TimeoutError.
     return isinstance(exc, OSError)
+
+
+#: After this, a ``PENDING`` row is assumed to belong to nobody. The sending
+#: actors declare ``time_limit=60000`` — one minute — so a row still pending an
+#: hour later is not being worked on: the worker died between ``create_email``
+#: and the send. Generous on purpose, because the cost of guessing early is two
+#: copies of one email and the cost of guessing late is an hour's delay.
+ABANDONED_PENDING_AFTER = timedelta(hours=1)
+
+
+def _is_abandoned(record: OnboardingEmail) -> bool:
+    """Whether a ``PENDING`` row is a leftover rather than a live attempt.
+
+    Without this the row is permanent: the unique constraint makes every later
+    attempt raise ``IntegrityError``, the handler reads that as a concurrent
+    worker and answers ``False``, and the recovery sweep can never get the
+    signup back. Nothing else clears it, because nothing else knows the worker
+    that created it is gone.
+    """
+    return (
+        record.status == OnboardingEmail.EmailStatus.PENDING
+        and timezone.now() - record.created_at > ABANDONED_PENDING_AFTER
+    )
 
 
 def _is_refused_address(exc: BaseException) -> bool:
@@ -199,9 +224,13 @@ class OnboardingEmailService:
         if existing and existing.suppresses(user.email):
             logger.info("Welcome email address previously refused for user %s, not retrying", user.id)
             return False
-        if existing and existing.status in (
-            OnboardingEmail.EmailStatus.FAILED,
-            OnboardingEmail.EmailStatus.UNDELIVERABLE,
+        if existing and (
+            existing.status
+            in (
+                OnboardingEmail.EmailStatus.FAILED,
+                OnboardingEmail.EmailStatus.UNDELIVERABLE,
+            )
+            or _is_abandoned(existing)
         ):
             # UNDELIVERABLE only reaches here when the address has changed
             # since; the guard above kept the row when it still applies.
@@ -301,9 +330,13 @@ class OnboardingEmailService:
         if existing and existing.suppresses(user.email):
             logger.info("%s email address previously refused for user %s, not retrying", email_type, user.id)
             return False
-        if existing and existing.status in (
-            OnboardingEmail.EmailStatus.FAILED,
-            OnboardingEmail.EmailStatus.UNDELIVERABLE,
+        if existing and (
+            existing.status
+            in (
+                OnboardingEmail.EmailStatus.FAILED,
+                OnboardingEmail.EmailStatus.UNDELIVERABLE,
+            )
+            or _is_abandoned(existing)
         ):
             # UNDELIVERABLE only reaches here when the address has changed
             # since; the guard above kept the row when it still applies.
