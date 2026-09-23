@@ -65,12 +65,12 @@ def sweep_stranded_runs() -> int:
         .filter(since__lt=cutoff)
         # The sweep takes rows in any order; the model's default would sort them.
         .order_by()
-        .values_list("id", "plugin_name", "sbom_id")
+        .values_list("id", flat=True)
     )
 
     orchestrator = PluginOrchestrator()
     settled = 0
-    for run_id, plugin_name, sbom_id in stale.iterator():
+    for run_id in stale.iterator():
         try:
             run = orchestrator.finalize_stranded(str(run_id), _STRANDED_MESSAGE)
             # It hands back the row even when a worker finished the run between
@@ -80,8 +80,8 @@ def sweep_stranded_runs() -> int:
                 logger.info(
                     "[PLUGIN] settled stranded run %s (%s) for SBOM %s",
                     run_id,
-                    plugin_name,
-                    sbom_id,
+                    run.plugin_name,
+                    run.sbom_id,
                 )
         except Exception:
             # One row that refuses to settle must not strand the rest of the
