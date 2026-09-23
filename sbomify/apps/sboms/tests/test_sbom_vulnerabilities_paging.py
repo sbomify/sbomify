@@ -63,9 +63,7 @@ def _packages(response) -> list[dict]:
 def test_a_large_scan_renders_one_page_of_packages(sample_sbom: SBOM):  # noqa: F811
     _run(sample_sbom, [_finding(f"CVE-2026-{n:04d}", f"pkg-{n:04d}") for n in range(60)])
 
-    response = _client(sample_sbom).get(
-        reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id})
-    )
+    response = _client(sample_sbom).get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
     assert len(_packages(response)) == PACKAGES_PER_PAGE
     assert response.context["page_obj"].paginator.count == 60
@@ -90,9 +88,7 @@ def test_the_worst_package_is_on_the_first_page(sample_sbom: SBOM):  # noqa: F81
     findings.append(_finding("CVE-2026-9999", "zzz-last-reported", severity="critical"))
     _run(sample_sbom, findings)
 
-    response = _client(sample_sbom).get(
-        reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id})
-    )
+    response = _client(sample_sbom).get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
     assert _packages(response)[0]["package"]["name"] == "zzz-last-reported"
 
@@ -100,9 +96,7 @@ def test_the_worst_package_is_on_the_first_page(sample_sbom: SBOM):  # noqa: F81
 def test_a_small_scan_still_shows_everything_with_no_pager(sample_sbom: SBOM):  # noqa: F811
     _run(sample_sbom, [_finding("CVE-2026-1", "openssl"), _finding("CVE-2026-2", "zlib")])
 
-    response = _client(sample_sbom).get(
-        reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id})
-    )
+    response = _client(sample_sbom).get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
     assert len(_packages(response)) == 2
     assert response.context["page_obj"].has_other_pages() is False
@@ -144,9 +138,7 @@ class TestOnePackageCannotRebuildTheOversizedPage:
         findings = [_finding(f"CVE-2026-{n:04d}", "linux-yocto") for n in range(400)]
         _run(sample_sbom, findings)
 
-        response = _client(sample_sbom).get(
-            reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id})
-        )
+        response = _client(sample_sbom).get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
         package = _packages(response)[0]
         assert len(package["vulnerabilities"]) == MAX_ADVISORIES_PER_PACKAGE
@@ -156,9 +148,7 @@ class TestOnePackageCannotRebuildTheOversizedPage:
         """Capped after the counts, so the header does not shrink with the list."""
         _run(sample_sbom, [_finding(f"CVE-2026-{n:04d}", "linux-yocto") for n in range(400)])
 
-        response = _client(sample_sbom).get(
-            reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id})
-        )
+        response = _client(sample_sbom).get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
         assert _packages(response)[0]["open_count"] == 400
         assert "400" in response.content.decode()
@@ -166,18 +156,14 @@ class TestOnePackageCannotRebuildTheOversizedPage:
     def test_the_page_says_what_it_left_out(self, sample_sbom: SBOM):  # noqa: F811
         _run(sample_sbom, [_finding(f"CVE-2026-{n:04d}", "linux-yocto") for n in range(400)])
 
-        response = _client(sample_sbom).get(
-            reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id})
-        )
+        response = _client(sample_sbom).get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
         assert f"Showing the {MAX_ADVISORIES_PER_PACKAGE} most severe of 400" in response.content.decode()
 
     def test_a_small_package_is_not_capped_and_says_nothing(self, sample_sbom: SBOM):  # noqa: F811
         _run(sample_sbom, [_finding("CVE-2026-1", "openssl"), _finding("CVE-2026-2", "openssl")])
 
-        response = _client(sample_sbom).get(
-            reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id})
-        )
+        response = _client(sample_sbom).get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
         package = _packages(response)[0]
         assert len(package["vulnerabilities"]) == 2
@@ -189,9 +175,7 @@ class TestOnePackageCannotRebuildTheOversizedPage:
         findings = [_finding(f"CVE-2026-{p:02d}{n:03d}", f"pkg-{p:02d}") for p in range(40) for n in range(200)]
         _run(sample_sbom, findings)
 
-        response = _client(sample_sbom).get(
-            reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id})
-        )
+        response = _client(sample_sbom).get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
         cards = sum(len(p["vulnerabilities"]) for p in _packages(response))
         assert cards <= PACKAGES_PER_PAGE * MAX_ADVISORIES_PER_PACKAGE
