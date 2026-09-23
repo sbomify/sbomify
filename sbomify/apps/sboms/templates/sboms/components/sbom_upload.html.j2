@@ -60,20 +60,14 @@
         </template>
         <!-- Uploading state -->
         <template x-if="isUploading">
-            <div class="text-center">
-                <c-feedback.spinner size="lg" class="mx-auto mb-4" />
-                <p class="text-text m-0">
-                    Uploading and processing <span x-text="bomTypeLabel"></span>...
-                </p>
-            </div>
+            <c-feedback.spinner size="sm" message="Uploading artifact">
+            <span>Uploading and processing <span x-text="bomTypeLabel"></span>...</span>
+            </c-feedback.spinner>
         </template>
     </div>
     <!-- VEX dry-run preview -->
     <template x-if="isPreviewing">
-        <div class="mt-4 text-center text-text-muted">
-            <c-feedback.spinner class="mx-auto mb-2" />
-            Checking what this VEX would change…
-        </div>
+        <c-feedback.loading-stats compact message="Checking what this VEX would change..." />
     </template>
     <template x-if="preview">
         <c-cards.inset class="mt-4">

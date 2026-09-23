@@ -55,7 +55,7 @@
                 <c-buttons.secondary size="sm" x-show="hasUnsavedChanges() && !isLoading" @click="cancelChanges()">Discard</c-buttons.secondary>
                 <c-buttons.primary size="sm" x-show="hasUnsavedChanges() && !isLoading" @click="saveDomain()" ::disabled="!canSave()">Save domain</c-buttons.primary>
                 <c-buttons.outline-danger size="sm" x-show="currentDomain && !hasUnsavedChanges() && !isLoading" @click="removeDomain()">Remove domain</c-buttons.outline-danger>
-                <c-feedback.loading row message="Saving..." x-show="isLoading" />
+                <c-feedback.spinner size="inline" message="Saving domain" x-show="isLoading" x-cloak>Saving...</c-feedback.spinner>
             </div>
         </div>
         </c-cards.body>

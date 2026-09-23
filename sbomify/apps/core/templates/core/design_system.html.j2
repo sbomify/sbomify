@@ -606,8 +606,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     </c-slot>
     </c-forms.file-preview>
     <c-forms.file-upload static class="mt-4">
-    <c-feedback.spinner size="md" />
-    <p class="text-text-muted m-0 mt-3">Uploading and processing document...</p>
+    <c-feedback.spinner size="sm" message="Uploading document">Uploading and processing document...</c-feedback.spinner>
     </c-forms.file-upload>
     </c-cards.card>
     <h2 id="date-picker" class="text-xl font-semibold text-text">Date picker</h2>
@@ -1389,33 +1388,49 @@ first-of-type rule that drops the leading hairline reads the section's position
     </div>
     </c-cards.card>
     <h2 id="loading" class="text-xl font-semibold text-text">Loading states</h2>
+    <c-forms.hint>Use skeletons for content that is arriving. Keep the brand loader for small actions such as saving or uploading. Parents own spacing; loading messages are announced to screen readers.</c-forms.hint>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <c-cards.card title="Brand loader">
-        <div class="flex items-center gap-6">
-            <c-feedback.spinner size="sm" />
-            <c-feedback.spinner size="md" />
-            <c-feedback.spinner size="lg" />
+        <c-cards.card title="Card content">
+        <c-feedback.loading message="Loading card content..." />
+        <c-code-inline>&lt;c-feedback.loading&gt;</c-code-inline>
+        </c-cards.card>
+        <c-cards.card title="Lists and dropdowns">
+        <c-feedback.loading-list message="Loading notifications..." />
+        <c-code-inline>&lt;c-feedback.loading-list&gt;</c-code-inline>
+        </c-cards.card>
+        <div class="flex min-w-0 flex-col gap-3">
+            <c-feedback.loading-table message="Loading artifacts..." />
+            <c-code-inline>&lt;c-feedback.loading-table&gt;</c-code-inline>
         </div>
-        <p class="text-sm text-text-muted mt-4 mb-0">Use the brand loader for spinners. Never a bespoke one.</p>
+        <c-cards.card title="Charts">
+        <c-feedback.loading-chart message="Loading trends..." />
+        <c-code-inline>&lt;c-feedback.loading-chart&gt;</c-code-inline>
         </c-cards.card>
-        <c-cards.card title="Loading panel">
-        <c-feedback.loading message="Loading artifacts…" />
-        <c-feedback.loading row message="Refreshing…" />
-        <p class="text-sm text-text-muted m-0">
-            The placeholder an HTMX panel shows while its content is in flight. Use
-            <code class="tw-code-inline">&lt;c-feedback.loading&gt;</code>, or
-            <code class="tw-code-inline">row</code> beside a skeleton block.
-        </p>
+        <div class="flex min-w-0 flex-col gap-3">
+            <c-feedback.loading-stats count="4" message="Loading summary..." />
+            <c-feedback.loading-stats compact count="4" message="Loading compact summary..." />
+            <c-code-inline>&lt;c-feedback.loading-stats&gt;</c-code-inline>
+        </div>
+        <c-cards.card title="Small actions">
+        <div class="flex flex-wrap items-center gap-4">
+            <c-buttons.primary size="sm" loading>Saving...</c-buttons.primary>
+            <c-feedback.spinner size="sm" message="Uploading artifact">Uploading artifact...</c-feedback.spinner>
+        </div>
         </c-cards.card>
-        <c-cards.card title="Skeletons">
-        <div class="flex items-start gap-3">
-            <c-feedback.skeleton type="avatar" />
-            <div class="flex-1">
-                <c-feedback.skeleton type="paragraph" />
+        <div class="flex min-w-0 flex-col gap-3">
+            <c-feedback.loading-page message="Loading page content..." />
+            <c-code-inline>&lt;c-feedback.loading-page&gt;</c-code-inline>
+        </div>
+        <c-cards.card title="Skeleton primitives">
+        <div class="flex flex-col gap-4">
+            <div class="flex items-start gap-3">
+                <c-feedback.skeleton type="avatar" />
+                <div class="min-w-0 flex-1">
+                    <c-feedback.skeleton type="paragraph" />
+                </div>
             </div>
-        </div>
-        <div class="mt-4 flex gap-2">
             <c-feedback.skeleton type="button" width="7rem" />
+            <c-forms.hint>Decorative shapes with no external margins. Prefer the shared loading layouts for page content. Shimmer stops when reduced motion is enabled.</c-forms.hint>
         </div>
         </c-cards.card>
     </div>

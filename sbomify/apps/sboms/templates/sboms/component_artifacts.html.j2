@@ -8,11 +8,11 @@
     </c-buttons.secondary>
     </c-layout.page-header>
     {# Full artifacts table (all SBOMs, VEX, …) #}
-    <div id="sboms-table-container"
+    <div id="sboms-table-region"
          hx-get="{% url 'sboms:sboms_table' component.id %}?full=1"
          hx-trigger="load, refreshSbomsTable from:body, refreshVexDocuments from:body"
          hx-swap="innerHTML">
-        <c-feedback.loading message="Loading artifacts…" />
+        <c-feedback.loading-table message="Loading artifacts…" />
     </div>
 {% endblock %}
 {% block scripts %}

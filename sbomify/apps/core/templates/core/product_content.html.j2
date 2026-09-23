@@ -60,22 +60,22 @@
 {% endif %}
 <c-navigation.accordion-item native label="Product links" hx-get="{% url 'core:product_links' product.id %}" hx-trigger="toggle once" hx-target="#product-links-panel" hx-swap="innerHTML">
 <div id="product-links-panel">
-    <c-feedback.loading compact message="Loading product links" />
+    <c-feedback.loading message="Loading product links" />
 </div>
 </c-navigation.accordion-item>
 <c-navigation.accordion-item native label="Product identifiers" hx-get="{% url 'core:product_identifiers' product.id %}" hx-trigger="toggle once" hx-target="#product-identifiers-panel" hx-swap="innerHTML">
 <div id="product-identifiers-panel">
-    <c-feedback.loading compact message="Loading product identifiers" />
+    <c-feedback.loading message="Loading product identifiers" />
 </div>
 </c-navigation.accordion-item>
 <c-navigation.accordion-item native label="Compliance controls" hx-get="{% url 'controls:product_controls' current_team.key product.id %}" hx-trigger="toggle once" hx-target="#product-controls-panel" hx-swap="innerHTML">
 <div id="product-controls-panel">
-    <c-feedback.loading compact message="Loading compliance controls" />
+    <c-feedback.loading message="Loading compliance controls" />
 </div>
 </c-navigation.accordion-item>
 <c-navigation.accordion-item native label="Lifecycle" hx-get="{% url 'core:product_lifecycle' product.id %}" hx-trigger="toggle once" hx-target="#product-lifecycle-panel" hx-swap="innerHTML">
 <div id="product-lifecycle-panel">
-    <c-feedback.loading compact message="Loading lifecycle" />
+    <c-feedback.loading message="Loading lifecycle" />
 </div>
 </c-navigation.accordion-item>
 </c-cards.card>

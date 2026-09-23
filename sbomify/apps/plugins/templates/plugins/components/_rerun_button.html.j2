@@ -2,8 +2,11 @@
 {% if can_rerun and sbom_id and run.status != 'running' and run.status != 'pending' %}
     <span x-data="{ busy: false, done: false, err: '' }" @click.stop>
         <c-badges.action ::disabled="busy || done" ::title="err || (done ? 'Queued. Results appear once the run finishes.' : 'Run this plugin again')" @click="busy = true; err = ''; fetch('/api/v1/plugins/assessments/{{ sbom_id|escapejs }}/{{ run.plugin_name|escapejs }}/rerun', { method: 'POST', headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '' } }) .then(async r => { if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || ('Request failed (' + r.status + ')')); } done = true; if (window.showToast) window.showToast({ title: 'Re-run queued', type: 'success', message: 'Results appear once the run finishes.' }); }) .catch(e => { err = e.message; if (window.showToast) window.showToast({ title: 'Re-run failed', type: 'error', message: e.message }); }) .finally(() => { busy = false; })">
+        <c-feedback.spinner size="inline" message="Queuing assessment" x-show="busy" x-cloak />
         <i class="fas mr-1"
-           :class="busy ? 'fa-spinner fa-spin' : (done ? 'fa-check' : 'fa-rotate-right')"></i>
+           x-show="!busy"
+           :class="done ? 'fa-check' : 'fa-rotate-right'"
+           aria-hidden="true"></i>
         <span x-text="done ? 'Queued' : 'Re-run'"></span>
         </c-badges.action>
     </span>

@@ -7,8 +7,10 @@ The optional slot holds a change indicator beside the value. Accents include
 semantic colours and the severity scale, so pages never supply a colour recipe.
 Value and icon ink use those tokens directly, never a mix with the text colour.
 Each card is its own description list and can sit in any grid or flex layout.
+loading replaces the value and label with decorative skeletons in the same
+grid, for c-feedback.loading-stats. Its parent supplies the loading announcement.
 {% endcomment %}
-<c-vars value="0" label icon accent compact x_value class />
+<c-vars value="0" label icon accent compact x_value loading="" class />
 {% if not value or value == '0' %}
     {% firstof 'true' as stat_zero %}
 {% else %}
@@ -18,14 +20,20 @@ Each card is its own description list and can sit in any grid or flex layout.
     {% if x_value %}:data-zero="Number({{ x_value }}) === 0"{% else %}data-zero="{{ stat_zero }}"{% endif %}
     {{ attrs }}>
     <dt class="row-start-2 m-0 font-medium leading-[1.45] text-text-secondary text-[length:var(--stat-label-size)] sm:leading-[1.4]">
-        {{ label }}
+        {% if loading %}
+            <c-feedback.skeleton width="65%" height="1lh" />
+        {% else %}
+            {{ label }}
+        {% endif %}
         {% if icon %}
             <span class="absolute flex items-center justify-center rounded-lg border border-solid border-[color-mix(in_oklab,var(--stat-accent)_13%,transparent)] bg-[color-mix(in_oklab,var(--stat-accent)_8%,var(--color-surface))] leading-none {% if compact %}top-3 right-3 h-6 w-6 text-sm{% else %}top-4 right-3 h-7 w-7 text-base sm:rounded-[0.5625rem] sm:top-[1.125rem] sm:right-[1.125rem] sm:h-8 sm:w-8{% endif %} text-[color:var(--stat-accent)]"
                   aria-hidden="true"><i class="{{ icon }}"></i></span>
         {% endif %}
     </dt>
     <dd class="row-start-1 m-0 min-w-0 break-words text-[length:var(--stat-value-size)] font-bold leading-[1.1] tracking-[-0.035em] tabular-nums text-[color:var(--stat-ink)]{% if slot %} flex items-baseline gap-2.5 [--stat-change-mt:0px]{% endif %}{% if icon %}{% if compact %} pr-8{% else %} pr-[2.125rem] sm:pr-[2.625rem]{% endif %}{% endif %}">
-        {% if x_value %}
+        {% if loading %}
+            <c-feedback.skeleton width="3rem" height="1lh" />
+        {% elif x_value %}
             <span x-text="{{ x_value }}">{{ value|default:0 }}</span>
         {% else %}
             {{ value|default:0 }}

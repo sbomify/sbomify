@@ -323,9 +323,7 @@
                         </div>
                         <div class="p-6 overflow-y-auto">
                             <template x-if="isLoadingPreview">
-                                <div class="flex justify-center py-8">
-                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary" %}
-                                </div>
+                                <c-feedback.loading message="Loading document preview..." />
                             </template>
                             <template x-if="!isLoadingPreview">
                                 {% comment %}

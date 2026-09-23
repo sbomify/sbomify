@@ -23,7 +23,7 @@
     </c-slot>
     </c-tables.toolbar>
     {# Loading State #}
-    <c-feedback.loading message="Loading artifacts..." x-show="isLoading" />
+    <c-feedback.loading-table nested message="Loading artifacts..." x-show="isLoading" x-cloak />
     {# Empty State #}
     <div x-show="!isLoading && artifacts.length === 0">
         <c-feedback.empty-state icon="fas fa-puzzle-piece" icon_variant="neutral" icon_size="sm" title="No artifacts yet" message="Add artifacts to this release to get started">
@@ -175,7 +175,7 @@
                 </div>
             </div>
             {# Loading State #}
-            <c-feedback.loading message="Loading artifacts..." x-show="isLoadingAvailable" />
+            <c-feedback.loading-list message="Loading artifacts..." x-show="isLoadingAvailable" x-cloak />
             {# No Results #}
             <div x-show="!isLoadingAvailable && availableArtifacts.length === 0">
                 <c-feedback.empty-state icon="fas fa-inbox" icon_variant="neutral" icon_size="sm" title="No artifacts available" message="All artifacts have already been added to this release" />

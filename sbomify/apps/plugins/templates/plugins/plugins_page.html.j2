@@ -6,9 +6,9 @@
          hx-get="{% url 'plugins:plugins_summary' %}"
          hx-trigger="load, refreshPluginSettings from:body"
          hx-swap="innerHTML">
-        <c-feedback.loading message="Loading plugin summary..." compact />
+        <c-feedback.loading-stats compact message="Loading plugin summary..." />
     </div>
     <c-layout.frame id="plugins-page-content" hx-get="{% url 'plugins:team_plugin_settings' team.key %}" hx-trigger="load" hx-swap="innerHTML">
-    <c-feedback.loading message="Loading plugins..." compact />
+    <c-feedback.loading-page message="Loading plugins..." />
     </c-layout.frame>
 {% endblock dashboard_content %}

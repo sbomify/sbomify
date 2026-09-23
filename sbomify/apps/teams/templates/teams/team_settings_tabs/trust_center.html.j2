@@ -113,13 +113,13 @@
              hx-trigger="load, refreshAccessRequests from:body"
              hx-swap="innerHTML settle:0"
              @ws:message.window="if ($event.detail.type === 'access_request_updated') $dispatch('refreshAccessRequests')">
-            <c-feedback.loading row message="Loading access requests..." />
+            <c-feedback.loading-table message="Loading access requests..." />
         </div>
         <div id="team-custom-domain-wrapper"
              hx-get="{% url 'teams:team_custom_domain' team.key %}"
              hx-trigger="load, refreshTeamCustomDomain from:body"
              hx-swap="innerHTML settle:0">
-            <c-feedback.loading row message="Loading custom domain settings..." />
+            <c-cards.card flush><c-feedback.loading message="Loading custom domain settings..." /></c-cards.card>
         </div>
     {% else %}
         <c-feedback.empty-state icon="fas fa-globe" title="Your Trust Center is off" message="Enable it to configure sharing, security contacts, access requests and a custom domain." />

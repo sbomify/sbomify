@@ -8,7 +8,7 @@
     <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true"
          hx-trigger="load"
          hx-swap="innerHTML">
-        <c-feedback.loading message="Loading vulnerability trends..." />
+        <c-feedback.loading-chart message="Loading vulnerability trends..." />
     </div>
     </c-cards.card>
 {% endblock %}

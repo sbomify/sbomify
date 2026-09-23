@@ -70,6 +70,9 @@ docker compose -f docker-compose.tests.yml exec db psql -U sbomify_test -d postg
 
 E2E tests use Playwright via Chrome DevTools Protocol in Docker with visual regression (baseline screenshots in `__snapshots__/`, diffs in `__diffs__/`):
 
+Run browser tests sequentially. Workers share one CDP browser, so parallel runs
+can interfere with focus and overwrite emulated motion preferences.
+
 ```bash
 docker compose -f docker-compose.tests.yml exec tests uv run pytest sbomify/apps/core/tests/e2e/
 ```
@@ -255,6 +258,15 @@ gallery first.
 Adding to the library: a variant is a new file nesting the base and passing
 `variant_class`; a modifier (size, state, density) is a prop. Ship it with a
 gallery demo in `core/design_system.html.j2` in the same change.
+
+**Loading convention**: content uses `<c-feedback.loading>` (card body), or its
+`loading-table`, `loading-list`, `loading-chart`, `loading-stats` and `loading-page`
+variants. Choose the shape of the content being loaded; keep the page header
+visible. Each supplies an accessible status and decorative, motion-aware
+skeletons. Do not build page-specific loaders or cover already loaded content
+with a navigation overlay. `<c-feedback.spinner>` and button `loading` are for
+small actions such as saving and uploading. Skeleton primitives have no external
+margins; their parent owns gaps, just like loaded components.
 
 Colour, radius, shadow and type come from the tokens in
 `sbomify/assets/css/tailwind.src.css` (`:root` is dark, `:root.light`

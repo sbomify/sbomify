@@ -23,8 +23,8 @@ row template and toggles state wrappers, never component layout classes.
         </span>
     </div>
     <div class="max-h-[min(24rem,calc(100dvh-9rem))] overflow-y-auto">
-        <div id="notifications-loading" role="status">
-            <c-feedback.loading compact size="sm" message="Loading notifications..." />
+        <div id="notifications-loading">
+            <c-feedback.loading-list message="Loading notifications..." />
         </div>
         <ul id="notifications-list" aria-label="Recent notifications">
         </ul>

@@ -31,7 +31,7 @@
                      @dragover.prevent="onDragOver($event, 'assigned')"
                      @dragleave="onDragLeave($event, 'assigned')"
                      @drop.prevent="onDrop($event, 'assigned')">
-                    <c-feedback.loading row message="Loading..." x-show="isLoading" />
+                    <c-feedback.loading-list message="Loading items..." x-show="isLoading" x-cloak />
                     <div x-show="!isLoading" class="space-y-1">
                         <template x-for="item in filteredAssigned" :key="item.id">
                             <div class="p-3 bg-surface border border-border rounded-lg cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all duration-150 select-none"
@@ -99,7 +99,7 @@
                      @dragover.prevent="onDragOver($event, 'available')"
                      @dragleave="onDragLeave($event, 'available')"
                      @drop.prevent="onDrop($event, 'available')">
-                    <c-feedback.loading row message="Loading..." x-show="isLoading" />
+                    <c-feedback.loading-list message="Loading items..." x-show="isLoading" x-cloak />
                     <div x-show="!isLoading" class="space-y-1">
                         <template x-for="item in filteredAvailable" :key="item.id">
                             <div class="p-3 bg-surface border border-border rounded-lg cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all duration-150 select-none"

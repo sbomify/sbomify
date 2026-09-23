@@ -9,11 +9,11 @@
          hx-swap="outerHTML"></div>
 {% endblock %}
 {% block table_section %}
-    <div id="sboms-table-container"
+    <div id="sboms-table-region"
          hx-get="{% url 'sboms:sboms_table_public' component.id %}"
          hx-trigger="load, refreshSbomsTable from:body"
          hx-swap="innerHTML">
-        <c-feedback.loading message="Loading SBOMs..." />
+        <c-feedback.loading-table message="Loading SBOMs..." />
     </div>
 {% endblock %}
 {% block scripts_additional %}

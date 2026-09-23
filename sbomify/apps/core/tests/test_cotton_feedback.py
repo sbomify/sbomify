@@ -6,7 +6,10 @@ stack, so pages can rely on the components without ever writing a class
 themselves.
 """
 
+import re
+
 import pytest
+from django.template import Context, Template
 from django.template.loader import render_to_string
 
 
@@ -225,11 +228,11 @@ def test_empty_state_slot_holds_a_real_button_component(rendered: str) -> None:
 @pytest.mark.parametrize(
     ("probe", "shape"),
     [
-        ("skeleton-text", "h-4 mb-2.5 rounded-sm last:w-[70%] last:mb-0"),
-        ("skeleton-title", "h-6 w-[60%] mb-3 rounded-md"),
+        ("skeleton-text", "h-4 w-full rounded-sm"),
+        ("skeleton-title", "h-6 w-[60%] rounded-md"),
         ("skeleton-avatar", "w-12 h-12 shrink-0 rounded-full"),
-        ("skeleton-button", "h-10 w-28 rounded-lg"),
-        ("skeleton-image", "w-full h-48 rounded-lg"),
+        ("skeleton-button", "h-10 w-28 rounded-[0.5rem]"),
+        ("skeleton-image", "w-full h-48 rounded-[0.5rem]"),
     ],
 )
 def test_skeleton_type_segments(rendered: str, probe: str, shape: str) -> None:
@@ -239,7 +242,8 @@ def test_skeleton_type_segments(rendered: str, probe: str, shape: str) -> None:
 def test_skeleton_shimmer_is_shared_by_every_shape(rendered: str) -> None:
     for probe in ("skeleton-text", "skeleton-avatar", "skeleton-image"):
         tag = _probe(rendered, probe)
-        assert "animate-[shimmer_1.5s_ease-in-out_infinite]" in tag
+        assert "motion-safe:animate-[shimmer_1.5s_ease-in-out_infinite]" in tag
+        assert 'aria-hidden="true"' in tag
         assert "bg-[length:200%_100%]" in tag
 
 
@@ -255,41 +259,68 @@ def test_skeleton_width_and_height_stay_inline(rendered: str) -> None:
 
 
 def test_skeleton_paragraph_stacks_text_rows_and_shortens_the_last(rendered: str) -> None:
-    assert "space-y-2 mt-2" in _probe(rendered, "skeleton-paragraph")
+    assert "flex min-w-0 flex-col gap-2 w-full" in _probe(rendered, "skeleton-paragraph")
     rows = _section(rendered, "skeleton-paragraph")
     assert rows.count("width: 100%;") == 1
     assert rows.count("width: 60%;") == 1
     assert rows.count("animate-[shimmer_1.5s_ease-in-out_infinite]") == 2
 
 
-def test_skeleton_paragraph_rows_do_not_inherit_the_wrapper_class(rendered: str) -> None:
-    # class is declared bare, so it falls through from the surrounding context
-    # unless the component clears it: the rows must not pick up the wrapper's.
-    assert "mt-2" not in _section(rendered, "skeleton-paragraph")
+def test_skeleton_shapes_leave_spacing_to_the_parent(rendered: str) -> None:
+    for shape in ("text", "title", "avatar", "button", "image", "paragraph"):
+        tag = _probe(rendered, f"skeleton-{shape}")
+        assert not re.search(r"(?:^|[\s\"])(?:m|mt|mb|mx|my)-", tag)
 
 
 # --- loading --------------------------------------------------------------
 
 
-def test_loading_panel_stacks_and_uses_the_large_brand_loader(rendered: str) -> None:
-    panel = _probe(rendered, "loading-panel")
-    assert "flex flex-col items-center justify-center py-12" in panel
-    body = _section(rendered, "loading-panel")
-    assert "tw-brand-loader tw-loader-lg text-primary" in body
-    assert '<p class="mt-3 text-text-muted">Loading artifacts…</p>' in body
+@pytest.mark.parametrize("variant", ["panel", "list", "table", "table-nested", "stats", "chart", "page"])
+def test_content_loading_uses_decorative_skeletons(rendered: str, variant: str) -> None:
+    assert 'role="status"' in _probe(rendered, f"loading-{variant}")
+    body = _section(rendered, f"loading-{variant}")
+    assert re.search(r'<span class="sr-only">Loading .+?</span>', body)
+    assert 'aria-hidden="true"' in body
+    assert "motion-safe:animate-[shimmer_1.5s_ease-in-out_infinite]" in body
+    assert "tw-brand-loader" not in body
+    assert not re.search(r"<(?:button|input|a)\b", body)
 
 
-def test_loading_row_puts_the_loader_beside_the_message(rendered: str) -> None:
-    row = _probe(rendered, "loading-row")
-    assert "flex items-center justify-center py-2" in row
-    assert "flex-col" not in row
-    body = _section(rendered, "loading-row")
-    assert "tw-brand-loader tw-loader-md text-primary" in body
-    assert '<span class="ml-3 text-sm text-text-muted">Refreshing…</span>' in body
+def test_loading_density_and_table_surface_modifiers(rendered: str) -> None:
+    assert _section(rendered, "loading-list").count("rounded-full") == 2
+    assert _section(rendered, "loading-table").count("width: 70%;") == 2
+    assert _section(rendered, "loading-table-nested").count("width: 70%;") == 1
+    assert "bg-transparent" in _section(rendered, "loading-table-nested")
+    assert _section(rendered, "loading-stats").count("<dl ") == 3
+    assert _section(rendered, "loading-stats").count("height: 1lh;") == 6
 
 
-def test_loading_forwards_attrs(rendered: str) -> None:
-    assert 'hx-swap-oob="true"' in _probe(rendered, "loading-row")
+def test_loading_forwards_state_to_the_root(rendered: str) -> None:
+    tag = _probe(rendered, "loading-list")
+    assert 'hx-swap-oob="true"' in tag
+    assert 'x-show="isLoading"' in tag
+    assert "x-cloak" in tag
+
+
+def test_action_spinner_forwards_state_and_inherits_control_colour(rendered: str) -> None:
+    tag = _probe(rendered, "spinner")
+    assert 'x-show="isSaving"' in tag
+    assert "x-cloak" in tag
+    body = _section(rendered, "spinner")
+    assert "tw-brand-loader tw-loader-inline" in body
+    assert 'aria-label="Saving"' in body
+    assert "text-primary" not in body
+
+
+def test_legacy_loading_tag_delegates_and_preserves_attributes() -> None:
+    html = Template(
+        '{% load design_system %}'
+        '{% loading_state message="Loading examples..." row=True hx_swap_oob="true" x_show="busy" %}'
+    ).render(Context())
+    assert 'hx-swap-oob="true"' in html
+    assert 'x-show="busy"' in html
+    assert "data-content-loading" in html
+    assert "tw-brand-loader" not in html
 
 
 # --- toast ----------------------------------------------------------------

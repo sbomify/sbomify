@@ -116,13 +116,12 @@
                          class="run-findings"
                          hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
                          hx-trigger="click once from:#run-trigger-{{ run.id }}"
-                         hx-swap="outerHTML"></div>
+                         hx-swap="outerHTML">
+                        <c-feedback.loading-table nested message="Loading assessment results..." />
+                    </div>
                 {% else %}
                     {# Pending state #}
-                    <div class="text-center text-text-muted py-6">
-                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-2xl block mb-3" %}
-                        <p class="mb-0">Assessment in progress...</p>
-                    </div>
+                    <c-feedback.loading message="Assessment in progress..." />
                 {% endif %}
                 </c-cards.collapsible-body>
                 </c-cards.collapsible>
@@ -232,7 +231,9 @@
                      class="run-findings"
                      hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
                      hx-trigger="click once from:#run-trigger-{{ run.id }}"
-                     hx-swap="outerHTML"></div>
+                     hx-swap="outerHTML">
+                    <c-feedback.loading-table nested message="Loading assessment results..." />
+                </div>
                 {% if run.result.metadata.standard_name %}
                     {# Standard Info (for compliance plugins) #}
                     <div class="standard-info mt-4">
@@ -258,10 +259,7 @@
                 {% endif %}
             {% else %}
                 {# Pending state #}
-                <div class="text-center text-text-muted py-6">
-                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-2xl block mb-3" %}
-                    <p class="mb-0">Assessment in progress...</p>
-                </div>
+                <c-feedback.loading message="Assessment in progress..." />
             {% endif %}
             </c-cards.collapsible-body>
             </c-cards.collapsible>

@@ -90,8 +90,7 @@
             </template>
             <template x-if="isUploading">
                 <c-forms.file-upload static>
-                <c-feedback.spinner size="md" />
-                <c-forms.hint>Uploading and processing document...</c-forms.hint>
+                <c-feedback.spinner size="sm" message="Uploading document">Uploading and processing document...</c-feedback.spinner>
                 </c-forms.file-upload>
             </template>
         </div>

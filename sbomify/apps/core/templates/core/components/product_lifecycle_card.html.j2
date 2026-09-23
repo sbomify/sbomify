@@ -82,16 +82,9 @@
         </div>
         <p class="text-text-muted text-sm mb-4">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</p>
         <div class="flex gap-2">
-            {% comment %}
-                    The mark stays the brand loader include: it takes the
-                    button's own ink, where c-feedback.spinner would tint it
-                    primary on a primary button.
-            {% endcomment %}
             <c-buttons.primary type="submit" ::disabled="saving">
             <template x-if="saving">
-                <span>
-                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
-                Saving...</span>
+                <c-feedback.spinner size="inline" message="Saving lifecycle">Saving...</c-feedback.spinner>
             </template>
             <template x-if="!saving">
                 <span><i class="fas fa-check mr-1"></i>Save</span>

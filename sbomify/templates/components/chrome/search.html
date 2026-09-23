@@ -66,7 +66,7 @@ id allows a live gallery example; only the navbar instance owns the shortcut.
         </template>
     </div>
     <div x-show="status === 'loading'" aria-hidden="true">
-        <c-feedback.loading compact size="sm" message="Searching..." />
+        <c-feedback.loading-list message="Searching..." />
     </div>
     <div x-show="status === 'ready' && !results.length">
         <c-feedback.empty-state size="sm" icon="fas fa-search" icon_variant="neutral" title="No results" message="Try a different name or keyword." />

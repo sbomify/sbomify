@@ -2,11 +2,11 @@
 {% load django_vite %}
 {% block meta_description_suffix %}View documents associated with this component.{% endblock %}
 {% block table_section %}
-    <div id="documents-table-container"
+    <div id="documents-table-region"
          hx-get="{% url 'documents:documents_table_public' component.id %}"
          hx-trigger="load, refreshDocumentsTable from:body"
          hx-swap="innerHTML">
-        <c-feedback.loading message="Loading documents..." />
+        <c-feedback.loading-table message="Loading documents..." />
     </div>
 {% endblock %}
 {% block scripts_additional %}
