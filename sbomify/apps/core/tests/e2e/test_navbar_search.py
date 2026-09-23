@@ -241,3 +241,22 @@ def test_focus_shows_preloaded_pages_and_search_examples(
     expect(search).to_have_value("api key")
     expect(panel.get_by_role("option")).to_have_count(1)
     assert len(requests) == 2 and "q=api+key" in requests[1]
+
+
+@pytest.mark.django_db
+def test_empty_workspace_dashboard_initializes_search(authenticated_page: Page) -> None:
+    page = authenticated_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("/dashboard")
+    expect(page.get_by_role("heading", name="Connect your first repository")).to_be_visible()
+    search = page.get_by_role("combobox", name="Search products, components and pages")
+    panel = page.locator("#navbar-search-dropdown")
+    expect(panel).to_be_hidden()
+    search.focus()
+    expect(panel.get_by_role("option", name="Products", exact=True)).to_be_visible()
+    search.press("Escape")
+    expect(panel).to_be_hidden()
+    page.get_by_role("button", name="Connect repository", exact=True).click()
+    expect(page.get_by_role("dialog")).to_be_visible()
+    assert errors == []

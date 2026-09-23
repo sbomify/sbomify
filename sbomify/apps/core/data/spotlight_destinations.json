@@ -179,7 +179,7 @@
       "url_name": "teams:team_settings",
       "section": "settings",
       "icon": "fa-sliders",
-      "keywords": ["general settings", "workspace name", "preferences", "configuration", "patch SLA", "patch targets", "freshness"],
+      "keywords": ["general settings", "workspace name", "preferences", "configuration", "patch SLA", "patch targets", "freshness", "support period", "support years"],
       "args": ["team_key"],
       "roles": ["owner", "admin"]
     },

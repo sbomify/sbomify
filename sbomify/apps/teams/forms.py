@@ -120,6 +120,10 @@ class PatchSLAForm(forms.Form):
     low = forms.IntegerField(required=False, min_value=0, max_value=3650)
 
 
+class SupportPeriodForm(forms.Form):
+    default_support_period_years = forms.IntegerField(required=False, min_value=5, max_value=100)
+
+
 class OnboardingProductForm(forms.Form):
     """Form for creating a product during onboarding."""
 
@@ -162,8 +166,22 @@ class OnboardingComponentForm(forms.Form):
     )
 
 
-class OnboardingCompanyForm(forms.Form):
-    """Single-step onboarding form for SBOM identity setup."""
+class OnboardingCompanyForm(PatchSLAForm):
+    """Organisation and security settings saved together at the end of setup."""
+
+    mode = forms.ChoiceField(
+        choices=[("recommended", "Recommended"), ("custom", "Custom")], required=False, initial="recommended"
+    )
+    address = forms.CharField(required=False, max_length=2000)
+    security_email = forms.EmailField(required=False)
+    publish_security_txt = forms.BooleanField(required=False)
+    default_support_period_years = forms.IntegerField(required=False, min_value=5, max_value=100, initial=5)
+
+    def clean(self) -> dict[str, Any]:
+        cleaned = super().clean() or {}
+        if cleaned.get("publish_security_txt") and not cleaned.get("security_email"):
+            self.add_error("security_email", "Enter an email for vulnerability reports.")
+        return cleaned
 
     company_name = forms.CharField(
         label="Company / Organization Name",

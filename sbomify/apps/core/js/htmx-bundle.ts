@@ -8,16 +8,12 @@ import './alerts-global';
 import './clipboard-global';
 
 // Centralized Alpine components and HTMX lifecycle
-import { registerHtmxBundleComponents } from './alpine-components';
 import { initHtmxLifecycle } from './htmx-lifecycle';
 import { registerHtmxConfig } from './htmx-config';
 import { initializeAlpine } from './alpine-init';
 
 // Register HTMX config
 registerHtmxConfig();
-
-// Register all HTMX bundle components from central registry
-registerHtmxBundleComponents();
 
 // Initialize HTMX lifecycle handler
 initHtmxLifecycle();

@@ -42,6 +42,13 @@ all as design regressions in GitHub CI.
   reduced-motion settings during loading-state checks. Run E2E tests sequentially
   against the shared CDP browser. Exercise both skeletons and the content that
   replaces them, including public stylesheets. See [loading-state tests](../sbomify/apps/core/tests/e2e/test_loading_states.py).
+- **Bundle startup order.** The empty dashboard loads an upload bundle that can
+  start Alpine before the main bundle. Register shared components in
+  [the central initializer](../sbomify/apps/core/js/alpine-init.ts), before
+  `Alpine.start()`. A missing search controller left its panel open and empty.
+  Exercise pages with conditional bundles, including a brand-new workspace;
+  [search browser tests](../sbomify/apps/core/tests/e2e/test_navbar_search.py) cover
+  that state as well as focus, suggestions, keyboard navigation and dismissal.
 - **Formatting and static checks.** Template and Python formatter output was
   needed during the migration. Run the actual [pre-commit checks](../.pre-commit-config.yaml)
   before committing and review their diff. A browser render does not check

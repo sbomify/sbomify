@@ -24,7 +24,6 @@ import {
 } from './utils';
 
 // Centralized Alpine components and HTMX lifecycle
-import { registerAllComponents } from './alpine-components';
 import { initHtmxLifecycle } from './htmx-lifecycle';
 import { registerHtmxConfig } from './htmx-config';
 import { initializeAlpine } from './alpine-init';
@@ -51,9 +50,6 @@ window.sbomifyFormatCompactRelativeDate = formatCompactRelativeDate;
 
 // Register HTMX config
 registerHtmxConfig();
-
-// Register all Alpine components from central registry
-registerAllComponents();
 
 // Initialize centralized HTMX lifecycle handler
 initHtmxLifecycle();

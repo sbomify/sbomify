@@ -2,7 +2,7 @@
  * Alpine.js Component Registry
  * 
  * Centralized registration of all Alpine.data components.
- * Import registerAllComponents() to register all Alpine components in one place.
+ * initializeAlpine() registers this set before any entry point starts the DOM.
  */
 import Alpine from 'alpinejs';
 
@@ -208,7 +208,7 @@ export function registerCommonComponents(): void {
 
 /**
  * Register all Alpine.js components from across the application.
- * Call this once from main.ts or htmx-bundle.ts.
+ * Called once by initializeAlpine(), including when a page bundle starts first.
  */
 export function registerAllComponents(): void {
     // Common inline components
@@ -266,68 +266,12 @@ export function registerAllComponents(): void {
     registerCraDocSignature();
 }
 
-/**
- * Register components needed for HTMX bundle (subset, no releaseList/barcodes)
- */
-export function registerHtmxBundleComponents(): void {
-    // Common inline components
-    registerCommonComponents();
-
-    // Core components
-    registerCopyableValue();
-    registerPublicStatusToggle();
-    registerVisibilitySelector();
-    registerWorkspaceSwitcher();
-    registerAccessTokensList();
-    registerDeleteModal();
-    // confirmModal is registered in alpine-init.ts (base template dependency)
-    registerCopyToken();
-    registerSiteNotifications();
-    registerPlanCard();
-    registerEditableSingleField();
-    registerProductIdentifiers();
-    registerItemsListTable();
-    registerItemAssignmentManager();
-    registerReleaseEditor();
-    registerReleaseArtifacts();
-    registerComponentMetaInfoEditor();
-    registerComponentMetaInfo();
-    registerAccountDangerZone();
-    registerTeamGeneral();
-    registerSettingsNavigation();
-    registerTeamBranding();
-    registerCustomDomain();
-    registerFileDragAndDrop();
-    registerDatePicker();
-
-    // SBOM module components
-    registerSbomUpload();
-    registerSbomsTable();
-    registerLicensesEditor();
-    registerContactsEditor();
-    registerSupplierEditor();
-
-    // Other modules
-    registerDocumentUpload();
-    registerPlanSelection();
-
-    // Compliance module
-    registerCraScopeScreening();
-    registerCraStep1();
-    registerCraStep2();
-    registerCraStep3();
-    registerCraStep4();
-    registerCraStep5();
-    registerCraDocSignature();
-}
-
 export default {
     registerAlpineComponent,
     isComponentRegistered,
     getRegisteredComponents,
     registerCommonComponents,
     registerAllComponents,
-    registerHtmxBundleComponents,
     // Common components
     dangerZone,
     modalState,

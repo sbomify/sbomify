@@ -1,0 +1,9 @@
+{% comment %}A numbered explanation in setup. Copy belongs to the page; the shared icon chip and text rhythm live here.{% endcomment %}
+<c-vars number title description />
+<div class="flex items-start gap-3">
+    <c-chips.neutral class="shrink-0" aria-hidden="true">{{ number }}</c-chips.neutral>
+    <div class="flex min-w-0 flex-col gap-1">
+        <h2 class="m-0 text-sm font-semibold text-text">{{ title }}</h2>
+        <p class="m-0 text-sm leading-relaxed text-text-muted">{{ description }}</p>
+    </div>
+</div>

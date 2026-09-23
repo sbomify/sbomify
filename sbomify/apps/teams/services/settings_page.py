@@ -24,6 +24,7 @@ def general_context(request: HttpRequest, workspace_key: str) -> ServiceResult[d
     return ServiceResult.success(
         {
             "is_default_team": bool(membership and membership.is_default_team),
+            "default_support_period_years": membership.team.default_support_period_years if membership else None,
             "patch_sla_form": PatchSLAForm(initial=targets),
             "patch_sla_mode": "recommended" if targets == default_patch_sla_days() else "custom",
         }
@@ -71,6 +72,12 @@ def update_patch_sla(workspace_key: str, targets: dict[str, int | None]) -> Serv
         workspace.patch_sla_days = targets
         workspace.save(update_fields=["patch_sla_days"])
         transaction.on_commit(lambda: cache.delete(f"dashboard-page:v3:{workspace.pk}"))
+    return ServiceResult.success()
+
+
+def update_support_period(workspace_key: str, years: int | None) -> ServiceResult[None]:
+    if not Team.objects.filter(key=workspace_key).update(default_support_period_years=years):
+        return ServiceResult.failure("Workspace not found", status_code=404)
     return ServiceResult.success()
 
 

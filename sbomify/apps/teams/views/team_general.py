@@ -15,10 +15,10 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team
-from sbomify.apps.teams.forms import PatchSLAForm, TeamGeneralSettingsForm
+from sbomify.apps.teams.forms import PatchSLAForm, SupportPeriodForm, TeamGeneralSettingsForm
 from sbomify.apps.teams.models import Member, Team, default_patch_sla_days
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
-from sbomify.apps.teams.services.settings_page import general_context, update_patch_sla
+from sbomify.apps.teams.services.settings_page import general_context, update_patch_sla, update_support_period
 from sbomify.apps.teams.utils import (
     delete_workspace_with_billing_cleanup,
     refresh_current_team_session,
@@ -60,6 +60,15 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         action = request.POST.get("action", "update_name")
+
+        if action == "update_support_period":
+            support_form = SupportPeriodForm(request.POST)
+            if not support_form.is_valid():
+                return htmx_error_response(support_form.errors.as_text())
+            result = update_support_period(team_key, support_form.cleaned_data["default_support_period_years"])
+            if not result.ok:
+                return htmx_error_response(result.error or "Unable to save support period")
+            return htmx_success_response("Default support period updated")
 
         if action == "update_patch_sla":
             form = PatchSLAForm(request.POST)

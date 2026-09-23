@@ -1614,6 +1614,20 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-navigation.stepper-connector />
     <c-navigation.stepper-step label="Export" label_class="hidden sm:inline">5</c-navigation.stepper-step>
     </c-navigation.stepper>
+    <c-navigation.stepper class="mt-6" role="list" aria-label="Compact setup progress">
+    <c-navigation.stepper-step compact state="completed" label="Why" role="listitem" />
+    <c-navigation.stepper-connector compact />
+    <c-navigation.stepper-step compact state="active" label="Organisation" role="listitem" aria-current="step" />
+    <c-navigation.stepper-connector compact />
+    <c-navigation.stepper-step compact label="Security" role="listitem" />
+    </c-navigation.stepper>
+    <div class="grid gap-6 mt-6 lg:grid-cols-2">
+        <c-onboarding.reason number="01" title="Who you are" description="Record the organisation and person responsible for your artifacts." />
+        <c-cards.card flush>
+        <c-onboarding.checklist-item complete title="Organisation identity" description="Your default contact profile is saved." />
+        <c-onboarding.checklist-item active title="Security contact" description="Where researchers can report vulnerabilities." />
+        </c-cards.card>
+    </div>
     <p class="text-sm text-text-muted mt-4 mb-0">
         A long rail hides its captions on a narrow screen and keeps the circles:
         <c-code-inline>label_class="hidden sm:inline"</c-code-inline> on each step, as the CRA wizard does.

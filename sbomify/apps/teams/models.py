@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinLengthValidator, RegexValidator
+from django.core.validators import MaxValueValidator, MinLengthValidator, MinValueValidator, RegexValidator
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -234,6 +234,12 @@ class Team(models.Model):
     branding_info = models.JSONField(default=dict)
     has_completed_wizard = models.BooleanField(default=False)
     onboarding_goal = models.TextField(blank=True, default="")
+    default_support_period_years = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(5), MaxValueValidator(100)],
+        help_text="Default support period for new product assessments. Product support dates take precedence.",
+    )
     is_public = models.BooleanField(
         default=True, help_text="Controls whether the workspace Trust Center is publicly accessible."
     )

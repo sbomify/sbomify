@@ -54,6 +54,23 @@
          hx-select="#patch-sla-form"
          hx-trigger="refreshPatchSLA from:body"
          hx-swap="innerHTML">{% include 'teams/components/patch_sla_form.html.j2' %}</div>
+    <form method="post"
+          hx-post="{% url 'teams:team_general' team.key %}"
+          hx-swap="none"
+          hx-disabled-elt="find button[type='submit']"
+          class="flex flex-col gap-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_support_period">
+        <c-cards.card flush>
+        <c-cards.header compact title="Product support" />
+        <c-forms.field horizontal label="Default support period (years)" for="default-support-period" hint="Used for new product assessments. Product support dates take precedence. Existing assessments keep their dates. Leave empty for no default.">
+        <c-forms.input size="sm" id="default-support-period" name="default_support_period_years" type="number" min="5" max="100" step="1" value="{{ default_support_period_years|default_if_none:'' }}" placeholder="No default" />
+        </c-forms.field>
+        </c-cards.card>
+        <div class="flex justify-end">
+            <c-buttons.primary size="sm" type="submit">Save support period</c-buttons.primary>
+        </div>
+    </form>
     {% if is_owner %}
         {% include 'teams/components/team_danger_zone.html.j2' with team_key=team.key team_name=team.name is_default_team=is_default_team %}
     {% endif %}

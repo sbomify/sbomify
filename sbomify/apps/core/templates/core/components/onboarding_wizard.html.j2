@@ -1,484 +1,195 @@
 {% extends "core/base.html.j2" %}
-{% load static %}
 {% load django_vite %}
-{% block title %}Get Started - sbomify{% endblock %}
-{% block styles %}
-    <style>
-        .onboarding-bg {
-            background:
-                radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklab, var(--color-primary) 8%, transparent) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 80% 100%, color-mix(in oklab, var(--color-primary) 4%, transparent) 0%, transparent 50%),
-                var(--color-background);
-        }
-        :root.light .onboarding-bg {
-            background:
-                radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklab, var(--color-primary) 6%, transparent) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 80% 100%, color-mix(in oklab, var(--color-primary) 3%, transparent) 0%, transparent 50%),
-                var(--color-background);
-        }
-        .step-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 9999px;
-            background-color: var(--color-border);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .step-dot.active {
-            width: 28px;
-            background-color: var(--color-primary);
-        }
-        .step-dot.completed {
-            background-color: var(--color-success);
-        }
-        .onboarding-card {
-            border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
-            box-shadow:
-                0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 1px color-mix(in oklab, var(--color-border) 30%, transparent);
-        }
-        :root.dark .onboarding-card {
-            box-shadow:
-                0 8px 32px -4px rgb(0 0 0 / 0.4),
-                0 0 0 1px rgb(255 255 255 / 0.04);
-        }
-        .success-ring {
-            animation: success-pulse 2s ease-out 0.8s;
-        }
-        @keyframes success-pulse {
-            0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-success) 40%, transparent); }
-            70% { box-shadow: 0 0 0 16px color-mix(in oklab, var(--color-success) 0%, transparent); }
-            100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-success) 0%, transparent); }
-        }
-        .plan-card {
-            border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
-            box-shadow:
-                0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 1px color-mix(in oklab, var(--color-border) 30%, transparent);
-            transition: all 0.2s ease;
-        }
-        .plan-card:hover,
-        .plan-card.selected {
-            border-color: var(--color-primary);
-            box-shadow:
-                0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 2px color-mix(in oklab, var(--color-primary) 30%, transparent);
-        }
-        :root.dark .plan-card {
-            box-shadow:
-                0 8px 32px -4px rgb(0 0 0 / 0.4),
-                0 0 0 1px rgb(255 255 255 / 0.04);
-        }
-        @media (prefers-reduced-motion: reduce) {
-            .step-dot { transition: none; }
-            .success-ring { animation: none; }
-        }
-    </style>
-{% endblock %}
+{% block title %}Set up your workspace · sbomify{% endblock %}
 {% block main %}
-    <div class="onboarding-bg min-h-screen flex flex-col items-center justify-center px-4 py-12 sm:py-16">
-        <!-- Logo -->
-        <div class="flex items-center justify-center mb-10">
-            {% include "core/components/brand/logo.html.j2" with class="h-8 w-auto text-text" animate=True label="sbomify" %}
+    <main id="main-content" class="min-h-screen px-4 py-8 sm:px-7 sm:py-10">
+        <c-layout.frame class="mx-auto w-full max-w-6xl">
+        <div class="flex justify-center py-2">
+            {% include "core/components/brand/logo.html.j2" with class="h-6 w-auto" label="sbomify" %}
         </div>
-        <!-- Step Progress (3 dots without billing, 4 with billing) -->
-        <div class="flex items-center gap-2 mb-8">
-            {# Dot 1: Welcome #}
-            <div class="step-dot {% if current_step == 'welcome' %}active{% elif current_step == 'setup' or current_step == 'complete' or current_step == 'plan' %}completed{% endif %}">
-            </div>
-            {# Dot 2: Setup #}
-            <div class="step-dot {% if current_step == 'setup' %}active{% elif current_step == 'complete' or current_step == 'plan' %}completed{% endif %}">
-            </div>
-            {# Dot 3: Complete #}
-            <div class="step-dot {% if current_step == 'complete' %}active{% elif current_step == 'plan' %}completed{% endif %}">
-            </div>
-            {# Dot 4: Plan (only when billing enabled) #}
-            {% if billing_enabled %}
-                <div class="step-dot {% if current_step == 'plan' %}active{% endif %}"></div>
-            {% endif %}
-        </div>
-        {% if current_step == 'welcome' %}
-            <!-- Welcome Step -->
-            <div class="w-full max-w-md"
-                 x-data="{ show: false }"
-                 x-init="setTimeout(() => show = true, 80)">
-                <div class="onboarding-card bg-surface rounded-2xl overflow-hidden"
-                     x-show="show"
-                     x-transition:enter="transition ease-out duration-500"
-                     x-transition:enter-start="opacity-0 translate-y-3"
-                     x-transition:enter-end="opacity-100 translate-y-0">
-                    <div class="px-8 sm:px-10 pt-10 sm:pt-12 pb-8 sm:pb-10 text-center">
-                        <h1 class="font-display text-2xl sm:text-3xl font-bold text-text mb-3 tracking-tight">Welcome, {{ first_name }}</h1>
-                        <p class="text-text-muted text-sm sm:text-base leading-relaxed mb-8">
-                            Know exactly what's inside your software, and keep it secure.
-                        </p>
-                        <!-- Value highlights -->
-                        <div class="flex flex-col gap-3 mb-8 text-left">
-                            <div class="flex items-center gap-3">
-                                <c-chips.icon-chip size="sm">
-                                <i class="fas fa-upload text-xs" aria-hidden="true"></i>
-                                </c-chips.icon-chip>
-                                <span class="text-text-secondary text-sm">See every component in your software supply chain</span>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <c-chips.icon-chip size="sm">
-                                <i class="fas fa-search text-xs" aria-hidden="true"></i>
-                                </c-chips.icon-chip>
-                                <span class="text-text-secondary text-sm">Find vulnerabilities before they become problems</span>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <c-chips.icon-chip size="sm">
-                                <i class="fas fa-check-circle text-xs" aria-hidden="true"></i>
-                                </c-chips.icon-chip>
-                                <span class="text-text-secondary text-sm">Stay compliant with security standards</span>
-                            </div>
-                        </div>
-                        <c-buttons.primary size="lg" href="{% url 'teams:onboarding_wizard' %}?step=setup" class="w-full no-underline">
-                        Get Started
-                        <i class="fas fa-arrow-right text-sm"></i>
-                        </c-buttons.primary>
-                    </div>
-                </div>
-                <p class="text-center text-text-muted/60 text-xs mt-6">Takes about 2 minutes</p>
-            </div>
-        {% elif current_step == 'setup' %}
-            <!-- Setup Step -->
-            <div class="w-full max-w-md"
-                 x-data="onboardingWizard({ initialEmail: '{{ form.email.value|default:''|escapejs }}', initialContactName: '{{ form.contact_name.value|default:''|escapejs }}' })">
-                <div class="onboarding-card bg-surface rounded-2xl overflow-hidden">
-                    <div class="px-8 sm:px-10 pt-8 sm:pt-10 pb-6 sm:pb-8">
-                        <!-- Header -->
-                        <div class="mb-8">
-                            <p class="text-primary text-xs font-semibold uppercase tracking-widest mb-2">
-                                Step 1 of
-                                {% if billing_enabled %}
-                                    3
-                                {% else %}
-                                    2
-                                {% endif %}
-                            </p>
-                            <h1 class="font-display text-2xl font-bold text-text mb-1.5 tracking-tight">Create your workspace</h1>
-                            <p class="text-text-muted text-sm">Tell us about your organization. You can change this later.</p>
-                        </div>
-                        <form method="post"
-                              action="{% url 'teams:onboarding_wizard' %}"
-                              @submit="handleSubmit()">
-                            {% csrf_token %}
-                            {% if form.non_field_errors %}
-                                <c-forms.error class="mb-6" role="alert">
-                                {% for error in form.non_field_errors %}{{ error }}{% endfor %}
-                                </c-forms.error>
-                            {% endif %}
-                            <div class="space-y-5">
-                                <!-- Company Name -->
-                                <div>
-                                    <c-forms.label for="id_company_name" required>Company name</c-forms.label>
-                                    {% comment %}
-                                        The validation recipe is picked in the
-                                        browser by the wizard's Alpine component,
-                                        so these fields keep their class binding.
-                                    {% endcomment %}
-                                    <c-forms.input id="id_company_name" name="company_name" placeholder="e.g., Acme Corporation" required value="{{ form.company_name.value|default:'' }}" minlength="2" maxlength="200" autocomplete="organization" autofocus x-model="companyName" @blur="markTouched('companyName')" ::class="getValidationClass('companyName')" />
-                                    {% if form.company_name.errors %}
-                                        <c-forms.error>
-                                        {% for error in form.company_name.errors %}{{ error }}{% endfor %}
-                                        </c-forms.error>
-                                    {% endif %}
-                                    <c-forms.hint>Used to name your workspace and Trust Center.</c-forms.hint>
-                                </div>
-                                <!-- Contact Name -->
-                                <div>
-                                    <c-forms.label for="id_contact_name" required>Your name</c-forms.label>
-                                    <c-forms.input id="id_contact_name" name="contact_name" placeholder="e.g., Jane Smith" required value="{{ form.contact_name.value|default:'' }}" minlength="2" maxlength="150" autocomplete="name" x-model="contactName" @blur="markTouched('contactName')" ::class="getValidationClass('contactName')" />
-                                    {% if form.contact_name.errors %}
-                                        <c-forms.error>
-                                        {% for error in form.contact_name.errors %}{{ error }}{% endfor %}
-                                        </c-forms.error>
-                                    {% endif %}
-                                    <c-forms.hint>Required for NTIA compliance. Person responsible for SBOM inquiries.</c-forms.hint>
-                                </div>
-                                <!-- Email -->
-                                <div>
-                                    <c-forms.label for="id_email">Work email</c-forms.label>
-                                    <c-forms.input id="id_email" name="email" type="email" placeholder="security@example.com" value="{{ form.email.value|default:'' }}" maxlength="254" autocomplete="email" x-model="email" @blur="markTouched('email')" ::class="getValidationClass('email')" />
-                                    {% if form.email.errors %}
-                                        <c-forms.error>
-                                        {% for error in form.email.errors %}{{ error }}{% endfor %}
-                                        </c-forms.error>
-                                    {% endif %}
-                                    <c-forms.hint>Embedded in SBOM metadata for security inquiries.</c-forms.hint>
-                                </div>
-                                <!-- Website -->
-                                <div>
-                                    <c-forms.label for="id_website">
-                                    Website <span class="text-text-muted font-normal text-xs">(optional)</span>
-                                    </c-forms.label>
-                                    <c-forms.input id="id_website" name="website" type="url" placeholder="https://example.com" value="{{ form.website.value|default:'' }}" maxlength="500" autocomplete="url" pattern="https?://.+" x-model="website" @blur="markTouched('website')" ::class="getValidationClass('website')" />
-                                    {% if form.website.errors %}
-                                        <c-forms.error>
-                                        {% for error in form.website.errors %}{{ error }}{% endfor %}
-                                        </c-forms.error>
-                                    {% endif %}
-                                    <c-forms.hint>Added to SBOM external references.</c-forms.hint>
-                                </div>
-                                <!-- Goal -->
-                                <div>
-                                    <c-forms.label for="id_goal">
-                                    What are you trying to accomplish? <span class="text-text-muted font-normal text-xs">(optional)</span>
-                                    </c-forms.label>
-                                    <c-forms.textarea id="id_goal" name="goal" rows="3" maxlength="1000" placeholder="e.g., Track open source dependencies, meet compliance requirements..." value="{{ form.goal.value|default:'' }}" />
-                                    {% if form.goal.errors %}
-                                        <c-forms.error>
-                                        {% for error in form.goal.errors %}{{ error }}{% endfor %}
-                                        </c-forms.error>
-                                    {% endif %}
-                                    <c-forms.hint>Helps us tailor your experience.</c-forms.hint>
-                                </div>
-                            </div>
-                            <!-- Footer -->
-                            <div class="flex items-center justify-between mt-8 pt-6 border-t border-border/50">
-                                <a href="{% url 'teams:onboarding_wizard' %}"
-                                   class="text-sm text-text-muted hover:text-text no-underline transition-colors flex items-center gap-1.5">
-                                    <i class="fas fa-arrow-left text-xs"></i> Back
-                                </a>
-                                <c-buttons.primary type="submit" ::disabled="!canSubmit">
-                                <span x-show="!isSubmitting" class="flex items-center gap-2">
-                                    Create Workspace
-                                    <i class="fas fa-arrow-right text-xs"></i>
-                                </span>
-                                <span x-show="isSubmitting" x-cloak class="flex items-center gap-2">
-                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
-                                    Creating...
-                                </span>
-                                </c-buttons.primary>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        {% elif current_step == 'complete' %}
-            <!-- Success Step -->
-            <div class="w-full max-w-md"
-                 x-data="{ show: false }"
-                 x-init="setTimeout(() => show = true, 80)">
-                <div class="onboarding-card bg-surface rounded-2xl overflow-hidden"
-                     x-show="show"
-                     x-transition:enter="transition ease-out duration-500"
-                     x-transition:enter-start="opacity-0 translate-y-3"
-                     x-transition:enter-end="opacity-100 translate-y-0">
-                    <div class="px-8 sm:px-10 pt-10 sm:pt-12 pb-8 sm:pb-10">
-                        <!-- Animated checkmark -->
-                        <div class="text-center">
-                            <div class="relative mx-auto mb-8 w-20 h-20"
-                                 x-data="{ scaled: false }"
-                                 x-init="setTimeout(() => scaled = true, 250)">
-                                <div class="absolute inset-0 rounded-full bg-success/10 success-ring"></div>
-                                <div class="absolute inset-0 flex items-center justify-center rounded-full bg-success/10 transition-transform duration-500 ease-out"
-                                     :class="scaled ? 'scale-100' : 'scale-0'">
-                                    <i class="fas fa-check text-success text-3xl"></i>
-                                </div>
-                            </div>
-                            <h1 class="font-display text-2xl sm:text-3xl font-bold text-text mb-3 tracking-tight">
-                                {{ company_name|default:"Your workspace" }} is set up
-                            </h1>
-                            <p class="text-text-muted text-sm sm:text-base leading-relaxed mb-8">Let's explore what sbomify can do for you.</p>
-                        </div>
-                        <!-- Onboarding checklist -->
-                        <div class="rounded-xl border border-border/50 divide-y divide-border/50 mb-8">
-                            <div class="flex items-center gap-3 px-4 py-3">
-                                <div class="w-5 h-5 rounded-full bg-success/20 flex items-center justify-center shrink-0">
-                                    <i class="fas fa-check text-success text-[10px]"></i>
-                                </div>
-                                <span class="text-sm text-text-muted line-through">Create workspace</span>
-                            </div>
-                            <div class="flex items-center gap-3 px-4 py-3">
-                                <div class="w-5 h-5 rounded-full border-2 border-primary shrink-0"></div>
-                                <span class="text-sm text-text">See your first security insights</span>
-                            </div>
-                        </div>
-                        <!-- Actions -->
-                        <c-buttons.primary size="lg" href="{{ next_url|default:'/dashboard' }}" class="w-full no-underline mb-3">
-                        Continue
-                        <i class="fas fa-arrow-right text-sm"></i>
-                        </c-buttons.primary>
-                    </div>
-                </div>
-            </div>
-        {% elif current_step == 'plan' %}
-            <!-- Plan Selection Step -->
-            {{ plans|json_script:"plans-data" }}
-            <div class="w-full max-w-5xl"
-                 x-data="{ selectedPlan: '{{ plan_hint|default:'' }}', billingPeriod: 'monthly', plans: [], init() { this.plans = window.parseJsonScript('plans-data') || []; }, get selectedPlanData() { return this.plans.find(p => p.key === this.selectedPlan) || null; }, formatPrice(plan) { if (plan.key === 'community') return '$0'; if (plan.key === 'enterprise') return 'Custom'; const price = this.billingPeriod === 'monthly' ? (plan.monthly_price_discounted || plan.monthly_price) : (plan.annual_price_discounted || plan.annual_price); if (!price) return 'Contact us'; return '$' + Math.round(price).toLocaleString(); }, priceLabel(plan) { if (plan.key === 'community') return '/forever'; if (plan.key === 'enterprise') return 'pricing'; return this.billingPeriod === 'monthly' ? '/month' : '/year'; }, monthlyEquiv(plan) { if (this.billingPeriod !== 'annual' || plan.key !== 'business') return ''; const price = plan.annual_price_discounted || plan.annual_price; if (!price) return ''; return '$' + Math.round(price / 12).toLocaleString() + '/mo billed annually'; } }">
-                {# Heading #}
-                <div class="text-center mb-8">
-                    <p class="text-primary text-xs font-semibold uppercase tracking-widest mb-2">Step 3 of 3</p>
-                    <h1 class="font-display text-2xl sm:text-3xl font-bold text-text mb-3 tracking-tight">Choose Your Plan</h1>
-                    <p class="text-text-muted text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
-                        Start free and upgrade when you need more. All plans include unlimited SBOMs.
-                    </p>
-                </div>
-                {# Billing Toggle #}
-                <div class="flex items-center justify-center gap-4 mb-10">
-                    <span class="text-sm font-medium transition-colors"
-                          :class="billingPeriod === 'monthly' ? 'text-text' : 'text-text-muted'">Monthly</span>
-                    <c-forms.toggle role="switch" aria-label="Toggle annual billing" ::checked="billingPeriod === 'annual'" @change="billingPeriod = $event.target.checked ? 'annual' : 'monthly'" />
-                    <span class="text-sm font-medium transition-colors flex items-center gap-2"
-                          :class="billingPeriod === 'annual' ? 'text-text' : 'text-text-muted'">
-                        Annual
-                        <template x-for="plan in plans.filter(p => p.key === 'business' && p.annual_savings_percent)"
-                                  :key="plan.key">
-                            <c-badges.success x-text="'Save ' + Math.round(plan.annual_savings_percent) + '%'" />
-                        </template>
-                    </span>
-                </div>
-                {# Plan Cards #}
-                <div class="grid md:grid-cols-3 gap-6 w-full mb-10">
-                    <template x-for="plan in plans" :key="plan.key">
-                        <div class="plan-card bg-surface rounded-2xl overflow-hidden relative cursor-pointer"
-                             :class="{ 'selected': selectedPlan === plan.key }"
-                             @click="selectedPlan = plan.key">
-                            {# Popular badge for business #}
-                            <template x-if="plan.key === 'business'">
-                                <div class="absolute -top-0 left-0 right-0 bg-primary text-white text-xs font-semibold text-center py-1.5 rounded-t-2xl flex items-center justify-center gap-1.5">
-                                    <i class="fas fa-star text-[10px]"></i>
-                                    Most Popular
-                                </div>
-                            </template>
-                            <div class="p-6 sm:p-8" :class="plan.key === 'business' ? 'pt-12' : ''">
-                                {# Selection radio #}
-                                <div class="flex items-center justify-between mb-4">
-                                    <h3 class="text-xl font-bold text-text" x-text="plan.name"></h3>
-                                    <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors"
-                                         :class="selectedPlan === plan.key ? 'border-primary bg-primary' : 'border-border'">
-                                        <i class="fas fa-check text-white text-[10px]"
-                                           x-show="selectedPlan === plan.key"
-                                           x-transition></i>
-                                    </div>
-                                </div>
-                                {# Price #}
-                                <div class="mb-4">
-                                    <span class="text-3xl font-bold text-text" x-text="formatPrice(plan)"></span>
-                                    <span class="text-text-muted text-sm" x-text="priceLabel(plan)"></span>
-                                    <template x-if="monthlyEquiv(plan)">
-                                        <div class="text-xs text-text-muted mt-1" x-text="monthlyEquiv(plan)"></div>
-                                    </template>
-                                </div>
-                                {# Description #}
-                                <p class="text-sm text-text-muted mb-5" x-text="plan.description || ''"></p>
-                                {# CTA label #}
-                                <div class="text-sm font-semibold mb-5"
-                                     :class="plan.key === 'business' ? 'text-primary' : 'text-text-secondary'">
-                                    <template x-if="plan.key === 'community'">
-                                        <span>Free forever</span>
-                                    </template>
-                                    <template x-if="plan.key === 'business'">
-                                        <span>Start {{ trial_days }}-day free trial</span>
-                                    </template>
-                                    <template x-if="plan.key === 'enterprise'">
-                                        <span>Contact Sales</span>
-                                    </template>
-                                </div>
-                                {# Limits #}
-                                <div class="space-y-2 mb-5 p-3 bg-background rounded-lg">
-                                    <h6 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Plan Limits</h6>
-                                    <div class="flex items-center gap-2">
-                                        <i class="fas fa-cube text-primary text-xs w-4"></i>
-                                        <span class="text-sm text-text"
-                                              x-text="plan.max_products ? plan.max_products + ' Products' : 'Unlimited Products'"></span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <i class="fas fa-puzzle-piece text-primary text-xs w-4"></i>
-                                        <span class="text-sm text-text"
-                                              x-text="plan.max_components ? plan.max_components + ' Components' : 'Unlimited Components'"></span>
-                                    </div>
-                                </div>
-                                {# Features #}
-                                <div class="space-y-2">
-                                    <template x-if="plan.key === 'community'">
-                                        <ul class="space-y-1.5">
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>Unlimited SBOMs</span>
-                                            </li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>Public Trust Center</span>
-                                            </li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>Weekly vulnerability scans</span>
-                                            </li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>API access</span>
-                                            </li>
-                                        </ul>
-                                    </template>
-                                    <template x-if="plan.key === 'business'">
-                                        <ul class="space-y-1.5">
-                                            <li class="text-xs font-semibold text-primary uppercase tracking-wider mb-1">Everything in Community, plus:</li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>Private components & products</span>
-                                            </li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>NTIA compliance checks</span>
-                                            </li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>Advanced vulnerability scanning</span>
-                                            </li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>Priority support</span>
-                                            </li>
-                                        </ul>
-                                    </template>
-                                    <template x-if="plan.key === 'enterprise'">
-                                        <ul class="space-y-1.5">
-                                            <li class="text-xs font-semibold text-primary uppercase tracking-wider mb-1">Everything in Business, plus:</li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>Custom integrations</span>
-                                            </li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>SLA guarantee</span>
-                                            </li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>Dedicated support</span>
-                                            </li>
-                                            <li class="flex items-start gap-2 text-sm text-text">
-                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
-                                                <span>Custom deployment options</span>
-                                            </li>
-                                        </ul>
-                                    </template>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                {# Submit Form #}
-                <form method="post"
-                      action="{% url 'teams:onboarding_wizard' %}"
-                      class="w-full max-w-md mx-auto">
-                    {% csrf_token %}
-                    <input type="hidden" name="plan" :value="selectedPlan">
-                    <c-buttons.primary type="submit" size="lg" class="w-full" ::disabled="!selectedPlan">
-                    <span x-show="selectedPlan === 'business'">Start Free Trial</span>
-                    <span x-show="selectedPlan === 'enterprise'">Contact Sales</span>
-                    <span x-show="selectedPlan === 'community'">Continue with Community</span>
-                    <span x-show="!selectedPlan">Select a plan to continue</span>
-                    <i class="fas fa-arrow-right text-sm" x-show="selectedPlan"></i>
-                    </c-buttons.primary>
-                </form>
-                <p class="text-center text-text-muted/60 text-xs mt-6">You can change your plan anytime from workspace settings.</p>
-            </div>
+        {% if current_step == 'setup' %}{{ wizard_config|json_script:"onboarding-config" }}{% endif %}
+        <c-layout.frame x-data="
+        {% if current_step == 'setup' %}
+            onboardingWizard(window.parseJsonScript('onboarding-config'))
+        {% else %}
+            { step: '{{ current_step }}' }
         {% endif %}
-    </div>
-{% endblock %}
-{% block scripts %}
-    {% vite_asset 'sbomify/apps/teams/js/main.ts' %}
-{% endblock %}
+        ">
+        <c-navigation.stepper class="mx-auto w-full max-w-2xl" role="list" aria-label="Setup progress">
+        <c-navigation.stepper-step compact label="Why" label_class="hidden sm:inline" role="listitem" ::data-state="step === 'welcome' ? 'active' : 'completed'" ::aria-current="step === 'welcome' ? 'step' : null" />
+        <c-navigation.stepper-connector compact />
+        <c-navigation.stepper-step compact label="Your organisation" label_class="hidden sm:inline" role="listitem" ::data-state="step === 'organisation' ? 'active' : step === 'welcome' ? '' : 'completed'" ::aria-current="step === 'organisation' ? 'step' : null" />
+        <c-navigation.stepper-connector compact />
+        <c-navigation.stepper-step compact label="Security promises" label_class="hidden sm:inline" role="listitem" ::data-state="step === 'security' ? 'active' : step === 'complete' || step === 'plan' ? 'completed' : ''" ::aria-current="step === 'security' ? 'step' : null" />
+        {% if billing_enabled %}
+            <c-navigation.stepper-connector compact />
+            <c-navigation.stepper-step compact label="Your plan" label_class="hidden sm:inline" role="listitem" ::data-state="step === 'plan' ? 'active' : ''" ::aria-current="step === 'plan' ? 'step' : null" />
+        {% endif %}
+        </c-navigation.stepper>
+        {% if current_step == 'plan' %}
+            <c-layout.page-header title="Choose your plan" subtitle="Start with Community or try Business. You can change your plan later." />
+            {{ plan_selection_data|json_script:"onboarding-plan-data" }}
+            <c-layout.frame x-data="planSelection(window.parseJsonScript('onboarding-plan-data'))">
+            <div class="flex justify-center">
+                <c-navigation.segmented aria-label="Billing period">
+                <c-navigation.segment ::data-active="billingPeriod === 'monthly'" ::aria-pressed="billingPeriod === 'monthly'" @click="billingPeriod = 'monthly'">Monthly</c-navigation.segment>
+                <c-navigation.segment ::data-active="billingPeriod === 'annual'" ::aria-pressed="billingPeriod === 'annual'" @click="billingPeriod = 'annual'">Annual</c-navigation.segment>
+                </c-navigation.segmented>
+            </div>
+            <div class="grid gap-5 lg:grid-cols-3">
+                {% for plan in plan_cards %}
+                    <c-billing.plan-card :plan="plan">
+                    <c-slot name="action">
+                    {% if plan.key == plan_hint %}<c-badges.secondary>Your selected plan</c-badges.secondary>{% endif %}
+                    <form method="post" action="{% url 'teams:onboarding_wizard' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="plan" value="{{ plan.key }}">
+                        <input type="hidden" name="billing_period" :value="billingPeriod">
+                        {% if plan.key == 'business' %}
+                            <c-buttons.primary type="submit" class="w-full">Start {{ trial_days }}-day free trial</c-buttons.primary>
+                        {% elif plan.key == 'enterprise' %}
+                            <c-buttons.secondary type="submit" class="w-full">Contact sales</c-buttons.secondary>
+                        {% else %}
+                            <c-buttons.secondary type="submit" class="w-full">Continue with Community</c-buttons.secondary>
+                        {% endif %}
+                    </form>
+                    </c-slot>
+                    </c-billing.plan-card>
+                {% endfor %}
+            </div>
+            <c-forms.hint>Business continues to checkout. No subscription starts until you confirm it there.</c-forms.hint>
+            </c-layout.frame>
+        {% else %}
+            <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
+                <c-cards.card>
+                <c-layout.frame>
+                {% if current_step == 'welcome' %}
+                    <c-forms.hint>
+                    {% if first_name %}
+                        Welcome, {{ first_name }}
+                    {% else %}
+                        Welcome
+                    {% endif %}
+                    </c-forms.hint>
+                    <c-layout.page-header title="Set up your security workspace" subtitle="Add your organisation and security commitments once. Use them when generating artifacts and preparing product assessments." />
+                    <c-onboarding.reason number="01" title="Who you are" description="Record your organisation and the person responsible for your artifacts. These details form your default contact profile." />
+                    <c-onboarding.reason number="02" title="Where to report a vulnerability" description="Give security researchers a contact email. You can publish it through your Trust Center's security.txt." />
+                    <c-onboarding.reason number="03" title="How you support your software" description="Choose a default support period and patch targets so you can track progress against your commitments." />
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <c-buttons.primary href="{% url 'teams:onboarding_wizard' %}?step=setup">Start <i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.primary>
+                        <c-forms.hint>Takes about two minutes.</c-forms.hint>
+                    </div>
+                {% elif current_step == 'setup' %}
+                    <form method="post"
+                          action="{% url 'teams:onboarding_wizard' %}"
+                          novalidate
+                          @submit="submit($event)"
+                          class="flex flex-col gap-6">
+                        {% csrf_token %}
+                        {% if form.non_field_errors %}
+                            <c-feedback.alert variant="danger">{{ form.non_field_errors }}</c-feedback.alert>
+                        {% endif %}
+                        <div x-ref="organisation"
+                             x-show="step === 'organisation'"
+                             class="flex flex-col gap-6">
+                            <c-layout.page-header title="Who are you?" subtitle="These details identify your organisation. You can change them later. Uploaded artifacts always keep their original content." tabindex="-1" x-ref="organisationTitle" />
+                            <c-forms.field label="Organisation name" for="id_company_name" required hint="Names your workspace and identifies your organisation." :error="form.company_name.errors">
+                            <c-forms.input id="id_company_name" name="company_name" required maxlength="255" autocomplete="organization" value="{{ form.company_name.value|default:'' }}" />
+                            </c-forms.field>
+                            <c-forms.field label="Your name" for="id_contact_name" required hint="The person responsible for your artifacts." :error="form.contact_name.errors">
+                            <c-forms.input id="id_contact_name" name="contact_name" required maxlength="255" autocomplete="name" value="{{ form.contact_name.value|default:'' }}" />
+                            </c-forms.field>
+                            <div class="grid gap-5 sm:grid-cols-2">
+                                <c-forms.field label="Website" for="id_website" hint="Optional. Your organisation's website." :error="form.website.errors">
+                                <c-forms.input id="id_website" name="website" type="url" autocomplete="url" maxlength="200" value="{{ form.website.value|default:'' }}" placeholder="https://example.com" />
+                                </c-forms.field>
+                                <c-forms.field label="Contact email" for="id_email" hint="We suggest this as your security contact next." :error="form.email.errors">
+                                <c-forms.input id="id_email" name="email" type="email" x-ref="email" autocomplete="email" value="{{ form.email.value|default:'' }}" />
+                                </c-forms.field>
+                            </div>
+                            <div class="flex flex-col items-start gap-3">
+                                <c-buttons.secondary size="sm" @click="addressExpanded = !addressExpanded" ::aria-expanded="addressExpanded" aria-controls="registered-address"><i class="fas fa-plus" aria-hidden="true"></i>Registered address</c-buttons.secondary>
+                                <c-forms.field id="registered-address" class="w-full" x-show="addressExpanded" x-cloak label="Registered address" for="id_address" hint="Optional. The organisation's postal address." :error="form.address.errors">
+                                <c-forms.textarea id="id_address" name="address" autocomplete="street-address" maxlength="2000" rows="3" value="{{ form.address.value|default:'' }}" />
+                                </c-forms.field>
+                            </div>
+                            <c-forms.field label="What are you trying to accomplish?" for="id_goal" hint="Optional. Helps us understand what you need." :error="form.goal.errors">
+                            <c-forms.textarea id="id_goal" name="goal" maxlength="1000" rows="2" value="{{ form.goal.value|default:'' }}" />
+                            </c-forms.field>
+                            <div class="flex flex-wrap justify-between gap-3">
+                                <c-buttons.secondary href="{% url 'teams:onboarding_wizard' %}">Back</c-buttons.secondary>
+                                <c-buttons.primary @click="next()">Continue <i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.primary>
+                            </div>
+                        </div>
+                        <div x-ref="security"
+                             x-show="step === 'security'"
+                             x-cloak
+                             class="flex flex-col gap-6">
+                            <c-layout.page-header title="Your security promises" subtitle="Set defaults for future assessments and track how quickly vulnerabilities are fixed. These settings do not certify compliance." tabindex="-1" x-ref="securityTitle" />
+                            <c-forms.field label="Vulnerability reports go to" for="id_security_email" :error="form.security_email.errors">
+                            <c-forms.input id="id_security_email" name="security_email" type="email" x-ref="securityEmail" value="{{ form.security_email.value|default:'' }}" placeholder="security@example.com" />
+                            </c-forms.field>
+                            <c-forms.checkbox name="publish_security_txt" value="on" :checked="form.publish_security_txt.value">Publish this email in my Trust Center's security.txt</c-forms.checkbox>
+                            <c-forms.field label="Default support period (years)" for="id_default_support_period_years" hint="Used for new product assessments, from the release date or assessment date. A product's support date takes precedence." :error="form.default_support_period_years.errors">
+                            <c-forms.input id="id_default_support_period_years" name="default_support_period_years" type="number" min="5" max="100" step="1" value="{{ form.default_support_period_years.value|default_if_none:'' }}" />
+                            </c-forms.field>
+                            <div class="flex flex-col gap-4"
+                                 x-data="{ mode: '{{ form.mode.value|default:'recommended'|escapejs }}' }">
+                                <c-forms.field label="Maximum time to fix" for="id_mode" hint="Recommended: critical 7, high 30 and medium 90 days. Low is best effort." :error="form.mode.errors">
+                                <c-forms.select id="id_mode" name="mode" x-model="mode">
+                                <option value="recommended">Use recommended patch targets</option>
+                                <option value="custom">Set my own</option>
+                                </c-forms.select>
+                                </c-forms.field>
+                                <div class="grid gap-4 sm:grid-cols-2" x-show="mode === 'custom'" x-cloak>
+                                    {% for field in form %}
+                                        {% if field.name == 'critical' or field.name == 'high' or field.name == 'medium' or field.name == 'low' %}
+                                            <c-forms.field label="{{ field.label }} (days)" for="{{ field.id_for_label }}" :error="field.errors">
+                                            <c-forms.input id="{{ field.id_for_label }}" name="{{ field.name }}" type="number" min="0" max="3650" step="1" value="{{ field.value|default_if_none:'' }}" placeholder="Best effort" ::disabled="mode !== 'custom'" />
+                                            </c-forms.field>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                                <c-forms.hint>Leave a target empty for best effort. That severity is excluded from the patch SLA percentage.</c-forms.hint>
+                            </div>
+                            <div class="flex flex-wrap justify-between gap-3">
+                                <c-buttons.secondary @click="back()" ::disabled="isSubmitting">Back</c-buttons.secondary>
+                                <c-buttons.primary type="submit" ::disabled="isSubmitting"><c-feedback.spinner size="sm" x-show="isSubmitting" x-cloak /><span x-text="isSubmitting ? 'Saving...' : 'Save and continue'">Save and continue</span></c-buttons.primary>
+                            </div>
+                        </div>
+                    </form>
+                {% elif current_step == 'complete' %}
+                    <c-feedback.status tone="success" label="Workspace ready" />
+                    <c-layout.page-header title="Your workspace is set up" subtitle="Your settings are saved. Create a product and component, then connect a repository or upload your first artifact." />
+                    <c-forms.hint>{{ company_name }}</c-forms.hint>
+                    <div class="flex justify-end">
+                        <c-buttons.primary href="{{ next_url }}">
+                        {% if billing_enabled %}
+                            Choose your plan
+                        {% else %}
+                            Go to dashboard
+                        {% endif %}
+                        <i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.primary>
+                        </div>
+                    {% endif %}
+                    </c-layout.frame>
+                    </c-cards.card>
+                    <aside aria-label="What this gives you">
+                        <c-cards.card flush>
+                        <c-cards.header compact title="What this gives you" hint="A reusable starting point for your workspace." />
+                        <c-onboarding.checklist-item title="Organisation identity" description="Your default manufacturer and supplier profile." :complete="setup_saved" ::data-active="step === 'organisation'" />
+                        <c-onboarding.checklist-item title="An artifact contact" description="The person responsible for SBOM inquiries." :complete="setup_saved" ::data-active="step === 'organisation'" />
+                        <c-onboarding.checklist-item title="A security contact" description="Where researchers can report vulnerabilities." :complete="security_contact_saved" ::data-active="step === 'security'" />
+                        <c-onboarding.checklist-item title="A support default" description="A starting point for future product assessments." :complete="support_default_saved" ::data-active="step === 'security'" />
+                        <c-onboarding.checklist-item title="Measurable patch targets" description="Track time to fix against your chosen targets." :complete="setup_saved" ::data-active="step === 'security'" />
+                        </c-cards.card>
+                    </aside>
+                </div>
+            {% endif %}
+            </c-layout.frame>
+            </c-layout.frame>
+        </main>
+    {% endblock %}
+    {% block scripts %}
+        {% vite_asset 'sbomify/apps/teams/js/main.ts' %}
+    {% endblock %}
