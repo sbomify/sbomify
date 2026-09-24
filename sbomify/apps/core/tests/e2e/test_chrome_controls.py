@@ -252,10 +252,15 @@ def test_notification_refresh_ignores_an_older_response(authenticated_page: Page
 @pytest.mark.django_db
 def test_clearing_notifications_reports_failure_and_keeps_the_list(authenticated_page: Page) -> None:
     page = authenticated_page
-    records = [{
-        "id": "example", "type": "alert", "message": "Example notification", "severity": "info",
-        "created_at": "2020-01-01T12:00:00Z",
-    }]
+    records = [
+        {
+            "id": "example",
+            "type": "alert",
+            "message": "Example notification",
+            "severity": "info",
+            "created_at": "2020-01-01T12:00:00Z",
+        }
+    ]
     page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=records))
     page.route("**/api/v1/notifications/clear/", lambda route: route.fulfill(status=503))
     page.goto("/dashboard")
