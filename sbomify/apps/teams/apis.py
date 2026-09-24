@@ -432,14 +432,14 @@ def update_team_branding(
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     # Check every new file before storing any, so a rejected logo cannot leave a new icon half-applied.
-    images: dict[str, tuple[bytes, str, str]] = {}
+    # Each file is read again for its upload, so only one sits in memory at a time.
+    images: dict[str, tuple[Any, str, str]] = {}
     for field in ["icon", "logo"]:
         if (file := request.FILES.get(field)) and not getattr(payload, f"{field}_pending_deletion", False):
             file.seek(0)
-            data = file.read()
-            if not (image_type := _branding_image_type(data)):
+            if not (image_type := _branding_image_type(file.read())):
                 return 400, {"detail": _INVALID_BRANDING_IMAGE, "error_code": ErrorCode.VALIDATION_ERROR}
-            images[field] = (data, *image_type)
+            images[field] = (file, *image_type)
 
     # TODO: has to be a separate model
     branding_data = _normalize_branding_payload(team.branding_info)
@@ -451,11 +451,12 @@ def update_team_branding(
         if getattr(payload, f"{field}_pending_deletion", False):
             branding_info[field] = ""
         elif field in images:
-            data, extension, content_type = images[field]
+            file, extension, content_type = images[field]
             branding_info[field] = generate_branding_filename(team, field, extension)
+            file.seek(0)
 
             try:
-                upload_to_s3(branding_info[field], data, content_type)
+                upload_to_s3(branding_info[field], file.read(), content_type)
             except Exception:
                 logger.exception(f"Failed to upload {field} file {branding_info[field]}")
                 raise

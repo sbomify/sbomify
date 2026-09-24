@@ -8,6 +8,7 @@ browser to run or fetch.
 
 import json
 import tracemalloc
+from unittest.mock import call
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -246,6 +247,25 @@ class TestBrandingSettingsForm:
         stored = team.branding_info["icon"]
         assert stored.endswith(".jpg")
         s3.Bucket.return_value.put_object.assert_called_once_with(Key=stored, Body=JPEG, ContentType="image/jpeg")
+
+    def test_an_icon_and_a_logo_are_each_stored_from_their_own_bytes(self, owner, s3):
+        client, team = owner
+
+        response = self.post(
+            client,
+            team,
+            {
+                "icon": SimpleUploadedFile("icon.png", PNG, content_type="image/png"),
+                "logo": SimpleUploadedFile("logo.jpg", JPEG, content_type="image/jpeg"),
+            },
+        )
+
+        assert json.loads(response["HX-Trigger"])["messages"][0]["type"] == "success"
+        team.refresh_from_db()
+        assert s3.Bucket.return_value.put_object.call_args_list == [
+            call(Key=team.branding_info["icon"], Body=PNG, ContentType="image/png"),
+            call(Key=team.branding_info["logo"], Body=JPEG, ContentType="image/jpeg"),
+        ]
 
     def test_one_rejected_file_stores_nothing(self, owner, s3):
         """A valid icon must not be half-applied, with its old file deleted, when the logo beside it fails."""
