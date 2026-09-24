@@ -288,8 +288,12 @@ class TestBrandingSettingsForm:
                 },
             )
 
-        new_icon = s3.Bucket.return_value.put_object.call_args_list[0].kwargs["Key"]
-        assert s3.Object.call_args_list == [call(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, new_icon)]
+        # The failed key goes too: S3 can store an object and still answer with an error.
+        new_icon, new_logo = (upload.kwargs["Key"] for upload in s3.Bucket.return_value.put_object.call_args_list)
+        assert s3.Object.call_args_list == [
+            call(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, new_icon),
+            call(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, new_logo),
+        ]
         team.refresh_from_db()
         assert (team.branding_info["icon"], team.branding_info["logo"]) == ("old_icon.png", "old_logo.png")
 

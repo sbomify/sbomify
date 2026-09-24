@@ -470,7 +470,7 @@ def update_team_branding(
                 upload_to_s3(branding_info[field], file.read(), content_type)
             except Exception:
                 logger.exception(f"Failed to upload {field} file {branding_info[field]}")
-                _delete_branding_files(uploaded)
+                _delete_branding_files([*uploaded, branding_info[field]])
                 raise
             uploaded.append(branding_info[field])
         else:
