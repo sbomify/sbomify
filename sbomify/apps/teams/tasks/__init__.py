@@ -1,12 +1,18 @@
+import json
 import logging
 from datetime import timedelta
+from typing import cast
 
 import dramatiq
 import requests
+import urllib3
+from django.db.models import DateTimeField, F
+from django.db.models.functions import Coalesce, Greatest, Now
 from django.utils import timezone
 
 from sbomify.apps.core.integrations.http import request_with_retry
 from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.utils import custom_domain_challenge, invalidate_custom_domain_cache
 from sbomify.task_utils import record_task_breadcrumb
 
 logger = logging.getLogger(__name__)
@@ -17,6 +23,59 @@ BASE_DELAY_MINUTES = 5
 # Note: This doesn't stop verification attempts, it just caps the backoff delay at ~3.5 days
 # The system will continue checking indefinitely at this maximum interval
 MAX_RETRIES = 10
+# Our domain-check answer is a few hundred bytes, and whoever runs the domain
+# chooses what answers the probe.
+PROBE_MAX_BYTES = 4096
+
+
+def _serves_challenge(team_id: int, domain: str) -> bool:
+    """Whether the domain, fetched through public DNS, answers with its challenge."""
+    url = f"https://{domain}/.well-known/com.sbomify.domain-check"
+    headers = {"User-Agent": "sbomify-domain-verification/1.0"}
+    try:
+        # No redirects: the answer has to come from the domain itself.
+        with request_with_retry(
+            "GET", url, headers=headers, timeout=10, verify=True, allow_redirects=False, stream=True
+        ) as response:
+            logger.debug(f"Probe response status: {response.status_code}")
+            if response.status_code != 200:
+                return False
+            body = response.raw.read(PROBE_MAX_BYTES, decode_content=True)
+        answer = json.loads(body)
+    except (requests.RequestException, urllib3.exceptions.HTTPError, ValueError):
+        return False
+    served = answer.get("challenge") if isinstance(answer, dict) else None
+    return isinstance(served, str) and served == custom_domain_challenge(team_id, domain)
+
+
+@dramatiq.actor(queue_name="domain_verification", max_retries=0, time_limit=60000)
+def probe_custom_domain(team_id: int, domain: str) -> None:
+    """Validate one domain if it answers with its challenge.
+
+    One message per domain, so a domain that answers slowly spends its own time
+    limit instead of holding up the domains queued after it.
+    """
+    if not _serves_challenge(team_id, domain):
+        return
+
+    # Conditional on the domain the probe fetched: the workspace may have
+    # changed it while the request was in flight.
+    validated = Team.objects.filter(pk=team_id, custom_domain=domain, custom_domain_validated=False).update(
+        custom_domain_validated=True,
+        # Validation is what makes the custom domain the preferred one,
+        # so it rewrites every absolute URL in the CSAF distribution.
+        # This bypasses the model signal, so it bumps the marker itself.
+        csaf_feed_updated_at=Greatest(
+            Coalesce(F("csaf_feed_updated_at"), Now(), output_field=DateTimeField()),
+            Now(),
+            output_field=DateTimeField(),
+        ),
+        custom_domain_verification_failures=0,
+        custom_domain_last_checked_at=timezone.now(),
+    )
+    if validated:
+        invalidate_custom_domain_cache(domain)
+        logger.info(f"Successfully validated domain {domain}")
 
 
 @dramatiq.actor(time_limit=900000)  # 15 minutes
@@ -24,7 +83,7 @@ def verify_custom_domains() -> None:
     """
     Periodic task to verify unvalidated custom domains.
 
-    This task iterates through unvalidated domains and sends a probe request.
+    This task iterates through unvalidated domains and queues a probe for each one due.
     It uses exponential backoff to avoid spamming domains that are not yet configured.
 
     Time limit: 15 minutes to accommodate large numbers of domains.
@@ -61,46 +120,13 @@ def verify_custom_domains() -> None:
         )
 
         try:
-            # Send a probe request
-            # We use a short timeout because we just want to see if it reaches us
-            # We expect the request to hit our middleware, which will validate the domain
-            # even if this request eventually returns 404 or something else.
-            # However, for the middleware to trigger, the DNS must point to us.
-
-            # We add a special header so we can potentially identify these probes if needed
-            headers = {"User-Agent": "sbomify-domain-verification/1.0"}
-
-            # Use .well-known/com.sbomify.domain-check endpoint to ensure ALLOWED_HOSTS is validated
-            # This prevents random domains from using our server as a verification endpoint
-            protocol = "https"
-            url = f"{protocol}://{team.custom_domain}/.well-known/com.sbomify.domain-check"
-
-            try:
-                response = request_with_retry("GET", url, headers=headers, timeout=10, verify=True)
-                logger.debug(f"Probe response status: {response.status_code}")
-                # If we get a response (even 404), it means DNS is likely configured
-                # and pointing to a server. If it points to US, our middleware
-                # should have intercepted it and marked it valid.
-
-                # Check if it was validated by the middleware (refresh from DB)
-                team.refresh_from_db()
-                if team.custom_domain_validated:
-                    logger.info(f"Successfully validated domain {team.custom_domain}")
-                    continue
-
-            except requests.RequestException:
-                # HTTPS failed, try HTTP? Or just count as failure.
-                # Let's count as failure for now.
-                pass
-
-            # If we are here, validation failed (endpoint didn't validate or request failed)
+            # Counted before the probe runs, so a probe that times out still backs off.
             # Use F() expression for atomic increment to prevent race conditions
-            from django.db.models import F
-
             Team.objects.filter(pk=team.pk).update(
                 custom_domain_verification_failures=F("custom_domain_verification_failures") + 1,
                 custom_domain_last_checked_at=now,
             )
+            probe_custom_domain.send(team.pk, cast(str, team.custom_domain))
 
         except Exception as e:
             logger.error(f"Error verifying domain {team.custom_domain}: {e}")

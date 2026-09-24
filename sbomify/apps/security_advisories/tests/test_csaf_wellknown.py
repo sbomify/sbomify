@@ -871,9 +871,9 @@ class TestPublisherIdentityMovesTheMarker:
         assert self._marker(team) > before
 
     @override_settings(TRUST_CENTER_DOMAIN="trustcenters.test")
-    def test_middleware_auto_validation_moves_it(self, team, rich_advisory) -> None:  # noqa: F811
+    def test_probe_validation_moves_it(self, team, rich_advisory, mocker) -> None:  # noqa: F811
         """That path validates with ``queryset.update()``, which no model signal sees."""
-        from sbomify.apps.core.middleware import CustomDomainContextMiddleware
+        from sbomify.apps.teams.tasks import probe_custom_domain
 
         team = _public(team)
         team.custom_domain = "trust.acme.test"
@@ -881,8 +881,8 @@ class TestPublisherIdentityMovesTheMarker:
         team.save(update_fields=["custom_domain", "custom_domain_validated"])
         before = self._marker(team)
 
-        middleware = CustomDomainContextMiddleware(lambda request: None)
-        middleware._auto_validate_domain(team, "trust.acme.test")
+        mocker.patch("sbomify.apps.teams.tasks._serves_challenge", return_value=True)
+        probe_custom_domain(team.pk, "trust.acme.test")
 
         team.refresh_from_db()
         assert team.custom_domain_validated is True
