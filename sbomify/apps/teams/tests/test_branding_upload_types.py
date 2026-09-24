@@ -3,7 +3,7 @@
 Icons and logos are served straight from the public media bucket. What lands
 there, the extension on its key and the ContentType it is served with all follow
 from what the file is: a PNG, JPEG or WebP, or an SVG with nothing in it for a
-browser to run.
+browser to run or fetch.
 """
 
 import json
@@ -132,6 +132,34 @@ class TestBrandingUploadEndpoint:
             pytest.param(
                 svg("<a xml:base='javascript:alert(1)//' href='#x'><rect width='10' height='10'/></a>"), id="xml-base"
             ),
+            pytest.param(svg("<style>@import 'https://example.com/a.css';</style>"), id="css-import"),
+            pytest.param(svg("<style>rect{fill:url(https://example.com/a.svg#g)}</style>"), id="css-external-url"),
+            pytest.param(
+                svg("<style>rect{fill:u\\72l(https://example.com/a.svg#g)}</style>"),
+                id="css-url-written-with-an-escape",
+            ),
+            pytest.param(
+                svg("<style>rect{fill:u\\72&#13;&#10;l(https://example.com/a.svg#g)}</style>"),
+                id="css-escape-before-a-crlf",
+            ),
+            pytest.param(
+                svg("<style>rect{fill:ur<!-- -->l(https://example.com/a.svg#g)}</style>"),
+                id="css-url-split-by-a-comment",
+            ),
+            pytest.param(svg("<style>ur<g/>l(https://example.com/a.svg#g)</style>"), id="element-inside-a-style-sheet"),
+            pytest.param(
+                svg("<style>rect{background:image-set('https://example.com/a.png' 1x)}</style>"), id="css-image-set"
+            ),
+            pytest.param(
+                svg("<rect style='fill:url(https://example.com/a.svg#g)' width='10' height='10'/>"),
+                id="style-attribute-external-url",
+            ),
+            pytest.param(
+                svg(
+                    "<rect width='10' height='10'><set attributeName='fill' to='url(https://example.com/a.svg#g)'/></rect>"
+                ),
+                id="animated-external-url",
+            ),
             pytest.param(b"<?xml version='1.0' encoding='x-unknown'?>" + svg(), id="unknown-encoding"),
             pytest.param(svg("<g/>" * 300_000), id="over-the-size-cap"),
             pytest.param(svg()[:-1], id="malformed"),
@@ -162,6 +190,14 @@ class TestBrandingUploadEndpoint:
             pytest.param(svg("<image href='data:image/png;base64,iVBORw0KGgo='/>"), id="embedded-png"),
             pytest.param(svg("<image href='data:image/jpg;base64,/9j/4AAQ'/>"), id="embedded-jpg"),
             pytest.param(svg("<style>.a{fill:#fff}</style><rect class='a' width='10' height='10'/>"), id="style"),
+            pytest.param(
+                svg("<style><![CDATA[.a{fill:url(#g)}]]></style><linearGradient id='g'/><rect class='a' width='10'/>"),
+                id="css-internal-reference",
+            ),
+            pytest.param(
+                svg("<rect style='fill:url(\"#g\");stroke:url( #g )' width='10' height='10'/>"),
+                id="style-attribute-internal-reference",
+            ),
             pytest.param(
                 svg(
                     "<g inkscape:label='Layer 1'><rect width='10' height='10'/></g>",

@@ -262,22 +262,49 @@ _MAX_SVG_BYTES = 1024 * 1024
 _SVG_ROOT = "{http://www.w3.org/2000/svg}svg"
 # Elements a browser runs as HTML or MathML even inside an SVG document.
 _LIVE_NAMESPACES = ("{http://www.w3.org/1999/xhtml}", "{http://www.w3.org/1998/Math/MathML}")
-# An in-document reference or an embedded raster image. Any other href loads or
-# runs something the check never saw.
+# An in-document reference or an embedded raster image, in an href or a CSS url().
+# Anything else loads or runs something the check never saw.
 _INERT_HREF = re.compile(r"#|data:image/(png|jpe?g|gif|webp)[;,]")
+# CSS that fetches from a plain string, or the start of a url() whose target _INERT_HREF checks.
+_CSS_FETCH = re.compile(r"@import|image-set\(|url\(\s*['\"]?\s*")
+_CSS_ESCAPE = re.compile(r"\\(?:([0-9a-f]{1,6})[ \t\n]?|(.))", re.IGNORECASE | re.DOTALL)
+
+
+def _css_fetches(css: str) -> bool:
+    """Whether ``css`` fetches anything but an in-document reference or an embedded raster image."""
+    if "\\" in css:
+        # Decode escapes as a browser does, where CRLF, CR and form feed each read as one line break.
+        css = _CSS_ESCAPE.sub(
+            lambda escape: chr(min(int(escape[1], 16), 0x10FFFF)) if escape[1] else escape[2],
+            re.sub(r"\r\n?|\f", "\n", css),
+        )
+    css = css.lower()
+    return any(
+        not fetch[0].startswith("url(") or not _INERT_HREF.match(css, fetch.end()) for fetch in _CSS_FETCH.finditer(css)
+    )
 
 
 class _InertSvgTarget:
-    """Parser target that raises at the first thing a browser could run. It keeps no element, so no tree builds up."""
+    """Parser target that raises at the first thing a browser could run or fetch.
+
+    It keeps no element, so no tree builds up, only the text of a style sheet it is inside.
+    """
 
     root_seen = False
+    style_sheet: list[str] | None = None
 
     def start(self, tag: str, attrib: dict[str, str]) -> None:
         if not self.root_seen and tag != _SVG_ROOT:
             raise ValueError("not an SVG")
         self.root_seen = True
-        if tag.rpartition("}")[2] == "script" or tag.startswith(_LIVE_NAMESPACES):
+        # A browser drops an element inside a style sheet and joins the text on either side of it.
+        if self.style_sheet is not None:
+            raise ValueError("element inside a style sheet")
+        element = tag.rpartition("}")[2]
+        if element == "script" or tag.startswith(_LIVE_NAMESPACES):
             raise ValueError("script, HTML or MathML element")
+        if element == "style":
+            self.style_sheet = []
         for attribute, value in attrib.items():
             name = attribute.rpartition("}")[2].lower()
             animated = value.strip().rpartition(":")[2].lower() if name == "attributename" else ""
@@ -285,19 +312,34 @@ class _InertSvgTarget:
                 raise ValueError("event handler, xml:base or animated href")
             if name == "href" and not _INERT_HREF.match(value.strip().lower()):
                 raise ValueError("href that leaves the document")
+            # Presentation attributes, style and animation values are CSS, and none of them has a namespace.
+            if "}" not in attribute and _css_fetches(value):
+                raise ValueError("CSS that fetches")
+
+    def data(self, text: str) -> None:
+        if self.style_sheet is not None:
+            self.style_sheet.append(text)
+
+    def end(self, tag: str) -> None:
+        if self.style_sheet is not None:
+            if _css_fetches("".join(self.style_sheet)):
+                raise ValueError("CSS that fetches")
+            self.style_sheet = None
 
     def pi(self, target: str, data: str) -> None:
         raise ValueError("processing instruction")
 
 
 def _is_inert_svg(data: bytes) -> bool:
-    """Whether ``data`` is an SVG that runs nothing when opened on its own.
+    """Whether ``data`` is an SVG that runs nothing and fetches nothing when opened on its own.
 
     Checked, never cleaned: a file is stored exactly as uploaded or not at all.
     A DTD is refused because its entities and attribute defaults add content the
     markup does not show, xml:base because it re-points every in-document href,
     and an animation of an href, an event handler or xml:base because it swaps
-    the checked value for another once the image loads.
+    the checked value for another once the image loads. CSS gets the href rule:
+    a url() stays in the document or holds a raster image, and @import and
+    image-set(), which fetch from a plain string, are refused.
     """
     parser = DefusedXMLParser(target=_InertSvgTarget(), forbid_dtd=True)
     try:
