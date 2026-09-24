@@ -45,6 +45,7 @@ from sbomify.task_utils import format_task_error
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError, SBOMGoneError
 from ..sdk.base import RetryLaterError
 from ..sdk.enums import RunReason, ScanMode
+from ..utils import plugin_plan_requirement, team_has_plugin_access
 
 logger = logging.getLogger(__name__)
 
@@ -481,11 +482,12 @@ def enqueue_assessment(
     triggered_by_token: AccessToken | None = None,
     delay_ms: int | None = None,
     release_id: str | None = None,
-) -> None:
+) -> bool:
     """Enqueue an assessment to be run asynchronously.
 
     This is the primary interface for triggering assessments. It serializes
-    the arguments and sends the task to the Dramatiq queue.
+    the arguments and sends the task to the Dramatiq queue. It refuses a plugin
+    the workspace's billing plan does not include, and returns whether it queued.
 
     The task dispatch is wrapped in transaction.on_commit() to ensure that
     the SBOM and any related data are visible to the worker when the task
@@ -521,6 +523,17 @@ def enqueue_assessment(
         ...     run_reason=RunReason.ON_UPLOAD,
         ... )
     """
+    # Every path that starts a run comes through here, so this is where the plan
+    # decides. Checking only when a workspace enables a plugin let a workspace that
+    # later left the plan keep running it.
+    if plugin_plan_requirement(plugin_name) is not None:
+        from sbomify.apps.sboms.models import SBOM
+
+        sbom = SBOM.objects.select_related("component__team").filter(id=sbom_id).first()
+        if sbom is not None and not team_has_plugin_access(sbom.component.team, plugin_name):
+            logger.info(f"[PLUGIN] Skipped {plugin_name} for SBOM {sbom_id}: the workspace's plan does not include it")
+            return False
+
     # Capture values at call time for the closure, as on_commit callbacks execute after this function returns
     task_sbom_id = sbom_id
     task_plugin_name = plugin_name
@@ -594,6 +607,7 @@ def enqueue_assessment(
         )
 
     transaction.on_commit(_capture_scan_initiated)
+    return True
 
 
 # Delay for attestation plugins in milliseconds (2 minutes)
@@ -953,7 +967,7 @@ def enqueue_assessments_for_sbom(
         # Apply delay for attestation plugins to allow external systems to process
         delay_ms = ATTESTATION_DELAY_MS if plugin_category == AssessmentCategory.ATTESTATION.value else None
 
-        enqueue_assessment(
+        queued = enqueue_assessment(
             sbom_id=sbom_id,
             plugin_name=plugin_name,
             run_reason=run_reason,
@@ -963,7 +977,8 @@ def enqueue_assessments_for_sbom(
             delay_ms=delay_ms,
             release_id=release_id,
         )
-        enqueued.append(plugin_name)
+        if queued:
+            enqueued.append(plugin_name)
 
     logger.info(f"[PLUGIN] Enqueued {len(enqueued)} assessments for SBOM {sbom_id}: {enqueued}")
 

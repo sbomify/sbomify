@@ -121,11 +121,11 @@ def check_rate_limit(key: str, limit: int = 5, period: int = 60) -> bool:
 
 
 def handle_community_downgrade_visibility(team: Team) -> None:
-    """Set all components to PUBLIC when downgrading to community plan.
+    """Set all components and products to PUBLIC when downgrading to community plan.
 
     Logs an audit trail of the visibility change for traceability.
     """
-    from sbomify.apps.sboms.models import Component
+    from sbomify.apps.sboms.models import Component, Product
     from sbomify.apps.security_advisories.signals import track_component_changes
 
     components = Component.objects.filter(team=team).exclude(visibility=Component.Visibility.PUBLIC)
@@ -138,10 +138,31 @@ def handle_community_downgrade_visibility(team: Team) -> None:
             team.key,
         )
 
+    # One save each, not a bulk update: the CSAF feed marker listens on product saves.
+    private_products = list(Product.objects.filter(team=team, is_public=False))
+    for product in private_products:
+        product.is_public = True
+        product.save(update_fields=["is_public"])
+    if private_products:
+        logger.warning(
+            "Community downgrade: set %d product(s) to PUBLIC for team %s",
+            len(private_products),
+            team.key,
+        )
+
 
 def apply_community_downgrade(team: Team) -> None:
-    """Apply Community's rules to a workspace that has just left a paid plan."""
+    """Apply Community's rules to a workspace that has just left a paid plan.
+
+    ``team`` must already carry the Community plan: the plugins it keeps are the
+    ones that plan includes.
+    """
+    from sbomify.apps.plugins.utils import drop_plugins_outside_plan
+
     handle_community_downgrade_visibility(team)
+    dropped = drop_plugins_outside_plan(team)
+    if dropped:
+        logger.info("Community downgrade: disabled %s for team %s", ", ".join(dropped), team.key)
 
 
 # Stripe statuses after which a subscription no longer pays for anything. ``unpaid``
