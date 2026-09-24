@@ -29,18 +29,9 @@ nothing (placeholder collapses) when the latest artifact has no crypto assets.
 </c-slot>
 <div class="space-y-4">
     <div class="grid grid-cols-3 gap-3">
-        <c-layout.stat-card compact accent="danger">
-        <c-layout.stat.value>{{ posture.pqc_counts.quantum_vulnerable|default:0 }}</c-layout.stat.value>
-        <c-layout.stat.label>Vulnerable</c-layout.stat.label>
-        </c-layout.stat-card>
-        <c-layout.stat-card compact accent="warning">
-        <c-layout.stat.value>{{ posture.pqc_counts.review|default:0 }}</c-layout.stat.value>
-        <c-layout.stat.label>Review</c-layout.stat.label>
-        </c-layout.stat-card>
-        <c-layout.stat-card compact accent="success">
-        <c-layout.stat.value>{{ posture.pqc_counts.quantum_safe|default:0 }}</c-layout.stat.value>
-        <c-layout.stat.label>Quantum-safe</c-layout.stat.label>
-        </c-layout.stat-card>
+        <c-layout.stat-card compact accent="danger" value="{{ posture.pqc_counts.quantum_vulnerable|default:0 }}" label="Vulnerable" />
+        <c-layout.stat-card compact accent="warning" value="{{ posture.pqc_counts.review|default:0 }}" label="Review" />
+        <c-layout.stat-card compact accent="success" value="{{ posture.pqc_counts.quantum_safe|default:0 }}" label="Quantum-safe" />
     </div>
     <div class="flex flex-wrap items-center justify-between gap-2">
         <a href="{% url 'core:component_item' component_id 'sboms' sbom_id %}"

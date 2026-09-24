@@ -1,70 +1,17 @@
 <div x-data="fileDragAndDrop({ accept: '{{ accept|escapejs }}', existingUrl: '{{ existing_url|default:""|escapejs }}', fieldName: '{{ field_name|default:""|escapejs }}' })">
-    <div class="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors"
-         :class="{ 'border-primary bg-primary/5': dragover, 'border-success bg-success/5': hasFile, 'border-border hover:border-primary/50': !dragover && !hasFile }"
-         @click="$refs.fileInput.click()"
-         @dragover.prevent="dragover = true"
-         @dragleave.prevent="dragover = false"
-         @drop.prevent="handleDrop">
-        <input type="file"
-               name="{{ field_name }}"
-               x-ref="fileInput"
-               class="hidden"
-               :accept="accept"
-               @change="handleFileSelect">
-        <template x-if="isEmpty">
-            <div class="flex flex-col items-center gap-3">
-                <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-cloud-upload-alt text-2xl text-primary"></i>
-                </div>
-                <p class="text-text font-medium m-0">Drop file here or click to upload</p>
-                <span class="text-text-muted text-sm" x-text="acceptHint"></span>
-            </div>
-        </template>
-        <template x-if="isImagePreview">
-            <div class="flex justify-center">
-                <img :src="previewUrl"
-                     alt="Preview"
-                     class="max-w-[200px] max-h-[200px] rounded-lg object-cover"
-                     width="200"
-                     height="200">
-            </div>
-        </template>
-        <template x-if="showExisting">
-            <div class="relative inline-block">
-                <img :src="existingUrl"
-                     alt="Current file"
-                     class="max-w-[200px] max-h-[200px] rounded-lg object-cover"
-                     width="200"
-                     height="200">
-                <div class="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                    <p class="text-white font-medium m-0">Click to change</p>
-                </div>
-            </div>
-        </template>
-    </div>
-    {% comment %}
-        The picked-file row: a name and the control that clears it. It is a
-        one-off strip, so it is composed from utilities with the library's icon
-        button doing the acting part.
-    {% endcomment %}
+    <c-forms.file-upload size="sm" name="{{ field_name }}" accept="{{ accept }}" input_ref="fileInput" active="dragover" preview="previewUrl || existingUrl" on_change="handleFileSelect" @dragover.prevent="dragover = true" @dragleave.prevent="dragover = false" @drop.prevent="handleDrop">
+    <span x-text="file?.name || (existingUrl ? 'Choose a replacement' : 'Drop a file or choose one')"></span>
+    </c-forms.file-upload>
     <template x-if="file">
-        <div class="flex items-center gap-3 mt-4 px-4 py-3 bg-surface border border-solid border-border rounded-lg">
-            <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-text truncate m-0" x-text="file.name"></p>
-            </div>
-            <c-buttons.icon label="Remove file" variant="danger" @click.prevent="removeFile">
-            <i class="fas fa-trash" aria-hidden="true"></i>
-            </c-buttons.icon>
-        </div>
+        <c-forms.file-preview>
+        <c-slot name="name"><span x-text="file.name"></span></c-slot>
+        <c-slot name="action"><c-buttons.icon-quiet size="sm" label="Remove file" @click.prevent="removeFile"><i class="fas fa-trash" aria-hidden="true"></i></c-buttons.icon-quiet></c-slot>
+        </c-forms.file-preview>
     </template>
     <template x-if="showExisting">
-        <div class="flex items-center gap-3 mt-4 px-4 py-3 bg-surface border border-solid border-border rounded-lg">
-            <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-text truncate m-0">Current file</p>
-            </div>
-            <c-buttons.icon label="Remove existing file" variant="danger" @click.prevent="removeExistingFile">
-            <i class="fas fa-trash" aria-hidden="true"></i>
-            </c-buttons.icon>
-        </div>
+        <c-forms.file-preview>
+        <c-slot name="name">Current file</c-slot>
+        <c-slot name="action"><c-buttons.icon-quiet size="sm" label="Remove existing file" @click.prevent="removeExistingFile"><i class="fas fa-trash" aria-hidden="true"></i></c-buttons.icon-quiet></c-slot>
+        </c-forms.file-preview>
     </template>
 </div>

@@ -1,0 +1,87 @@
+<c-layout.frame id="product-content" x-data="{ assignOpen: false, removeTarget: null, isPublic: {{ product.is_public|yesno:'true,false' }} }" @remove-product-component.window="removeTarget = $event.detail" @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic" hx-get="{{ inventory.base_url }}" hx-include="#product-components-filters" hx-trigger="refresh-product from:body" hx-target="this" hx-swap="outerHTML show:none" hx-sync="this:replace">
+{% url 'core:product_details_public' product.id as product_public_url %}
+<c-layout.page-header title="{{ product.name }}" editable_item_type="{{ product.has_crud_permissions|yesno:'product,' }}" editable_item_id="{{ product.id }}" :copy_values="header_copy_values" x-data="publicSharing('{{ product_public_url|escapejs }}')">
+<c-slot name="subtitle">
+{% if product.has_crud_permissions %}
+    {% include 'core/components/editable_single_field.html.j2' with item_type='product' item_id=product.id item_value=product.description|default:'' field_name='description' field_type='textarea' placeholder='Add a description' %}
+{% else %}
+    {{ product.description }}
+{% endif %}
+</c-slot>
+{% if can_administer %}
+    <c-forms.visibility-selector item_type="product" item_id="{{ product.id }}" visibility="{{ product.is_public|yesno:'public,private' }}" />
+{% elif product.is_public %}
+    <c-badges.success size="sm">Public</c-badges.success>
+{% else %}
+    <c-badges.secondary size="sm">Private</c-badges.secondary>
+{% endif %}
+{% if has_sboms %}
+    <c-actions-menu label="Download SBOM" caption="Download SBOM" icon="fas fa-download">
+    <c-dropdowns.item compact icon="fas fa-download" href="{% url 'core:sbom_download_product' product.id %}">Download CycloneDX</c-dropdowns.item>
+    <c-dropdowns.item compact icon="fas fa-download" href="{% url 'core:sbom_download_product' product.id %}?format=spdx">Download SPDX</c-dropdowns.item>
+    </c-actions-menu>
+{% endif %}
+<c-buttons.secondary size="sm" href="{{ product_public_url }}" x-show="isPublic"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>View Trust Center</c-buttons.secondary>
+{% if product.has_crud_permissions %}
+    <c-actions-menu label="Product actions" icon="fas fa-ellipsis">
+    <c-dropdowns.item compact icon="fas fa-plus" href="{% url 'core:release_new' %}?product={{ product.id }}">Create release</c-dropdowns.item>
+    <c-dropdowns.item compact icon="fas fa-link" x-show="isPublic" @click="copyToClipboard()">Copy public URL</c-dropdowns.item>
+    <c-dropdowns.item compact icon="fas fa-certificate" x-show="isPublic" @click="copyBadgeToClipboard()">Copy badge</c-dropdowns.item>
+    </c-actions-menu>
+{% endif %}
+</c-layout.page-header>
+<c-forms.hint compact>Current components and their latest assessments. Releases keep their own artifact collections.</c-forms.hint>
+<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <c-layout.stat-card label="Components" :value="metrics.components" icon="fas fa-cube" />
+    <c-layout.stat-card label="Artifacts" :value="metrics.artifacts" icon="fas fa-file-lines" />
+    <c-layout.stat-card label="Open vulnerabilities" :value="metrics.open" icon="fas fa-crosshairs" accent="warning" />
+    <c-layout.stat-card label="Past your patch SLA" :value="metrics.past_sla" icon="fas fa-clock" accent="danger" />
+</div>
+{% if metrics.unassessed %}
+    <c-feedback.alert variant="warning">{{ metrics.unassessed }} component{{ metrics.unassessed|pluralize }} still need{{ metrics.unassessed|pluralize:'s,' }} a completed security assessment.</c-feedback.alert>
+{% endif %}
+{% include 'core/product_components.html.j2' %}
+<div class="flex flex-col gap-4">
+    <c-layout.section-header title="Releases" level="2">
+    <c-slot name="actions">
+    <c-buttons.secondary size="sm" href="{% url 'core:product_releases' product.id %}">View all {{ release_inventory.total }}<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.secondary>
+    </c-slot>
+    </c-layout.section-header>
+    <c-inventory.results :inventory="release_inventory" preview />
+</div>
+<c-cards.card flush>
+<c-cards.header compact title="Product details" />
+{% if has_cra_access %}
+    <c-navigation.accordion-item native label="CRA assessment">
+    {% include 'compliance/components/cra_product_card.html.j2' %}
+    </c-navigation.accordion-item>
+{% endif %}
+<c-navigation.accordion-item native label="Product links" hx-get="{% url 'core:product_links' product.id %}" hx-trigger="toggle once" hx-target="#product-links-panel" hx-swap="innerHTML">
+<div id="product-links-panel">
+    <c-feedback.loading message="Loading product links" />
+</div>
+</c-navigation.accordion-item>
+<c-navigation.accordion-item native label="Product identifiers" hx-get="{% url 'core:product_identifiers' product.id %}" hx-trigger="toggle once" hx-target="#product-identifiers-panel" hx-swap="innerHTML">
+<div id="product-identifiers-panel">
+    <c-feedback.loading message="Loading product identifiers" />
+</div>
+</c-navigation.accordion-item>
+<c-navigation.accordion-item native label="Compliance controls" hx-get="{% url 'controls:product_controls' current_team.key product.id %}" hx-trigger="toggle once" hx-target="#product-controls-panel" hx-swap="innerHTML">
+<div id="product-controls-panel">
+    <c-feedback.loading message="Loading compliance controls" />
+</div>
+</c-navigation.accordion-item>
+<c-navigation.accordion-item native label="Lifecycle" hx-get="{% url 'core:product_lifecycle' product.id %}" hx-trigger="toggle once" hx-target="#product-lifecycle-panel" hx-swap="innerHTML">
+<div id="product-lifecycle-panel">
+    <c-feedback.loading message="Loading lifecycle" />
+</div>
+</c-navigation.accordion-item>
+</c-cards.card>
+{% if product.has_crud_permissions %}
+    {% include 'core/components/product_component_dialogs.html.j2' %}
+    {% include 'core/components/product_release_dialogs.html.j2' with refresh_event='refresh-product' %}
+{% endif %}
+{% if can_delete %}
+    {% include 'components/product_danger_zone.html.j2' with product_id=product.id product_name=product.name %}
+{% endif %}
+</c-layout.frame>

@@ -1,0 +1,58 @@
+{% comment %}
+Private navigation follows Monitor, Ship and Prove. Products holds the product,
+release and component inventory tabs. Capability flags are live, so this component must not be fragment-cached.
+{% endcomment %}
+<div x-show="sidebarMobileOpen"
+     x-cloak
+     @click="sidebarMobileOpen = false"
+     class="fixed inset-0 bg-navy/50 backdrop-blur-sm z-40 lg:hidden"
+     aria-hidden="true"></div>
+<aside id="sidebar"
+       aria-label="Main navigation"
+       :data-mobile-open="sidebarMobileOpen"
+       x-trap.inert.noscroll="sidebarMobileOpen"
+       class="invisible lg:visible data-[mobile-open=true]:visible fixed inset-y-0 left-0 z-50 w-[var(--sidebar-width)] -translate-x-full data-[mobile-open=true]:translate-x-0 lg:translate-x-0 transition-transform duration-200 bg-surface border-r border-border flex flex-col">
+    <div class="h-16 flex items-center px-6 shrink-0">
+        <a href="{% url 'core:dashboard' %}" aria-label="sbomify home">
+            {% include 'core/components/brand/logo.html.j2' with class='h-6 w-auto text-text' %}
+        </a>
+        <div class="lg:hidden ml-auto">
+            <c-buttons.icon label="Close sidebar" @click="sidebarMobileOpen = false"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon>
+        </div>
+    </div>
+    <div class="px-3 pb-2">
+        <c-chrome.workspace-switcher />
+    </div>
+    <nav class="flex-1 overflow-y-auto px-3 pb-4 space-y-4"
+         aria-label="Primary navigation">
+        {% if not request.session.current_team.has_completed_wizard %}
+            <c-chrome.nav-item href="{% url 'teams:onboarding_wizard' %}" label="Get started" icon="fas fa-rocket" match="teams:onboarding_wizard" />
+        {% endif %}
+        <c-chrome.nav-group label="Monitor">
+        <c-chrome.nav-item href="{% url 'core:dashboard' %}" label="Overview" icon="fas fa-border-all" match="core:dashboard" />
+        {% if request.session.current_team.key %}
+            <c-chrome.nav-item href="{% url 'vulnerability_scanning:vulnerability_scans' request.session.current_team.key %}" label="Vulnerability scans" icon="fas fa-bullseye" match="vulnerability_scanning:" />
+        {% endif %}
+        </c-chrome.nav-group>
+        <c-chrome.nav-group label="Ship">
+        {% if 'core:component' in request.resolver_match.view_name or 'core:release' in request.resolver_match.view_name %}
+            {% firstof 'true' as inventory_active %}
+        {% endif %}
+        <c-chrome.nav-item :active="inventory_active" href="{% url 'core:products_dashboard' %}" label="Products" icon="fas fa-cube" match="core:product" />
+        </c-chrome.nav-group>
+        <c-chrome.nav-group label="Prove">
+        {% if can_administer %}
+            <c-chrome.nav-item href="{% url 'compliance:cra_product_list' %}" label="Posture" icon="fas fa-scale-balanced" match="compliance:" />
+        {% endif %}
+        <c-chrome.nav-item href="{% url 'core:security_advisories_dashboard' %}" label="Security advisories" icon="fas fa-shield-halved" match="core:security_advisor" />
+        </c-chrome.nav-group>
+    </nav>
+    <div class="px-3 py-3 border-t border-border space-y-1">
+        {% if can_administer %}
+            <c-chrome.nav-item href="{% url 'plugins:plugins_page' %}" label="Plugins" icon="fas fa-plug" match="plugins:" />
+        {% endif %}
+        {% if request.session.current_team.key %}
+            <c-chrome.nav-item href="{% url 'teams:team_settings' request.session.current_team.key %}" label="Settings" icon="fas fa-gear" match="teams:team_settings" />
+        {% endif %}
+    </div>
+</aside>

@@ -15,19 +15,23 @@
     "  5. `args` names URL kwargs the resolver fills from the current session:",
     "     'team_key' is the only one supported today.",
     "",
+    "  6. `suggested` includes the destination when search first opens.",
+    "     `example` offers a clickable search phrase that finds this destination.",
+    "",
     "Ordering within a section is by match quality, not by position here.",
     "Sections themselves are ordered by `SECTION_ORDER` in spotlight.py."
   ],
   "destinations": [
     {
-      "title": "Dashboard",
+      "title": "Overview",
       "url_name": "core:dashboard",
       "section": "navigate",
-      "icon": "fa-house",
-      "keywords": ["home", "overview", "start", "landing"]
+      "icon": "fa-border-all",
+      "keywords": ["home", "overview", "start", "landing", "dashboard"]
     },
     {
       "title": "Products",
+      "suggested": true,
       "url_name": "core:products_dashboard",
       "section": "navigate",
       "icon": "fa-cube",
@@ -35,20 +39,29 @@
     },
     {
       "title": "Components",
-      "url_name": "core:components_dashboard",
+      "suggested": true,
+      "url_name": "core:products_dashboard",
+      "query": {
+        "view": "components"
+      },
       "section": "navigate",
       "icon": "fa-puzzle-piece",
       "keywords": ["component list", "all components", "libraries", "modules"]
     },
     {
       "title": "Releases",
-      "url_name": "core:releases_dashboard",
+      "example": "versions",
+      "url_name": "core:products_dashboard",
+      "query": {
+        "view": "releases"
+      },
       "section": "navigate",
       "icon": "fa-tag",
       "keywords": ["versions", "tags", "release list", "shipped"]
     },
     {
       "title": "Security Advisories",
+      "suggested": true,
       "url_name": "core:security_advisories_dashboard",
       "section": "navigate",
       "icon": "fa-shield-halved",
@@ -72,16 +85,16 @@
       "roles": ["owner", "admin"]
     },
     {
-      "title": "CRA Compliance",
+      "title": "Posture",
       "url_name": "compliance:cra_product_list",
       "section": "navigate",
       "icon": "fa-scale-balanced",
-      "keywords": ["cra", "cyber resilience act", "compliance", "conformity", "eu regulation", "doc", "declaration"],
+      "keywords": ["cra", "cyber resilience act", "compliance", "conformity", "eu regulation", "doc", "declaration", "cra compliance"],
       "roles": ["owner", "admin"]
     },
     {
       "title": "Vulnerability trends",
-      "url_name": "vulnerability_scanning:vulnerability_trends",
+      "url_name": "core:dashboard_trends",
       "section": "navigate",
       "icon": "fa-chart-line",
       "keywords": ["trends", "over time", "history", "vulnerability chart", "graph", "metrics"],
@@ -128,7 +141,6 @@
       "keywords": ["enterprise", "sales", "custom plan", "talk to sales", "quote"],
       "roles": ["owner"]
     },
-
     {
       "title": "New product",
       "url_name": "core:product_new",
@@ -136,6 +148,15 @@
       "icon": "fa-plus",
       "keywords": ["create product", "add product"],
       "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Add release",
+      "example": "new release",
+      "url_name": "core:release_new",
+      "section": "create",
+      "icon": "fa-tag",
+      "keywords": ["new release", "create release", "version"],
+      "roles": ["owner", "admin", "member"]
     },
     {
       "title": "New component",
@@ -153,13 +174,12 @@
       "keywords": ["create advisory", "publish advisory", "disclose"],
       "roles": ["owner", "admin"]
     },
-
     {
       "title": "Workspace settings",
       "url_name": "teams:team_settings",
       "section": "settings",
       "icon": "fa-sliders",
-      "keywords": ["general settings", "workspace name", "preferences", "configuration"],
+      "keywords": ["general settings", "workspace name", "preferences", "configuration", "patch SLA", "patch targets", "freshness", "support period", "support years"],
       "args": ["team_key"],
       "roles": ["owner", "admin"]
     },
@@ -175,6 +195,7 @@
     },
     {
       "title": "API tokens",
+      "example": "api key",
       "url_name": "teams:team_settings",
       "section": "settings",
       "icon": "fa-key",
@@ -184,11 +205,11 @@
       "roles": ["owner", "admin"]
     },
     {
-      "title": "Contacts",
+      "title": "Parties",
       "url_name": "teams:team_settings",
       "section": "settings",
       "icon": "fa-address-book",
-      "keywords": ["contact profiles", "supplier contact", "author", "manufacturer"],
+      "keywords": ["contact profiles", "contacts", "parties", "supplier contact", "author", "manufacturer"],
       "args": ["team_key"],
       "fragment": "contact-profiles",
       "roles": ["owner", "admin"]
@@ -240,10 +261,12 @@
       "icon": "fa-right-left",
       "keywords": ["change workspace", "other workspace", "my workspaces", "tenant"]
     },
-
     {
       "title": "Upload an SBOM",
-      "url_name": "core:components_dashboard",
+      "url_name": "core:products_dashboard",
+      "query": {
+        "view": "components"
+      },
       "section": "actions",
       "icon": "fa-upload",
       "keywords": ["import sbom", "upload artifact", "add sbom", "cyclonedx", "spdx", "import"],
@@ -251,7 +274,10 @@
     },
     {
       "title": "Upload a VEX",
-      "url_name": "core:components_dashboard",
+      "url_name": "core:products_dashboard",
+      "query": {
+        "view": "components"
+      },
       "section": "actions",
       "icon": "fa-upload",
       "keywords": ["import vex", "vex document", "suppress", "triage import"],
@@ -274,6 +300,14 @@
       "keywords": ["view public page", "customer view", "what customers see"]
     },
     {
+      "title": "Connect a repository",
+      "url_name": "core:repository_setup",
+      "section": "actions",
+      "icon": "fa-code-branch",
+      "keywords": ["repository setup", "coding agent", "terminal", "TUI", "Docker", "uv", "workflow", "lockfile"],
+      "roles": ["owner", "admin", "member"]
+    },
+    {
       "title": "Get started wizard",
       "url_name": "teams:onboarding_wizard",
       "section": "actions",
@@ -286,6 +320,16 @@
       "section": "actions",
       "icon": "fa-life-ring",
       "keywords": ["help", "support", "contact us", "bug report", "feedback"]
+    },
+    {
+      "title": "Compliance controls",
+      "url_name": "teams:team_settings",
+      "args": ["team_key"],
+      "section": "settings",
+      "icon": "fa-list-check",
+      "keywords": ["compliance frameworks", "catalog", "OSCAL", "SOC 2", "ISO 27001", "control status"],
+      "roles": ["owner", "admin"],
+      "fragment": "controls"
     }
   ]
 }

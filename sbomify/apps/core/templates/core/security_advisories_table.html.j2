@@ -12,16 +12,16 @@
         {# The shell draws the frame itself, so the table needs no card around it. #}
         <c-tables.shell>
         <c-tables.toolbar>
-        <c-tables.search id="advisories-search" label="Search advisories" placeholder="Search advisories..." x-model="search" />
+        <c-forms.search-input size="sm" id="advisories-search" label="Search advisories" placeholder="Search advisories..." x-model="search" />
         {# Status filter #}
-        <c-tables.select id="advisories-status-filter" label="Filter by status" x-model="filter">
+        <c-forms.select size="md" id="advisories-status-filter" label="Filter by status" x-model="filter">
         <option value="all">All statuses</option>
         <option value="identified">Identified</option>
         <option value="investigating">Investigating</option>
         <option value="fix_in_progress">Fix in progress</option>
         <option value="resolved">Resolved</option>
         <option value="wont_fix">Won't fix</option>
-        </c-tables.select>
+        </c-forms.select>
         <c-slot name="right">
         <c-tables.page-size id="advisories-per-page" x-model.number="perPage">
         <option value="5">5</option>
@@ -31,13 +31,13 @@
         </c-tables.page-size>
         </c-slot>
         </c-tables.toolbar>
-        <c-tables.table>
+        <c-tables.table sized variant_class="min-w-144 sm:min-w-192 md:min-w-256" aria-label="Security advisories">
         <c-tables.head>
-        <c-tables.header-cell sort="severity">Severity</c-tables.header-cell>
+        <c-tables.header-cell sort="severity" class="w-32">Severity</c-tables.header-cell>
         <c-tables.header-cell sort="title" nowrap>Advisory</c-tables.header-cell>
-        <c-tables.header-cell class="hidden md:table-cell">Products</c-tables.header-cell>
-        <c-tables.header-cell sort="status">Status</c-tables.header-cell>
-        <c-tables.header-cell sort="updated" date class="hidden sm:table-cell">Updated</c-tables.header-cell>
+        <c-tables.header-cell class="hidden md:table-cell w-48">Products</c-tables.header-cell>
+        <c-tables.header-cell sort="status" class="w-44">Status</c-tables.header-cell>
+        <c-tables.header-cell sort="updated" date class="hidden sm:table-cell w-40">Updated</c-tables.header-cell>
         <c-tables.actions-cell as="th" label="Actions" />
         </c-tables.head>
         <tbody>
@@ -47,10 +47,10 @@
                     Status and publication take their variant from the row Alpine
                     builds, so they bind data-variant rather than pick a variant
                     component. Severity is not a variant: it binds data-level and
-                    c-badges.severity-dynamic owns the five CVSS recipes.
+                    c-badges.severity owns the five CVSS recipes.
                 {% endcomment %}
                 <c-tables.cell nowrap>
-                <c-badges.severity-dynamic ::data-level="advisory.severity" x-text="advisory.severity || 'none'" />
+                <c-badges.severity ::data-level="advisory.severity" x-text="advisory.severity || 'none'" />
                 </c-tables.cell>
                 <c-tables.cell nowrap>
                 <div class="min-w-0">

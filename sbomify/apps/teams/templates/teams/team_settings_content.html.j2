@@ -1,0 +1,22 @@
+{% load teams %}
+<c-layout.frame id="settings-content" hx-history="false" x-data="settingsNavigation">
+<c-layout.page-header title="Settings" subtitle="{{ team.name|workspace_display }}. Manage your workspace and personal preferences.">
+<c-buttons.secondary size="sm" href="{% url 'teams:teams_dashboard' %}">Workspaces</c-buttons.secondary>
+</c-layout.page-header>
+<c-navigation.tabs links aria-label="Settings sections" hx-boost="true" hx-target="#settings-content" hx-select="#settings-content" hx-swap="outerHTML show:none settle:0" hx-sync="this:replace">
+{% for tab in settings_tabs %}
+    {% if tab.key == active_tab.key %}
+        <c-navigation.tab href="{% url 'teams:team_settings_tab' team_key=team.key tab=tab.key %}" active data-settings-tab="{{ tab.key }}">{{ tab.label }}</c-navigation.tab>
+    {% else %}
+        <c-navigation.tab href="{% url 'teams:team_settings_tab' team_key=team.key tab=tab.key %}"  data-settings-tab="{{ tab.key }}">{{ tab.label }}</c-navigation.tab>
+    {% endif %}
+{% endfor %}
+</c-navigation.tabs>
+<section id="{{ active_tab.key }}"
+         aria-label="{{ active_tab.label }} settings">
+    {% include active_tab.template_path %}
+</section>
+{% if active_tab.key == 'trust-center' %}
+    {% include 'teams/components/settings_access_modals.html.j2' %}
+{% endif %}
+</c-layout.frame>

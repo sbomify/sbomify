@@ -15,7 +15,7 @@ from django.template.loader import render_to_string
 PANEL = "min-w-48"
 ITEM = "group flex items-center gap-3"
 ICON_CHIP = "shrink-0 flex items-center justify-center"
-METRIC_CHIP = "inline-flex items-center gap-1.5"
+METRIC_CHIP = "inline-flex flex-wrap items-center min-w-0 max-w-full gap-1.5"
 ASSESSMENT = "inline-flex items-center justify-center gap-1"
 
 
@@ -133,9 +133,9 @@ def test_panel_width_comes_from_the_caller_class(rendered: str) -> None:
 def test_item_carries_the_shared_row(rendered: str) -> None:
     item = _classes(rendered, ITEM, "Edit")
     for bit in (
-        "flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold",
+        "flex items-center gap-3 w-full max-sm:min-h-11 px-2.5 py-2 rounded-lg text-sm font-semibold",
         "text-left no-underline cursor-pointer",
-        "transition-all duration-150",
+        "transition-colors duration-150",
         "focus-visible:outline-none",
     ):
         assert bit in item
@@ -276,7 +276,8 @@ def test_icon_chip_forwards_attrs_and_caller_class(rendered: str) -> None:
 def test_metric_chip_shares_the_pill_shell(rendered: str) -> None:
     chip = _classes(rendered, METRIC_CHIP, "Components")
     assert chip.startswith(
-        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5]"
+        "inline-flex flex-wrap items-center min-w-0 max-w-full gap-1.5 "
+        "px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5]"
     )
 
 
@@ -294,7 +295,7 @@ def test_metric_chip_accent_segments_tint_fill_border_and_text(rendered: str, ac
     chip = _classes(rendered, METRIC_CHIP, marker)
     assert f"bg-[color-mix(in_oklab,var(--color-{accent})_10%,transparent)]" in chip
     assert f"border-[color-mix(in_oklab,var(--color-{accent})_30%,transparent)]" in chip
-    assert f"text-[color:color-mix(in_oklab,var(--color-{accent})_60%,var(--color-text))]" in chip
+    assert f"text-[color:var(--color-{accent})]" in chip
     assert "bg-surface" not in chip
 
 
@@ -331,7 +332,9 @@ def test_assessment_pill_without_a_status_is_the_quiet_tint(rendered: str) -> No
     pill = _opening(rendered, ASSESSMENT, "+2")
     assert 'data-status=""' in pill
     classes = _classes(rendered, ASSESSMENT, "+2")
-    assert "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_20%,transparent)]" in classes
+    assert (
+        "text-[color:var(--color-text-muted)] bg-[color-mix(in_oklab,var(--color-border)_20%,transparent)]" in classes
+    )
     assert "border-[color-mix(in_oklab,var(--color-border)_40%,transparent)]" in classes
 
 
@@ -347,13 +350,13 @@ def test_assessment_pill_token_recipes_are_keyed_by_the_attribute(rendered: str,
     assert f"data-[status={status}]:hover:bg-[color-mix(in_oklab,var(--color-{token})_15%,transparent)]" in pill
 
 
-def test_assessment_pill_keeps_the_literal_ambers_and_reds(rendered: str) -> None:
-    """fail and summary-fail were raw values in the stylesheet, not the tokens."""
+def test_assessment_failures_use_the_warning_and_danger_tokens(rendered: str) -> None:
+    """Failure states share the palette with every other assessment surface."""
     pill = _classes(rendered, ASSESSMENT, "CRA")
-    assert "data-[status=fail]:text-[#b45309]" in pill
-    assert "data-[status=fail]:bg-[rgb(245_158_11/0.12)]" in pill
-    assert "data-[status=summary-fail]:text-[#dc2626]" in pill
-    assert "data-[status=summary-fail]:bg-[rgb(239_68_68/0.1)]" in pill
+    assert "data-[status=fail]:text-warning" in pill
+    assert "data-[status=fail]:bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)]" in pill
+    assert "data-[status=summary-fail]:text-danger" in pill
+    assert "data-[status=summary-fail]:bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)]" in pill
 
 
 def test_assessment_pill_carries_every_recipe_whatever_the_status(rendered: str) -> None:

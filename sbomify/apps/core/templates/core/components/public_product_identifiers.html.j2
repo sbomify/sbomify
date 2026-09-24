@@ -25,10 +25,11 @@ document.querySelector lookup is unambiguous.
                                  x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
                                  aria-hidden="true">
                             </svg>
-                            <span x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
-                                  class="text-text-muted text-xs">
-                                <c-feedback.spinner size="inline" />
-                            </span>
+                            <div x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
+                                 role="status"
+                                 aria-label="Loading barcode">
+                                <c-feedback.skeleton type="image" width="10rem" height="3rem" />
+                            </div>
                         </div>
                     {% endif %}
                 </div>

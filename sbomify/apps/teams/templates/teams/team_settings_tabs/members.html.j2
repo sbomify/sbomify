@@ -1,234 +1,102 @@
 {% load teams %}
-{% comment %}
-    Members, in the settings-tab style the branding tab set: no card chrome, an
-    h2 and one explainer line up top with the tab's one action beside them,
-    then plain h3 sections separated by hairlines. Each list is a bordered
-    rounded panel, matching the token list.
-{% endcomment %}
-<div>
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-lg font-semibold text-text m-0">Members</h2>
-            <p class="text-sm text-text-muted mt-1 m-0">Who has access to this workspace.</p>
-        </div>
-        {% if can_administer %}
-            <c-buttons.primary size="sm" href="{% url 'teams:invite_user' team.key %}">
-            <i class="fas fa-user-plus mr-2"></i>
-            Invite member
-            </c-buttons.primary>
-        {% endif %}
-    </div>
-    {# Incoming workspace invitations for the current user #}
+<div class="flex flex-col gap-5">
+    <c-layout.section-header level="2" title="Members" subtitle="Who has access to this workspace.">
+    <c-slot name="actions">
+    {% if can_administer %}
+        <c-buttons.primary size="sm" href="{% url 'teams:invite_user' team.key %}">Invite member</c-buttons.primary>
+    {% endif %}
+    </c-slot>
+    </c-layout.section-header>
     {% if pending_invitations %}
-        <section class="mt-8">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <h3 class="text-sm font-semibold text-text m-0">Incoming invitations</h3>
-                <c-badges.info>{{ pending_invitations|length }} pending</c-badges.info>
+        <c-cards.card flush>
+        <c-cards.header compact title="Incoming invitations" hint="You have been invited to these workspaces." />
+        {% for inv in pending_invitations %}
+            <c-forms.field horizontal label="{{ inv.team_name }}" hint="Expires {{ inv.expires_at|date:'j M Y' }}">
+            <div class="flex items-center gap-2">
+                <c-badges.secondary>{{ inv.role|title }}</c-badges.secondary>
+                <form method="post"
+                      action="{% url 'core:accept_user_invitation' inv.id %}"
+                      hx-boost="false">
+                    {% csrf_token %}<c-buttons.primary type="submit" size="sm">Accept</c-buttons.primary>
+                </form>
+                <form method="post"
+                      action="{% url 'core:reject_user_invitation' inv.id %}"
+                      hx-boost="false">
+                    {% csrf_token %}<c-buttons.secondary type="submit" size="sm">Decline</c-buttons.secondary>
+                </form>
             </div>
-            <p class="text-sm text-text-muted mt-1 m-0">You have been invited to join other workspaces.</p>
-            <div class="mt-4 border border-border rounded-xl overflow-hidden divide-y divide-border/50">
-                {% for inv in pending_invitations %}
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-4 px-6 py-4 hover:bg-background/30 transition-colors">
-                        <div class="relative flex-shrink-0 hidden sm:block">
-                            <c-chips.icon-chip circle accent="info">
-                            <i class="fas fa-building text-lg"></i>
-                            </c-chips.icon-chip>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2">
-                                <h6 class="font-medium text-text m-0 truncate">{{ inv.team_name }}</h6>
-                                <c-badges.secondary>{{ inv.role|title }}</c-badges.secondary>
-                            </div>
-                            <span class="text-xs text-text-muted flex items-center gap-1 mt-1">
-                                <i class="fas fa-clock"></i>
-                                Expires {{ inv.expires_at|date:"j M Y" }}
-                            </span>
-                        </div>
-                        <div class="flex-shrink-0 flex items-center gap-2">
-                            <form method="post"
-                                  action="{% url 'core:accept_user_invitation' inv.id %}"
-                                  class="inline"
-                                  hx-boost="false">
-                                {% csrf_token %}
-                                <c-buttons.primary type="submit" size="sm">
-                                <i class="fas fa-check mr-1"></i> Accept
-                                </c-buttons.primary>
-                            </form>
-                            <form method="post"
-                                  action="{% url 'core:reject_user_invitation' inv.id %}"
-                                  class="inline"
-                                  hx-boost="false">
-                                {% csrf_token %}
-                                <c-buttons.outline-danger type="submit" size="sm">
-                                <i class="fas fa-times mr-1"></i> Decline
-                                </c-buttons.outline-danger>
-                            </form>
-                        </div>
-                    </div>
+            </c-forms.field>
+        {% endfor %}
+        </c-cards.card>
+    {% endif %}
+    <c-cards.card flush>
+    <c-cards.header compact title="Workspace members" hint="{{ team.members|length }} member{{ team.members|length|pluralize }}" />
+    <c-tables.table>
+    <c-tables.head>
+    <c-tables.header-cell compact>Member</c-tables.header-cell>
+    <c-tables.header-cell compact>Role</c-tables.header-cell>
+    <c-tables.actions-cell as="th" />
+    </c-tables.head>
+    <tbody>
+        {% for member in team.members %}
+            <c-tables.row>
+            <c-tables.cell compact>
+            <div class="flex items-center gap-3">
+                <c-avatar size="sm" initials="{{ member.user|user_initials }}" />
+                <div class="min-w-0">
+                    <c-overview.record title="{{ member.user.first_name }} {{ member.user.last_name }}" detail="{{ member.user.email }}" />
+                </div>
+            </div>
+            </c-tables.cell>
+            <c-tables.cell compact><c-badges.secondary>{{ member.role|title }}</c-badges.secondary></c-tables.cell>
+            <c-tables.actions-cell>
+            {% if can_administer and member.role != 'owner' %}
+                <c-actions-menu label="Member actions">
+                <c-dropdowns.item-danger icon="fas fa-user-minus" @click="$dispatch('open-delete-member-modal', { displayName: '{{ member.user.first_name|escapejs }} {{ member.user.last_name|escapejs }}', formData: { member_id: '{{ member.id }}' } })">Remove member</c-dropdowns.item-danger>
+                </c-actions-menu>
+            {% endif %}
+            </c-tables.actions-cell>
+            </c-tables.row>
+        {% endfor %}
+    </tbody>
+    </c-tables.table>
+    <c-navigation.accordion-item native label="What can each role do?" id="role-legend">
+    <div class="space-y-3">
+        {% for role_key, role_label, role_description in role_descriptions %}
+            <c-overview.record title="{{ role_label }}" detail="{{ role_description }}" />
+        {% endfor %}
+    </div>
+    </c-navigation.accordion-item>
+    </c-cards.card>
+    {% if can_administer %}
+        <c-cards.card flush>
+        <c-cards.header compact title="Pending invitations" hint="{{ team.invitations|length }} pending" />
+        {% if team.invitations %}
+            <c-tables.table>
+            <c-tables.head>
+            <c-tables.header-cell compact>Email</c-tables.header-cell>
+            <c-tables.header-cell compact>Role</c-tables.header-cell>
+            <c-tables.header-cell compact>Expires</c-tables.header-cell>
+            <c-tables.actions-cell as="th" />
+            </c-tables.head>
+            <tbody>
+                {% for invitation in team.invitations %}
+                    <c-tables.row>
+                    <c-tables.cell compact>{{ invitation.email }}</c-tables.cell>
+                    <c-tables.cell compact><c-badges.secondary>{{ invitation.role|title }}</c-badges.secondary></c-tables.cell>
+                    <c-tables.cell compact date muted>{{ invitation.expires_at|date:"j M Y" }}</c-tables.cell>
+                    <c-tables.actions-cell>
+                    <c-buttons.icon-quiet size="sm" label="Cancel invitation for {{ invitation.email }}" @click="$dispatch('open-delete-invitation-modal', { displayName: '{{ invitation.email|escapejs }}', formData: { invitation_id: '{{ invitation.id }}' } })"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon-quiet>
+                    </c-tables.actions-cell>
+                    </c-tables.row>
                 {% endfor %}
-            </div>
-        </section>
-    {% endif %}
-    {# Workspace members #}
-    <section class="mt-8{% if pending_invitations %} pt-8 border-t border-border{% endif %}">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <h3 class="text-sm font-semibold text-text m-0">Workspace members</h3>
-            <c-badges.primary>{{ team.members|length }} member{{ team.members|length|pluralize }}</c-badges.primary>
-        </div>
-        <div class="mt-4 border border-border rounded-xl overflow-hidden">
-            {% if team.members %}
-                <div class="divide-y divide-border/50">
-                    {% for member in team.members %}
-                        <div class="flex items-center gap-4 px-6 py-4 hover:bg-background/30 transition-colors">
-                            {# Avatar with initials #}
-                            <div class="relative flex-shrink-0">
-                                {% if member.role == 'owner' %}
-                                    <c-avatar initials="{{ member.user|user_initials }}" style="--avatar-accent: var(--color-primary)" />
-                                {% elif member.role == 'admin' %}
-                                    <c-avatar initials="{{ member.user|user_initials }}" style="--avatar-accent: var(--color-warning)" />
-                                {% else %}
-                                    <c-avatar initials="{{ member.user|user_initials }}" style="--avatar-accent: var(--color-text-muted)" />
-                                {% endif %}
-                                {% if member.role == 'owner' %}
-                                    <span class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary border-2 border-surface flex items-center justify-center">
-                                        <i class="fas fa-crown text-white text-[8px]"></i>
-                                    </span>
-                                {% endif %}
-                            </div>
-                            {# Member Info #}
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2">
-                                    <h6 class="font-medium text-text m-0 truncate">{{ member.user.first_name }} {{ member.user.last_name }}</h6>
-                                    {% if member.role == 'owner' %}
-                                        <c-badges.primary>{{ member.role|title }}</c-badges.primary>
-                                    {% elif member.role == 'admin' %}
-                                        <c-badges.warning>{{ member.role|title }}</c-badges.warning>
-                                    {% else %}
-                                        <c-badges.secondary>{{ member.role|title }}</c-badges.secondary>
-                                    {% endif %}
-                                </div>
-                                <p class="text-sm text-text-muted m-0 truncate">{{ member.user.email }}</p>
-                            </div>
-                            {# Actions #}
-                            {% if can_administer %}
-                                {% if member.role != 'owner' %}
-                                    <div class="flex-shrink-0">
-                                        <c-buttons.icon size="sm" title="Remove member" label="Remove {{ member.user.first_name }} {{ member.user.last_name }}" @click="$dispatch('open-delete-member-modal', { displayName: '{{ member.user.first_name }} {{ member.user.last_name }}', formData: { member_id: '{{ member.id }}' } })">
-                                        <i class="fas fa-user-minus" aria-hidden="true"></i>
-                                        </c-buttons.icon>
-                                    </div>
-                                {% endif %}
-                            {% endif %}
-                        </div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <c-feedback.empty-state icon="fas fa-users" title="No members yet" message="Invite team members to collaborate on this workspace." />
-            {% endif %}
-            {% comment %}
-                Role legend. The members page is the only place a user learns what a role
-                grants, so the descriptions come from authz.ROLE_DESCRIPTIONS and move with
-                the capability table rather than drifting out of date here.
-            {% endcomment %}
-            <div class="border-t border-border/40" x-data="{ open: false }">
-                <button type="button"
-                        class="w-full flex items-center justify-between gap-3 px-6 py-3 text-sm text-text-muted hover:text-text transition-colors"
-                        @click="open = !open"
-                        :aria-expanded="open.toString()"
-                        aria-controls="role-legend">
-                    <span class="flex items-center gap-2">
-                        <i class="fas fa-circle-info" aria-hidden="true"></i>
-                        What can each role do?
-                    </span>
-                    <i class="fas fa-chevron-down transition-transform"
-                       :class="open && 'rotate-180'"
-                       aria-hidden="true"></i>
-                </button>
-                <div id="role-legend" x-show="open" x-cloak class="px-6 pb-5">
-                    <dl class="space-y-3 m-0">
-                        {% for role_key, role_label, role_description in role_descriptions %}
-                            <div class="flex flex-col sm:flex-row sm:gap-4">
-                                <dt class="sm:w-28 flex-shrink-0 mb-1 sm:mb-0">
-                                    {% if role_key == 'owner' %}
-                                        <c-badges.primary>{{ role_label }}</c-badges.primary>
-                                    {% elif role_key == 'admin' %}
-                                        <c-badges.warning>{{ role_label }}</c-badges.warning>
-                                    {% else %}
-                                        <c-badges.secondary>{{ role_label }}</c-badges.secondary>
-                                    {% endif %}
-                                </dt>
-                                <dd class="text-sm text-text-muted m-0">
-                                    {{ role_description }}
-                                </dd>
-                            </div>
-                        {% endfor %}
-                    </dl>
-                </div>
-            </div>
-        </div>
-    </section>
-    {% if can_administer %}
+            </tbody>
+            </c-tables.table>
+        {% else %}
+            <c-feedback.empty-state compact icon="fas fa-envelope" title="No pending invitations" message="Invite a member to give them access to this workspace." />
+        {% endif %}
+        </c-cards.card>
         {% include "components/modals/delete_modal.html.j2" with modal_id="delete-member-modal" modal_title="Remove Member" message_text="Are you sure you want to remove" warning_text="This action will immediately remove the member from the workspace and revoke their access." form_action=request.path form=delete_member_form submit_text="Remove Member" additional_fields='<input type="hidden" name="active_tab" value="members">' %}
-    {% endif %}
-    {# Pending invitations #}
-    {% if can_administer %}
-        <section class="mt-8 pt-8 border-t border-border">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <h3 class="text-sm font-semibold text-text m-0">Pending invitations</h3>
-                {% if team.invitations|length > 0 %}
-                    <c-badges.warning>{{ team.invitations|length }} pending</c-badges.warning>
-                {% endif %}
-            </div>
-            {% if team.invitations|length == 0 %}
-                <div class="mt-4">
-                    <c-feedback.empty-state icon="fas fa-check-circle" title="All caught up!" message="No pending invitations. Use the invite button above to add new members." />
-                </div>
-            {% else %}
-                <div class="mt-4 border border-border rounded-xl overflow-hidden divide-y divide-border/50">
-                    {% for invitation in team.invitations %}
-                        <div class="flex items-center gap-4 px-6 py-4 hover:bg-background/30 transition-colors">
-                            {# Avatar placeholder for pending user #}
-                            <div class="relative flex-shrink-0">
-                                <c-chips.icon-chip circle accent="warning">
-                                <i class="fas fa-envelope text-lg"></i>
-                                </c-chips.icon-chip>
-                                <span class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-warning border-2 border-surface flex items-center justify-center">
-                                    <i class="fas fa-clock text-white text-[8px]"></i>
-                                </span>
-                            </div>
-                            {# Invitation Info #}
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2">
-                                    <h6 class="font-medium text-text m-0 truncate">{{ invitation.email }}</h6>
-                                    {% if invitation.role == 'admin' %}
-                                        <c-badges.warning>{{ invitation.role|title }}</c-badges.warning>
-                                    {% else %}
-                                        <c-badges.secondary>{{ invitation.role|title }}</c-badges.secondary>
-                                    {% endif %}
-                                </div>
-                                <div class="flex items-center gap-4 mt-1">
-                                    <span class="text-xs text-text-muted flex items-center gap-1">
-                                        <i class="fas fa-calendar-plus"></i>
-                                        Sent
-                                        {% include 'core/components/relative_time.html.j2' with timestamp=invitation.created_at %}
-                                    </span>
-                                    <span class="text-xs text-text-muted flex items-center gap-1">
-                                        <i class="fas fa-hourglass-half"></i>
-                                        Expires {{ invitation.expires_at|date:"j M Y" }}
-                                    </span>
-                                </div>
-                            </div>
-                            {# Actions #}
-                            <div class="flex-shrink-0 flex items-center gap-2">
-                                <c-buttons.icon size="sm" title="Cancel invitation" label="Cancel invitation for {{ invitation.email }}" @click="$dispatch('open-delete-invitation-modal', { displayName: '{{ invitation.email }}', formData: { invitation_id: '{{ invitation.id }}' } })">
-                                <i class="fas fa-times" aria-hidden="true"></i>
-                                </c-buttons.icon>
-                            </div>
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        </section>
         {% include "components/modals/delete_modal.html.j2" with modal_id="delete-invitation-modal" modal_title="Cancel Invitation" message_text="Are you sure you want to cancel the invitation for" warning_text="This action will immediately cancel the invitation and the user will no longer be able to join the workspace using this invite." form_action=request.path form=delete_invitation_form submit_text="Cancel Invitation" additional_fields='<input type="hidden" name="active_tab" value="members">' %}
     {% endif %}
 </div>

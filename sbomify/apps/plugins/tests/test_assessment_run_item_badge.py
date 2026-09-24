@@ -301,7 +301,7 @@ class TestStatusMarkersAreNotVulnerabilities:
         import re
 
         html = _render(self._skipped_security_run())
-        total_value = re.search(r">(\d+)</span>\s*<span[^>]*>\s*Total</span>", html.replace("\n", " "))
+        total_value = re.search(r"<dt\b[^>]*>\s*Total\s*</dt>\s*<dd\b[^>]*>\s*(\d+)\b", html)
         assert total_value, "Total stat card not found"
         # The stored summary says 1 (the marker); the card must say 0.
         assert total_value.group(1) == "0"

@@ -1,79 +1,68 @@
 {% extends "core/dashboard_base.html.j2" %}
 {% load design_system %}
 {% block title %}CRA Compliance - sbomify{% endblock %}
-{% block sidebar_content %}
-    <div x-show="!sidebarCollapsed"
-         x-cloak
-         class="px-3 py-4 border-t border-border">
-        <h3 class="px-4 text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Compliance</h3>
-        {% url 'compliance:cra_product_list' as cra_list_url %}
-        {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
-            {% include 'core/components/sidebar_link.html.j2' with url=cra_list_url icon="fa-shield-halved" label="CRA Wizard" match="compliance:" %}
-        {% endwith %}
-    </div>
-{% endblock sidebar_content %}
 {% block dashboard_content %}
-    {% page_header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act." icon="fas fa-scale-balanced" %}{% endpage_header %}
-    <div class="space-y-6">
-        {% if not has_cra_access %}
-            <c-cards.card flush>
-            <div class="p-8 text-center">
-                <i class="fas fa-lock text-4xl text-text-muted mb-4"></i>
-                <h3 class="text-lg font-semibold text-text mb-2">Business Plan Required</h3>
-                <p class="text-text-muted">CRA Compliance requires a Business plan or higher.</p>
-            </div>
-            </c-cards.card>
-        {% elif assessments %}
-            {# The table runs to the card's edge, so the card carries no body band. #}
-            <c-cards.card flush>
-            <c-slot name="header">
-            <div class="px-6 py-4 border-b border-border">
-                <h2 class="text-lg font-semibold text-text m-0">Assessments</h2>
-            </div>
-            </c-slot>
-            <c-tables.table>
-            <c-tables.head>
-            <c-tables.header-cell nowrap>Product</c-tables.header-cell>
-            <c-tables.header-cell>Status</c-tables.header-cell>
-            <c-tables.header-cell>Progress</c-tables.header-cell>
-            <c-tables.header-cell date>Last Updated</c-tables.header-cell>
-            <c-tables.header-cell end>
-            <span class="sr-only">Actions</span>
-            </c-tables.header-cell>
-            </c-tables.head>
-            <tbody>
-                {% for a in assessments %}
-                    <c-tables.row>
-                    <c-tables.cell nowrap class="font-medium">{{ a.product_name }}</c-tables.cell>
-                    <c-tables.cell>
-                    {% if a.status_value == "complete" %}
-                        <c-badges.success>Complete</c-badges.success>
-                    {% elif a.status_value == "in_progress" %}
-                        <c-badges.warning>In progress</c-badges.warning>
-                    {% else %}
-                        <c-badges.secondary>Draft</c-badges.secondary>
-                    {% endif %}
-                    </c-tables.cell>
-                    <c-tables.cell>{{ a.completed_steps|length }}/5 steps</c-tables.cell>
-                    <c-tables.cell date>{{ a.updated_at|date:"j M Y" }}</c-tables.cell>
-                    <c-tables.cell end>
-                    <c-buttons.ghost size="sm" href="{% url 'compliance:cra_wizard_shell' assessment_id=a.id %}">
-                    Continue <i class="fas fa-arrow-right ml-1"></i>
-                    </c-buttons.ghost>
-                    </c-tables.cell>
-                    </c-tables.row>
-                {% endfor %}
-            </tbody>
-            </c-tables.table>
-            </c-cards.card>
-        {% else %}
-            {% comment %}
+    <c-layout.page-header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act." />
+    <c-layout.frame>
+    {% if not has_cra_access %}
+        <c-cards.card flush>
+        <div class="p-8 text-center">
+            <i class="fas fa-lock text-4xl text-text-muted mb-4"></i>
+            <h3 class="text-lg font-semibold text-text mb-2">Business Plan Required</h3>
+            <p class="text-text-muted">CRA Compliance requires a Business plan or higher.</p>
+        </div>
+        </c-cards.card>
+    {% elif assessments %}
+        {# The table runs to the card's edge, so the card carries no body band. #}
+        <c-cards.card flush>
+        <c-slot name="header">
+        <div class="px-6 py-4 border-b border-border">
+            <h2 class="text-lg font-semibold text-text m-0">Assessments</h2>
+        </div>
+        </c-slot>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell nowrap>Product</c-tables.header-cell>
+        <c-tables.header-cell>Status</c-tables.header-cell>
+        <c-tables.header-cell>Progress</c-tables.header-cell>
+        <c-tables.header-cell date>Last Updated</c-tables.header-cell>
+        <c-tables.header-cell end>
+        <span class="sr-only">Actions</span>
+        </c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for a in assessments %}
+                <c-tables.row>
+                <c-tables.cell nowrap class="font-medium">{{ a.product_name }}</c-tables.cell>
+                <c-tables.cell>
+                {% if a.status_value == "complete" %}
+                    <c-badges.success>Complete</c-badges.success>
+                {% elif a.status_value == "in_progress" %}
+                    <c-badges.warning>In progress</c-badges.warning>
+                {% else %}
+                    <c-badges.secondary>Draft</c-badges.secondary>
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell>{{ a.completed_steps|length }}/5 steps</c-tables.cell>
+                <c-tables.cell date>{{ a.updated_at|date:"j M Y" }}</c-tables.cell>
+                <c-tables.cell end>
+                <c-buttons.ghost size="sm" href="{% url 'compliance:cra_wizard_shell' assessment_id=a.id %}">
+                Continue <i class="fas fa-arrow-right ml-1"></i>
+                </c-buttons.ghost>
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        </c-cards.card>
+    {% else %}
+        {% comment %}
                 The library panel, so the mark sits in the tinted medallion
                 every other empty state uses rather than a bare muted glyph.
-            {% endcomment %}
-            <c-cards.card flush>
-            <c-feedback.empty-state icon="fas fa-shield-halved" title="No CRA assessments" message="Start a CRA compliance assessment from any product's detail page." />
-            </c-cards.card>
-        {% endif %}
-    </div>
+        {% endcomment %}
+        <c-cards.card flush>
+        <c-feedback.empty-state icon="fas fa-shield-halved" title="No CRA assessments" message="Start a CRA compliance assessment from any product's detail page." />
+        </c-cards.card>
+    {% endif %}
+    </c-layout.frame>
 {% endblock dashboard_content %}

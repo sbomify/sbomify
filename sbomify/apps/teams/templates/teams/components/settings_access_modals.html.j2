@@ -1,0 +1,173 @@
+{# Access Request Modals - at page level to avoid hidden tab pane issues #}
+{% if can_administer and team.is_public %}
+    {# Invite user Modal #}
+    <div class="contents"
+         x-data="{ open: false }"
+         @open-invite-user-modal.window="open = true"
+         @close-invite-modal.window="open = false">
+        <c-modal teleport="false" id="inviteUserModal" title="Invite user" icon="fas fa-user-plus">
+        <form id="inviteUserForm"
+              method="post"
+              action="{% url 'documents:access_request_queue' team.key %}"
+              hx-post="{% url 'documents:access_request_queue' team.key %}"
+              hx-target="#access-requests-wrapper"
+              hx-swap="innerHTML"
+              hx-trigger="submit"
+              @htmx:after-request="if($event.detail.successful) open = false">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="invite">
+            <input type="hidden" name="active_tab" value="trust-center">
+            <c-feedback.alert variant="info" title="What does this invitation do?" class="mb-4">
+            The user will receive an email invitation to join this workspace.
+            If they don't have an account, they'll be prompted to create one.
+            After signing in and completing any required NDA, they will automatically join with access to gated components.
+            </c-feedback.alert>
+            <div class="mb-4">
+                <c-forms.label for="invite_email">Email address</c-forms.label>
+                <c-forms.input type="email" id="invite_email" name="email" placeholder="user@example.com" required />
+                <c-forms.hint>The user will receive an invitation email to join this workspace.</c-forms.hint>
+            </div>
+        </form>
+        <c-slot name="footer">
+        <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
+        <c-buttons.primary type="submit" form="inviteUserForm">
+        <i class="fas fa-paper-plane mr-2"></i>Send invitation
+        </c-buttons.primary>
+        </c-slot>
+        </c-modal>
+    </div>
+    {# Access Request Info Modal #}
+    <div class="contents"
+         x-data="{ open: false, data: {} }"
+         @open-access-request-info-modal.window="open = true; data = $event.detail;">
+        <c-modal teleport="false" id="accessRequestInfoModal" title="Audit trail" icon="fas fa-history" size="lg">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <c-layout.data-box label="Name" value_x_text="data.userName || 'Not recorded'" />
+            <c-layout.data-box label="Email" value_x_text="data.userEmail || 'Not recorded'" />
+            <c-layout.data-box label="Requested at" value_x_text="data.requestedAt || 'Not recorded'" />
+            <c-layout.data-box label="Decided at" value_x_text="data.decidedAt || 'Not recorded'" />
+            <c-layout.data-box label="Decided by" value_x_text="data.decidedBy || 'Not recorded'" />
+            <c-layout.data-box label="Revoked at" value_x_text="data.revokedAt || 'Not recorded'" />
+            <c-layout.data-box label="Revoked by" value_x_text="data.revokedBy || 'Not recorded'" />
+            <c-layout.data-box label="Request status">
+            <c-badges.dynamic ::data-variant="({pending: 'warning', approved: 'success', rejected: 'danger'})[data.status] || 'secondary'" x-text="({pending: 'Pending', approved: 'Approved', rejected: 'Rejected', revoked: 'Revoked'})[data.status] || 'Not recorded'" />
+            </c-layout.data-box>
+        </div>
+        <div x-show="data.ndaSigned" class="mt-6 flex flex-col gap-4">
+            <c-layout.section-header title="NDA signature" />
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <c-layout.data-box label="Signed name" value_x_text="data.ndaSignedName || 'Not recorded'" />
+                <c-layout.data-box label="Signed at" value_x_text="data.ndaSignedAt || 'Not recorded'" />
+                <c-layout.data-box label="IP address" value_x_text="data.ndaIp || 'Not recorded'" />
+                <c-layout.data-box label="User agent" value_x_text="data.ndaUserAgent || 'Not recorded'" />
+                <c-layout.data-box label="NDA status">
+                <c-badges.dynamic ::data-variant="data.ndaCurrent ? (data.ndaModified ? 'danger' : 'success') : 'warning'" x-text="data.ndaCurrent ? (data.ndaModified ? 'Modified' : 'Valid') : 'Invalid'" />
+                </c-layout.data-box>
+                <template x-if="data.ndaUrl"><c-buttons.secondary size="sm" href="#" ::href="data.ndaUrl" target="_blank" rel="noopener">View NDA</c-buttons.secondary></template>
+            </div>
+        </div>
+        <div class="mt-6">
+            <c-layout.data-box label="Notes" value_x_text="data.notes || 'No notes'" />
+        </div>
+        <c-slot name="footer">
+        <c-buttons.ghost @click="open = false">Close</c-buttons.ghost>
+        </c-slot>
+        </c-modal>
+    </div>
+    {# Cancel invitation Modal #}
+    <div class="contents"
+         x-data="{ open: false, invitationId: '', invitationEmail: '' }"
+         @open-cancel-invitation-modal.window="open = true; invitationId = $event.detail.invitationId; invitationEmail = $event.detail.invitationEmail;">
+        <c-modal teleport="false" id="cancelInvitationModal" title="Cancel invitation" icon="fas fa-exclamation-triangle" size="sm" style="--chip-accent: var(--color-warning)">
+        <c-forms.hint class="mb-3">
+        Are you sure you want to cancel the invitation sent to <strong x-text="invitationEmail"></strong>?
+        </c-forms.hint>
+        <c-forms.hint class="mb-3">
+        This will cancel the invitation and the user will no longer be able to accept it.
+        </c-forms.hint>
+        <c-slot name="footer">
+        <c-buttons.ghost @click="open = false">Keep invitation</c-buttons.ghost>
+        <form method="post"
+              action="{% url 'documents:access_request_queue' team.key %}"
+              hx-post="{% url 'documents:access_request_queue' team.key %}"
+              hx-target="#access-requests-wrapper"
+              hx-swap="innerHTML"
+              hx-trigger="submit"
+              @htmx:after-request="if($event.detail.successful) open = false"
+              class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="cancel_invitation">
+            <input type="hidden" name="invitation_id" x-model="invitationId">
+            <input type="hidden" name="active_tab" value="trust-center">
+            <c-buttons.danger type="submit">
+            <i class="fas fa-times mr-2"></i>Cancel invitation
+            </c-buttons.danger>
+        </form>
+        </c-slot>
+        </c-modal>
+    </div>
+    {# Revoke access Modal #}
+    <div class="contents"
+         x-data="{ open: false, requestId: '', userEmail: '' }"
+         @open-revoke-access-modal.window="open = true; requestId = $event.detail.requestId; userEmail = $event.detail.userEmail;">
+        <c-modal teleport="false" id="revokeAccessModal" title="Revoke access" icon="fas fa-ban" size="sm" style="--chip-accent: var(--color-danger)">
+        <c-forms.hint class="mb-3">
+        Are you sure you want to revoke access for <strong x-text="userEmail"></strong>?
+        </c-forms.hint>
+        <c-forms.hint class="mb-3">
+        This will remove their guest membership and they will no longer have access to gated components.
+        </c-forms.hint>
+        <c-slot name="footer">
+        <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
+        <form method="post"
+              action="{% url 'documents:access_request_queue' team.key %}"
+              hx-post="{% url 'documents:access_request_queue' team.key %}"
+              hx-target="#access-requests-wrapper"
+              hx-swap="innerHTML"
+              hx-trigger="submit"
+              @htmx:after-request="if($event.detail.successful) open = false"
+              class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="revoke">
+            <input type="hidden" name="request_id" x-model="requestId">
+            <input type="hidden" name="active_tab" value="trust-center">
+            <c-buttons.danger type="submit">
+            <i class="fas fa-ban mr-2"></i>Revoke access
+            </c-buttons.danger>
+        </form>
+        </c-slot>
+        </c-modal>
+    </div>
+    {# Clear Rejection Modal #}
+    <div class="contents"
+         x-data="{ open: false, requestId: '', userEmail: '' }"
+         @open-clear-rejection-modal.window="open = true; requestId = $event.detail.requestId; userEmail = $event.detail.userEmail;">
+        <c-modal teleport="false" id="clearRejectionModal" title="Remove from list" icon="fas fa-trash" size="sm" role="alertdialog" style="--chip-accent: var(--color-danger)">
+        <c-forms.hint class="mb-3">
+        Are you sure you want to remove <strong x-text="userEmail"></strong> from the rejected list?
+        </c-forms.hint>
+        <c-forms.hint class="mb-3">
+        This will delete the rejection record. The user will be able to submit a new access request.
+        </c-forms.hint>
+        <c-slot name="footer">
+        <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
+        <form method="post"
+              action="{% url 'documents:access_request_queue' team.key %}"
+              hx-post="{% url 'documents:access_request_queue' team.key %}"
+              hx-target="#access-requests-wrapper"
+              hx-swap="innerHTML"
+              hx-trigger="submit"
+              @htmx:after-request="if($event.detail.successful) open = false"
+              class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="clear_rejection">
+            <input type="hidden" name="request_id" x-model="requestId">
+            <input type="hidden" name="active_tab" value="trust-center">
+            <c-buttons.danger type="submit">
+            <i class="fas fa-trash mr-2"></i>Remove from list
+            </c-buttons.danger>
+        </form>
+        </c-slot>
+        </c-modal>
+    </div>
+{% endif %}

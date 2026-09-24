@@ -1,6 +1,7 @@
 {# Trusted publishers — a modal opened from the component header ⋮ menu (open-trusted-publishers window event). #}
 {# The body is the HTMX shell: the section partial loads on page load and swaps in place on create/delete. #}
-<div x-data="{ tpOpen: false }"
+<div class="contents"
+     x-data="{ tpOpen: false }"
      @open-trusted-publishers.window="tpOpen = true"
      @keydown.escape.window="if (tpOpen) tpOpen = false">
     <c-modal id="trustedPublishersModal" show="tpOpen" size="wide" title="Trusted Publishers" icon="fas fa-shield-halved">
@@ -8,7 +9,7 @@
          hx-trigger="load"
          hx-swap="outerHTML">
         {# placeholder, replaced by the rendered section partial on load #}
-        <div class="text-text-muted text-sm">Loading trusted publishers…</div>
+        <c-feedback.loading-list message="Loading trusted publishers..." />
     </div>
     </c-modal>
 </div>

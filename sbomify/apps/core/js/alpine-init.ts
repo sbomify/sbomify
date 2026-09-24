@@ -10,6 +10,7 @@ import { parseJsonScript } from './utils';
 import { registerWebSocketStore } from './components/websocket-store';
 import { registerTooltipDirective } from './alpine-tooltip';
 import { registerConfirmModal } from './components/confirm-modal';
+import { registerAllComponents } from './alpine-components';
 
 let initializationPromise: Promise<void> | null = null;
 
@@ -46,9 +47,7 @@ registerTooltipDirective(Alpine);
 // Register global stores before Alpine starts
 registerWebSocketStore();
 
-// Register components required by base template (confirm_modal.html.j2).
-// This must happen here (not in individual entry points) because child bundles
-// call initializeAlpine() before the core bundle's registerAllComponents() runs.
+// The base confirmation modal is available to every entry point.
 registerConfirmModal();
 
 if (!window.Alpine) {
@@ -62,6 +61,9 @@ export function initializeAlpine(): Promise<void> {
   }
 
   initializationPromise = Promise.resolve().then(() => {
+    // Any page bundle may reach startup first. Register shared components
+    // here so the chrome never initializes against an incomplete registry.
+    registerAllComponents();
     window.Alpine.start();
   });
 
@@ -73,5 +75,4 @@ export function isAlpineInitialized(): boolean {
 }
 
 export default window.Alpine || Alpine;
-
 

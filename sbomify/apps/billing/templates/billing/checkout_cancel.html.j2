@@ -1,28 +1,18 @@
 {% extends "core/base.html.j2" %}
 {% block title %}Payment Cancelled{% endblock %}
 {% block content %}
-    <div class="container mx-auto py-12 px-4">
-        <div class="max-w-lg mx-auto">
-            <c-cards.card body_class="text-center">
-            <div class="mb-6">
-                <i class="fas fa-times-circle text-warning text-6xl"></i>
+    <main id="main-content" class="max-w-3xl mx-auto px-4 py-8">
+        <c-layout.frame>
+        <c-layout.page-header title="Payment cancelled" subtitle="No charges were made to your account." />
+        <c-cards.card>
+        <div class="flex flex-col gap-5">
+            <c-typography.description>If you experienced any issues during checkout, please contact our support team for assistance.</c-typography.description>
+            <div class="flex flex-wrap gap-3">
+                <c-buttons.secondary href="{% url 'core:dashboard' %}">Back to dashboard</c-buttons.secondary>
+                <c-buttons.primary @click="window.history.back()">Try again</c-buttons.primary>
             </div>
-            <h2 class="text-2xl font-semibold text-warning mb-4">Payment Cancelled</h2>
-            <p class="text-lg text-text-muted mb-6">Your payment was cancelled and no charges were made to your account.</p>
-            <p class="text-sm text-text-muted mb-8">
-                If you experienced any issues during checkout, please contact our support team for assistance.
-            </p>
-            <div class="flex flex-col sm:flex-row gap-3 justify-center">
-                <c-buttons.secondary href="{% url 'core:dashboard' %}">
-                <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
-                <span>Back to Dashboard</span>
-                </c-buttons.secondary>
-                <c-buttons.primary @click="window.history.back()">
-                <i class="fas fa-arrow-left" aria-hidden="true"></i>
-                <span>Try Again</span>
-                </c-buttons.primary>
-            </div>
-            </c-cards.card>
         </div>
-    </div>
+        </c-cards.card>
+        </c-layout.frame>
+    </main>
 {% endblock %}

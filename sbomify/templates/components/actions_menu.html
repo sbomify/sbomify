@@ -17,11 +17,17 @@ stretch makes the trigger as tall as the control beside it, for the action row
 of a page header. The two branches below differ only in the trigger's shape and
 must stay in lockstep: they cannot be one call because the stretch recipe
 replaces the size one rather than adding to it.
+caption gives a primary menu a visible text trigger, such as Download SBOM.
+It uses the same button, panel and keyboard behaviour as the icon-only menu.
+selectable focuses the checked radio item when opening, including with arrow
+keys. x_disabled binds a busy state to the actual trigger. A caption slot can
+contain a changing label and icon; pass an empty icon to supply your own.
 {% endcomment %}
-<c-vars label="Actions" icon="fas fa-ellipsis-vertical" width="w-60" stretch class />
+<c-vars label="Actions" caption icon="fas fa-ellipsis-vertical" width="w-60" stretch selectable x_disabled class />
 <div class="relative inline-flex shrink-0{% if class %} {{ class }}{% endif %}"
-     x-data="actionsMenu"
+     x-data="actionsMenu({ selectable: {{ selectable|yesno:'true,false' }} })"
      @keydown.escape.window="closeAndFocus()"
+     {% if selectable %}@keydown.arrow-down="if ($event.target === $refs.trigger) { $event.preventDefault(); show(); }" @keydown.arrow-up="if ($event.target === $refs.trigger) { $event.preventDefault(); show(); }"{% endif %}
      {{ attrs }}>
     {% comment %}
         The stopped click keeps the press off a clickable table row, and off the
@@ -31,17 +37,22 @@ replaces the size one rather than adding to it.
         the panel would otherwise take it as their own.
     {% endcomment %}
     {% with class="" %}
-        {% if stretch %}
-            <c-buttons.icon label="{{ label }}" stretch x-ref="trigger" @click.stop="toggle()" ::aria-expanded="open" aria-haspopup="true">
+        {% if caption %}
+            <c-buttons.secondary size="sm" aria-label="{{ label }}" x-ref="trigger" @click.stop="toggle()" ::aria-expanded="open" aria-haspopup="menu" ::disabled="{{ x_disabled|default:'false' }}">
+            {% if icon %}<i class="{{ icon }}" aria-hidden="true"></i>{% endif %}
+            {{ caption }}<i class="fas fa-chevron-down text-xs" aria-hidden="true"></i>
+            </c-buttons.secondary>
+        {% elif stretch %}
+            <c-buttons.icon label="{{ label }}" stretch x-ref="trigger" @click.stop="toggle()" ::aria-expanded="open" aria-haspopup="menu" ::disabled="{{ x_disabled|default:'false' }}">
             <i class="{{ icon }}" aria-hidden="true"></i>
             </c-buttons.icon>
         {% else %}
-            <c-buttons.icon label="{{ label }}" size="sm" x-ref="trigger" @click.stop="toggle()" ::aria-expanded="open" aria-haspopup="true">
+            <c-buttons.icon label="{{ label }}" size="sm" x-ref="trigger" @click.stop="toggle()" ::aria-expanded="open" aria-haspopup="menu" ::disabled="{{ x_disabled|default:'false' }}">
             <i class="{{ icon }}" aria-hidden="true"></i>
             </c-buttons.icon>
         {% endif %}
         <template x-teleport="body">
-            <c-dropdowns.dropdown floating class="{{ width }}" aria-label="{{ label }}" x-ref="menu" x-show="open" x-cloak ::style="style" @click="close()" @click.outside="close()">{{ slot }}</c-dropdowns.dropdown>
+            <c-dropdowns.dropdown floating class="{{ width }}" aria-label="{{ label }}" x-ref="menu" tabindex="-1" x-show="open" x-cloak ::style="style" @click="close()" @click.outside="close()">{{ slot }}</c-dropdowns.dropdown>
         </template>
     {% endwith %}
 </div>

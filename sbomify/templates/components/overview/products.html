@@ -1,0 +1,46 @@
+{% comment %}Product exposure uses the same occurrence snapshot as the metrics. Evidence distinguishes absent SBOMs from old ones.{% endcomment %}
+<c-vars products />
+<c-cards.card flush>
+<c-cards.header compact title="Exposure by product"><c-overview.severity-legend /></c-cards.header>
+{% if products %}
+    <c-overview.table aria-label="Product exposure">
+    <c-tables.head>
+    <tr>
+        <c-tables.header-cell>Product</c-tables.header-cell>
+        <c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
+        <c-tables.header-cell nowrap>Past SLA</c-tables.header-cell>
+        <c-tables.header-cell>Evidence</c-tables.header-cell>
+        <c-tables.header-cell end>Action</c-tables.header-cell>
+    </tr>
+    </c-tables.head>
+    <tbody>
+        {% for product in products %}
+            <c-tables.row>
+            <c-tables.cell><c-overview.record href="{% url 'core:product_details' product.id %}" title="{{ product.name }}" detail="{{ product.component_count }} component{{ product.component_count|pluralize }}" /></c-tables.cell>
+            <c-tables.cell>
+            {% if product.security_component_count %}
+                <c-overview.exposure :counts="product.counts" :unassessed="product.unassessed" />
+            {% elif product.component_count %}
+                <c-feedback.status>Not applicable</c-feedback.status>
+            {% else %}
+                <c-badges.secondary>No components</c-badges.secondary>
+            {% endif %}
+            </c-tables.cell>
+            <c-tables.cell>
+            {% if product.past_sla %}
+                <c-badges.danger>{{ product.past_sla }}</c-badges.danger>
+            {% else %}
+                0
+            {% endif %}
+            </c-tables.cell>
+            <c-tables.cell><c-overview.evidence :product="product" /></c-tables.cell>
+            <c-tables.cell end><c-buttons.ghost size="sm" href="{% url 'core:product_details' product.id %}">View product</c-buttons.ghost></c-tables.cell>
+            </c-tables.row>
+        {% endfor %}
+    </tbody>
+    </c-overview.table>
+{% else %}
+    <c-feedback.empty-state compact icon_size="sm" icon="fas fa-cube" title="No products yet" message="Add a product to group your components and see their exposure together." />
+{% endif %}
+<c-cards.footer><c-buttons.ghost size="sm" href="{% url 'core:products_dashboard' %}">View products<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost></c-cards.footer>
+</c-cards.card>

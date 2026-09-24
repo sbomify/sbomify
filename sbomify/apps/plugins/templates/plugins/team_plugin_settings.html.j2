@@ -1,209 +1,108 @@
-{% load static %}
-{# Assessment Plugins Card #}
-<c-cards.dashboard class="mb-6">
-<c-slot name="header">
-<div class="px-6 py-4 border-b border-border">
-    <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <c-chips.icon-chip>
-            <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <div>
-                <h5 class="text-lg font-semibold text-text m-0">Assessment plugins</h5>
-                <p class="text-text-muted text-sm m-0">Configure which assessment plugins run on your SBOMs</p>
-            </div>
-        </div>
-    </div>
-</div>
-</c-slot>
 <form id="plugin-settings-form"
+      class="flex min-w-0 flex-col gap-6"
       hx-post="{% url 'plugins:team_plugin_settings' team.key %}"
       hx-swap="none"
       hx-disabled-elt="find button[type='submit']"
       hx-indicator="#plugin-settings-spinner">
     {% csrf_token %}
     {% if plugin_settings.available_plugins %}
+        <c-layout.section-header level="2" title="Assessment plugins" subtitle="Select plugins and save your changes to apply them.">
+        <c-slot name="actions">
+        <c-buttons.primary size="sm" type="submit">Save changes</c-buttons.primary>
+        </c-slot>
+        </c-layout.section-header>
         {% regroup plugin_settings.available_plugins by category as plugin_groups %}
-        <div class="space-y-6">
-            {% for group in plugin_groups %}
-                <div>
-                    <h6 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
-                        {{ group.grouper|default:"Other"|capfirst }}
-                    </h6>
-                    <div class="border border-border rounded-xl divide-y divide-border/50 overflow-hidden">
-                        {% for plugin in group.list %}
-                            {% comment %}
-                                The whole row toggles the plugin. toggle_ref names the switch, so a
-                                row whose config fields are open still toggles the plugin rather
-                                than the first field, and the guard inside the row keeps every
-                                nested control working on its own click.
-                            {% endcomment %}
-                            <c-layout.select-row toggle_ref="toggle" :disabled="plugin.requires_upgrade" x_data="{ enabled: {{ plugin.is_enabled|yesno:'true,false' }} }">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center flex-wrap gap-2 mb-1">
-                                    <label class="font-medium text-text {% if plugin.requires_upgrade %}text-text-muted{% endif %} cursor-pointer"
-                                           for="plugin-{{ plugin.name }}">{{ plugin.display_name }}</label>
-                                    <c-badges.secondary>v{{ plugin.version }}</c-badges.secondary>
-                                    {% for bom_type in plugin.supported_bom_types %}
-                                        <c-badges.secondary class="uppercase" title="Runs on {{ bom_type|upper }} artifacts">{{ bom_type }}</c-badges.secondary>
-                                    {% endfor %}
-                                    {% if plugin.is_beta %}
-                                        <c-badges.info>
-                                        <i class="fas fa-flask mr-1"></i>Beta
-                                        </c-badges.info>
-                                    {% endif %}
-                                    {% if plugin.requires_upgrade %}
-                                        <c-badges.warning>
-                                        <i class="fas fa-lock mr-1"></i>{{ plugin.required_plan }}+ Plan
-                                        </c-badges.warning>
-                                    {% endif %}
-                                </div>
-                                <p class="text-text-muted text-sm m-0 line-clamp-2"
-                                   title="{{ plugin.description }}">{{ plugin.description }}</p>
-                                {% if plugin.requires_upgrade %}
-                                    <div class="mt-3">
-                                        <c-buttons.warning size="sm" href="{% url 'billing:select_plan' team.key %}" class="no-underline">
-                                        <i class="fas fa-arrow-up mr-1"></i>Upgrade to Enable
-                                        </c-buttons.warning>
-                                    </div>
-                                {% endif %}
-                                {% if plugin.has_visible_config %}
-                                    <div x-show="enabled" x-cloak class="mt-4 pt-4 border-t border-border">
-                                        {% for field in plugin.config_schema %}
-                                            {% if field.type == "select" and not field.choices and field.hide_if_no_choices %}
-                                                {# Skip entire field — no choices available and explicitly flagged (e.g., Business tier for DT server) #}
-                                            {% else %}
-                                                <div class="{% if not forloop.last %}mb-3{% endif %}">
-                                                    <c-forms.label for="plugin_config_{{ plugin.name }}_{{ field.key }}">{{ field.label }}</c-forms.label>
-                                                    {% if field.type == "select" %}
-                                                        <c-forms.select name="plugin_config_{{ plugin.name }}_{{ field.key }}" id="plugin_config_{{ plugin.name }}_{{ field.key }}">
-                                                        <option value="">-- Default --</option>
-                                                        {% for choice in field.choices %}
-                                                            {% if field.current_value == choice.value %}
-                                                                <option value="{{ choice.value }}" selected>{{ choice.label }}</option>
-                                                            {% else %}
-                                                                <option value="{{ choice.value }}">{{ choice.label }}</option>
-                                                            {% endif %}
-                                                        {% endfor %}
-                                                        </c-forms.select>
-                                                    {% elif field.type == "boolean" %}
-                                                        {% if field.current_value == "true" %}
-                                                            <c-forms.checkbox-input name="plugin_config_{{ plugin.name }}_{{ field.key }}" id="plugin_config_{{ plugin.name }}_{{ field.key }}" value="true" checked />
-                                                        {% else %}
-                                                            <c-forms.checkbox-input name="plugin_config_{{ plugin.name }}_{{ field.key }}" id="plugin_config_{{ plugin.name }}_{{ field.key }}" value="true" />
-                                                        {% endif %}
-                                                    {% elif field.type == "number" %}
-                                                        <c-forms.input type="number" name="plugin_config_{{ plugin.name }}_{{ field.key }}" id="plugin_config_{{ plugin.name }}_{{ field.key }}" value="{{ field.current_value }}" />
-                                                    {% else %}
-                                                        <c-forms.input type="text" name="plugin_config_{{ plugin.name }}_{{ field.key }}" id="plugin_config_{{ plugin.name }}_{{ field.key }}" value="{{ field.current_value }}" />
-                                                    {% endif %}
-                                                    {% if field.help_text %}<c-forms.hint>{{ field.help_text }}</c-forms.hint>{% endif %}
-                                                </div>
-                                            {% endif %}
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                            {% comment %}
-                                On or off for the whole plugin, applied on the
-                                spot, so it reads as a switch rather than a
-                                checkbox stranded at the far edge of the row.
-                            {% endcomment %}
-                            <div class="flex-shrink-0">
-                                <c-forms.toggle name="enabled_plugins" value="{{ plugin.name }}" id="plugin-{{ plugin.name }}" aria-label="Enable {{ plugin.display_name|default:plugin.name }}" x-ref="toggle" x-model="enabled" :disabled="plugin.requires_upgrade" />
-                            </div>
-                            </c-layout.select-row>
-                        {% endfor %}
+        {% for group in plugin_groups %}
+            <c-cards.card flush class="overflow-hidden">
+            <c-cards.header compact title="{{ group.grouper|default:'Other'|capfirst }}">
+            <c-badges.secondary>{{ group.list|length }}</c-badges.secondary>
+            </c-cards.header>
+            {% for plugin in group.list %}
+                <c-layout.select-row divided toggle_ref="toggle" :disabled="plugin.requires_upgrade" x_data="{ enabled: {{ plugin.is_enabled|yesno:'true,false' }} }">
+                <c-forms.checkbox-input name="enabled_plugins" value="{{ plugin.name }}" id="plugin-{{ plugin.name }}" aria-label="Enable {{ plugin.display_name|default:plugin.name }}" x-ref="toggle" x-model="enabled" :checked="plugin.is_enabled" :disabled="plugin.requires_upgrade" />
+                <div class="flex min-w-0 flex-1 flex-col gap-3">
+                    <div class="flex min-w-0 flex-col gap-2">
+                        <c-forms.label compact for="plugin-{{ plugin.name }}">{{ plugin.display_name }}</c-forms.label>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <c-badges.secondary>v{{ plugin.version }}</c-badges.secondary>
+                            {% for bom_type in plugin.supported_bom_types %}
+                                <c-badges.secondary title="Runs on {{ bom_type|upper }} artifacts">{{ bom_type|upper }}</c-badges.secondary>
+                            {% endfor %}
+                            {% if plugin.is_beta %}<c-badges.info>Beta</c-badges.info>{% endif %}
+                            {% if plugin.requires_upgrade %}
+                                <c-badges.warning>{{ plugin.required_plan }} plan required</c-badges.warning>
+                            {% endif %}
+                        </div>
+                        <c-forms.hint compact>{{ plugin.description }}</c-forms.hint>
                     </div>
+                    {% if plugin.requires_upgrade %}
+                        <div>
+                            <c-buttons.secondary size="sm" href="{% url 'billing:select_plan' team.key %}">View plans</c-buttons.secondary>
+                        </div>
+                    {% endif %}
+                    {% if plugin.has_visible_config %}
+                        <c-cards.inset x-show="enabled" x-cloak>
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            {% for field in plugin.config_schema %}
+                                {% if field.type == "select" and not field.choices and field.hide_if_no_choices %}
+                                    {# The plan has no configurable choices for this field. #}
+                                {% elif field.type == "boolean" %}
+                                    <c-forms.field hint="{{ field.help_text }}">
+                                    {% if field.current_value == "true" %}
+                                        <c-forms.checkbox name="plugin_config_{{ plugin.name }}_{{ field.key }}" id="plugin_config_{{ plugin.name }}_{{ field.key }}" value="true" checked>{{ field.label }}</c-forms.checkbox>
+                                    {% else %}
+                                        <c-forms.checkbox name="plugin_config_{{ plugin.name }}_{{ field.key }}" id="plugin_config_{{ plugin.name }}_{{ field.key }}" value="true">{{ field.label }}</c-forms.checkbox>
+                                    {% endif %}
+                                    </c-forms.field>
+                                {% else %}
+                                    <c-forms.field label="{{ field.label }}" for="plugin_config_{{ plugin.name }}_{{ field.key }}" hint="{{ field.help_text }}">
+                                    {% if field.type == "select" %}
+                                        <c-forms.select name="plugin_config_{{ plugin.name }}_{{ field.key }}" id="plugin_config_{{ plugin.name }}_{{ field.key }}">
+                                        <option value="">Default</option>
+                                        {% for choice in field.choices %}
+                                            <option value="{{ choice.value }}"
+                                                    {% if field.current_value == choice.value %}selected{% endif %}>
+                                                {{ choice.label }}
+                                            </option>
+                                        {% endfor %}
+                                        </c-forms.select>
+                                    {% elif field.type == "number" %}
+                                        <c-forms.input type="number" name="plugin_config_{{ plugin.name }}_{{ field.key }}" id="plugin_config_{{ plugin.name }}_{{ field.key }}" value="{{ field.current_value }}" />
+                                    {% else %}
+                                        <c-forms.input name="plugin_config_{{ plugin.name }}_{{ field.key }}" id="plugin_config_{{ plugin.name }}_{{ field.key }}" value="{{ field.current_value }}" />
+                                    {% endif %}
+                                    </c-forms.field>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        </c-cards.inset>
+                    {% endif %}
                 </div>
+                </c-layout.select-row>
             {% endfor %}
-        </div>
-        <c-feedback.alert class="mt-6">Enabled plugins will automatically assess new SBOM uploads.</c-feedback.alert>
-        {# Save sits at the bottom right, below the fields it applies to. #}
-        <div class="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-border">
-            <span id="plugin-settings-spinner" class="htmx-indicator">
-                <c-feedback.spinner size="sm" />
-            </span>
-            <c-buttons.primary type="submit">
-            <i class="fas fa-save mr-2"></i>Save
-            </c-buttons.primary>
+            </c-cards.card>
+        {% endfor %}
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <c-forms.hint compact>Changes apply to new uploads. Existing assessment results are kept.</c-forms.hint>
+            <div class="flex items-center gap-2">
+                <span id="plugin-settings-spinner" class="htmx-indicator">
+                    <c-feedback.spinner size="sm" />
+                </span>
+                <c-buttons.primary type="submit" size="sm">Save changes</c-buttons.primary>
+            </div>
         </div>
     {% else %}
-        <c-feedback.empty-state icon="fas fa-puzzle-piece" title="No plugins available" message="Plugins will appear here once they are registered by administrators." />
+        <c-feedback.empty-state icon="fas fa-puzzle-piece" title="No plugins available" message="Plugins will appear here when an administrator adds them." />
     {% endif %}
 </form>
-</c-cards.dashboard>
-{# Info Card about Plugin Behavior #}
-<c-cards.dashboard class="mb-6 mt-6">
-<c-slot name="header">
-<div class="px-6 py-4 border-b border-border">
-    <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
-            <i class="fas fa-info-circle text-info"></i>
-        </div>
-        <div>
-            <h5 class="text-lg font-semibold text-text m-0">About assessment plugins</h5>
-            <p class="text-text-muted text-sm m-0">Learn how plugins work with your SBOMs</p>
-        </div>
+<c-cards.card>
+<div class="flex flex-col gap-5">
+    <c-layout.section-header level="2" title="About assessments" />
+    <div class="grid gap-6 md:grid-cols-2">
+        <c-layout.section-header title="Automatic assessments" subtitle="Enabled plugins assess new uploads. Open an artifact to see its results." icon="fas fa-circle-check" accent="success" />
+        <c-layout.section-header title="Assessment history" subtitle="Past results are preserved so you can track security and compliance over time." icon="fas fa-history" accent="neutral" />
+        <c-layout.section-header title="Supported artifacts" subtitle="Each plugin lists the artifact types it can assess." icon="fas fa-file-shield" accent="neutral" />
+        <c-layout.section-header title="Plugin configuration" subtitle="Select a plugin to see any available configuration fields." icon="fas fa-sliders" accent="neutral" />
     </div>
 </div>
-</c-slot>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <div>
-        <div class="flex items-start gap-3">
-            <c-chips.icon-chip size="sm" accent="success">
-            <i class="fas fa-check-circle" aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <div>
-                <h6 class="font-medium text-text m-0 mb-1">Automatic Assessments</h6>
-                <p class="text-text-muted text-sm m-0">
-                    Enabled plugins automatically run assessments when new SBOMs are uploaded.
-                    Results appear on the SBOM detail page and in the SBOMs table.
-                </p>
-            </div>
-        </div>
-    </div>
-    <div>
-        <div class="flex items-start gap-3">
-            <div class="w-8 h-8 rounded-lg bg-info/10 flex items-center justify-center flex-shrink-0">
-                <i class="fas fa-history text-info text-sm"></i>
-            </div>
-            <div>
-                <h6 class="font-medium text-text m-0 mb-1">Historical Tracking</h6>
-                <p class="text-text-muted text-sm m-0">
-                    All assessment results are preserved, allowing you to track compliance
-                    and security status over time for audit purposes.
-                </p>
-            </div>
-        </div>
-    </div>
-    <div>
-        <div class="flex items-start gap-3">
-            <c-chips.icon-chip size="sm">
-            <i class="fas fa-shield-alt" aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <div>
-                <h6 class="font-medium text-text m-0 mb-1">Compliance Plugins</h6>
-                <p class="text-text-muted text-sm m-0">
-                    Compliance plugins like NTIA Minimum Elements verify that your SBOMs
-                    meet industry standards and regulatory requirements.
-                </p>
-            </div>
-        </div>
-    </div>
-    <div>
-        <div class="flex items-start gap-3">
-            <c-chips.icon-chip size="sm" accent="neutral">
-            <i class="fas fa-cog" aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <div>
-                <h6 class="font-medium text-text m-0 mb-1">Per-Plugin Configuration</h6>
-                <p class="text-text-muted text-sm m-0">
-                    Some plugins support custom configuration. Configuration options
-                    will appear when the plugin is enabled.
-                </p>
-            </div>
-        </div>
-    </div>
-</div>
-</c-cards.dashboard>
+</c-cards.card>

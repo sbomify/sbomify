@@ -1,0 +1,3 @@
+{% comment %}A deadline derived from scan history. Only a measured breach uses danger ink; unknown history and best effort remain explicit.{% endcomment %}
+<c-vars sla />
+<span class="text-xs tabular-nums {% if sla.overdue %}text-danger font-semibold{% else %}text-text-muted{% endif %}">{{ sla.label }}</span>

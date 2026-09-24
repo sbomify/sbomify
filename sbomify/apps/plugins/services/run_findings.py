@@ -15,9 +15,8 @@ Only the page leaves Postgres whole. Resolving the stored result to render
 twenty-five rows meant de-TOASTing and parsing every finding the scan produced,
 which is most of what opening a card costs: at 4,075 findings the blob is about
 12 MB uncompressed and 22.7 ms of the 33 ms the page takes. Filtering and the
-toolbar's counts read seven keys per finding and never touch a title,
-description or reference list, so those seven come back as a flat projection and
-the rest stays in the database until the page is known.
+toolbar's counts read a small projection, including the title for name searches.
+Descriptions and references stay in the database until the page is known.
 """
 
 from __future__ import annotations
@@ -89,6 +88,8 @@ def _filterable(finding: dict[str, Any]) -> dict[str, Any]:
         "package": component.get("name") or "",
         "ecosystem": component.get("ecosystem") or "",
         "vex_state": state,
+        "severity": str(finding.get("severity") or "unknown").lower(),
+        "version": component.get("version") or "",
         "vex_suppressed": state in SUPPRESSED_STATES,
     }
 
@@ -96,8 +97,8 @@ def _filterable(finding: dict[str, Any]) -> dict[str, Any]:
 #: Every finding in the run, carrying only what a filter or a count reads.
 #:
 #: ``_matches`` reads the severity, the VEX state, the KEV mark and the search
-#: haystack; the haystack is the advisory id, its aliases, the package and its
-#: ecosystem. The option lists and the KEV and suppressed totals read the same
+#: haystack; the haystack includes the advisory title and the package version.
+#: The option lists and the KEV and suppressed totals read the same
 #: keys again. Nothing in that set is large, and nothing outside it is needed
 #: until a row renders, so the projection stops there.
 #:
@@ -116,7 +117,9 @@ _PROJECTION_SQL = """
            t.finding ->> 'severity',
            t.finding ->> 'analysis_state',
            t.finding -> 'component' ->> 'name',
-           t.finding -> 'component' ->> 'ecosystem'
+           t.finding -> 'component' ->> 'ecosystem',
+           COALESCE(NULLIF(t.finding ->> 'title', ''), t.finding ->> 'summary'),
+           t.finding -> 'component' ->> 'version'
     FROM {table} run
     CROSS JOIN LATERAL jsonb_array_elements(
         CASE WHEN jsonb_typeof(run.result -> 'findings') = 'array'
@@ -167,9 +170,10 @@ def _projected_findings(run_id: UUID, table: str) -> list[dict[str, Any]]:
             "aliases": aliases or [],
             "severity": severity,
             "analysis_state": state,
-            "component": {"name": name, "ecosystem": ecosystem},
+            "title": title or "",
+            "component": {"name": name, "ecosystem": ecosystem, "version": version},
         }
-        for position, advisory_id, status, aliases, severity, state, name, ecosystem in rows
+        for position, advisory_id, status, aliases, severity, state, name, ecosystem, title, version in rows
     ]
 
 

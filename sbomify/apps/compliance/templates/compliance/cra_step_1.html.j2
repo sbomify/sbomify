@@ -42,7 +42,7 @@
                     Manufacturer
                     <c-badges.danger class="ml-2" x-show="manufacturerIsPlaceholder" data-testid="mfr-placeholder-badge">Not configured</c-badges.danger>
                 </h2>
-                <a href="{% url 'teams:contact_profiles_list' team_key=team.key %}"
+                <a href="{% url 'teams:team_settings_tab' team_key=team.key tab='contact-profiles' %}"
                    class="text-sm text-primary hover:underline"
                    data-testid="mfr-settings-link">
                     <i class="fas fa-up-right-from-square mr-1"></i>
@@ -365,7 +365,7 @@
             </div>
         </div>
         {# Footer navigation #}
-        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+        <div class="flex flex-wrap justify-between items-center gap-3 mt-8 pt-6 border-t border-border">
             {% if step > 1 %}
                 <c-buttons.secondary href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}">
                 <i class="fas fa-arrow-left mr-2"></i> Back

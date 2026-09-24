@@ -16,13 +16,13 @@
     {% endcomment %}
     <c-tables.shell nested>
     <c-tables.toolbar>
-    <c-tables.search id="sboms-search" label="Search artifacts" placeholder="Search artifacts..." x-model="search" @input="currentPage = 1" />
-    <c-tables.select id="sboms-type-filter" label="Filter by type" x-model="typeFilter" @change="currentPage = 1">
+    <c-forms.search-input size="sm" id="sboms-search" label="Search artifacts" placeholder="Search artifacts..." x-model="search" @input="currentPage = 1" />
+    <c-forms.select size="md" id="sboms-type-filter" label="Filter by type" x-model="typeFilter" @change="currentPage = 1">
     <option value="all">All Types</option>
     <template x-for="t in bomTypes" :key="t">
         <option :value="t" x-text="t.toUpperCase()"></option>
     </template>
-    </c-tables.select>
+    </c-forms.select>
     {% if full_view %}
         <c-slot name="right">
         <c-tables.page-size id="sboms-per-page" x-model.number="pageSize" @change="currentPage = 1">
@@ -33,16 +33,24 @@
         </c-slot>
     {% endif %}
     </c-tables.toolbar>
-    <c-tables.table>
+    <c-tables.table sized variant_class="
+    {% if is_public_view %}
+        min-w-144 md:min-w-192
+    {% else %}
+        min-w-192 md:min-w-224 lg:min-w-296
+    {% endif %}
+    " aria-label="Artifacts">
     <c-tables.head>
     <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-    <c-tables.header-cell>Type</c-tables.header-cell>
-    <c-tables.header-cell sort="version" class="hidden md:table-cell">Version</c-tables.header-cell>
-    {% if not is_public_view %}<c-tables.header-cell>Vulnerabilities</c-tables.header-cell>{% endif %}
+    <c-tables.header-cell class="w-28">Type</c-tables.header-cell>
+    <c-tables.header-cell sort="version" class="hidden md:table-cell w-28">Version</c-tables.header-cell>
     {% if not is_public_view %}
-        <c-tables.header-cell class="hidden lg:table-cell">Assessments</c-tables.header-cell>
+        <c-tables.header-cell class="w-56 lg:w-88">Vulnerabilities</c-tables.header-cell>
     {% endif %}
-    <c-tables.header-cell sort="created_at" date>Uploaded</c-tables.header-cell>
+    {% if not is_public_view %}
+        <c-tables.header-cell class="hidden lg:table-cell w-40">Assessments</c-tables.header-cell>
+    {% endif %}
+    <c-tables.header-cell sort="created_at" date class="w-36 sm:w-40">Uploaded</c-tables.header-cell>
     <c-tables.actions-cell as="th" />
     </c-tables.head>
     <tbody>
@@ -74,7 +82,7 @@
             {% endcomment %}
             <c-badges.dynamic ::data-variant="({ sbom: 'info', vex: 'violet', cbom: 'success' })[bomType] || 'secondary'" x-text="bomType.toUpperCase()" />
             </c-tables.cell>
-            <c-tables.cell class="hidden md:table-cell">
+            <c-tables.cell nowrap class="hidden md:table-cell">
             <span class="font-mono text-sm text-text"
                   x-text="item.sbom.version.length > 20 ? item.sbom.version.slice(0, 20) + '...' : item.sbom.version"
                   :title="item.sbom.version"></span>

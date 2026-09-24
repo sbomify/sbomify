@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.utils.html import strip_tags
 
 from sbomify.apps.vulnerability_scanning.utils import result_scanned_nothing
 
@@ -42,33 +43,53 @@ class TestThePredicate:
         assert result_scanned_nothing(value) is False
 
 
+@pytest.mark.django_db
 class TestTheRowStatus:
-    """The product page's single filterable status per component."""
+    """Product and workspace tables share the same assessment state."""
 
-    def _status(self, vuln: dict[str, Any] | None) -> str:
-        from sbomify.apps.core.services.product_page import _row_status
+    def _row(self, workspace: Any, results: list[dict[str, Any]]) -> dict[str, Any]:
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.core.services.inventory_page import build_inventory_snapshot
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
-        return _row_status(vuln)
+        component = Component.objects.create(name="Library", team=workspace)
+        sbom = SBOM.objects.create(name="bom", component=component, format="cyclonedx")
+        for index, result in enumerate(results):
+            run = AssessmentRun.objects.create(
+                sbom=sbom, plugin_name=f"scanner-{index}", category="security", status="completed", result=result
+            )
+            sync_findings(run)
+        return build_inventory_snapshot(workspace, "components")["rows"][0]
 
-    def test_no_run_is_not_scanned(self) -> None:
-        assert self._status(None) == "not_scanned"
+    def test_no_run_is_not_scanned(self, sample_team_with_owner_member) -> None:
+        row = self._row(sample_team_with_owner_member.team, [])
 
-    def test_a_skipped_run_is_its_own_state(self) -> None:
-        counts = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "scanned_nothing": True}
+        assert row["scan_label"] == "Not assessed"
+        assert row["assessed"] is False
 
-        assert self._status(counts) == "scanned_nothing"
+    def test_a_skipped_run_is_its_own_state(self, sample_team_with_owner_member) -> None:
+        row = self._row(sample_team_with_owner_member.team, [SKIPPED])
 
-    def test_a_clean_run_is_clean(self) -> None:
-        counts = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "scanned_nothing": False}
+        assert row["scan_label"] == "Nothing scanned"
+        assert row["assessed"] is False
 
-        assert self._status(counts) == "clean"
+    def test_a_clean_run_is_clean(self, sample_team_with_owner_member) -> None:
+        row = self._row(sample_team_with_owner_member.team, [CLEAN])
 
-    def test_findings_outrank_everything(self) -> None:
-        """A skipped provider alongside one that found something must not hide
-        the finding — severity wins."""
-        counts = {"total": 1, "critical": 0, "high": 1, "medium": 0, "low": 0, "scanned_nothing": True}
+        assert row["scan_label"] == "Scanned"
+        assert row["assessed"] is True
+        assert row["vulnerabilities"] == 0
 
-        assert self._status(counts) == "high"
+    def test_findings_outrank_everything(self, sample_team_with_owner_member) -> None:
+        """A skipped provider must not hide another provider's vulnerability."""
+        result = {"findings": [{"id": "CVE-2026-0001", "severity": "high", "component": {"name": "pkg"}}]}
+        row = self._row(sample_team_with_owner_member.team, [SKIPPED, result])
+
+        assert row["assessed"] is True
+        assert row["scan_label"] == "Scanned"
+        assert row["counts"]["high"] == 1
 
 
 @pytest.mark.django_db
@@ -236,7 +257,7 @@ class TestTheSbomPages:
 
         html = self._open(sample_sbom, url).content.decode()
 
-        # "Skipped" and "Pending" both appear elsewhere on this page (the run
-        # cards, a zero count), so match the card header's own markup.
-        assert '<i class="fas fa-ban"></i>Skipped' in html
-        assert '<i class="fas fa-clock"></i>Pending' not in html
+        # Match the heading and its adjacent status, not the run badges or zero-count chips.
+        page_text = " ".join(strip_tags(html).split())
+        assert "Assessments Skipped" in page_text
+        assert "Assessments Pending" not in page_text

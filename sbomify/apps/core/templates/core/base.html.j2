@@ -20,10 +20,6 @@
                         effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                     }
                     document.documentElement.classList.add(effectiveTheme);
-                    // Read the same preference as Alpine persist before the first paint.
-                    try {
-                        document.documentElement.toggleAttribute('data-sidebar-collapsed', localStorage.getItem('sidebar-collapsed') === 'true');
-                    } catch(e) { /* blocked storage: use the expanded layout */ }
                 })();
             </script>
             <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -93,10 +89,8 @@
                 html.light { background-color: #ffffff; color: #25293F; }
                 html { min-height: 100%; }
                 body { min-height: 100vh; }
-                html { --sidebar-width: 16rem; }
-                html[data-sidebar-collapsed] { --sidebar-width: 4rem; }
-                html[data-sidebar-collapsed] #sidebar [data-sidebar-view="expanded"],
-                html:not([data-sidebar-collapsed]) #sidebar [data-sidebar-view="collapsed"] { display: none; }
+                html { --sidebar-width: 15rem; }
+                #sidebar [data-sidebar-view="collapsed"] { display: none; }
             </style>
             {% block styles %}{% endblock %}
             <link rel="stylesheet"
@@ -125,7 +119,7 @@
             {% endif %}
         </div>
         <!-- Global Toast Notifications -->
-        {% include "components/tw/toast_container.html.j2" %}
+        <c-feedback.toast-container />
         <!-- Global Confirmation Modal -->
         {% include "components/tw/confirm_modal.html.j2" %}
         <!-- Analytics Consent Banner -->

@@ -1,116 +1,47 @@
 {% extends "core/public_base.htmx.j2" %}
-{% load static %}
-{% load django_vite %}
 {% block title %}Sign NDA - {{ team.name }}{% endblock %}
 {% block content %}
-    <div class="max-w-3xl mx-auto py-8 px-4">
-        <div class="rounded-2xl shadow-xl overflow-hidden border"
-             style="background: var(--surface-card);
-                    border-color: var(--border-color)">
-            {# Header with brand gradient #}
-            <div class="px-6 py-6 text-center relative overflow-hidden"
-                 style="background: linear-gradient(135deg, var(--brand-color) 0%, var(--brand-color-dark) 100%)">
-                {# Subtle pattern overlay #}
-                <div class="absolute inset-0 opacity-10"
-                     style="background-image: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.2) 0%, transparent 40%)">
-                </div>
-                <div class="relative z-10">
-                    <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg"
-                         style="background: rgba(255,255,255,0.2);
-                                backdrop-filter: blur(10px)">
-                        <i class="fas fa-file-signature text-white text-2xl"></i>
-                    </div>
-                    <h1 class="text-2xl font-bold text-white m-0">Sign Non-Disclosure Agreement</h1>
-                    <p class="text-white/80 text-sm mt-2 m-0">Complete your access request</p>
-                </div>
-            </div>
-            {# Form content #}
-            <div class="p-6">
-                <p class="mb-6 text-center text-sm leading-relaxed"
-                   style="color: var(--text-secondary)">
-                    Please review and sign the NDA below to complete your access request for
-                    <strong style="color: var(--text-primary);">{{ team.name }}</strong>.
-                </p>
-                {# NDA Document Preview #}
-                <div class="mb-6">
-                    <div class="flex items-center justify-between mb-3">
-                        <h5 class="text-base font-semibold m-0"
-                            style="color: var(--text-primary)">NDA Document</h5>
-                        <div class="flex items-center gap-3">
-                            {% if nda_document.file_size %}
-                                <span class="text-sm" style="color: var(--text-muted);">{{ nda_document.file_size|filesizeformat }}</span>
-                            {% endif %}
-                            <a href="{% url 'documents:document_download' nda_document.id %}?view=inline"
-                               target="_blank"
-                               class="inline-flex items-center gap-1.5 text-sm font-medium transition-colors no-underline hover:no-underline"
-                               style="color: var(--accent-color)">
-                                <i class="fas fa-external-link-alt text-xs"></i>Open in New Tab
-                            </a>
-                        </div>
-                    </div>
-                    <div class="rounded-xl overflow-hidden"
-                         style="border: 1px solid var(--border-color);
-                                background: var(--bg-secondary)">
-                        <iframe src="{% url 'documents:document_download' nda_document.id %}?view=inline"
-                                title="NDA Document"
-                                class="w-full h-96 border-0"></iframe>
-                    </div>
-                </div>
-                {# Sign NDA Form #}
-                <form method="post"
-                      action="{% url 'documents:sign_nda' team.key access_request.id %}">
-                    {% csrf_token %}
-                    <div class="mb-5">
-                        <label for="signed_name"
-                               class="block text-sm font-medium mb-2"
-                               style="color: var(--text-primary)">
-                            Full Name <span style="color: var(--accent-color);">*</span>
-                        </label>
-                        <c-forms.input id="signed_name" name="signed_name" required placeholder="Enter your full name" style="background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary)" autocomplete="name" onfocus="this.style.borderColor='var(--accent-color)'; this.style.boxShadow='0 0 0 3px rgba(var(--accent-color-rgb), 0.15)';" onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';" />
-                        <p class="text-xs mt-2" style="color: var(--text-muted);">This name will be recorded with your NDA signature.</p>
-                    </div>
-                    <div class="mb-5">
-                        <label class="flex items-start gap-3 cursor-pointer">
-                            {% comment %}
-                                value stays "on", the browser's own default for a
-                                checkbox with none: the view reads it back by that
-                                exact string.
-                            {% endcomment %}
-                            <c-forms.checkbox-input id="consent" name="consent" value="on" required class="mt-0.5" style="border-color: var(--border-color); accent-color: var(--accent-color)" />
-                            <span class="text-sm" style="color: var(--text-secondary);">
-                                I have read and agree to the terms of the Non-Disclosure Agreement
-                                <span style="color: var(--accent-color);">*</span>
-                            </span>
-                        </label>
-                    </div>
-                    {# Important notice #}
-                    <div class="rounded-xl p-4 mb-6"
-                         style="background: color-mix(in oklab, var(--color-warning) 10%, transparent);
-                                border: 1px solid color-mix(in oklab, var(--color-warning) 25%, transparent)">
-                        <div class="flex items-start gap-3">
-                            <c-chips.icon-chip accent="warning">
-                            <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-                            </c-chips.icon-chip>
-                            <div>
-                                <strong class="block mb-1 text-sm"
-                                        style="color: color-mix(in oklab, var(--color-warning) 70%, var(--text-primary))">Important</strong>
-                                <p class="text-sm m-0"
-                                   style="color: color-mix(in oklab, var(--color-warning) 60%, var(--text-primary))">
-                                    By signing this NDA, you agree to keep confidential information secure.
-                                    Your signature, IP address, and timestamp will be recorded.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex flex-col sm:flex-row gap-3">
-                        <c-buttons.primary type="submit" size="lg" class="flex-1">
-                        <i class="fas fa-signature" aria-hidden="true"></i>
-                        Sign NDA and Submit Request
-                        </c-buttons.primary>
-                        <c-buttons.secondary href="{% url 'core:workspace_public' workspace_key=team.key %}" size="lg" class="flex-1">Cancel</c-buttons.secondary>
-                    </div>
-                </form>
-            </div>
+    <c-layout.frame class="max-w-3xl mx-auto">
+    <c-branded.page-header title="Sign Non-Disclosure Agreement" lede="Review and sign the NDA to complete your access request for {{ team.name }}." />
+    <c-branded.surface>
+    <form method="post"
+          action="{% url 'documents:sign_nda' team.key access_request.id %}"
+          class="flex flex-col gap-5">
+        {% csrf_token %}
+        <c-branded.section-header title="NDA document">
+        <c-slot name="action">
+        <div class="flex flex-wrap items-center gap-3">
+            {% if nda_document.file_size %}
+                <c-typography.description size="sm">{{ nda_document.file_size|filesizeformat }}</c-typography.description>
+            {% endif %}
+            <c-buttons.secondary href="{% url 'documents:document_download' nda_document.id %}?view=inline" target="_blank" rel="noopener" size="sm">
+            <i class="fas fa-external-link-alt" aria-hidden="true"></i>Open in new tab
+            </c-buttons.secondary>
         </div>
-    </div>
+        </c-slot>
+        </c-branded.section-header>
+        <c-branded.surface flush>
+        <iframe src="{% url 'documents:document_download' nda_document.id %}?view=inline"
+                title="NDA document"
+                class="w-full h-96 border-0"></iframe>
+        </c-branded.surface>
+        <c-forms.field label="Full name" for="signed_name" required hint="This name will be recorded with your NDA signature.">
+        <c-forms.input id="signed_name" name="signed_name" required placeholder="Enter your full name" autocomplete="name" />
+        </c-forms.field>
+        <c-forms.checkbox id="consent" name="consent" value="on" required>
+        I have read and agree to the terms of the Non-Disclosure Agreement
+        </c-forms.checkbox>
+        <c-feedback.alert variant="warning" title="Before you sign">
+        By signing this NDA, you agree to keep confidential information secure.
+        Your signature, IP address, and timestamp will be recorded.
+        </c-feedback.alert>
+        <div class="flex flex-wrap gap-3">
+            <c-buttons.secondary type="submit">
+            <i class="fas fa-signature" aria-hidden="true"></i>Sign NDA and submit request
+            </c-buttons.secondary>
+            <c-buttons.secondary href="{% url 'core:workspace_public' workspace_key=team.key %}">Cancel</c-buttons.secondary>
+        </div>
+    </form>
+    </c-branded.surface>
+    </c-layout.frame>
 {% endblock %}

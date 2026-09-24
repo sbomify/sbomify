@@ -1,12 +1,7 @@
-"""The dashboard digest reads the findings table, not the scan blobs.
+"""The overview reads projected findings without loading scanner result blobs.
 
-It used to load every current run's whole ``result`` for every component in the
-workspace, merge and extract in Python, sort the lot, and return three rows: the
-work scaled with the workspace while the answer never grew.
-
-Ranking and bounding are SQL now. What stays in Python is the cross-provider
-fold, because it is by alias and transitive, and it runs over the ranked
-candidates rather than over everything.
+The shared security snapshot folds provider aliases per package and supplies
+both the priority list and workspace-wide metrics from the same rows.
 """
 
 from __future__ import annotations
@@ -24,6 +19,12 @@ from sbomify.apps.vulnerability_scanning.findings import sync_findings
 from sbomify.apps.vulnerability_scanning.models import Finding
 
 pytestmark = pytest.mark.django_db
+
+
+def _context(workspace_id: int) -> dict[str, Any]:
+    result = build_dashboard_context(workspace_id)
+    assert result.ok and result.value is not None
+    return result.value
 
 
 def _scan(sbom: SBOM, findings: list[dict[str, Any]], plugin: str = "osv") -> AssessmentRun:
@@ -83,7 +84,7 @@ class TestTheSameAdvisoryFromTwoScannersShowsOnce:
             },
         )
 
-        digest = build_dashboard_context(team.id)["needs_attention"]
+        digest = _context(team.id)["needs_attention"]
 
         assert len(digest) == 1, [row["id"] for row in digest]
 
@@ -98,7 +99,7 @@ class TestTheSameAdvisoryFromTwoScannersShowsOnce:
             },
         )
 
-        digest = build_dashboard_context(team.id)["needs_attention"]
+        digest = _context(team.id)["needs_attention"]
 
         assert {row["id"] for row in digest} == {"CVE-2026-0001", "CVE-2026-0002"}
 
@@ -122,7 +123,7 @@ class TestTheSameAdvisoryFromTwoScannersShowsOnce:
             },
         )
 
-        digest = build_dashboard_context(team.id)["needs_attention"]
+        digest = _context(team.id)["needs_attention"]
 
         assert len(digest) == 1, [row["id"] for row in digest]
 
@@ -139,7 +140,7 @@ class TestTheSameAdvisoryFromTwoScannersShowsOnce:
             },
         )
 
-        digest = build_dashboard_context(team.id)["needs_attention"]
+        digest = _context(team.id)["needs_attention"]
 
         assert len(digest) == 1, [row["id"] for row in digest]
 
@@ -151,7 +152,7 @@ class TestTheSameAdvisoryFromTwoScannersShowsOnce:
         nasty["malicious"] = True
         _component_with(team, {"osv": [_finding("CVE-2026-0001", "critical"), nasty]})
 
-        digest = build_dashboard_context(team.id)["needs_attention"]
+        digest = _context(team.id)["needs_attention"]
 
         assert digest[0]["id"] == "MAL-2026-0001", [row["id"] for row in digest]
 
@@ -163,6 +164,17 @@ class TestTheSameAdvisoryFromTwoScannersShowsOnce:
         stored = Finding.objects.get(advisory_id="GHSA-x")
 
         assert stored.aliases == ["CVE-2026-9999"]
+
+    def test_title_only_malware_keeps_its_projected_priority(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        malware = _finding("GHSA-malware", "low")
+        malware["title"] = "Malicious Package in openssl"
+        _component_with(team, {"osv": [_finding("CVE-2026-0001", "critical"), malware]})
+
+        digest = _context(team.id)["needs_attention"]
+
+        assert digest[0]["id"] == "GHSA-malware"
+        assert digest[0]["malicious"] is True
 
 
 class TestItNoLongerReadsTheBlobs:
@@ -178,7 +190,7 @@ class TestItNoLongerReadsTheBlobs:
         AssessmentRun.objects.filter(sbom__component_id=component.id).update(result={"findings": []})
         cache.clear()
 
-        digest = build_dashboard_context(team.id)["needs_attention"]
+        digest = _context(team.id)["needs_attention"]
 
         assert [row["id"] for row in digest] == ["CVE-2026-0007"]
 
@@ -186,7 +198,7 @@ class TestItNoLongerReadsTheBlobs:
         team = sample_team_with_owner_member.team
         _component_with(team, {"osv": []})
 
-        assert build_dashboard_context(team.id)["needs_attention"] == []
+        assert _context(team.id)["needs_attention"] == []
 
 
 class TestScopeIsKept:
@@ -203,7 +215,7 @@ class TestScopeIsKept:
         _scan(new, [_finding("CVE-NEW", "high")])
         cache.clear()
 
-        digest = build_dashboard_context(team.id)["needs_attention"]
+        digest = _context(team.id)["needs_attention"]
 
         assert [row["id"] for row in digest] == ["CVE-NEW"]
 
@@ -213,7 +225,7 @@ class TestScopeIsKept:
         cleared["analysis_state"] = "not_affected"
         _component_with(team, {"osv": [cleared, _finding("CVE-2026-0004", "high")]})
 
-        digest = build_dashboard_context(team.id)["needs_attention"]
+        digest = _context(team.id)["needs_attention"]
 
         assert [row["id"] for row in digest] == ["CVE-2026-0004"]
 
@@ -227,7 +239,7 @@ class TestScopeIsKept:
         _component_with(team, {"osv": [_finding("CVE-MINE", "high")]}, name="mine")
         _component_with(somebody_else, {"osv": [_finding("CVE-THEIRS", "critical")]}, name="theirs")
 
-        digest = build_dashboard_context(team.id)["needs_attention"]
+        digest = _context(team.id)["needs_attention"]
 
         assert [row["id"] for row in digest] == ["CVE-MINE"]
 
@@ -251,9 +263,21 @@ class TestOnePackageAtATime:
             },
         )
 
-        rows = build_dashboard_context(team.id)["needs_attention"]
+        rows = _context(team.id)["needs_attention"]
 
         assert sorted(row["package"] for row in rows) == ["openssl", "zlib"]
+
+    def test_same_package_name_in_two_ecosystems_stays_separate(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        npm = _finding("CVE-2026-0001", "critical", package="shared-name")
+        npm["component"]["ecosystem"] = "npm"
+        pypi = _finding("CVE-2026-0001", "critical", package="shared-name")
+        pypi["component"]["ecosystem"] = "pypi"
+        _component_with(team, {"osv": [npm, pypi]})
+
+        rows = _context(team.id)["needs_attention"]
+
+        assert sorted(row["ecosystem"] for row in rows) == ["npm", "pypi"]
 
     def test_an_alias_does_not_bridge_two_packages(self, sample_team_with_owner_member) -> None:
         """The chain that folds two scanners inside one package must not reach
@@ -267,7 +291,7 @@ class TestOnePackageAtATime:
             },
         )
 
-        rows = build_dashboard_context(team.id)["needs_attention"]
+        rows = _context(team.id)["needs_attention"]
 
         assert sorted(row["package"] for row in rows) == ["openssl", "zlib"]
 
@@ -282,6 +306,6 @@ class TestOnePackageAtATime:
             },
         )
 
-        rows = build_dashboard_context(team.id)["needs_attention"]
+        rows = _context(team.id)["needs_attention"]
 
         assert len(rows) == 1

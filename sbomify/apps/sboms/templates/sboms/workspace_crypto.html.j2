@@ -2,52 +2,21 @@
 {% load pqc_extras %}
 {% block title %}Cryptography{% endblock %}
 {% block dashboard_content %}
-    <div class="mb-6">
-        <div class="flex items-center gap-3">
-            <c-chips.icon-chip>
-            <i class="fas fa-lock text-lg" aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <div>
-                <h1 class="text-2xl font-bold text-text">Cryptography</h1>
-                <p class="text-text-muted text-sm">{{ team.name }} · quantum readiness and migration priority across all components</p>
-            </div>
-        </div>
-    </div>
+    <c-layout.page-header title="Cryptography" subtitle="{{ team.name }} · quantum readiness and migration priority across all components" />
     {% if rollup.has_crypto_data %}
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-            <c-layout.stat-card compact accent="danger">
-            <c-layout.stat.value>{{ rollup.verdict_counts.at_risk|default:0 }}</c-layout.stat.value>
-            <c-layout.stat.label>At risk</c-layout.stat.label>
-            </c-layout.stat-card>
-            <c-layout.stat-card compact accent="warning">
-            <c-layout.stat.value>{{ rollup.verdict_counts.needs_review|default:0 }}</c-layout.stat.value>
-            <c-layout.stat.label>Needs review</c-layout.stat.label>
-            </c-layout.stat-card>
-            <c-layout.stat-card compact accent="success">
-            <c-layout.stat.value>{{ rollup.verdict_counts.ready|default:0 }}</c-layout.stat.value>
-            <c-layout.stat.label>Quantum-ready</c-layout.stat.label>
-            </c-layout.stat-card>
-            <c-layout.stat-card compact accent="muted">
-            <c-layout.stat.value>{{ rollup.verdict_counts.no_crypto|default:0 }}</c-layout.stat.value>
-            <c-layout.stat.label>No crypto</c-layout.stat.label>
-            </c-layout.stat-card>
-            {% comment %}
-                Resolved before the tag: a component prop is compared exactly, and
-                the formatter puts a branch inside an attribute on its own lines.
-            {% endcomment %}
-            {% firstof rollup.certificates.expired|yesno:"danger," rollup.certificates.expiring_soon|yesno:"warning," "" as certs_accent %}
-            <c-layout.stat-card compact accent="{{ certs_accent }}">
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <c-layout.stat-card compact accent="danger" value="{{ rollup.verdict_counts.at_risk|default:0 }}" label="At risk" />
+            <c-layout.stat-card compact accent="warning" value="{{ rollup.verdict_counts.needs_review|default:0 }}" label="Needs review" />
+            <c-layout.stat-card compact accent="success" value="{{ rollup.verdict_counts.ready|default:0 }}" label="Quantum-ready" />
+            <c-layout.stat-card compact accent="muted" value="{{ rollup.verdict_counts.no_crypto|default:0 }}" label="No crypto" />
             {% if rollup.certificates.expired %}
-                <c-layout.stat.value>{{ rollup.certificates.expired }}</c-layout.stat.value>
-                <c-layout.stat.label>Expired certs</c-layout.stat.label>
+                <c-layout.stat-card compact accent="danger" :value="rollup.certificates.expired" label="Expired certs" />
             {% else %}
-                <c-layout.stat.value>{{ rollup.certificates.expiring_soon }}</c-layout.stat.value>
-                <c-layout.stat.label>Certs expiring ≤90d</c-layout.stat.label>
+                <c-layout.stat-card compact accent="warning" :value="rollup.certificates.expiring_soon" label="Certs expiring ≤90d" />
             {% endif %}
-            </c-layout.stat-card>
         </div>
         {% if rollup.top_vulnerable %}
-            <c-cards.card class="mb-6">
+            <c-cards.card>
             <c-slot name="header">
             {% comment %}
                 The band the app's cards carry: shorter than the library header

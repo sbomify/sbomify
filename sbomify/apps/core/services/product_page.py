@@ -1,150 +1,175 @@
+"""Product details compose the same inventory and security data as the workspace."""
+
 from __future__ import annotations
 
 from typing import Any
 
-from sbomify.apps.core.models import Component, Release
-from sbomify.apps.plugins.models import AssessmentRun
-from sbomify.apps.sboms.models import SBOM
+from django.db import transaction
+from django.http import HttpRequest
+from django.urls import reverse
+from pydantic import ValidationError
 
-_SEVERITIES = ("critical", "high", "medium", "low")
-
-
-def _row_status(vuln: dict[str, Any] | None) -> str:
-    """The single filterable status of a component row.
-
-    Its worst severity, else ``clean`` for a row that was scanned and had
-    nothing, ``scanned_nothing`` for one where a scan ran and matched no
-    packages, and ``not_scanned`` where none ran at all.
-
-    The middle case exists because a skipped run stores zero findings exactly
-    as a clean scan does. Folded into ``clean`` it reads as an all-clear over an
-    artifact nothing could be matched against; folded into ``not_scanned`` it
-    hides that a scan did run and needs attention.
-    """
-    if vuln is None:
-        return "not_scanned"
-    for severity in _SEVERITIES:
-        if vuln[severity]:
-            return severity
-    return "scanned_nothing" if vuln.get("scanned_nothing") else "clean"
+from sbomify.apps.compliance.models import CRAAssessment
+from sbomify.apps.compliance.permissions import check_cra_access
+from sbomify.apps.core.apis import get_product, patch_product
+from sbomify.apps.core.authz import can
+from sbomify.apps.core.models import Component, Product
+from sbomify.apps.core.schemas import ProductPatchSchema
+from sbomify.apps.core.services.inventory_page import COLUMNS, build_inventory_snapshot, build_inventory_table
+from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.tea.mappers import get_product_tei_urn
 
 
-def build_product_components_rows(product_id: str) -> dict[str, Any]:
-    """The product page's components-and-security table plus its rollup badge.
+def build_product_page_context(request: HttpRequest, product_id: str) -> ServiceResult[dict[str, Any]]:
+    """Keep the route's workspace boundary independent of table query parameters."""
+    workspace_key = (request.session.get("current_team") or {}).get("key")
+    instance = Product.objects.select_related("team").filter(id=product_id, team__key=workspace_key).first()
+    if instance is None or not can(request, "product:read", instance):
+        return ServiceResult.failure("Product not found", status_code=404)
+    status, product = get_product(request, product_id)
+    if status != 200:
+        return ServiceResult.failure(product.get("detail", "Product not found"), status_code=status)
 
-    One row per assigned component with its latest SBOM version and the same
-    merged-by-alias, VEX-aware severity counts the component page shows, so the
-    numbers agree across pages. Batched: one query for components, one for the
-    latest SBOM per component, one for each provider's latest run per SBOM.
-    Rows sort worst-first.
-    """
-    from sbomify.apps.vulnerability_scanning.utils import (
-        extract_finding_rows,
-        merge_findings_by_alias,
-        result_scanned_nothing,
-        severity_counts_from_rows,
+    product.pop("components", None)
+    workspace = instance.team
+    components = build_inventory_snapshot(workspace, "components", product_id=product_id)
+    table = build_inventory_table(
+        request,
+        components,
+        kind="components",
+        product_id=product_id,
+        base_url=reverse("core:product_details", args=[product_id]),
+        content_id="product-components",
     )
-    from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
-
-    components = list(Component.objects.filter(products__id=product_id).order_by("name").values("id", "name"))
-    component_ids = [c["id"] for c in components]
-
-    latest_sboms = (
-        SBOM.objects.filter(component_id__in=component_ids, bom_type=SBOM.BomType.SBOM)
-        .order_by("component_id", "-created_at")
-        .distinct("component_id")
-        .values("id", "component_id", "version")
+    if not table.ok:
+        return table
+    if request.headers.get("HX-Target") == "product-components":
+        return ServiceResult.success({**(table.value or {}), "product": product})
+    releases = build_inventory_snapshot(workspace, "releases", product_id=product_id)
+    release_rows = sorted(
+        releases["rows"],
+        key=lambda row: (
+            row["release_type"] != "Rolling latest",
+            -(row["released_at"] or row["created_at"]).timestamp(),
+        ),
     )
-    sbom_by_component = {row["component_id"]: row for row in latest_sboms}
-    sbom_ids = [row["id"] for row in sbom_by_component.values()]
-
-    runs = (
-        AssessmentRun.objects.filter(sbom_id__in=sbom_ids, category="security", status="completed")
-        .order_by("sbom_id", "plugin_name", "-created_at")
-        .distinct("sbom_id", "plugin_name")
-        .values("sbom_id", "result", "created_at")
+    rows = components["rows"]
+    security_rows = [row for row in rows if row["security_applicable"]]
+    metrics = {
+        "components": len(rows),
+        "artifacts": sum(row["artifact_count"] for row in rows),
+        "open": sum(row["vulnerabilities"] for row in security_rows),
+        "past_sla": sum(row["past_sla"] for row in security_rows),
+        "unassessed": sum(row["unassessed"] for row in security_rows),
+    }
+    product_tei = get_product_tei_urn(product_id, workspace.id)
+    copy_values = [{"value": product_id, "title": f"Product ID: {product_id} (click to copy)"}]
+    if product_tei:
+        copy_values.append({"value": product_tei, "title": f"TEI: {product_tei} (click to copy)"})
+    has_cra_access = can(request, "workspace:administer", workspace) and check_cra_access(
+        billing_plan_key=workspace.billing_plan
     )
-    results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
-    last_scan_by_sbom: dict[str, Any] = {}
-    for run in runs:
-        sbom_id = str(run["sbom_id"])
-        results_by_sbom.setdefault(sbom_id, []).append(run["result"])
-        if sbom_id not in last_scan_by_sbom or run["created_at"] > last_scan_by_sbom[sbom_id]:
-            last_scan_by_sbom[sbom_id] = run["created_at"]
-
-    rows: list[dict[str, Any]] = []
-    rollup = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
-    vex_cache: dict[Any, list[dict[str, Any]]] = {}
-    for component in components:
-        sbom = sbom_by_component.get(component["id"])
-        row: dict[str, Any] = {
-            "id": component["id"],
-            "name": component["name"],
-            "version": sbom["version"] if sbom else "",
-            "vuln": None,
-            "last_scan": None,
-        }
-        if sbom:
-            provider_results = results_by_sbom.get(str(sbom["id"]))
-            if provider_results:
-                merged = merge_findings_by_alias(provider_results)
-                # VEX lives in S3; skip the fetch entirely for clean components
-                # (the common case) so an N-component product doesn't pay N
-                # object reads just to annotate empty lists.
-                statements = load_vex_suppressions(component["id"], cache=vex_cache) if merged["findings"] else []
-                findings = extract_finding_rows(merged, statements)
-                if findings:
-                    counts = severity_counts_from_rows(findings)
-                else:
-                    # Summary-only results (no findings list) still carry counts.
-                    from sbomify.apps.vulnerability_scanning.utils import extract_severity_counts
-
-                    counts = max(
-                        (extract_severity_counts(result) for result in provider_results),
-                        key=lambda c: c["total"],
-                    )
-                counts["scanned_nothing"] = all(result_scanned_nothing(result) for result in provider_results)
-                for severity in _SEVERITIES:
-                    rollup[severity] += counts[severity]
-                rollup["total"] += counts["total"]
-                row["vuln"] = counts
-                row["last_scan"] = last_scan_by_sbom.get(str(sbom["id"]))
-        row["status"] = _row_status(row["vuln"])
-        rows.append(row)
-
-    rows.sort(
-        key=lambda r: (
-            -(r["vuln"] or {}).get("critical", 0),
-            -(r["vuln"] or {}).get("high", 0),
-            -(r["vuln"] or {}).get("medium", 0),
-            -(r["vuln"] or {}).get("low", 0),
-            r["name"].lower(),
-        )
-    )
-    return {"rows": rows, "rollup": rollup}
-
-
-def build_product_releases_summary(product_id: str, limit: int = 2) -> dict[str, Any]:
-    """The releases strip: the newest releases (rolling "latest" first) plus the
-    total count. ``limit`` caps the strip; the full history lives on the
-    releases page."""
-    from django.db.models import Count, F
-
-    queryset = Release.objects.filter(product_id=product_id)
-    total = queryset.count()
-    newest = queryset.annotate(artifact_count=Count("artifacts")).order_by(
-        "-is_latest", F("released_at").desc(nulls_last=True), "-created_at"
-    )[:limit]
-    releases = [
+    cra = CRAAssessment.objects.filter(product=instance, team=workspace).first() if has_cra_access else None
+    return ServiceResult.success(
         {
-            "id": release.id,
-            "name": release.name,
-            "version": release.version,
-            "is_latest": release.is_latest,
-            "is_prerelease": release.is_prerelease,
-            "date": release.released_at or release.created_at,
-            "artifact_count": release.artifact_count,
+            **(table.value or {}),
+            "product": product,
+            "metrics": metrics,
+            "has_sboms": any(row["has_sbom"] for row in rows),
+            "release_editor_data": release_rows,
+            "release_inventory": {
+                "kind": "releases",
+                "singular": "release",
+                "scope_product": product_id,
+                "rows": release_rows[:5],
+                "total": len(release_rows),
+                "headers": [{"label": label} for _, label in COLUMNS["releases"]],
+            },
+            "available_components": list(
+                Component.objects.filter(team=workspace, is_global=False)
+                .exclude(products=instance)
+                .order_by("name", "id")
+                .values("id", "name")
+            )
+            if can(request, "product:manage", instance)
+            else [],
+            "current_team": request.session.get("current_team", {}),
+            "header_copy_values": copy_values,
+            "product_tei": product_tei,
+            "has_cra_access": has_cra_access,
+            "cra_assessment": cra,
+            "team_billing_plan": workspace.billing_plan,
         }
-        for release in newest
-    ]
-    return {"total": total, "releases": releases}
+    )
+
+
+def update_product_page(request: HttpRequest, product_id: str) -> ServiceResult[str]:
+    """Apply one relationship change to the current membership, never a browser's stale list."""
+    workspace_key = (request.session.get("current_team") or {}).get("key")
+    with transaction.atomic():
+        product = Product.objects.select_for_update().filter(id=product_id, team__key=workspace_key).first()
+        if product is None:
+            return ServiceResult.failure("Product not found", status_code=404)
+        if not can(request, "product:manage", product):
+            return ServiceResult.failure("You do not have permission to update this product", status_code=403)
+        action = request.POST.get("action", "")
+        if action == "update_description":
+            data: dict[str, Any] = {"description": request.POST.get("description", "").strip()}
+            message = "Description updated"
+        elif action in ("assign_component", "remove_component"):
+            component_id = request.POST.get("component_id", "")
+            component = Component.objects.filter(id=component_id, team_id=product.team_id, is_global=False).first()
+            if component is None:
+                return ServiceResult.failure("Component not found", status_code=404)
+            ids = set(product.components.values_list("id", flat=True))
+            if action == "assign_component":
+                ids.add(component_id)
+                message = "Component assigned"
+            else:
+                ids.discard(component_id)
+                message = "Component removed from product"
+            data = {"component_ids": sorted(ids)}
+        else:
+            return ServiceResult.failure("Choose a product action", status_code=400)
+        try:
+            payload = ProductPatchSchema.model_validate(data)
+        except ValidationError:
+            return ServiceResult.failure("Check the product details and try again", status_code=400)
+        status, result = patch_product(request, product_id, payload)
+        if status != 200:
+            return ServiceResult.failure(result.get("detail", "Unable to update product"), status_code=status)
+    return ServiceResult.success(message)
+
+
+def build_product_releases_context(request: HttpRequest, product_id: str) -> ServiceResult[dict[str, Any]]:
+    """The product's full release history uses the workspace inventory's table."""
+    workspace_key = (request.session.get("current_team") or {}).get("key")
+    instance = Product.objects.select_related("team").filter(id=product_id, team__key=workspace_key).first()
+    if instance is None or not can(request, "product:read", instance):
+        return ServiceResult.failure("Product not found", status_code=404)
+    status, product = get_product(request, product_id)
+    if status != 200:
+        return ServiceResult.failure(product.get("detail", "Product not found"), status_code=status)
+    product.pop("components", None)
+    snapshot = build_inventory_snapshot(instance.team, "releases", product_id=product_id)
+    result = build_inventory_table(
+        request,
+        snapshot,
+        kind="releases",
+        product_id=product_id,
+        base_url=reverse("core:product_releases", args=[product_id]),
+        content_id="product-releases-content",
+    )
+    if not result.ok:
+        return result
+    return ServiceResult.success(
+        {
+            **(result.value or {}),
+            "product": product,
+            "release_editor_data": snapshot["rows"],
+            "breadcrumb_items": [
+                {"label": product["name"], "url": reverse("core:product_details", args=[product_id])},
+                {"label": "Releases"},
+            ],
+        }
+    )

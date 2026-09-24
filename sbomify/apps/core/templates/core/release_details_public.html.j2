@@ -106,35 +106,12 @@
             <div class="space-y-5">
                 {# Severity breakdown (VEX applied) #}
                 <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
-                    <c-layout.stat-card compact>
-                    <c-layout.stat.value x-text="data.counts.total" />
-                    <c-layout.stat.label>Total</c-layout.stat.label>
-                    </c-layout.stat-card>
-                    {% comment %}
-                    The severity bands are not the card's four named accents, so each
-                    one points --stat-accent at its own severity token, exactly as the
-                    stylesheet expected.
-                    {% endcomment %}
-                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-critical)">
-                    <c-layout.stat.value x-text="data.counts.critical" />
-                    <c-layout.stat.label>Critical</c-layout.stat.label>
-                    </c-layout.stat-card>
-                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-high)">
-                    <c-layout.stat.value x-text="data.counts.high" />
-                    <c-layout.stat.label>High</c-layout.stat.label>
-                    </c-layout.stat-card>
-                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-medium)">
-                    <c-layout.stat.value x-text="data.counts.medium" />
-                    <c-layout.stat.label>Medium</c-layout.stat.label>
-                    </c-layout.stat-card>
-                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-low)">
-                    <c-layout.stat.value x-text="data.counts.low" />
-                    <c-layout.stat.label>Low</c-layout.stat.label>
-                    </c-layout.stat-card>
-                    <c-layout.stat-card compact accent="muted">
-                    <c-layout.stat.value x-text="data.counts.unknown" />
-                    <c-layout.stat.label>Unknown</c-layout.stat.label>
-                    </c-layout.stat-card>
+                    <c-layout.stat-card compact x_value="data.counts.total" label="Total" />
+                    <c-layout.stat-card compact accent="severity-critical" x_value="data.counts.critical" label="Critical" />
+                    <c-layout.stat-card compact accent="severity-high" x_value="data.counts.high" label="High" />
+                    <c-layout.stat-card compact accent="severity-medium" x_value="data.counts.medium" label="Medium" />
+                    <c-layout.stat-card compact accent="severity-low" x_value="data.counts.low" label="Low" />
+                    <c-layout.stat-card compact accent="muted" x_value="data.counts.unknown" label="Unknown" />
                 </div>
                 {# Suppression note #}
                 <p class="text-sm text-text-muted m-0 flex items-center gap-2 flex-wrap"
@@ -153,7 +130,7 @@
                         <div class="py-2.5 flex items-start gap-3"
                              :class="f.suppressed ? 'opacity-50' : ''">
                             {# The band comes from the row Alpine builds, so it binds data-level. #}
-                            <c-badges.severity-dynamic class="flex-shrink-0" ::data-level="f.severity" x-text="f.severity" />
+                            <c-badges.severity class="flex-shrink-0" ::data-level="f.severity" x-text="f.severity" />
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <c-code-inline x-text="f.id" />

@@ -1,0 +1,103 @@
+{% comment %}
+One plan comparison card. All plans share the card surface, price hierarchy,
+quota rows and feature list. The view supplies prices and limits; the existing
+planSelection controller owns billing navigation and guards. The action slot
+lets the gallery demonstrate the card without starting a checkout.
+Subgrid aligns comparison rows to their content on desktop; stacked cards
+size themselves naturally on smaller screens.
+{% endcomment %}
+{% load humanize %}
+<c-vars plan />
+<c-cards.card flush class="grid h-full min-w-0 grid-rows-[auto_auto_auto_auto_1fr_auto] gap-5 data-[current=true]:border-border-focus lg:row-span-6 lg:grid-rows-subgrid" data-current="{{ plan.current|yesno:'true,false' }}" role="region" aria-label="{{ plan.name }} plan">
+<div class="contents">
+    <div class="flex min-h-7 flex-wrap items-center justify-between gap-2 px-5 pt-5 sm:px-6 sm:pt-6">
+        <h3 class="m-0 text-lg font-semibold text-text">{{ plan.name }}</h3>
+        {% if plan.current %}
+            <c-badges.secondary size="sm" class="gap-1"><i class="fas fa-check" aria-hidden="true"></i>Current plan</c-badges.secondary>
+        {% endif %}
+    </div>
+    <div class="flex flex-col gap-2 px-5 sm:px-6">
+        {% if plan.key == 'community' %}
+            <div class="flex items-baseline gap-1.5">
+                <span class="text-4xl font-semibold tracking-tight text-text">$0</span><span class="text-sm text-text-muted">/ month</span>
+            </div>
+            <p class="m-0 text-xs text-text-muted">Free forever</p>
+        {% elif plan.prices %}
+            {% for price in plan.prices %}
+                <div class="flex flex-col gap-2"
+                     x-show="billingPeriod === '{{ price.period }}'"
+                     {% if price.period == 'annual' %}x-cloak{% endif %}>
+                    {% if price.amount or price.amount == 0 %}
+                        <div class="flex flex-wrap items-baseline gap-1.5">
+                            <span class="text-4xl font-semibold tracking-tight text-text">${{ price.amount|floatformat:0|intcomma }}</span><span class="text-sm text-text-muted">/ {{ price.unit }}</span>
+                        </div>
+                        {% if price.original and price.original > price.amount %}
+                            <p class="m-0 text-xs text-text-muted">
+                                <span class="sr-only">Previously</span> <s>${{ price.original|floatformat:0|intcomma }} / {{ price.unit }}</s>
+                            </p>
+                        {% endif %}
+                        {% if price.period == 'annual' %}
+                            <p class="m-0 text-xs text-text-muted">Billed once a year</p>
+                        {% else %}
+                            <p class="m-0 text-xs text-text-muted">Billed monthly</p>
+                        {% endif %}
+                        {% if price.promo and price.discount %}
+                            <div>
+                                <c-badges.success size="sm">{{ price.promo }}: {{ price.discount|floatformat:0 }}% off</c-badges.success>
+                            </div>
+                        {% endif %}
+                        {% if price.savings %}
+                            <p class="m-0 text-xs text-success">Save ${{ price.savings|floatformat:0|intcomma }} a year</p>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-3xl font-semibold tracking-tight text-text">Contact us</span>
+                        <p class="m-0 text-xs text-text-muted">Contact sales for pricing</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <span class="text-4xl font-semibold tracking-tight text-text">Custom</span>
+            <p class="m-0 text-xs text-text-muted">A plan tailored to your workspace</p>
+        {% endif %}
+    </div>
+    <p class="m-0 px-5 text-sm leading-5 text-text-muted sm:px-6">{{ plan.description }}</p>
+    <div class="px-5 sm:px-6">
+        <ul class="m-0 flex list-none flex-col gap-2 border-y border-solid border-border px-0 py-4">
+            {% for limit in plan.limits %}
+                <li class="flex items-center gap-2.5 text-sm text-text">
+                    <i class="fas fa-check w-4 shrink-0 text-center text-text-muted"
+                       aria-hidden="true"></i><span>
+                        {% if limit.count is None %}
+                            Unlimited {{ limit.label }}s
+                        {% else %}
+                            {{ limit.count }} {{ limit.label }}{{ limit.count|pluralize }}
+                        {% endif %}
+                    </span>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="flex flex-col gap-5 px-5 sm:px-6">
+        <ul class="m-0 flex list-none flex-col gap-3 p-0">
+            {% for feature in plan.features %}
+                <li class="flex items-start gap-2.5 text-sm leading-5 text-text">
+                    <i class="fas fa-check w-4 shrink-0 text-center leading-5 text-text-muted"
+                       aria-hidden="true"></i><span>{{ feature }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+        <c-feedback.alert variant="warning" x-show="getDowngradeWarning('{{ plan.key|escapejs }}')" x-cloak><span x-text="getDowngradeWarning('{{ plan.key|escapejs }}')"></span></c-feedback.alert>
+    </div>
+</div>
+<c-slot name="footer">
+<div class="flex flex-col gap-3">
+    {% if action %}
+        {{ action }}
+    {% elif plan.key == 'business' and not plan.current %}
+        <c-buttons.primary class="w-full" ::disabled="!canSelectPlan('{{ plan.key|escapejs }}')" @click="handlePlanSelection('{{ plan.key|escapejs }}')"><span x-text="getButtonText('{{ plan.key|escapejs }}')">Select {{ plan.name }}</span></c-buttons.primary>
+    {% else %}
+        <c-buttons.secondary class="w-full" ::disabled="!canSelectPlan('{{ plan.key|escapejs }}')" @click="handlePlanSelection('{{ plan.key|escapejs }}')"><span x-text="getButtonText('{{ plan.key|escapejs }}')">Select {{ plan.name }}</span></c-buttons.secondary>
+    {% endif %}
+</div>
+</c-slot>
+</c-cards.card>

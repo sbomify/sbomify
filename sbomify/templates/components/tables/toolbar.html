@@ -1,5 +1,5 @@
 {% comment %}
-The band above the table. Search and filters go in the default slot, page size
+The band above the table. flush places filters outside the table frame. Search and filters go in the default slot, page size
 and actions in the named right slot; each group is a row of its own so the two
 stay apart. The band wraps, so a narrow viewport stacks the groups instead of
 crushing them.
@@ -9,9 +9,11 @@ public base still loads the pre-Tailwind static/css/utilities.css, whose
 `.p-4 { padding: 1.5rem !important }` shadows Tailwind's `.p-4` and made the
 band 16px taller on a public page. That sheet has no px-*/py-* names.
 {% endcomment %}
-<c-vars class />
-<div class="flex flex-wrap items-center justify-between gap-4 px-4 py-4 bg-[color-mix(in_oklab,var(--color-background)_50%,transparent)] border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]{% if class %} {{ class }}{% endif %}"
+<c-vars flush class />
+<div class="flex flex-wrap items-center justify-between gap-4{% if not flush %} px-4 py-4 bg-[color-mix(in_oklab,var(--color-background)_50%,transparent)] border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>
-    <div class="flex items-center gap-3">{{ slot }}</div>
-    {% if right %}<div class="flex items-center gap-3">{{ right }}</div>{% endif %}
+    <div class="flex flex-wrap min-w-0 max-w-full items-center gap-3">{{ slot }}</div>
+    {% if right %}
+        <div class="flex flex-wrap min-w-0 max-w-full items-center gap-3">{{ right }}</div>
+    {% endif %}
 </div>

@@ -119,7 +119,7 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
     # Check that the page contains the expected elements. Creation moved to its
     # own page, so the dashboard links there instead of holding a modal form.
     content = response.content.decode()
-    assert 'id="products-table-container"' in content
+    assert 'id="inventory-content"' in content
     assert reverse("core:product_new") in content
     assert 'id="addProductForm"' not in content
 
@@ -144,7 +144,7 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
     # Check that the page contains the expected elements. Creation moved to its
     # own page, so the dashboard links there instead of holding a modal form.
     content = response.content.decode()
-    assert 'id="components-table-container"' in content
+    assert 'id="inventory-content"' in content
     assert reverse("core:component_new") in content
     assert 'id="addComponentForm"' not in content
 

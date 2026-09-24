@@ -1,0 +1,31 @@
+{% comment %}
+The shared top bar gives search its own row on phones. The shell owns its
+responsive height so the content offset stays in step with the header.
+Each control owns its state and composes the shared component library.
+{% endcomment %}
+<header class="fixed top-0 right-0 left-0 lg:left-[var(--sidebar-width)] h-[var(--app-header-height)] bg-surface/95 backdrop-blur-sm border-b border-border z-40"
+        role="banner">
+    <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center h-full w-full max-w-7xl mx-auto px-4 py-2 gap-2 sm:flex sm:px-8 sm:py-0 sm:gap-4">
+        {# The wrapper owns responsive display because the button sets its own. #}
+        <div class="flex items-center gap-1 min-w-0 lg:hidden">
+            <c-buttons.icon-quiet label="Toggle sidebar navigation" aria-controls="sidebar" @click="sidebarMobileOpen = !sidebarMobileOpen" ::aria-expanded="sidebarMobileOpen">
+            <i class="fas fa-bars text-base" aria-hidden="true"></i>
+            </c-buttons.icon-quiet>
+            <a href="{% url 'core:dashboard' %}"
+               aria-label="sbomify home"
+               class="flex items-center min-h-11 min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:hidden">
+                {% include 'core/components/brand/logo.html.j2' with class='w-28 max-w-full h-auto text-text' %}
+            </a>
+        </div>
+        <div class="col-span-2 row-start-2 min-w-0 sm:flex-1 sm:max-w-[420px]">
+            <c-chrome.search />
+        </div>
+        <div class="col-start-2 row-start-1 flex items-center gap-1.5 sm:gap-3 ml-auto shrink-0"
+             role="toolbar"
+             aria-label="Quick actions">
+            <c-chrome.create-menu :can_manage="can_manage" />
+            <c-chrome.notifications />
+            <c-chrome.account-menu :can_manage="can_manage" />
+        </div>
+    </div>
+</header>

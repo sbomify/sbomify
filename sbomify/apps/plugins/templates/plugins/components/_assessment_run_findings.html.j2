@@ -10,67 +10,16 @@ nothing here is built until one is opened.
 
 Swapped in whole, pager included, so a page link replaces the same region the first load
 filled.{% endcomment %}
-<div id="findings-{{ run.id }}" class="run-findings">
+<div id="findings-{{ run.id }}"
+     class="run-findings"
+     hx-target="this"
+     hx-swap="outerHTML">
     {% comment %}The toolbar narrows the list this card shows. Its parameters are
     prefixed, so a URL that carries both this and the component panel's filters
     stays readable. The form targets this region, which is the same region the
     card's first fetch fills and the pager replaces.{% endcomment %}
     {% if panel.unfiltered_total %}
-        <form method="get"
-              action="{{ findings_url }}"
-              hx-get="{{ findings_url }}"
-              hx-target="#findings-{{ run.id }}"
-              hx-swap="outerHTML"
-              hx-trigger="change, input changed delay:350ms from:#run-search-{{ run.id }}, submit"
-              class="mb-3">
-            <input type="hidden" name="run_submitted" value="1">
-            <c-tables.toolbar class="[&>div:first-child]:flex-wrap">
-            <c-tables.search id="run-search-{{ run.id }}" label="Search findings" placeholder="Search findings..." class="max-w-xs" name="run_search" value="{{ panel.query.search }}" hx-preserve="true" />
-            {% comment %}Severity, VEX state and KEV belong to vulnerabilities.
-            A compliance run reports checks, which carry none of the three, so
-            offering them there gives a severity dropdown with a blank option, a
-            state dropdown reading "No decision" for every row, and a KEV filter
-            for a concept that does not apply. Search is the filter that means
-            something for a list of checks.{% endcomment %}
-            {% if is_security %}
-                <c-tables.select id="run-sev-{{ run.id }}" label="Filter by severity" name="run_severity">
-                <option value="all">All Severities</option>
-                {% for severity in panel.severity_options %}
-                    <option value="{{ severity }}"
-                            {% if severity == panel.query.severity %}selected{% endif %}>
-                        {{ severity|capfirst }}
-                    </option>
-                {% endfor %}
-                </c-tables.select>
-                {% if panel.state_options %}
-                    <c-tables.select id="run-state-{{ run.id }}" label="Filter by VEX analysis state" name="run_state">
-                    <option value="all">All States</option>
-                    {% for state in panel.state_options %}
-                        <option value="{{ state.value }}"
-                                {% if state.value == panel.query.state %}selected{% endif %}>{{ state.label }}</option>
-                    {% endfor %}
-                    </c-tables.select>
-                {% endif %}
-                {% if panel.kev_total %}
-                    <c-forms.checkbox name="run_kev" :checked="panel.query.kev_only">Known exploited ({{ panel.kev_total }})</c-forms.checkbox>
-                {% endif %}
-                {% comment %}Without this the card silently loses its suppressed
-                rows on the first filter change: the form always carries
-                run_submitted, and a submitted request with no run_suppressed
-                reads as "hide them", which is how the marker distinguishes an
-                untouched page from a deliberate choice. The panel offers the
-                same control for the same reason.{% endcomment %}
-                {% if panel.suppressed_total %}
-                    <c-forms.checkbox class="whitespace-nowrap" name="run_suppressed" :checked="panel.query.show_suppressed">
-                    Show suppressed ({{ panel.suppressed_total }})
-                    </c-forms.checkbox>
-                {% endif %}
-            {% endif %}
-            <noscript>
-                <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
-            </noscript>
-            </c-tables.toolbar>
-        </form>
+        <c-vulnerabilities.filters :panel="panel" url="{{ findings_url }}" target="findings-{{ run.id }}" id="run-{{ run.id }}" prefix="run_" :security="is_security" />
     {% endif %}
     {% if panel.unfiltered_total and not findings %}
         <c-feedback.empty-state compact icon="fas fa-search" icon_variant="neutral" title="No matches found" message="No findings match your search criteria" />
@@ -140,9 +89,7 @@ filled.{% endcomment %}
                                         </c-badges.warning>
                                     {% endif %}
                                     {% if can_triage and run.category == 'security' %}
-                                        <c-buttons.outline size="sm" @click="$dispatch('open-triage', { id: '{{ finding.id|escapejs }}', purl: '{{ finding.component.purl|default:''|escapejs }}', state: '{{ finding.analysis_state|default:''|escapejs }}', justification: '{{ finding.analysis_justification|default:''|escapejs }}', detail: '{{ finding.analysis_detail|default:''|escapejs }}', aliases: '{{ finding.aliases|default:''|join:','|escapejs }}' })">
-                                        <i class="fas fa-stethoscope mr-1"></i>Triage
-                                        </c-buttons.outline>
+                                        <c-vulnerabilities.triage-action :id="finding.id" :purl="finding.component.purl" :state="finding.analysis_state" :justification="finding.analysis_justification" :detail="finding.analysis_detail" :aliases="finding.aliases" />
                                     {% endif %}
                                 </div>
                                 <div class="finding-description">{{ finding.title }}</div>
@@ -248,27 +195,11 @@ filled.{% endcomment %}
             </div>
         {% endif %}
     {% endif %}
-    {% if page_count > 1 %}
-        {% comment %}hx-boost makes these two links swap this region and leaves them as ordinary
-        links when it is not running, so the endpoint answers both. hx-push-url is off because
-        boosting pushes by default and the address bar would then hold this partial rather than
-        the artifact page.{% endcomment %}
-        <div class="flex items-center justify-end gap-2 mt-3"
-             hx-boost="true"
-             hx-push-url="false"
-             hx-target="#findings-{{ run.id }}"
-             hx-swap="outerHTML">
-            {% if has_prev %}
-                <c-buttons.secondary size="sm" aria-label="Previous page" href="{{ prev_url }}"><i class="fas fa-chevron-left text-xs" aria-hidden="true"></i></c-buttons.secondary>
-            {% else %}
-                <c-buttons.secondary size="sm" aria-label="Previous page" disabled><i class="fas fa-chevron-left text-xs" aria-hidden="true"></i></c-buttons.secondary>
-            {% endif %}
-            <span class="text-sm text-text-muted">Page {{ page }} / {{ page_count }}</span>
-            {% if has_next %}
-                <c-buttons.secondary size="sm" aria-label="Next page" href="{{ next_url }}"><i class="fas fa-chevron-right text-xs" aria-hidden="true"></i></c-buttons.secondary>
-            {% else %}
-                <c-buttons.secondary size="sm" aria-label="Next page" disabled><i class="fas fa-chevron-right text-xs" aria-hidden="true"></i></c-buttons.secondary>
-            {% endif %}
-        </div>
+    {% if panel.unfiltered_total %}
+        {% if is_security %}
+            <c-vulnerabilities.footer :panel="panel" url="{{ findings_url }}" query="{{ findings_query }}" prefix="run_" push_url="false" />
+        {% else %}
+            <c-vulnerabilities.footer :panel="panel" url="{{ findings_url }}" query="{{ findings_query }}" prefix="run_" noun="checks" push_url="false" />
+        {% endif %}
     {% endif %}
 </div>

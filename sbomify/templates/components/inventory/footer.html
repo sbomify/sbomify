@@ -1,0 +1,19 @@
+{% comment %}Server pagination reuses the library pager and native page-size select. The count describes the filtered result, not the workspace total.{% endcomment %}
+<c-vars inventory />
+<c-tables.footer>
+<c-tables.info role="status">Showing {{ inventory.page.start_index }} to {{ inventory.page.end_index }} of {{ inventory.page.paginator.count }}</c-tables.info>
+<div class="flex flex-wrap items-center gap-4">
+    <div class="flex items-center gap-2">
+        <label for="{{ inventory.content_id|default:'inventory' }}-page-size" class="text-xs text-text-muted">Rows</label>
+        <c-forms.select size="sm" name="per_page" id="{{ inventory.content_id|default:'inventory' }}-page-size">
+        <option value="10"
+                {% if inventory.params.per_page == '10' %}selected{% endif %}>10</option>
+        <option value="25"
+                {% if inventory.params.per_page == '25' %}selected{% endif %}>25</option>
+        <option value="50"
+                {% if inventory.params.per_page == '50' %}selected{% endif %}>50</option>
+        </c-forms.select>
+    </div>
+    <c-navigation.pagination :current="inventory.page.number" :total="inventory.page.paginator.num_pages" :page_range="inventory.page_range" base_url="{{ inventory.base_url }}" query="{{ inventory.query }}" label="Inventory pagination" hx-boost="true" />
+</div>
+</c-tables.footer>

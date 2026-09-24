@@ -10,16 +10,9 @@
     Sections and the index come from GALLERY_SECTIONS in views/design_system.py.
 {% endcomment %}
 {% block dashboard_content %}
-    <div class="mb-8">
-        <h1 class="text-2xl font-bold text-text mb-2">sbomify Design System</h1>
-        <p class="text-text-muted">
-            Every shared component, rendered through its own tag. Dev-only. Each component's own file in
-            <code class="tw-code-inline">sbomify/templates/components/</code> is its parameter contract; the
-            rules live in <code class="tw-code-inline">AGENTS.md</code>.
-        </p>
-    </div>
+    <c-layout.page-header title="sbomify Design System" subtitle="Every shared component, rendered through its own tag. Available in development." />
     {# ── Index ─────────────────────────────────────────────────────────────── #}
-    <c-cards.dashboard title="Component index" class="mb-8">
+    <c-cards.dashboard title="Component index">
     {% regroup sections by group as section_groups %}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
         {% for group in section_groups %}
@@ -36,12 +29,119 @@
         {% endfor %}
     </div>
     </c-cards.dashboard>
+    <c-layout.frame id="settings-controls">
+    <c-layout.page-header title="Settings controls" subtitle="Shared fields and compact controls, with one responsive row layout." />
+    <c-navigation.tabs links aria-label="Example settings sections">
+    <c-navigation.tab href="#settings-controls" active>General</c-navigation.tab>
+    <c-navigation.tab href="#settings-controls">Members</c-navigation.tab>
+    <c-navigation.tab href="#settings-controls">API tokens</c-navigation.tab>
+    <c-navigation.tab href="#settings-controls">Parties</c-navigation.tab>
+    <c-navigation.tab href="#settings-controls">Trust Center</c-navigation.tab>
+    <c-navigation.tab href="#settings-controls">Branding</c-navigation.tab>
+    <c-navigation.tab href="#settings-controls">Billing</c-navigation.tab>
+    <c-navigation.tab href="#settings-controls">Account</c-navigation.tab>
+    </c-navigation.tabs>
+    <c-cards.card flush>
+    <c-cards.header compact title="Example workspace" />
+    <c-forms.field horizontal label="Workspace name" for="ds-settings-name" hint="Shown in navigation and across your workspace.">
+    <c-forms.input size="sm" id="ds-settings-name" value="Example workspace" />
+    </c-forms.field>
+    <c-forms.field horizontal label="Patch target (days)" for="ds-settings-target" hint="Zero is a valid target." error="Choose a whole number of days.">
+    <c-forms.input size="sm" id="ds-settings-target" type="number" :value="0" state="error" />
+    </c-forms.field>
+    <c-forms.field horizontal label="Theme"><c-chrome.theme-picker standalone /></c-forms.field>
+    <c-forms.field horizontal label="Member"><c-overview.record title="Example member" detail="member@example.com" /></c-forms.field>
+    </c-cards.card>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-5"
+         x-data="teamBranding('{}')">
+        <c-cards.card>
+        <div class="space-y-4">
+            <c-forms.color-field size="sm" id="ds-settings-color" label="Accent color" colour="uiColors.accent_color" on_input="updateColor('accent_color', $event.target.value)" />
+            <c-forms.file-upload size="sm" name="ds-settings-logo" input_ref="previewFile" accept="image/*" preview="''" required disabled hint="Disabled input, with state on the real control.">Choose a logo</c-forms.file-upload>
+        </div>
+        </c-cards.card>
+        <c-branding.preview name="Example workspace" address="trust.example.com" />
+    </div>
+    </c-layout.frame>
+    <c-layout.frame id="app-overview">
+    <c-layout.page-header title="App chrome and overview" subtitle="The rail, workspace picker, top bar and footer frame this gallery. Vulnerability bars open a severity breakdown at both sizes." />
+    <c-overview.header active="trends" />
+    <p class="text-sm text-text-muted">
+        On phones, the top bar puts navigation and quick actions above a full-width search field.
+        The same search, menus and touch targets serve every page.
+    </p>
+    <div role="group"
+         class="grid grid-cols-2 xl:grid-cols-4 gap-3"
+         aria-label="Example overview metrics">
+        <c-layout.stat-card :value="12" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
+        <c-layout.stat-card :value="4" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
+        <c-layout.stat-card :value="0" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
+        <c-layout.stat-card :value="2" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
+    </div>
+    <p class="text-sm text-text-muted">
+        Overview metrics use a faint accent tint, a quiet shadow and a rounded icon well.
+        Zero values stay neutral. The component owns its spacing and type at every width.
+    </p>
+    <c-overview.quick-actions>
+    <c-layout.action-tile flush accent="info" href="{% url 'core:product_new' %}" title="Add product" description="Organise components and artifacts" icon="fas fa-cube" />
+    <c-layout.action-tile flush accent="info" title="Add release" description="Bring a version's artifacts together" icon="fas fa-tag" href="{% url 'core:release_new' %}" />
+    <c-layout.action-tile flush accent="info" href="{% url 'core:component_new' %}" title="Add component" description="Store SBOMs and documents" icon="fas fa-puzzle-piece" />
+    <c-layout.action-tile flush accent="info" href="{% url 'core:security_advisory_new' %}" title="Add advisory" description="Create a draft security advisory" icon="fas fa-shield-halved" />
+    </c-overview.quick-actions>
+    <c-cards.card flush>
+    <c-cards.header compact title="Exposure by product" hint="Example data" />
+    <c-overview.table aria-label="Example product exposure">
+    <c-tables.head>
+    <tr>
+        <c-tables.header-cell>Product</c-tables.header-cell><c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
+    </tr>
+    </c-tables.head>
+    <tbody>
+        <c-tables.row>
+        <c-tables.cell><c-overview.record href="{% url 'core:products_dashboard' %}" title="Example product" detail="3 components" /></c-tables.cell>
+        <c-tables.cell><c-overview.exposure :counts="overview_demo_counts" :unassessed="1" /></c-tables.cell>
+        </c-tables.row>
+    </tbody>
+    </c-overview.table>
+    </c-cards.card>
+    <c-cards.card>
+    <div class="flex flex-wrap items-center gap-4">
+        <c-overview.severity-legend />
+        <c-overview.sla :sla="overview_demo_sla" />
+        <c-overview.evidence :product="overview_demo_evidence" />
+    </div>
+    </c-cards.card>
+    <c-overview.priority :dashboard="overview_demo_empty" />
+    <c-overview.products />
+    <c-forms.hint>An empty workspace shows setup in place of metrics and tables, using the onboarding explanations and existing upload controls.</c-forms.hint>
+    <c-overview.onboarding :can_manage="False" :can_administer="False" />
+    </c-layout.frame>
+    <c-layout.frame>
+    <c-layout.page-header title="Product inventory" subtitle="Linked tabs, compact server-sorted cells, severity breakdowns and shared filters." />
+    <c-navigation.tabs links aria-label="Example inventory views">
+    <c-navigation.tab href="{% url 'core:products_dashboard' %}" badge="1" active>Products</c-navigation.tab>
+    <c-navigation.tab href="{% url 'core:products_dashboard' %}?view=releases" badge="2">Releases</c-navigation.tab>
+    <c-navigation.tab href="{% url 'core:products_dashboard' %}?view=components" badge="3">Components</c-navigation.tab>
+    </c-navigation.tabs>
+    <c-inventory.table :inventory="inventory_demo" hx-disable />
+    <c-inventory.results :inventory="inventory_demo" preview />
+    <c-actions-menu label="Example download menu" caption="Download SBOM" icon="fas fa-download">
+    <c-dropdowns.item compact href="#app-overview">Download CycloneDX</c-dropdowns.item>
+    <c-dropdowns.item compact href="#app-overview">Download SPDX</c-dropdowns.item>
+    </c-actions-menu>
+    <div class="flex flex-wrap gap-4">
+        <c-feedback.status tone="success" label="Current" />
+        <c-feedback.status tone="warning" label="Stale" />
+        <c-feedback.status label="Not assessed" />
+    </div>
+    </c-layout.frame>
     {# ── Foundations ───────────────────────────────────────────────────────── #}
-    <h2 id="colors" class="text-xl font-semibold text-text mb-4">Colour tokens</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="colors" class="text-xl font-semibold text-text">Colour tokens</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
-        Every colour in the app resolves to one of these. Swatches read the custom property directly,
-        so this grid is the tokens, not a copy of them.
+        Text and icons use these tokens directly. Backgrounds, borders and focus rings can use
+        transparent tints. Do not blend foreground colours with text or add local colour values.
+        Swatches read the custom properties directly in both themes.
     </p>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {% for token in demo_tokens %}
@@ -53,8 +153,8 @@
         {% endfor %}
     </div>
     </c-cards.card>
-    <h2 id="typography" class="text-xl font-semibold text-text mb-4">Typography</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="typography" class="text-xl font-semibold text-text">Typography</h2>
+    <c-cards.card>
     <div class="space-y-3">
         <h1 class="text-3xl font-bold text-text m-0">Heading 1, Figtree Bold</h1>
         <h2 class="text-2xl font-semibold text-text m-0">Heading 2, Figtree Semibold</h2>
@@ -65,8 +165,8 @@
         <p class="font-mono text-sm text-text m-0">Mono: identifiers, tokens and code (tabular where numeric).</p>
     </div>
     </c-cards.card>
-    <h2 id="icon-chips" class="text-xl font-semibold text-text mb-4">Icon chips</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="icon-chips" class="text-xl font-semibold text-text">Icon chips</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         The accent carrier of the design language: a flat 12% tint with the accent as foreground.
         Every "icon beside a heading" is one of these. Never a gradient chip, never a coloured side-border.
@@ -97,8 +197,8 @@
         </c-chips.icon-chip>
     </div>
     </c-cards.card>
-    <h2 id="metric-chips" class="text-xl font-semibold text-text mb-4">Metric chips</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="metric-chips" class="text-xl font-semibold text-text">Metric chips</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         The stats strip that sits under a page header: a bordered surface pill holding an icon,
         a muted label and a value.
@@ -139,14 +239,22 @@
         <c-chips.metric.value>3</c-chips.metric.value>
         <c-chips.metric.label>Critical</c-chips.metric.label>
         </c-chips.metric-chip>
+        <c-chips.metric-chip>
+        <i class="fas fa-shield-halved text-text-muted" aria-hidden="true"></i>
+        <c-chips.metric.value>12 Critical</c-chips.metric.value>
+        <c-chips.metric.value>24 High</c-chips.metric.value>
+        <c-chips.metric.value>36 Medium</c-chips.metric.value>
+        <c-chips.metric.value>48 Low</c-chips.metric.value>
+        <c-chips.metric.label>Scanned 5 minutes ago</c-chips.metric.label>
+        </c-chips.metric-chip>
     </div>
     <p class="text-sm text-text-muted mt-4 mb-0">
         An accent recolours the fill, the border and the text together. The label
         stays muted; the value and icon take the accent.
     </p>
     </c-cards.card>
-    <h2 id="assessment-pills" class="text-xl font-semibold text-text mb-4">Assessment pills</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="assessment-pills" class="text-xl font-semibold text-text">Assessment pills</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         One plugin's verdict in an artifacts table. The verdict is computed in the browser, so the
         caller binds <c-code-inline>data-status</c-code-inline> and the pill holds every recipe.
@@ -180,24 +288,26 @@
         unrecognised status falls back to.
     </p>
     </c-cards.card>
-    <h2 id="page-header" class="text-xl font-semibold text-text mb-4">Page &amp; section headers</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="page-header" class="text-xl font-semibold text-text">Page &amp; section headers</h2>
+    <c-cards.card>
+    <c-layout.frame>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/layout/). The actions are the slot, so they
     are real button components.
     {% endcomment %}
-    <c-layout.page-header title="Acme Gateway" subtitle="Quantum readiness across all components." icon="fas fa-box">
+    <c-layout.page-header title="Acme Gateway" subtitle="Quantum readiness across all components.">
     <c-buttons.secondary size="sm"><i class="fas fa-plus" aria-hidden="true"></i> <span>Assign component</span></c-buttons.secondary>
     <c-buttons.primary size="sm">New release</c-buttons.primary>
     </c-layout.page-header>
-    <p class="text-sm text-text-muted mb-6">
-        Every main page opens with this, called as <code class="tw-code-inline">c-layout.page-header</code>. The
-        slot becomes the actions on the right; a page with none still closes the tag. Put it above the page's
-        content stack, not inside it, so the gap under the title is the same on every page. Inside a
-        <code class="tw-code-inline">space-y-*</code> stack, pass <code class="tw-code-inline">flush</code>.
+    <p class="text-sm text-text-muted">
+        Every app page opens with the same icon-free <code class="tw-code-inline">c-layout.page-header</code>. The
+        slot becomes the actions on the right. The app canvas is a <c-code-inline>c-layout.frame</c-code-inline>:
+        it gives its children a 1.5rem vertical gap. Headers have no external margin. Use the same frame for
+        a tab replacement root or a narrower form page. This demo and Settings controls above compose
+        headers and content in that frame, without spacing switches on their children.
     </p>
-    <c-layout.page-header mark="avatar" icon="fas fa-cube" title="Acme Gateway" :breadcrumbs="demo_breadcrumbs" :copy_values="demo_copy_values" editable_item_type="product" editable_item_id="ds-demo">
+    <c-layout.page-header title="Acme Gateway Enterprise Edition" :breadcrumbs="demo_breadcrumbs" :copy_values="demo_copy_values" editable_item_type="product" editable_item_id="ds-demo">
     <c-slot name="meta">
     <c-badges.danger>
     <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
@@ -205,39 +315,42 @@
     </c-slot>
     <c-buttons.primary size="sm">New release</c-buttons.primary>
     </c-layout.page-header>
-    <p class="text-sm text-text-muted mb-6">
-        The detail-page shape of the same header. <code class="tw-code-inline">mark="avatar"</code> swaps the
-        chip for the avatar mark, which is <code class="tw-code-inline">c-avatar</code> wearing the page's icon.
+    <p class="text-sm text-text-muted">
+        Long titles, identifiers and breadcrumbs wrap within the available width. Detail pages
+        use the same header and title alignment as list pages.
         <code class="tw-code-inline">copy_values</code> adds click-to-copy identifiers beside the title, and the
         named <code class="tw-code-inline">meta</code> slot puts a status the title is qualified by on the same
         line. <code class="tw-code-inline">breadcrumbs</code> replaces the subtitle. Set
         <code class="tw-code-inline">editable_item_type</code> and
         <code class="tw-code-inline">editable_item_id</code> to render the title as the inline editable field.
     </p>
-    <hr class="my-6 border-border">
-    <c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />
-    <c-layout.section-body>
-    <c-forms.field label="Token name" for="ds-section-token">
-    <c-forms.input name="ds-section-token" placeholder="ci-pipeline" />
-    </c-forms.field>
-    </c-layout.section-body>
-    <c-layout.section-header icon="fas fa-building" accent="success" title="Entities" subtitle="Organizations (Manufacturer, Supplier, Author)" class="mt-6">
+    <c-layout.page-header title="An advisory with supporting detail" subtitle="Security advisory" description="Supporting descriptions use the same header. Longer text can be expanded without clipping the page title. This keeps the complete title readable while leaving the page's actions available at every screen size." />
+    <hr class="border-border">
+    <div class="flex flex-col gap-4">
+        <c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />
+        <c-layout.section-body>
+        <c-forms.field label="Token name" for="ds-section-token">
+        <c-forms.input name="ds-section-token" placeholder="ci-pipeline" />
+        </c-forms.field>
+        </c-layout.section-body>
+    </div>
+    <c-layout.section-header icon="fas fa-building" accent="success" title="Entities" subtitle="Organizations (Manufacturer, Supplier, Author)">
     <c-slot name="actions">
     <c-buttons.primary size="sm">
     <i class="fas fa-plus mr-1.5" aria-hidden="true"></i>Add entity
     </c-buttons.primary>
     </c-slot>
     </c-layout.section-header>
-    <p class="text-sm text-text-muted mt-6 mb-0">
+    <p class="text-sm text-text-muted">
         A section header introduces a block inside a card.
         <code class="tw-code-inline">c-layout.section-body</code> indents that block to the title's left edge and
         drops the indent on a narrow screen. Pass <code class="tw-code-inline">level="2"</code> when the page
         needs the title as an h2, and fill the named
         <code class="tw-code-inline">actions</code> slot for the control the section is headed by.
     </p>
-    <hr class="my-6 border-border">
+    <hr class="border-border">
     {% comment %} The steps sit in their own block, the way a page nests them in its form: the
-    first-of-type rule that drops the leading hairline reads the section's position
+first-of-type rule that drops the leading hairline reads the section's position
     among its siblings. {% endcomment %}
     <div>
         <c-layout.form-section step="1" title="What it is" description="A title is all a draft needs.">
@@ -251,17 +364,18 @@
         </c-forms.field>
         </c-layout.form-section>
     </div>
-    <p class="text-sm text-text-muted mt-6 mb-0">
+    <p class="text-sm text-text-muted">
         A long form's steps: <code class="tw-code-inline">c-layout.form-section</code> puts what the step is on
         the left and its fields on the right, stacking into one column below 64rem. Each step draws the rule
         above it, so the first one drops it from its position rather than from a prop. Pass
         <code class="tw-code-inline">step</code> for the number, or <code class="tw-code-inline">icon</code> for a
         mark; <code class="tw-code-inline">accent</code> reaches the chip untouched.
     </p>
+    </c-layout.frame>
     </c-cards.card>
     {# ── Controls ──────────────────────────────────────────────────────────── #}
-    <h2 id="buttons" class="text-xl font-semibold text-text mb-4">Buttons</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="buttons" class="text-xl font-semibold text-text">Buttons</h2>
+    <c-cards.card>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/buttons/), the first componentized set.
@@ -303,8 +417,8 @@
         beside an artifact, the arrow through to its detail page.
     </p>
     </c-cards.card>
-    <h2 id="forms" class="text-xl font-semibold text-text mb-4">Form controls</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="forms" class="text-xl font-semibold text-text">Form controls</h2>
+    <c-cards.card>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/forms/). c-forms.field composes the label, the
@@ -392,8 +506,8 @@
         <span class="text-sm text-text">Row is the control</span>
     </div>
     </c-cards.card>
-    <h2 id="choice-group" class="text-xl font-semibold text-text mb-4">Choice group</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="choice-group" class="text-xl font-semibold text-text">Choice group</h2>
+    <c-cards.card>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/layout/). The label and the hint are
@@ -432,8 +546,8 @@
         group renders its slot, so a fixed set can be written as tiles in the template.
     </p>
     </c-cards.card>
-    <h2 id="search" class="text-xl font-semibold text-text mb-4">Search input</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="search" class="text-xl font-semibold text-text">Search input</h2>
+    <c-cards.card>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/forms/). model names the Alpine property the
@@ -443,8 +557,32 @@
         <c-forms.search-input model="q" placeholder="Search products, components…" class="max-w-md" aria-label="Search" />
     </div>
     </c-cards.card>
-    <h2 id="file-upload" class="text-xl font-semibold text-text mb-4">File upload</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="navigation-search" class="text-xl font-semibold text-text">Navigation search</h2>
+    <c-cards.card>
+    <div class="flex flex-col gap-3">
+        <p class="text-sm text-text-muted">
+            Focus the field to see suggested pages and example searches immediately. The pointer and arrow keys share one selection. Escape closes the panel and keeps focus in the field.
+        </p>
+        <div class="max-w-md">
+            <c-chrome.search id="gallery-search" />
+        </div>
+    </div>
+    </c-cards.card>
+    <h2 id="visibility" class="text-xl font-semibold text-text">Visibility</h2>
+    <c-cards.card>
+    <div class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+            <c-forms.visibility-selector item_id="gallery-component" visibility="gated" gated_allowed preview />
+            <c-forms.visibility-selector item_type="product" item_id="gallery-product" visibility="private" preview />
+            <c-forms.visibility-selector item_id="gallery-plan" visibility="public" preview />
+        </div>
+        <p class="text-sm text-text-muted">
+            Preview component and product visibility, including a plan without gated access. Changes stay in this gallery.
+        </p>
+    </div>
+    </c-cards.card>
+    <h2 id="file-upload" class="text-xl font-semibold text-text">File upload</h2>
+    <c-cards.card>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/forms/). The drag state stays with the caller:
@@ -467,12 +605,11 @@
     </c-slot>
     </c-forms.file-preview>
     <c-forms.file-upload static class="mt-4">
-    <c-feedback.spinner size="md" />
-    <p class="text-text-muted m-0 mt-3">Uploading and processing document...</p>
+    <c-feedback.spinner size="sm" message="Uploading document">Uploading and processing document...</c-feedback.spinner>
     </c-forms.file-upload>
     </c-cards.card>
-    <h2 id="date-picker" class="text-xl font-semibold text-text mb-4">Date picker</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="date-picker" class="text-xl font-semibold text-text">Date picker</h2>
+    <c-cards.card>
     {% comment %}
     value_binding is required: it names the Alpine property the picker reads and
     writes, so it must resolve in an enclosing scope.
@@ -482,8 +619,8 @@
     </div>
     </c-cards.card>
     {# ── Containers ────────────────────────────────────────────────────────── #}
-    <h2 id="cards" class="text-xl font-semibold text-text mb-4">Cards</h2>
-    <p class="text-sm text-text-muted mb-4">
+    <h2 id="cards" class="text-xl font-semibold text-text">Cards</h2>
+    <p class="text-sm text-text-muted">
         Containers sit still: no hover lift, no shadow swap. Cards compose: a card holds library components,
         it does not hold bespoke markup.
     </p>
@@ -491,7 +628,7 @@
     This section renders through the cotton component library
     (sbomify/templates/components/cards/).
     {% endcomment %}
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <c-cards.card title="Default card" subtitle="Header, body, hairline border">
         <p class="text-sm text-text m-0">The plain container. Use it for anything that is not a dashboard panel.</p>
         </c-cards.card>
@@ -504,13 +641,13 @@
         </c-buttons.danger>
         </c-cards.dangerzone>
     </div>
-    <p class="text-sm text-text-muted mb-4">
+    <p class="text-sm text-text-muted">
         The Danger Zone every page ends with is one component: c-cards.dangerzone-collapsible owns the band, the
         chevron and the collapse, and the caller supplies only the state name (isExpanded by default) and the
         rows. Never assemble it from the dangerzone parts on a page: that is how the app ended up with three
         different Danger Zones.
     </p>
-    <div class="mb-8" x-data="{ isExpanded: false }">
+    <div x-data="{ isExpanded: false }">
         <c-cards.dangerzone-collapsible>
         <div class="flex items-center justify-between gap-4">
             <div class="flex items-start gap-3">
@@ -528,7 +665,7 @@
         </div>
         </c-cards.dangerzone-collapsible>
     </div>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <c-cards.card title="Footer band" subtitle="A named slot for the actions a card ends with">
         <p class="text-sm text-text m-0">The default slot is the body; name a slot footer and the band appears under it.</p>
         <c-slot name="footer">
@@ -552,7 +689,7 @@
         </p>
         </c-cards.card>
     </div>
-    <c-cards.card flush class="mb-8">
+    <c-cards.card flush>
     <c-slot name="header">
     <c-cards.header>
     <h3 class="text-lg font-semibold text-text m-0">Flush body</h3>
@@ -570,7 +707,7 @@
     <span class="text-sm text-text">No body band between them and the card</span>
     </c-layout.select-row>
     </c-cards.card>
-    <c-cards.card title="Inset panels" subtitle="The quiet sub-panel inside a card body" class="mb-8">
+    <c-cards.card title="Inset panels" subtitle="The quiet sub-panel inside a card body">
     <c-cards.inset>
     <p class="text-sm text-text m-0 mb-3">
         An inset card is sunken, not raised: a tinted background, a hairline border, no shadow.
@@ -580,12 +717,40 @@
     </c-cards.inset>
     </c-cards.inset>
     </c-cards.card>
-    <h2 id="collapsible" class="text-xl font-semibold text-text mb-4">Collapsible card</h2>
-    <p class="text-sm text-text-muted mb-4">
+    <h2 id="plan-cards" class="text-xl font-semibold text-text">Plan cards</h2>
+    <div class="flex flex-col gap-4"
+         x-data="planSelection({ currentPlan: 'community', csrfToken: '', enterpriseContactUrl: '#plan-cards' })">
+        <div class="flex">
+            <c-navigation.segmented aria-label="Preview billing period">
+            <c-navigation.segment ::data-active="billingPeriod === 'monthly'" ::aria-pressed="billingPeriod === 'monthly'" @click="billingPeriod = 'monthly'">Monthly</c-navigation.segment>
+            <c-navigation.segment ::data-active="billingPeriod === 'annual'" ::aria-pressed="billingPeriod === 'annual'" @click="billingPeriod = 'annual'">Annual</c-navigation.segment>
+            </c-navigation.segmented>
+        </div>
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {% for plan in plan_card_demos %}
+                <c-billing.plan-card :plan="plan">
+                <c-slot name="action"><c-buttons.secondary disabled class="w-full">Preview only</c-buttons.secondary></c-slot>
+                </c-billing.plan-card>
+            {% endfor %}
+        </div>
+    </div>
+    <h2 id="workspace-cards" class="text-xl font-semibold text-text">Workspace cards</h2>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <c-workspaces.card name="Example workspace" role="owner" member_count="4" invitation_count="0" workspace_key="example" current_key="example" default>
+        <c-buttons.secondary size="sm" href="#workspace-cards">Open workspace</c-buttons.secondary>
+        <c-buttons.secondary size="sm" href="#workspace-cards">Settings</c-buttons.secondary>
+        </c-workspaces.card>
+        <c-workspaces.card name="A workspace with a longer name that wraps naturally" role="member" member_count="12" invitation_count="2" workspace_key="second" current_key="example">
+        <c-buttons.secondary size="sm" href="#workspace-cards">Open workspace</c-buttons.secondary>
+        <c-buttons.secondary size="sm" href="#workspace-cards">Settings</c-buttons.secondary>
+        </c-workspaces.card>
+    </div>
+    <h2 id="collapsible" class="text-xl font-semibold text-text">Collapsible card</h2>
+    <p class="text-sm text-text-muted">
         The trigger is a real button, and the open state is an Alpine expression the page owns, so one
         x-data can keep a single panel of a stack open.
     </p>
-    <div class="space-y-3 mb-8" x-data="{ open: 'links' }">
+    <div class="space-y-3" x-data="{ open: 'links' }">
         {% for row in demo_collapsible %}
             <c-cards.collapsible>
             <c-cards.collapsible-trigger state="open === '{{ row.id }}'" @click="open = open === '{{ row.id }}' ? '' : '{{ row.id }}'">{{ row.label }}</c-cards.collapsible-trigger>
@@ -595,8 +760,8 @@
             </c-cards.collapsible>
         {% endfor %}
     </div>
-    <p class="tw-data-label mb-3">Levels</p>
-    <div class="space-y-3 mb-8" x-data="{ open: '' }">
+    <p class="tw-data-label">Levels</p>
+    <div class="space-y-3" x-data="{ open: '' }">
         <c-cards.collapsible level="success">
         <c-cards.collapsible-trigger state="open === 'success'" @click="open = open === 'success' ? '' : 'success'">Clean run</c-cards.collapsible-trigger>
         <c-cards.collapsible-body state="open === 'success'">
@@ -616,8 +781,8 @@
         </c-cards.collapsible-body>
         </c-cards.collapsible>
     </div>
-    <p class="tw-data-label mb-3">Row of its own</p>
-    <div class="space-y-3 mb-4" x-data="{ open: '' }">
+    <p class="tw-data-label">Row of its own</p>
+    <div class="space-y-3" x-data="{ open: '' }">
         <c-cards.collapsible level="warning">
         <c-cards.collapsible-trigger bare state="open === 'bare'" @click="open = open === 'bare' ? '' : 'bare'">
         <div class="flex items-center gap-3 flex-grow min-w-0">
@@ -633,18 +798,18 @@
         </c-cards.collapsible-body>
         </c-cards.collapsible>
     </div>
-    <p class="text-sm text-text-muted mb-8">
+    <p class="text-sm text-text-muted">
         <code class="tw-code-inline">bare</code> drops the trigger's title wrapper for a header that is a name
         plus its status chips: the row builds its own line, and the weight belongs to the name inside it rather
         than to everything standing beside it.
     </p>
-    <h2 id="accordion" class="text-xl font-semibold text-text mb-4">Accordion</h2>
-    <p class="text-sm text-text-muted mb-4">
+    <h2 id="accordion" class="text-xl font-semibold text-text">Accordion</h2>
+    <p class="text-sm text-text-muted">
         One bordered container of divided collapsible sections. The compact density
         (<code class="tw-code-inline">density="sm"</code>) is for category lists inside a card, like the
         controls catalogue.
     </p>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <c-navigation.accordion x-data="{ open: 'a-org' }">
         {% for row in demo_accordion %}
             <c-navigation.accordion-item label="{{ row.label }}" state="open === 'a-{{ row.id }}'" @click="open = open === 'a-{{ row.id }}' ? '' : 'a-{{ row.id }}'">
@@ -660,26 +825,26 @@
         {% endfor %}
         </c-navigation.accordion>
     </div>
-    <p class="text-sm text-text-muted mb-4">
-        <code class="tw-code-inline">c-navigation.disclosure</code> is the same section opened by the browser
+    <p class="text-sm text-text-muted">
+        <code class="tw-code-inline">c-navigation.accordion-item native</code> is the same section opened by the browser
         rather than by Alpine, for a page that keeps no state: a details element, the chevron turning on
         <code class="tw-code-inline">open</code>. Use it for a snippet or an explanation a page reveals on demand.
     </p>
-    <div class="mb-8 max-w-2xl">
+    <div class="max-w-2xl">
         <c-navigation.accordion density="sm">
-        <c-navigation.disclosure label_class="flex items-center gap-2">
+        <c-navigation.accordion-item native label_class="flex items-center gap-2">
         <c-slot name="label">
         <i class="fas fa-code text-text-muted" aria-hidden="true"></i>Configure your GitHub Actions workflow
         </c-slot>
         <p class="m-0">The step that mints a token and uploads the SBOM.</p>
-        </c-navigation.disclosure>
-        <c-navigation.disclosure label="Open on arrival" open>
+        </c-navigation.accordion-item>
+        <c-navigation.accordion-item native label="Open on arrival" open>
         <p class="m-0">A section that starts open carries the native attribute.</p>
-        </c-navigation.disclosure>
+        </c-navigation.accordion-item>
         </c-navigation.accordion>
     </div>
-    <h2 id="modals" class="text-xl font-semibold text-text mb-4">Modals</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="modals" class="text-xl font-semibold text-text">Modals</h2>
+    <c-cards.card>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/modal.html). The body is the slot and the
@@ -690,7 +855,8 @@
         <code class="tw-code-inline">show</code> names the Alpine boolean the page already keeps.
         A dialog inside an HTMX-swapped partial passes
         <c-code-inline>teleport="false"</c-code-inline> and stays where it was written, which is what
-        keeps its form wired.
+        keeps its form wired. On phones, the body uses smaller padding and scrolls while the title
+        and actions stay visible. Actions wrap when they need more room.
     </p>
     <div class="flex flex-wrap gap-2"
          x-data="{ open: false, wide: false, removeTarget: null }">
@@ -734,8 +900,8 @@
         dispatch <code class="tw-code-inline">confirm:show</code> rather than building another modal.
     </p>
     </c-cards.card>
-    <h2 id="action-tiles" class="text-xl font-semibold text-text mb-4">Action tiles &amp; data boxes</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="action-tiles" class="text-xl font-semibold text-text">Action tiles &amp; data boxes</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         A row in a list of things to do: icon chip, name, one line under it, chevron. With
         <code class="tw-code-inline">href</code> it is an anchor, without one a button, so an action that navigates and
@@ -764,20 +930,20 @@
         <c-layout.data-box label="End of Life">4 Aug 2030</c-layout.data-box>
     </div>
     </c-cards.card>
-    <h2 id="select-rows" class="text-xl font-semibold text-text mb-4">Selectable rows</h2>
+    <h2 id="select-rows" class="text-xl font-semibold text-text">Selectable rows</h2>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/layout/). The control and the body are the
     slot, so the checkbox is the real form component.
     {% endcomment %}
-    <p class="text-sm text-text-muted mb-4">
+    <p class="text-sm text-text-muted">
         A list where the whole row toggles its control. The selected state reads from
         <code class="tw-code-inline">:has(:checked)</code>, so it cannot fall out of step with the checkbox, and the
         row keeps a real control for keyboard and form submission. The row click is a pointer convenience on top,
         and it stands aside when the click already landed on something interactive. A disabled row loses both the
         hover and the pointer.
     </p>
-    <div class="border border-border rounded-xl divide-y divide-border/50 overflow-hidden mb-8">
+    <div class="border border-border rounded-xl divide-y divide-border/50 overflow-hidden">
         {% for row in demo_select_rows %}
             <c-layout.select-row :disabled="row.disabled">
             <div class="flex-1 min-w-0">
@@ -812,12 +978,21 @@
         </div>
         </c-layout.select-row>
     </div>
-    <p class="text-sm text-text-muted mb-8">
+    <p class="text-sm text-text-muted">
         <code class="tw-code-inline">toggle_ref</code> names the switch the row toggles. Without it the row clicks
         the first input it contains, which is the wrong one once the body has fields of its own.
     </p>
-    <h2 id="empty-states" class="text-xl font-semibold text-text mb-4">Empty states</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <c-cards.card flush class="overflow-hidden">
+    <c-cards.header compact title="Divided selection rows" />
+    <c-layout.select-row divided>
+    <c-forms.checkbox id="ds-divided-security" checked>Security assessments</c-forms.checkbox>
+    </c-layout.select-row>
+    <c-layout.select-row divided>
+    <c-forms.checkbox id="ds-divided-compliance">Compliance assessments</c-forms.checkbox>
+    </c-layout.select-row>
+    </c-cards.card>
+    <h2 id="empty-states" class="text-xl font-semibold text-text">Empty states</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <c-cards.card>
         {% comment %}
         This section renders through the cotton component library
@@ -839,30 +1014,33 @@
         </c-cards.card>
     </div>
     {# ── Data ──────────────────────────────────────────────────────────────── #}
-    <h2 id="tables" class="text-xl font-semibold text-text mb-4">Tables</h2>
+    <h2 id="tables" class="text-xl font-semibold text-text">Tables</h2>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/tables/). A table is nested, not configured: the
     shell holds a toolbar, a table and a footer, and the table holds a head, rows
     and cells.
     {% endcomment %}
-    <p class="text-sm text-text-muted mb-4">
+    <p class="text-sm text-text-muted">
         The shell holds the toolbar, the table and the footer. A wide table scrolls inside the table
         component, never on the page body. Inside a card, pass <code class="tw-code-inline">nested</code> and
         the shell drops its own frame. <c-code-inline>fixed</c-code-inline> gives every
         column an equal share and centres the middle ones; <c-code-inline>sized</c-code-inline> fixes the
-        layout and leaves alignment alone, for a table whose header cells state their own widths. The sortable header and the pager read the Alpine state a table page
-        already keeps, so the demo below really sorts and pages.
+        layout and leaves alignment alone. Use it for sortable tables: give the supporting columns widths
+        and leave the name column to fill the remaining space. Sorting then changes rows without moving columns.
+        The header uses the same sort control for Alpine buttons (<c-code-inline>sort</c-code-inline>)
+        and server links (<c-code-inline>href</c-code-inline> and <c-code-inline>order</c-code-inline>),
+        shown in the inventory above. Both keep space for the direction indicator in every state.
     </p>
-    <p class="text-sm text-text-muted mb-4">
+    <p class="text-sm text-text-muted">
         Pass <c-code-inline>nowrap</c-code-inline> to the header cell and the body cell of the column that
         names the row. The name stays on one line and ends in an ellipsis at the column edge, so the
         column has an edge to scan down instead of a break landing somewhere different on every row.
         The third row below carries a name long enough to show it.
     </p>
-    <c-tables.shell class="mb-8" x-data="{ sortColumn: 'name', sortDirection: 'asc', currentPage: 1, totalPages: 3, sort(column) { this.sortDirection = this.sortColumn === column && this.sortDirection === 'asc' ? 'desc' : 'asc'; this.sortColumn = column } }">
+    <c-tables.shell x-data="{ sortColumn: 'name', sortDirection: 'asc', currentPage: 1, totalPages: 3, sort(column) { this.sortDirection = this.sortColumn === column && this.sortDirection === 'asc' ? 'desc' : 'asc'; this.sortColumn = column } }">
     <c-tables.toolbar>
-    <c-tables.search id="ds-table-search" label="Search components" placeholder="Search components…" />
+    <c-forms.search-input size="sm" id="ds-table-search" label="Search components" placeholder="Search components…" />
     <c-slot name="right">
     <c-tables.page-size id="ds-table-per-page">
     <option>10</option>
@@ -870,32 +1048,32 @@
     </c-tables.page-size>
     </c-slot>
     </c-tables.toolbar>
-    <c-tables.table fixed>
+    <c-tables.table sized variant_class="min-w-208">
     <c-tables.head>
     <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-    <c-tables.header-cell>Format</c-tables.header-cell>
-    <c-tables.header-cell sort="updated" date>Updated</c-tables.header-cell>
-    <c-tables.header-cell sort="vulnerabilities" end>Vulnerabilities</c-tables.header-cell>
+    <c-tables.header-cell class="w-36">Format</c-tables.header-cell>
+    <c-tables.header-cell sort="updated" date class="w-40">Updated</c-tables.header-cell>
+    <c-tables.header-cell sort="vulnerabilities" end class="w-48">Vulnerabilities</c-tables.header-cell>
     <c-tables.actions-cell as="th" />
     </c-tables.head>
     <tbody>
         <c-tables.row>
         <c-tables.cell nowrap class="font-medium">acme-gateway-core</c-tables.cell>
-        <c-tables.cell><span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span></c-tables.cell>
+        <c-tables.cell><c-badges.format format="cyclonedx">CycloneDX</c-badges.format></c-tables.cell>
         <c-tables.cell date>10 Aug 2026</c-tables.cell>
         <c-tables.cell end><c-badges.warning>3 high</c-badges.warning></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
         <c-tables.row>
         <c-tables.cell nowrap class="font-medium">acme-vault-core</c-tables.cell>
-        <c-tables.cell><span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span></c-tables.cell>
+        <c-tables.cell><c-badges.format format="spdx">SPDX</c-badges.format></c-tables.cell>
         <c-tables.cell date>2 Aug 2026</c-tables.cell>
         <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
         <c-tables.row>
         <c-tables.cell nowrap class="font-medium">acme-gateway-edge-proxy-transport-security-module</c-tables.cell>
-        <c-tables.cell><span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span></c-tables.cell>
+        <c-tables.cell><c-badges.format format="cyclonedx">CycloneDX</c-badges.format></c-tables.cell>
         <c-tables.cell date>28 Jul 2026</c-tables.cell>
         <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
@@ -907,8 +1085,12 @@
     <c-tables.pager />
     </c-tables.footer>
     </c-tables.shell>
-    <h2 id="pagination" class="text-xl font-semibold text-text mb-4">Pagination</h2>
-    <c-cards.card class="mb-8">
+    <c-cards.card flush>
+    <c-cards.header title="Vulnerability reports" />
+    {% include "core/components/vulnerability_demo.html.j2" %}
+    </c-cards.card>
+    <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
+    <c-cards.card>
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />
     <p class="text-sm text-text-muted mt-4 mb-6">
         The server-rendered pager: the view knows the current page and every control is a link.
@@ -943,71 +1125,39 @@
         <code class="tw-code-inline">c-tables.pager</code>.
     </p>
     </c-cards.card>
-    <h2 id="stats" class="text-xl font-semibold text-text mb-4">Stat cards</h2>
-    {% comment %}
-    This section renders through the cotton component library
-    (sbomify/templates/components/layout/). The parts are components, so the
-    number, its label and the delta each carry their own recipe.
-    {% endcomment %}
-    <p class="text-sm text-text-muted mb-4">
-        Laying the cards out is the page's job (a grid utility).
-        <code class="tw-code-inline">c-layout.stat.row</code> is the wrapper <em>inside</em> a card that sits the
-        delta on the value's baseline.
+    <h2 id="stats" class="text-xl font-semibold text-text">Stat cards</h2>
+    <p class="text-sm text-text-muted">
+        One stat card serves dashboards, scan summaries and dense panels. Pass a value,
+        label and optional icon. The slot places a change indicator beside the value.
     </p>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <c-layout.stat-card>
-        <c-layout.stat.label>Total products</c-layout.stat.label>
-        <c-layout.stat.row>
-        <c-layout.stat.value>1,234</c-layout.stat.value>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <c-layout.stat-card value="1,234" label="Total products">
         <c-layout.stat.change-up><i class="fas fa-arrow-up" aria-hidden="true"></i> 12%</c-layout.stat.change-up>
-        </c-layout.stat.row>
         </c-layout.stat-card>
-        <c-layout.stat-card accent="danger" icon="fas fa-shield-halved">
-        <c-layout.stat.label>Vulnerabilities</c-layout.stat.label>
-        <c-layout.stat.row>
-        <c-layout.stat.value>17</c-layout.stat.value>
+        <c-layout.stat-card accent="danger" icon="fas fa-shield-halved" value="17" label="Vulnerabilities">
         <c-layout.stat.change-down><i class="fas fa-arrow-down" aria-hidden="true"></i> 5</c-layout.stat.change-down>
-        </c-layout.stat.row>
         </c-layout.stat-card>
-        <c-layout.stat-card accent="success" icon="fas fa-circle-check">
-        <c-layout.stat.label>NTIA compliant</c-layout.stat.label>
-        <c-layout.stat.value>96%</c-layout.stat.value>
-        </c-layout.stat-card>
-        <c-layout.stat-card accent="warning" icon="fas fa-clock">
-        <c-layout.stat.label>Stale scans</c-layout.stat.label>
-        <c-layout.stat.value>4</c-layout.stat.value>
-        </c-layout.stat-card>
+        <c-layout.stat-card accent="success" icon="fas fa-circle-check" value="96%" label="NTIA compliant" />
+        <c-layout.stat-card accent="warning" icon="fas fa-clock" value="4" label="Stale scans" />
     </div>
-    <p class="tw-data-label mb-3">Compact, the dense metric strip above a table</p>
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
-        <c-layout.stat-card compact accent="danger">
-        <c-layout.stat.value>3</c-layout.stat.value>
-        <c-layout.stat.label>At risk</c-layout.stat.label>
-        </c-layout.stat-card>
-        <c-layout.stat-card compact accent="warning">
-        <c-layout.stat.value>7</c-layout.stat.value>
-        <c-layout.stat.label>Needs review</c-layout.stat.label>
-        </c-layout.stat-card>
-        <c-layout.stat-card compact accent="success">
-        <c-layout.stat.value>41</c-layout.stat.value>
-        <c-layout.stat.label>Ready</c-layout.stat.label>
-        </c-layout.stat-card>
-        <c-layout.stat-card compact>
-        <c-layout.stat.value>51</c-layout.stat.value>
-        <c-layout.stat.label>Total</c-layout.stat.label>
-        </c-layout.stat-card>
-        <c-layout.stat-card compact accent="muted">
-        <c-layout.stat.value>—</c-layout.stat.value>
-        <c-layout.stat.label>Unscanned</c-layout.stat.label>
-        </c-layout.stat-card>
+    <p class="tw-data-label">Compact, the dense metric strip above a table</p>
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <c-layout.stat-card compact accent="danger" value="3" label="At risk" />
+        <c-layout.stat-card compact accent="warning" value="7" label="Needs review" />
+        <c-layout.stat-card compact accent="success" value="41" label="Ready" />
+        <c-layout.stat-card compact value="51" label="Total" />
+        <c-layout.stat-card compact accent="danger" value="0" label="Unscanned" />
     </div>
-    <p class="text-sm text-text-muted mb-8">
-        The accent is one custom property on the card. The icon takes it, and in a compact card so does the number,
-        so a strip reads as colour first. The parts read that property themselves, which is why a compact card's
-        label and value never repeat what the card already knows.
+    <p class="text-sm text-text-muted">
+        Compact changes spacing and type size. Accents include semantic colours and severity levels.
+        Zero values stay neutral. For client state, x_value binds the value and its zero state together.
     </p>
-    <h2 id="severity" class="text-xl font-semibold text-text mb-4">Severity badges</h2>
-    <c-cards.card class="mb-8">
+    <div x-data="{ count: 0 }" class="flex flex-wrap items-center gap-4">
+        <c-layout.stat-card compact accent="warning" icon="fas fa-clock" x_value="count" label="Pending assessments" />
+        <c-buttons.secondary @click="count = count ? 0 : 3">Toggle example count</c-buttons.secondary>
+    </div>
+    <h2 id="severity" class="text-xl font-semibold text-text">Severity badges</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         One component for the whole scale: pass the band as <code class="tw-code-inline">level</code>, so pages
         never write a five-branch <code class="tw-code-inline">if/elif</code> chain. Squarer and uppercase so the
@@ -1023,21 +1173,21 @@
         {% endfor %}
     </div>
     <div class="flex flex-wrap items-center gap-2 mt-6">
-        <c-badges.severity-dynamic level="critical">Critical</c-badges.severity-dynamic>
-        <c-badges.severity-dynamic level="high">High</c-badges.severity-dynamic>
-        <c-badges.severity-dynamic level="medium">Medium</c-badges.severity-dynamic>
-        <c-badges.severity-dynamic level="low">Low</c-badges.severity-dynamic>
-        <c-badges.severity-dynamic>Unknown</c-badges.severity-dynamic>
+        <c-badges.severity level="critical">Critical</c-badges.severity>
+        <c-badges.severity level="high">High</c-badges.severity>
+        <c-badges.severity level="medium">Medium</c-badges.severity>
+        <c-badges.severity level="low">Low</c-badges.severity>
+        <c-badges.severity>Unknown</c-badges.severity>
     </div>
     <p class="text-sm text-text-muted mt-2 mb-0">
-        <c-code-inline>c-badges.severity-dynamic</c-code-inline> is the same scale for a findings list Alpine
+        <c-code-inline>c-badges.severity</c-code-inline> is the same scale for a findings list Alpine
         builds from JSON: the caller binds <c-code-inline>::data-level</c-code-inline> and the recipes stay in
         the component. Where the server knows the band, pass it as
         <c-code-inline>level</c-code-inline>.
     </p>
     </c-cards.card>
-    <h2 id="progress" class="text-xl font-semibold text-text mb-4">Progress</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="progress" class="text-xl font-semibold text-text">Progress</h2>
+    <c-cards.card>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/progress.html). The variant only sets
@@ -1055,8 +1205,8 @@
         </div>
     </div>
     </c-cards.card>
-    <h2 id="badges" class="text-xl font-semibold text-text mb-4">Badges</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="badges" class="text-xl font-semibold text-text">Badges</h2>
+    <c-cards.card>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/badges/).
@@ -1121,8 +1271,8 @@
         than an accent, and it is smaller and squarer than a tag, which is a thing you can act on.
     </p>
     </c-cards.card>
-    <h2 id="tags" class="text-xl font-semibold text-text mb-4">Tags</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="tags" class="text-xl font-semibold text-text">Tags</h2>
+    <c-cards.card>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/tags/).
@@ -1143,8 +1293,8 @@
     </p>
     </c-cards.card>
     {# ── Feedback ──────────────────────────────────────────────────────────── #}
-    <h2 id="alerts" class="text-xl font-semibold text-text mb-4">Alerts</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="alerts" class="text-xl font-semibold text-text">Alerts</h2>
+    <c-cards.card>
     {% comment %}
     Alerts, callouts, toasts, loading states and empty states render through the
     cotton component library (sbomify/templates/components/feedback/).
@@ -1153,7 +1303,7 @@
         <c-feedback.alert variant="success" title="Saved">Your changes have been saved.</c-feedback.alert>
         <c-feedback.alert variant="warning" dismissible>Review your settings before continuing.</c-feedback.alert>
         <c-feedback.alert variant="danger" title="Upload failed">The SBOM could not be parsed.</c-feedback.alert>
-        <c-feedback.alert variant="info">New features are available in this release.</c-feedback.alert>
+        <c-feedback.alert variant="info">10 components still need a completed security assessment.</c-feedback.alert>
         <c-feedback.alert variant="success" title="security.txt">
         Served at <c-code-inline>/.well-known/security.txt</c-code-inline>. Fill the named action slot with the
         control that resolves the notice and it sits at the end of the row.
@@ -1175,14 +1325,22 @@
         </c-buttons.secondary>
         </c-slot>
         </c-feedback.alert>
+        <div class="max-w-sm">
+            <c-feedback.alert variant="warning" title="Some components need attention" dismissible>
+            Review the latest artifacts and complete a security assessment before sharing this release.
+            <c-slot name="action">
+            <c-buttons.secondary size="sm">Review components</c-buttons.secondary>
+            </c-slot>
+            </c-feedback.alert>
+        </div>
     </div>
     <p class="text-sm text-text-muted mt-4 mb-0">
         The named mark slot replaces the glyph, for a notice marked by the brand loader rather than
-        an icon.
+        an icon. Actions sit after the message and move below it when the alert is narrow.
     </p>
     </c-cards.card>
-    <h2 id="callouts" class="text-xl font-semibold text-text mb-4">Callouts</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="callouts" class="text-xl font-semibold text-text">Callouts</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         A regulatory notice panel, richer than an alert: an icon chip, a title, a legal-basis pill and a body
         that carries controls. The accent tints the full hairline border, never a side border.
@@ -1221,8 +1379,8 @@
         </c-feedback.callout>
     </div>
     </c-cards.card>
-    <h2 id="toasts" class="text-xl font-semibold text-text mb-4">Toasts</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="toasts" class="text-xl font-semibold text-text">Toasts</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         The container is already in the base template. Dispatch a <code class="tw-code-inline">toast</code>
         event. Never build a notification by hand.
@@ -1232,40 +1390,59 @@
         <c-buttons.danger size="sm" @click="$dispatch('toast', { type: 'error', title: 'Failed', message: 'Could not parse the SBOM.' })">Error toast</c-buttons.danger>
     </div>
     </c-cards.card>
-    <h2 id="loading" class="text-xl font-semibold text-text mb-4">Loading states</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <c-cards.card title="Brand loader">
-        <div class="flex items-center gap-6">
-            <c-feedback.spinner size="sm" />
-            <c-feedback.spinner size="md" />
-            <c-feedback.spinner size="lg" />
+    <h2 id="loading" class="text-xl font-semibold text-text">Loading states</h2>
+    <c-forms.hint>Use skeletons for content that is arriving. Keep the brand loader for small actions such as saving or uploading. Parents own spacing; loading messages are announced to screen readers.</c-forms.hint>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <c-cards.card title="Card content">
+        <c-feedback.loading message="Loading card content..." />
+        <c-code-inline>&lt;c-feedback.loading&gt;</c-code-inline>
+        </c-cards.card>
+        <c-cards.card title="Lists and dropdowns">
+        <c-feedback.loading-list message="Loading notifications..." />
+        <c-code-inline>&lt;c-feedback.loading-list&gt;</c-code-inline>
+        </c-cards.card>
+        <div class="flex min-w-0 flex-col gap-3">
+            <c-feedback.loading-table message="Loading artifacts..." />
+            <c-code-inline>&lt;c-feedback.loading-table&gt;</c-code-inline>
         </div>
-        <p class="text-sm text-text-muted mt-4 mb-0">Use the brand loader for spinners. Never a bespoke one.</p>
+        <c-cards.card title="Charts">
+        <c-feedback.loading-chart message="Loading trends..." />
+        <c-code-inline>&lt;c-feedback.loading-chart&gt;</c-code-inline>
         </c-cards.card>
-        <c-cards.card title="Loading panel">
-        <c-feedback.loading message="Loading artifacts…" />
-        <c-feedback.loading row message="Refreshing…" />
-        <p class="text-sm text-text-muted m-0">
-            The placeholder an HTMX panel shows while its content is in flight. Use
-            <code class="tw-code-inline">&lt;c-feedback.loading&gt;</code>, or
-            <code class="tw-code-inline">row</code> beside a skeleton block.
-        </p>
+        <div class="flex min-w-0 flex-col gap-3">
+            <c-feedback.loading-stats count="4" message="Loading summary..." />
+            <c-feedback.loading-stats compact count="4" message="Loading compact summary..." />
+            <c-code-inline>&lt;c-feedback.loading-stats&gt;</c-code-inline>
+        </div>
+        <c-cards.card title="Small actions">
+        <div class="flex flex-wrap items-center gap-4">
+            <c-buttons.primary size="sm" loading>Saving...</c-buttons.primary>
+            <c-feedback.spinner size="sm" message="Uploading artifact">Uploading artifact...</c-feedback.spinner>
+        </div>
         </c-cards.card>
-        <c-cards.card title="Skeletons">
-        <div class="flex items-start gap-3">
-            <c-feedback.skeleton type="avatar" />
-            <div class="flex-1">
-                <c-feedback.skeleton type="paragraph" />
+        <div class="flex min-w-0 flex-col gap-3">
+            <c-feedback.loading-page message="Loading page content..." />
+            <c-code-inline>&lt;c-feedback.loading-page&gt;</c-code-inline>
+        </div>
+        <c-cards.card title="Skeleton primitives">
+        <div class="flex flex-col gap-4">
+            <div class="flex items-start gap-3">
+                <c-feedback.skeleton type="avatar" />
+                <div class="min-w-0 flex-1">
+                    <c-feedback.skeleton type="paragraph" />
+                </div>
             </div>
-        </div>
-        <div class="mt-4 flex gap-2">
             <c-feedback.skeleton type="button" width="7rem" />
+            <c-forms.hint>Decorative shapes with no external margins. Prefer the shared loading layouts for page content. Shimmer stops when reduced motion is enabled.</c-forms.hint>
         </div>
         </c-cards.card>
     </div>
     {# ── Navigation ────────────────────────────────────────────────────────── #}
-    <h2 id="tabs" class="text-xl font-semibold text-text mb-4">Tabs</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="tabs" class="text-xl font-semibold text-text">Tabs</h2>
+    <p class="text-sm text-text-muted">
+        Long rows scroll without a scrollbar. Arrows appear when there are more tabs to reach; touch scrolling and keyboard navigation still work.
+    </p>
+    <c-cards.card>
     <c-navigation.tabs :tabs="demo_tabs" active="overview" />
     <div class="mt-6">
         <c-navigation.tabs-pills :tabs="demo_tabs" active="sboms" />
@@ -1289,8 +1466,8 @@
         </c-navigation.segmented>
     </div>
     </c-cards.card>
-    <h2 id="breadcrumbs" class="text-xl font-semibold text-text mb-4">Breadcrumbs</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="breadcrumbs" class="text-xl font-semibold text-text">Breadcrumbs</h2>
+    <c-cards.card>
     <c-navigation.breadcrumbs :items="demo_breadcrumbs" />
     <p class="text-sm text-text-muted mt-4 mb-2">
         A crumb may carry an icon, which the public trails use. The last crumb is the current page: it
@@ -1298,8 +1475,8 @@
     </p>
     <c-navigation.breadcrumbs :items="demo_marked_breadcrumbs" />
     </c-cards.card>
-    <h2 id="dropdowns" class="text-xl font-semibold text-text mb-4">Dropdowns</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="dropdowns" class="text-xl font-semibold text-text">Dropdowns</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         The panel a menu sits on. It owns the surface, the menu role and the arrow, home and end key
         handling; the page owns the trigger, the open state and where the panel is anchored.
@@ -1382,8 +1559,8 @@
         </div>
     </div>
     </c-cards.card>
-    <h2 id="actions-menu" class="text-xl font-semibold text-text mb-4">Actions menu</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="actions-menu" class="text-xl font-semibold text-text">Actions menu</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         Row and header actions. Unlike <code class="tw-code-inline">dropdown</code>, the items are block content
         rather than a list, so a menu can mix links with HTMX and Alpine actions, and the menu is teleported out
@@ -1425,23 +1602,41 @@
     </c-tables.table>
     </c-tables.shell>
     </c-cards.card>
-    <h2 id="stepper" class="text-xl font-semibold text-text mb-4">Stepper</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="stepper" class="text-xl font-semibold text-text">Stepper</h2>
+    <c-cards.card>
     <c-navigation.stepper>
-    <c-navigation.stepper-step state="completed" label="Scope"><i class="fas fa-check" aria-hidden="true"></i></c-navigation.stepper-step>
+    <c-navigation.stepper-step state="completed" label="Scope" label_class="hidden sm:inline"><i class="fas fa-check" aria-hidden="true"></i></c-navigation.stepper-step>
     <c-navigation.stepper-connector completed />
-    <c-navigation.stepper-step state="active" label="Assessment">2</c-navigation.stepper-step>
+    <c-navigation.stepper-step state="active" label="Assessment" label_class="hidden sm:inline">2</c-navigation.stepper-step>
     <c-navigation.stepper-connector />
     <c-navigation.stepper-step label="Declaration" label_class="hidden sm:inline">3</c-navigation.stepper-step>
+    <c-navigation.stepper-connector />
+    <c-navigation.stepper-step label="Review" label_class="hidden sm:inline">4</c-navigation.stepper-step>
+    <c-navigation.stepper-connector />
+    <c-navigation.stepper-step label="Export" label_class="hidden sm:inline">5</c-navigation.stepper-step>
     </c-navigation.stepper>
+    <c-navigation.stepper class="mt-6" role="list" aria-label="Compact setup progress">
+    <c-navigation.stepper-step compact state="completed" label="Why" role="listitem" />
+    <c-navigation.stepper-connector compact />
+    <c-navigation.stepper-step compact state="active" label="Organisation" role="listitem" aria-current="step" />
+    <c-navigation.stepper-connector compact />
+    <c-navigation.stepper-step compact label="Security" role="listitem" />
+    </c-navigation.stepper>
+    <div class="grid gap-6 mt-6 lg:grid-cols-2">
+        <c-onboarding.reason number="01" title="Who you are" description="Record the organisation and person responsible for your artifacts." />
+        <c-cards.card flush>
+        <c-onboarding.checklist-item complete title="Organisation identity" description="Your default contact profile is saved." />
+        <c-onboarding.checklist-item active title="Security contact" description="Where researchers can report vulnerabilities." />
+        </c-cards.card>
+    </div>
     <p class="text-sm text-text-muted mt-4 mb-0">
         A long rail hides its captions on a narrow screen and keeps the circles:
         <c-code-inline>label_class="hidden sm:inline"</c-code-inline> on each step, as the CRA wizard does.
     </p>
     </c-cards.card>
     {# ── Misc ──────────────────────────────────────────────────────────────── #}
-    <h2 id="avatars" class="text-xl font-semibold text-text mb-4">Avatars</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="avatars" class="text-xl font-semibold text-text">Avatars</h2>
+    <c-cards.card>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/avatar.html).
@@ -1479,35 +1674,64 @@
         </div>
     </div>
     </c-cards.card>
-    <h2 id="copy" class="text-xl font-semibold text-text mb-4">Code &amp; tokens</h2>
+    <c-cards.card title="Compact chrome controls">
+    <div class="flex items-center gap-4 mb-4">
+        <c-avatar button flat size="sm" initials="JD" aria-label="Example account" />
+        <c-buttons.icon-quiet label="Example notifications"><i class="far fa-bell" aria-hidden="true"></i></c-buttons.icon-quiet>
+        <c-chrome.theme-picker />
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div role="menu" aria-label="Compact menu example">
+            <c-dropdowns.item compact>My account settings</c-dropdowns.item>
+            <c-dropdowns.item compact>API tokens</c-dropdowns.item>
+        </div>
+        <c-feedback.empty-state size="sm" icon="far fa-bell" icon_variant="neutral" title="You're all caught up" message="No new notifications." />
+    </div>
+    <ul aria-label="Example notifications">
+        <c-chrome.notification-item severity="info" message="You have a workspace invitation." timestamp="5m ago" href="#avatars" action="Respond" />
+        <c-chrome.notification-item severity="warning" message="A customer requested access to your Trust Center." timestamp="1h ago" href="#avatars" action="Review" />
+        <c-chrome.notification-item severity="error" message="Your payment could not be processed." timestamp="2h ago" href="#avatars" action="Fix payment" />
+    </ul>
+    </c-cards.card>
+    <h2 id="copy" class="text-xl font-semibold text-text">Code &amp; tokens</h2>
     {% comment %}
     This section renders through the cotton component library
     (sbomify/templates/components/code_block.html, token_display.html and
-    copy_button.html). Each owns its own copied state, which is why the copied
-    look is one whole Alpine binding rather than a class laid over the resting
-    one.
+    copy_button.html). Every copy action uses the same clipboard controller and
+    confirms without changing the button's surface or width.
     {% endcomment %}
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <c-cards.card title="Code block">
-        <c-code-block :code="demo_code" language="bash" filename="upload.sh" />
-        <p class="text-sm text-text-muted mt-4 mb-0">
-            Without a filename the copy control sits in the block's top-right corner instead of a header band.
-        </p>
-        <p class="text-sm text-text-muted mt-4 mb-0">
+        <div class="flex flex-col gap-4">
+            <c-code-block :code="demo_code" language="bash" filename="upload.sh" />
+            <div class="flex flex-col gap-3">
+                <c-typography.eyebrow>Terminal variant</c-typography.eyebrow>
+                <c-code-terminal :code="demo_code" />
+            </div>
+            <c-typography.description size="sm">Without a filename the copy control sits in the block's top-right corner instead of a header band.</c-typography.description>
+            <c-typography.description size="sm">
             Its inline twin is <c-code-inline>c-code-inline</c-code-inline>, for a path or a flag set in running
             text: <c-code-inline>/.well-known/security.txt</c-code-inline>. Pass
             <c-code-inline>accent="primary"</c-code-inline> for the identifier chip
             (<c-code-inline accent="primary">CRA-13-4</c-code-inline>).
-        </p>
+            </c-typography.description>
+        </div>
         </c-cards.card>
         <c-cards.card title="Token display">
         <c-token-display label="Personal access token" token="sbom_pat_9f2Ac41ZzQ0m7Ktb" masked />
         <p class="tw-data-label mt-6 mb-2">Copy button</p>
         <p class="text-sm text-text-muted mb-3">
             The standalone control, for a value that is already on the page. It confirms in place for two
-            seconds rather than raising a toast.
+            seconds with a checkmark. Its surface and width stay steady.
         </p>
-        <c-copy-button value="https://sbomify.com/t/acme-corp" />
+        <div class="flex flex-col gap-4">
+            <c-copy-button value="https://sbomify.com/t/acme-corp" />
+            <div class="flex flex-wrap items-center gap-3">
+                <c-copy-button-primary value="Example setup instructions" label="Copy prompt" />
+                <c-copy-button-icon value="Example setup instructions" copy_label="Copy example" />
+            </div>
+            <c-copy-field id="ds-copy-url" label="Public URL" value="https://trust.example.com/public/workspace/example-enterprise/software-transparency" />
+        </div>
         <p class="tw-data-label mt-6 mb-2">Inline copy</p>
         <p class="text-sm text-text-muted mb-3">
             An identifier you click to copy. It confirms in place with its own
@@ -1525,8 +1749,8 @@
         </p>
         </c-cards.card>
     </div>
-    <h2 id="tooltip" class="text-xl font-semibold text-text mb-4">Tooltip</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="tooltip" class="text-xl font-semibold text-text">Tooltip</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         Tooltips come from the <code class="tw-code-inline">x-tooltip</code> Alpine directive, which
         positions a single shared element. CSS-hover tooltips cannot follow the trigger.
@@ -1536,8 +1760,8 @@
         <c-buttons.icon label="More information" x-tooltip="'Immutable, sbomify never rewrites an artifact'"><i class="fas fa-circle-info" aria-hidden="true"></i></c-buttons.icon>
     </div>
     </c-cards.card>
-    <h2 id="branded" class="text-xl font-semibold text-text mb-4">Branded components</h2>
-    <c-cards.card class="mb-8">
+    <h2 id="branded" class="text-xl font-semibold text-text">Branded components</h2>
+    <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         <code class="tw-code-inline">c-branded.*</code> is a second, smaller library for pages we render on
         behalf of a workspace, for their customers to read: the trust centre first, and anything else

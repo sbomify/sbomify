@@ -6,37 +6,29 @@
         {{ step_urls|json_script:"step-urls" }}
         {# Step content #}
         <div class="space-y-6">
-            {# Tab bar #}
-            <div class="border-b border-border">
-                <nav class="flex gap-4">
-                    <button @click="activeTab = 'checklist'"
-                            type="button"
-                            :class="activeTab === 'checklist' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
-                            class="px-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5">
-                        <i class="fas fa-clipboard-check text-xs"></i>
-                        Security Checklist
-                        <template x-if="unansweredCount > 0">
-                            <c-badges.danger size="sm" class="ml-1" x-text="unansweredCount + ' unanswered'" />
-                        </template>
-                    </button>
-                    <button @click="activeTab = 'vulnerability'"
-                            type="button"
-                            :class="activeTab === 'vulnerability' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
-                            class="px-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5">
-                        <i class="fas fa-bug text-xs"></i>
-                        Vulnerability Handling
-                    </button>
-                    <button @click="activeTab = 'incident'"
-                            type="button"
-                            :class="activeTab === 'incident' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
-                            class="px-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5">
-                        <i class="fas fa-triangle-exclamation text-xs"></i>
-                        Incident Reporting
-                    </button>
-                </nav>
-            </div>
+            <c-navigation.tabs-pills aria-label="Security assessment sections">
+            <c-navigation.segment class="shrink-0" role="tab" id="tab-checklist" aria-controls="panel-checklist" ::aria-selected="activeTab === 'checklist'" ::tabindex="activeTab === 'checklist' ? 0 : -1" ::data-active="activeTab === 'checklist'" @click="activeTab = 'checklist'">
+            <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+            Security checklist
+            <c-badges.danger size="sm" x-show="unansweredCount > 0" x-text="unansweredCount + ' unanswered'" />
+            </c-navigation.segment>
+            <c-navigation.segment class="shrink-0" role="tab" id="tab-vulnerability" aria-controls="panel-vulnerability" ::aria-selected="activeTab === 'vulnerability'" ::tabindex="activeTab === 'vulnerability' ? 0 : -1" ::data-active="activeTab === 'vulnerability'" @click="activeTab = 'vulnerability'">
+            <i class="fas fa-bug" aria-hidden="true"></i>
+            Vulnerability handling
+            </c-navigation.segment>
+            <c-navigation.segment class="shrink-0" role="tab" id="tab-incident" aria-controls="panel-incident" ::aria-selected="activeTab === 'incident'" ::tabindex="activeTab === 'incident' ? 0 : -1" ::data-active="activeTab === 'incident'" @click="activeTab = 'incident'">
+            <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+            Incident reporting
+            </c-navigation.segment>
+            </c-navigation.tabs-pills>
             {# Tab A: Security Checklist #}
-            <div x-show="activeTab === 'checklist'" x-transition class="space-y-4">
+            <div id="panel-checklist"
+                 role="tabpanel"
+                 aria-labelledby="tab-checklist"
+                 tabindex="0"
+                 x-show="activeTab === 'checklist'"
+                 x-transition
+                 class="space-y-4">
                 <template x-for="group in controlGroups" :key="group.group_id">
                     {# The trigger row and the finding list own their padding. #}
                     <c-cards.card flush>
@@ -110,7 +102,12 @@
                 </template>
             </div>
             {# Tab B: Vulnerability Handling #}
-            <div x-show="activeTab === 'vulnerability'" x-transition>
+            <div id="panel-vulnerability"
+                 role="tabpanel"
+                 aria-labelledby="tab-vulnerability"
+                 tabindex="0"
+                 x-show="activeTab === 'vulnerability'"
+                 x-transition>
                 <c-cards.card>
                 <c-slot name="header">
                 <div class="px-6 py-4 border-b border-border">
@@ -168,7 +165,12 @@
                 </c-cards.card>
             </div>
             {# Tab C: Incident Reporting (Article 14) #}
-            <div x-show="activeTab === 'incident'" x-transition>
+            <div id="panel-incident"
+                 role="tabpanel"
+                 aria-labelledby="tab-incident"
+                 tabindex="0"
+                 x-show="activeTab === 'incident'"
+                 x-transition>
                 <c-cards.card body_class="space-y-4">
                 <c-slot name="header">
                 <div class="px-6 py-4 border-b border-border">
@@ -216,7 +218,7 @@
             </div>
         </div>
         {# Footer navigation #}
-        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+        <div class="flex flex-wrap justify-between items-center gap-3 mt-8 pt-6 border-t border-border">
             {% if step > 1 %}
                 <c-buttons.secondary href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}">
                 <i class="fas fa-arrow-left mr-2"></i> Back

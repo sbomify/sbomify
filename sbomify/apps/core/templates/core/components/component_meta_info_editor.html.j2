@@ -65,10 +65,7 @@
                                  x-init="$nextTick(() => htmx.process($el))"
                                  @cancel-custom-form.window="window.dispatchEvent(new CustomEvent('close-metadata-editor'))"
                                  class="custom-contact-form">
-                                <div class="text-center py-6">
-                                    <c-feedback.spinner size="inline" class="mr-2" />
-                                    <span class="text-text-muted">Loading contact form...</span>
-                                </div>
+                                <c-feedback.loading message="Loading contact form..." />
                             </div>
                         </template>
                     </div>

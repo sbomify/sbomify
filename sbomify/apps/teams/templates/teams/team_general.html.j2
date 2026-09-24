@@ -1,95 +1,77 @@
-{% load static %}
-{% load widget_tweaks %}
-{% comment %}
-    General, in the settings-tab style the branding tab set: no card chrome,
-    an h2 and one explainer line up top, then plain h3 sections separated by
-    hairlines. Store team name as JSON in data attribute for safe Alpine.js
-    initialization.
-{% endcomment %}
 <div id="team-general-content"
      data-team-name="{{ team.name }}"
      data-freshness-days="{{ team.sbom_freshness_days|default_if_none:'' }}"
+     class="flex flex-col gap-5"
      x-cloak
      x-data="teamGeneral($el.dataset.teamName, $el.dataset.freshnessDays)">
-    <div>
-        <h2 class="text-lg font-semibold text-text m-0">General</h2>
-        <p class="text-sm text-text-muted mt-1 m-0">Your workspace's name and defaults.</p>
-    </div>
+    <c-layout.section-header level="2" title="General" subtitle="Your workspace's name, defaults and security targets." />
     <form id="team-general-form"
           method="post"
           hx-post="{% url 'teams:team_general' team.key %}"
           hx-disabled-elt="#team-general-save-btn"
-          hx-swap="none">
+          hx-swap="none"
+          class="flex flex-col gap-5">
         {% csrf_token %}
-        {# Workspace name #}
-        <section class="mt-8">
-            <h3 class="text-sm font-semibold text-text m-0">Workspace name</h3>
-            <div class="mt-4">
-                <c-forms.label for="workspace-name">Name</c-forms.label>
-                <c-forms.input id="workspace-name" name="name" placeholder="Enter workspace name" maxlength="255" required x-model="localName" />
-                <c-forms.hint>Shown across the platform. Maximum 255 characters.</c-forms.hint>
-            </div>
-        </section>
-        {# SBOM freshness #}
-        <section class="mt-8 pt-8 border-t border-border">
-            <h3 class="text-sm font-semibold text-text m-0">SBOM freshness</h3>
-            <p class="text-sm text-text-muted mt-1 m-0">How long an SBOM stays current before its component is flagged stale.</p>
-            <div class="mt-4">
-                <c-forms.label for="sbom-freshness-days">Freshness window</c-forms.label>
-                <div class="flex items-center gap-2">
-                    <c-forms.input type="number" id="sbom-freshness-days" name="sbom_freshness_days" placeholder="No freshness policy" min="0" max="3650" step="1" x-model="localFreshness" />
-                    <span class="text-text-muted text-sm whitespace-nowrap">days</span>
-                </div>
-                <c-forms.hint>Leave empty for no policy. Individual components can override this.</c-forms.hint>
-            </div>
-        </section>
+        <c-cards.card flush>
+        <c-cards.header compact title="Workspace" />
+        <c-forms.field horizontal label="Workspace name" for="workspace-name" hint="Shown in navigation and across your workspace.">
+        <c-forms.input size="sm" id="workspace-name" name="name" value="{{ team.name }}" maxlength="255" required x-model="localName" />
+        </c-forms.field>
+        <c-forms.field horizontal label="Workspace key" hint="Your workspace's permanent identifier.">
+        {% include 'core/components/copyable_value.html.j2' with value=team.key title='Copy workspace key' only %}
+        </c-forms.field>
+        <c-forms.field horizontal label="Default workspace" hint="The workspace you open when you sign in.">
+        {% if is_default_team %}
+            <c-feedback.status tone="success" label="Your default workspace" />
+        {% else %}
+            <c-buttons.secondary type="submit" form="default-workspace-form" size="sm">Make default</c-buttons.secondary>
+        {% endif %}
+        </c-forms.field>
+        </c-cards.card>
+        <c-cards.card flush>
+        <c-cards.header compact title="Freshness" />
+        <c-forms.field horizontal label="Freshness window (days)" for="sbom-freshness-days" hint="Flag components with an older SBOM as stale. Leave empty for no policy. Components can override this.">
+        <c-forms.input size="sm" type="number" id="sbom-freshness-days" name="sbom_freshness_days" value="{{ team.sbom_freshness_days|default_if_none:'' }}" placeholder="No freshness policy" min="0" max="3650" step="1" x-model="localFreshness" />
+        </c-forms.field>
+        </c-cards.card>
+        <div class="flex items-center justify-end gap-2">
+            <c-buttons.secondary size="sm" ::disabled="!hasUnsavedChanges()" @click="localName = originalName; localFreshness = originalFreshness">Discard</c-buttons.secondary>
+            <c-buttons.primary type="submit" size="sm" id="team-general-save-btn" ::disabled="!hasUnsavedChanges()">Save changes</c-buttons.primary>
+        </div>
     </form>
-    {# Cancel/Save at the bottom right, below the fields they apply to. #}
-    <div class="flex items-center justify-end gap-2 mt-8 pt-6 border-t border-border">
-        <c-buttons.secondary size="sm" x-show="hasUnsavedChanges()" @click="$dispatch('refreshTeamGeneral')">
-        <i class="fas fa-undo mr-2"></i>Cancel
-        </c-buttons.secondary>
-        <c-buttons.primary type="submit" size="sm" id="team-general-save-btn" form="team-general-form" ::disabled="!hasUnsavedChanges()">
-        <i class="fas fa-save mr-2"></i>Save changes
-        </c-buttons.primary>
-    </div>
-    {# Default workspace #}
-    <section class="mt-8 pt-8 border-t border-border">
-        <h3 class="text-sm font-semibold text-text m-0">Default workspace</h3>
-        <p class="text-sm text-text-muted mt-1 m-0">Where you land when you log in.</p>
-        <div class="mt-4 flex items-center justify-between flex-wrap gap-3">
-            <div>
-                {% if is_default_team %}
-                    <c-badges.success>
-                    <i class="fas fa-check-circle mr-1" aria-hidden="true"></i>
-                    This is your default workspace
-                    </c-badges.success>
-                {% else %}
-                    <span class="text-text-muted text-sm">This workspace is not your default</span>
-                {% endif %}
-            </div>
-            {% if not is_default_team %}
-                <form method="post"
-                      hx-post="{% url 'teams:team_general' team.key %}"
-                      hx-disabled-elt="find button[type='submit']"
-                      hx-swap="none">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="set_default">
-                    <c-buttons.secondary type="submit" size="sm">
-                    <i class="fas fa-star mr-2"></i>Make default
-                    </c-buttons.secondary>
-                </form>
-            {% endif %}
+    {% if not is_default_team %}
+        <form id="default-workspace-form"
+              hidden
+              method="post"
+              hx-post="{% url 'teams:team_general' team.key %}"
+              hx-swap="none">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_default">
+        </form>
+    {% endif %}
+    <div id="patch-sla-wrapper"
+         hx-get="{% url 'teams:team_general' team.key %}"
+         hx-select="#patch-sla-form"
+         hx-trigger="refreshPatchSLA from:body"
+         hx-swap="innerHTML">{% include 'teams/components/patch_sla_form.html.j2' %}</div>
+    <form method="post"
+          hx-post="{% url 'teams:team_general' team.key %}"
+          hx-swap="none"
+          hx-disabled-elt="find button[type='submit']"
+          class="flex flex-col gap-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_support_period">
+        <c-cards.card flush>
+        <c-cards.header compact title="Product support" />
+        <c-forms.field horizontal label="Default support period (years)" for="default-support-period" hint="Used for new product assessments. Product support dates take precedence. Existing assessments keep their dates. Leave empty for no default.">
+        <c-forms.input size="sm" id="default-support-period" name="default_support_period_years" type="number" min="5" max="100" step="1" value="{{ default_support_period_years|default_if_none:'' }}" placeholder="No default" />
+        </c-forms.field>
+        </c-cards.card>
+        <div class="flex justify-end">
+            <c-buttons.primary size="sm" type="submit">Save support period</c-buttons.primary>
         </div>
-    </section>
-    {% comment %}
-        Danger Zone, owner only. This tab is ADMINISTER (admins can rename the
-        workspace, set defaults, and so on), but deleting the workspace is
-        OWNER_ONLY, so an admin must not be shown a control that always 403s.
-    {% endcomment %}
+    </form>
     {% if is_owner %}
-        <div class="mt-8">
-            {% include 'teams/components/team_danger_zone.html.j2' with team_key=team.key team_name=team.name is_default_team=is_default_team %}
-        </div>
+        {% include 'teams/components/team_danger_zone.html.j2' with team_key=team.key team_name=team.name is_default_team=is_default_team %}
     {% endif %}
 </div>

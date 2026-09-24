@@ -1,0 +1,16 @@
+{% comment %}
+A rail destination with one anchor. match is a Django view-name fragment;
+the active row uses a neutral tint. No caller supplies a colour or recipe.
+{% endcomment %}
+<c-vars active href icon label match class />
+<a href="{{ href }}"
+   title="{{ label }}"
+   aria-label="{{ label }}"
+   @click="sidebarMobileOpen = false"
+   {% if active or match and match in request.resolver_match.view_name %}aria-current="page"{% endif %}
+   class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-[0.875rem] no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 {% if active or match and match in request.resolver_match.view_name %}bg-surface-hover text-text{% else %}text-text-secondary hover:bg-surface-hover hover:text-text{% endif %}{% if class %} {{ class }}{% endif %}"
+   {{ attrs }}>
+    <i class="{{ icon }} shrink-0 w-4 text-center text-text-muted"
+       aria-hidden="true"></i>
+    <span>{{ label }}</span>
+</a>

@@ -1136,87 +1136,9 @@
                 </div>
             </footer>
         </div>
-        {# Theme Toggle Script #}
-        <script>
-            // Helper to apply theme (sets data-theme and CSS variables)
-            function applyTheme(isDark) {
-                // Inline styles on the root element already win the cascade
-                // against the theme selector rules in the inline <style> block,
-                // matching the no-!important pattern set up in the page-load
-                // theme-flash script above.
-                const html = document.documentElement;
-                const style = html.style;
-                html.setAttribute('data-theme', isDark ? 'dark' : 'light');
-                // Mirror via .light/.dark class so the :root.light overrides
-                // in tailwind.src.css fire correctly AND so the class-based
-                // `dark:*` Tailwind variant (defined via @custom-variant in
-                // tailwind.src.css) picks up the public dark theme too.
-                html.classList.toggle('light', !isDark);
-                html.classList.toggle('dark', isDark);
-                if (isDark) {
-                    style.setProperty('--color-surface', 'rgb(30 41 59)');
-                    style.setProperty('--color-surface-elevated', 'rgb(51 65 85)');
-                    style.setProperty('--color-border', 'rgb(51 65 85)');
-                } else {
-                    style.setProperty('--color-surface', 'rgb(255 255 255)');
-                    style.setProperty('--color-surface-elevated', 'rgb(255 255 255)');
-                    style.setProperty('--color-border', 'rgb(226 232 240)');
-                }
-            }
-
-            // Alpine.js theme toggle component
-            function themeToggle() {
-                return {
-                    open: false,
-                    theme: localStorage.getItem('public-theme') || 'system',
-
-                    get currentIcon() {
-                        if (this.theme === 'dark') return 'fas fa-moon';
-                        if (this.theme === 'light') return 'fas fa-sun';
-                        // System - show current effective theme icon
-                        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                        return isDark ? 'fas fa-moon' : 'fas fa-sun';
-                    },
-
-                    get currentLabel() {
-                        if (this.theme === 'dark') return 'Dark';
-                        if (this.theme === 'light') return 'Light';
-                        return 'System';
-                    },
-
-                    setTheme(newTheme) {
-                        this.theme = newTheme;
-                        this.open = false;
-
-                        if (newTheme === 'system') {
-                            localStorage.removeItem('public-theme');
-                            // For system, apply based on OS preference
-                            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                            applyTheme(isDark);
-                            document.documentElement.setAttribute('data-theme-source', 'system');
-                        } else {
-                            localStorage.setItem('public-theme', newTheme);
-                            applyTheme(newTheme === 'dark');
-                            document.documentElement.removeAttribute('data-theme-source');
-                        }
-                    },
-
-                    init() {
-                        // Listen for system theme changes when in system mode
-                        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-                            if (this.theme === 'system') {
-                                applyTheme(e.matches);
-                                // Force Alpine to re-evaluate currentIcon
-                                this.theme = 'system';
-                            }
-                        });
-                    }
-                };
-            }
-</script>
-{% block scripts %}
-{% endblock %}
-{% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
-{% htmx_script %}
-</body>
+        <c-feedback.toast-container />
+        {% block scripts %}{% endblock %}
+        {% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
+        {% htmx_script %}
+    </body>
 </html>

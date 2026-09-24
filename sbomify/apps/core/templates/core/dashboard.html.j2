@@ -1,118 +1,52 @@
-{% extends "core/dashboard_base.htmx.j2" %}
-{% load static %}
+{% extends 'core/dashboard_base.htmx.j2' %}
 {% load django_vite %}
-{% load advisory_tags %}
-{% block title %}sbomify Dashboard{% endblock %}
+{% block title %}
+    {% if show_repository_setup %}
+        Repository setup
+    {% else %}
+        Overview
+    {% endif %}
+    · sbomify
+{% endblock %}
 {% block dashboard_content %}
-    {# The greeting is this page's title: it is the security picture, not a page label. #}
-    <c-layout.page-header title="{{ greeting }}" subtitle="{{ page_subtitle }}" />
-    <div class="space-y-6">
-        {% if dashboard.is_first_visit %}
-            {# First visit — a flowing onboarding hero: soft surface, illustration bleeds in. #}
-            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/5 dark:from-primary/20 via-transparent to-transparent">
-                {# Illustration — SVG used as a mask so it takes the primary (light blue) colour. #}
-                <div aria-hidden="true"
-                     class="hidden md:block absolute right-[6%] top-1/2 -translate-y-1/2 w-[38%] max-w-[380px] opacity-40 bg-primary pointer-events-none select-none"
-                     style="aspect-ratio: 1210 / 680;
-                            -webkit-mask: url('{% static 'img/onboarding.svg' %}') center / contain no-repeat;
-                            mask: url('{% static 'img/onboarding.svg' %}') center / contain no-repeat"></div>
-                <div class="relative p-6 sm:p-8 md:pr-[44%]">
-                    {% comment %}
-                        One action, not a checklist. The wizard command sets a
-                        repository up end to end, so walking someone through
-                        creating a product and a component by hand duplicated
-                        work the command does, and stranded anyone who ran it
-                        first.
-                    {% endcomment %}
-                    <h4 class="text-xl font-semibold text-text m-0">Get started</h4>
-                    <p class="text-sm text-text-muted m-0 mt-1 max-w-md">
-                        Run one command in your repository and push. Your first SBOM
-                        lands here and this page starts reporting.
-                    </p>
-                    <div class="mt-5 flex items-center gap-4 flex-wrap">
-                        <c-buttons.primary class="flex-shrink-0" @click="$dispatch('open-cicd')">
-                        <i class="fas fa-rocket mr-2" aria-hidden="true"></i>Get started
-                        </c-buttons.primary>
-                        {% if onboarding.first_component %}
-                            <span class="text-sm text-text-muted">
-                                Already have an SBOM file?
-                                <button type="button"
-                                        @click="$dispatch('open-upload')"
-                                        class="text-primary hover:underline font-medium">Upload it</button>
-                            </span>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            {# Reuse the component-page CI/CD and upload modals here — no duplication. #}
-            {% if onboarding.first_component %}
-                {% with component=onboarding.first_component %}
-                    {% include "sboms/components/ci_cd_info.html.j2" %}
-                    {% include "sboms/components/sbom_upload.html.j2" with component_id=component.id %}
-                {% endwith %}
-            {% else %}
-                {% include "sboms/components/ci_cd_info.html.j2" %}
-            {% endif %}
-        {% else %}
-            {# Needs attention — the worst non-suppressed findings across the workspace #}
-            {% if dashboard.needs_attention %}
-                {# flush: the findings own their gutters, so the list runs to the card's edge. #}
-                <c-cards.card flush>
-                <c-slot name="header">
-                <c-cards.header>
-                <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
-                    Needs attention
-                    <c-badges.danger size="sm">{{ dashboard.needs_attention|length }}</c-badges.danger>
-                </h4>
-                </c-cards.header>
-                </c-slot>
-                <div class="divide-y divide-border">
-                    {% for finding in dashboard.needs_attention %}
-                        <div class="px-6 py-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                            {% comment %} unknown / info / malicious are off the CVSS scale, and the
-                            badge renders them in its neutral band. {% endcomment %}
-                            <c-badges.severity level="{{ finding.severity|lower }}">{{ finding.severity|capfirst }}</c-badges.severity>
-                            {% with finding_url=finding.id|advisory_url %}
-                                {% if finding_url %}
-                                    <a href="{{ finding_url }}"
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       class="font-mono text-sm text-primary hover:underline">{{ finding.id }}</a>
-                                {% else %}
-                                    <span class="font-mono text-sm text-text-muted">{{ finding.id }}</span>
-                                {% endif %}
-                            {% endwith %}
-                            <span class="text-sm text-text font-medium">{{ finding.package }}</span>
-                            {% if finding.version %}<span class="text-sm text-text-muted">· {{ finding.version }}</span>{% endif %}
-                            <span class="text-sm text-text-muted">
-                                in <span class="font-medium text-text">{{ finding.component_name }}</span>
-                                {% if finding.scanned_at %}· scanned {{ finding.scanned_at|timesince }} ago{% endif %}
-                            </span>
-                            <a href="{% url 'core:component_details' finding.component_id %}"
-                               class="ml-auto text-sm text-primary hover:underline no-underline inline-flex items-center gap-1">
-                                Review<i class="fas fa-arrow-right text-xs"></i>
-                            </a>
-                        </div>
-                    {% endfor %}
-                </div>
-                </c-cards.card>
-            {% endif %}
-        {% endif %}
-        {# Vulnerability Trends #}
-        {# flush: the panel HTMX swaps in brings its own padding. #}
-        <c-cards.card flush>
-        <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true"
-             hx-trigger="load"
-             hx-swap="innerHTML">
-            <c-feedback.loading message="Loading vulnerability trends..." />
+    {% if show_repository_setup %}
+        <c-layout.page-header title="{{ onboarding.title|default:'Set up your first repository' }}" subtitle="Choose a coding agent or the terminal wizard. Find your lockfiles, create components and add a workflow." />
+        <c-overview.onboarding :can_manage="can_manage" :can_administer="can_administer" :first_component="onboarding.first_component" :setup_config="onboarding.setup_config" />
+    {% else %}
+        <c-overview.header subtitle="{{ page_subtitle }}" />
+        <div role="group"
+             class="grid grid-cols-2 xl:grid-cols-4 gap-3"
+             aria-label="Key metrics">
+            <c-layout.stat-card :value="dashboard.metrics.open" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
+            <c-layout.stat-card :value="dashboard.metrics.past_sla" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
+            <c-layout.stat-card :value="dashboard.metrics.known_exploited" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
+            <c-layout.stat-card :value="dashboard.metrics.stale" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
         </div>
-        </c-cards.card>
-    </div>
+        {% if can_manage %}
+            <c-overview.quick-actions>
+            <c-layout.action-tile flush accent="info" href="{% url 'core:product_new' %}" icon="fas fa-cube" title="Add product" description="Organise components and artifacts" />
+            <c-layout.action-tile flush accent="info" icon="fas fa-tag" title="Add release" description="Bring a version's artifacts together" href="{% url 'core:release_new' %}" />
+            <c-layout.action-tile flush accent="info" href="{% url 'core:component_new' %}" icon="fas fa-puzzle-piece" title="Add component" description="Store SBOMs and documents" />
+            <c-layout.action-tile flush accent="info" href="{% url 'core:security_advisory_new' %}" icon="fas fa-shield-halved" title="Add advisory" description="Create a draft security advisory" />
+            </c-overview.quick-actions>
+        {% endif %}
+        {% if dashboard.unassessed or dashboard.metrics.sla_unknown %}
+            <c-feedback.alert variant="info">
+            {% if dashboard.unassessed %}
+                {{ dashboard.unassessed }} component{{ dashboard.unassessed|pluralize }} still need{{ dashboard.unassessed|pluralize:'s,' }} a completed security assessment.
+            {% endif %}
+            {% if dashboard.metrics.sla_unknown %}
+                Patch SLA is unavailable for {{ dashboard.metrics.sla_unknown }} occurrence{{ dashboard.metrics.sla_unknown|pluralize }} without scan history.
+            {% endif %}
+            </c-feedback.alert>
+        {% endif %}
+        <c-overview.priority :dashboard="dashboard" workspace_key="{{ current_team.key }}" />
+        <c-overview.products :products="dashboard.products" />
+    {% endif %}
 {% endblock %}
 {% block scripts %}
     {{ block.super }}
-    {# The CI/CD + upload modals use Alpine components registered in the sboms bundle. #}
-    {% if dashboard.is_first_visit and onboarding.first_component %}
+    {% if show_repository_setup and can_manage and onboarding.first_component %}
         {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
     {% endif %}
 {% endblock %}

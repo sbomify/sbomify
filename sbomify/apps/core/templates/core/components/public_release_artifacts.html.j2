@@ -7,25 +7,25 @@
             {# The shell draws the frame itself, so the table needs no card around it. #}
             <c-tables.shell>
             <c-tables.toolbar>
-            <c-tables.search id="release-artifacts-search" label="Search artifacts" placeholder="Search artifacts..." x-model="search" />
+            <c-forms.search-input size="sm" id="release-artifacts-search" label="Search artifacts" placeholder="Search artifacts..." x-model="search" />
             <c-slot name="right">
-            <c-tables.select id="release-artifacts-type" label="Filter by type" x-model="typeFilter">
+            <c-forms.select size="md" id="release-artifacts-type" label="Filter by type" x-model="typeFilter">
             <option value="">All Types</option>
             <option value="sbom">SBOMs Only</option>
             <option value="vex">VEX Only</option>
             <option value="cbom">CBOMs Only</option>
             <option value="document">Documents Only</option>
-            </c-tables.select>
+            </c-forms.select>
             </c-slot>
             </c-tables.toolbar>
-            <c-tables.table>
+            <c-tables.table sized variant_class="min-w-80 md:min-w-192 lg:min-w-256" aria-label="Release artifacts">
             <c-tables.head>
-            <c-tables.header-cell sort="type" class="w-10">Type</c-tables.header-cell>
+            <c-tables.header-cell sort="type" class="w-24 md:w-28">Type</c-tables.header-cell>
             <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-            <c-tables.header-cell sort="component" class="hidden md:table-cell">Component</c-tables.header-cell>
-            <c-tables.header-cell sort="format" class="hidden md:table-cell">Format</c-tables.header-cell>
-            <c-tables.header-cell sort="version" class="hidden lg:table-cell">Version</c-tables.header-cell>
-            <c-tables.header-cell sort="created" date class="hidden lg:table-cell">Created</c-tables.header-cell>
+            <c-tables.header-cell sort="component" class="hidden md:table-cell w-48">Component</c-tables.header-cell>
+            <c-tables.header-cell sort="format" class="hidden md:table-cell w-40">Format</c-tables.header-cell>
+            <c-tables.header-cell sort="version" class="hidden lg:table-cell w-28">Version</c-tables.header-cell>
+            <c-tables.header-cell sort="created" date class="hidden lg:table-cell w-40">Created</c-tables.header-cell>
             </c-tables.head>
             <tbody>
                 <template x-for="artifact in filteredArtifacts" :key="artifact.id">
@@ -76,9 +76,10 @@
                     <span x-show="!artifact.sbom_format && !artifact.document_type"
                           class="text-text-muted">—</span>
                     </c-tables.cell>
-                    <c-tables.cell class="hidden lg:table-cell">
+                    <c-tables.cell nowrap class="hidden lg:table-cell">
                     <span x-show="getVersion(artifact)"
                           class="text-text"
+                          :title="getVersion(artifact)"
                           x-text="getVersion(artifact)"></span>
                     <span x-show="!getVersion(artifact)" class="text-text-muted">—</span>
                     </c-tables.cell>

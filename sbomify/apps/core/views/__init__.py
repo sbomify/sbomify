@@ -60,6 +60,7 @@ from sbomify.apps.core.views.product_releases_public import ProductReleasesPubli
 from sbomify.apps.core.views.products_dashboard import ProductCreateView as ProductCreateView
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
 from sbomify.apps.core.views.products_dashboard import ProductsTableView as ProductsTableView
+from sbomify.apps.core.views.release_create import ReleaseCreateView as ReleaseCreateView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
@@ -159,19 +160,14 @@ def _get_access_tokens(user: Any) -> list[dict[str, Any]]:
     ]
 
 
-def _build_settings_context(user: Any, form: Any = None, new_token: Any = None) -> dict[str, Any]:
+def _build_settings_context(user: Any) -> dict[str, Any]:
     """Helper function to build context for settings page."""
-    from sbomify.apps.core.forms import CreateAccessTokenForm
     from sbomify.apps.teams.queries import get_pending_invitations_for_user
 
-    context = {
-        "create_access_token_form": form or CreateAccessTokenForm(),
+    return {
         "pending_invitations": get_pending_invitations_for_user(user),
         "access_tokens": _get_access_tokens(user),
     }
-    if new_token:
-        context["new_encoded_access_token"] = new_token
-    return context
 
 
 @never_cache

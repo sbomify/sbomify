@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.controls.models import Control
@@ -13,20 +13,14 @@ from sbomify.apps.controls.services.catalog_service import (
     activate_builtin_catalog,
     deactivate_catalog,
     delete_catalog,
-    get_active_catalogs,
 )
-from sbomify.apps.controls.services.status_service import get_controls_detail, upsert_status
+from sbomify.apps.controls.services.page_context import build_product_controls, controls_table_context
+from sbomify.apps.controls.services.status_service import upsert_status
 from sbomify.apps.core.authz import ADMINISTER
+from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.core.models import User
-from sbomify.apps.teams.models import Member, Team
-from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
-
-BULK_STATUSES = [
-    ("compliant", "Compliant"),
-    ("partial", "Partial"),
-    ("not_implemented", "Not Implemented"),
-    ("not_applicable", "N/A"),
-]
+from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 
 
 def _check_team_key_matches_session(request: HttpRequest, team_key: str) -> bool:
@@ -35,15 +29,14 @@ def _check_team_key_matches_session(request: HttpRequest, team_key: str) -> bool
     return current_team_key == team_key
 
 
-def _can_administer(request: HttpRequest, team_key: str) -> bool:
-    """Whether this user may administer the workspace, read from the live Member row.
+class ProductControlsView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """Load the same controls tables with product-specific overrides."""
 
-    Not from ``session["current_team"]["role"]``: that is a cache with a 300s TTL,
-    so a demoted user kept seeing admin-only controls (and a promoted one kept
-    being denied them) until it refreshed. Authorization is enforced from the DB
-    everywhere else; the UI flag has to agree with it.
-    """
-    return Member.objects.filter(user=cast(User, request.user), team__key=team_key, role__in=ADMINISTER).exists()
+    def get(self, request: HttpRequest, team_key: str, product_id: str) -> HttpResponse:
+        result = build_product_controls(request, team_key, product_id)
+        if not result.ok:
+            return htmx_error_response(result.error or "Unable to load controls")
+        return render(request, "controls/components/product_controls_section.html.j2", result.value)
 
 
 class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -124,9 +117,6 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        from django.shortcuts import render
-
-        from sbomify.apps.teams.apis import get_team
         from sbomify.apps.teams.utils import redirect_to_team_settings
 
         if not _check_team_key_matches_session(request, team_key):
@@ -152,43 +142,11 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.error(request, upsert_result.error or "Failed to update status")
             return redirect_to_team_settings(team_key, "controls")
 
-        # For HTMX requests, return the updated controls table partial
         if request.headers.get("HX-Request"):
-            try:
-                team = Team.objects.get(key=team_key)
-            except Team.DoesNotExist:
-                messages.error(request, "Workspace not found")
-                return redirect_to_team_settings(team_key, "controls")
-
-            catalogs_result = get_active_catalogs(team)
-            catalog = catalogs_result.value[0] if catalogs_result.ok and catalogs_result.value else None
-
-            controls_categories: list[dict[str, Any]] = []
-            if catalog:
-                detail_result = get_controls_detail(catalog)
-                if detail_result.ok and detail_result.value is not None:
-                    controls_categories = detail_result.value
-
-            # Get team data for template context
-            resp_code, team_data = get_team(request, team_key)
-            if resp_code != 200:
-                return redirect_to_team_settings(team_key, "controls")
-
-            try:
-                team_dict = team_data.dict() if hasattr(team_data, "dict") else team_data.model_dump()
-            except AttributeError:
-                team_dict = team_data
-
             return render(
                 request,
                 "controls/controls_table.html.j2",
-                {
-                    "team": team_dict,
-                    "controls_catalog": catalog,
-                    "controls_categories": controls_categories,
-                    "bulk_statuses": BULK_STATUSES,
-                    "is_admin_or_owner": _can_administer(request, team_key),
-                },
+                {"controls": controls_table_context(request, control.catalog)},
             )
 
         messages.success(request, "Control status updated.")
@@ -232,33 +190,11 @@ class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View)
             messages.error(request, upsert_result.error or "Failed to update status")
             return redirect("core:product_details", product_id=product_id)
 
-        # For HTMX requests, return the updated product controls partial
         if request.headers.get("HX-Request"):
-            from sbomify.apps.controls.services.status_service import get_controls_detail, get_controls_summary
-
-            catalog = control.catalog
-            summary_result = get_controls_summary(catalog.team, product=product)
-            detail_result = get_controls_detail(catalog, product=product)
-
-            product_controls: dict[str, Any] | None = None
-            if summary_result.ok and detail_result.ok:
-                product_controls = {
-                    "catalog": catalog,
-                    "summary": summary_result.value,
-                    "categories": detail_result.value or [],
-                    "team_key": team_key,
-                    "product_id": product_id,
-                }
-
-            from django.shortcuts import render
-
             return render(
                 request,
-                "controls/components/product_controls_section.html.j2",
-                {
-                    "product_controls": product_controls,
-                    "is_admin_or_owner": _can_administer(request, team_key),
-                },
+                "controls/controls_table.html.j2",
+                {"controls": controls_table_context(request, control.catalog, product)},
             )
 
         messages.success(request, "Control status updated.")
@@ -272,7 +208,6 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from sbomify.apps.controls.services.status_service import bulk_update_statuses
-        from sbomify.apps.teams.apis import get_team
         from sbomify.apps.teams.utils import redirect_to_team_settings
 
         if not _check_team_key_matches_session(request, team_key):
@@ -317,36 +252,13 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         else:
             messages.success(request, f"Set {result.value} controls in {category} to {status}.")
 
-        # For HTMX, return the updated table
         if request.headers.get("HX-Request"):
-            catalogs_result = get_active_catalogs(team)
-            catalog = catalogs_result.value[0] if catalogs_result.ok and catalogs_result.value else None
-            controls_categories: list[dict[str, Any]] = []
-            if catalog:
-                detail_result = get_controls_detail(catalog)
-                if detail_result.ok and detail_result.value is not None:
-                    controls_categories = detail_result.value
-
-            resp_code, team_data = get_team(request, team_key)
-            if resp_code != 200:
-                return redirect_to_team_settings(team_key, "controls")
-            try:
-                team_dict = team_data.dict() if hasattr(team_data, "dict") else team_data.model_dump()
-            except AttributeError:
-                team_dict = team_data
-
-            from django.shortcuts import render as django_render
-
-            return django_render(
-                request,
-                "controls/controls_table.html.j2",
-                {
-                    "team": team_dict,
-                    "controls_catalog": catalog,
-                    "controls_categories": controls_categories,
-                    "bulk_statuses": BULK_STATUSES,
-                    "is_admin_or_owner": _can_administer(request, team_key),
-                },
-            )
+            control = controls_qs.select_related("catalog__team").first()
+            if control is not None:
+                return render(
+                    request,
+                    "controls/controls_table.html.j2",
+                    {"controls": controls_table_context(request, control.catalog)},
+                )
 
         return redirect_to_team_settings(team_key, "controls")

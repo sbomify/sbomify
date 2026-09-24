@@ -4,7 +4,7 @@ on the output; it is not routed anywhere.
 {% endcomment %}
 <c-tables.shell class="mb-8" data-probe="shell">
 <c-tables.toolbar>
-<c-tables.search id="probe-search" label="Search components" placeholder="Search components" x-model="search" />
+<c-forms.search-input size="sm" id="probe-search" label="Search components" placeholder="Search components" x-model="search" />
 <c-slot name="right">
 <c-tables.page-size id="probe-per-page" x-model.number="perPage">
 <option value="10">Ten</option>
@@ -35,7 +35,7 @@ on the output; it is not routed anywhere.
 <c-tables.pager />
 </c-tables.footer>
 </c-tables.shell>
-<c-tables.shell nested>
+<c-tables.shell nested data-probe="nested-shell">
 <c-tables.toolbar>
 <span>Toolbar without a right group</span>
 </c-tables.toolbar>
@@ -60,3 +60,10 @@ on the output; it is not routed anywhere.
 </tbody>
 </c-tables.table>
 </c-tables.shell>
+<c-tables.table sized data-probe="server-sorting">
+<c-tables.head>
+<c-tables.header-cell href="/probe?direction=desc" sort="name" order="ascending">Server ascending</c-tables.header-cell>
+<c-tables.header-cell href="/probe?direction=asc" sort="name" order="descending">Server descending</c-tables.header-cell>
+<c-tables.header-cell href="/probe?sort=name" sort="name">Server unsorted</c-tables.header-cell>
+</c-tables.head>
+</c-tables.table>

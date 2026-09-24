@@ -1,0 +1,49 @@
+{% comment %}
+The product and component visibility control: one quiet button, with the saved
+choice and access rules in a shared radio menu. Arrow keys explore choices;
+only activating an option submits the existing HTMX form. The saved label stays
+in place until the server accepts the change. Preview is for the live gallery.
+{% endcomment %}
+<c-vars item_type="component" item_id visibility="private" gated_allowed preview />
+<div x-data="visibilitySelector({ itemType: '{{ item_type|escapejs }}', itemId: '{{ item_id|escapejs }}', currentVisibility: '{{ visibility|escapejs }}', gatedVisibilityAllowed: {{ gated_allowed|yesno:'true,false' }}, preview: {{ preview|yesno:'true,false' }} })"
+     class="inline-flex"
+     :aria-busy="isLoading">
+    <form x-ref="form"
+          hx-post="{% url 'core:toggle_public_status' item_type item_id %}"
+          hx-swap="none"
+          @htmx:before-request="isLoading = true"
+          @htmx:after-request="afterRequest($event)">
+        {% csrf_token %}
+        {% if item_type == 'product' %}
+            <input type="hidden"
+                   name="is_public"
+                   :value="pendingVisibility === 'public' ? 'true' : 'false'">
+        {% else %}
+            <input type="hidden" name="visibility" :value="pendingVisibility">
+        {% endif %}
+    </form>
+    <c-actions-menu label="{{ item_type|capfirst }} visibility" selectable icon="" width="w-80 max-w-[calc(100vw-1rem)]" x_disabled="isLoading">
+    <c-slot name="caption">
+    <span class="inline-flex w-4 shrink-0 items-center justify-center text-text-muted"
+          aria-hidden="true">
+        <i x-show="!isLoading" :class="statusIcon"></i>
+        <span x-show="isLoading" x-cloak><c-feedback.spinner size="inline" /></span>
+    </span>
+    <span class="min-w-12 text-left" x-text="statusText">{{ visibility|capfirst }}</span>
+    <span class="sr-only" x-show="isLoading">Saving</span>
+    </c-slot>
+    <c-dropdowns.header>Visibility</c-dropdowns.header>
+    <c-dropdowns.item radio icon="fas fa-lock" description="Only workspace members can access." ::aria-checked="visibility === 'private'" @click="selectVisibility('private')" ::disabled="isLoading">Private</c-dropdowns.item>
+    <c-dropdowns.item radio icon="fas fa-globe" description="Anyone can view this {{ item_type }}." ::aria-checked="visibility === 'public'" @click="selectVisibility('public')" ::disabled="isLoading">Public</c-dropdowns.item>
+    {% if item_type == 'component' %}
+        {% if gated_allowed %}
+            <c-dropdowns.item radio icon="fas fa-shield-halved" description="Public listing. Downloads need approval." ::aria-checked="visibility === 'gated'" @click="selectVisibility('gated')" ::disabled="isLoading">Gated</c-dropdowns.item>
+        {% else %}
+            <c-dropdowns.item radio icon="fas fa-shield-halved" description="Downloads need approval. Available on Business and Enterprise plans." ::aria-checked="visibility === 'gated'" disabled>Gated</c-dropdowns.item>
+        {% endif %}
+    {% endif %}
+    </c-actions-menu>
+    <span class="sr-only"
+          role="status"
+          x-text="isLoading ? 'Saving visibility...' : ''"></span>
+</div>

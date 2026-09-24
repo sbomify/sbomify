@@ -1,134 +1,93 @@
-<c-cards.dashboard class="mb-6" id="controls-table-{{ controls_catalog.id }}" x-data="{ statusFilter: 'all', expandedGroups: {} }">
-<c-slot name="header">
-<div class="px-6 py-4 border-b border-border">
-    <div class="flex items-center justify-between gap-4">
-        <div class="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
-            <c-chips.icon-chip>
-            <i class="fas {{ catalog_icon|default:'fa-list-check' }}"
-               aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <div class="min-w-0">
-                <h5 class="text-base font-semibold text-text m-0 truncate"
-                    title="{{ controls_catalog.name }}">
-                    {{ controls_catalog.name|truncatechars:50 }}
-                    {% if controls_catalog.source == 'custom' %}
-                        <span class="text-xs font-normal text-primary ml-1">Imported</span>
-                    {% endif %}
-                </h5>
-                <p class="text-text-muted text-sm m-0">
-                    {{ controls_total_count }} controls · {{ controls_categories|length }} categories
-                </p>
-            </div>
-        </div>
-        <div class="flex items-center gap-2">
-            <div class="hidden sm:flex items-center gap-1 mr-2 relative"
-                 x-data="{ showExport: false }"
-                 @click.outside="showExport = false">
-                <c-buttons.outline-primary size="sm" @click="showExport = !showExport">
-                <i class="fas fa-download mr-1"></i>Export
-                </c-buttons.outline-primary>
-                <c-dropdowns.dropdown class="right-0 top-full mt-1" aria-label="Export" x-show="showExport" x-cloak x-transition>
-                <c-dropdowns.item href="/api/v1/controls/catalogs/{{ controls_catalog.id }}/export/csv" icon="fas fa-file-csv">Controls CSV</c-dropdowns.item>
-                <c-dropdowns.item href="/api/v1/controls/catalogs/{{ controls_catalog.id }}/export/summary-csv" icon="fas fa-chart-bar">Summary CSV</c-dropdowns.item>
-                </c-dropdowns.dropdown>
-            </div>
-            <label for="status-filter-{{ controls_catalog.id }}"
-                   class="text-sm text-text-muted whitespace-nowrap">Filter:</label>
-            <c-forms.select id="status-filter-{{ controls_catalog.id }}" size="sm" x-model="statusFilter">
-            <option value="all">All statuses</option>
-            <option value="compliant">Compliant</option>
-            <option value="partial">Partial</option>
-            <option value="not_implemented">Not Implemented</option>
-            <option value="not_applicable">Not Applicable</option>
-            </c-forms.select>
-        </div>
-    </div>
-</div>
+{% comment %}One control table for workspace defaults and product overrides. The caller supplies its context and the parent owns spacing.{% endcomment %}
+<c-cards.card flush id="controls-table-{{ controls.catalog.id }}" x-data="{ statusFilter: 'all', expandedGroups: {} }">
+<c-tables.toolbar>
+<c-layout.section-header title="{{ controls.catalog.name }}" subtitle="{{ controls.total }} control{{ controls.total|pluralize }}" level="3" />
+<c-slot name="right">
+{% if not controls.product %}
+    <c-actions-menu label="Export {{ controls.catalog.name }}" caption="Export" icon="fas fa-download">
+    <c-dropdowns.item href="{% url 'api-1:export_csv' controls.catalog.id %}" icon="fas fa-file-csv">Controls CSV</c-dropdowns.item>
+    <c-dropdowns.item href="{% url 'api-1:export_summary_csv' controls.catalog.id %}" icon="fas fa-chart-bar">Summary CSV</c-dropdowns.item>
+    </c-actions-menu>
+{% endif %}
+<c-forms.select size="sm" id="status-filter-{{ controls.catalog.id }}" aria-label="Filter {{ controls.catalog.name }} by status" x-model="statusFilter">
+<option value="all">All statuses</option>
+{% for value, label in controls.statuses %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+</c-forms.select>
 </c-slot>
-{% comment %}
-    expandedGroups is the card's own state, declared on the root above: the
-    trigger and the panel are siblings inside an accordion item, so the flag
-    they share has to live over the whole rail.
-{% endcomment %}
+</c-tables.toolbar>
 <c-navigation.accordion density="sm">
-{% for category in controls_categories %}
-    <c-navigation.accordion-item state="expandedGroups['{{ category.name|escapejs }}']" label_class="flex flex-1 items-center justify-between gap-4 mr-4" @click="expandedGroups['{{ category.name|escapejs }}'] = !expandedGroups['{{ category.name|escapejs }}']">
-    {# Category Header #}
-    <c-slot name="label">
-    <span class="flex items-center gap-3 min-w-0">
-        <c-chips.icon-chip size="sm">
-        <i class="fas {{ category.icon }}" aria-hidden="true"></i>
-        </c-chips.icon-chip>
-        <span class="font-medium text-text truncate">{{ category.name }}</span>
-        <span class="text-text-muted text-sm flex-shrink-0">({{ category.controls|length }})</span>
-    </span>
-    <span class="flex items-center gap-4 flex-shrink-0">
-        {# The rail owns the width; the bar fills it, so no two width utilities land on the track. #}
-        <span class="w-24 hidden sm:block">
-            {# djlint:off #}
-                <c-progress :value="category.percentage" variant="{% if category.percentage >= 80 %}success{% elif category.percentage >= 50 %}warning{% else %}danger{% endif %}" />
-            {# djlint:on #}
-        </span>
-        <span class="text-sm text-text-muted w-10 text-right">{{ category.percentage|floatformat:0 }}%</span>
-    </span>
-    </c-slot>
-    {# Bulk Actions Bar #}
-    <div class="flex flex-wrap items-center gap-2 py-2 text-xs">
-        <span class="text-text-muted mr-1">Set all to:</span>
-        {% for bulk_status, bulk_label in bulk_statuses %}
-            <form method="post"
-                  action="{% url 'controls:bulk_category_update' team.key %}"
-                  onclick="return confirm('Set all {{ category.name|escapejs }} controls to {{ bulk_label|escapejs }}?')"
-                  class="inline">
-                {% csrf_token %}
-                <input type="hidden" name="category" value="{{ category.name }}">
-                <input type="hidden" name="catalog_id" value="{{ controls_catalog.id }}">
-                <input type="hidden" name="status" value="{{ bulk_status }}">
-                {% comment %}
-                        Compliant reads green, which the old markup got by
-                        overriding --btn-accent on the primary outline. The
-                        variant carries it now, so the page states no colour.
-                {% endcomment %}
-                {% if bulk_status == 'compliant' %}
-                    <c-buttons.outline-success type="submit" size="sm">{{ bulk_label }}</c-buttons.outline-success>
-                {% elif bulk_status == 'partial' %}
-                    <c-buttons.outline-warning type="submit" size="sm">{{ bulk_label }}</c-buttons.outline-warning>
-                {% else %}
-                    <c-buttons.outline type="submit" size="sm">{{ bulk_label }}</c-buttons.outline>
-                {% endif %}
-            </form>
-        {% endfor %}
-    </div>
-    <div class="border-t border-border/50">
-        {% for control in category.controls %}
-            <div class="py-3 flex items-center gap-4 hover:bg-background/50 transition-colors border-b border-border/30 last:border-b-0"
-                 x-show="statusFilter === 'all' || statusFilter === '{{ control.status }}'">
-                <c-code-inline accent="primary" class="flex-shrink-0">{{ control.control_id }}</c-code-inline>
-                <span class="text-sm text-text flex-1 min-w-0 truncate"
-                      title="{{ control.title }}">{{ control.title }}</span>
-                <form method="post"
-                      action="{% url 'controls:status_update' team.key %}"
-                      class="flex-shrink-0">
-                    {% csrf_token %}
-                    <input type="hidden" name="control_id" value="{{ control.id }}">
-                    <input type="hidden" name="active_tab" value="controls">
-                    {# djlint:off #}
-                        <c-forms.select name="status" size="sm" accent="{% if control.status == 'compliant' %}success{% elif control.status == 'partial' %}warning{% elif control.status == 'not_implemented' %}danger{% endif %}" @change="$el.form.requestSubmit()">
-                    {# djlint:on #}
-                    <option value="compliant"
-                            {% if control.status == "compliant" %}selected{% endif %}>Compliant</option>
-                    <option value="partial"
-                            {% if control.status == "partial" %}selected{% endif %}>Partial</option>
-                    <option value="not_implemented"
-                            {% if control.status == "not_implemented" %}selected{% endif %}>Not Implemented</option>
-                    <option value="not_applicable"
-                            {% if control.status == "not_applicable" %}selected{% endif %}>Not Applicable</option>
-                    </c-forms.select>
-                </form>
+{% for category in controls.categories %}
+    <c-navigation.accordion-item state="expandedGroups['{{ category.name|escapejs }}']" label="{{ category.name }} ({{ category.controls|length }})" @click="expandedGroups['{{ category.name|escapejs }}'] = !expandedGroups['{{ category.name|escapejs }}']">
+    <div class="flex flex-col gap-3">
+        <c-progress :value="category.percentage" />
+        {% if controls.can_edit and not controls.product %}
+            <div class="flex flex-wrap items-center gap-2">
+                <c-forms.hint>Set this category to:</c-forms.hint>
+                {% for value, label in controls.statuses %}
+                    <form hx-post="{{ controls.bulk_url }}"
+                          hx-target="#controls-table-{{ controls.catalog.id }}"
+                          hx-swap="morph"
+                          hx-confirm="Set every control in {{ category.name }} to {{ label }}?"
+                          hx-disabled-elt="find button">
+                        {% csrf_token %}
+                        <input type="hidden" name="category" value="{{ category.name }}">
+                        <input type="hidden" name="catalog_id" value="{{ controls.catalog.id }}">
+                        <input type="hidden" name="status" value="{{ value }}">
+                        <c-buttons.secondary size="sm" type="submit">{{ label }}</c-buttons.secondary>
+                    </form>
+                {% endfor %}
             </div>
-        {% endfor %}
+        {% endif %}
+        <c-tables.shell nested>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell>Control</c-tables.header-cell>
+        <c-tables.header-cell>Description</c-tables.header-cell>
+        {% if controls.product %}<c-tables.header-cell>Source</c-tables.header-cell>{% endif %}
+        <c-tables.header-cell>Status</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for control in category.controls %}
+                <c-tables.row x-show="statusFilter === 'all' || statusFilter === '{{ control.status }}'">
+                <c-tables.cell nowrap><c-code-inline>{{ control.control_id }}</c-code-inline></c-tables.cell>
+                <c-tables.cell>{{ control.title }}</c-tables.cell>
+                {% if controls.product %}
+                    <c-tables.cell nowrap>
+                    {% if control.is_product_specific %}
+                        <c-badges.primary>Product override</c-badges.primary>
+                    {% else %}
+                        <c-badges.secondary>Workspace default</c-badges.secondary>
+                    {% endif %}
+                    </c-tables.cell>
+                {% endif %}
+                <c-tables.cell nowrap>
+                {% if controls.can_edit %}
+                    <form hx-post="{{ controls.status_url }}"
+                          hx-target="#controls-table-{{ controls.catalog.id }}"
+                          hx-swap="morph"
+                          hx-disabled-elt="find select">
+                        {% csrf_token %}
+                        <input type="hidden" name="control_id" value="{{ control.id }}">
+                        <c-forms.select name="status" size="sm" aria-label="Status for {{ control.control_id }}" @change="$el.form.requestSubmit()">
+                        {% for value, label in controls.statuses %}
+                            <option value="{{ value }}"
+                                    {% if control.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                        </c-forms.select>
+                    </form>
+                {% else %}
+                    {% for value, label in controls.statuses %}
+                        {% if control.status == value %}<c-badges.secondary>{{ label }}</c-badges.secondary>{% endif %}
+                    {% endfor %}
+                {% endif %}
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        </c-tables.shell>
     </div>
     </c-navigation.accordion-item>
 {% endfor %}
 </c-navigation.accordion>
-</c-cards.dashboard>
+</c-cards.card>

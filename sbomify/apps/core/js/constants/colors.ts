@@ -10,25 +10,6 @@
  */
 
 /**
- * Severity level colors for vulnerability charts and badges
- */
-export const severityColors = {
-  critical: '#DC3545',  // --color-severity-critical
-  high: '#FD7E14',      // --color-severity-high
-  medium: '#FFC107',    // --color-severity-medium
-  low: '#0DCAF0',       // --color-severity-low
-} as const;
-
-/**
- * Provider/source colors for charts
- */
-export const providerColors = {
-  osv: '#4285F4',              // --color-provider-osv (Google Blue)
-  dependencyTrack: '#10B981',  // --color-provider-dependency-track
-  default: '#6C757D',          // --color-provider-default
-} as const;
-
-/**
  * Barcode rendering colors
  * Note: Must remain pure black/white for barcode scanner compatibility
  */
@@ -45,13 +26,3 @@ export const defaultBrandColors = {
   primary: '#25293F',    // Brand navy ink (matches --color-primary: 37 41 63)
   accent: '#4263EB',     // Brand blue accent
 } as const;
-
-/**
- * Helper to convert hex to rgba string
- */
-export function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}

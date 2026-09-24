@@ -47,6 +47,4 @@ class ProductIdentifiersView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             return htmx_error_response("Product not found")
 
         response = render(request, self.template_name, context)
-        # Add HX-Trigger to close any open modals
-        response["HX-Trigger"] = "closeModal"
         return response

@@ -1,0 +1,55 @@
+{% comment %}
+Shared server-side finding filters. The host owns the replacement region;
+prefix keeps each report's query parameters separate and id keeps controls unique.
+Security filters are omitted for compliance checks. Changing a filter resets the
+page, and replacing an in-flight request prevents an older search winning a race.
+{% endcomment %}
+<c-vars panel url target id prefix="vuln_" security="1" push_url="false" />
+<form method="get"
+      action="{{ url }}"
+      hx-get="{{ url }}"
+      hx-target="#{{ target }}"
+      hx-swap="outerHTML"
+      hx-push-url="{{ push_url }}"
+      hx-sync="this:replace"
+      hx-trigger="change, input changed delay:350ms from:#{{ id }}-search, submit">
+    <input type="hidden" name="{{ prefix }}submitted" value="1">
+    <c-tables.toolbar>
+    <c-forms.search-input size="sm" id="{{ id }}-search" label="{{ security|yesno:'Search vulnerabilities,Search checks' }}" placeholder="Search by name or ID..." name="{{ prefix }}search" value="{{ panel.query.search }}" />
+    {% if security %}
+        <c-forms.select size="md" id="{{ id }}-severity" label="Filter by severity" name="{{ prefix }}severity">
+        <option value="all">All severities</option>
+        {% for severity in panel.severity_options %}
+            <option value="{{ severity }}"
+                    {% if severity == panel.query.severity %}selected{% endif %}>{{ severity|capfirst }}</option>
+        {% endfor %}
+        </c-forms.select>
+        <c-forms.select size="md" id="{{ id }}-state" label="Filter by triage state" name="{{ prefix }}state">
+        <option value="all">All states</option>
+        {% for state in panel.state_options %}
+            <option value="{{ state.value }}"
+                    {% if state.value == panel.query.state %}selected{% endif %}>{{ state.label }}</option>
+        {% endfor %}
+        </c-forms.select>
+        {% if panel.kev_total or panel.query.kev_only %}
+            <c-forms.checkbox id="{{ id }}-kev" name="{{ prefix }}kev" :checked="panel.query.kev_only">Known exploited ({{ panel.kev_total }})</c-forms.checkbox>
+        {% endif %}
+        {% if panel.suppressed_total or not panel.query.show_suppressed %}
+            <c-forms.checkbox id="{{ id }}-suppressed" name="{{ prefix }}suppressed" :checked="panel.query.show_suppressed">Show suppressed</c-forms.checkbox>
+        {% else %}
+            <input type="hidden" name="{{ prefix }}suppressed" value="1">
+        {% endif %}
+    {% endif %}
+    <c-slot name="right">
+    <c-tables.page-size id="{{ id }}-per-page" label="Rows per page" name="{{ prefix }}per_page">
+    {% for size in panel.per_page_choices %}
+        <option value="{{ size }}" {% if size == panel.per_page %}selected{% endif %}>{{ size }}</option>
+    {% endfor %}
+    </c-tables.page-size>
+    <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
+    {% if panel.query.is_filtered or not panel.query.show_suppressed %}
+        <c-buttons.ghost size="sm" href="{{ url }}" hx-get="{{ url }}" hx-params="none" hx-target="#{{ target }}" hx-swap="outerHTML" hx-push-url="{{ push_url }}">Clear filters</c-buttons.ghost>
+    {% endif %}
+    </c-slot>
+    </c-tables.toolbar>
+</form>

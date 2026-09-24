@@ -87,7 +87,7 @@ function initThemeManager(): void {
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     const currentTheme = getStoredTheme();
     if (currentTheme === 'system') {
-      applyTheme('system');
+      setTheme('system');
     }
   });
 
@@ -97,6 +97,8 @@ function initThemeManager(): void {
     setTheme,
     getSystemTheme,
   };
+  // A child bundle can start Alpine before core exposes the manager.
+  window.dispatchEvent(new CustomEvent('theme-changed', { detail: { theme: storedTheme } }));
 }
 
 export { initThemeManager, setTheme, getStoredTheme, getSystemTheme, type Theme };

@@ -1,33 +1,39 @@
-<div x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}', tokenCount: {{ access_token_count }} })">
-    {# Account, in the settings-tab style the branding tab set: no card chrome. #}
-    <div class="mb-8">
-        <h2 class="text-lg font-semibold text-text m-0">Account</h2>
-        <p class="text-sm text-text-muted mt-1 m-0">Your personal account.</p>
-    </div>
+<div class="flex flex-col gap-5"
+     x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}', tokenCount: {{ access_token_count }} })">
+    <c-layout.section-header level="2" title="Account" subtitle="Your sign-in details and personal preferences." />
+    <c-cards.card flush>
+    <c-cards.header compact title="You" />
+    <c-forms.field horizontal label="Name" hint="Your name comes from your sign-in provider.">
+    <c-forms.input size="sm" readonly aria-label="Name" value="{{ request.user.get_full_name|default:request.user.username }}" />
+    </c-forms.field>
+    <c-forms.field horizontal label="Email" hint="Used to sign in and receive notifications.">
+    <c-forms.input size="sm" readonly aria-label="Email" value="{{ request.user.email }}" />
+    </c-forms.field>
+    <c-forms.field horizontal label="Sign-in" hint="Manage your password and two-factor authentication with your sign-in provider.">
+    <c-forms.hint>Managed by your identity provider</c-forms.hint>
+    </c-forms.field>
+    </c-cards.card>
+    <c-cards.card flush>
+    <c-cards.header compact title="Appearance" />
+    <c-forms.field horizontal label="Theme" hint="Choose a light or dark appearance, or follow your system setting.">
+    <c-chrome.theme-picker standalone />
+    </c-forms.field>
+    </c-cards.card>
     <c-cards.dangerzone-collapsible>
-    <div class="flex items-center gap-4">
-        <div class="flex-1">
-            <h6 class="text-sm font-semibold text-text m-0">Delete account</h6>
-            <p class="text-text-muted text-sm mt-1 m-0">
-                Your account will be deactivated immediately and permanently removed after 14 days.
-            </p>
-        </div>
-        <c-buttons.danger class="flex-shrink-0" @click.prevent="openDeleteModal()" aria-label="Delete your account">
-        <i class="fas fa-user-slash" aria-hidden="true"></i>
-        Delete account
-        </c-buttons.danger>
-    </div>
+    <c-layout.section-header title="Delete account" subtitle="Your account will be deactivated immediately and permanently removed after 14 days.">
+    <c-slot name="actions"><c-buttons.danger size="sm" @click.prevent="openDeleteModal()" aria-label="Delete your account">Delete account</c-buttons.danger></c-slot>
+    </c-layout.section-header>
     </c-cards.dangerzone-collapsible>
     {# Delete Account Modal #}
     <c-modal id="deleteAccountModal" show="showDeleteModal" title="Delete your account" icon="fas fa-exclamation-triangle" role="alertdialog" aria-describedby="deleteAccountModalDesc">
-    <p id="deleteAccountModalDesc" class="text-text-muted mb-4">
-        Your account will be deactivated immediately and permanently deleted after <strong class="text-text">14 days</strong>.
-    </p>
+    <c-forms.hint id="deleteAccountModalDesc" class="mb-4">
+    Your account will be deactivated immediately and permanently deleted after <strong>14 days</strong>.
+    </c-forms.hint>
     <c-feedback.alert variant="warning" icon="fas fa-key" class="mb-4" x-show="tokenCount > 0" x-cloak>
     You have <strong x-text="tokenCount"></strong> active API token(s) that will be <strong>immediately revoked</strong>. Any CI/CD pipelines using these tokens will stop working.
     </c-feedback.alert>
     <c-feedback.alert variant="info" title="Immediate effects" class="mb-4">
-    <ul class="text-sm m-0 pl-4 space-y-1">
+    <ul class="pl-4 space-y-1">
         <li>Account deactivated (cannot log in)</li>
         <li>Personal access tokens revoked</li>
         <li>Pending invitations removed</li>
@@ -38,7 +44,7 @@
     </ul>
     </c-feedback.alert>
     <c-feedback.alert variant="info" icon="fas fa-clock" title="After 14 days" class="mb-4">
-    <ul class="text-sm m-0 pl-4 space-y-1">
+    <ul class="pl-4 space-y-1">
         <li>Account permanently deleted</li>
         <li>Contact support to cancel deletion within the grace period</li>
     </ul>
@@ -54,7 +60,7 @@
     <c-slot name="footer">
     <c-buttons.ghost @click="closeModal()" ::disabled="isDeleting">Cancel</c-buttons.ghost>
     <c-buttons.danger @click="deleteAccount()" ::disabled="!canConfirm || isDeleting">
-    <span x-show="isDeleting">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
+    <c-feedback.spinner size="sm" x-show="isDeleting" />
     <i x-show="!isDeleting" class="fas fa-trash"></i>
     <span x-text="isDeleting ? 'Deleting…' : 'Delete my account'"></span>
     </c-buttons.danger>

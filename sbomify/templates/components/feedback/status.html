@@ -1,0 +1,8 @@
+{% comment %}An unboxed status label, with a dot as well as a written label. tone is a state modifier; all recipes stay here and use platform tokens.{% endcomment %}
+<c-vars tone label />
+<span class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-muted"
+      {{ attrs }}>
+    <span class="h-1.5 w-1.5 shrink-0 rounded-full {% if tone == 'success' %}bg-success{% elif tone == 'warning' %}bg-warning{% else %}bg-text-muted/50{% endif %}"
+          aria-hidden="true"></span>
+    {{ label }}{{ slot }}
+</span>

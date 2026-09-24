@@ -76,6 +76,8 @@ class Destination:
     url_name: str
     section: str
     icon: str
+    suggested: bool = False
+    example: str = ""
     keywords: tuple[str, ...] = ()
     roles: tuple[str, ...] = ()
     args: tuple[str, ...] = ()
@@ -132,6 +134,8 @@ def load_destinations() -> tuple[Destination, ...]:
                 url_name=entry["url_name"],
                 section=entry.get("section", "navigate"),
                 icon=entry.get("icon", "fa-arrow-right"),
+                suggested=entry.get("suggested", False),
+                example=entry.get("example", ""),
                 keywords=tuple(entry.get("keywords", ())),
                 roles=tuple(entry.get("roles", ())),
                 args=tuple(entry.get("args", ())),
@@ -200,3 +204,36 @@ def search_destinations(query: str, *, role: str = "", team_key: str = "", limit
         }
         for negative_score, _rank, _length, _title, destination, url in scored[:limit]
     ]
+
+
+def initial_suggestions(*, role: str = "", workspace_key: str = "") -> list[dict[str, str]]:
+    """Starter pages and example queries from the same permission-aware registry."""
+    suggestions = []
+    for destination in load_destinations():
+        if not (destination.suggested or destination.example) or not destination.visible_to(role):
+            continue
+        url = destination.resolve(team_key=workspace_key)
+        if url is None:
+            continue
+        if destination.suggested:
+            suggestions.append(
+                {
+                    "title": destination.title,
+                    "url": url,
+                    "section": "suggested",
+                    "section_label": "Suggested pages",
+                    "icon": destination.icon,
+                }
+            )
+        if destination.example:
+            suggestions.append(
+                {
+                    "title": destination.example,
+                    "url": url,
+                    "section": "examples",
+                    "section_label": "Try searching",
+                    "icon": "fa-search",
+                    "query": destination.example,
+                }
+            )
+    return suggestions

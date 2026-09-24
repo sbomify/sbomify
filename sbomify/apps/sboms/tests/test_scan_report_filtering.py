@@ -1,14 +1,4 @@
-"""Narrowing the full scan report without flattening it.
-
-Reported by a pilot customer, who asked for two things: a way to filter, and a
-flat list rather than the package grouping. They do not get the same answer.
-
-Finding-level work has two homes now, the component panel and the assessment
-card, and both search, filter and triage. What this report has that neither has
-is the grouping, which answers "what do I need to upgrade". So the filters
-narrow the advisories inside each package and drop the packages left with
-nothing, and a severity filter reads as "which packages have a critical".
-"""
+"""The flat scan report filters all advisories before paging."""
 
 from __future__ import annotations
 
@@ -18,7 +8,7 @@ from django.urls import reverse
 
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk import RunReason
-from sbomify.apps.sboms.views.sbom_vulnerabilities import MAX_ADVISORIES_PER_PACKAGE, PACKAGES_PER_PAGE
+from sbomify.apps.sboms.services.vulnerability_report import PAGE_SIZE
 
 from ..models import SBOM
 from .fixtures import sample_component, sample_sbom  # noqa: F401
@@ -61,13 +51,13 @@ def _report(sbom: SBOM, **params):
     return _client(sbom).get(url, params)
 
 
-def _packages(response) -> list[dict]:
-    data = response.context["vulnerabilities"]
-    return data["results"][0]["packages"] if data else []
+def _rows(response) -> list[dict]:
+    data = response.context["scan_panel"]
+    return data["rows"] if data else []
 
 
 class TestTheFiltersNarrowIt:
-    def test_severity_keeps_only_packages_holding_one(self, sample_sbom: SBOM):  # noqa: F811
+    def test_severity_keeps_only_matching_advisories(self, sample_sbom: SBOM):  # noqa: F811
         _run(
             sample_sbom,
             [
@@ -79,7 +69,7 @@ class TestTheFiltersNarrowIt:
 
         response = _report(sample_sbom, scan_submitted="1", scan_severity="critical")
 
-        assert [entry["package"]["name"] for entry in _packages(response)] == ["openssl"]
+        assert [entry["package"] for entry in _rows(response)] == ["openssl"]
 
     def test_search_matches_the_package_name(self, sample_sbom: SBOM):  # noqa: F811
         _run(
@@ -89,7 +79,7 @@ class TestTheFiltersNarrowIt:
 
         response = _report(sample_sbom, scan_submitted="1", scan_search="zlib")
 
-        assert [entry["package"]["name"] for entry in _packages(response)] == ["zlib"]
+        assert [entry["package"] for entry in _rows(response)] == ["zlib"]
 
     def test_search_matches_the_advisory_id(self, sample_sbom: SBOM):  # noqa: F811
         _run(
@@ -99,10 +89,10 @@ class TestTheFiltersNarrowIt:
 
         response = _report(sample_sbom, scan_submitted="1", scan_search="CVE-2026-0002")
 
-        assert [entry["package"]["name"] for entry in _packages(response)] == ["zlib"]
+        assert [entry["package"] for entry in _rows(response)] == ["zlib"]
 
     def test_a_package_keeps_only_its_matching_advisories(self, sample_sbom: SBOM):  # noqa: F811
-        """The grouping survives the filter; the group gets smaller."""
+        """Only matching advisories appear, even when they share a package."""
         _run(
             sample_sbom,
             [
@@ -113,8 +103,7 @@ class TestTheFiltersNarrowIt:
 
         response = _report(sample_sbom, scan_submitted="1", scan_severity="critical")
 
-        entry = _packages(response)[0]
-        assert [row["id"] for row in entry["vulnerabilities"]] == ["CVE-2026-0001"]
+        assert [row["id"] for row in _rows(response)] == ["CVE-2026-0001"]
 
     def test_a_filter_matching_nothing_says_so(self, sample_sbom: SBOM):  # noqa: F811
         """An empty report reads as a clean scan, which is a different thing."""
@@ -122,15 +111,15 @@ class TestTheFiltersNarrowIt:
 
         response = _report(sample_sbom, scan_submitted="1", scan_severity="critical")
 
-        assert _packages(response) == []
-        assert "No matches found" in response.content.decode()
+        assert _rows(response) == []
+        assert "No vulnerabilities match these filters." in response.content.decode()
 
     def test_an_unfiltered_report_is_unchanged(self, sample_sbom: SBOM):  # noqa: F811
         _run(sample_sbom, [_finding(f"CVE-2026-{n:04d}", f"pkg-{n:04d}") for n in range(4)])
 
         response = _report(sample_sbom)
 
-        assert len(_packages(response)) == 4
+        assert len(_rows(response)) == 4
 
 
 class TestTheSuppressedToggleIsAFilter:
@@ -151,7 +140,7 @@ class TestTheSuppressedToggleIsAFilter:
 
         response = _report(sample_sbom, scan_submitted="1")
 
-        assert [entry["package"]["name"] for entry in _packages(response)] == ["zlib"]
+        assert [entry["package"] for entry in _rows(response)] == ["zlib"]
 
     def test_leaving_it_ticked_shows_them(self, sample_sbom: SBOM):  # noqa: F811
         _run(
@@ -164,7 +153,7 @@ class TestTheSuppressedToggleIsAFilter:
 
         response = _report(sample_sbom, scan_submitted="1", scan_suppressed="1")
 
-        assert {entry["package"]["name"] for entry in _packages(response)} == {"openssl", "zlib"}
+        assert {entry["package"] for entry in _rows(response)} == {"openssl", "zlib"}
 
     def test_the_toolbar_counts_it_as_narrowed(self, sample_sbom: SBOM):  # noqa: F811
         """So the Clear control is offered and the empty state reads correctly."""
@@ -172,49 +161,44 @@ class TestTheSuppressedToggleIsAFilter:
 
         response = _report(sample_sbom, scan_submitted="1")
 
-        assert response.context["scan_is_narrowed"] is True
+        assert response.context["scan_panel"]["query"].show_suppressed is False
 
     def test_an_untouched_page_is_not_narrowed(self, sample_sbom: SBOM):  # noqa: F811
         _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
 
         response = _report(sample_sbom)
 
-        assert response.context["scan_is_narrowed"] is False
+        assert response.context["scan_panel"]["query"].show_suppressed is True
 
 
-class TestTheRowStillDescribesTheWholePackage:
+class TestTheFilterKeepsTheUnfilteredTotal:
     def test_the_counts_are_not_recomputed_from_the_filtered_subset(self, sample_sbom: SBOM):  # noqa: F811
-        """A row saying "1 of 40" under a critical filter is the useful reading.
-        One saying "1 of 1" hides the other thirty-nine, which is what the
-        reader is deciding about."""
         findings = [_finding("CVE-2026-0001", "openssl", "critical")]
         findings += [_finding(f"CVE-2026-{n:04d}", "openssl", "low") for n in range(2, 40)]
         _run(sample_sbom, findings)
 
         response = _report(sample_sbom, scan_submitted="1", scan_severity="critical")
 
-        entry = _packages(response)[0]
-        assert len(entry["vulnerabilities"]) == 1
-        assert entry["open_count"] == 39
+        assert len(_rows(response)) == 1
+        assert response.context["scan_panel"]["unfiltered_total"] == 39
 
 
 class TestTheBoundsStillHold:
-    def test_filtering_does_not_lift_the_package_cap(self, sample_sbom: SBOM):  # noqa: F811
-        """Both caps exist because this page had no bound at all before it was
-        paged. A filter must not become a way around them."""
+    def test_filtering_keeps_the_page_size_bound(self, sample_sbom: SBOM):  # noqa: F811
+        """A filter must not turn a bounded page into the whole report."""
         _run(sample_sbom, [_finding(f"CVE-2026-{n:04d}", f"pkg-{n:04d}", "high") for n in range(60)])
 
         response = _report(sample_sbom, scan_submitted="1", scan_severity="high")
 
-        assert len(_packages(response)) == PACKAGES_PER_PAGE
+        assert len(_rows(response)) == PAGE_SIZE
 
-    def test_filtering_does_not_lift_the_per_package_cap(self, sample_sbom: SBOM):  # noqa: F811
+    def test_one_package_uses_the_same_page_size_bound(self, sample_sbom: SBOM):  # noqa: F811
         _run(sample_sbom, [_finding(f"CVE-2026-{n:04d}", "openssl", "high") for n in range(40)])
 
         response = _report(sample_sbom, scan_submitted="1", scan_severity="high")
 
-        entry = _packages(response)[0]
-        assert len(entry["vulnerabilities"]) == MAX_ADVISORIES_PER_PACKAGE
+        assert len(_rows(response)) == PAGE_SIZE
+        assert response.context["scan_panel"]["total"] == 40
 
 
 class TestTheToolbarOffersWhatIsThere:
@@ -228,7 +212,7 @@ class TestTheToolbarOffersWhatIsThere:
 
         response = _report(sample_sbom, scan_submitted="1", scan_severity="critical")
 
-        assert response.context["scan_severity_options"] == ["critical", "low"]
+        assert response.context["scan_panel"]["severity_options"] == ["critical", "low"]
 
     def test_a_severity_no_advisory_carries_is_still_offered(self, sample_sbom: SBOM):  # noqa: F811
         """A scanner may report a severity of its own, so the parser keeps any
@@ -239,15 +223,15 @@ class TestTheToolbarOffersWhatIsThere:
 
         response = _report(sample_sbom, scan_submitted="1", scan_severity="moderate")
 
-        assert "moderate" in response.context["scan_severity_options"]
-        assert _packages(response) == []
+        assert "moderate" in response.context["scan_panel"]["severity_options"]
+        assert _rows(response) == []
 
     def test_an_unreported_severity_is_not_offered_unprompted(self, sample_sbom: SBOM):  # noqa: F811
         _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "critical")])
 
         response = _report(sample_sbom)
 
-        assert response.context["scan_severity_options"] == ["critical"]
+        assert response.context["scan_panel"]["severity_options"] == ["critical"]
 
 
 class TestPagingKeepsTheFilter:
@@ -256,7 +240,7 @@ class TestPagingKeepsTheFilter:
     unfiltered report, which is the state they just left."""
 
     def test_the_pager_links_carry_the_search(self, sample_sbom: SBOM):  # noqa: F811
-        findings = [_finding(f"CVE-2026-{n:04d}", f"pkg-{n:03d}", "high") for n in range(PACKAGES_PER_PAGE + 5)]
+        findings = [_finding(f"CVE-2026-{n:04d}", f"pkg-{n:03d}", "high") for n in range(PAGE_SIZE + 5)]
         _run(sample_sbom, findings)
 
         response = _report(sample_sbom, scan_submitted="1", scan_search="pkg-0")
@@ -277,11 +261,10 @@ class TestPagingKeepsTheFilter:
     def test_an_unfiltered_report_keeps_its_links_clean(self, sample_sbom: SBOM):  # noqa: F811
         _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
 
-        assert _report(sample_sbom).context["scan_query_string"] == ""
+        assert _report(sample_sbom).context["scan_query_string"] == "scan_submitted=1&scan_suppressed=1"
 
-    def test_the_pager_never_carries_a_findings_page(self, sample_sbom: SBOM):  # noqa: F811
-        """The number in these links is the package page. The findings page the
-        shared query would otherwise add belongs to a different pager."""
+    def test_the_filter_query_does_not_duplicate_the_page_parameter(self, sample_sbom: SBOM):  # noqa: F811
+        """The shared pager supplies the page number separately from its filters."""
         _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
 
         response = _report(sample_sbom, scan_submitted="1", scan_search="openssl", scan_page="3")
@@ -289,7 +272,7 @@ class TestPagingKeepsTheFilter:
         assert "scan_page" not in response.context["scan_query_string"]
 
     def test_the_rendered_pager_holds_the_filter(self, sample_sbom: SBOM):  # noqa: F811
-        findings = [_finding(f"CVE-2026-{n:04d}", f"pkg-{n:03d}", "high") for n in range(PACKAGES_PER_PAGE + 5)]
+        findings = [_finding(f"CVE-2026-{n:04d}", f"pkg-{n:03d}", "high") for n in range(PAGE_SIZE + 5)]
         _run(sample_sbom, findings)
 
         body = _report(sample_sbom, scan_submitted="1", scan_severity="high").content.decode()
@@ -314,7 +297,7 @@ class TestTheStateAndKevFilters:
 
         response = _report(sample_sbom, scan_submitted="1", scan_kev="1")
 
-        assert [entry["package"]["name"] for entry in _packages(response)] == ["openssl"]
+        assert [entry["package"] for entry in _rows(response)] == ["openssl"]
 
     def test_an_alias_counts_as_exploited_too(self, sample_sbom: SBOM, monkeypatch):  # noqa: F811
         """Merging folds every id an advisory answers to into one entry, which
@@ -326,7 +309,7 @@ class TestTheStateAndKevFilters:
 
         response = _report(sample_sbom, scan_submitted="1", scan_kev="1")
 
-        assert len(_packages(response)) == 1
+        assert len(_rows(response)) == 1
 
     def test_the_control_counts_the_whole_scan(self, sample_sbom: SBOM, monkeypatch):  # noqa: F811
         from sbomify.apps.vulnerability_scanning import kev
@@ -339,15 +322,15 @@ class TestTheStateAndKevFilters:
 
         response = _report(sample_sbom, scan_submitted="1", scan_kev="1")
 
-        assert response.context["scan_kev_total"] == 1
+        assert response.context["scan_panel"]["kev_total"] == 1
         assert "scan_kev" in response.content.decode()
 
-    def test_no_exploited_advisory_means_no_control(self, sample_sbom: SBOM):  # noqa: F811
+    def test_kev_filter_is_hidden_when_the_catalog_has_no_matches(self, sample_sbom: SBOM):  # noqa: F811
         _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high")])
 
         response = _report(sample_sbom)
 
-        assert response.context["scan_kev_total"] == 0
+        assert response.context["scan_panel"]["kev_total"] == 0
         assert "scan_kev" not in response.content.decode()
 
     def test_the_state_filter_narrows_the_report(self, sample_sbom: SBOM):  # noqa: F811
@@ -361,7 +344,7 @@ class TestTheStateAndKevFilters:
 
         response = _report(sample_sbom, scan_submitted="1", scan_state="exploitable")
 
-        assert [entry["package"]["name"] for entry in _packages(response)] == ["openssl"]
+        assert [entry["package"] for entry in _rows(response)] == ["openssl"]
 
     def test_an_undecided_advisory_reads_as_open(self, sample_sbom: SBOM):  # noqa: F811
         """No decision is a state the reader can filter by, which is why the
@@ -370,12 +353,12 @@ class TestTheStateAndKevFilters:
 
         response = _report(sample_sbom, scan_submitted="1", scan_state="open")
 
-        assert len(_packages(response)) == 1
-        assert {option["value"] for option in response.context["scan_state_options"]} == {"open"}
+        assert len(_rows(response)) == 1
+        assert {option["value"] for option in response.context["scan_panel"]["state_options"]} == {"open"}
 
     def test_the_state_options_carry_their_labels(self, sample_sbom: SBOM):  # noqa: F811
         _run(sample_sbom, [_finding("CVE-2026-0001", "openssl", "high", analysis_state="not_affected")])
 
-        options = _report(sample_sbom).context["scan_state_options"]
+        options = _report(sample_sbom).context["scan_panel"]["state_options"]
 
         assert {option["value"]: option["label"] for option in options}["not_affected"] == "Not affected"

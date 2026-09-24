@@ -1,0 +1,16 @@
+{% comment %}Finding counts and navigation share the global pager. The parent supplies its scoped query string; changing pages retains every filter and the page size.{% endcomment %}
+<c-vars panel url query prefix="vuln_" noun="vulnerabilities" push_url="true" />
+<c-tables.footer>
+<div class="flex flex-wrap items-center gap-4">
+    <c-tables.info>
+    Showing {{ panel.start_index }} to {{ panel.end_index }} of {{ panel.total }} {{ noun }}
+    {% if not panel.suppressed_shown and panel.suppressed_total %}
+        · {{ panel.suppressed_total }} suppressed hidden
+    {% endif %}
+    </c-tables.info>
+    {{ slot }}
+</div>
+{% if panel.page_count > 1 %}
+    <c-navigation.pagination :current="panel.page" :total="panel.page_count" :page_range="panel.page_range" base_url="{{ url }}" query="{{ query }}" page_param="{{ prefix }}page" label="{{ noun|capfirst }} pagination" hx-boost="true" hx-push-url="{{ push_url }}" />
+{% endif %}
+</c-tables.footer>

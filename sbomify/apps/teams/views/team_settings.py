@@ -13,6 +13,7 @@ from django.views import View
 from django.views.decorators.cache import never_cache
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
 from sbomify.apps.core.authz import ADMINISTER, MANAGE, ROLE_DESCRIPTIONS
@@ -25,6 +26,7 @@ from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, check_member_removal
 from sbomify.apps.teams.queries import get_member_role_by_key, get_pending_invitations_for_user
+from sbomify.apps.teams.services.settings_page import build_panel_context, profiles_context
 from sbomify.apps.teams.utils import refresh_current_team_session
 from sbomify.logging import getLogger
 
@@ -33,92 +35,6 @@ from sbomify.logging import getLogger
 NDA_VERSION_ALLOCATION_ATTEMPTS = 5
 
 logger = getLogger(__name__)
-
-PLAN_FEATURES = {
-    "community": [
-        "Unlimited SBOMs",
-        "Unlimited products & components",
-        "All data is public",
-        "Weekly vulnerability scans",
-        "Community support",
-        "API access",
-        "Workspace management",
-        "Public Trust Center",
-        "Custom branding (logo & colors)",
-    ],
-    "business": [
-        "Everything in Community",
-        "Private components/products",
-        "NTIA Minimum Elements check",
-        "Advanced vulnerability scanning (every 12 hours)",
-        "Product identifiers (SKUs/barcodes)",
-        "Priority support",
-        "Workspace management",
-        "Public Trust Center",
-        "Custom domain for Trust Center",
-        "Custom branding (logo & colors)",
-    ],
-    "enterprise": [
-        "Everything in Business",
-        "Unlimited users",
-        "Custom Dependency Track servers",
-        "Dedicated support",
-        "Custom integrations",
-        "SLA guarantee",
-        "Advanced security",
-        "Custom deployment options",
-        "Public Trust Center",
-        "Custom domain for Trust Center",
-        "Advanced custom branding (logo, colors, themes)",
-    ],
-}
-
-
-# The built-in control catalogues offered as tiles on the Controls tab.
-# ``catalog_service`` discovers the catalogues themselves by globbing
-# ``controls/data``, so this list is the one place that has to be kept in
-# step by hand; ``test_every_builtin_catalogue_has_a_tile_in_settings``
-# fails if it drifts. Entries are (slug, catalogue name, tile label, icon).
-BUILTIN_CATALOG_TILES: list[tuple[str, str, str, str]] = [
-    ("soc2-type2", "SOC 2 Type II", "SOC 2 Type II", "fa-shield-halved"),
-    ("iso27001-2022", "ISO 27001:2022", "ISO 27001", "fa-certificate"),
-    ("nist-csf-2", "NIST Cybersecurity Framework 2.0", "NIST CSF 2.0", "fa-landmark"),
-    ("cis-controls-v8", "CIS Controls v8", "CIS v8", "fa-lock"),
-    ("hipaa", "HIPAA", "HIPAA", "fa-heart-pulse"),
-    ("gdpr", "GDPR", "GDPR", "fa-user-shield"),
-    ("cmmc-2", "CMMC 2.0", "CMMC 2.0", "fa-jet-fighter"),
-    ("csa-ccm-v4", "CSA CCM", "CSA CCM", "fa-cloud"),
-    ("pci-dss-v4", "PCI DSS", "PCI DSS", "fa-credit-card"),
-    ("nist-800-53-r5", "NIST SP 800-53", "NIST 800-53", "fa-building-columns"),
-    ("nist-800-171-r2", "NIST SP 800-171", "NIST 800-171", "fa-building-lock"),
-]
-
-
-def _get_bulk_statuses() -> list[tuple[str, str]]:
-    """Return bulk status choices, importing from controls app if available."""
-    try:
-        from sbomify.apps.controls.views import BULK_STATUSES
-
-        return BULK_STATUSES
-    except ImportError:
-        return [
-            ("compliant", "Compliant"),
-            ("partial", "Partial"),
-            ("not_implemented", "Not Implemented"),
-            ("not_applicable", "N/A"),
-        ]
-
-
-PLAN_LIMITS = {
-    "max_products": {
-        "label": "Products",
-        "icon": "cube",
-    },
-    "max_components": {
-        "label": "Components",
-        "icon": "puzzle-piece",
-    },
-}
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -224,7 +140,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         plan_limits: list[dict[str, str]] = []
 
         if wants_fresh_billing:
-            plan_features = PLAN_FEATURES.get(billing_plan, [])
+            plan_features = list(PLAN_FEATURES.get(billing_plan, ()))
             pricing_service = TeamPricingService()
             try:
                 billing_plan_obj = BillingPlan.objects.get(key=billing_plan)
@@ -285,53 +201,24 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         # Get company-wide NDA document if exists
         company_nda_document = None
-        if team_obj:
+        if team_obj and active_tab.key == "trust-center":
             company_nda_document = team_obj.get_company_nda_document()
 
         # Fetch contact profiles for the settings tab
-        _, profiles = list_contact_profiles(request, team_key)
+        profiles: list[Any] = []
+        if active_tab.key == "contact-profiles":
+            profiles_status, profiles = list_contact_profiles(request, team_key)
+            if profiles_status != 200:
+                return error_response(request, HttpResponse("Unable to load party profiles", status=profiles_status))
 
         # Count access tokens for account deletion tab
         from sbomify.apps.access_tokens.models import AccessToken
 
         user = cast(User, request.user)
-        access_token_count = AccessToken.objects.filter(user=user).count()
+        access_token_count = AccessToken.objects.filter(user=user).count() if active_tab.key == "account" else 0
 
         # Fetch incoming invitations for the current user (accept/reject UI on members tab)
-        pending_invitations = get_pending_invitations_for_user(user)
-
-        # Controls tab — all catalogs (active + inactive, including imports)
-        catalog_icon_map: dict[str, str] = {
-            "SOC 2 Type II": "fa-shield-halved",
-            "ISO 27001:2022": "fa-certificate",
-            "NIST Cybersecurity Framework 2.0": "fa-landmark",
-            "CIS Controls v8": "fa-lock",
-            "HIPAA": "fa-heart-pulse",
-            "GDPR": "fa-user-shield",
-            "CMMC 2.0": "fa-jet-fighter",
-            "CSA CCM": "fa-cloud",
-            "PCI DSS": "fa-credit-card",
-            "NIST SP 800-53": "fa-building-columns",
-        }
-        active_catalogs: list[dict[str, Any]] = []
-        if team_obj:
-            from sbomify.apps.controls.models import ControlCatalog
-            from sbomify.apps.controls.services.catalog_service import get_active_catalogs
-            from sbomify.apps.controls.services.status_service import get_controls_detail
-
-            catalogs_result = get_active_catalogs(team_obj)
-            if catalogs_result.ok and catalogs_result.value:
-                for catalog in catalogs_result.value:
-                    detail_result = get_controls_detail(catalog)
-                    categories = detail_result.value if detail_result.ok and detail_result.value else []
-                    active_catalogs.append(
-                        {
-                            "catalog": catalog,
-                            "categories": categories,
-                            "total_count": sum(len(c.get("controls", [])) for c in categories),
-                            "icon": catalog_icon_map.get(catalog.name, "fa-list-check"),
-                        }
-                    )
+        pending_invitations = get_pending_invitations_for_user(user) if active_tab.key == "members" else []
 
         # Which section is on screen, and which the nav offers. Resolved from
         # the registry so the two cannot disagree — a tab the member may not
@@ -339,69 +226,63 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # method, because it also decides whether Stripe is called.
         from sbomify.apps.teams.settings_tabs import visible_tabs
 
-        return render(
-            request,
-            "teams/team_settings.html.j2",
-            {
-                "APP_BASE_URL": settings.APP_BASE_URL,
-                "settings_tabs": visible_tabs(role, billing_enabled=billing_enabled_flag),
-                "active_tab": active_tab,
-                "team": team_data,
-                "team_obj": team_obj,  # Pass actual model in case specific valid/function call is lower down
-                # Members tab
-                "delete_member_form": DeleteMemberForm(),
-                "delete_invitation_form": DeleteInvitationForm(),
-                # Billing tab
-                "plan_features": plan_features,
-                "all_plan_features": PLAN_FEATURES,
-                "plan_pricing": plan_pricing,
-                "plan_limits": plan_limits,
-                "can_set_private": can_set_private,
-                # Trust center settings
-                "branding_info": branding_info,
-                "company_nda_document": company_nda_document,
-                "max_upload_size_mb": settings.ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024),
-                "trust_center_domain": getattr(settings, "TRUST_CENTER_DOMAIN", ""),
-                "trust_center_url": (
-                    build_custom_domain_url(team_obj, "/", secure=True).rstrip("/") if team_obj else ""
-                ),
-                "security_txt_config": team_obj.security_txt_config if team_obj else {},
-                "security_txt_contacts": (
-                    ContactProfileContact.objects.filter(
-                        entity__profile__team=team_obj,
-                        entity__profile__is_component_private=False,
-                    )
-                    .order_by("entity__profile__name", "name")
-                    .values("id", "name", "email", "entity__profile__name")
-                    if team_obj and team_obj.is_public
-                    else []
-                ),
-                # Contact Profiles tab
-                "profiles": profiles,
-                # Account tab
-                "access_token_count": access_token_count,
-                # Members tab — incoming invitations for the current user
-                "pending_invitations": pending_invitations,
-                # Members tab — role legend, sourced from the capability table
-                "role_descriptions": ROLE_DESCRIPTIONS,
-                # Controls tab
-                "active_catalogs": active_catalogs,
-                "active_catalog_names": {c["catalog"].name for c in active_catalogs},
-                "imported_catalogs": list(
-                    ControlCatalog.objects.filter(team=team_obj, source="custom").values(
-                        "id", "name", "version", "is_active"
-                    )
+        context = {
+            "APP_BASE_URL": settings.APP_BASE_URL,
+            "settings_tabs": visible_tabs(role, billing_enabled=billing_enabled_flag),
+            "active_tab": active_tab,
+            "team": team_data,
+            "team_obj": team_obj,  # Pass actual model in case specific valid/function call is lower down
+            # Members tab
+            "delete_member_form": DeleteMemberForm(),
+            "delete_invitation_form": DeleteInvitationForm(),
+            # Billing tab
+            "plan_features": plan_features,
+            "all_plan_features": PLAN_FEATURES,
+            "plan_pricing": plan_pricing,
+            "plan_limits": plan_limits,
+            "can_set_private": can_set_private,
+            # Trust center settings
+            "branding_info": branding_info,
+            "company_nda_document": company_nda_document,
+            "max_upload_size_mb": settings.ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024),
+            "trust_center_domain": getattr(settings, "TRUST_CENTER_DOMAIN", ""),
+            "trust_center_url": (build_custom_domain_url(team_obj, "/", secure=True).rstrip("/") if team_obj else ""),
+            "security_txt_config": team_obj.security_txt_config if team_obj else {},
+            "security_txt_contacts": (
+                ContactProfileContact.objects.filter(
+                    entity__profile__team=team_obj,
+                    entity__profile__is_component_private=False,
                 )
-                if team_obj
-                else [],
-                "bulk_statuses": _get_bulk_statuses(),
-                "available_catalogs": BUILTIN_CATALOG_TILES,
-                # ``role`` above is the same live lookup against the same row;
-                # re-querying only asked the database a question it had already
-                # answered.
-                "is_admin_or_owner": role in ADMINISTER,
-            },
+                .order_by("entity__profile__name", "name")
+                .values("id", "name", "email", "entity__profile__name")
+                if team_obj and team_obj.is_public and active_tab.key == "trust-center"
+                else []
+            ),
+            # Contact Profiles tab
+            "profiles": profiles,
+            # Account tab
+            "access_token_count": access_token_count,
+            # Members tab — incoming invitations for the current user
+            "pending_invitations": pending_invitations,
+            # Members tab — role legend, sourced from the capability table
+            "role_descriptions": ROLE_DESCRIPTIONS,
+            # ``role`` above is the same live lookup against the same row;
+            # re-querying only asked the database a question it had already
+            # answered.
+            "is_admin_or_owner": role in ADMINISTER,
+        }
+        panel = build_panel_context(request, team_key, active_tab.key)
+        if not panel.ok:
+            return error_response(request, HttpResponse(panel.error, status=panel.status_code or 400))
+        context.update(panel.value or {})
+        if active_tab.key == "contact-profiles":
+            context.update(profiles_context(profiles))
+        template = (
+            "teams/team_settings_content.html.j2"
+            if request.headers.get("HX-Target") == "settings-content"
+            else "teams/team_settings.html.j2"
         )
+        return render(request, template, context)
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         if request.POST.get("visibility_action") == "update":

@@ -1,21 +1,10 @@
 import { formatDate as sharedFormatDate } from '../../core/js/utils';
 
-interface Usage {
-    users: number;
-    products: number;
-    components: number;
-}
-
 interface FAQ {
     id: string;
     question: string;
     answer: string;
     expanded: boolean;
-}
-
-interface Feature {
-    key: string;
-    label: string;
 }
 
 interface DowngradeLimits {
@@ -28,8 +17,6 @@ interface DowngradeLimits {
 interface PlanSelectionData {
     billingPeriod: 'monthly' | 'annual';
     currentPlan: string;
-    teamKey: string;
-    usage: Usage;
     faqs: FAQ[];
     isSubmitting: boolean;
     cancelAtPeriodEnd: boolean;
@@ -37,7 +24,6 @@ interface PlanSelectionData {
     downgradeLimits: DowngradeLimits;
 
     init(): void;
-    getFeatures(planKey: string): Feature[];
     toggleFAQ(id: string): void;
     canSelectPlan(planKey?: string): boolean;
     getButtonText(planKey: string): string;
@@ -56,8 +42,6 @@ export function registerPlanSelection() {
 
 export default function planSelection(initialData: {
     currentPlan: string;
-    teamKey: string;
-    usage: Usage;
     csrfToken: string;
     enterpriseContactUrl: string;
     currentSubscriptionStatus?: string;
@@ -70,8 +54,6 @@ export default function planSelection(initialData: {
     return {
         billingPeriod: initialData.billingPeriod || 'monthly',
         currentPlan: initialData.currentPlan,
-        teamKey: initialData.teamKey,
-        usage: initialData.usage,
         isSubmitting: false,
         cancelAtPeriodEnd: initialData.cancelAtPeriodEnd || false,
         currentPeriodEnd: initialData.currentPeriodEnd || '',
@@ -97,7 +79,7 @@ export default function planSelection(initialData: {
             {
                 id: 'upgrade-anytime',
                 question: 'Can I upgrade or downgrade my plan anytime?',
-                answer: 'Absolutely! You can upgrade or downgrade your plan at any time. Changes take effect immediately, and billing adjustments are prorated.',
+                answer: 'You can change plans at any time. If your usage exceeds a plan’s limits, reduce it before downgrading. Review the billing changes before confirming.',
                 expanded: false
             },
             {
@@ -107,9 +89,9 @@ export default function planSelection(initialData: {
                 expanded: false
             },
             {
-                id: 'data-security',
-                question: 'How secure is my data?',
-                answer: 'We use enterprise-grade security with end-to-end encryption and regular security audits. Your data is always protected.',
+                id: 'billing-period',
+                question: 'How does annual billing work?',
+                answer: 'The annual price is charged once a year. Choose Annual above to compare prices and see the available savings.',
                 expanded: false
             }
         ],
@@ -119,48 +101,6 @@ export default function planSelection(initialData: {
             if (!this.downgradeLimits || typeof this.downgradeLimits !== 'object') {
                 this.downgradeLimits = {};
             }
-        },
-
-        getFeatures(planKey: string) {
-            const baseFeatures: Feature[] = [
-                { key: 'unlimited-sboms', label: 'Unlimited SBOMs' },
-                { key: 'unlimited-products', label: 'Unlimited products' },
-                { key: 'unlimited-components', label: 'Unlimited components' },
-            ];
-
-            if (planKey === 'community') {
-                baseFeatures.push(
-                    { key: 'user-limit', label: '1 user (owner only)' },
-                    { key: 'public-only', label: 'All data is public' },
-                    { key: 'vulnerability-scanning', label: 'Weekly vulnerability scans' },
-                    { key: 'community-support', label: 'Community support' },
-                    { key: 'api-access', label: 'API access' }
-                );
-            } else if (planKey === 'business') {
-                baseFeatures.push(
-                    { key: 'includes-community', label: 'Everything in Community, plus:' },
-                    { key: 'user-limit', label: 'Up to 5 users' },
-                    { key: 'private-data', label: 'Private components/products' },
-                    { key: 'ntia-compliance', label: 'NTIA Minimum Elements check' },
-                    { key: 'vulnerability-scanning', label: 'Advanced vulnerability scanning (every 12 hours)' },
-                    { key: 'product-identifiers', label: 'Product identifiers (SKUs/barcodes)' },
-                    { key: 'priority-support', label: 'Priority support' },
-                    { key: 'team-management', label: 'Workspace management' }
-                );
-            } else if (planKey === 'enterprise') {
-                baseFeatures.push(
-                    { key: 'includes-business', label: 'Everything in Business, plus:' },
-                    { key: 'user-limit', label: 'Unlimited users' },
-                    { key: 'custom-dt-servers', label: 'Custom Dependency Track servers' },
-                    { key: 'dedicated-support', label: 'Dedicated support' },
-                    { key: 'custom-integrations', label: 'Custom integrations' },
-                    { key: 'sla-guarantee', label: 'SLA guarantee' },
-                    { key: 'advanced-security', label: 'Advanced security' },
-                    { key: 'custom-deployment', label: 'Custom deployment options' }
-                );
-            }
-
-            return baseFeatures;
         },
 
         toggleFAQ(id: string) {
@@ -181,8 +121,7 @@ export default function planSelection(initialData: {
                 }
             }
 
-            // Allow all plans to be clickable - we handle special cases in handlePlanSelection
-            return true;
+            return planKey !== 'community' || (this.currentPlan !== 'community' && !this.cancelAtPeriodEnd);
         },
 
         getDowngradeWarning(planKey: string): string | null {
@@ -191,7 +130,7 @@ export default function planSelection(initialData: {
             }
             const limits = this.downgradeLimits[planKey];
             if (limits && limits.exceeds && limits.resources && limits.resources.length > 0) {
-                return `Cannot downgrade: You currently have ${limits.resources.join(', ')}. Please reduce your usage to downgrade to this plan.`;
+                return `Reduce usage to choose this plan: ${limits.resources.join(', ')}.`;
             }
             return null;
         },
@@ -207,53 +146,32 @@ export default function planSelection(initialData: {
             if (this.downgradeLimits && this.downgradeLimits[planKey]) {
                 const limits = this.downgradeLimits[planKey];
                 if (limits && limits.exceeds) {
-                    return 'Cannot Downgrade';
+                    return 'Over plan limits';
                 }
             }
 
             if (this.cancelAtPeriodEnd && planKey === 'community') {
-                return 'Downgrade Scheduled';
+                return 'Downgrade scheduled';
             }
 
             if (this.currentPlan === planKey) {
-                if (planKey === 'enterprise') return 'Contact Sales';
-                // If we are canceling, "Manage Subscription" (on Business) takes them to Portal to Resume
-                if (planKey !== 'community') return 'Manage Subscription';
-                return 'Current Plan';
+                if (planKey === 'enterprise') return 'Contact sales';
+                // If we are canceling, "Manage subscription" (on Business) takes them to Portal to Resume
+                if (planKey !== 'community') return 'Manage subscription';
+                return 'Current plan';
             } else if ((!this.currentPlan || this.currentPlan === 'unknown') && planKey === 'community') {
-                return 'Get Started with Community';
+                return 'Choose Community';
             } else if (planKey === 'enterprise') {
-                return 'Contact Sales';
+                return 'Contact sales';
             } else {
                 if (isSubscribed && planKey === 'community') return 'Downgrade to Community';
-                if (isSubscribed) return 'Switch to This Plan';
-                return this.currentPlan ? 'Switch to This Plan' : 'Get Started';
+                if (isSubscribed) return 'Select plan';
+                return this.currentPlan ? 'Select plan' : 'Get started';
             }
         },
 
         handlePlanSelection(planKey: string) {
-            if (this.isSubmitting) {
-                return;
-            }
-
-            // Check if downgrade limits are exceeded
-            if (this.downgradeLimits && this.downgradeLimits[planKey]) {
-                const limits = this.downgradeLimits[planKey];
-                if (limits && limits.exceeds) {
-                    const warning = this.getDowngradeWarning(planKey);
-                    if (warning) {
-                        alert(warning);
-                    }
-                    return;
-                }
-            }
-
-            // Handle clicking Community when downgrade is already scheduled
-            if (this.cancelAtPeriodEnd && planKey === 'community') {
-                const endDate = this.formatDate(this.currentPeriodEnd);
-                alert(`Your downgrade to Community is already scheduled. Your current plan will remain active until ${endDate || 'the end of your billing period'}.`);
-                return;
-            }
+            if (!this.canSelectPlan(planKey)) return;
 
             if (planKey === 'enterprise') {
                 window.location.href = initialData.enterpriseContactUrl;

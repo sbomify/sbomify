@@ -19,13 +19,7 @@ from pathlib import Path
 
 from sbomify.apps.vulnerability_scanning.vex import SUPPRESSED_STATES
 
-TEMPLATE = (
-    Path(__file__).resolve().parents[1]
-    / "templates"
-    / "core"
-    / "components"
-    / "component_vulnerabilities_table.html.j2"
-)
+TEMPLATE = Path(__file__).resolve().parents[3] / "templates/components/vulnerabilities/table.html"
 
 
 def _split_at_outer_elif(source: str) -> tuple[str, str]:

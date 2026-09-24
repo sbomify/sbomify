@@ -50,7 +50,8 @@ def test_modal_teleports_to_the_body_and_declares_its_dialog_role(rendered: str)
 def test_modal_panel_recipe_and_default_size(rendered: str) -> None:
     section = _section(rendered, "modal-default")
     assert "flex flex-col w-full" in section
-    assert "max-h-[90vh] overflow-hidden bg-surface border border-solid border-border rounded-2xl" in section
+    assert "max-h-[calc(100dvh-2rem)] sm:max-h-[min(90vh,calc(100dvh-2rem))]" in section
+    assert "overflow-hidden bg-surface border border-solid border-border rounded-2xl" in section
     assert "shadow-[0_25px_50px_-12px_rgb(0_0_0/0.4)]" in section
     assert "max-w-lg" in section
 
@@ -130,7 +131,7 @@ def test_modal_without_a_title_renders_no_header(rendered: str) -> None:
 
 def test_modal_slots_land_in_body_and_footer(rendered: str) -> None:
     default = _section(rendered, "modal-default")
-    assert "flex-auto min-h-0 p-6 overflow-y-auto" in default
+    assert "flex-auto min-h-0 px-4 py-4 sm:px-6 sm:py-6 overflow-y-auto" in default
     assert "<p>Modal body</p>" in default
     large = _section(rendered, "modal-lg")
     footer = large[large.index("border-t border-solid") :]
@@ -269,52 +270,48 @@ def test_progress_without_a_label_has_no_header_row(rendered: str) -> None:
 
 def test_code_block_shell_recipe(rendered: str) -> None:
     block = _probe(rendered, "code-named")
-    assert "relative overflow-hidden bg-background border border-solid border-border rounded-[0.625rem]" in block
-    assert 'x-data="{ copied: false }"' in _section(rendered, "code-named")
+    assert "relative min-w-0 overflow-hidden border border-solid rounded-[0.625rem] border-border" in block
+    assert "data-copy-container" in block
 
 
 def test_code_block_named_header_carries_the_filename(rendered: str) -> None:
     section = _section(rendered, "code-named")
-    assert "flex items-center justify-between px-4 py-2.5 bg-surface border-b border-solid" in section
-    assert "text-xs font-semibold uppercase tracking-[0.05em] text-text-muted" in section
+    assert "flex items-center justify-between gap-3 border-b border-solid border-border px-4 py-2.5" in section
+    assert "font-mono text-xs text-text-muted" in section
     assert "upload.sh" in section
 
 
 def test_code_block_without_a_filename_floats_the_copy_control(rendered: str) -> None:
     section = _section(rendered, "code-bare")
-    assert '<div class="flex items-center absolute top-2 right-2 z-10">' in section
+    assert '<div class="absolute right-2 top-2 z-10">' in section
     assert "px-4 py-2.5 bg-surface" not in section
 
 
-def test_code_block_copy_state_is_one_complete_binding(rendered: str) -> None:
+def test_code_block_uses_the_shared_copy_state_without_repainting_the_surface(rendered: str) -> None:
     section = _section(rendered, "code-named")
-    assert (
-        ":class=\"copied ? 'bg-success border-success text-white' : 'bg-transparent border-transparent "
-        "text-text-muted" in section
-    )
-    # The resting colours live only in the binding, never beside it.
-    assert "border border-solid cursor-pointer" in section
-    assert (
-        'class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-solid'
-    ) in section
+    assert ':data-copied="copied"' in section
+    assert "group-data-[copied=true]:text-success" in section
+    assert "bg-success" not in section
+    assert 'role="status"' in section
+    assert '@click="copyToClipboard()"' in section
 
 
 def test_code_block_copies_from_its_own_root(rendered: str) -> None:
     section = _section(rendered, "code-named")
-    assert "$root.querySelector('code').textContent" in section
+    assert "copyableValue({ value: '', copySelector: 'code' })" in section
     assert ":aria-label=\"copied ? 'Copied' : 'Copy code'\"" in section
 
 
 def test_code_block_language_and_code_reach_the_pre(rendered: str) -> None:
     section = _section(rendered, "code-named")
     assert '<code class="font-mono language-bash">echo hello</code>' in section
-    assert '<pre class="m-0 font-mono text-[0.8125rem] leading-[1.6] text-text">' in section
+    assert '<pre class="m-0 font-mono text-[0.78125rem] leading-[1.8]' in section
     assert '<code class="font-mono">print(1)</code>' in _section(rendered, "code-bare")
 
 
 def test_code_block_cap_swaps_the_overflow_segment_and_sets_the_height(rendered: str) -> None:
     section = _section(rendered, "code-capped")
-    assert "p-4 overflow-auto" in section
+    assert "px-5 py-4 overflow-auto" in section
     assert "overflow-x-auto" not in section
     assert 'style="max-height: 12rem"' in section
 
@@ -338,7 +335,7 @@ def test_code_inline_is_the_neutral_chip_by_default(rendered: str) -> None:
 def test_code_inline_accent_replaces_the_whole_tint(rendered: str) -> None:
     chip = _probe(rendered, "code-inline-primary")
     assert "bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]" in chip
-    assert "text-[color-mix(in_oklab,var(--color-primary)_70%,var(--color-text))]" in chip
+    assert "text-[color:var(--color-primary)]" in chip
     assert "var(--color-border)_35%" not in chip
     assert chip.count("bg-[color-mix") == 1
     assert "ml-1" in chip
@@ -397,30 +394,19 @@ def test_token_display_with_nothing_to_do_drops_the_action_rail(rendered: str) -
 # --- copy button ----------------------------------------------------------
 
 
-def test_copy_button_recipe_and_copied_binding(rendered: str) -> None:
+def test_copy_button_uses_the_shared_controller_and_quiet_button(rendered: str) -> None:
     button = _probe(rendered, "copy-default")
-    assert "group inline-flex items-center gap-2 px-3.5 py-2 text-[0.8125rem] font-medium rounded-lg" in button
-    assert "focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in button
-    assert ":class=\"copied ? 'bg-success border-success text-white' : 'bg-surface border-border text-text" in button
+    assert "copyableValue({ value: 'https://sbomify.com/t/acme' })" in button
+    assert '@click="copyToClipboard()"' in button
+    assert ':data-copied="copied"' in button
+    assert "bg-success" not in button
 
 
-def test_copy_button_writes_its_value_and_confirms(rendered: str) -> None:
-    button = _probe(rendered, "copy-default")
-    assert "navigator.clipboard.writeText('https://sbomify.com/t/acme')" in button
-    assert "setTimeout(() => copied = false, 2000)" in button
-
-
-def test_copy_button_labels_are_server_rendered_and_bound(rendered: str) -> None:
+def test_copy_button_labels_reserve_both_states(rendered: str) -> None:
     section = _section(rendered, "copy-labelled")
-    assert "x-text=\"copied ? 'Copied ID' : 'Copy ID'\">Copy ID</span>" in section
-    assert ":aria-label=\"copied ? 'Copied ID' : 'Copy ID'\"" in _probe(rendered, "copy-labelled")
-
-
-def test_copy_button_icons_carry_their_own_colour(rendered: str) -> None:
-    section = _section(rendered, "copy-default")
-    assert 'class="fas fa-copy text-xs text-text-muted transition-all duration-200 group-hover:text-primary"' in section
-    assert 'class="fas fa-check text-xs text-white"' in section
-    assert "x-cloak" in section
+    assert 'group-data-[copied=true]:invisible">Copy ID</span>' in section
+    assert 'group-data-[copied=true]:visible">Copied ID</span>' in section
+    assert "Copied to clipboard" in section
 
 
 def test_copy_button_forwards_attrs_and_class(rendered: str) -> None:
@@ -448,15 +434,14 @@ def test_inline_copy_confirms_from_a_data_attribute_not_a_class(rendered: str) -
     chip = _probe(rendered, "inline-copy")
     assert 'data-copied="false"' in chip
     assert ':data-copied="copied"' in chip
-    assert "data-[copied=true]:bg-success" in chip
-    assert "data-[copied=true]:border-success" in chip
-    assert "data-[copied=true]:text-white" in chip
+    assert "data-[copied=true]:bg-success" not in chip
+    assert "data-[copied=true]:text-white" not in chip
 
 
 def test_inline_copy_icon_reads_the_same_marker_from_the_group(rendered: str) -> None:
     section = _section(rendered, "inline-copy")
-    assert "text-[0.6875rem] text-text-muted transition-all duration-150 group-hover:text-primary" in section
-    assert "group-data-[copied=true]:text-white" in section
+    assert "text-[0.6875rem] text-[color:var(--color-text-muted)]" in section
+    assert "group-data-[copied=true]:text-success" in section
     assert ":class=\"copied ? 'fa-check' : 'fa-copy'\"" in section
 
 
@@ -484,7 +469,7 @@ def test_inline_copy_forwards_attrs_and_class(rendered: str) -> None:
 def test_actions_menu_wrapper_holds_the_alpine_component(rendered: str) -> None:
     wrapper = _probe(rendered, "menu-default")
     assert 'class="relative inline-flex shrink-0"' in wrapper
-    assert 'x-data="actionsMenu"' in wrapper
+    assert 'x-data="actionsMenu({ selectable: false })"' in wrapper
     assert '@keydown.escape.window="closeAndFocus()"' in wrapper
 
 
@@ -495,7 +480,7 @@ def test_actions_menu_trigger_is_the_library_icon_button(rendered: str) -> None:
     assert 'x-ref="trigger"' in section
     assert '@click.stop="toggle()"' in section
     assert ':aria-expanded="open"' in section
-    assert 'aria-haspopup="true"' in section
+    assert 'aria-haspopup="menu"' in section
 
 
 def test_actions_menu_stretch_trigger_swaps_the_shape(rendered: str) -> None:

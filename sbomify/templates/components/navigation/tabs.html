@@ -1,4 +1,9 @@
 {% comment %}
+Every tab row scrolls natively without a scrollbar. Quiet arrows appear only
+when its content overflows; the shared controller keeps the selected tab visible.
+links renders ordinary navigation links, with aria-current instead of tab
+semantics. Entries may carry href for server-driven pages.
+
 The tab row: a real tablist that owns the arrow, home and end key handling, so
 a tab set is keyboard-navigable wherever it is used.
 
@@ -11,21 +16,30 @@ this row holds (its class, above all) can fall through into it.
 The pills look is a variant file (c-navigation.tabs-pills): it swaps the recipe
 and marks the row with data-tabs-pills, the attribute each tab reads to drop its
 underline, the same descendant relationship the .tw-tabs-pills rules had.
+inset gives a card's tab row internal gutters without interrupting its rule.
+The optional trailing slot holds a caption or recommendation beside the tabs.
 {% endcomment %}
-<c-vars variant_class tabs active class />
-<div class="flex {% if variant_class %}{{ variant_class }}{% else %}gap-1 border-b border-solid border-border{% endif %}{% if class %} {{ class }}{% endif %}"
-     role="tablist"
-     @keydown.arrow-right.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx < tabs.length - 1) { tabs[idx + 1].focus(); tabs[idx + 1].click(); }"
-     @keydown.arrow-left.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx > 0) { tabs[idx - 1].focus(); tabs[idx - 1].click(); }"
-     @keydown.home.prevent="const tab = $el.querySelector('[role=tab]'); if (tab) { tab.focus(); tab.click(); }"
-     @keydown.end.prevent="const tabs = $el.querySelectorAll('[role=tab]'); const tab = tabs[tabs.length - 1]; if (tab) { tab.focus(); tab.click(); }"
-     {{ attrs }}>
-    {% for tab in tabs %}
-        {% if tab.id == active %}
-            <c-navigation.tab panel="{{ tab.id }}" icon="{{ tab.icon }}" badge="{{ tab.badge }}" active only>{{ tab.label }}</c-navigation.tab>
-        {% else %}
-            <c-navigation.tab panel="{{ tab.id }}" icon="{{ tab.icon }}" badge="{{ tab.badge }}" only>{{ tab.label }}</c-navigation.tab>
+<c-vars links inset variant_class tabs active class />
+<div class="flex items-center min-w-0 max-w-full{% if class %} {{ class }}{% endif %}"
+     x-data="scrollableTabs">
+    <c-buttons.icon-quiet label="Scroll tabs left" x-show="overflow" x-cloak ::disabled="!canScrollBack" @click="scroll(-1)" only><i class="fas fa-chevron-left text-xs" aria-hidden="true"></i></c-buttons.icon-quiet>
+    <div x-ref="scroller"
+         @scroll.passive="measure()"
+         @focusin="reveal($event.target)"
+         class="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div x-ref="tabItems" class="flex w-max min-w-full items-center {% if variant_class %}{{ variant_class }}{% else %}{% if links %}gap-1{% else %}gap-6{% endif %} border-b border-solid border-border{% endif %}{% if inset %} px-5 sm:px-6{% endif %}" role="{% if links %}navigation{% else %}tablist{% endif %}" {% if not links %} @keydown.arrow-right.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx < tabs.length - 1) { tabs[idx + 1].focus({ preventScroll: true }); tabs[idx + 1].click(); }" @keydown.arrow-left.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx > 0) { tabs[idx - 1].focus({ preventScroll: true }); tabs[idx - 1].click(); }" @keydown.home.prevent="const tab = $el.querySelector('[role=tab]'); if (tab) { tab.focus({ preventScroll: true }); tab.click(); }" @keydown.end.prevent="const tabs = $el.querySelectorAll('[role=tab]'); const tab = tabs[tabs.length - 1]; if (tab) { tab.focus({ preventScroll: true }); tab.click(); }"
         {% endif %}
-    {% endfor %}
-    {{ slot }}
+        {{ attrs }}>
+        {% for tab in tabs %}
+            {% if tab.id == active %}
+                <c-navigation.tab href="{{ tab.href }}" panel="{{ tab.id }}" icon="{{ tab.icon }}" badge="{{ tab.badge }}" active only>{{ tab.label }}</c-navigation.tab>
+            {% else %}
+                <c-navigation.tab href="{{ tab.href }}" panel="{{ tab.id }}" icon="{{ tab.icon }}" badge="{{ tab.badge }}" only>{{ tab.label }}</c-navigation.tab>
+            {% endif %}
+        {% endfor %}
+        {{ slot }}
+        {% if trailing %}<div class="ml-auto shrink-0">{{ trailing }}</div>{% endif %}
+    </div>
+</div>
+<c-buttons.icon-quiet label="Scroll tabs right" x-show="overflow" x-cloak ::disabled="!canScrollForward" @click="scroll(1)" only><i class="fas fa-chevron-right text-xs" aria-hidden="true"></i></c-buttons.icon-quiet>
 </div>

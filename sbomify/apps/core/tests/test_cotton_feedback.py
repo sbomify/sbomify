@@ -6,7 +6,11 @@ stack, so pages can rely on the components without ever writing a class
 themselves.
 """
 
+import re
+from html import unescape
+
 import pytest
+from django.template import Context, Template
 from django.template.loader import render_to_string
 
 
@@ -49,11 +53,11 @@ def test_alert_variant_sets_its_accent(rendered: str, probe: str, accent: str) -
     assert accent in _probe(rendered, probe)
 
 
-def test_alert_shell_reads_the_accent_for_tint_border_and_text(rendered: str) -> None:
+def test_alert_shell_tints_the_surface_and_keeps_neutral_text(rendered: str) -> None:
     info = _probe(rendered, "alert-info")
-    assert "bg-[linear-gradient(135deg,color-mix(in_oklab,var(--alert-accent)_10%,transparent)_0%," in info
+    assert "bg-[color-mix(in_oklab,var(--alert-accent)_6%,var(--color-surface))]" in info
     assert "border-[color-mix(in_oklab,var(--alert-accent)_20%,transparent)]" in info
-    assert "text-[color-mix(in_oklab,var(--alert-accent)_60%,var(--color-text))]" in info
+    assert "text-text" in info
     assert 'role="alert"' in info
 
 
@@ -76,11 +80,11 @@ def test_alert_icon_follows_the_variant_unless_overridden(rendered: str, probe: 
 
 def test_alert_padding_segments_never_conflict(rendered: str) -> None:
     plain = _probe(rendered, "alert-info")
-    assert "px-5" in plain
-    assert "pr-12" not in plain
+    assert "px-4" in plain
+    assert "pr-14" not in plain
     dismissible = _probe(rendered, "alert-warning")
-    assert "relative pl-5 pr-12" in dismissible
-    assert "px-5" not in dismissible
+    assert "relative pl-4 pr-14" in dismissible
+    assert "px-4" not in dismissible
 
 
 def test_alert_dismiss_keeps_its_alpine_hook_and_label(rendered: str) -> None:
@@ -92,17 +96,17 @@ def test_alert_dismiss_keeps_its_alpine_hook_and_label(rendered: str) -> None:
 def test_alert_action_slot_is_the_rows_last_item(rendered: str) -> None:
     """The control that resolves the notice sits after the message, not in it."""
     body = _section(rendered, "alert-actioned")
-    message = body.index('<p class="text-sm m-0">')
+    message = body.index('<p class="text-sm leading-6 m-0">')
     action = body.index("Manage")
     assert message < action
-    # Outside the content column, so the row's flex puts it at the end.
+    # Outside the message column, so the action has its own space.
     assert body.index("</div>", message) < action
 
 
 def test_alert_body_slot_replaces_the_paragraph(rendered: str) -> None:
     """A notice that explains itself at length cannot live inside a p element."""
     body = _section(rendered, "alert-body")
-    assert '<p class="text-sm m-0">' not in body
+    assert '<p class="text-sm leading-6 m-0">' not in body
     assert '<p class="mb-2">No vulnerability scan data found for this SBOM.</p>' in body
     assert "<pre" in body
     # The title still leads the column.
@@ -115,7 +119,7 @@ def test_alert_mark_slot_replaces_the_glyph(rendered: str) -> None:
     assert "brand-loader-stand-in" in marked
     assert "fa-info-circle" not in marked
     # It keeps the glyph's box and ink, so the row does not shift under it.
-    assert "shrink-0 w-5 h-5 mt-0.5 text-[var(--alert-accent,currentColor)]" in marked
+    assert "w-5 h-6 text-base leading-none text-[var(--alert-accent,currentColor)]" in marked
 
 
 def test_alert_without_an_action_renders_nothing_after_the_message(rendered: str) -> None:
@@ -127,8 +131,8 @@ def test_alert_without_an_action_renders_nothing_after_the_message(rendered: str
 
 def test_alert_title_and_slot_render(rendered: str) -> None:
     body = _section(rendered, "alert-success")
-    assert '<p class="font-semibold mb-1">Saved</p>' in body
-    assert '<p class="text-sm m-0">Success body</p>' in body
+    assert '<p class="font-semibold leading-6 mt-0 mb-1">Saved</p>' in body
+    assert '<p class="text-sm leading-6 m-0">Success body</p>' in body
 
 
 def test_alert_forwards_attrs_and_caller_class(rendered: str) -> None:
@@ -225,11 +229,11 @@ def test_empty_state_slot_holds_a_real_button_component(rendered: str) -> None:
 @pytest.mark.parametrize(
     ("probe", "shape"),
     [
-        ("skeleton-text", "h-4 mb-2.5 rounded-sm last:w-[70%] last:mb-0"),
-        ("skeleton-title", "h-6 w-[60%] mb-3 rounded-md"),
+        ("skeleton-text", "h-4 w-full rounded-sm"),
+        ("skeleton-title", "h-6 w-[60%] rounded-md"),
         ("skeleton-avatar", "w-12 h-12 shrink-0 rounded-full"),
-        ("skeleton-button", "h-10 w-28 rounded-lg"),
-        ("skeleton-image", "w-full h-48 rounded-lg"),
+        ("skeleton-button", "h-10 w-28 rounded-[0.5rem]"),
+        ("skeleton-image", "w-full h-48 rounded-[0.5rem]"),
     ],
 )
 def test_skeleton_type_segments(rendered: str, probe: str, shape: str) -> None:
@@ -239,7 +243,8 @@ def test_skeleton_type_segments(rendered: str, probe: str, shape: str) -> None:
 def test_skeleton_shimmer_is_shared_by_every_shape(rendered: str) -> None:
     for probe in ("skeleton-text", "skeleton-avatar", "skeleton-image"):
         tag = _probe(rendered, probe)
-        assert "animate-[shimmer_1.5s_ease-in-out_infinite]" in tag
+        assert "motion-safe:animate-[shimmer_1.5s_ease-in-out_infinite]" in tag
+        assert 'aria-hidden="true"' in tag
         assert "bg-[length:200%_100%]" in tag
 
 
@@ -255,41 +260,68 @@ def test_skeleton_width_and_height_stay_inline(rendered: str) -> None:
 
 
 def test_skeleton_paragraph_stacks_text_rows_and_shortens_the_last(rendered: str) -> None:
-    assert "space-y-2 mt-2" in _probe(rendered, "skeleton-paragraph")
+    assert "flex min-w-0 flex-col gap-2 w-full" in _probe(rendered, "skeleton-paragraph")
     rows = _section(rendered, "skeleton-paragraph")
     assert rows.count("width: 100%;") == 1
     assert rows.count("width: 60%;") == 1
     assert rows.count("animate-[shimmer_1.5s_ease-in-out_infinite]") == 2
 
 
-def test_skeleton_paragraph_rows_do_not_inherit_the_wrapper_class(rendered: str) -> None:
-    # class is declared bare, so it falls through from the surrounding context
-    # unless the component clears it: the rows must not pick up the wrapper's.
-    assert "mt-2" not in _section(rendered, "skeleton-paragraph")
+def test_skeleton_shapes_leave_spacing_to_the_parent(rendered: str) -> None:
+    for shape in ("text", "title", "avatar", "button", "image", "paragraph"):
+        tag = _probe(rendered, f"skeleton-{shape}")
+        assert not re.search(r"(?:^|[\s\"])(?:m|mt|mb|mx|my)-", tag)
 
 
 # --- loading --------------------------------------------------------------
 
 
-def test_loading_panel_stacks_and_uses_the_large_brand_loader(rendered: str) -> None:
-    panel = _probe(rendered, "loading-panel")
-    assert "flex flex-col items-center justify-center py-12" in panel
-    body = _section(rendered, "loading-panel")
-    assert "tw-brand-loader tw-loader-lg text-primary" in body
-    assert '<p class="mt-3 text-text-muted">Loading artifacts…</p>' in body
+@pytest.mark.parametrize("variant", ["panel", "list", "table", "table-nested", "stats", "chart", "page"])
+def test_content_loading_uses_decorative_skeletons(rendered: str, variant: str) -> None:
+    assert 'role="status"' in _probe(rendered, f"loading-{variant}")
+    body = _section(rendered, f"loading-{variant}")
+    assert re.search(r'<span class="sr-only">Loading .+?</span>', body)
+    assert 'aria-hidden="true"' in body
+    assert "motion-safe:animate-[shimmer_1.5s_ease-in-out_infinite]" in body
+    assert "tw-brand-loader" not in body
+    assert not re.search(r"<(?:button|input|a)\b", body)
 
 
-def test_loading_row_puts_the_loader_beside_the_message(rendered: str) -> None:
-    row = _probe(rendered, "loading-row")
-    assert "flex items-center justify-center py-2" in row
-    assert "flex-col" not in row
-    body = _section(rendered, "loading-row")
-    assert "tw-brand-loader tw-loader-md text-primary" in body
-    assert '<span class="ml-3 text-sm text-text-muted">Refreshing…</span>' in body
+def test_loading_density_and_table_surface_modifiers(rendered: str) -> None:
+    assert _section(rendered, "loading-list").count("rounded-full") == 2
+    assert _section(rendered, "loading-table").count("width: 70%;") == 2
+    assert _section(rendered, "loading-table-nested").count("width: 70%;") == 1
+    assert "bg-transparent" in _section(rendered, "loading-table-nested")
+    assert _section(rendered, "loading-stats").count("<dl ") == 3
+    assert _section(rendered, "loading-stats").count("height: 1lh;") == 6
 
 
-def test_loading_forwards_attrs(rendered: str) -> None:
-    assert 'hx-swap-oob="true"' in _probe(rendered, "loading-row")
+def test_loading_forwards_state_to_the_root(rendered: str) -> None:
+    tag = _probe(rendered, "loading-list")
+    assert 'hx-swap-oob="true"' in tag
+    assert 'x-show="isLoading"' in tag
+    assert "x-cloak" in tag
+
+
+def test_action_spinner_forwards_state_and_inherits_control_colour(rendered: str) -> None:
+    tag = _probe(rendered, "spinner")
+    assert 'x-show="isSaving"' in tag
+    assert "x-cloak" in tag
+    body = _section(rendered, "spinner")
+    assert "tw-brand-loader tw-loader-inline" in body
+    assert 'aria-label="Saving"' in body
+    assert "text-primary" not in body
+
+
+def test_legacy_loading_tag_delegates_and_preserves_attributes() -> None:
+    html = Template(
+        "{% load design_system %}"
+        '{% loading_state message="Loading examples..." row=True hx_swap_oob="true" x_show="busy" %}'
+    ).render(Context())
+    assert 'hx-swap-oob="true"' in html
+    assert 'x-show="busy"' in html
+    assert "data-content-loading" in html
+    assert "tw-brand-loader" not in html
 
 
 # --- toast ----------------------------------------------------------------
@@ -297,8 +329,8 @@ def test_loading_forwards_attrs(rendered: str) -> None:
 
 def test_toast_shell_and_accent(rendered: str) -> None:
     success = _probe(rendered, "toast-success")
-    assert "min-w-80 max-w-md" in success
-    assert "animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]" in success
+    assert "w-[min(28rem,calc(100vw-2rem))]" in success
+    assert "motion-safe:animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]" in success
     assert "[--toast-accent:var(--color-success)]" in success
     assert 'role="alert"' in success
     assert "[--toast-accent:var(--color-danger)]" in _probe(rendered, "toast-danger")
@@ -328,7 +360,7 @@ def test_toast_close_is_on_by_default_and_can_be_turned_off(rendered: str) -> No
 
 
 def test_toast_container_keeps_its_event_driven_alpine_markup(rendered: str) -> None:
-    body = rendered[rendered.index('id="toast-container"') :]
+    body = unescape(rendered[rendered.index('id="toast-container"') :])
     assert '@toast.window="addToast($event.detail)"' in body
     assert 'aria-live="polite"' in body
     assert '<template x-for="toast in toasts" :key="toast.id">' in body
@@ -338,17 +370,19 @@ def test_toast_container_keeps_its_event_driven_alpine_markup(rendered: str) -> 
 
 
 def test_toast_container_binds_only_the_accent_and_the_glyph(rendered: str) -> None:
-    body = rendered[rendered.index('id="toast-container"') :]
-    assert ":class=\"{ '[--toast-accent:var(--color-success)]': toast.type === 'success'" in body
-    assert ":class=\"{ 'fas fa-check-circle': toast.type === 'success'" in body
+    body = unescape(rendered[rendered.index('id="toast-container"') :])
+    assert ':data-variant="toast.type"' in body
+    assert "data-[variant=success]:[--toast-accent:var(--color-success)]" in body
+    assert ":class=\"{success: 'fas fa-check-circle'" in body
     # The surface itself is static, exactly as c-feedback.toast renders it.
-    assert "pointer-events-auto flex items-start gap-3 py-4 px-4.5 bg-surface rounded-xl" in body
+    assert "flex items-start gap-3 py-4 px-4.5 bg-surface rounded-xl" in body
+    assert "pointer-events-auto" in body
 
 
 def test_toast_container_surface_matches_the_toast_component(rendered: str) -> None:
     shared = (
         "bg-surface rounded-xl border border-solid border-border "
-        "shadow-[0_10px_40px_-10px_rgb(0_0_0/0.3)] min-w-80 max-w-md "
-        "animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]"
+        "shadow-[0_10px_40px_-10px_rgb(0_0_0/0.3)] w-[min(28rem,calc(100vw-2rem))] "
+        "motion-safe:animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]"
     )
     assert rendered.count(shared) == 3  # two toasts and the container's template

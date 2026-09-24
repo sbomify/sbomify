@@ -12,200 +12,139 @@ from typing import Any, cast
 
 from django.core.cache import cache as django_cache
 
-from sbomify.apps.core.models import Component
+from sbomify.apps.core.models import Component, Product
+from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.core.services.security_snapshot import build_component_security_picture
 from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.teams.models import Team
 
 _CACHE_TTL_SECONDS = 60
-_DIGEST_LIMIT = 3
+_DIGEST_LIMIT = 4
 
 
-#: How many ranked rows to fold before taking the digest's three.
-#:
-#: The fold is by alias and cannot go into SQL, so something has to bound what
-#: it runs over. The database returns the worst rows first, and folding the top
-#: few is enough: two rows can only merge into one, so the worst three survivors
-#: are always inside the worst few candidates by a wide margin.
-_DIGEST_CANDIDATES = 60
-
-
-def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> list[dict[str, Any]]:
-    """Worst non-suppressed findings across the given components.
-
-    Read from the findings table rather than from scan results. The old shape
-    loaded every current run's whole ``result`` for every component in the
-    workspace, merged and extracted in Python, sorted the lot, and returned
-    three rows. The work scaled with the workspace while the answer never grew.
-
-    Ranking and bounding now happen in SQL. What stays in Python is the
-    cross-provider fold, because it is by alias and transitive, and it runs over
-    the ranked candidates rather than over everything.
-    """
-    from django.db.models import F, Value
-    from django.db.models.functions import Coalesce
-
-    from sbomify.apps.vulnerability_scanning.models import Finding
-
-    # ``is_current`` is scoped per SBOM, not per component: it means the newest
-    # run per (sbom, plugin). A component that has since uploaded a newer
-    # artifact still has current rows against the superseded one, and the
-    # dashboard must not resurface those, so the newest SBOM per component is
-    # resolved first and the findings are narrowed to it.
-    latest_sbom_ids = (
-        SBOM.objects.filter(component_id__in=component_ids, bom_type=SBOM.BomType.SBOM)
-        .order_by("component_id", "-created_at")
-        .distinct("component_id")
-        .values_list("id", flat=True)
-    )
-
-    candidates = (
-        Finding.objects.filter(
-            component_id__in=component_ids,
-            sbom_id__in=latest_sbom_ids,
-            # Rows accumulate per run, so one advisory seen by fifty scans is
-            # fifty rows. Every reader has to narrow to the current ones.
-            is_current=True,
-            vex_suppressed=False,
-        )
-        .annotate(scanned_at=F("run__created_at"), sbom_version=F("sbom__version"))
-        # Exactly the columns of vuln_finding_current_rank_idx, in its order, so
-        # this walks the index instead of sorting the workspace's findings.
-        #
-        # Malicious leads, ahead of severity, for the reason the model records:
-        # a malicious package carries no severity of its own, so ranking on
-        # severity alone buries it in the unranked bucket below every real CVE,
-        # and it is a remove-now decision rather than a patch-later one. The old
-        # Python sort had that gap; porting it unchanged would have kept it.
-        #
-        # Recency is deliberately not here. It lives on the run, so ordering by
-        # it joins another table and gives up the index, which on a large
-        # workspace means sorting many rows to slice sixty. It is applied to the
-        # window below instead, which honours it among the candidates rather
-        # than across every finding: for a digest of three that is the right
-        # trade, and the alternative is a sort that grows with the workspace.
-        .order_by(
-            F("malicious").desc(),
-            "severity_rank",
-            # The display rule is ``or 0``, so a missing score ties with an
-            # explicit 0.0 rather than sorting above or below every score.
-            Coalesce("cvss_score", Value(0.0)).desc(),
-        )
-        .values(
-            "severity_rank",
-            "malicious",
-            "advisory_id",
-            "aliases",
-            "severity",
-            "cvss_score",
-            "package_name",
-            "package_version",
-            "ecosystem",
-            "vex_state",
-            "component_id",
-            "scanned_at",
-            "sbom_version",
-        )[:_DIGEST_CANDIDATES]
-    )
-
-    # Recency restored as the tiebreak the digest has always used: within a
-    # severity band the freshly scanned component leads, so a critical from
-    # today outranks one from last month. Stable, so rows that tie on it keep
-    # the database's order.
-    ranked = sorted(
-        candidates,
-        key=lambda row: (
-            not row["malicious"],
-            row["severity_rank"],
-            -(row["scanned_at"].timestamp() if row["scanned_at"] else 0.0),
-            -(row["cvss_score"] or 0),
-        ),
-    )
-
-    folded: list[dict[str, Any]] = []
-    for row in _fold_by_alias(ranked)[:_DIGEST_LIMIT]:
-        folded.append(
-            {
-                "id": row["advisory_id"],
-                "severity": row["severity"],
-                "cvss_score": row["cvss_score"],
-                "package": row["package_name"],
-                "version": row["package_version"],
-                "ecosystem": row["ecosystem"],
-                "vex_state": row["vex_state"],
-                "malicious": row["malicious"],
-                "component_id": row["component_id"],
-                "component_name": component_names.get(row["component_id"], ""),
-                "sbom_version": row["sbom_version"],
-                "scanned_at": row["scanned_at"],
-            }
-        )
-    return folded
-
-
-def _fold_by_alias(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One row per advisory, however many ids the scanners reported it under.
-
-    Transitive, which is the whole difficulty. OSV can report ``GHSA-a`` aliased
-    to ``CVE-1``, Dependency Track can report ``CVE-1`` aliased to ``CVE-2``, and
-    a third can report ``CVE-2`` alone. All three are one vulnerability, and no
-    pair of them shares an id with the third. A single pass that claims ids as it
-    goes folds the first two and then emits the third beside them, because by the
-    time the bridging row arrives the earlier ones have already been written out.
-
-    So the groups are built first and emitted afterwards. ``rows`` arrives in the
-    order the database ranked it, and each group is represented by its earliest
-    member, so folding never promotes a finding above one that outranks it.
-
-    Scoped to the package, as ``merge_findings_by_alias`` is. A finding is stored
-    per advisory *and* package, and a digest entry names the package it found, so
-    folding one CVE across two of them would print one line naming whichever
-    package ranked first and say nothing about the other.
-    """
-    group_of: dict[tuple[Any, ...], int] = {}
-    groups: list[list[int]] = []
-
-    for position, row in enumerate(rows):
-        scope = (row["package_name"], row["package_version"], row["ecosystem"])
-        keys = {(scope, str(one).lower()) for one in (row["advisory_id"], *(row.get("aliases") or [])) if one}
-        joined = sorted({group_of[key] for key in keys if key in group_of})
-        if not joined:
-            groups.append([position])
-            target = len(groups) - 1
-        else:
-            # This row bridges groups that had no id in common until now, so they
-            # are one vulnerability after all and have to be merged rather than
-            # left as separate entries.
-            target = joined[0]
-            groups[target].append(position)
-            for other in joined[1:]:
-                groups[target].extend(groups[other])
-                groups[other] = []
-            for key, index in list(group_of.items()):
-                if index in joined[1:]:
-                    group_of[key] = target
-        for key in keys:
-            group_of[key] = target
-
-    return [rows[min(members)] for members in groups if members]
-
-
-def get_first_component(team_id: int) -> Component | None:
+def get_first_component(team_id: int) -> ServiceResult[Component]:
     """Uncached on purpose: the digest cache may lag a just-created component,
     and the onboarding hero must reflect it immediately."""
-    return Component.objects.filter(team_id=team_id).first()
+    return ServiceResult.success(
+        Component.objects.filter(team_id=team_id, component_type=Component.ComponentType.BOM).first()
+    )
 
 
-def build_dashboard_context(team_id: int) -> dict[str, Any]:
-    cache_key = f"dashboard-page:{team_id}"
+def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Team]:
+    if not workspace_key:
+        return ServiceResult.success()
+    workspace = Team.objects.filter(key=workspace_key).first()
+    if workspace is None:
+        return ServiceResult.failure("Workspace not found", status_code=404)
+    return ServiceResult.success(workspace)
+
+
+def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
+    """One workspace snapshot for the overview, without per-product scan reads."""
+    from sbomify.apps.documents.models import Document
+    from sbomify.apps.sboms.freshness import freshness_state
+
+    cache_key = f"dashboard-page:v3:{team_id}"
     cached = django_cache.get(cache_key)
     if cached is not None:
-        return cast("dict[str, Any]", cached)
+        return ServiceResult.success(cast("dict[str, Any]", cached))
 
-    components = dict(Component.objects.filter(team_id=team_id).values_list("id", "name"))
-    has_artifacts = SBOM.objects.filter(component__team_id=team_id).exists()
+    workspace = Team.objects.filter(id=team_id).first()
+    if workspace is None:
+        return ServiceResult.failure("Workspace not found", status_code=404)
 
+    components = list(
+        Component.objects.filter(team_id=team_id, component_type=Component.ComponentType.BOM).values(
+            "id", "name", "sbom_freshness_days"
+        )
+    )
+    component_names = {component["id"]: component["name"] for component in components}
+    picture = build_component_security_picture(list(component_names), component_names, workspace.patch_sla_days or {})
+    has_artifacts = (
+        SBOM.objects.filter(component__team_id=team_id).exists()
+        or Document.objects.filter(component__team_id=team_id).exists()
+    )
+    stale_components: set[str] = set()
+    without_policy: set[str] = set()
+    for component in components:
+        latest = picture["latest_sboms"].get(component["id"])
+        override = component["sbom_freshness_days"]
+        window = override if override is not None else workspace.sbom_freshness_days
+        freshness = freshness_state(latest["created_at"] if latest else None, window)
+        if freshness and freshness["is_stale"]:
+            stale_components.add(component["id"])
+        if latest and window is None:
+            without_policy.add(component["id"])
+
+    products: list[dict[str, Any]] = []
+    product_names_by_component: dict[str, list[str]] = {}
+    overdue_by_component: dict[str, int] = {}
+    for finding in picture["findings"]:
+        if finding["sla"]["overdue"]:
+            component_id = finding["component_id"]
+            overdue_by_component[component_id] = overdue_by_component.get(component_id, 0) + 1
+    # The prefetched join is tenant-scoped on both sides.
+    from django.db.models import Prefetch
+
+    for product in (
+        Product.objects.filter(team_id=team_id)
+        .order_by("name")
+        .prefetch_related(Prefetch("components", queryset=Component.objects.filter(team_id=team_id).only("id")))
+    ):
+        component_ids = {component.id for component in product.components.all()}
+        security_ids = component_ids & component_names.keys()
+        for component_id in component_ids:
+            product_names_by_component.setdefault(component_id, []).append(product.name)
+        counts = {
+            key: sum(picture["counts"].get(component_id, {}).get(key, 0) for component_id in security_ids)
+            for key in ("total", "critical", "high", "medium", "low")
+        }
+        counts["other"] = counts["total"] - counts["critical"] - counts["high"]
+        counts["unknown"] = counts["other"] - counts["medium"] - counts["low"]
+        products.append(
+            {
+                "id": product.id,
+                "name": product.name,
+                "component_count": len(component_ids),
+                "security_component_count": len(security_ids),
+                "counts": counts,
+                "unassessed": len(security_ids & picture["unassessed"]),
+                "stale": len(security_ids & stale_components),
+                "missing_sboms": len(security_ids - picture["latest_sboms"].keys()),
+                "no_policy": len(security_ids & without_policy),
+                "past_sla": sum(overdue_by_component.get(component_id, 0) for component_id in security_ids),
+            }
+        )
+    products.sort(
+        key=lambda row: (
+            -row["counts"]["critical"],
+            -row["counts"]["high"],
+            -row["counts"]["total"],
+            row["name"].lower(),
+        )
+    )
+    counts = picture["counts"]
+    for finding in picture["findings"]:
+        finding["products"] = product_names_by_component.get(finding["component_id"], [])
     context = {
         "is_first_visit": not has_artifacts,
-        "needs_attention": _digest_rows(list(components), components) if has_artifacts else [],
+        "needs_attention": picture["findings"][:_DIGEST_LIMIT],
+        "metrics": {
+            "open": sum(count["total"] for count in counts.values()),
+            "critical_high": sum(count["critical"] + count["high"] for count in counts.values()),
+            "past_sla": sum(overdue_by_component.values()),
+            "sla_unknown": sum(count["total"] for count in counts.values())
+            - len(picture["findings"])
+            + sum(finding["sla"]["label"] == "Awaiting history" for finding in picture["findings"]),
+            "known_exploited": sum(bool(finding["kev"]) for finding in picture["findings"]),
+            "stale": len(stale_components),
+        },
+        "unassessed": len(picture["unassessed"]),
+        "products": products[:8],
+        "product_count": len(products),
     }
-    django_cache.set(cache_key, context, _CACHE_TTL_SECONDS)
-    return context
+    # The first upload must replace setup immediately, without waiting for a
+    # cached empty snapshot to expire.
+    if has_artifacts:
+        django_cache.set(cache_key, context, _CACHE_TTL_SECONDS)
+    return ServiceResult.success(context)

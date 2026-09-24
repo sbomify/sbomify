@@ -19,13 +19,13 @@
         <c-tables.shell nested>
         {# Search + severity filter toolbar #}
         <c-tables.toolbar>
-        <c-tables.search id="cbom-issue-search" label="Search CBOM issues" placeholder="Search CBOM issues..." class="max-w-xs" x-model="search" />
-        <c-tables.select id="cbom-issue-sev-filter" label="Filter by severity" x-model="sevFilter">
+        <c-forms.search-input size="sm" id="cbom-issue-search" label="Search CBOM issues" placeholder="Search CBOM issues..." class="max-w-xs" x-model="search" />
+        <c-forms.select size="md" id="cbom-issue-sev-filter" label="Filter by severity" x-model="sevFilter">
         <option value="all">All Severities</option>
         <template x-for="v in sevOptions" :key="v">
             <option :value="v" x-text="v.charAt(0).toUpperCase() + v.slice(1)"></option>
         </template>
-        </c-tables.select>
+        </c-forms.select>
         </c-tables.toolbar>
         <c-tables.table x-cloak>
         <c-tables.head>

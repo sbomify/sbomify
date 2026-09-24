@@ -33,15 +33,9 @@ flags plus the PCI DSS 12.3.3 CSV export).
 </c-slot>
 <div class="space-y-6">
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <c-layout.stat-card compact>
-        <c-layout.stat.value>{{ crypto_inventory.count }}</c-layout.stat.value>
-        <c-layout.stat.label>Total</c-layout.stat.label>
-        </c-layout.stat-card>
+        <c-layout.stat-card compact :value="crypto_inventory.count" label="Total" />
         {% for asset_type, n in crypto_inventory.by_asset_type.items %}
-            <c-layout.stat-card compact style="--stat-accent: var(--color-info)">
-            <c-layout.stat.value>{{ n }}</c-layout.stat.value>
-            <c-layout.stat.label>{{ asset_type }}</c-layout.stat.label>
-            </c-layout.stat-card>
+            <c-layout.stat-card compact accent="info" :value="n" label="{{ asset_type }}" />
         {% endfor %}
     </div>
     {% comment %}
@@ -81,13 +75,13 @@ flags plus the PCI DSS 12.3.3 CSV export).
     <div x-show="tab === 'assets'">
         <c-tables.shell nested>
         <c-tables.toolbar>
-        <c-tables.search id="ci-search" label="Search crypto assets" placeholder="Search assets..." x-model="search" />
-        <c-tables.select id="ci-status-filter" label="Filter by quantum readiness" x-model="statusFilter">
+        <c-forms.search-input size="sm" id="ci-search" label="Search crypto assets" placeholder="Search assets..." x-model="search" />
+        <c-forms.select size="md" id="ci-status-filter" label="Filter by quantum readiness" x-model="statusFilter">
         <option value="all">All statuses</option>
         <template x-for="v in statusOptions" :key="v">
             <option :value="v" x-text="statusLabel(v)"></option>
         </template>
-        </c-tables.select>
+        </c-forms.select>
         </c-tables.toolbar>
         <c-tables.table x-cloak>
         <c-tables.head>

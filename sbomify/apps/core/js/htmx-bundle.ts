@@ -6,25 +6,21 @@ import '../../vulnerability_scanning/js/vulnerability-chart';
 import './layout-interactions';
 import './alerts-global';
 import './clipboard-global';
-import './navbar-search';
 
 // Centralized Alpine components and HTMX lifecycle
-import { registerHtmxBundleComponents } from './alpine-components';
 import { initHtmxLifecycle } from './htmx-lifecycle';
 import { registerHtmxConfig } from './htmx-config';
 import { initializeAlpine } from './alpine-init';
+import { initDjangoMessages } from './django-messages';
 
 // Register HTMX config
 registerHtmxConfig();
-
-// Register all HTMX bundle components from central registry
-registerHtmxBundleComponents();
 
 // Initialize HTMX lifecycle handler
 initHtmxLifecycle();
 
 // Initialize Alpine
-void initializeAlpine();
+void initializeAlpine().then(initDjangoMessages);
 
 // Listen for successful document uploads and reload the page
 window.addEventListener('document-uploaded', () => {

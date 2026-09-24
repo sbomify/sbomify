@@ -32,9 +32,9 @@
           @submit="submitForm">
         {% csrf_token %}
         {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
-        <div class="p-6">
+        <div class="flex flex-col gap-8 p-6">
             {# Profile Details Section #}
-            <div class="mb-8">
+            <div class="flex flex-col gap-4">
                 <c-layout.section-header icon="fas fa-id-card" title="Profile Details" subtitle="Basic information about this contact profile" />
                 <c-cards.card>
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -52,7 +52,7 @@
                 </c-cards.card>
             </div>
             {# Entities Section #}
-            <div class="mb-6">
+            <div class="flex flex-col gap-4">
                 <c-layout.section-header icon="fas fa-building" accent="success" title="Entities" subtitle="Organizations (Manufacturer, Supplier, Author)">
                 <c-slot name="actions">
                 <c-buttons.primary size="sm" @click="addEntity" ::disabled="manufacturerCount >= 1 && supplierCount >= 1" ::title="manufacturerCount >= 1 && supplierCount >= 1 ? 'Both manufacturer and supplier roles are filled' : 'Add a new entity'">
@@ -61,12 +61,14 @@
                 </c-slot>
                 </c-layout.section-header>
                 {# Info banner #}
-                <c-feedback.alert class="mb-4">
+                <c-feedback.alert>
                 Each profile can have <strong>one manufacturer</strong> and <strong>one supplier</strong>.
                 A single entity can fulfill both roles.
                 </c-feedback.alert>
                 {{ entities_formset.management_form }}
-                <div id="entities-container" class="space-y-3">
+                <div id="entities-container"
+                     class="flex flex-col gap-3"
+                     x-show="visibleEntitiesCount > 0">
                     {% for entity_form in entities_formset %}
                         {% include "teams/contact_profiles/forms/entity.html.j2" with form=entity_form contacts_formset=entity_form.contacts_formset %}
                     {% endfor %}

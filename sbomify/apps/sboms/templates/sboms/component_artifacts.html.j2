@@ -2,17 +2,17 @@
 {% load django_vite %}
 {% block title %}sbomify Artifacts: {{ component.name }}{% endblock %}
 {% block content %}
-    <c-layout.page-header title="{{ page_title }}" icon="fas fa-shield-halved" mark="avatar" :breadcrumbs="breadcrumb_items">
+    <c-layout.page-header title="{{ page_title }}" :breadcrumbs="breadcrumb_items">
     <c-buttons.secondary href="{% url 'core:component_details' component.id %}">
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to component
     </c-buttons.secondary>
     </c-layout.page-header>
     {# Full artifacts table (all SBOMs, VEX, …) #}
-    <div id="sboms-table-container"
+    <div id="sboms-table-region"
          hx-get="{% url 'sboms:sboms_table' component.id %}?full=1"
          hx-trigger="load, refreshSbomsTable from:body, refreshVexDocuments from:body"
          hx-swap="innerHTML">
-        <c-feedback.loading message="Loading artifacts…" />
+        <c-feedback.loading-table message="Loading artifacts…" />
     </div>
 {% endblock %}
 {% block scripts %}

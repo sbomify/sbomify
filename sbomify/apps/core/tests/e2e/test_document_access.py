@@ -9,7 +9,7 @@ instead of rendering the form.
 """
 
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.core.utils import number_to_random_token
@@ -97,3 +97,45 @@ class TestSignNdaSnapshot:
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("accent", ["#FFF0A0", "#25293F"])
+@pytest.mark.parametrize("width", [320, 1280])
+def test_access_forms_keep_controls_readable_and_signature_fields_intact(
+    authenticated_page: Page, pending_nda_request, accent: str, width: int
+) -> None:
+    team = pending_nda_request.team
+    team.branding_info = {**team.branding_info, "accent_color": accent}
+    team.save(update_fields=["branding_info"])
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 900})
+    for suffix in ("", f"/{pending_nda_request.id}/sign-nda"):
+        pending_nda_request.status = AccessRequest.Status.PENDING if suffix else AccessRequest.Status.REJECTED
+        pending_nda_request.save(update_fields=["status"])
+        page.goto(f"/workspace/{team.key}/access-request{suffix}")
+        expect(page.get_by_role("heading", level=1)).to_be_visible()
+        submit = page.locator('form button[type="submit"]')
+        expect(submit).to_be_visible()
+        contrast = submit.evaluate("""el => {
+            const luminance = colour => {
+                const rgb = colour.match(/[0-9.]+/g).slice(0, 3).map(v => {
+                    const c = Number(v) / 255;
+                    return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
+                });
+                return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+            };
+            const s = getComputedStyle(el), a = luminance(s.color), b = luminance(s.backgroundColor);
+            return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+        }""")
+        assert contrast >= 4.5
+        assert page.locator("html").evaluate("el => el.scrollWidth <= el.clientWidth")
+    expect(page.get_by_label("Full name", exact=False)).to_have_attribute("required", "")
+    consent = page.get_by_role("checkbox")
+    expect(consent).to_have_attribute("name", "consent")
+    expect(consent).to_have_attribute("value", "on")
+    expect(consent).to_have_attribute("required", "")
+    page.evaluate("""() => document.body.dispatchEvent(new CustomEvent('messages', {
+        detail: {value: [{type: 'info', message: 'Example access notice'}]}
+    }))""")
+    expect(page.locator("#toast-container").get_by_text("Example access notice", exact=True)).to_be_visible()

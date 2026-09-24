@@ -1,0 +1,6 @@
+{% comment %}Two adjoining card regions with a quieter supporting panel. They stack on small screens, preserving one dividing rule and the same internal padding. Use inside a flush card; main content is the slot and supporting content the aside slot.{% endcomment %}
+<c-vars class />
+<div class="grid min-w-0 xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]{% if class %} {{ class }}{% endif %}" {{ attrs }}>
+    <div class="flex min-w-0 flex-col gap-4 px-5 py-5 sm:px-6">{{ slot }}</div>
+    <div class="flex min-w-0 flex-col gap-3 border-t border-solid border-border bg-[color-mix(in_oklab,var(--color-surface-hover)_25%,var(--color-surface))] px-5 py-5 sm:px-6 xl:border-t-0 xl:border-l">{{ aside }}</div>
+</div>

@@ -107,7 +107,7 @@
                 <c-slot name="action">
                 {# The search landmark stays on the wrapper; the component is the box inside it. #}
                 <div role="search">
-                    <c-tables.search id="tc-products-search" label="Search products" placeholder="Search products..." x-model="q" />
+                    <c-forms.search-input size="sm" id="tc-products-search" label="Search products" placeholder="Search products..." x-model="q" />
                 </div>
                 </c-slot>
             {% endif %}

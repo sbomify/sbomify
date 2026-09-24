@@ -1,0 +1,15 @@
+<c-layout.frame id="inventory-content" hx-get="{{ inventory.refresh_url }}" hx-trigger="refresh-products from:body, refresh-components from:body, refresh-releases from:body, refresh-inventory from:body" @ws:message.window.debounce.500ms="if (['product_created', 'product_updated', 'product_deleted', 'component_created', 'component_updated', 'component_deleted', 'release_created', 'release_updated', 'release_deleted', 'sbom_uploaded', 'sbom_deleted', 'document_uploaded', 'document_deleted', 'assessment_complete'].includes($event.detail.type)) $dispatch('refresh-inventory')" hx-sync="#inventory-content:replace" hx-target="this" hx-swap="outerHTML show:none">
+<c-layout.page-header title="Products" subtitle="Everything this workspace ships, and the evidence behind it.">
+{% if can_manage %}
+    {% if inventory.kind == 'products' %}
+        <c-buttons.primary size="sm" href="{% url 'core:product_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create product</c-buttons.primary>
+    {% elif inventory.kind == 'components' %}
+        <c-buttons.primary size="sm" href="{% url 'core:component_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create component</c-buttons.primary>
+    {% else %}
+        <c-buttons.primary size="sm" href="{% url 'core:release_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create release</c-buttons.primary>
+    {% endif %}
+{% endif %}
+</c-layout.page-header>
+<c-navigation.tabs links :tabs="inventory.tabs" active="{{ inventory.kind }}" aria-label="Product inventory" hx-boost="true" hx-target="#inventory-content" />
+<c-inventory.table :inventory="inventory" />
+</c-layout.frame>

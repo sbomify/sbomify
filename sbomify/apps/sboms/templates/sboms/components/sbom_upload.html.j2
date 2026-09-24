@@ -1,5 +1,7 @@
 {# Upload artifact — a modal opened from the component header ⋮ menu (open-upload window event), not a body card. #}
-<div x-data="{ uploadOpen: false }"
+<div class="contents"
+     x-data="uploadDialog"
+     @hashchange.window="openFromHash()"
      @open-upload.window="uploadOpen = true"
      @close-upload.window="uploadOpen = false"
      @keydown.escape.window="if (uploadOpen) uploadOpen = false">
@@ -59,20 +61,14 @@
         </template>
         <!-- Uploading state -->
         <template x-if="isUploading">
-            <div class="text-center">
-                <c-feedback.spinner size="lg" class="mx-auto mb-4" />
-                <p class="text-text m-0">
-                    Uploading and processing <span x-text="bomTypeLabel"></span>...
-                </p>
-            </div>
+            <c-feedback.spinner size="sm" message="Uploading artifact">
+            <span>Uploading and processing <span x-text="bomTypeLabel"></span>...</span>
+            </c-feedback.spinner>
         </template>
     </div>
     <!-- VEX dry-run preview -->
     <template x-if="isPreviewing">
-        <div class="mt-4 text-center text-text-muted">
-            <c-feedback.spinner class="mx-auto mb-2" />
-            Checking what this VEX would change…
-        </div>
+        <c-feedback.loading-stats compact message="Checking what this VEX would change..." />
     </template>
     <template x-if="preview">
         <c-cards.inset class="mt-4">
@@ -80,22 +76,10 @@
             <i class="fas fa-flask text-primary mr-1"></i>Preview: nothing stored yet
         </h5>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-            <c-layout.stat-card compact style="--stat-accent: var(--color-info)">
-            <c-layout.stat.value x-text="preview.would_suppress"></c-layout.stat.value>
-            <c-layout.stat.label>Would suppress</c-layout.stat.label>
-            </c-layout.stat-card>
-            <c-layout.stat-card compact>
-            <c-layout.stat.value x-text="preview.already_suppressed"></c-layout.stat.value>
-            <c-layout.stat.label>Already suppressed</c-layout.stat.label>
-            </c-layout.stat-card>
-            <c-layout.stat-card compact accent="warning">
-            <c-layout.stat.value x-text="preview.unmatched_statements"></c-layout.stat.value>
-            <c-layout.stat.label>Statements matching nothing</c-layout.stat.label>
-            </c-layout.stat-card>
-            <c-layout.stat-card compact>
-            <c-layout.stat.value x-text="preview.findings_checked"></c-layout.stat.value>
-            <c-layout.stat.label>Findings checked</c-layout.stat.label>
-            </c-layout.stat-card>
+            <c-layout.stat-card compact accent="info" x_value="preview.would_suppress" label="Would suppress" />
+            <c-layout.stat-card compact x_value="preview.already_suppressed" label="Already suppressed" />
+            <c-layout.stat-card compact accent="warning" x_value="preview.unmatched_statements" label="Statements matching nothing" />
+            <c-layout.stat-card compact x_value="preview.findings_checked" label="Findings checked" />
         </div>
         <template x-if="preview.matched.length">
             <ul class="text-sm text-text-muted mb-3 space-y-1">

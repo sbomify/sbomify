@@ -137,7 +137,9 @@ class ProductLifecycleView(LoginRequiredMixin, View):
             return htmx_error_response("Failed to update lifecycle dates")
 
         if not changes_made:
-            return htmx_success_response("No changes to save")
+            response = htmx_success_response("No changes to save")
+            response["HX-Reswap"] = "none"
+            return response
 
         product.refresh_from_db()
 

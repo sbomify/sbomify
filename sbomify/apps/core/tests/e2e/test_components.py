@@ -1,5 +1,5 @@
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
@@ -303,6 +303,9 @@ class TestWorkspaceCryptoSnapshot:
 
         authenticated_page.goto(f"/workspaces/{sbom_component_details.team.key}/crypto/")
         authenticated_page.wait_for_load_state("networkidle")
+
+        expect(authenticated_page.locator("dl").filter(has_text="At risk").locator("dd")).to_have_text("1")
+        expect(authenticated_page.locator("dl").filter(has_text="Expired certs").locator("dd")).to_have_text("1")
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)

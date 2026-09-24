@@ -1,0 +1,42 @@
+{% comment %}
+Inventory filters compose the shared native controls. The parent GET form owns
+submission and HTMX replacement; options and selected values come from its service.
+{% endcomment %}
+<c-vars inventory />
+<c-tables.toolbar flush>
+<c-forms.search-input size="sm" name="search" id="{{ inventory.content_id|default:'inventory' }}-search" label="Search {{ inventory.kind }}" placeholder="Search {{ inventory.kind }}" value="{{ inventory.params.search }}" />
+{% if inventory.kind != 'products' and not inventory.scope_product %}
+    <c-forms.select size="md" name="product" id="{{ inventory.content_id|default:'inventory' }}-product" label="Filter by product" class="max-w-full">
+    <option value="">All products</option>
+    {% if inventory.kind == 'components' %}
+        <option value="unassigned"
+                {% if inventory.params.product == 'unassigned' %}selected{% endif %}>Unassigned</option>
+    {% endif %}
+    {% for product in inventory.products %}
+        <option value="{{ product.id }}"
+                {% if inventory.params.product == product.id %}selected{% endif %}>{{ product.name }}</option>
+    {% endfor %}
+    </c-forms.select>
+{% endif %}
+<c-forms.select size="md" name="risk" id="{{ inventory.content_id|default:'inventory' }}-risk" label="Filter by risk">
+<option value="all">All risk</option>
+<option value="attention"
+        {% if inventory.params.risk == 'attention' %}selected{% endif %}>Has vulnerabilities</option>
+<option value="clear"
+        {% if inventory.params.risk == 'clear' %}selected{% endif %}>No open vulnerabilities</option>
+<option value="unassessed"
+        {% if inventory.params.risk == 'unassessed' %}selected{% endif %}>Not fully assessed</option>
+</c-forms.select>
+<c-forms.select size="md" name="visibility" id="{{ inventory.content_id|default:'inventory' }}-visibility" label="Filter by visibility">
+<option value="all">All visibility</option>
+<option value="public"
+        {% if inventory.params.visibility == 'public' %}selected{% endif %}>Public</option>
+<option value="private"
+        {% if inventory.params.visibility == 'private' %}selected{% endif %}>Private</option>
+{% if inventory.kind == 'components' %}
+    <option value="gated"
+            {% if inventory.params.visibility == 'gated' %}selected{% endif %}>Gated</option>
+{% endif %}
+</c-forms.select>
+<c-slot name="right"><c-overview.severity-legend /></c-slot>
+</c-tables.toolbar>

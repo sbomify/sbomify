@@ -10,9 +10,9 @@ for a column with no visible heading; the body cell renders the slot. The two
 branches differ in the cell they nest and in nothing else, and both state their
 own gutters, so the default ones never stack against them.
 {% endcomment %}
-<c-vars as label="Actions" class />
+<c-vars compact as label="Actions" class />
 {% if as == 'th' %}
-    <c-tables.header-cell end date variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" class="{{ class }}" :attrs="attrs"><span class="sr-only">{{ label }}</span></c-tables.header-cell>
+    <c-tables.header-cell end date :compact="compact" variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" class="{{ class }}" :attrs="attrs"><span class="sr-only">{{ label }}</span></c-tables.header-cell>
 {% else %}
-    <c-tables.cell end date variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" class="{{ class }}" :attrs="attrs">{{ slot }}</c-tables.cell>
+    <c-tables.cell end date :compact="compact" variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" class="{{ class }}" :attrs="attrs">{{ slot }}</c-tables.cell>
 {% endif %}
