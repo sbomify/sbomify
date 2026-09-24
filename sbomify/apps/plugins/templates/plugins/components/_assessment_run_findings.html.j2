@@ -13,7 +13,9 @@ filled.{% endcomment %}
 <div id="findings-{{ run.id }}"
      class="run-findings"
      hx-target="this"
-     hx-swap="outerHTML">
+     hx-swap="morph"
+     hx-get="{{ findings_url }}?{{ findings_query }}"
+     hx-trigger="triage-saved from:body, vex-reapplied from:body">
     {% comment %}The toolbar narrows the list this card shows. Its parameters are
     prefixed, so a URL that carries both this and the component panel's filters
     stays readable. The form targets this region, which is the same region the
@@ -29,13 +31,13 @@ filled.{% endcomment %}
             {# Security Findings List #}
             <div class="findings-list">
                 <h6>
-                    <i class="fas fa-list-ul mr-1"></i>Vulnerabilities
+                    <i class="fas fa-list-ul mr-1" aria-hidden="true"></i>Vulnerabilities
                 </h6>
                 {% for finding in findings %}
                     <div class="finding-item {{ finding.severity|severity_border_class }}">
                         <div class="flex items-start">
                             <span class="finding-status-icon {{ finding.severity|severity_text_class }}">
-                                <i class="{{ finding.severity|severity_icon }}"></i>
+                                <i class="{{ finding.severity|severity_icon }}" aria-hidden="true"></i>
                             </span>
                             <div class="flex-1 ml-2">
                                 <div class="finding-title flex items-center gap-2 flex-wrap">
@@ -46,7 +48,7 @@ filled.{% endcomment %}
                                                target="_blank"
                                                rel="noopener noreferrer"
                                                class="text-primary hover:underline no-underline inline-flex items-center gap-1">
-                                                <i class="fas fa-external-link-alt text-xs"></i>{{ finding.id }}
+                                                <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>{{ finding.id }}
                                             </a>
                                         {% else %}
                                             <span class="text-text font-medium">{{ finding.id }}</span>
@@ -62,7 +64,7 @@ filled.{% endcomment %}
                                     {% comment %}A malicious package is a different decision from a vulnerable one: rip it out now rather than schedule a patch. Shown ahead of severity because the severity is not the point, and the OpenSSF records carry none at all.{% endcomment %}
                                     {% if finding.malicious %}
                                         <c-badges.solid-danger size="sm" class="uppercase" title="Malicious package: remove it rather than upgrade">
-                                        <i class="fas fa-skull-crossbones mr-1"></i>Malicious
+                                        <i class="fas fa-skull-crossbones mr-1" aria-hidden="true"></i>Malicious
                                         </c-badges.solid-danger>
                                     {% endif %}
                                     {# CISA KEV: confirmed exploited in the wild #}
@@ -79,13 +81,13 @@ filled.{% endcomment %}
                                     {# VEX analysis state #}
                                     {% if finding.analysis_state %}
                                         <c-badges.info title="{{ finding.analysis_justification|vex_justification_label }} {{ finding.analysis_detail|default:'' }}">
-                                        <i class="fas fa-clipboard-check mr-0.5"></i>{{ finding.analysis_state }}
+                                        <i class="fas fa-clipboard-check mr-0.5" aria-hidden="true"></i>{{ finding.analysis_state }}
                                         </c-badges.info>
                                     {% endif %}
                                     {# Stale: a component-wide suppression asserted for a different version of this package #}
                                     {% if finding.analysis_stale %}
                                         <c-badges.warning title="This suppression was asserted for a different version of this package. Re-review whether it still applies">
-                                        <i class="fas fa-triangle-exclamation mr-0.5"></i>re-review
+                                        <i class="fas fa-triangle-exclamation mr-0.5" aria-hidden="true"></i>re-review
                                         </c-badges.warning>
                                     {% endif %}
                                     {% if can_triage and run.category == 'security' %}
@@ -96,7 +98,7 @@ filled.{% endcomment %}
                                 {# Component info #}
                                 {% if finding.component %}
                                     <div class="mt-1 text-sm text-text-muted">
-                                        <i class="fas fa-cube mr-1"></i>
+                                        <i class="fas fa-cube mr-1" aria-hidden="true"></i>
                                         <span class="font-mono">{{ finding.component.name }}
                                             {% if finding.component.version %}@{{ finding.component.version }}{% endif %}
                                         </span>
@@ -135,7 +137,7 @@ filled.{% endcomment %}
                                                        target="_blank"
                                                        rel="noopener noreferrer"
                                                        class="inline-flex items-center gap-1 text-xs text-primary hover:underline no-underline mr-2">
-                                                        <i class="fas fa-external-link-alt"></i>Reference
+                                                        <i class="fas fa-external-link-alt" aria-hidden="true"></i>Reference
                                                     </a>
                                                 {% endif %}
                                             {% endfor %}
@@ -151,7 +153,7 @@ filled.{% endcomment %}
                                                                target="_blank"
                                                                rel="noopener noreferrer"
                                                                class="inline-flex items-center gap-1 text-xs text-primary hover:underline no-underline truncate">
-                                                                <i class="fas fa-external-link-alt flex-shrink-0"></i>{{ ref|truncatechars:80 }}
+                                                                <i class="fas fa-external-link-alt flex-shrink-0" aria-hidden="true"></i>{{ ref|truncatechars:80 }}
                                                             </a>
                                                         {% endif %}
                                                     {% endfor %}
@@ -171,20 +173,20 @@ filled.{% endcomment %}
             {# Compliance Findings List #}
             <div class="findings-list">
                 <h6>
-                    <i class="fas fa-list-ul mr-1"></i>Findings
+                    <i class="fas fa-list-ul mr-1" aria-hidden="true"></i>Findings
                 </h6>
                 {% for finding in findings %}
                     <div class="finding-item {{ finding.status|status_border_class }}">
                         <div class="flex items-start">
                             <span class="finding-status-icon {{ finding.status|status_text_class }}">
-                                <i class="{{ finding.status|status_icon }}"></i>
+                                <i class="{{ finding.status|status_icon }}" aria-hidden="true"></i>
                             </span>
                             <div class="flex-1 ml-2">
                                 <div class="finding-title">{{ finding.title }}</div>
                                 <div class="finding-description">{{ finding.description|advisory_prose|format_finding_description }}</div>
                                 {% if finding.remediation %}
                                     <div class="finding-remediation">
-                                        <i class="fas fa-lightbulb mr-1"></i>
+                                        <i class="fas fa-lightbulb mr-1" aria-hidden="true"></i>
                                         {{ finding.remediation }}
                                     </div>
                                 {% endif %}

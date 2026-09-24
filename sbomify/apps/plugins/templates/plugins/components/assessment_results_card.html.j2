@@ -1,19 +1,30 @@
 {% load static plugins_extras %}
 <link rel="stylesheet"
       href="{% static 'css/components/assessment-results-card.css' %}">
-{# WebSocket listener for real-time assessment updates #}
-<c-layout.frame id="assessment-results" x-data @ws:message.window=" if ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ sbom_id }}') { location.reload(); } ">
+{% comment %}A completing assessment refreshes this section only. It used to
+reload the page, which arrives unannounced: the reader may have a triage modal
+open with a justification half typed, a suppression search filled in, or a
+disclosure expanded, and a reload discards all of it. hx-select pulls this same
+region out of the page response, so no extra endpoint is needed, and morph keeps
+scroll position and focus.
+
+hx-disinherit is not optional here. htmx inherits hx-target, hx-select and
+hx-swap down the tree, and each run card lazily fetches its findings from a
+descendant that sets neither target nor select. Without this, opening a card
+sent its findings through this element's hx-select, matched nothing in that
+response, and emptied the whole section.{% endcomment %}
+<c-layout.frame id="assessment-results" x-data hx-get="{{ request.get_full_path }}" hx-select="#assessment-results" hx-target="this" hx-swap="morph" hx-trigger="assessment-complete from:body" hx-disinherit="*" @ws:message.window=" if ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ sbom_id }}') { document.body.dispatchEvent(new CustomEvent('assessment-complete')); } ">
 <c-layout.section-header level="2" title="Assessments">
 <c-slot name="actions">
 {% with status=assessment_runs.status_summary %}
     {% if status.overall_status == 'all_pass' %}
-        <c-badges.secondary class="gap-1">
+        <c-badges.success class="gap-1">
         <i class="fas fa-check-circle" aria-hidden="true"></i>All passed
-        </c-badges.secondary>
+        </c-badges.success>
     {% elif status.overall_status == 'has_failures' %}
-        <c-badges.secondary class="gap-1">
+        <c-badges.warning class="gap-1">
         <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>Issues found
-        </c-badges.secondary>
+        </c-badges.warning>
     {% elif status.overall_status == 'pending' or status.overall_status == 'in_progress' %}
         <c-badges.secondary class="gap-1">
         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
@@ -45,7 +56,7 @@
             </c-chips.metric-chip>
             <c-chips.metric-chip accent="warning">
             <c-chips.metric.value>{{ status.failing_count }}</c-chips.metric.value>
-            <c-chips.metric.label>Issues</c-chips.metric.label>
+            <c-chips.metric.label>Issue{{ status.failing_count|pluralize }}</c-chips.metric.label>
             </c-chips.metric-chip>
             <c-chips.metric-chip accent="info">
             <c-chips.metric.value>{{ status.pending_count|add:status.in_progress_count }}</c-chips.metric.value>

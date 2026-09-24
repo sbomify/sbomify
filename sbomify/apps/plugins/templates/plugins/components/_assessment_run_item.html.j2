@@ -23,7 +23,7 @@
                         <span class="flex items-center gap-1 flex-wrap">
                             {% for name in run.release_names %}
                                 <c-badges.secondary title="Release this scan result applies to">
-                                <i class="fas fa-tag mr-1"></i>{{ name }}
+                                <i class="fas fa-tag mr-1" aria-hidden="true"></i>{{ name }}
                                 </c-badges.secondary>
                             {% endfor %}
                         </span>
@@ -32,21 +32,21 @@
                         {% comment %}A skipped scanner counts its own stand-down notice as one info finding, so security_total is 1 and the card would otherwise claim a vulnerability the scanner never reported.{% endcomment %}
                         {% if skipped %}
                             <c-badges.secondary title="This plugin did not scan, so it reported no verdict.">
-                            <i class="fas fa-ban mr-1"></i>Skipped
+                            <i class="fas fa-ban mr-1" aria-hidden="true"></i>Skipped
                             </c-badges.secondary>
                         {% elif security_total %}
-                            <c-badges.secondary>
-                            <i class="fas fa-shield-alt mr-1"></i>{{ security_total }} vulnerabilit{{ security_total|pluralize:"y,ies" }}
-                            </c-badges.secondary>
+                            <c-badges.warning>
+                            <i class="fas fa-shield-alt mr-1" aria-hidden="true"></i>{{ security_total }} vulnerabilit{{ security_total|pluralize:"y,ies" }}
+                            </c-badges.warning>
                         {% else %}
-                            <c-badges.secondary>
-                            <i class="fas fa-check-circle mr-1"></i>No vulnerabilities
-                            </c-badges.secondary>
+                            <c-badges.success>
+                            <i class="fas fa-check-circle mr-1" aria-hidden="true"></i>No vulnerabilities
+                            </c-badges.success>
                         {% endif %}
                     {% elif run.status == 'failed' %}
-                        <c-badges.secondary>
-                        <i class="fas fa-times-circle mr-1"></i>Error
-                        </c-badges.secondary>
+                        <c-badges.danger>
+                        <i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Error
+                        </c-badges.danger>
                     {% elif run.status == 'running' %}
                         <c-badges.secondary>
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
@@ -54,7 +54,7 @@
                         </c-badges.secondary>
                     {% else %}
                         <c-badges.secondary>
-                        <i class="fas fa-clock mr-1"></i>Pending
+                        <i class="fas fa-clock mr-1" aria-hidden="true"></i>Pending
                         </c-badges.secondary>
                     {% endif %}
                     {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
@@ -70,17 +70,17 @@
                     {# Run Metadata #}
                     <div class="flex flex-wrap items-center gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
                         <span>
-                            <i class="fas fa-code-branch mr-1"></i>
+                            <i class="fas fa-code-branch mr-1" aria-hidden="true"></i>
                             v{{ run.plugin_version }}
                         </span>
                         <span>
-                            <i class="fas fa-play-circle mr-1"></i>
+                            <i class="fas fa-play-circle mr-1" aria-hidden="true"></i>
                             {{ run.run_reason|format_run_reason }}
                         </span>
                         {% include 'plugins/components/_rerun_button.html.j2' %}
                         {% if run.completed_at %}
                             <span>
-                                <i class="fas fa-calendar-check mr-1"></i>
+                                <i class="fas fa-calendar-check mr-1" aria-hidden="true"></i>
                                 {{ run.completed_at|date:"M d, Y \a\t H:i" }}
                             </span>
                         {% endif %}
@@ -125,10 +125,10 @@
             {% endwith %}
         {% else %}
             {# Compliance / non-security rendering #}
-            {% comment %}A skipped run keeps the neutral base border: it produced no verdict, so it is neither a warning nor a pass.{% endcomment %}
+            {% comment %}A skipped run, and a run whose result could not be read, keep the neutral base border: neither produced a verdict, so neither is a warning or a pass.{% endcomment %}
             {# The level must render as one bare word, so its branch stays on one line. #}
             {# djlint:off #}
-            <c-cards.collapsible level="{% if skipped %}{% elif error_count %}danger{% elif fail_count %}warning{% elif run.status == 'completed' and pass_count == 0 %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ expanded: false }">
+            <c-cards.collapsible level="{% if skipped %}{% elif not result %}{% elif error_count %}danger{% elif fail_count %}warning{% elif run.status == 'completed' and pass_count == 0 %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ expanded: false }">
             {# djlint:on #}
             <c-cards.collapsible-trigger bare state="expanded" @click="expanded = !expanded" id="run-trigger-{{ run.id }}">
             <div class="flex items-center gap-3 flex-grow min-w-0">
@@ -138,7 +138,7 @@
                     <span class="flex items-center gap-1 flex-wrap">
                         {% for name in run.release_names %}
                             <c-badges.secondary title="Release this scan result applies to">
-                            <i class="fas fa-tag mr-1"></i>{{ name }}
+                            <i class="fas fa-tag mr-1" aria-hidden="true"></i>{{ name }}
                             </c-badges.secondary>
                         {% endfor %}
                     </span>
@@ -146,26 +146,31 @@
                 {% if run.status == 'completed' %}
                     {% if skipped %}
                         <c-badges.secondary title="This plugin did not run, so it reported no verdict.">
-                        <i class="fas fa-ban mr-1"></i>Skipped
+                        <i class="fas fa-ban mr-1" aria-hidden="true"></i>Skipped
+                        </c-badges.secondary>
+                    {% elif not result %}
+                        {% comment %}The run finished but its stored result could not be read: _run_to_schema drops a blob that fails validation to None so one bad row cannot blank the page. Every count is then zero, which used to fall through to "Warnings Only" and report a verdict this run never gave. A security run carrying a critical finding read as warnings-only.{% endcomment %}
+                        <c-badges.secondary title="This run finished, but its stored result could not be read.">
+                        <i class="fas fa-question-circle mr-1" aria-hidden="true"></i>Result unavailable
                         </c-badges.secondary>
                     {% elif has_issues %}
-                        <c-badges.secondary>
-                        <i class="fas fa-exclamation-triangle mr-1"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
-                        </c-badges.secondary>
+                        <c-badges.warning>
+                        <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
+                        </c-badges.warning>
                     {% elif pass_count == 0 %}
                         {% comment %}All findings were warnings — no positive verdict was produced. Surface distinctly so operators don't misread as a pass.{% endcomment %}
-                        <c-badges.secondary>
-                        <i class="fas fa-exclamation-circle mr-1"></i>Warnings Only
-                        </c-badges.secondary>
+                        <c-badges.warning>
+                        <i class="fas fa-exclamation-circle mr-1" aria-hidden="true"></i>Warnings Only
+                        </c-badges.warning>
                     {% else %}
-                        <c-badges.secondary>
-                        <i class="fas fa-check-circle mr-1"></i>Passed
-                        </c-badges.secondary>
+                        <c-badges.success>
+                        <i class="fas fa-check-circle mr-1" aria-hidden="true"></i>Passed
+                        </c-badges.success>
                     {% endif %}
                 {% elif run.status == 'failed' %}
-                    <c-badges.secondary>
-                    <i class="fas fa-times-circle mr-1"></i>Error
-                    </c-badges.secondary>
+                    <c-badges.danger>
+                    <i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Error
+                    </c-badges.danger>
                 {% elif run.status == 'running' %}
                     <c-badges.secondary>
                     {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
@@ -173,7 +178,7 @@
                     </c-badges.secondary>
                 {% else %}
                     <c-badges.secondary>
-                    <i class="fas fa-clock mr-1"></i>Pending
+                    <i class="fas fa-clock mr-1" aria-hidden="true"></i>Pending
                     </c-badges.secondary>
                 {% endif %}
                 {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
@@ -189,17 +194,17 @@
                 {# Run Metadata #}
                 <div class="flex flex-wrap items-center gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
                     <span>
-                        <i class="fas fa-code-branch mr-1"></i>
+                        <i class="fas fa-code-branch mr-1" aria-hidden="true"></i>
                         v{{ run.plugin_version }}
                     </span>
                     <span>
-                        <i class="fas fa-play-circle mr-1"></i>
+                        <i class="fas fa-play-circle mr-1" aria-hidden="true"></i>
                         {{ run.run_reason|format_run_reason }}
                     </span>
                     {% include 'plugins/components/_rerun_button.html.j2' %}
                     {% if run.completed_at %}
                         <span>
-                            <i class="fas fa-calendar-check mr-1"></i>
+                            <i class="fas fa-calendar-check mr-1" aria-hidden="true"></i>
                             {{ run.completed_at|date:"M d, Y \a\t H:i" }}
                         </span>
                     {% endif %}
@@ -235,7 +240,7 @@
                     {# Standard Info (for compliance plugins) #}
                     <div class="standard-info mt-4">
                         <h6>
-                            <i class="fas fa-book mr-1"></i>Standard Reference
+                            <i class="fas fa-book mr-1" aria-hidden="true"></i>Standard Reference
                         </h6>
                         <div class="text-sm">
                             <strong>Standard:</strong> {{ run.result.metadata.standard_name }}
@@ -248,7 +253,7 @@
                                    target="_blank"
                                    rel="noopener noreferrer"
                                    class="text-primary hover:underline no-underline">
-                                    View Standard <i class="fas fa-external-link-alt ml-1"></i>
+                                    View Standard <i class="fas fa-external-link-alt ml-1" aria-hidden="true"></i>
                                 </a>
                             {% endif %}
                         </div>
