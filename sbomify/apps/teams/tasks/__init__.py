@@ -121,12 +121,16 @@ def verify_custom_domains() -> None:
 
         try:
             # Counted before the probe runs, so a probe that times out still backs off.
+            # Only if the domain is still the one read above and still pending.
             # Use F() expression for atomic increment to prevent race conditions
-            Team.objects.filter(pk=team.pk).update(
+            counted = Team.objects.filter(
+                pk=team.pk, custom_domain=team.custom_domain, custom_domain_validated=False
+            ).update(
                 custom_domain_verification_failures=F("custom_domain_verification_failures") + 1,
                 custom_domain_last_checked_at=now,
             )
-            probe_custom_domain.send(team.pk, cast(str, team.custom_domain))
+            if counted:
+                probe_custom_domain.send(team.pk, cast(str, team.custom_domain))
 
         except Exception as e:
             logger.error(f"Error verifying domain {team.custom_domain}: {e}")

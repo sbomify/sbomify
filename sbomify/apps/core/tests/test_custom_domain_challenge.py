@@ -7,6 +7,7 @@ which fetches the domain through public DNS, can mark it verified.
 
 import gzip
 import io
+import json
 from urllib.parse import urlsplit
 
 import pytest
@@ -15,7 +16,7 @@ import urllib3
 from django.test import Client
 
 from sbomify.apps.teams.models import Team
-from sbomify.apps.teams.tasks import probe_custom_domain, verify_custom_domains
+from sbomify.apps.teams.tasks import PROBE_MAX_BYTES, probe_custom_domain, verify_custom_domains
 from sbomify.apps.teams.utils import custom_domain_challenge
 
 DOMAIN = "trust.example.com"
@@ -75,6 +76,25 @@ def test_each_due_domain_is_counted_and_probed_in_its_own_message(claimed, mocke
     assert claimed.custom_domain_last_checked_at is not None
 
 
+@pytest.mark.parametrize("change", [{"custom_domain": "other.example.com"}, {"custom_domain_validated": True}])
+def test_the_task_leaves_a_domain_that_changed_after_it_was_read(claimed, mocker, change):
+    send = mocker.patch.object(probe_custom_domain, "send")
+
+    def change_it_meanwhile(task_name: str, message: str, **kwargs) -> None:
+        if message == "probe":
+            Team.objects.filter(pk=claimed.pk).update(**change)
+
+    # The breadcrumb is recorded between the task's read and its write.
+    mocker.patch("sbomify.apps.teams.tasks.record_task_breadcrumb", side_effect=change_it_meanwhile)
+
+    verify_custom_domains()
+
+    send.assert_not_called()
+    claimed.refresh_from_db()
+    assert claimed.custom_domain_verification_failures == 0
+    assert claimed.custom_domain_last_checked_at is None
+
+
 @pytest.mark.parametrize("routed", [_routed_here, _routed_here_compressed])
 def test_the_probe_verifies_a_domain_that_serves_the_challenge(claimed, mocker, routed):
     Team.objects.filter(pk=claimed.pk).update(custom_domain_verification_failures=1)
@@ -86,8 +106,22 @@ def test_the_probe_verifies_a_domain_that_serves_the_challenge(claimed, mocker, 
     assert claimed.custom_domain_validated is True
     assert claimed.custom_domain_verification_failures == 0
     assert claimed.custom_domain_last_checked_at is not None
-    # A redirect would let the answer come from somewhere other than the domain.
+    # A redirect would let the answer come from somewhere other than the domain,
+    # and so would an unchecked certificate.
     assert fetch.call_args.kwargs["allow_redirects"] is False
+    assert fetch.call_args.kwargs["verify"] is True
+
+
+def test_the_probe_reads_no_more_than_a_domain_check_answer(claimed, mocker):
+    answer = {"challenge": custom_domain_challenge(claimed.pk, DOMAIN), "padding": "x" * PROBE_MAX_BYTES}
+    mocker.patch(
+        "sbomify.apps.teams.tasks.request_with_retry", return_value=_response(200, json.dumps(answer).encode())
+    )
+
+    probe_custom_domain(claimed.pk, DOMAIN)
+
+    claimed.refresh_from_db()
+    assert claimed.custom_domain_validated is False
 
 
 @pytest.mark.parametrize(
@@ -123,6 +157,16 @@ def test_the_probe_does_not_verify_a_domain_changed_while_it_ran(claimed, mocker
     claimed.refresh_from_db()
     assert claimed.custom_domain == "other.example.com"
     assert claimed.custom_domain_validated is False
+
+
+def test_the_challenge_is_served_only_on_the_custom_domain(client, claimed, settings):
+    settings.TRUST_CENTER_DOMAIN = "trustcenters.test"
+    Team.objects.filter(pk=claimed.pk).update(is_public=True, slug="claimant")
+
+    response = client.get("/.well-known/com.sbomify.domain-check", HTTP_HOST="claimant.trustcenters.test")
+
+    assert response.status_code == 200
+    assert "challenge" not in response.json()
 
 
 def test_the_challenge_is_bound_to_the_deployment_the_workspace_and_the_domain(settings):
