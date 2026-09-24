@@ -27,7 +27,7 @@ from .billing_helpers import (
 )
 from .models import BillingPlan
 from .schemas import ChangePlanRequest, ChangePlanResponse, PlanSchema, UsageSchema
-from .stripe_client import StripeError, get_stripe_client
+from .stripe_client import BillingRetryableError, StripeError, StripeResourceMissingError, get_stripe_client
 
 router = Router(tags=["Billing"], auth=(PersonalAccessTokenAuth(), django_auth))
 
@@ -84,7 +84,14 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
 
 @router.post(
     "/change-plan/",
-    response={200: ChangePlanResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse},
+    response={
+        200: ChangePlanResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        429: ErrorResponse,
+        503: ErrorResponse,
+    },
 )
 def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any]:
     """Change the current team's billing plan."""
@@ -125,6 +132,8 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
         return 404, {"detail": "Workspace not found"}
     except BillingPlan.DoesNotExist:
         return 400, {"detail": "Invalid plan"}
+    except BillingRetryableError:
+        return 503, {"detail": "Billing is unavailable right now. Try again in a few minutes."}
     except (StripeError, ValueError):
         return 400, {"detail": "Invalid request"}
 
@@ -134,52 +143,39 @@ def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, An
     with transaction.atomic():
         team = Team.objects.select_for_update().get(pk=team.pk)
         billing_limits = team.billing_plan_limits or {}
-        # Use the stored Stripe customer id. Web checkout creates a random cus_..., so the
-        # f"c_{team.key}" form only matches the API-created path; hardcoding it made
-        # get_customer 404 for web-checkout teams, the StripeError branch downgraded locally,
-        # and the active subscription was never canceled (continued billing).
-        customer_id = billing_limits.get("stripe_customer_id") or f"c_{team.key}"
 
-        try:
-            customer = stripe_client.get_customer(customer_id)
-            subscriptions = stripe_client.list_subscriptions(customer.id, limit=1)
+        # Only a subscription Stripe reports gone or ended moves the workspace
+        # now. Any other Stripe error propagates and rolls this back: reading a
+        # timeout as "no subscription" published a paying workspace's components.
+        subscription = None
+        if subscription_id := billing_limits.get("stripe_subscription_id"):
+            try:
+                subscription = stripe_client.get_subscription(subscription_id)
+            except StripeResourceMissingError:
+                subscription = None
 
-            if subscriptions.data:
-                cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
-                scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
+        if subscription is not None and subscription.status not in ("canceled", "incomplete_expired"):
+            if billing_limits.get("cancel_at_period_end") and billing_limits.get("scheduled_downgrade_plan"):
+                return 400, {
+                    "detail": (
+                        "A downgrade is already scheduled. "
+                        "Your current plan will remain active until the end of your billing period."
+                    )
+                }
 
-                if cancel_at_period_end and scheduled_downgrade_plan:
-                    return 400, {
-                        "detail": (
-                            "A downgrade is already scheduled. "
-                            "Your current plan will remain active until the end of your billing period."
-                        )
-                    }
+            stripe_client.modify_subscription(subscription.id, cancel_at_period_end=True)
 
-                stripe_client.modify_subscription(subscriptions.data[0].id, cancel_at_period_end=True)
-
-                existing_limits = billing_limits.copy()
-                existing_limits.update(
-                    {
-                        "cancel_at_period_end": True,
-                        "scheduled_downgrade_plan": "community",
-                        "stripe_subscription_id": subscriptions.data[0].id,
-                        "subscription_status": "active",
-                        "last_updated": timezone.now().isoformat(),
-                    }
-                )
-                if "stripe_customer_id" not in existing_limits:
-                    existing_limits["stripe_customer_id"] = customer.id
-
-                team.billing_plan_limits = existing_limits
-            else:
-                team.billing_plan = "community"
-                existing_limits = billing_limits.copy()
-                existing_limits.update(get_community_plan_limits())
-                team.billing_plan_limits = existing_limits
-                handle_community_downgrade_visibility(team)
-
-        except StripeError:
+            existing_limits = billing_limits.copy()
+            existing_limits.update(
+                {
+                    "cancel_at_period_end": True,
+                    "scheduled_downgrade_plan": "community",
+                    "subscription_status": subscription.status,
+                    "last_updated": timezone.now().isoformat(),
+                }
+            )
+            team.billing_plan_limits = existing_limits
+        else:
             team.billing_plan = "community"
             existing_limits = billing_limits.copy()
             existing_limits.update(get_community_plan_limits())
