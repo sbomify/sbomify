@@ -30,6 +30,8 @@ from .config import get_unlimited_plan_limits, is_billing_enabled
 from .models import BillingPlan
 from .stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from .stripe_client import (
+    LIVE_SUBSCRIPTION_STATUSES,
+    TERMINAL_SUBSCRIPTION_STATUSES,
     BillingRetryableError,
     StripeError,
     StripeResourceMissingError,
@@ -41,14 +43,6 @@ from .stripe_client import (
 logger = getLogger(__name__)
 
 stripe_client = get_stripe_client()
-
-# Statuses in which a workspace's stored subscription is still the one it pays
-# through. While it is, an event for a different subscription of the same
-# customer describes one the workspace has replaced.
-LIVE_SUBSCRIPTION_STATUSES = frozenset({"active", "trialing", "past_due", "incomplete"})
-
-# Statuses Stripe never moves a subscription out of.
-TERMINAL_SUBSCRIPTION_STATUSES = frozenset({"canceled", "incomplete_expired"})
 
 
 def cancel_replaced_subscription(subscription_id: str) -> None:
@@ -64,6 +58,7 @@ def cancel_replaced_subscription(subscription_id: str) -> None:
     if subscription.status in TERMINAL_SUBSCRIPTION_STATUSES:
         return
     stripe_client.cancel_subscription(subscription_id)
+    logger.info("Cancelled the subscription a checkout replaced")
 
 
 def _best_effort(description: str, fn: Any, *args: Any, **kwargs: Any) -> None:
@@ -1012,7 +1007,6 @@ def handle_checkout_completed(session: Any) -> None:
             logger.info("Cancelling old subscription to prevent double billing")
             try:
                 cancel_replaced_subscription(existing_subscription_id)
-                logger.info("Successfully cancelled old subscription")
             except StripeError as e:
                 # A failed cancel (often a transient Stripe outage) must NOT be
                 # acknowledged: returning 200 strands both subscriptions active

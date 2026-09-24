@@ -18,6 +18,14 @@ from .utils import STRIPE_API_LIMIT
 
 logger = getLogger(__name__)
 
+# Statuses in which a workspace's stored subscription is still the one it pays
+# through. While it is, an event for a different subscription of the same
+# customer describes one the workspace has replaced.
+LIVE_SUBSCRIPTION_STATUSES = frozenset({"active", "trialing", "past_due", "incomplete"})
+
+# Statuses Stripe never moves a subscription out of.
+TERMINAL_SUBSCRIPTION_STATUSES = frozenset({"canceled", "incomplete_expired"})
+
 F = TypeVar("F", bound=Callable[..., Any])
 
 

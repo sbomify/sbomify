@@ -25,10 +25,9 @@ from .billing_helpers import (
     handle_community_downgrade_visibility,
     release_checkout_lock,
 )
-from .billing_processing import LIVE_SUBSCRIPTION_STATUSES
 from .models import BillingPlan
 from .schemas import ChangePlanRequest, ChangePlanResponse, PlanSchema, UsageSchema
-from .stripe_client import StripeError, get_stripe_client
+from .stripe_client import LIVE_SUBSCRIPTION_STATUSES, StripeError, get_stripe_client
 
 router = Router(tags=["Billing"], auth=(PersonalAccessTokenAuth(), django_auth))
 
