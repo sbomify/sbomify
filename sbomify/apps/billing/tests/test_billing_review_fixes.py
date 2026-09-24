@@ -658,7 +658,7 @@ class TestATrialRunsItsFullLength:
     def test_a_trial_with_hours_left_has_not_expired(self, mocker, sample_team_with_owner_member):
         from sbomify.apps.billing import billing_processing
 
-        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")
+        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.apply_community_downgrade")
         mocker.patch("sbomify.apps.billing.billing_processing.notify_billing_managers")
         team = sample_team_with_owner_member.team
 
@@ -671,7 +671,7 @@ class TestATrialRunsItsFullLength:
     def test_a_trial_past_its_end_expires(self, mocker, sample_team_with_owner_member):
         from sbomify.apps.billing import billing_processing
 
-        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")
+        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.apply_community_downgrade")
         mocker.patch("sbomify.apps.billing.billing_processing.notify_billing_managers")
         team = sample_team_with_owner_member.team
 

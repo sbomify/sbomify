@@ -20,9 +20,9 @@ from .billing_helpers import (
     RATE_LIMIT,
     RATE_LIMIT_PERIOD,
     acquire_checkout_lock,
+    apply_community_downgrade,
     check_rate_limit,
     get_community_plan_limits,
-    handle_community_downgrade_visibility,
     release_checkout_lock,
 )
 from .models import BillingPlan
@@ -177,14 +177,14 @@ def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, An
                 existing_limits = billing_limits.copy()
                 existing_limits.update(get_community_plan_limits())
                 team.billing_plan_limits = existing_limits
-                handle_community_downgrade_visibility(team)
+                apply_community_downgrade(team)
 
         except StripeError:
             team.billing_plan = "community"
             existing_limits = billing_limits.copy()
             existing_limits.update(get_community_plan_limits())
             team.billing_plan_limits = existing_limits
-            handle_community_downgrade_visibility(team)
+            apply_community_downgrade(team)
 
         team.save()
     return 200, {"success": True}

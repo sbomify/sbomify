@@ -16,7 +16,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
-from .billing_helpers import parse_cancel_at
+from .billing_helpers import ENDED_SUBSCRIPTION_STATUSES, downgrade_ended_subscription, parse_cancel_at
 from .stripe_cache import get_cached_subscription, invalidate_subscription_cache, set_cached_subscription
 from .stripe_client import StripeError, StripeResourceMissingError, get_stripe_client
 
@@ -119,6 +119,8 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
     # else.
     if reconciled and stripe_sub_id and team.key:
         invalidate_subscription_cache(stripe_sub_id, team.key)
+    if reconciled:
+        downgrade_ended_subscription(team.pk)
     return reconciled
 
 
@@ -301,6 +303,11 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             billing_limits["billing_period"] = real_billing_period
             needs_update = True
             updated_fields.append("billing_period")
+
+        # Checked on every sync, not only on a status change: this is also what
+        # moves a workspace whose ended subscription left it on the paid plan.
+        if real_sub_status in ENDED_SUBSCRIPTION_STATUSES:
+            downgrade_ended_subscription(team.pk)
 
         # Update last_updated timestamp
         if needs_update:
