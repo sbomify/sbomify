@@ -13,10 +13,16 @@ complete Alpine binding rather than a class layered over the resting one: two
 utilities for the same property would be resolved by stylesheet order, not by
 which is "on". The focus ring is the library floor; the tw-* rules never had
 one on these buttons.
+
+copy() awaits the write before it claims one happened. This is the component
+that shows a token the user cannot ask for again, so a green check over a
+rejected clipboard call (denied permission, insecure origin) costs them the
+secret. On failure it says so and leaves the resting state alone, matching
+copyable-value.ts.
 {% endcomment %}
 <c-vars label token masked copyable="true" class />
 <div class="relative flex flex-col gap-2{% if class %} {{ class }}{% endif %}"
-     x-data="{ copied: false, masked: {{ masked|yesno:'true,false' }} }"
+     x-data="{ copied: false, copiedTimer: undefined, masked: {{ masked|yesno:'true,false' }}, async copy() { try { await navigator.clipboard.writeText(this.$refs.token.textContent.trim()) } catch (err) { console.error('Failed to copy:', err); this.$dispatch('messages', { value: [{ type: 'error', message: 'Failed to copy to clipboard' }] }); return } this.copied = true; clearTimeout(this.copiedTimer); this.copiedTimer = setTimeout(() => { this.copied = false }, 2000) } }"
      {{ attrs }}>
     {% if label %}
         <div class="flex items-center justify-between gap-2">
@@ -39,7 +45,7 @@ one on these buttons.
                             :class="copied ? 'bg-success text-white' : 'bg-transparent text-text-muted hover:bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] hover:text-primary'"
                             :title="copied ? 'Copied' : 'Copy token'"
                             :aria-label="copied ? 'Copied' : 'Copy token'"
-                            @click="navigator.clipboard.writeText($refs.token.textContent.trim()); copied = true; setTimeout(() => copied = false, 2000)">
+                            @click="copy()">
                         <i :class="copied ? 'fas fa-check' : 'far fa-copy'" aria-hidden="true"></i>
                     </button>
                 {% endif %}
