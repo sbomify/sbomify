@@ -87,6 +87,16 @@ size themselves naturally on smaller screens.
             {% endfor %}
         </ul>
         <c-feedback.alert variant="warning" x-show="getDowngradeWarning('{{ plan.key|escapejs }}')" x-cloak><span x-text="getDowngradeWarning('{{ plan.key|escapejs }}')"></span></c-feedback.alert>
+        {% if plan.downgrade %}
+            {% comment %}
+                The button leaves for the Stripe portal's cancel flow, so this is the
+                last place we can say what moving here does. Hidden when the card is
+                already blocked, so a plan never carries two alerts at once.
+            {% endcomment %}
+            <c-feedback.alert variant="info" x-show="!getDowngradeWarning('{{ plan.key|escapejs }}')" x-cloak>
+            Moving here cancels your current subscription at the end of the billing period. Your workspace limits drop to the ones listed above.
+            </c-feedback.alert>
+        {% endif %}
     </div>
 </div>
 <c-slot name="footer">
