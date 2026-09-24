@@ -136,14 +136,15 @@ Keycloak runs with `start-dev`, which disables theme caching, so template edits
 show on refresh and CSS edits show after `bun run build`.
 
 The realm is configured by `bin/keycloak-bootstrap.sh`, which sets
-`loginTheme`, `emailTheme`, `registrationAllowed` and `resetPasswordAllowed`.
+`loginTheme`, `emailTheme`, `registrationAllowed`, `resetPasswordAllowed` and
+`verifyEmail`, and sends the realm's mail to Mailpit at `http://localhost:8025`.
 After changing it, re-run:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up keycloak-bootstrap
 ```
 
-To reach `login-update-password.ftl` without a working mailbox, set a required
+To reach `login-update-password.ftl` without an emailed link, set a required
 action on a test user and sign in as them:
 
 ```bash
@@ -153,9 +154,6 @@ docker exec <keycloak-container> /opt/keycloak/bin/kcadm.sh update users/<id> \
 
 ## Known gaps
 
-- **No SMTP in dev.** The bootstrap does not configure Keycloak's mail server,
-  so the reset email is never delivered locally and the emailed-link path cannot
-  be exercised end to end. The compose file does define a `mailpit` service.
 - **`login-config.ftl` is dead.** It is a generic required-actions page, but no
   Keycloak template has that name, so it is never loaded. The nearest real name
   is `login-config-totp.ftl`, which is specifically the authenticator-setup page
