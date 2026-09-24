@@ -282,7 +282,6 @@
     </c-layout.frame>
 {% endblock %}
 {% block scripts %}
-    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% if is_sbom_backed %}
         {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
         {% vite_asset 'sbomify/apps/plugins/js/main.ts' %}
