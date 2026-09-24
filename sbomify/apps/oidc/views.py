@@ -27,7 +27,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.oidc.forms import OIDCBindingForm
@@ -61,7 +61,7 @@ def _list_context(component: Component, form: OIDCBindingForm | None = None) -> 
     }
 
 
-class _TrustedPublishersBase(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+class _TrustedPublishersBase(GuestAccessBlockedMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """Shared helper: resolve the component AND check CRUD permission.
 
     Returns ``None`` and writes the error response into ``self._error``

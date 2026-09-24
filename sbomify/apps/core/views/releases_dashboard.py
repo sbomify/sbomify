@@ -10,6 +10,7 @@ from django.views import View
 
 from sbomify.apps.core.apis import list_all_releases
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
@@ -66,7 +67,7 @@ class ReleasesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         return render(request, "core/releases_dashboard.html.j2", context)
 
 
-class ReleasesTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+class ReleasesTableView(GuestAccessBlockedMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """View for HTMX table refresh."""
 
     def get(self, request: HttpRequest) -> HttpResponse:

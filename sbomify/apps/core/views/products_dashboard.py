@@ -11,6 +11,7 @@ from django.views import View
 from sbomify.apps.core.apis import create_product, list_products
 from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin
 from sbomify.apps.core.schemas import ProductCreateSchema
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
@@ -109,7 +110,7 @@ class ProductCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         return _create_product(request, on_error="core:product_new")
 
 
-class ProductsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+class ProductsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """View for HTMX table refresh."""
 
     def get(self, request: HttpRequest) -> HttpResponse:

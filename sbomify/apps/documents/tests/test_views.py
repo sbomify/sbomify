@@ -308,7 +308,7 @@ class TestDocumentsTableView:
             "documents:documents_table_public",
             kwargs={"component_id": public_document_component.id},
         )
-        response = client.get(url)
+        response = client.get(url, headers={"hx-request": "true"})
         assert response.status_code == 200
 
     def test_documents_table_private_view_requires_auth(self, client, sample_document_component):
@@ -317,7 +317,7 @@ class TestDocumentsTableView:
             "documents:documents_table",
             kwargs={"component_id": sample_document_component.id},
         )
-        response = client.get(url)
+        response = client.get(url, headers={"hx-request": "true"})
         assert response.status_code == 302  # Redirect to login
 
     def test_documents_table_private_view_accessible_auth(
@@ -330,7 +330,7 @@ class TestDocumentsTableView:
             "documents:documents_table",
             kwargs={"component_id": sample_document_component.id},
         )
-        response = authenticated_web_client.get(url)
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         assert response.status_code == 200
 
     def test_documents_table_guest_restriction(self, authenticated_web_client, sample_document_component, guest_user):
@@ -343,7 +343,7 @@ class TestDocumentsTableView:
             "documents:documents_table",
             kwargs={"component_id": sample_document_component.id},
         )
-        response = authenticated_web_client.get(url)
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         assert response.status_code == 302  # Redirect to workspace public
 
     def test_documents_table_post_requires_auth(self, client, public_document_component):

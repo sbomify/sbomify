@@ -12,7 +12,7 @@ from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.forms import TeamGeneralSettingsForm
@@ -28,7 +28,7 @@ from sbomify.apps.teams.utils import (
 logger = logging.getLogger(__name__)
 
 
-class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """View for managing workspace general settings (name, default, deletion).
 
     Gated at the ``ADMINISTER`` tier (owners and admins). Workspace *deletion* is

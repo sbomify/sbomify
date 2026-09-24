@@ -50,7 +50,8 @@ class TestListView:
     @pytest.mark.django_db
     def test_get_renders_empty_state(self, authed_client: Client, component: Component) -> None:
         response = authed_client.get(
-            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            headers={"hx-request": "true"},
         )
         assert response.status_code == 200
         assert b"trusted-publishers-section" in response.content
@@ -78,7 +79,8 @@ class TestListView:
         binding.save(update_fields=["bot_user"])
 
         response = authed_client.get(
-            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            headers={"hx-request": "true"},
         )
         assert response.status_code == 200
         assert b"acme/widget" in response.content
@@ -89,7 +91,8 @@ class TestListView:
         """Unauthenticated request gets the standard login redirect."""
         client = Client()
         response = client.get(
-            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            headers={"hx-request": "true"},
         )
         # LoginRequiredMixin sends to login URL — status 302
         assert response.status_code in (302, 401, 403)
@@ -106,7 +109,8 @@ class TestListView:
         """
         settings.APP_BASE_URL = "app.staging.sbomify.io/"  # schemeless + trailing slash
         response = authed_client.get(
-            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            headers={"hx-request": "true"},
         )
         assert response.status_code == 200
         body = response.content.decode()
@@ -327,7 +331,8 @@ class TestPermissions:
         client = Client()
         setup_authenticated_client_session(client, team_with_business_plan, guest)
         response = client.get(
-            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            headers={"hx-request": "true"},
         )
         # GuestAccessBlockedMixin redirects guests
         assert response.status_code in (302, 403)

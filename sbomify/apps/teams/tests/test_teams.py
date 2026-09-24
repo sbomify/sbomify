@@ -2109,7 +2109,7 @@ def test_team_general_get__when_user_is_owner__should_succeed(
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-    response: HttpResponse = client.get(uri)
+    response: HttpResponse = client.get(uri, headers={"hx-request": "true"})
 
     assert response.status_code == 200
     assert team.name in response.content.decode("utf-8")
@@ -2130,7 +2130,7 @@ def test_team_general_get__when_user_is_admin__should_succeed(
 
     setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
 
-    response: HttpResponse = client.get(uri)
+    response: HttpResponse = client.get(uri, headers={"hx-request": "true"})
 
     assert response.status_code == 200
 
@@ -2146,7 +2146,7 @@ def test_team_general_get__when_user_is_guest__should_fail(
 
     setup_authenticated_client_session(client, team, sample_team_with_guest_member.user)
 
-    response: HttpResponse = client.get(uri)
+    response: HttpResponse = client.get(uri, headers={"hx-request": "true"})
 
     assert response.status_code == 403
 
@@ -2243,7 +2243,7 @@ def test_team_general_post__admin_cannot_delete_workspace(
 
     # ...and the control isn't rendered either — an admin must not be shown a
     # Delete Workspace button that always 403s.
-    page: HttpResponse = client.get(uri)
+    page: HttpResponse = client.get(uri, headers={"hx-request": "true"})
     assert page.status_code == 200
     assert "Delete Workspace" not in page.content.decode()
 
