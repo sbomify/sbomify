@@ -33,6 +33,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.core.apis import _enforce_limit_under_lock
 from sbomify.apps.core.authz import ADMINISTER, can
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
@@ -564,8 +565,15 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     if not Member.objects.filter(user=cast(User, request.user), team__key=team_key, role__in=ADMINISTER).exists():
         return error_response(request, HttpResponseForbidden("Only allowed for admins or owners of the target team"))
     target_team = Team.objects.filter(key=team_key).first()
+    if target_team is None:
+        return error_response(request, HttpResponseNotFound("Workspace not found"))
 
     with transaction.atomic():
+        # Counted under the target's row lock, as creating a component there is.
+        allowed, limit_message, _code = _enforce_limit_under_lock(str(target_team.id), "component")
+        if not allowed:
+            return error_response(request, HttpResponseForbidden(limit_message))
+
         # SEMANTICALLY REQUIRED clear (NOT the belt-and-suspenders pattern).
         # We're about to change ``component.team_id`` to a different team.
         # If we left the M2M attached, those rows would become cross-tenant
@@ -575,6 +583,8 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         # happen before the team change.
         component.products.clear()
         component.team_id = team_id
+        if not target_team.can_be_private():
+            component.visibility = Component.Visibility.PUBLIC
         component.save()
 
     messages.add_message(
