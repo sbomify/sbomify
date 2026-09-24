@@ -390,6 +390,14 @@ def delete_from_s3(
     s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
 
 
+def _delete_branding_files(filenames: Sequence[str]) -> None:
+    for filename in filenames:
+        try:
+            delete_from_s3(filename)
+        except Exception as e:
+            logger.warning(f"Failed to delete branding file {filename}: {e}")
+
+
 def _refresh_workspace_list_session(request: HttpRequest) -> None:
     """Recompute the cached workspace list after a rename.
 
@@ -445,6 +453,9 @@ def update_team_branding(
     branding_data = _normalize_branding_payload(team.branding_info)
     branding_info = BrandingInfo(**branding_data).model_dump()
 
+    # Old files go only once the new keys are saved, and a failure before then removes this request's uploads.
+    uploaded: list[str] = []
+    replaced: list[str] = []
     for field in ["icon", "logo"]:
         old_filename = branding_info.get(field)
 
@@ -459,15 +470,14 @@ def update_team_branding(
                 upload_to_s3(branding_info[field], file.read(), content_type)
             except Exception:
                 logger.exception(f"Failed to upload {field} file {branding_info[field]}")
+                _delete_branding_files(uploaded)
                 raise
+            uploaded.append(branding_info[field])
         else:
             continue
 
-        try:
-            if old_filename:
-                delete_from_s3(old_filename)
-        except Exception as e:
-            logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
+        if old_filename:
+            replaced.append(old_filename)
 
     branding_info["brand_color"] = payload.brand_color or branding_info.get("brand_color")
     branding_info["accent_color"] = payload.accent_color or branding_info.get("accent_color")
@@ -477,7 +487,12 @@ def update_team_branding(
         branding_info["branding_enabled"] = payload.branding_enabled
 
     team.branding_info = branding_info
-    team.save(update_fields=["branding_info"])
+    try:
+        team.save(update_fields=["branding_info"])
+    except Exception:
+        _delete_branding_files(uploaded)
+        raise
+    _delete_branding_files(replaced)
 
     updated_branding_data = _normalize_branding_payload(team.branding_info)
     updated_branding = BrandingInfo(**updated_branding_data)
