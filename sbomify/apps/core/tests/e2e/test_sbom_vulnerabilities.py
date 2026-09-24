@@ -7,7 +7,7 @@ from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 
 
 @pytest.fixture
-def sbom_with_findings(sbom_component_details):
+def sbom_with_findings(sbom_component_details, mocker):
     """The fixture SBOM plus a second provider run carrying real findings.
 
     The fixture's own run stores an empty findings list, so the view merges
@@ -19,6 +19,9 @@ def sbom_with_findings(sbom_component_details):
     from sbomify.apps.sboms.models import SBOM
 
     sbom = SBOM.objects.get(component=sbom_component_details)
+    # This fixture creates database rows, not an uploaded artifact. Keep the
+    # detail page's lazy crypto inventory from waiting on live object storage.
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data", return_value=None)
 
     AssessmentRun.objects.create(
         sbom=sbom,
@@ -241,7 +244,6 @@ def test_full_report_saves_package_triage(authenticated_page, sbom_with_findings
     from sbomify.apps.vulnerability_scanning.vex import TRIAGE_SOURCE
 
     upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_sbom", return_value="triage.json")
-    mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data", return_value=None)
     mocker.patch("sbomify.apps.sboms.services.sboms.schedule_vex_reapply")
     sbom = sbom_with_findings
     original_filename = sbom.sbom_filename

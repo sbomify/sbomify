@@ -41,7 +41,8 @@ def test_tabs_arrows_scroll_and_reveal_selected_tab(
     expect(right).to_be_hidden()
     page.set_viewport_size({"width": 320, "height": 740})
     expect(account).to_be_in_viewport(ratio=1)
-    assert page.locator("html").evaluate("el => el.scrollWidth <= el.clientWidth")
+    # Allow the responsive layout to settle after the viewport changes.
+    page.wait_for_function("document.documentElement.scrollWidth <= document.documentElement.clientWidth", timeout=5000)
 
 
 @pytest.mark.django_db
