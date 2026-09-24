@@ -430,6 +430,12 @@ class TestStorageClient:
             settings.AWS_MEDIA_STORAGE_BUCKET_NAME, "test_object", b"test_data", "image/png"
         )
 
+    def test_upload_media_refuses_an_empty_content_type(self):
+        client = StorageClient("MEDIA")
+        with pytest.raises(ValueError, match="ContentType"):
+            client.upload_media("test_object", b"test_data", "")
+        self.mock_store.put_object.assert_not_called()
+
     def test_upload_sbom_delegates(self):
         client = StorageClient("SBOMS")
         object_name = client.upload_sbom(b"test_data")

@@ -7,12 +7,14 @@ browser to run.
 """
 
 import json
+import tracemalloc
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+from sbomify.apps.teams.apis import _MAX_SVG_BYTES, _branding_image_type
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 24
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 24
@@ -209,7 +211,10 @@ class TestBrandingSettingsForm:
             },
         )
 
-        assert json.loads(response["HX-Trigger"])["messages"][0]["type"] == "error"
+        assert json.loads(response["HX-Trigger"])["messages"][0] == {
+            "type": "error",
+            "message": "Upload a PNG, JPEG or WebP image, or a plain SVG under 1 MB.",
+        }
         assert_nothing_stored(s3, team)
 
     def test_a_file_sent_with_its_removal_is_ignored(self, owner, s3):
@@ -226,3 +231,18 @@ class TestBrandingSettingsForm:
         s3.Bucket.return_value.put_object.assert_not_called()
         team.refresh_from_db()
         assert team.branding_info["logo"] == ""
+
+
+def test_an_svg_at_the_size_cap_is_checked_without_keeping_its_elements():
+    """An element tree of this file would take over 50 MB. The check reads each element and keeps none."""
+    data = svg("<g/>" * 250_000)
+    assert len(data) <= _MAX_SVG_BYTES
+
+    tracemalloc.start()
+    try:
+        assert _branding_image_type(data) == (".svg", "image/svg+xml")
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert peak < 8 * 1024 * 1024

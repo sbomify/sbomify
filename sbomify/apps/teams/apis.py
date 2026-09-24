@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import io
 import re
 import uuid
 from collections.abc import Sequence
 from typing import Any, cast
 
-from defusedxml.ElementTree import ParseError, iterparse
+from defusedxml.ElementTree import DefusedXMLParser, ParseError
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -257,7 +256,7 @@ def update_team_branding_field(
 # one is stored, and its extension and ContentType, follow from its bytes and
 # never from the filename or type the client sent.
 _INVALID_BRANDING_IMAGE = "Upload a PNG, JPEG or WebP image, or a plain SVG under 1 MB."
-# Parsing an SVG takes far more memory and time than its size, so SVGs get a cap of their own.
+# Checking an SVG runs Python for every element and attribute, so SVGs get a size cap of their own.
 _MAX_SVG_BYTES = 1024 * 1024
 
 _SVG_ROOT = "{http://www.w3.org/2000/svg}svg"
@@ -266,6 +265,29 @@ _LIVE_NAMESPACES = ("{http://www.w3.org/1999/xhtml}", "{http://www.w3.org/1998/M
 # An in-document reference or an embedded raster image. Any other href loads or
 # runs something the check never saw.
 _INERT_HREF = re.compile(r"#|data:image/(png|jpe?g|gif|webp)[;,]")
+
+
+class _InertSvgTarget:
+    """Parser target that raises at the first thing a browser could run. It keeps no element, so no tree builds up."""
+
+    root_seen = False
+
+    def start(self, tag: str, attrib: dict[str, str]) -> None:
+        if not self.root_seen and tag != _SVG_ROOT:
+            raise ValueError("not an SVG")
+        self.root_seen = True
+        if tag.rpartition("}")[2] == "script" or tag.startswith(_LIVE_NAMESPACES):
+            raise ValueError("script, HTML or MathML element")
+        for attribute, value in attrib.items():
+            name = attribute.rpartition("}")[2].lower()
+            animated = value.strip().rpartition(":")[2].lower() if name == "attributename" else ""
+            if name.startswith("on") or name == "base" or animated == "href" or animated.startswith("on"):
+                raise ValueError("event handler, xml:base or animated href")
+            if name == "href" and not _INERT_HREF.match(value.strip().lower()):
+                raise ValueError("href that leaves the document")
+
+    def pi(self, target: str, data: str) -> None:
+        raise ValueError("processing instruction")
 
 
 def _is_inert_svg(data: bytes) -> bool:
@@ -277,20 +299,10 @@ def _is_inert_svg(data: bytes) -> bool:
     and an animation of an href or an event handler because it swaps the checked
     value for another once the image loads.
     """
+    parser = DefusedXMLParser(target=_InertSvgTarget(), forbid_dtd=True)
     try:
-        events = iterparse(io.BytesIO(data), events=("start", "pi"), forbid_dtd=True)
-        for index, (event, element) in enumerate(events):
-            if event == "pi" or (index == 0 and element.tag != _SVG_ROOT):
-                return False
-            if element.tag.rpartition("}")[2] == "script" or element.tag.startswith(_LIVE_NAMESPACES):
-                return False
-            for attribute, value in element.attrib.items():
-                name = attribute.rpartition("}")[2].lower()
-                animated = value.strip().rpartition(":")[2].lower() if name == "attributename" else ""
-                if name.startswith("on") or name == "base" or animated == "href" or animated.startswith("on"):
-                    return False
-                if name == "href" and not _INERT_HREF.match(value.strip().lower()):
-                    return False
+        parser.feed(data)
+        parser.close()
     except (ParseError, ValueError, LookupError):
         return False
     return True
@@ -453,6 +465,7 @@ def upload_branding_file(
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
+    file.seek(0)
     data = file.read()
     if not (image_type := _branding_image_type(data)):
         return 400, {"detail": _INVALID_BRANDING_IMAGE, "error_code": ErrorCode.VALIDATION_ERROR}

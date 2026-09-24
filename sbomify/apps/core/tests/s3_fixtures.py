@@ -37,6 +37,8 @@ class MockStorageClient:
         """Mock upload_media method."""
         if self.bucket_type != "MEDIA":
             raise ValueError("This method is only for MEDIA bucket")
+        if not content_type:
+            raise ValueError("Media uploads need a ContentType")
         self.upload_data_as_file("media-bucket", object_name, data)
 
     def upload_sbom(self, data: bytes) -> str:

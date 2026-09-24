@@ -246,6 +246,8 @@ class StorageClient:
             raise ValueError("This method is only for MEDIA bucket")
 
         # The media bucket is served to browsers as-is, so nothing goes in without a type of its own.
+        if not content_type:
+            raise ValueError("Media uploads need a ContentType")
         self._store.put_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, object_name, data, content_type)
 
     def upload_sbom(self, data: bytes) -> str:
