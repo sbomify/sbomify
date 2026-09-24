@@ -99,13 +99,13 @@ def test_product_uses_the_same_visibility_menu(
     page.goto(reverse("core:product_details", args=[product.pk]))
     header = page.locator("[data-page-header]")
     trigger = header.get_by_role("button", name="Product visibility", exact=True)
-    download = header.get_by_role("button", name="Download SBOM", exact=True)
+    actions = header.get_by_role("button", name="Product actions", exact=True)
     expect(trigger).to_be_visible()
-    expect(download).to_be_visible()
-    trigger_bounds, download_bounds = trigger.bounding_box(), download.bounding_box()
-    assert trigger_bounds and download_bounds
-    assert abs(trigger_bounds["y"] - download_bounds["y"]) < 1
-    assert 0 < download_bounds["x"] - (trigger_bounds["x"] + trigger_bounds["width"]) <= 16
+    expect(actions).to_be_visible()
+    trigger_bounds, actions_bounds = trigger.bounding_box(), actions.bounding_box()
+    assert trigger_bounds and actions_bounds
+    assert abs(trigger_bounds["y"] - actions_bounds["y"]) < 1
+    assert 0 < actions_bounds["x"] - (trigger_bounds["x"] + trigger_bounds["width"]) <= 16
     trigger.click()
     menu = page.get_by_role("menu", name="Product visibility", exact=True)
     expect(menu.get_by_role("menuitemradio")).to_have_count(2)
