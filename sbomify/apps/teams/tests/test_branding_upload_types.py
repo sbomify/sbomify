@@ -47,9 +47,9 @@ def owner(client, sample_team_with_owner_member):
     return client, team
 
 
-def upload(client, team, name: str, data: bytes, content_type: str):
+def upload(client, team, name: str, data: bytes, content_type: str, field: str = "logo"):
     return client.post(
-        f"/api/v1/workspaces/{team.key}/branding/upload/logo",
+        f"/api/v1/workspaces/{team.key}/branding/upload/{field}",
         {"file": SimpleUploadedFile(name, data, content_type=content_type)},
     )
 
@@ -83,6 +83,19 @@ class TestBrandingUploadEndpoint:
         assert stored.startswith(f"team_{team.key}_logo_")
         assert stored.endswith(extension)
         s3.Bucket.return_value.put_object.assert_called_once_with(Key=stored, Body=data, ContentType=content_type)
+
+    def test_an_icon_is_stored_under_the_type_its_bytes_show(self, owner, s3):
+        client, team = owner
+
+        response = upload(client, team, "icon.svg", JPEG, "image/svg+xml", field="icon")
+
+        assert response.status_code == 200
+        stored = response.json()["icon"]
+        assert stored.startswith(f"team_{team.key}_icon_")
+        assert stored.endswith(".jpg")
+        s3.Bucket.return_value.put_object.assert_called_once_with(Key=stored, Body=JPEG, ContentType="image/jpeg")
+        team.refresh_from_db()
+        assert (team.branding_info["icon"], team.branding_info["logo"]) == (stored, "old_logo.png")
 
     def test_a_raster_past_the_svg_cap_is_stored_whole(self, owner, s3):
         client, team = owner
