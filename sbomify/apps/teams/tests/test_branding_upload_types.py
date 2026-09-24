@@ -114,6 +114,10 @@ class TestBrandingUploadEndpoint:
             ),
             pytest.param(svg("<set attributeName='onmouseover' to='alert(1)'/>"), id="animated-event-handler"),
             pytest.param(
+                svg("<a href='#x'><set attributeName='xml:base' to='javascript:alert(1)//'/></a>"),
+                id="animated-xml-base",
+            ),
+            pytest.param(
                 svg("<foreignObject><p xmlns='http://www.w3.org/1999/xhtml'>hi</p></foreignObject>"),
                 id="foreign-object",
             ),

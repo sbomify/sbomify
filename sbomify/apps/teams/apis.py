@@ -281,7 +281,7 @@ class _InertSvgTarget:
         for attribute, value in attrib.items():
             name = attribute.rpartition("}")[2].lower()
             animated = value.strip().rpartition(":")[2].lower() if name == "attributename" else ""
-            if name.startswith("on") or name == "base" or animated == "href" or animated.startswith("on"):
+            if name.startswith("on") or name == "base" or animated in ("href", "base") or animated.startswith("on"):
                 raise ValueError("event handler, xml:base or animated href")
             if name == "href" and not _INERT_HREF.match(value.strip().lower()):
                 raise ValueError("href that leaves the document")
@@ -296,8 +296,8 @@ def _is_inert_svg(data: bytes) -> bool:
     Checked, never cleaned: a file is stored exactly as uploaded or not at all.
     A DTD is refused because its entities and attribute defaults add content the
     markup does not show, xml:base because it re-points every in-document href,
-    and an animation of an href or an event handler because it swaps the checked
-    value for another once the image loads.
+    and an animation of an href, an event handler or xml:base because it swaps
+    the checked value for another once the image loads.
     """
     parser = DefusedXMLParser(target=_InertSvgTarget(), forbid_dtd=True)
     try:
