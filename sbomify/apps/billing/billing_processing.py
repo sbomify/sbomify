@@ -32,6 +32,7 @@ from .stripe_cache import get_subscription_cancel_at_period_end, invalidate_subs
 from .stripe_client import (
     BillingRetryableError,
     StripeError,
+    StripeResourceMissingError,
     WorkspaceGoneError,
     get_stripe_client,
     handle_stripe_errors,
@@ -40,6 +41,29 @@ from .stripe_client import (
 logger = getLogger(__name__)
 
 stripe_client = get_stripe_client()
+
+# Statuses in which a workspace's stored subscription is still the one it pays
+# through. While it is, an event for a different subscription of the same
+# customer describes one the workspace has replaced.
+LIVE_SUBSCRIPTION_STATUSES = frozenset({"active", "trialing", "past_due", "incomplete"})
+
+# Statuses Stripe never moves a subscription out of.
+TERMINAL_SUBSCRIPTION_STATUSES = frozenset({"canceled", "incomplete_expired"})
+
+
+def cancel_replaced_subscription(subscription_id: str) -> None:
+    """Cancel the subscription a completed checkout replaced, unless it has already ended.
+
+    Called by the checkout webhook and by the browser's return from checkout,
+    whichever lands first, so the workspace never pays through two subscriptions.
+    """
+    try:
+        subscription = stripe_client.get_subscription(subscription_id)
+    except StripeResourceMissingError:
+        return
+    if subscription.status in TERMINAL_SUBSCRIPTION_STATUSES:
+        return
+    stripe_client.cancel_subscription(subscription_id)
 
 
 def _best_effort(description: str, fn: Any, *args: Any, **kwargs: Any) -> None:
@@ -366,6 +390,19 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
 
         if last_processed_id == webhook_id:
             logger.info("Webhook already processed, skipping")
+            return
+
+        # Resolved through the customer rather than the subscription id: the
+        # event is about another subscription of the same customer. While the
+        # stored one is live, that other one is the subscription a checkout
+        # replaced, and writing it back would point the workspace at it.
+        stored_subscription_id = billing_limits.get("stripe_subscription_id")
+        if (
+            stored_subscription_id
+            and stored_subscription_id != subscription.id
+            and billing_limits.get("subscription_status") in LIVE_SUBSCRIPTION_STATUSES
+        ):
+            logger.info("Ignoring an event for a subscription the workspace has replaced")
             return
 
         _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
@@ -974,7 +1011,7 @@ def handle_checkout_completed(session: Any) -> None:
         if existing_subscription_id and existing_subscription_id != session.subscription:
             logger.info("Cancelling old subscription to prevent double billing")
             try:
-                stripe_client.cancel_subscription(existing_subscription_id)
+                cancel_replaced_subscription(existing_subscription_id)
                 logger.info("Successfully cancelled old subscription")
             except StripeError as e:
                 # A failed cancel (often a transient Stripe outage) must NOT be

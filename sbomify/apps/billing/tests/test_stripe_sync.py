@@ -381,7 +381,10 @@ class TestSyncIntegration:
         mock_sync.return_value = True
 
         # Mock checkout session
-        with mock_patch("sbomify.apps.billing.views.stripe_client") as mock_client:
+        with (
+            mock_patch("sbomify.apps.billing.views.stripe_client") as mock_client,
+            mock_patch("sbomify.apps.billing.billing_processing.stripe_client", mock_client),
+        ):
             mock_session = MagicMock()
             mock_session.payment_status = "paid"
             mock_session.subscription = "sub_test_123"

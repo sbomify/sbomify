@@ -25,6 +25,7 @@ from .billing_helpers import (
     handle_community_downgrade_visibility,
     release_checkout_lock,
 )
+from .billing_processing import LIVE_SUBSCRIPTION_STATUSES
 from .models import BillingPlan
 from .schemas import ChangePlanRequest, ChangePlanResponse, PlanSchema, UsageSchema
 from .stripe_client import StripeError, get_stripe_client
@@ -84,7 +85,14 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
 
 @router.post(
     "/change-plan/",
-    response={200: ChangePlanResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse},
+    response={
+        200: ChangePlanResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+        429: ErrorResponse,
+    },
 )
 def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any]:
     """Change the current team's billing plan."""
@@ -200,17 +208,28 @@ def _handle_business_upgrade(
     if not team_key:
         return 400, {"detail": "Workspace is not properly configured. Please contact support."}
 
-    customer_id = f"c_{team_key}"
+    # A second checkout would start a second subscription next to the live one.
+    billing_limits = team.billing_plan_limits or {}
+    if (
+        billing_limits.get("stripe_subscription_id")
+        and billing_limits.get("subscription_status") in LIVE_SUBSCRIPTION_STATUSES
+    ):
+        return 409, {"detail": "This workspace already has a subscription. Change it from the billing portal."}
 
-    try:
-        customer = stripe_client.get_customer(customer_id)
-    except StripeError:
-        customer = stripe_client.create_customer(
-            email=user.email,
-            name=team.name,
-            metadata={"team_key": team_key},
-            id=customer_id,
-        )
+    # The customer the workspace already has, so its subscriptions stay together.
+    customer_id = billing_limits.get("stripe_customer_id")
+    if not customer_id:
+        customer_id = f"c_{team_key}"
+        try:
+            customer = stripe_client.get_customer(customer_id)
+        except StripeError:
+            customer = stripe_client.create_customer(
+                email=user.email,
+                name=team.name,
+                metadata={"team_key": team_key},
+                id=customer_id,
+            )
+        customer_id = customer.id
 
     price_id = plan.stripe_price_annual_id if data.billing_period == "annual" else plan.stripe_price_monthly_id
     if not price_id:
@@ -225,7 +244,7 @@ def _handle_business_upgrade(
         )
 
         session = stripe_client.create_checkout_session(
-            customer_id=customer.id,
+            customer_id=customer_id,
             price_id=price_id,
             success_url=success_url,
             cancel_url=request.build_absolute_uri("/"),
