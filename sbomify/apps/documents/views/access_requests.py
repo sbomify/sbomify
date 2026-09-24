@@ -259,37 +259,13 @@ class AccessRequestView(View):
         except Team.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
-        # Get or create user
-        UserModel = get_user_model()
-        user = None
-
-        if request.user.is_authenticated:
-            user = request.user
-        else:
-            email = request.POST.get("email")
-            if not email:
-                messages.error(request, "Email is required")
-                return redirect("documents:request_access", team_key=team_key)
-
-            name = request.POST.get("name", "")
-
-            # Check if user already exists
-            try:
-                user = UserModel.objects.get(email=email)
-            except UserModel.DoesNotExist:
-                # Create new user
-                username = email.split("@")[0]
-                base_username = username
-                counter = 1
-                while UserModel.objects.filter(username=username).exists():
-                    username = f"{base_username}_{counter}"
-                    counter += 1
-
-                user = UserModel.objects.create_user(
-                    username=username,
-                    email=email,
-                    first_name=name or "",
-                )
+        # The same rule as GET: the requester signs in and asks for themselves.
+        # A posted email address is not an identity.
+        if not request.user.is_authenticated:
+            login_url = reverse("core:keycloak_login")
+            redirect_url = reverse("documents:request_access", kwargs={"team_key": team_key})
+            return redirect(f"{login_url}?next={quote(redirect_url)}")
+        user = request.user
 
         # Check if user already has access
         try:
