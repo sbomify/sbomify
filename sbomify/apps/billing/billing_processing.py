@@ -96,7 +96,7 @@ def _event_created(event: Any) -> int | None:
     return created if type(created) is int else None
 
 
-def _is_stale(billing_limits: dict[str, Any], created: int | None) -> bool:
+def _is_older_than_applied(billing_limits: dict[str, Any], created: int | None) -> bool:
     """Whether an event created at ``created`` is older than the newest event already applied.
 
     Stripe delivers events out of order and retries a failed delivery for days, so an
@@ -109,7 +109,7 @@ def _is_stale(billing_limits: dict[str, Any], created: int | None) -> bool:
 
 def _record_event_created(billing_limits: dict[str, Any], created: int | None) -> None:
     """Remember ``created`` as the newest event applied, unless a newer one already is."""
-    if created is not None and not _is_stale(billing_limits, created):
+    if created is not None and not _is_older_than_applied(billing_limits, created):
         billing_limits["latest_event_created"] = created
 
 
@@ -394,7 +394,7 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
         _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
 
         previous_status = billing_limits.get("subscription_status")
-        if _update_billing_from_subscription(team, subscription, webhook_id, _event_created(event)) is None:
+        if not _update_billing_from_subscription(team, subscription, webhook_id, _event_created(event)):
             return
 
         _best_effort(
@@ -488,14 +488,12 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
     raise Team.DoesNotExist("No workspace holds the subscription in this webhook event")
 
 
-def _update_billing_from_subscription(
-    team: Team, subscription: Any, webhook_id: str, created: int | None
-) -> dict[str, Any] | None:
+def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id: str, created: int | None) -> bool:
     """Update team billing limits from subscription data within a transaction.
 
     Returns:
-        The updated billing_limits dict, or None when the event is older than the
-        newest one already applied and changed nothing.
+        Whether the event was applied: False when it was already processed or is
+        older than the newest event already applied.
     """
     with transaction.atomic():
         team = Team.objects.select_for_update().get(pk=team.pk)
@@ -503,11 +501,11 @@ def _update_billing_from_subscription(
 
         if billing_limits.get("last_processed_webhook_id") == webhook_id:
             logger.info("Webhook already processed (checked after lock)")
-            return billing_limits
+            return False
 
-        if _is_stale(billing_limits, created):
+        if _is_older_than_applied(billing_limits, created):
             logger.info("Ignoring a subscription event older than the last one applied")
-            return None
+            return False
 
         billing_limits["subscription_status"] = subscription.status
         billing_limits["stripe_subscription_id"] = subscription.id
@@ -623,7 +621,7 @@ def _update_billing_from_subscription(
             # acknowledged with 200.
             raise BillingRetryableError(f"Trial-period processing failed: {e!s}") from e
 
-    return billing_limits
+    return True
 
 
 def _send_subscription_notifications(team: Team, status: str, previous_status: Any) -> None:
@@ -669,7 +667,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
             return
 
         # Never ignored as older: Stripe does not revive a deleted subscription, so
-        # an event created after this one cannot have made it current again.
+        # the deletion holds whatever newer event was applied first.
         created = _event_created(event)
 
         _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
@@ -834,7 +832,7 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
             created = _event_created(event)
-            if _is_stale(billing_limits, created):
+            if _is_older_than_applied(billing_limits, created):
                 logger.info("Ignoring a payment failure older than the last event applied")
                 return
             billing_limits["subscription_status"] = "past_due"
@@ -916,20 +914,23 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
             created = _event_created(event)
-            if _is_stale(billing_limits, created):
-                logger.info("Ignoring a payment older than the last event applied")
-                return
-            billing_limits["subscription_status"] = "active"
+            # A payment that went through stays true however late its event arrives, so it
+            # is recorded, acknowledged and counted either way. Only an event no newer one
+            # has replaced moves the status.
+            if _is_older_than_applied(billing_limits, created):
+                logger.info("Recording a payment older than the last event applied, status unchanged")
+            else:
+                billing_limits["subscription_status"] = "active"
+                # Payment recovered — clear the failure marker so the grace window resets for any
+                # future failure episode. The "keep first failure time" guard on the failed-payment
+                # webhook would otherwise reuse this stale timestamp and treat the next failure as
+                # already past grace.
+                billing_limits.pop("payment_failed_at", None)
+                _record_event_created(billing_limits, created)
             billing_limits["last_updated"] = timezone.now().isoformat()
-            # Payment recovered — clear the failure marker so the grace window resets for any
-            # future failure episode. The "keep first failure time" guard on the failed-payment
-            # webhook would otherwise reuse this stale timestamp and treat the next failure as
-            # already past grace.
-            billing_limits.pop("payment_failed_at", None)
             billing_limits["last_payment_amount"] = invoice.amount_paid / 100.0 if invoice.amount_paid else 0.0
             billing_limits["last_payment_currency"] = invoice.currency
             billing_limits["last_processed_webhook_id"] = webhook_id
-            _record_event_created(billing_limits, created)
 
             if next_billing_date:
                 billing_limits["next_billing_date"] = next_billing_date
