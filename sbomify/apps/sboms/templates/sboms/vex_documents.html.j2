@@ -70,7 +70,11 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
         </tbody>
         </c-tables.table>
     {% else %}
-        <c-feedback.empty-state icon="fas fa-file-shield" title="No VEX documents yet" message="Choose VEX when uploading an artifact, or publish one through the API." />
+        <c-feedback.empty-state icon="fas fa-file-shield" title="No VEX documents yet" message="Choose VEX when uploading an artifact, or publish one through the API.">
+        {% if has_crud_permissions %}
+            <c-buttons.primary href="{% url 'core:component_details' component_id %}#upload-artifact" @click="$dispatch('open-upload')"><i class="fas fa-upload" aria-hidden="true"></i>Upload VEX</c-buttons.primary>
+        {% endif %}
+        </c-feedback.empty-state>
     {% endif %}
     </c-tables.shell>
     {% comment %}

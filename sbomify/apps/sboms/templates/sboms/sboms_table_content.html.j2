@@ -2,7 +2,11 @@
 {% load json_extras %}
 {% load humanize %}
 {% if not sboms %}
-    <c-feedback.empty-state icon="fas fa-file-code" title="No artifacts yet" message="No artifacts have been uploaded to this component." />
+    <c-feedback.empty-state icon="fas fa-file-code" title="No artifacts yet" message="No artifacts have been uploaded to this component.">
+    {% if has_crud_permissions and not is_public_view %}
+        <c-buttons.primary href="{% url 'core:component_details' component_id %}#upload-artifact" @click="$dispatch('open-upload')"><i class="fas fa-upload" aria-hidden="true"></i>Upload artifact</c-buttons.primary>
+    {% endif %}
+    </c-feedback.empty-state>
 {% else %}
     {% comment %}
     Nested either way: the private page wraps this in the shell that carries the

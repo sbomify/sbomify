@@ -1,6 +1,10 @@
 {# The documents table body. Rows come from the documents projection via json_script and are paged in the browser by documentsTable. #}
 {% if not documents %}
-    <c-feedback.empty-state icon="fas fa-file-alt" title="No documents yet" message="No documents have been uploaded to this component." />
+    <c-feedback.empty-state icon="fas fa-file-alt" title="No documents yet" message="No documents have been uploaded to this component.">
+    {% if has_crud_permissions and not is_public_view %}
+        <c-buttons.primary href="{% url 'core:component_details' component_id %}#upload-artifact" @click="$dispatch('open-upload')"><i class="fas fa-upload" aria-hidden="true"></i>Upload document</c-buttons.primary>
+    {% endif %}
+    </c-feedback.empty-state>
 {% else %}
     {# Inside the card on the private page the card draws the frame, so the shell drops its own. #}
     <c-tables.shell :nested="table_nested">
