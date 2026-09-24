@@ -1,8 +1,10 @@
 import gzip
+from types import SimpleNamespace
 
 from django.http import HttpRequest, HttpResponse
 from django.test import override_settings
 
+from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.middleware import (
     ContentSecurityPolicyMiddleware,
     GzipRequestDecompressionMiddleware,
@@ -134,6 +136,9 @@ def test_real_ip_middleware():
 
 _OK_RESPONSE = HttpResponse("ok")
 
+# The middleware inflates bodies only for a caller holding a token we signed.
+_SIGNED_BEARER = f"Bearer {create_personal_access_token(SimpleNamespace(pk=1))}"
+
 
 def _make_middleware(
     get_response=None,
@@ -150,6 +155,7 @@ def _gzip_request(body: bytes) -> HttpRequest:
     request._body = compressed
     request.META["HTTP_CONTENT_ENCODING"] = "gzip"
     request.META["CONTENT_LENGTH"] = str(len(compressed))
+    request.META["HTTP_AUTHORIZATION"] = _SIGNED_BEARER
     return request
 
 
@@ -209,6 +215,7 @@ class TestGzipDecompressionPassthrough:
         request._body = compressed
         request.META["HTTP_CONTENT_ENCODING"] = "  gzip  "
         request.META["CONTENT_LENGTH"] = str(len(compressed))
+        request.META["HTTP_AUTHORIZATION"] = _SIGNED_BEARER
 
         middleware = _make_middleware()
         response = middleware(request)
@@ -261,6 +268,7 @@ class TestGzipDecompressionErrors:
         request = HttpRequest()
         request._body = b"this is not gzip"
         request.META["HTTP_CONTENT_ENCODING"] = "gzip"
+        request.META["HTTP_AUTHORIZATION"] = _SIGNED_BEARER
 
         middleware = _make_middleware()
         response = middleware(request)

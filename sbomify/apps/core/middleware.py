@@ -646,6 +646,27 @@ class HtmxMessagesMiddleware:
         return response
 
 
+def _carries_signed_token(request: HttpRequest) -> bool:
+    """Whether the request's bearer token carries our signature.
+
+    ponytail: signature only, so a revoked token still passes here; the view's
+    own auth refuses it after the body is inflated. A full check here would
+    record every authentication twice.
+    """
+    from jwt.exceptions import DecodeError
+
+    from sbomify.apps.access_tokens.utils import decode_personal_access_token
+
+    scheme, _, token = request.META.get("HTTP_AUTHORIZATION", "").partition(" ")
+    if scheme.casefold() != "bearer" or not token.strip():
+        return False
+    try:
+        decode_personal_access_token(token.strip())
+    except DecodeError:
+        return False
+    return True
+
+
 class GzipRequestDecompressionMiddleware:
     """Decompress gzip-encoded request bodies.
 
@@ -654,8 +675,12 @@ class GzipRequestDecompressionMiddleware:
     decompresses the body so downstream code (CSRF, Django Ninja, views)
     sees normal uncompressed data.
 
-    A configurable size limit (``settings.GZIP_REQUEST_MAX_SIZE``, default
-    200 MB) guards against zip bombs.
+    A size limit (``settings.GZIP_REQUEST_MAX_SIZE``, the ceiling an uncompressed
+    body gets) guards against zip bombs.
+
+    This runs before any view checks who is asking, so only a caller holding a
+    token we signed gets a body inflated. Browsers never compress request bodies;
+    the upload clients that do all send a bearer token.
     """
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
@@ -673,6 +698,9 @@ class GzipRequestDecompressionMiddleware:
         if encodings != ["gzip"]:
             logger.warning("Rejected unsupported multiple Content-Encoding: %s", raw_encoding)
             return HttpResponseBadRequest("Unsupported multiple Content-Encoding values")
+
+        if not _carries_signed_token(request):
+            return HttpResponse("A compressed request body needs a valid API token", status=401)
 
         max_size: int = getattr(settings, "GZIP_REQUEST_MAX_SIZE", 200 * 1024 * 1024)
 
