@@ -85,7 +85,7 @@ def test_search_forwards_its_binding_to_the_input(rendered: str) -> None:
 
 def test_page_size_select_recipe_and_options_slot(rendered: str) -> None:
     select = _element_holding(rendered, "select", 'id="probe-per-page"')
-    for bit in ("py-1.5 pr-8 pl-3", "appearance-none", "bg-[position:right_0.5rem_center]", "bg-[length:1.25rem]"):
+    for bit in ("py-1.5 pr-8 pl-3 max-sm:min-h-11", "appearance-none", "bg-[position:right_0.5rem_center]", "bg-[length:1.25rem]"):
         assert bit in select
     assert "data:image/svg+xml," in select
     assert 'x-model.number="perPage"' in select
@@ -326,7 +326,7 @@ def test_pager_drives_the_current_page_state(rendered: str) -> None:
 
 def test_pager_arrows_render_through_the_shared_page_control(rendered: str) -> None:
     pager = [part for part in rendered.split('<div class="flex items-center gap-2"') if "Previous page" in part][0]
-    assert "min-w-8 h-8 px-2 rounded-md" in pager
+    assert "min-w-8 h-8 max-sm:min-w-11 max-sm:min-h-11 px-2 rounded-md" in pager
     # Arrows use the same neutral hover recipe as numbered pages.
     for utility in ("bg-surface", "text-text", "hover:text-text", "border-border"):
         assert utility in pager

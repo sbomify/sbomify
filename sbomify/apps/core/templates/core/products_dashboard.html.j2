@@ -1,5 +1,9 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% block title %}Products · sbomify{% endblock %}
+{# The three inventory tabs are one page, so the tab leads the title the way Trends does under Overview. Three tabs open must not read as three identical tabs. #}
+{% block title %}
+    {% if inventory.kind != 'products' %}{{ inventory.kind|title }} ·{% endif %}
+    Products · sbomify
+{% endblock %}
 {% block dashboard_content %}
     {% include 'core/products_inventory.html.j2' %}
 {% endblock %}

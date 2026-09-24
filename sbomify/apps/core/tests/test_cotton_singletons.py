@@ -422,7 +422,7 @@ def test_inline_copy_is_a_monospace_chip_a_keyboard_can_reach(rendered: str) -> 
     chip = _probe(rendered, "inline-copy")
     assert "<button" in chip
     assert 'type="button"' in chip
-    assert "group inline-flex max-w-full items-center gap-1.5 px-2 py-1 font-mono" in chip
+    assert "group relative inline-flex max-w-full items-center gap-1.5 px-2 py-1 font-mono" in chip
     assert "text-[0.8125rem] text-text bg-background border border-solid border-border rounded-md" in chip
     # No line-height: an arbitrary font-size attaches none to cancel, and the
     # public pages read 1.6 where the app reads 1.5.
@@ -475,7 +475,7 @@ def test_actions_menu_wrapper_holds_the_alpine_component(rendered: str) -> None:
 
 def test_actions_menu_trigger_is_the_library_icon_button(rendered: str) -> None:
     section = _section(rendered, "menu-default")
-    assert "w-9 h-9 text-sm rounded-md" in section
+    assert "w-9 h-9 max-sm:min-w-11 max-sm:min-h-11 text-sm rounded-md" in section
     assert 'aria-label="Product actions"' in section
     assert 'x-ref="trigger"' in section
     assert '@click.stop="toggle()"' in section

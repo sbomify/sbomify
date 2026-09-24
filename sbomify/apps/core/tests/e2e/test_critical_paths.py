@@ -215,7 +215,7 @@ class TestCriticalPaths:
 
         # Test sboms pages
         response = client.get(reverse("core:components_dashboard"))
-        assert "<title> Products · sbomify </title>" in " ".join(response.content.decode().split())
+        assert "<title> Components · Products · sbomify </title>" in " ".join(response.content.decode().split())
 
         response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
         assert f"sbomify Component: {component.name}" in response.content.decode()

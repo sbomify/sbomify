@@ -137,10 +137,20 @@
   --color-gray-700: rgb(51 65 85);      /* var(--color-gray-700) */
   --color-gray-800: rgb(30 41 59);      /* var(--color-gray-800) */
   --color-gray-900: rgb(15 23 42);      /* var(--color-text) */
-  --color-severity-critical: rgb(220 53 69);    /* var(--color-danger) */
+  /* Severity, pitched for the dark surface. :root.light restates them darker:
+     a severity is read as text over a 12% tint of itself, so the value has to
+     clear 4.5:1 against that tint in the theme it renders in. */
+  --color-severity-critical: rgb(255 100 107);  /* lifted for dark, as --color-danger is */
   --color-severity-high: rgb(253 126 20);       /* var(--color-severity-high) */
   --color-severity-medium: rgb(255 193 7);      /* var(--color-severity-medium) */
   --color-severity-low: rgb(13 202 240);        /* var(--color-severity-low) */
+  /* Status ink: the same status read as text on a tint of itself. The brand
+     value stays the fill; only the ink moves, and only where a theme needs it. */
+  --color-success-ink: rgb(54 197 143);
+  --color-warning-ink: rgb(247 181 70);
+  --color-danger-ink: rgb(246 109 113);
+  --color-info-ink: rgb(108 183 240);
+  --color-accent-ink: rgb(162 137 255);
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */
   --color-alert-success-border: rgb(187 247 208); /* var(--color-alert-success-border) */
   --color-alert-danger-bg: rgb(254 242 242);    /* var(--color-alert-danger-bg) */
@@ -284,11 +294,21 @@
   --color-gray-800: rgb(30 41 59);      /* var(--color-gray-800) */
   --color-gray-900: rgb(15 23 42);      /* var(--color-text) */
 
-  /* Severity colors (same across themes) */
-  --color-severity-critical: rgb(220 53 69);    /* var(--color-danger) */
-  --color-severity-high: rgb(253 126 20);       /* var(--color-severity-high) */
-  --color-severity-medium: rgb(255 193 7);      /* var(--color-severity-medium) */
-  --color-severity-low: rgb(13 202 240);        /* var(--color-severity-low) */
+  /* Severity, pitched for a white surface. Same hue, same order, darker: the
+     dark-theme values are read over a near-black tint and are far too pale
+     here, where the tint is almost white. Each clears 4.5:1 as text on its own
+     12% tint, and 3:1 as a bar or chart line on the page. */
+  --color-severity-critical: rgb(199 26 52);
+  --color-severity-high: rgb(184 62 0);
+  --color-severity-medium: rgb(149 91 0);
+  --color-severity-low: rgb(0 112 147);
+
+  /* Status ink for text on a tint. The brand fill above is unchanged. */
+  --color-success-ink: rgb(0 119 67);
+  --color-warning-ink: rgb(159 85 0);
+  --color-danger-ink: rgb(197 37 51);
+  --color-info-ink: rgb(59 90 225);
+  --color-accent-ink: rgb(112 83 201);
 
   /* Alert backgrounds (same across themes) */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */

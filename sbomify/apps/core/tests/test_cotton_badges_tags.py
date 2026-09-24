@@ -33,10 +33,10 @@ def _badge(rendered: str, label: str) -> str:
         ("Bare", "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_12%,transparent)]"),
         ("Primary", "text-primary bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]"),
         ("Secondary", "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]"),
-        ("Success", "text-success bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)]"),
-        ("Warning", "text-warning bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)]"),
-        ("Danger", "text-danger bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)]"),
-        ("Info", "text-info bg-[color-mix(in_oklab,var(--color-info)_12%,transparent)]"),
+        ("Success", "text-success-ink bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)]"),
+        ("Warning", "text-warning-ink bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)]"),
+        ("Danger", "text-danger-ink bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)]"),
+        ("Info", "text-info-ink bg-[color-mix(in_oklab,var(--color-info)_12%,transparent)]"),
         ("Violet", "text-accent bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)]"),
         ("Accent", "bg-[linear-gradient(135deg,var(--color-primary-dark)_0%,var(--color-accent-pink)_100%)]"),
         ("KEV", "text-white bg-danger"),
@@ -173,7 +173,7 @@ def test_severity_dynamic_forwards_class_and_alpine_bindings(rendered: str) -> N
 @pytest.mark.parametrize(
     ("label", "fmt", "recipe_bit"),
     [
-        ("CycloneDX", "cyclonedx", "data-[format=cyclonedx]:text-success"),
+        ("CycloneDX", "cyclonedx", "data-[format=cyclonedx]:text-success-ink"),
         ("SPDX", "spdx", "data-[format=spdx]:text-accent"),
     ],
 )
@@ -222,9 +222,9 @@ def test_format_badge_is_not_the_badge_shell(rendered: str) -> None:
     [
         ("Neutral", "text-text bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]"),
         ("Tag primary", "text-primary bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]"),
-        ("Tag success", "text-success bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)]"),
-        ("Tag warning", "text-warning bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)]"),
-        ("Tag danger", "text-danger bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)]"),
+        ("Tag success", "text-success-ink bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)]"),
+        ("Tag warning", "text-warning-ink bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)]"),
+        ("Tag danger", "text-danger-ink bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)]"),
     ],
 )
 def test_tag_variants_carry_their_recipe(rendered: str, label: str, recipe_bit: str) -> None:
@@ -285,8 +285,8 @@ def test_dynamic_badge_keeps_every_recipe_and_binds_only_the_variant(rendered: s
     danger = _probe(rendered, "dyn-danger")
     assert 'data-variant="danger"' in danger
     # The recipes stay in the component, keyed by the attribute.
-    assert "data-[variant=danger]:text-danger" in danger
-    assert "data-[variant=success]:text-success" in danger
+    assert "data-[variant=danger]:text-danger-ink" in danger
+    assert "data-[variant=success]:text-success-ink" in danger
     # And the neutral tint is the resting state, so an unknown variant degrades quietly.
     # Written as an arbitrary value: the text-text-muted utility is !important, which
     # would outrank every variant recipe and leave each one with neutral text.
