@@ -430,7 +430,18 @@ def _extract_spdx3_primary_package(
     3. Fall back to matching package name with document name
     4. Fall back to first software_Package element
     """
-    packages = payload.packages
+    # ``SPDX3Schema.packages`` is where each software_Package element is first
+    # typed: the schema keeps the graph as raw dicts and validates an element
+    # only when this property reads it. A package carrying ``"name": 12345``
+    # therefore raises here, long after ``validate_spdx_sbom`` accepted the
+    # document, and the raise landed in the upload endpoint's catch-all —
+    # which answers every uploader "Invalid request" and files one Sentry
+    # event per malformed upload. Both callers already render a returned
+    # message as a 400, so say which element and which field instead.
+    try:
+        packages = payload.packages
+    except ValidationError as e:
+        return None, f"Invalid SPDX 3.0 package element: {e}"
     if not packages:
         return None, "No packages found in SPDX 3.0 document"
 
