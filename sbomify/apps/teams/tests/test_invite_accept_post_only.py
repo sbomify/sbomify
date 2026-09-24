@@ -68,6 +68,18 @@ def test_emailed_link_confirms_before_joining(invitee: Any, invitation: Invitati
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(("role", "phrase"), [("admin", "invited as an admin."), ("member", "invited as a member.")])
+def test_confirmation_names_the_role(team_with_business_plan: Team, invitee: Any, role: str, phrase: str) -> None:
+    invitation = Invitation.objects.create(team=team_with_business_plan, email=invitee.email, role=role)
+    client = Client()
+    client.force_login(invitee)
+
+    response = client.get(_url(invitation.token))
+
+    assert phrase in response.content.decode()
+
+
+@pytest.mark.django_db
 def test_link_leaves_an_existing_role_alone(invitee: Any, invitation: Invitation) -> None:
     membership = Member.objects.create(team=invitation.team, user=invitee, role="guest")
     client = Client()

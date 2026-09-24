@@ -4,7 +4,10 @@
     <c-layout.frame>
     <div class="flex flex-col gap-1">
         <c-typography.eyebrow>Workspace invitation</c-typography.eyebrow>
-        <c-layout.page-header title="{{ invitation.team.display_name }}" subtitle="You're invited as {{ invitation.get_role_display|lower }}." />
+        {# The subtitle must render as one sentence, so its article branch stays on one line. #}
+        {# djlint:off #}
+        <c-layout.page-header title="{{ invitation.team.display_name }}" subtitle="You're invited as {% if invitation.role|first in 'aeiou' %}an{% else %}a{% endif %} {{ invitation.get_role_display|lower }}." />
+        {# djlint:on #}
     </div>
     <form method="post"
           action="{% url 'teams:accept_invite' invitation.token %}">
