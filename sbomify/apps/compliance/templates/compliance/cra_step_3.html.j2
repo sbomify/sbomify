@@ -137,7 +137,7 @@
                     </p>
                     </c-slot>
                     <c-slot name="action">
-                    <c-buttons.outline-primary size="sm" href="{% url 'teams:team_settings' team.key %}#trust-center" class="shrink-0">
+                    <c-buttons.outline-primary size="sm" href="{% url 'teams:team_settings_tab' team_key=team.key tab='trust-center' %}" class="shrink-0">
                     {% if security_txt_enabled %}
                         Manage
                     {% else %}
