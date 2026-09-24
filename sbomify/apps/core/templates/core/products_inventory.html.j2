@@ -13,3 +13,4 @@
 <c-navigation.tabs links :tabs="inventory.tabs" active="{{ inventory.kind }}" aria-label="Product inventory" hx-boost="true" hx-target="#inventory-content" />
 <c-inventory.table :inventory="inventory" />
 </c-layout.frame>
+{% if inventory_navigation_oob %}<c-chrome.inventory-nav kind="{{ inventory.kind }}" oob />{% endif %}

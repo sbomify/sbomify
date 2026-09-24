@@ -1,0 +1,28 @@
+{% comment %}
+Inventory destinations share one active item. Inventory tab swaps replace this
+small group out of band so the rail stays in sync without resetting the sidebar.
+The optional kind also lets the gallery demonstrate a selected destination.
+{% endcomment %}
+<c-vars kind id="inventory-navigation" oob />
+{% if not kind %}
+    {% if request.resolver_match.view_name == 'core:products_dashboard' %}
+        {% firstof 'products' as kind %}
+    {% elif 'core:release' in request.resolver_match.view_name or request.resolver_match.view_name == 'core:product_releases' %}
+        {% firstof 'releases' as kind %}
+    {% elif 'core:component' in request.resolver_match.view_name %}
+        {% firstof 'components' as kind %}
+    {% elif 'core:product' in request.resolver_match.view_name %}
+        {% firstof 'products' as kind %}
+    {% endif %}
+{% endif %}
+{% if kind == 'products' or kind == 'releases' %}
+    {% firstof 'true' as products_active %}
+{% elif kind == 'components' %}
+    {% firstof 'true' as components_active %}
+{% endif %}
+<div id="{{ id }}"
+     class="space-y-1"
+     {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+    <c-chrome.nav-item :active="products_active" href="{% url 'core:products_dashboard' %}" label="Products" icon="fas fa-cube" />
+    <c-chrome.nav-item :active="components_active" href="{% url 'core:components_dashboard' %}" label="Components" icon="fas fa-puzzle-piece" />
+</div>

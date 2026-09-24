@@ -40,10 +40,7 @@
     {
       "title": "Components",
       "suggested": true,
-      "url_name": "core:products_dashboard",
-      "query": {
-        "view": "components"
-      },
+      "url_name": "core:components_dashboard",
       "section": "navigate",
       "icon": "fa-puzzle-piece",
       "keywords": ["component list", "all components", "libraries", "modules"]
@@ -51,10 +48,7 @@
     {
       "title": "Releases",
       "example": "versions",
-      "url_name": "core:products_dashboard",
-      "query": {
-        "view": "releases"
-      },
+      "url_name": "core:releases_dashboard",
       "section": "navigate",
       "icon": "fa-tag",
       "keywords": ["versions", "tags", "release list", "shipped"]
@@ -85,11 +79,11 @@
       "roles": ["owner", "admin"]
     },
     {
-      "title": "Posture",
+      "title": "Compliance",
       "url_name": "compliance:cra_product_list",
       "section": "navigate",
       "icon": "fa-scale-balanced",
-      "keywords": ["cra", "cyber resilience act", "compliance", "conformity", "eu regulation", "doc", "declaration", "cra compliance"],
+      "keywords": ["posture", "start assessment", "cra", "cyber resilience act", "compliance", "conformity", "eu regulation", "doc", "declaration", "cra compliance"],
       "roles": ["owner", "admin"]
     },
     {
@@ -263,10 +257,7 @@
     },
     {
       "title": "Upload an SBOM",
-      "url_name": "core:products_dashboard",
-      "query": {
-        "view": "components"
-      },
+      "url_name": "core:components_dashboard",
       "section": "actions",
       "icon": "fa-upload",
       "keywords": ["import sbom", "upload artifact", "add sbom", "cyclonedx", "spdx", "import"],
@@ -274,10 +265,7 @@
     },
     {
       "title": "Upload a VEX",
-      "url_name": "core:products_dashboard",
-      "query": {
-        "view": "components"
-      },
+      "url_name": "core:components_dashboard",
       "section": "actions",
       "icon": "fa-upload",
       "keywords": ["import vex", "vex document", "suppress", "triage import"],

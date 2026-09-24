@@ -15,7 +15,6 @@ base URL and optional fixed product scope; the parent owns HTMX replacement.
       hx-sync="#{{ inventory.content_id }}:replace"
       hx-trigger="submit, change target:select, input changed delay:350ms target:input[type=search]"
       {{ attrs }}>
-    <input type="hidden" name="view" value="{{ inventory.kind }}">
     <input type="hidden" name="sort" value="{{ inventory.params.sort }}">
     <input type="hidden"
            name="direction"

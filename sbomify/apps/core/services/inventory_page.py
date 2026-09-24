@@ -59,7 +59,8 @@ def _counts(counts: dict[str, int] | None = None) -> dict[str, int]:
 
 
 def _url(params: dict[str, Any], *, base_url: str = "", **changes: Any) -> str:
-    return (base_url or reverse("core:products_dashboard")) + "?" + urlencode({**params, **changes})
+    query = urlencode({key: value for key, value in {**params, **changes}.items() if value != ""})
+    return (base_url or reverse("core:products_dashboard")) + (f"?{query}" if query else "")
 
 
 def build_inventory_snapshot(workspace: Team, kind: str, *, product_id: str = "") -> dict[str, Any]:
@@ -254,9 +255,8 @@ def build_inventory_table(
     The caller authorises and scopes the snapshot before passing it here. A
     product scope is fixed by the route and cannot be widened by a query string.
     """
-    base_url = base_url or reverse("core:products_dashboard")
+    base_url = base_url or reverse(f"core:{kind}_dashboard")
     params: dict[str, Any] = {
-        "view": kind,
         "search": request.GET.get("search", "").strip(),
         "risk": request.GET.get("risk", "all"),
         "visibility": request.GET.get("visibility", "all"),
@@ -345,9 +345,9 @@ def build_inventory_table(
                 "badge": str(snapshot["counts"][key]),
                 "href": _url(
                     {
-                        "view": key,
                         "product": params["product"] if key != "products" and params["product"] != "unassigned" else "",
-                    }
+                    },
+                    base_url=reverse(f"core:{key}_dashboard"),
                 ),
             }
             for key in KINDS
@@ -355,6 +355,6 @@ def build_inventory_table(
         "query": urlencode(params),
         "page_range": list(page.paginator.get_elided_page_range(page.number, on_each_side=1, on_ends=1)),
         "refresh_url": _url(params, base_url=base_url, page=page.number),
-        "reset_url": _url({"view": kind}, base_url=base_url),
+        "reset_url": base_url,
     }
     return ServiceResult.success({"inventory": inventory})

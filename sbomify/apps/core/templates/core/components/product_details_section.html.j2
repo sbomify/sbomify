@@ -1,0 +1,58 @@
+<section class="flex flex-col gap-4"
+         aria-labelledby="product-details-heading"
+         x-data="{ detailTab: 'lifecycle', selectDetailTab(tab) { this.$refs.panels.style.minHeight = this.$refs.panels.offsetHeight + 'px'; this.detailTab = tab; } }">
+    <c-layout.section-header id="product-details-heading" title="Product details" level="2" />
+    <c-navigation.tabs aria-label="Product details">
+    <c-navigation.tab panel="product-lifecycle" active_binding="detailTab === 'lifecycle'" @click="selectDetailTab('lifecycle')">Lifecycle</c-navigation.tab>
+    <c-navigation.tab panel="product-links" active_binding="detailTab === 'links'" @click="selectDetailTab('links')" hx-get="{% url 'core:product_links' product.id %}" hx-trigger="click once" hx-target="#product-links-panel" hx-swap="innerHTML show:none focus-scroll:false">Links</c-navigation.tab>
+    <c-navigation.tab panel="product-identifiers" active_binding="detailTab === 'identifiers'" @click="selectDetailTab('identifiers')" hx-get="{% url 'core:product_identifiers' product.id %}" hx-trigger="click once" hx-target="#product-identifiers-panel" hx-swap="innerHTML show:none focus-scroll:false">Identifiers</c-navigation.tab>
+    <c-navigation.tab panel="product-compliance" active_binding="detailTab === 'compliance'" @click="selectDetailTab('compliance')" hx-get="{% url 'controls:product_controls' current_team.key product.id %}" hx-trigger="click once" hx-target="#product-controls-panel" hx-swap="innerHTML show:none focus-scroll:false">Compliance</c-navigation.tab>
+    </c-navigation.tabs>
+    <div x-ref="panels">
+        <div id="panel-product-lifecycle"
+             role="tabpanel"
+             aria-labelledby="tab-product-lifecycle"
+             tabindex="0"
+             x-show="detailTab === 'lifecycle'">
+            <div id="product-lifecycle-panel"
+                 hx-get="{% url 'core:product_lifecycle' product.id %}"
+                 hx-trigger="load"
+                 hx-target="this"
+                 hx-swap="innerHTML show:none focus-scroll:false">
+                <c-feedback.loading message="Loading lifecycle" />
+            </div>
+        </div>
+        <div id="panel-product-links"
+             role="tabpanel"
+             aria-labelledby="tab-product-links"
+             tabindex="0"
+             x-show="detailTab === 'links'"
+             x-cloak>
+            <div id="product-links-panel">
+                <c-feedback.loading message="Loading product links" />
+            </div>
+        </div>
+        <div id="panel-product-identifiers"
+             role="tabpanel"
+             aria-labelledby="tab-product-identifiers"
+             tabindex="0"
+             x-show="detailTab === 'identifiers'"
+             x-cloak>
+            <div id="product-identifiers-panel">
+                <c-feedback.loading message="Loading product identifiers" />
+            </div>
+        </div>
+        <div id="panel-product-compliance"
+             role="tabpanel"
+             aria-labelledby="tab-product-compliance"
+             tabindex="0"
+             x-show="detailTab === 'compliance'"
+             x-cloak
+             class="flex flex-col gap-4">
+            {% include 'compliance/components/cra_product_card.html.j2' %}
+            <div id="product-controls-panel">
+                <c-feedback.loading message="Loading compliance controls" />
+            </div>
+        </div>
+    </div>
+</section>

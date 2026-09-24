@@ -2,8 +2,12 @@
 {% load design_system %}
 {% block title %}CRA Compliance - sbomify{% endblock %}
 {% block dashboard_content %}
-    <c-layout.page-header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act." />
-    <c-layout.frame>
+    <c-layout.frame x-data="{ startOpen: false, selectedProduct: '' }" @keydown.escape.window="startOpen = false">
+    <c-layout.page-header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act.">
+    {% if has_cra_access %}
+        <c-buttons.primary size="sm" @click="startOpen = true"><i class="fas fa-plus" aria-hidden="true"></i>Start assessment</c-buttons.primary>
+    {% endif %}
+    </c-layout.page-header>
     {% if not has_cra_access %}
         <c-cards.card flush>
         <div class="p-8 text-center">
@@ -61,8 +65,13 @@
                 every other empty state uses rather than a bare muted glyph.
         {% endcomment %}
         <c-cards.card flush>
-        <c-feedback.empty-state icon="fas fa-shield-halved" title="No CRA assessments" message="Start a CRA compliance assessment from any product's detail page." />
+        <c-feedback.empty-state icon="fas fa-shield-halved" title="No CRA assessments" message="Choose a product to check its scope and start a CRA assessment.">
+        <c-buttons.primary @click="startOpen = true"><i class="fas fa-plus" aria-hidden="true"></i>Start assessment</c-buttons.primary>
+        </c-feedback.empty-state>
         </c-cards.card>
+    {% endif %}
+    {% if has_cra_access %}
+        {% include "compliance/components/cra_start_dialog.html.j2" %}
     {% endif %}
     </c-layout.frame>
 {% endblock dashboard_content %}
