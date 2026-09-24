@@ -10,7 +10,6 @@ from django.db.models import DateTimeField, F
 from django.db.models.functions import Coalesce, Greatest, Now
 from django.utils import timezone
 
-from sbomify.apps.core.integrations.http import request_with_retry
 from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.utils import custom_domain_challenge, invalidate_custom_domain_cache
 from sbomify.task_utils import record_task_breadcrumb
@@ -24,7 +23,7 @@ BASE_DELAY_MINUTES = 5
 # The system will continue checking indefinitely at this maximum interval
 MAX_RETRIES = 10
 # Our domain-check answer is a few hundred bytes, and whoever runs the domain
-# chooses what answers the probe.
+# chooses what answers the probe. A longer answer is not ours.
 PROBE_MAX_BYTES = 4096
 
 
@@ -33,14 +32,17 @@ def _serves_challenge(team_id: int, domain: str) -> bool:
     url = f"https://{domain}/.well-known/com.sbomify.domain-check"
     headers = {"User-Agent": "sbomify-domain-verification/1.0"}
     try:
-        # No redirects: the answer has to come from the domain itself.
-        with request_with_retry(
-            "GET", url, headers=headers, timeout=10, verify=True, allow_redirects=False, stream=True
+        # No redirects: the answer has to come from the domain itself. No retries:
+        # the task's backoff schedules the next attempt.
+        with requests.get(
+            url, headers=headers, timeout=10, verify=True, allow_redirects=False, stream=True
         ) as response:
             logger.debug(f"Probe response status: {response.status_code}")
             if response.status_code != 200:
                 return False
-            body = response.raw.read(PROBE_MAX_BYTES, decode_content=True)
+            body = response.raw.read(PROBE_MAX_BYTES + 1, decode_content=True)
+        if len(body) > PROBE_MAX_BYTES:
+            return False
         answer = json.loads(body)
     except (requests.RequestException, urllib3.exceptions.HTTPError, ValueError):
         return False

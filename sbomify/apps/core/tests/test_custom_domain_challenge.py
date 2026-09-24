@@ -34,16 +34,16 @@ def _response(status: int, body: bytes, headers: dict[str, str] | None = None) -
     return response
 
 
-def _routed_here(method: str, url: str, **kwargs) -> requests.Response:
+def _routed_here(url: str, **kwargs) -> requests.Response:
     """What the probe receives when the domain's DNS points at this deployment."""
     parts = urlsplit(url)
     served = Client().get(parts.path, HTTP_HOST=parts.hostname, secure=True)
     return _response(served.status_code, served.content)
 
 
-def _routed_here_compressed(method: str, url: str, **kwargs) -> requests.Response:
+def _routed_here_compressed(url: str, **kwargs) -> requests.Response:
     """The same, through a proxy that compresses the answer."""
-    served = _routed_here(method, url)
+    served = _routed_here(url)
     return _response(served.status_code, gzip.compress(served.raw.read()), {"Content-Encoding": "gzip"})
 
 
@@ -98,7 +98,7 @@ def test_the_task_leaves_a_domain_that_changed_after_it_was_read(claimed, mocker
 @pytest.mark.parametrize("routed", [_routed_here, _routed_here_compressed])
 def test_the_probe_verifies_a_domain_that_serves_the_challenge(claimed, mocker, routed):
     Team.objects.filter(pk=claimed.pk).update(custom_domain_verification_failures=1)
-    fetch = mocker.patch("sbomify.apps.teams.tasks.request_with_retry", side_effect=routed)
+    fetch = mocker.patch("sbomify.apps.teams.tasks.requests.get", side_effect=routed)
 
     probe_custom_domain(claimed.pk, DOMAIN)
 
@@ -112,16 +112,27 @@ def test_the_probe_verifies_a_domain_that_serves_the_challenge(claimed, mocker, 
     assert fetch.call_args.kwargs["verify"] is True
 
 
-def test_the_probe_reads_no_more_than_a_domain_check_answer(claimed, mocker):
-    answer = {"challenge": custom_domain_challenge(claimed.pk, DOMAIN), "padding": "x" * PROBE_MAX_BYTES}
-    mocker.patch(
-        "sbomify.apps.teams.tasks.request_with_retry", return_value=_response(200, json.dumps(answer).encode())
-    )
+def test_the_probe_makes_one_request(claimed, mocker):
+    fetch = mocker.patch("sbomify.apps.teams.tasks.requests.get", side_effect=requests.ConnectionError)
+
+    probe_custom_domain(claimed.pk, DOMAIN)
+
+    # The task's backoff schedules the next attempt.
+    fetch.assert_called_once()
+    claimed.refresh_from_db()
+    assert claimed.custom_domain_validated is False
+
+
+def test_the_probe_stops_reading_and_rejects_an_oversized_answer(claimed, mocker):
+    answer = json.dumps({"challenge": custom_domain_challenge(claimed.pk, DOMAIN)}).encode()
+    served = _response(200, answer + b" " * PROBE_MAX_BYTES * 4)
+    mocker.patch("sbomify.apps.teams.tasks.requests.get", return_value=served)
 
     probe_custom_domain(claimed.pk, DOMAIN)
 
     claimed.refresh_from_db()
     assert claimed.custom_domain_validated is False
+    assert served.raw.tell() <= PROBE_MAX_BYTES + 1
 
 
 @pytest.mark.parametrize(
@@ -136,7 +147,7 @@ def test_the_probe_reads_no_more_than_a_domain_check_answer(claimed, mocker):
     ],
 )
 def test_the_probe_rejects_a_domain_that_serves_anything_else(claimed, mocker, status, body):
-    mocker.patch("sbomify.apps.teams.tasks.request_with_retry", return_value=_response(status, body))
+    mocker.patch("sbomify.apps.teams.tasks.requests.get", return_value=_response(status, body))
 
     probe_custom_domain(claimed.pk, DOMAIN)
 
@@ -145,12 +156,12 @@ def test_the_probe_rejects_a_domain_that_serves_anything_else(claimed, mocker, s
 
 
 def test_the_probe_does_not_verify_a_domain_changed_while_it_ran(claimed, mocker):
-    def fetch_then_change(method: str, url: str, **kwargs) -> requests.Response:
-        response = _routed_here(method, url)
+    def fetch_then_change(url: str, **kwargs) -> requests.Response:
+        response = _routed_here(url)
         Team.objects.filter(pk=claimed.pk).update(custom_domain="other.example.com")
         return response
 
-    mocker.patch("sbomify.apps.teams.tasks.request_with_retry", side_effect=fetch_then_change)
+    mocker.patch("sbomify.apps.teams.tasks.requests.get", side_effect=fetch_then_change)
 
     probe_custom_domain(claimed.pk, DOMAIN)
 
