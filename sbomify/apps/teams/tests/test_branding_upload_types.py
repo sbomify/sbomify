@@ -124,7 +124,11 @@ class TestBrandingUploadEndpoint:
             pytest.param(svg("<?xml-stylesheet type='text/xsl' href='#x'?>"), id="instruction-inside-svg"),
             pytest.param(b"<!DOCTYPE svg [<!ATTLIST svg onload CDATA 'alert(1)'>]>" + svg(), id="internal-dtd"),
             pytest.param(b"<!DOCTYPE svg SYSTEM 'https://example.com/svg.dtd'>" + svg(), id="external-dtd"),
+            pytest.param(
+                svg("<a xml:base='javascript:alert(1)//' href='#x'><rect width='10' height='10'/></a>"), id="xml-base"
+            ),
             pytest.param(b"<?xml version='1.0' encoding='x-unknown'?>" + svg(), id="unknown-encoding"),
+            pytest.param(svg("<g/>" * 300_000), id="over-the-size-cap"),
             pytest.param(svg()[:-1], id="malformed"),
             pytest.param(b"<note>hi</note>", id="not-svg"),
         ],
@@ -151,6 +155,7 @@ class TestBrandingUploadEndpoint:
                 id="internal-references",
             ),
             pytest.param(svg("<image href='data:image/png;base64,iVBORw0KGgo='/>"), id="embedded-png"),
+            pytest.param(svg("<image href='data:image/jpg;base64,/9j/4AAQ'/>"), id="embedded-jpg"),
             pytest.param(svg("<style>.a{fill:#fff}</style><rect class='a' width='10' height='10'/>"), id="style"),
             pytest.param(
                 svg(
@@ -206,3 +211,18 @@ class TestBrandingSettingsForm:
 
         assert json.loads(response["HX-Trigger"])["messages"][0]["type"] == "error"
         assert_nothing_stored(s3, team)
+
+    def test_a_file_sent_with_its_removal_is_ignored(self, owner, s3):
+        """Removal wins over a new file, so the file is neither checked nor stored."""
+        client, team = owner
+
+        response = self.post(
+            client,
+            team,
+            {"logo_pending_deletion": "true", "logo": SimpleUploadedFile("logo.html", HTML, content_type="text/html")},
+        )
+
+        assert json.loads(response["HX-Trigger"])["messages"][0]["type"] == "success"
+        s3.Bucket.return_value.put_object.assert_not_called()
+        team.refresh_from_db()
+        assert team.branding_info["logo"] == ""

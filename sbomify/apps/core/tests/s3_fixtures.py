@@ -33,7 +33,7 @@ class MockStorageClient:
             raise Exception(self.error_message)
         self.uploaded_files[object_name] = data
 
-    def upload_media(self, object_name: str, data: bytes) -> None:
+    def upload_media(self, object_name: str, data: bytes, content_type: str) -> None:
         """Mock upload_media method."""
         if self.bucket_type != "MEDIA":
             raise ValueError("This method is only for MEDIA bucket")

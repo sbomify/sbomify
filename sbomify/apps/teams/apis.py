@@ -256,14 +256,16 @@ def update_team_branding_field(
 # Branding files are served straight from the public media bucket, so whether
 # one is stored, and its extension and ContentType, follow from its bytes and
 # never from the filename or type the client sent.
-_INVALID_BRANDING_IMAGE = "Upload a PNG, JPEG, WebP or plain SVG image."
+_INVALID_BRANDING_IMAGE = "Upload a PNG, JPEG or WebP image, or a plain SVG under 1 MB."
+# Parsing an SVG takes far more memory and time than its size, so SVGs get a cap of their own.
+_MAX_SVG_BYTES = 1024 * 1024
 
 _SVG_ROOT = "{http://www.w3.org/2000/svg}svg"
 # Elements a browser runs as HTML or MathML even inside an SVG document.
 _LIVE_NAMESPACES = ("{http://www.w3.org/1999/xhtml}", "{http://www.w3.org/1998/Math/MathML}")
 # An in-document reference or an embedded raster image. Any other href loads or
 # runs something the check never saw.
-_INERT_HREF = re.compile(r"#|data:image/(png|jpeg|gif|webp)[;,]")
+_INERT_HREF = re.compile(r"#|data:image/(png|jpe?g|gif|webp)[;,]")
 
 
 def _is_inert_svg(data: bytes) -> bool:
@@ -271,8 +273,9 @@ def _is_inert_svg(data: bytes) -> bool:
 
     Checked, never cleaned: a file is stored exactly as uploaded or not at all.
     A DTD is refused because its entities and attribute defaults add content the
-    markup does not show, and an animation of an href or an event handler
-    because it swaps the checked value for another once the image loads.
+    markup does not show, xml:base because it re-points every in-document href,
+    and an animation of an href or an event handler because it swaps the checked
+    value for another once the image loads.
     """
     try:
         events = iterparse(io.BytesIO(data), events=("start", "pi"), forbid_dtd=True)
@@ -284,7 +287,7 @@ def _is_inert_svg(data: bytes) -> bool:
             for attribute, value in element.attrib.items():
                 name = attribute.rpartition("}")[2].lower()
                 animated = value.strip().rpartition(":")[2].lower() if name == "attributename" else ""
-                if name.startswith("on") or animated == "href" or animated.startswith("on"):
+                if name.startswith("on") or name == "base" or animated == "href" or animated.startswith("on"):
                     return False
                 if name == "href" and not _INERT_HREF.match(value.strip().lower()):
                     return False
@@ -301,7 +304,7 @@ def _branding_image_type(data: bytes) -> tuple[str, str] | None:
         return ".jpg", "image/jpeg"
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return ".webp", "image/webp"
-    if _is_inert_svg(data):
+    if len(data) <= _MAX_SVG_BYTES and _is_inert_svg(data):
         return ".svg", "image/svg+xml"
     return None
 
@@ -387,14 +390,14 @@ def update_team_branding(
 
         if getattr(payload, f"{field}_pending_deletion", False):
             branding_info[field] = ""
-        elif file := request.FILES.get(field):
+        elif field in images:
             data, extension, content_type = images[field]
             branding_info[field] = generate_branding_filename(team, field, extension)
 
             try:
                 upload_to_s3(branding_info[field], data, content_type)
             except Exception as e:
-                logger.error(f"Failed to upload {field} file {file.name}: {e}")
+                logger.error(f"Failed to upload {field} file {branding_info[field]}: {e}")
                 raise e
         else:
             continue
