@@ -49,7 +49,7 @@ class ReleaseCreateView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginReq
         back_url = (
             reverse("core:product_releases", args=[product_id])
             if product_id in dict(products)
-            else reverse("core:products_dashboard") + "?view=releases"
+            else reverse("core:releases_dashboard")
         )
         context: dict[str, Any] = {
             "form": form,

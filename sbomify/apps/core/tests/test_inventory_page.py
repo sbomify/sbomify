@@ -135,11 +135,12 @@ def test_inventory_renders_full_and_partial_pages(
     assert response.status_code == 200
     assert b"<c-" not in response.content
     assert b'id="inventory-content"' in response.content
+    assert b'name="view"' not in response.content
+    assert f'action="{reverse(f"core:{view}_dashboard")}"'.encode() in response.content
     # Rendering nested components must not rerun workspace queries for each one.
     with django_assert_max_num_queries(40):
         partial = client.get(
-            reverse("core:products_dashboard"),
-            {"view": view},
+            reverse(f"core:{view}_dashboard"),
             HTTP_HX_REQUEST="true",
             HTTP_HX_TARGET="inventory-content",
         )
@@ -171,3 +172,52 @@ def test_release_summary_only_and_skipped_results(sample_team_with_owner_member:
     assert row["unassessed"] == 1
     assert not row["assessed"]
     assert not any(r["id"] == release.id for r in inventory(member, view="releases", risk="clear")["rows"])
+
+
+@pytest.mark.parametrize("kind", ["products", "releases", "components"])
+@pytest.mark.parametrize("partial", [False, True])
+def test_legacy_inventory_links_redirect_with_filters(
+    client: Client, sample_team_with_owner_member: Member, kind: str, partial: bool
+) -> None:
+    member = sample_team_with_owner_member
+    setup_authenticated_client_session(client, member.team, member.user)
+    headers = {"HX-Request": "true", "HX-Target": "inventory-content"} if partial else {}
+    response = client.get(
+        reverse("core:products_dashboard"),
+        {"view": kind, "search": "Example", "product": "selected", "page": "2"},
+        headers=headers,
+    )
+    expected = reverse(f"core:{kind}_dashboard") + "?search=Example&product=selected&page=2"
+    if partial:
+        assert response.status_code == 200
+        assert response["HX-Redirect"] == expected
+    else:
+        assert response.status_code == 302
+        assert response.url == expected
+
+
+@pytest.mark.parametrize("kind", ["products", "releases", "components"])
+def test_inventory_links_use_dedicated_routes(sample_team_with_owner_member: Member, kind: str) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    member = sample_team_with_owner_member
+    product = Product.objects.create(team=member.team, name="Example")
+    result = inventory(member, view=kind, product=product.id, search="Example")
+    base = reverse(f"core:{kind}_dashboard")
+    assert result["base_url"] == result["reset_url"] == base
+    assert "view" not in result["params"]
+    for url in [result["refresh_url"], *(header["href"] for header in result["headers"])]:
+        parsed = urlsplit(url)
+        assert parsed.path == base
+        query = parse_qs(parsed.query)
+        assert "view" not in query
+        assert query["search"] == ["Example"]
+        if kind != "products":
+            assert query["product"] == [product.id]
+    for tab in result["tabs"]:
+        parsed = urlsplit(tab["href"])
+        assert parsed.path == reverse(f"core:{tab['id']}_dashboard")
+        query = parse_qs(parsed.query)
+        assert "view" not in query
+        if kind != "products" and tab["id"] != "products":
+            assert query["product"] == [product.id]

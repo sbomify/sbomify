@@ -125,8 +125,8 @@
     <c-layout.page-header title="Product inventory" subtitle="Linked tabs, compact server-sorted cells, severity breakdowns and shared filters." />
     <c-navigation.tabs links aria-label="Example inventory views">
     <c-navigation.tab href="{% url 'core:products_dashboard' %}" badge="1" active>Products</c-navigation.tab>
-    <c-navigation.tab href="{% url 'core:products_dashboard' %}?view=releases" badge="2">Releases</c-navigation.tab>
-    <c-navigation.tab href="{% url 'core:products_dashboard' %}?view=components" badge="3">Components</c-navigation.tab>
+    <c-navigation.tab href="{% url 'core:releases_dashboard' %}" badge="2">Releases</c-navigation.tab>
+    <c-navigation.tab href="{% url 'core:components_dashboard' %}" badge="3">Components</c-navigation.tab>
     </c-navigation.tabs>
     <c-inventory.table :inventory="inventory_demo" hx-disable />
     <c-inventory.results :inventory="inventory_demo" preview />

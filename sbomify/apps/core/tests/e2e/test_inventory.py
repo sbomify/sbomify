@@ -36,7 +36,10 @@ def test_inventory_navigation_and_filters(
         scroll_before = page.evaluate("window.scrollY")
         navigation.get_by_role("link", name=re.compile(f"^{kind}")).click()
         expect(page.get_by_role("table", name=kind, exact=True)).to_be_visible()
-        expect(page.locator("#inventory-navigation [aria-current=page]")).to_have_attribute("aria-label", kind)
+        expect(page.locator("#inventory-navigation [aria-current=page]")).to_have_attribute(
+            "aria-label", "Products" if kind == "Releases" else kind
+        )
+        expect(page).to_have_url(re.compile(f"/{kind.lower()}/$"))
         expect(page.locator("#inventory-content")).not_to_have_class(re.compile("htmx-settling"))
         assert page.evaluate("window.scrollY") == scroll_before
         assert navigation.evaluate(

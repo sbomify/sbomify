@@ -221,7 +221,7 @@ def test_focus_shows_preloaded_pages_and_search_examples(
     search.press("ArrowDown")
     expect(panel.get_by_role("option", name="Components", exact=True)).to_have_attribute("aria-selected", "true")
     search.press("Enter")
-    page.wait_for_url("**/products/?view=components")
+    page.wait_for_url("**/components/")
     assert requests == []
 
     page.keyboard.press("Control+k")

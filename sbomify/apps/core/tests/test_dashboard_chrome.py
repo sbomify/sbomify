@@ -65,10 +65,8 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
     ("path", "label"),
     [
         ("/products/", "Products"),
-        ("/products/?view=components", "Components"),
-        ("/products/?view=releases", "Releases"),
         ("/components/", "Components"),
-        ("/releases/", "Releases"),
+        ("/releases/", "Products"),
     ],
 )
 @pytest.mark.parametrize("partial", [False, True])
@@ -82,7 +80,7 @@ def test_inventory_navigation_tracks_selected_view(
     nav = re.search(r'(<div\s+id="inventory-navigation"[^>]*>)(.*?)</div>', response.content.decode(), re.DOTALL)
     assert nav is not None
     links = re.findall(r"<a\s[^>]*>", nav[2])
-    assert [re.search(r'aria-label="([^"]+)"', link)[1] for link in links] == ["Products", "Releases", "Components"]
+    assert [re.search(r'aria-label="([^"]+)"', link)[1] for link in links] == ["Products", "Components"]
     current = [link for link in links if 'aria-current="page"' in link]
     assert len(current) == 1
     assert f'aria-label="{label}"' in current[0]

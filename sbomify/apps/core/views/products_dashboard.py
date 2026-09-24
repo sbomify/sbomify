@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.vary import vary_on_headers
@@ -32,8 +33,17 @@ def _create_product(request: HttpRequest) -> HttpResponse:
 class InventoryView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     inventory_kind: str | None = None
 
-    @method_decorator(vary_on_headers("HX-Target"))
+    @method_decorator(vary_on_headers("HX-Target", "HX-Request"))
     def get(self, request: HttpRequest) -> HttpResponse:
+        if "view" in request.GET:
+            params = request.GET.copy()
+            legacy_kind = params.pop("view")[-1]
+            kind = self.inventory_kind or (legacy_kind if legacy_kind in ("releases", "components") else "products")
+            query = params.urlencode()
+            destination = reverse(f"core:{kind}_dashboard") + (f"?{query}" if query else "")
+            if request.headers.get("HX-Request") == "true":
+                return HttpResponse(headers={"HX-Redirect": destination})
+            return redirect(destination)
         result = build_inventory_context(request, kind=self.inventory_kind)
         if not result.ok:
             return HttpResponse(result.error, status=result.status_code or 400)
