@@ -18,6 +18,7 @@ import stripe
 from django.utils import timezone
 
 from sbomify.apps.billing import billing_processing, stripe_sync
+from sbomify.apps.billing.billing_helpers import downgrade_ended_subscription
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.teams.models import Team
@@ -156,6 +157,18 @@ def test_stale_trial_sweep_moves_an_ended_trial_to_community(paid_workspace):
         check_stale_trials_task()
 
     _assert_on_community(paid_workspace)
+
+
+def test_moving_to_community_clears_a_scheduled_cancel(paid_workspace):
+    limits = paid_workspace.billing_plan_limits
+    limits.update({"cancel_at_period_end": True, "scheduled_downgrade_plan": "community"})
+    Team.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
+
+    assert downgrade_ended_subscription(paid_workspace.pk)
+
+    _assert_on_community(paid_workspace)
+    assert "scheduled_downgrade_plan" not in paid_workspace.billing_plan_limits
+    assert paid_workspace.billing_plan_limits["cancel_at_period_end"] is False
 
 
 def test_enterprise_workspace_keeps_its_plan_when_a_subscription_ends(paid_workspace):

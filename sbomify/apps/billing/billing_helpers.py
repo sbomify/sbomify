@@ -190,6 +190,9 @@ def downgrade_ended_subscription(team_pk: int) -> bool:
             return False
         limits = (team.billing_plan_limits or {}).copy()
         limits.update(get_community_plan_limits())
+        # The downgrade a scheduled cancel was waiting for has now happened.
+        limits.pop("scheduled_downgrade_plan", None)
+        limits["cancel_at_period_end"] = False
         team.billing_plan = BillingPlan.KEY_COMMUNITY
         team.billing_plan_limits = limits
         team.save()
