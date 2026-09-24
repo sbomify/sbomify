@@ -74,7 +74,7 @@ def test_accept_invite_captures_team_member_invitation_accepted(
     client = Client()
     client.force_login(invitee)
 
-    response = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
 
     assert response.status_code == 302, f"Unexpected status {response.status_code}: {response.content!r}"
     assert Member.objects.filter(team=team_with_business_plan, user=invitee).exists()

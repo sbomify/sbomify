@@ -12,6 +12,7 @@ if typing.TYPE_CHECKING:
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.http import (
@@ -22,7 +23,7 @@ from django.http import (
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY, READ_INTERNAL, ROLE_GUEST, ROLE_OWNER
@@ -353,18 +354,14 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
     return render(request, "teams/invite.html.j2", context)
 
 
-@require_GET
+@require_http_methods(["GET", "POST"])
 def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFound | HttpResponse:
     log.info("Accepting invitation %s", invite_token)
 
-    invitation = Invitation.objects.filter(token=invite_token).first()
-
-    # Backward compatibility for legacy numeric invite links
-    if invitation is None and invite_token.isdigit():
-        try:
-            invitation = Invitation.objects.filter(id=int(invite_token)).first()
-        except ValueError:
-            pass
+    try:
+        invitation = Invitation.objects.filter(token=invite_token).first()
+    except ValidationError:
+        return error_response(request, HttpResponseNotFound("Unknown invitation"))
 
     if invitation is None:
         # If user is not authenticated, store token and redirect to login
@@ -382,12 +379,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         # If the invitation was auto-accepted during login, recover using session data
         auto_accepted_invites = request.session.get("auto_accepted_invites", [])
         matched = next(
-            (
-                inv
-                for inv in auto_accepted_invites
-                if inv.get("invitation_token") == invite_token
-                or (invite_token.isdigit() and str(inv.get("invitation_id")) == invite_token)
-            ),
+            (inv for inv in auto_accepted_invites if inv.get("invitation_token") == invite_token),
             None,
         )
         if not matched:
@@ -439,6 +431,14 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     if (request.user.email or "").lower() != invitation.email.lower():
         # Avoid revealing whether an invitation exists for another email
         return error_response(request, HttpResponseNotFound("Unknown invitation"))
+
+    # The emailed link only offers the invitation; accepting it is the
+    # confirmation page's POST. A zero count drops the toast that sends the
+    # user to settings to accept it, since this page does that.
+    if request.method == "GET":
+        return render(
+            request, "teams/accept_invite.html.j2", {"invitation": invitation, "pending_invitations_count": 0}
+        )
 
     # Check if we already have a membership
     try:
