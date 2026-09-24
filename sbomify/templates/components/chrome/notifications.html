@@ -15,14 +15,14 @@ row template and toggles state wrappers, never component layout classes.
         <span data-notification-count class="sr-only"></span>
     </span>
     </c-buttons.icon-quiet>
-    <c-dropdowns.dropdown flush role="dialog" class="right-0 mt-2 w-[360px] max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-16 max-sm:mt-0 max-sm:w-auto focus:outline-none" aria-label="Notifications" id="notifications-dropdown" x-ref="panel" tabindex="-1" x-show="open" x-cloak x-transition.opacity.duration.100ms @click.outside="open = false">
+    <c-dropdowns.dropdown flush role="dialog" class="right-0 mt-2 w-[360px] max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-[var(--app-header-height,4rem)] max-sm:mt-0 max-sm:w-auto focus:outline-none" aria-label="Notifications" id="notifications-dropdown" x-ref="panel" tabindex="-1" x-show="open" x-cloak x-transition.opacity.duration.100ms @click.outside="open = false">
     <div class="flex items-center justify-between gap-3 min-h-14 px-4 py-2 border-b border-border">
         <h2 class="text-sm font-semibold text-text">Notifications</h2>
         <span id="notifications-clear" class="hidden">
             <c-buttons.ghost size="sm" id="clearAllNotifications">Clear all</c-buttons.ghost>
         </span>
     </div>
-    <div class="max-h-[min(24rem,calc(100dvh-9rem))] overflow-y-auto">
+    <div class="max-h-[min(24rem,calc(100dvh-var(--app-header-height,4rem)-5rem))] overflow-y-auto">
         <div id="notifications-loading">
             <c-feedback.loading-list message="Loading notifications..." />
         </div>
