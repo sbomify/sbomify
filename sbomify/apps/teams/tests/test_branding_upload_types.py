@@ -84,6 +84,17 @@ class TestBrandingUploadEndpoint:
         assert stored.endswith(extension)
         s3.Bucket.return_value.put_object.assert_called_once_with(Key=stored, Body=data, ContentType=content_type)
 
+    def test_a_raster_past_the_svg_cap_is_stored_whole(self, owner, s3):
+        client, team = owner
+        large_png = PNG + bytes(3 * 1024 * 1024)
+
+        response = upload(client, team, "logo.png", large_png, "image/png")
+
+        assert response.status_code == 200
+        s3.Bucket.return_value.put_object.assert_called_once_with(
+            Key=response.json()["logo"], Body=large_png, ContentType="image/png"
+        )
+
     @pytest.mark.parametrize(
         "name,data,content_type",
         [

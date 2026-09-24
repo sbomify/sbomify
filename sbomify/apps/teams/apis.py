@@ -532,8 +532,8 @@ def upload_branding_file(
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     file.seek(0)
-    data = file.read()
-    if not (image_type := _branding_image_type(data)):
+    # As in update_team_branding, one byte past the SVG cap is enough to type the file.
+    if not (image_type := _branding_image_type(file.read(_MAX_SVG_BYTES + 1))):
         return 400, {"detail": _INVALID_BRANDING_IMAGE, "error_code": ErrorCode.VALIDATION_ERROR}
 
     branding_data = _normalize_branding_payload(team.branding_info)
@@ -547,7 +547,8 @@ def upload_branding_file(
     old_filename = update_data.get(file_type)
 
     # Upload new file first
-    s3_client.upload_media(new_filename, data, content_type)
+    file.seek(0)
+    s3_client.upload_media(new_filename, file.read(), content_type)
 
     try:
         # Update database atomically
