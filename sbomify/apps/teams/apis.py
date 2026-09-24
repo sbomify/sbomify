@@ -446,7 +446,8 @@ def update_team_branding(
     for field in ["icon", "logo"]:
         if (file := request.FILES.get(field)) and not getattr(payload, f"{field}_pending_deletion", False):
             file.seek(0)
-            if not (image_type := _branding_image_type(file.read())):
+            # A raster is typed by its signature and a longer SVG fails the cap, so one byte past it is enough.
+            if not (image_type := _branding_image_type(file.read(_MAX_SVG_BYTES + 1))):
                 return 400, {"detail": _INVALID_BRANDING_IMAGE, "error_code": ErrorCode.VALIDATION_ERROR}
             images[field] = (file, *image_type)
 

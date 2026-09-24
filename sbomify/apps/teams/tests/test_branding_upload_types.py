@@ -251,6 +251,19 @@ class TestBrandingSettingsForm:
         assert stored.endswith(".jpg")
         s3.Bucket.return_value.put_object.assert_called_once_with(Key=stored, Body=JPEG, ContentType="image/jpeg")
 
+    def test_a_raster_past_the_svg_cap_is_stored_whole(self, owner, s3):
+        client, team = owner
+        large_png = PNG + bytes(3 * 1024 * 1024)
+        icon = SimpleUploadedFile("icon.png", large_png, content_type="image/png")
+
+        response = self.post(client, team, {"icon": icon})
+
+        assert json.loads(response["HX-Trigger"])["messages"][0]["type"] == "success"
+        team.refresh_from_db()
+        s3.Bucket.return_value.put_object.assert_called_once_with(
+            Key=team.branding_info["icon"], Body=large_png, ContentType="image/png"
+        )
+
     def test_an_icon_and_a_logo_are_each_stored_from_their_own_bytes(self, owner, s3):
         client, team = owner
 
