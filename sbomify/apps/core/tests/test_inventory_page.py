@@ -171,3 +171,35 @@ def test_release_summary_only_and_skipped_results(sample_team_with_owner_member:
     assert row["unassessed"] == 1
     assert not row["assessed"]
     assert not any(r["id"] == release.id for r in inventory(member, view="releases", risk="clear")["rows"])
+
+
+@pytest.mark.parametrize("kind", ["products", "components", "releases"])
+@pytest.mark.parametrize("scoped", [False, True])
+def test_inventory_only_hydrates_models_used_by_selected_view(
+    sample_team_with_owner_member: Member, mocker: MockerFixture, kind: str, scoped: bool
+) -> None:
+    from sbomify.apps.core.services.inventory_page import build_inventory_snapshot
+
+    workspace = sample_team_with_owner_member.team
+    product = Product.objects.create(team=workspace, name="Selected product")
+    component = Component.objects.create(team=workspace, name="Selected component")
+    product.components.add(component)
+    Release.objects.create(product=product, name="v1")
+    other = Product.objects.create(team=workspace, name="Other product")
+    other.components.add(Component.objects.create(team=workspace, name="Other component"))
+    release_count = Release.objects.filter(product=product).count() if scoped else Release.objects.count()
+    component_loads = mocker.spy(Component, "from_db")
+    release_loads = mocker.spy(Release, "from_db")
+
+    snapshot = build_inventory_snapshot(workspace, kind, product_id=product.id if scoped else "")
+
+    assert snapshot["counts"] == {
+        "products": 1 if scoped else 2,
+        "components": 1 if scoped else 2,
+        "releases": release_count,
+    }
+    assert snapshot["rows"]
+    if kind == "releases":
+        component_loads.assert_not_called()
+    else:
+        release_loads.assert_not_called()

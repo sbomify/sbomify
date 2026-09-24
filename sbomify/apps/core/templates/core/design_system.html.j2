@@ -1682,8 +1682,15 @@ first-of-type rule that drops the leading hairline reads the section's position
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div role="menu" aria-label="Compact menu example">
-            <c-dropdowns.item compact>My account settings</c-dropdowns.item>
-            <c-dropdowns.item compact>API tokens</c-dropdowns.item>
+            <c-dropdowns.header>Preferences</c-dropdowns.header>
+            <c-dropdowns.item compact icon="far fa-user">My account settings</c-dropdowns.item>
+            <c-chrome.theme-picker />
+            <c-dropdowns.divider />
+            <c-dropdowns.header>Help</c-dropdowns.header>
+            <c-dropdowns.item compact icon="fas fa-book-open">Documentation</c-dropdowns.item>
+            <c-dropdowns.item compact icon="far fa-circle-question">Contact support</c-dropdowns.item>
+            <c-dropdowns.divider />
+            <c-dropdowns.item compact icon="fas fa-arrow-right-from-bracket">Sign out</c-dropdowns.item>
         </div>
         <c-feedback.empty-state size="sm" icon="far fa-bell" icon_variant="neutral" title="You're all caught up" message="No new notifications." />
     </div>

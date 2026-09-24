@@ -67,39 +67,54 @@ def build_inventory_snapshot(workspace: Team, kind: str, *, product_id: str = ""
     component_scope = Q(products__id=product_id) if product_id else Q()
     product_scope = Q(id=product_id) if product_id else Q()
     release_scope = Q(product_id=product_id) if product_id else Q()
-    components = list(
-        Component.objects.filter(component_scope, team=workspace)
-        .annotate(sbom_count=Count("sbom", distinct=True), document_count=Count("document", distinct=True))
-        .order_by("name", "id")
-    )
-    products = list(
-        Product.objects.filter(product_scope, team=workspace)
-        .annotate(release_count=Count("releases", distinct=True))
-        .prefetch_related(Prefetch("components", queryset=Component.objects.filter(team=workspace).only("id")))
-        .order_by("name", "id")
-    )
-    releases = list(
-        Release.objects.filter(release_scope, product__team=workspace)
-        .select_related("product")
-        .annotate(
-            artifact_count=Count(
-                "artifacts",
-                filter=Q(artifacts__sbom__component__team=workspace)
-                | Q(artifacts__document__component__team=workspace),
-                distinct=True,
-            )
+    component_query = Component.objects.filter(component_scope, team=workspace)
+    product_query = Product.objects.filter(product_scope, team=workspace).order_by("name", "id")
+    release_query = Release.objects.filter(release_scope, product__team=workspace)
+    # Tab counts do not need artifact joins or model instances from other views.
+    components = (
+        list(
+            component_query.annotate(
+                sbom_count=Count("sbom", distinct=True), document_count=Count("document", distinct=True)
+            ).order_by("name", "id")
         )
-        .order_by("name", "id")
+        if kind != "releases"
+        else []
     )
-    tabs_count = {"products": len(products), "components": len(components), "releases": len(releases)}
+    if kind != "releases":
+        product_query = product_query.prefetch_related(
+            Prefetch("components", queryset=Component.objects.filter(team=workspace).only("id"))
+        )
+    if kind == "products":
+        product_query = product_query.annotate(release_count=Count("releases", distinct=True))
+    elif kind == "releases":
+        product_query = product_query.only("id", "name")
+    products = list(product_query)
+    tabs_count = {
+        "products": len(products),
+        "components": len(components) if kind != "releases" else component_query.count(),
+        "releases": release_query.count(),
+    }
     choices = [{"id": product.id, "name": product.name} for product in products]
     memberships: dict[str, list[dict[str, str]]] = {}
-    for product in products:
-        for component in product.components.all():
-            memberships.setdefault(component.id, []).append({"id": product.id, "name": product.name})
+    if kind != "releases":
+        for product in products:
+            for component in product.components.all():
+                memberships.setdefault(component.id, []).append({"id": product.id, "name": product.name})
 
     rows: list[dict[str, Any]] = []
     if kind == "releases":
+        releases = list(
+            release_query.select_related("product")
+            .annotate(
+                artifact_count=Count(
+                    "artifacts",
+                    filter=Q(artifacts__sbom__component__team=workspace)
+                    | Q(artifacts__document__component__team=workspace),
+                    distinct=True,
+                )
+            )
+            .order_by("name", "id")
+        )
         postures = build_release_vuln_postures(releases)
         for release in releases:
             posture = postures[release.id]
@@ -209,7 +224,7 @@ def build_inventory_snapshot(workspace: Team, kind: str, *, product_id: str = ""
                     "description": product.description,
                     "component_count": len(assigned),
                     "security_component_count": len(security_rows),
-                    "release_count": product.release_count,
+                    "release_count": getattr(product, "release_count"),
                     "counts": counts,
                     "vulnerabilities": counts["total"],
                     "unassessed": sum(row["unassessed"] for row in security_rows),
