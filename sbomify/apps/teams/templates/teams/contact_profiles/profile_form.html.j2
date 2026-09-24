@@ -4,7 +4,7 @@
      @update-counts.window="updateCounts()">
     {# Header with back navigation #}
     <div class="flex items-center gap-4 px-6 py-5 border-b border-border">
-        <c-buttons.icon label="Back to profiles" hx-get="{% url 'teams:contact_profiles_list' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML" title="Back to profiles">
+        <c-buttons.icon label="Back to parties" hx-get="{% url 'teams:contact_profiles_list' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML" title="Back to parties">
         <i class="fas fa-arrow-left"></i>
         </c-buttons.icon>
         <div>
@@ -14,13 +14,13 @@
                 {% else %}
                     Edit
                 {% endif %}
-                Contact Profile
+                party
             </h5>
             <p class="text-sm leading-[1.5] text-text-muted mt-0.5">
                 {% if is_create %}
-                    Create a new reusable contact profile for your components
+                    Add a reusable party for your components
                 {% else %}
-                    Update profile information and contacts
+                    Update this party and its contacts
                 {% endif %}
             </p>
         </div>
@@ -35,17 +35,17 @@
         <div class="flex flex-col gap-8 p-6">
             {# Profile Details Section #}
             <div class="flex flex-col gap-4">
-                <c-layout.section-header icon="fas fa-id-card" title="Profile Details" subtitle="Basic information about this contact profile" />
+                <c-layout.section-header icon="fas fa-id-card" title="Party details" subtitle="Basic information about this party" />
                 <c-cards.card>
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <div class="lg:col-span-8">
-                        <c-forms.label for="{{ form.name.id_for_label }}" required>Profile Name</c-forms.label>
-                        <c-forms.input name="{{ form.name.html_name }}" id="{{ form.name.id_for_label }}" value="{{ form.name.value|default:'' }}" placeholder="e.g., Default Profile, Engineering Team" required title="A unique name to identify this contact profile" />
+                        <c-forms.label for="{{ form.name.id_for_label }}" required>Party name</c-forms.label>
+                        <c-forms.input name="{{ form.name.html_name }}" id="{{ form.name.id_for_label }}" value="{{ form.name.value|default:'' }}" placeholder="e.g. Default party, Engineering team" required title="A unique name to identify this party" />
                         <c-forms.hint>A descriptive name for this collection of contacts</c-forms.hint>
                         {% if form.name.errors %}<c-forms.error>{{ form.name.errors.0 }}</c-forms.error>{% endif %}
                     </div>
                     <div class="lg:col-span-4">
-                        <c-forms.label>Default Status</c-forms.label>
+                        <c-forms.label>Default</c-forms.label>
                         <c-forms.checkbox name="{{ form.is_default.html_name }}" :checked="form.is_default.value">Set as default</c-forms.checkbox>
                     </div>
                 </div>

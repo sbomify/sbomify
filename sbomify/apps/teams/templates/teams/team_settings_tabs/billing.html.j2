@@ -29,7 +29,7 @@
     {% endif %}
     </c-cards.card>
     {% if team.billing_plan_limits.subscription_status == 'past_due' %}
-        <c-feedback.alert variant="danger" title="Payment Failed">Check your dashboard for the grace period status and update your billing details.</c-feedback.alert>
+        <c-feedback.alert variant="danger" title="Payment failed">Check your dashboard for the grace period status and update your billing details.</c-feedback.alert>
     {% endif %}
     {% if plan_limits %}
         <section class="flex flex-col gap-4">
