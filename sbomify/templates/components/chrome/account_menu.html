@@ -6,8 +6,8 @@
      @keydown.escape.stop.prevent="close()"
      @focusout="if (!$el.contains($event.relatedTarget)) open = false">
     <c-avatar button flat size="sm" initials="{{ request.user|user_initials }}" aria-label="Your account" aria-haspopup="menu" aria-controls="account-menu" x-ref="trigger" @click="open = !open" @keydown.arrow-down.prevent="first()" ::aria-expanded="open" />
-    <c-dropdowns.dropdown id="account-menu" x-ref="menu" class="right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-16 max-sm:mt-0 max-sm:w-auto" aria-label="User options" x-show="open" x-cloak x-transition.opacity.duration.100ms @click.outside="open = false">
-    <div class="flex items-center gap-2.5 px-2.5 pt-2 pb-3">
+    <c-dropdowns.dropdown id="account-menu" x-ref="menu" class="right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-var(--app-header-height,4rem)-1.5rem)] overflow-y-auto overscroll-contain max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-[var(--app-header-height,4rem)] max-sm:mt-0 max-sm:w-auto" aria-label="User options" x-show="open" x-cloak x-transition.opacity.duration.100ms @click.outside="open = false">
+    <div class="flex items-center gap-2.5 px-2.5 pt-2 pb-3" role="presentation">
         <c-avatar flat size="sm" initials="{{ request.user|user_initials }}" aria-hidden="true" />
         <div class="min-w-0">
             <p class="truncate text-sm leading-5 font-semibold text-text">

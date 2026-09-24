@@ -13,7 +13,9 @@ release and component inventory tabs. Capability flags are live, so this compone
        x-trap.inert.noscroll="sidebarMobileOpen"
        class="invisible lg:visible data-[mobile-open=true]:visible fixed inset-y-0 left-0 z-50 w-[var(--sidebar-width)] -translate-x-full data-[mobile-open=true]:translate-x-0 lg:translate-x-0 transition-transform duration-200 bg-surface border-r border-border flex flex-col">
     <div class="h-16 flex items-center px-6 shrink-0">
-        <a href="{% url 'core:dashboard' %}" aria-label="sbomify home">
+        <a href="{% url 'core:dashboard' %}"
+           aria-label="sbomify home"
+           class="inline-flex items-center max-lg:min-h-11">
             {% include 'core/components/brand/logo.html.j2' with class='h-6 w-auto text-text' %}
         </a>
         <div class="lg:hidden ml-auto">

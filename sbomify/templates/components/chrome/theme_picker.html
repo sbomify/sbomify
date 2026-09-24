@@ -1,33 +1,29 @@
 {% comment %}The shared theme setting; standalone drops the menu label and uses pressed buttons.
-The account menu's theme setting composes the shared segmented control. State is bound as data and ARIA attributes, so every visual recipe stays in the control.{% endcomment %}
+The account menu's theme setting composes the shared segmented control. State is bound as data and ARIA attributes, so every visual recipe stays in the control.
+
+role, aria-checked and aria-pressed are resolved into single-token variables before
+they reach the segment. Writing the {% if %} inline left the rendered role as
+"\n            menuitemradio\n        ", and c-dropdowns.dropdown roves its rows with
+[role^=menuitem] — a prefix match the leading whitespace defeated, so arrow keys
+walked straight past the theme control. The accessible role was still correct, which
+is why role-based tests never saw it.
+
+Inside a menu the wrapper is the group that owns the three radios, so the tray below
+it renders as presentation rather than nesting a second group the menu cannot own.
+{% endcomment %}
 <c-vars standalone />
-<div class="flex items-center gap-3{% if not standalone %} justify-between px-2.5 py-2{% endif %}"
-     @theme-changed.window="theme = $event.detail.theme"
-     x-data="{ theme: window.themeManager?.getTheme() || 'dark', options: [{ value: 'light', icon: 'fa-sun', label: 'Light' }, { value: 'dark', icon: 'fa-moon', label: 'Dark' }, { value: 'system', icon: 'fa-desktop', label: 'Auto' }], setTheme(value) { this.theme = value; window.themeManager?.setTheme(value); } }">
-    {% if not standalone %}<span class="text-[13px] leading-5 text-text">Theme</span>{% endif %}
-    <c-navigation.segmented aria-label="Theme" role="group">
-    <template x-for="option in options" :key="option.value">
-        <c-navigation.segment size="sm" role="
-        {% if standalone %}
-            button
-        {% else %}
-            menuitemradio
-        {% endif %}
-        " ::data-active="theme === option.value" ::aria-checked="
-        {% if standalone %}
-            null
-        {% else %}
-            theme === option.value
-        {% endif %}
-        " ::aria-pressed="
-        {% if standalone %}
-            theme === option.value
-        {% else %}
-            null
-        {% endif %}
-        " ::aria-label="option.label" ::title="option.label" @click="setTheme(option.value)">
-        <i class="fas" :class="option.icon" aria-hidden="true"></i>
-        </c-navigation.segment>
-    </template>
-    </c-navigation.segmented>
-</div>
+{% with seg_role=standalone|yesno:"button,menuitemradio" checked_expr=standalone|yesno:"null,theme === option.value" pressed_expr=standalone|yesno:"theme === option.value,null" %}
+    <div class="flex items-center gap-3{% if not standalone %} justify-between px-2.5 py-2{% endif %}"
+         {% if not standalone %}role="group" aria-label="Theme"{% endif %}
+         @theme-changed.window="theme = $event.detail.theme"
+         x-data="{ theme: window.themeManager?.getTheme() || 'dark', options: [{ value: 'light', icon: 'fa-sun', label: 'Light' }, { value: 'dark', icon: 'fa-moon', label: 'Dark' }, { value: 'system', icon: 'fa-desktop', label: 'Auto' }], setTheme(value) { this.theme = value; window.themeManager?.setTheme(value); } }">
+        {% if not standalone %}<span class="text-[13px] leading-5 text-text" aria-hidden="true">Theme</span>{% endif %}
+        <c-navigation.segmented role="{% if standalone %}group{% else %}presentation{% endif %}" {% if standalone %}aria-label="Theme"{% endif %}>
+        <template x-for="option in options" :key="option.value">
+            <c-navigation.segment size="sm" role="{{ seg_role }}" ::data-active="theme === option.value" ::aria-checked="{{ checked_expr }}" ::aria-pressed="{{ pressed_expr }}" ::aria-label="option.label" ::title="option.label" @click="setTheme(option.value)">
+            <i class="fas" :class="option.icon" aria-hidden="true"></i>
+            </c-navigation.segment>
+        </template>
+        </c-navigation.segmented>
+    </div>
+{% endwith %}

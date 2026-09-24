@@ -10,8 +10,10 @@
     "     NOT use in the UI — someone searching 'api key' should land on tokens,",
     "     and someone searching '2fa' should land wherever that lives. Synonyms",
     "     are the whole point; the title is already matched separately.",
-    "  4. `roles` restricts visibility. Omit for everyone; ['owner','admin']",
-    "     for anything a guest must not see.",
+    "  4. `roles` restricts visibility, and must match what the view itself",
+    "     allows: a destination the rail shows but search hides is worse than no",
+    "     entry at all. Omit for everyone; ['owner','admin'] for anything a guest",
+    "     must not see.",
     "  5. `args` names URL kwargs the resolver fills from the current session:",
     "     'team_key' is the only one supported today.",
     "",
@@ -98,7 +100,7 @@
       "section": "navigate",
       "icon": "fa-chart-line",
       "keywords": ["trends", "over time", "history", "vulnerability chart", "graph", "metrics"],
-      "roles": ["owner", "admin"]
+      "roles": ["owner", "admin", "member"]
     },
     {
       "title": "Plugin summary",
@@ -286,11 +288,11 @@
     {
       "title": "Vulnerability scans",
       "url_name": "vulnerability_scanning:vulnerability_scans",
-      "section": "actions",
+      "section": "navigate",
       "icon": "fa-bug",
       "keywords": ["scan results", "findings", "cves", "vulnerabilities", "security scan"],
       "args": ["team_key"],
-      "roles": ["owner", "admin"]
+      "roles": ["owner", "admin", "member"]
     },
     {
       "title": "Public Trust Center page",

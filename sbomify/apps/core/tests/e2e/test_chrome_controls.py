@@ -267,3 +267,123 @@ def test_clearing_notifications_reports_failure_and_keeps_the_list(authenticated
     expect(panel.get_by_text("Example notification", exact=True)).to_be_visible()
     expect(clear).to_be_enabled()
     expect(page.locator("[data-notification-count]")).to_have_text("1 new notification")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("menu_id", ["create-menu", "notifications-dropdown", "account-menu"])
+def test_phone_menus_open_below_the_two_row_header(authenticated_page: Page, menu_id: str) -> None:
+    """Each panel cleared a 64px header while the phone header is 120px.
+
+    The three of them sat on top of the search row, covering 47 of its 50 pixels.
+    Checking only that a panel stays inside the viewport, as the sizing test above
+    does, cannot see that: an overlapping panel is still fully on screen.
+    """
+    page = authenticated_page
+    page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=[]))
+    page.set_viewport_size({"width": 375, "height": 667})
+    page.goto("/products/")
+    page.get_by_role("banner").locator(f'button[aria-controls="{menu_id}"]').click()
+    panel = page.locator(f"#{menu_id}")
+    expect(panel).to_be_visible()
+    assert panel.evaluate("""el => {
+        const panel = el.getBoundingClientRect();
+        const header = document.querySelector('[role=banner]').getBoundingClientRect();
+        const search = document.querySelector('#navbar-search-input').getBoundingClientRect();
+        return panel.top >= header.bottom && panel.bottom <= innerHeight
+            && panel.top >= search.bottom;
+    }""")
+
+
+@pytest.mark.django_db
+def test_account_menu_arrow_keys_reach_the_theme_control(authenticated_page: Page) -> None:
+    """The theme segments render menuitemradio but were skipped by the roving keys.
+
+    c-dropdowns.dropdown roves with [role^=menuitem]; the role was built from a
+    multi-line {% if %}, so its literal value began with a newline and the prefix
+    match missed it. get_by_role still resolved it, which is why nothing failed.
+    """
+    page = authenticated_page
+    page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=[]))
+    page.goto("/products/")
+    menu = page.locator("#account-menu")
+    page.get_by_role("button", name="Your account", exact=True).focus()
+    page.keyboard.press("ArrowDown")
+    expect(menu.get_by_role("menuitem", name="My account settings")).to_be_focused()
+
+    assert menu.evaluate(
+        """el => [...el.querySelectorAll('[role^=menuitem]')].map(i =>
+               i.getAttribute('aria-label') || i.textContent.trim())"""
+    ) == [
+        "My account settings",
+        "API tokens",
+        "Light",
+        "Dark",
+        "Auto",
+        "Documentation",
+        "Contact support",
+        "Sign out",
+    ]
+
+    for role, name in (
+        ("menuitem", "API tokens"),
+        ("menuitemradio", "Light"),
+        ("menuitemradio", "Dark"),
+        ("menuitemradio", "Auto"),
+        ("menuitem", "Documentation"),
+    ):
+        page.keyboard.press("ArrowDown")
+        expect(menu.get_by_role(role, name=name, exact=True)).to_be_focused()
+
+    # A menu owns menuitems, groups and separators — not anonymous divs.
+    assert menu.evaluate(
+        "el => [...el.children].every(c => c.getAttribute('role') !== null)"
+    )
+
+
+@pytest.mark.django_db
+def test_escape_in_the_workspace_picker_keeps_the_drawer_open(authenticated_page: Page) -> None:
+    """The picker listened on the window, so one Escape also closed the drawer."""
+    page = authenticated_page
+    page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=[]))
+    page.set_viewport_size({"width": 375, "height": 667})
+    page.goto("/products/")
+    page.get_by_role("banner").locator('button[aria-controls="sidebar"]').click()
+    sidebar = page.locator("#sidebar")
+    expect(sidebar).to_have_attribute("data-mobile-open", "true")
+
+    trigger = page.get_by_role("button", name="Switch workspace")
+    trigger.click()
+    workspaces = page.get_by_role("menu", name="Workspaces")
+    expect(workspaces).to_be_visible()
+    page.keyboard.press("Escape")
+
+    expect(workspaces).to_be_hidden()
+    expect(sidebar).to_have_attribute("data-mobile-open", "true")
+    expect(trigger).to_be_focused()
+
+    # A second Escape, with the picker already closed, is the drawer's.
+    page.keyboard.press("Escape")
+    expect(sidebar).not_to_have_attribute("data-mobile-open", "true")
+
+
+@pytest.mark.django_db
+def test_rail_rows_are_tappable_and_the_current_row_outranks_hover(authenticated_page: Page) -> None:
+    """Active and hover painted the identical background, and rows were 41px."""
+    page = authenticated_page
+    page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=[]))
+    page.set_viewport_size({"width": 375, "height": 667})
+    page.goto("/dashboard")
+    page.get_by_role("banner").locator('button[aria-controls="sidebar"]').click()
+    rows = page.locator("#sidebar nav a")
+    expect(rows.first).to_be_visible()
+    assert rows.evaluate_all("els => els.every(el => el.getBoundingClientRect().height >= 44)")
+
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto("/dashboard")
+    current = page.locator("#sidebar nav a[aria-current=page]")
+    other = page.locator("#sidebar nav a:not([aria-current])").first
+    expect(current).to_have_text("Overview")
+    other.hover()
+    assert current.evaluate(
+        "el => getComputedStyle(el).boxShadow",
+    ) != other.evaluate("el => getComputedStyle(el).boxShadow")
