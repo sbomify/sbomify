@@ -456,9 +456,9 @@ def update_team_branding(
 
             try:
                 upload_to_s3(branding_info[field], data, content_type)
-            except Exception as e:
-                logger.error(f"Failed to upload {field} file {branding_info[field]}: {e}")
-                raise e
+            except Exception:
+                logger.exception(f"Failed to upload {field} file {branding_info[field]}")
+                raise
         else:
             continue
 
