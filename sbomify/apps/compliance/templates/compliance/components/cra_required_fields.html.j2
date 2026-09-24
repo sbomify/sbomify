@@ -1,11 +1,10 @@
 <div x-show="missingFields.length" x-cloak>
-    <c-feedback.alert variant="warning" title="Before you continue">
+    <c-feedback.alert variant="info" title="Before you continue">
     <c-slot name="body">
-    <c-forms.hint>Select an item to go to the field. Required items disappear as you complete them.</c-forms.hint>
-    <ul class="flex flex-col gap-1" aria-label="Required information">
+    <ul class="flex flex-col gap-2" aria-label="Required information">
         <template x-for="field in missingFields" :key="field.target">
             <li>
-                <c-buttons.ghost size="sm" @click="focusRequiredField(field.target)"><span x-text="field.message"></span></c-buttons.ghost>
+                <c-buttons.secondary size="sm" @click="focusRequiredField(field.target)"><span class="whitespace-normal text-left" x-text="field.message"></span></c-buttons.secondary>
             </li>
         </template>
     </ul>
