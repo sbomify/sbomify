@@ -272,6 +272,7 @@ INSTALLED_APPS = [
     "sbomify.apps.controls",
     "sbomify.apps.oidc",
     "sbomify.apps.security_advisories",
+    "sbomify.apps.integrations",
 ]
 
 
@@ -1366,3 +1367,23 @@ ENTERPRISE_SALES_EMAIL = os.environ.get("ENTERPRISE_SALES_EMAIL", "hello@sbomify
 # PostHog analytics
 POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY", "")
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
+
+# Integrations
+#
+# One OAuth client per provider, registered by whoever runs this deployment.
+# Without both halves the provider's tile renders disabled rather than hidden,
+# so a self-hoster can see the feature exists and what it wants.
+#
+# The redirect URI to register is /integrations/oauth/<provider>/callback on
+# whichever hostname the app is served from.
+
+VANTA_CLIENT_ID = os.environ.get("VANTA_CLIENT_ID", "")
+VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
+
+# Vanta serves its API from one host for every region, but consent happens on
+# the customer's own regional app host: app.eu.vanta.com for EU accounts,
+# app.aus.vanta.com for AU. A deployment whose customers are not all in the US
+# overrides the authorize URL.
+VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
+VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
+VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")
