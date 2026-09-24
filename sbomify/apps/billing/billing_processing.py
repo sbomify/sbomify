@@ -759,6 +759,18 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
         _raise_classified_webhook_error(e)
 
 
+def _invoice_subscription_id(invoice: Any) -> str | None:
+    """The subscription an invoice bills, from either payload shape.
+
+    API version 2025-03-31 moved it from ``invoice.subscription`` to
+    ``invoice.parent.subscription_details.subscription``. Webhook payloads follow
+    the endpoint's version rather than the pinned one, so both shapes arrive.
+    """
+    details = getattr(getattr(invoice, "parent", None), "subscription_details", None)
+    subscription_id: str | None = getattr(invoice, "subscription", None) or getattr(details, "subscription", None)
+    return subscription_id
+
+
 @handle_stripe_errors
 def handle_payment_failed(invoice: Any, event: Any = None) -> None:
     """Handle payment failure events.
@@ -767,12 +779,13 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
         invoice: Stripe invoice object
         event: Optional Stripe event object for idempotency checking
     """
-    if not hasattr(invoice, "subscription") or not invoice.subscription:
+    subscription_id = _invoice_subscription_id(invoice)
+    if not subscription_id:
         logger.error("No subscription found in invoice")
         return
 
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=invoice.subscription)
+        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
         billing_limits = team.billing_plan_limits or {}
 
         webhook_id = getattr(event, "id", None) if event else f"inv_fail_{invoice.id}_{invoice.created}"
@@ -797,7 +810,7 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
             team.billing_plan_limits = billing_limits
             team.save()
 
-        _best_effort("invoice cache invalidation", invalidate_subscription_cache, invoice.subscription, team.key)
+        _best_effort("invoice cache invalidation", invalidate_subscription_cache, subscription_id, team.key)
 
         _best_effort(
             "payment failed notification",
@@ -833,12 +846,13 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         invoice: Stripe invoice object
         event: Optional Stripe event object for idempotency checking
     """
-    if not hasattr(invoice, "subscription") or not invoice.subscription:
+    subscription_id = _invoice_subscription_id(invoice)
+    if not subscription_id:
         logger.error("No subscription found in invoice")
         return
 
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=invoice.subscription)
+        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
         billing_limits = team.billing_plan_limits or {}
 
         webhook_id = getattr(event, "id", None) if event else f"inv_succ_{invoice.id}_{invoice.created}"
@@ -849,12 +863,14 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
             return
 
         next_billing_date = None
-        if invoice.subscription:
+        if subscription_id:
+            from .stripe_sync import current_period_end
+
             try:
-                subscription = stripe_client.get_subscription(invoice.subscription)
-                if hasattr(subscription, "current_period_end") and subscription.current_period_end:
+                subscription = stripe_client.get_subscription(subscription_id)
+                if period_end := current_period_end(subscription):
                     next_billing_date = datetime.datetime.fromtimestamp(
-                        subscription.current_period_end, tz=datetime.timezone.utc
+                        period_end, tz=datetime.timezone.utc
                     ).isoformat()
             except Exception as e:
                 logger.warning(f"Failed to fetch subscription for next billing date: {e}")
@@ -879,7 +895,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
             team.billing_plan_limits = billing_limits
             team.save()
 
-        _best_effort("invoice cache invalidation", invalidate_subscription_cache, invoice.subscription, team.key)
+        _best_effort("invoice cache invalidation", invalidate_subscription_cache, subscription_id, team.key)
 
         _best_effort(
             "payment succeeded notification",
@@ -1025,10 +1041,10 @@ def handle_checkout_completed(session: Any) -> None:
                 "last_processed_checkout_session": session.id,
             }
 
-            if hasattr(subscription, "current_period_end") and subscription.current_period_end:
-                next_billing_date = datetime.datetime.fromtimestamp(
-                    subscription.current_period_end, tz=datetime.timezone.utc
-                ).isoformat()
+            from .stripe_sync import current_period_end
+
+            if period_end := current_period_end(subscription):
+                next_billing_date = datetime.datetime.fromtimestamp(period_end, tz=datetime.timezone.utc).isoformat()
                 billing_limits["next_billing_date"] = next_billing_date
 
             if subscription.status == "trialing":
