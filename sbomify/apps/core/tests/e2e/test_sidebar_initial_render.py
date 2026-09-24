@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from playwright.sync_api import Page, Route, expect
 
@@ -24,14 +26,14 @@ def test_sidebar_initial_render(authenticated_page: Page, collapsed: bool, viewp
     page.route("**/*", block_scripts)
     expected_width = 240
     expected_offset = expected_width if viewport_width == 1920 else 0
-    for path in ["/products/", "/components/", "/releases/"]:
+    for path, label in [("/products/", "Products"), ("/components/", "Components"), ("/releases/", "Releases")]:
         page.goto(path)
         expect(page.locator("body")).to_have_css("opacity", "1")
         expect(page.locator("#sidebar")).to_have_css("width", f"{expected_width}px")
         expect(page.locator("header[role=banner]")).to_have_css("left", f"{expected_offset}px")
         expect(page.locator("#main-content")).to_have_css("padding-left", f"{expected_offset}px")
-        expect(page.locator("#sidebar nav a:visible")).to_have_count(5 if viewport_width == 1920 else 0)
-        expect(page.locator("#sidebar nav a[aria-current=page]")).to_have_attribute("aria-label", "Products")
+        expect(page.locator("#sidebar nav a:visible")).to_have_count(7 if viewport_width == 1920 else 0)
+        expect(page.locator("#sidebar nav a[aria-current=page]")).to_have_attribute("aria-label", label)
         product_label = page.locator("#sidebar nav a").filter(has_text="Products").locator("span")
         if viewport_width != 1920:
             expect(product_label).to_be_hidden()
@@ -55,3 +57,14 @@ def test_sidebar_initial_render(authenticated_page: Page, collapsed: bool, viewp
     else:
         page.get_by_role("button", name="Toggle sidebar navigation").click()
         expect(page.locator("#sidebar")).to_have_css("translate", "0px")
+
+    for label in ("Releases", "Components", "Products"):
+        sidebar = page.locator("#sidebar")
+        expect(sidebar.locator("[x-cloak]")).to_have_count(0)
+        if viewport_width != 1920 and not sidebar.is_visible():
+            page.get_by_role("button", name="Toggle sidebar navigation").click()
+        sidebar.get_by_role("link", name=label, exact=True).click()
+        expect(page).to_have_url(re.compile(f"/{label.lower()}/$"))
+        expect(sidebar.locator("[aria-current=page]")).to_have_attribute("aria-label", label)
+        if viewport_width != 1920:
+            expect(sidebar).to_be_hidden()

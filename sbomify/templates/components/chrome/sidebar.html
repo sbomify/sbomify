@@ -35,14 +35,11 @@ release and component inventory tabs. Capability flags are live, so this compone
         {% endif %}
         </c-chrome.nav-group>
         <c-chrome.nav-group label="Ship">
-        {% if 'core:component' in request.resolver_match.view_name or 'core:release' in request.resolver_match.view_name %}
-            {% firstof 'true' as inventory_active %}
-        {% endif %}
-        <c-chrome.nav-item :active="inventory_active" href="{% url 'core:products_dashboard' %}" label="Products" icon="fas fa-cube" match="core:product" />
+        <c-chrome.inventory-nav />
         </c-chrome.nav-group>
         <c-chrome.nav-group label="Prove">
         {% if can_administer %}
-            <c-chrome.nav-item href="{% url 'compliance:cra_product_list' %}" label="Posture" icon="fas fa-scale-balanced" match="compliance:" />
+            <c-chrome.nav-item href="{% url 'compliance:cra_product_list' %}" label="Compliance" icon="fas fa-scale-balanced" match="compliance:" />
         {% endif %}
         <c-chrome.nav-item href="{% url 'core:security_advisories_dashboard' %}" label="Security advisories" icon="fas fa-shield-halved" match="core:security_advisor" />
         </c-chrome.nav-group>

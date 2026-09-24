@@ -85,11 +85,11 @@
       "roles": ["owner", "admin"]
     },
     {
-      "title": "Posture",
+      "title": "Compliance",
       "url_name": "compliance:cra_product_list",
       "section": "navigate",
       "icon": "fa-scale-balanced",
-      "keywords": ["cra", "cyber resilience act", "compliance", "conformity", "eu regulation", "doc", "declaration", "cra compliance"],
+      "keywords": ["posture", "start assessment", "cra", "cyber resilience act", "compliance", "conformity", "eu regulation", "doc", "declaration", "cra compliance"],
       "roles": ["owner", "admin"]
     },
     {

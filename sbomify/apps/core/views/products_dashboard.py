@@ -39,7 +39,7 @@ class InventoryView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             return HttpResponse(result.error, status=result.status_code or 400)
         partial = request.headers.get("HX-Target") == "inventory-content"
         template = "core/products_inventory.html.j2" if partial else "core/products_dashboard.html.j2"
-        return render(request, template, result.value)
+        return render(request, template, {**(result.value or {}), "inventory_navigation_oob": partial})
 
 
 class ProductsDashboardView(InventoryView):
@@ -70,4 +70,6 @@ class ProductsTableView(InventoryView):
         result = build_inventory_context(request, kind=self.inventory_kind)
         if not result.ok:
             return HttpResponse(result.error, status=result.status_code or 400)
-        return render(request, "core/products_inventory.html.j2", result.value)
+        return render(
+            request, "core/products_inventory.html.j2", {**(result.value or {}), "inventory_navigation_oob": True}
+        )
