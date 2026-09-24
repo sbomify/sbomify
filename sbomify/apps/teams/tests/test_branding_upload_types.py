@@ -150,7 +150,11 @@ class TestBrandingUploadEndpoint:
             ),
             pytest.param(
                 svg("<style>rect{fill:ur<!-- -->l(https://example.com/a.svg#g)}</style>"),
-                id="css-url-split-by-a-comment",
+                id="css-url-split-by-an-xml-comment",
+            ),
+            pytest.param(
+                svg("<style>a{content:'/*'}rect{fill:url(https://example.com/a.svg#g)}a{content:'*/'}</style>"),
+                id="css-url-between-comment-marks-in-strings",
             ),
             pytest.param(svg("<style>ur<g/>l(https://example.com/a.svg#g)</style>"), id="element-inside-a-style-sheet"),
             pytest.param(
