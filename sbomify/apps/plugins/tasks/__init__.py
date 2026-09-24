@@ -530,7 +530,10 @@ def enqueue_assessment(
         from sbomify.apps.sboms.models import SBOM
 
         sbom = SBOM.objects.select_related("component__team").filter(id=sbom_id).first()
-        if sbom is not None and not team_has_plugin_access(sbom.component.team, plugin_name):
+        if sbom is None:
+            logger.info(f"[PLUGIN] Skipped {plugin_name}: SBOM {sbom_id} not found")
+            return False
+        if not team_has_plugin_access(sbom.component.team, plugin_name):
             logger.info(f"[PLUGIN] Skipped {plugin_name} for SBOM {sbom_id}: the workspace's plan does not include it")
             return False
 

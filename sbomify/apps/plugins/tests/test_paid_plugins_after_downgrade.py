@@ -68,6 +68,17 @@ def test_a_plugin_the_plan_excludes_is_not_queued(ensure_billing_plans, team_wit
     task.send_with_options.assert_not_called()
 
 
+def test_a_paid_plugin_is_not_queued_for_a_missing_sbom(ensure_billing_plans, django_capture_on_commit_callbacks):
+    with (
+        patch("sbomify.apps.plugins.tasks.run_assessment_task") as task,
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        queued = enqueue_assessment(sbom_id="missing", plugin_name=DT, run_reason=RunReason.ON_UPLOAD)
+
+    assert queued is False
+    task.send_with_options.assert_not_called()
+
+
 def test_a_plugin_the_plan_includes_is_queued(
     ensure_billing_plans, team_with_business_plan, django_capture_on_commit_callbacks
 ):
