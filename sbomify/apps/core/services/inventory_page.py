@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 from urllib.parse import urlencode
 
@@ -15,6 +16,7 @@ from sbomify.apps.core.models import Component, Product, Release
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.services.security_snapshot import build_component_security_picture
 from sbomify.apps.sboms.freshness import freshness_state
+from sbomify.apps.sboms.models import ProductComponent
 from sbomify.apps.teams.models import Team
 from sbomify.apps.vulnerability_scanning.posture import build_release_vuln_postures
 
@@ -62,15 +64,45 @@ def _url(params: dict[str, Any], *, base_url: str = "", **changes: Any) -> str:
     return (base_url or reverse("core:products_dashboard")) + "?" + urlencode({**params, **changes})
 
 
-def build_inventory_snapshot(workspace: Team, kind: str, *, product_id: str = "") -> dict[str, Any]:
-    """Batch joins and scans for an authorised workspace or product."""
+def _inventory_catalog(workspace: Team, product_id: str = "") -> dict[str, Any]:
+    products = Product.objects.filter(team=workspace)
+    components = Component.objects.filter(team=workspace)
+    releases = Release.objects.filter(product__team=workspace)
+    if product_id:
+        products = products.filter(id=product_id)
+        components = components.filter(products__id=product_id)
+        releases = releases.filter(product_id=product_id)
+    choices = list(products.order_by("name", "id").values("id", "name"))
+    return {
+        "products": choices,
+        "counts": {"products": len(choices), "components": components.count(), "releases": releases.count()},
+    }
+
+
+def build_inventory_snapshot(
+    workspace: Team,
+    kind: str,
+    *,
+    product_id: str = "",
+    row_ids: list[str] | None = None,
+    catalog: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Hydrate selected rows, retaining the authorised scope's tab counts."""
+    catalog = catalog if catalog is not None else _inventory_catalog(workspace, product_id)
     component_scope = Q(products__id=product_id) if product_id else Q()
     product_scope = Q(id=product_id) if product_id else Q()
     release_scope = Q(product_id=product_id) if product_id else Q()
     component_query = Component.objects.filter(component_scope, team=workspace)
     product_query = Product.objects.filter(product_scope, team=workspace).order_by("name", "id")
     release_query = Release.objects.filter(release_scope, product__team=workspace)
-    # Tab counts do not need artifact joins or model instances from other views.
+    if row_ids is not None:
+        if kind == "products":
+            product_query = product_query.filter(id__in=row_ids)
+            component_query = component_query.filter(products__id__in=row_ids).distinct()
+        elif kind == "components":
+            component_query = component_query.filter(id__in=row_ids)
+        else:
+            release_query = release_query.filter(id__in=row_ids)
     components = (
         list(
             component_query.annotate(
@@ -80,26 +112,26 @@ def build_inventory_snapshot(workspace: Team, kind: str, *, product_id: str = ""
         if kind != "releases"
         else []
     )
-    if kind != "releases":
-        product_query = product_query.prefetch_related(
-            Prefetch("components", queryset=Component.objects.filter(team=workspace).only("id"))
-        )
+    products = []
     if kind == "products":
-        product_query = product_query.annotate(release_count=Count("releases", distinct=True))
-    elif kind == "releases":
-        product_query = product_query.only("id", "name")
-    products = list(product_query)
-    tabs_count = {
-        "products": len(products),
-        "components": len(components) if kind != "releases" else component_query.count(),
-        "releases": release_query.count(),
-    }
-    choices = [{"id": product.id, "name": product.name} for product in products]
+        products = list(
+            product_query.annotate(release_count=Count("releases", distinct=True)).prefetch_related(
+                Prefetch("components", queryset=Component.objects.filter(team=workspace).only("id"))
+            )
+        )
+    tabs_count = catalog["counts"]
+    choices = catalog["products"]
     memberships: dict[str, list[dict[str, str]]] = {}
-    if kind != "releases":
-        for product in products:
-            for component in product.components.all():
-                memberships.setdefault(component.id, []).append({"id": product.id, "name": product.name})
+    if kind == "components":
+        links = ProductComponent.objects.filter(
+            product__team=workspace, component_id__in=[component.id for component in components]
+        )
+        if product_id:
+            links = links.filter(product_id=product_id)
+        for link in links.order_by("product__name", "product_id").values("component_id", "product_id", "product__name"):
+            memberships.setdefault(link["component_id"], []).append(
+                {"id": link["product_id"], "name": link["product__name"]}
+            )
 
     rows: list[dict[str, Any]] = []
     if kind == "releases":
@@ -251,8 +283,109 @@ def build_inventory_context(request: HttpRequest, *, kind: str | None = None) ->
     kind = kind or request.GET.get("view", "products")
     if kind not in KINDS:
         kind = "products"
-    snapshot = build_inventory_snapshot(workspace, kind)
-    return build_inventory_table(request, snapshot, kind=kind)
+    return build_inventory_page(request, workspace, kind=kind)
+
+
+def build_inventory_page(
+    request: HttpRequest,
+    workspace: Team,
+    *,
+    kind: str,
+    product_id: str = "",
+    base_url: str = "",
+    content_id: str = "inventory-content",
+) -> ServiceResult[dict[str, Any]]:
+    """Select from cheap metadata before loading security details.
+
+    Keep casefolded search and ordering identical to the shared table contract.
+    Only risk filters and derived sort keys require security for every match.
+    """
+    catalog = _inventory_catalog(workspace, product_id)
+    products = Product.objects.filter(team=workspace)
+    components = Component.objects.filter(team=workspace)
+    releases = Release.objects.filter(product__team=workspace)
+    if product_id:
+        products = products.filter(id=product_id)
+        components = components.filter(products__id=product_id)
+        releases = releases.filter(product_id=product_id)
+    sort = request.GET.get("sort", "name")
+    if kind == "products":
+        fields = ["id", "name", "description", "created_at", "is_public"]
+        if sort == "release_count":
+            products = products.annotate(release_count=Count("releases"))
+            fields.append("release_count")
+        rows = list(products.values(*fields))
+        for row in rows:
+            row["visibility"] = "public" if row.pop("is_public") else "private"
+            row["product_ids"] = []
+    elif kind == "components":
+        fields = ["id", "name", "created_at", "visibility"]
+        if sort == "artifact_count":
+            components = components.annotate(
+                artifact_count=Count("sbom", distinct=True) + Count("document", distinct=True)
+            )
+            fields.append("artifact_count")
+        rows = list(components.values(*fields))
+        memberships: dict[str, list[dict[str, str]]] = {}
+        links = ProductComponent.objects.filter(product__team=workspace, component__team=workspace)
+        if product_id:
+            links = links.filter(product_id=product_id)
+        for link in links.order_by("product__name", "product_id").values("component_id", "product_id", "product__name"):
+            memberships.setdefault(link["component_id"], []).append(
+                {"id": link["product_id"], "name": link["product__name"]}
+            )
+        for row in rows:
+            row["products"] = memberships.get(row["id"], [])
+            row["product_ids"] = [product["id"] for product in row["products"]]
+    else:
+        fields = [
+            "id",
+            "name",
+            "description",
+            "created_at",
+            "product_id",
+            "product__name",
+            "product__is_public",
+            "collection_version",
+            "is_latest",
+            "is_prerelease",
+        ]
+        if sort == "artifact_count":
+            releases = releases.annotate(
+                artifact_count=Count(
+                    "artifacts",
+                    filter=Q(artifacts__sbom__component__team=workspace)
+                    | Q(artifacts__document__component__team=workspace),
+                    distinct=True,
+                )
+            )
+            fields.append("artifact_count")
+        rows = list(releases.values(*fields))
+        for row in rows:
+            row["product_name"] = row.pop("product__name")
+            row["product_ids"] = [row["product_id"]]
+            row["visibility"] = "public" if row.pop("product__is_public") else "private"
+            row["release_type"] = (
+                "Rolling latest" if row["is_latest"] else "Prerelease" if row["is_prerelease"] else "Release"
+            )
+
+    def hydrate(ids: list[str]) -> list[dict[str, Any]]:
+        if not ids:
+            return []
+        detail_rows: list[dict[str, Any]] = build_inventory_snapshot(
+            workspace, kind, product_id=product_id, row_ids=ids, catalog=catalog
+        )["rows"]
+        return detail_rows
+
+    return build_inventory_table(
+        request,
+        {**catalog, "rows": rows},
+        kind=kind,
+        product_id=product_id,
+        base_url=base_url,
+        content_id=content_id,
+        hydrate=hydrate,
+    )
 
 
 def build_inventory_table(
@@ -263,6 +396,7 @@ def build_inventory_table(
     base_url: str = "",
     content_id: str = "inventory-content",
     product_id: str = "",
+    hydrate: Callable[[list[str]], list[dict[str, Any]]] | None = None,
 ) -> ServiceResult[dict[str, Any]]:
     """One server filter, sort and pagination contract for lists and detail pages.
 
@@ -309,24 +443,32 @@ def build_inventory_table(
                 )
             ).casefold()
         ]
-    if params["risk"] == "attention":
-        rows = [row for row in rows if row["vulnerabilities"] > 0]
-    elif params["risk"] == "clear":
-        rows = [row for row in rows if row["assessed"] and not row["vulnerabilities"] and not row["unassessed"]]
-    elif params["risk"] == "unassessed":
-        rows = [row for row in rows if row["security_applicable"] and (not row["assessed"] or row["unassessed"])]
     if params["visibility"] != "all":
         rows = [row for row in rows if row["visibility"] == params["visibility"]]
     if params["product"] == "unassigned":
         rows = [row for row in rows if not row["product_ids"]]
     elif params["product"]:
         rows = [row for row in rows if params["product"] in row["product_ids"]]
+    # Cheap filters run first, even when risk or security ordering requires
+    # evaluating every matching row. Never sort/filter only the current page.
+    needs_details = hydrate is not None and (params["risk"] != "all" or any(params["sort"] not in row for row in rows))
+    if needs_details and hydrate is not None:
+        rows = hydrate([row["id"] for row in rows])
+    if params["risk"] == "attention":
+        rows = [row for row in rows if row["vulnerabilities"] > 0]
+    elif params["risk"] == "clear":
+        rows = [row for row in rows if row["assessed"] and not row["vulnerabilities"] and not row["unassessed"]]
+    elif params["risk"] == "unassessed":
+        rows = [row for row in rows if row["security_applicable"] and (not row["assessed"] or row["unassessed"])]
     sort = params["sort"]
     rows.sort(
         key=lambda row: (row[sort].casefold() if isinstance(row[sort], str) else row[sort], row["id"]),
         reverse=params["direction"] == "desc",
     )
     page = Paginator(rows, int(params["per_page"])).get_page(request.GET.get("page", 1))
+    if hydrate is not None and not needs_details:
+        details = {row["id"]: row for row in hydrate([row["id"] for row in page.object_list])}
+        page.object_list = [details[row["id"]] for row in page.object_list if row["id"] in details]
     headers = [
         {
             "key": key,
