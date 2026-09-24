@@ -8,6 +8,8 @@ it, so it is gone.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
@@ -22,7 +24,7 @@ def test_no_api_call_changes_the_licence_catalogue(authenticated_api_client):
 
     response = client.post(
         "/api/v1/licensing/custom-licenses",
-        {"key": "MIT", "name": "Not MIT"},
+        json.dumps({"key": "MIT", "name": "Not MIT"}),
         content_type="application/json",
         **get_api_headers(access_token),
     )
