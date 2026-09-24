@@ -169,7 +169,9 @@ def _attach_patch_sla(findings: list[dict[str, Any]], component_ids: list[str], 
             for alias in (finding["id"], *finding["aliases"])
             if (finding["component_id"], alias.lower()) in first_seen
         ]
-        seconds = (min(sightings) + timedelta(days=days) - now).total_seconds() if days and sightings else None
+        seconds = (
+            (min(sightings) + timedelta(days=days) - now).total_seconds() if days is not None and sightings else None
+        )
         overdue = seconds is not None and seconds < 0
         if days is None:
             label = "Best effort"

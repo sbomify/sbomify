@@ -323,8 +323,9 @@ def test_missing_workspace_returns_a_service_error() -> None:
     assert result.status_code == 404
 
 
+@pytest.mark.parametrize("high_target,overdue_label", [(30, "10 days over"), (0, "40 days over")])
 def test_patch_sla_joins_alias_history_without_resetting_at_upload(
-    sample_team_with_owner_member: Member, mocker: MockerFixture
+    sample_team_with_owner_member: Member, mocker: MockerFixture, high_target: int, overdue_label: str
 ) -> None:
     from datetime import timedelta
 
@@ -336,6 +337,8 @@ def test_patch_sla_joins_alias_history_without_resetting_at_upload(
     now = timezone.now()
     mocker.patch("sbomify.apps.core.services.security_snapshot.timezone.now", return_value=now)
     workspace = sample_team_with_owner_member.team
+    workspace.patch_sla_days["high"] = high_target
+    workspace.save(update_fields=["patch_sla_days"])
     component = Component.objects.create(name="shared", team=workspace)
     sbom = SBOM.objects.create(name="new upload", component=component, format="cyclonedx")
     overdue = {**_finding("CVE-OVERDUE", "high", state="in_triage"), "aliases": ["GHSA-EARLY"]}
@@ -373,7 +376,7 @@ def test_patch_sla_joins_alias_history_without_resetting_at_upload(
     context = result.value
     rows = {row["id"]: row for row in context["needs_attention"]}
     assert context["needs_attention"][0]["id"] == "CVE-OVERDUE"
-    assert rows["CVE-OVERDUE"]["sla"]["label"] == "10 days over"
+    assert rows["CVE-OVERDUE"]["sla"]["label"] == overdue_label
     assert rows["CVE-OVERDUE"]["decision"] == "In triage"
     assert rows["CVE-OVERDUE"]["products"] == ["First", "Second"]
     assert rows["CVE-NEW"]["sla"]["label"] == "6 days left"
