@@ -339,7 +339,8 @@ class TestSignNDAAPI:
         client, access_token = authenticated_api_client
         client.force_login(guest_user)
 
-        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        # The requester signs for themselves, on their own session.
+        headers: dict[str, str] = {}
         url = reverse(
             "api-1:sign_nda",
             kwargs={
@@ -383,7 +384,8 @@ class TestSignNDAAPI:
         client, access_token = authenticated_api_client
         client.force_login(guest_user)
 
-        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        # The requester signs for themselves, on their own session.
+        headers: dict[str, str] = {}
         url = reverse(
             "api-1:sign_nda",
             kwargs={
@@ -420,7 +422,6 @@ class TestSignNDAAPI:
         client.force_login(guest_user)
 
         headers = {
-            "HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}",
             "HTTP_X_REAL_IP": "203.0.113.42",  # Client IP set by reverse proxy
         }
         url = reverse(
@@ -463,7 +464,8 @@ class TestSignNDAAPI:
         client, access_token = authenticated_api_client
         client.force_login(guest_user)
 
-        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        # The requester signs for themselves, on their own session.
+        headers: dict[str, str] = {}
         url = reverse(
             "api-1:sign_nda",
             kwargs={

@@ -122,7 +122,8 @@ class TestAccessRequestCreation:
         
         # API endpoint is /api/v1/teams/{team_key}/access-request
         url = f"/api/v1/teams/{team_with_business_plan.key}/access-request"
-        headers = get_api_headers(access_token)
+        # The requester asks for themselves, on their own session.
+        headers: dict[str, str] = {}
         
         response = client.post(
             url,

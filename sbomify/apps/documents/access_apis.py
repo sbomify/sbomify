@@ -1,8 +1,7 @@
 import hashlib
 import logging
-from typing import Any
+from typing import Any, cast
 
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -13,6 +12,7 @@ from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
+from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
@@ -39,7 +39,6 @@ from .services.access_emails import (
 # ask for access they already have.
 ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 
-User = get_user_model()
 log = logging.getLogger(__name__)
 
 router = Router(tags=["Access Requests"], auth=(PersonalAccessTokenAuth(), django_auth))
@@ -87,7 +86,6 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
         403: ErrorResponse,
         404: ErrorResponse,
     },
-    auth=None,  # Answers the not-signed-in caller itself, with the sign-in message below
 )
 def create_access_request(
     request: HttpRequest,
@@ -107,9 +105,7 @@ def create_access_request(
         except Team.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
-        if not request.user.is_authenticated:
-            return 401, {"detail": "Sign in to request access"}
-        user = request.user
+        user = cast(User, request.user)
 
         # Check if user already has access
         try:
@@ -281,7 +277,6 @@ def create_access_request(
         404: ErrorResponse,
         500: ErrorResponse,
     },
-    auth=None,
 )
 def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) -> Any:
     """Get NDA document for signing."""
@@ -297,11 +292,9 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
             return 404, {"detail": "Access request not found"}
 
         # Only the requester, or an owner or admin of the workspace, reads the NDA
-        if not request.user.is_authenticated:
-            return 401, {"detail": "Sign in to view the NDA"}
         if access_request.user != request.user:
             try:
-                member = Member.objects.get(team=team, user=request.user)
+                member = Member.objects.get(team=team, user=cast(User, request.user))
                 if member.role not in ADMINISTER:
                     return 403, {"detail": "Forbidden"}
             except Member.DoesNotExist:
@@ -351,7 +344,6 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
         # Storage is unreachable or the NDA will not read back.
         500: ErrorResponse,
     },
-    auth=None,
 )
 def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDASignRequest) -> Any:
     """Sign NDA for access request."""
@@ -367,8 +359,6 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
             return 404, {"detail": "Access request not found"}
 
         # Only the requester signs, for themselves
-        if not request.user.is_authenticated:
-            return 401, {"detail": "Sign in to sign the NDA"}
         if access_request.user != request.user:
             return 403, {"detail": "Forbidden"}
 
