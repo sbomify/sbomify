@@ -107,7 +107,9 @@ def test_empty_component_upload_action(authenticated_page: Page, component_facto
     label = "Upload artifact" if kind == "bom" else "Upload document"
     panel = page.locator("[data-empty-state]").filter(has=page.get_by_role("heading", name=title, exact=True))
     panel.get_by_role("link", name=label, exact=True).click()
-    expect(page.get_by_role("dialog", name=re.compile(label, re.IGNORECASE))).to_be_visible()
+    dialog = page.get_by_role("dialog", name=re.compile(label, re.IGNORECASE))
+    expect(dialog).to_be_visible()
     page.keyboard.press("Escape")
+    expect(dialog).to_be_hidden()
     panel.get_by_role("link", name=label, exact=True).click()
-    expect(page.get_by_role("dialog", name=re.compile(label, re.IGNORECASE))).to_be_visible()
+    expect(dialog).to_be_visible()

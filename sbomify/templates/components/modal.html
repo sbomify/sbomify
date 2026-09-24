@@ -47,7 +47,7 @@ run it, so they cannot drift apart.
      role="{{ role }}"
      aria-modal="true"
      {% if id and title %}aria-labelledby="{{ id }}-title"{% endif %}
-     @keydown.escape="{{ dismiss }}"
+     @keydown.escape.window="if ({{ show }}) { {{ dismiss }} }"
      {{ attrs }}>
     <div x-show="{{ show }}"
          x-transition:enter="transition ease-out duration-200"
