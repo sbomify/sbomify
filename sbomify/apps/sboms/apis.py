@@ -1166,9 +1166,9 @@ def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, An
     # Check access permissions using centralized access control
     # This handles public, gated (with approved guest access), and private components
     component = sbom.component
-    access_result = check_component_access(request, component)
-
-    if not access_result.has_access:
+    # can() adds the API-token scope gate that check_component_access alone skips.
+    if not can(request, "component:access", component):
+        access_result = check_component_access(request, component)
         # Provide helpful error message based on access result
         if access_result.requires_access_request:
             if not request.user.is_authenticated:
