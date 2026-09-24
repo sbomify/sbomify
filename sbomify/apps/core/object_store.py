@@ -46,7 +46,7 @@ class ObjectStoreClient(ABC):
     """Base class for object storage backends."""
 
     @abstractmethod
-    def put_object(self, bucket_name: str, key: str, data: bytes) -> None: ...
+    def put_object(self, bucket_name: str, key: str, data: bytes, content_type: str | None = None) -> None: ...
 
     @abstractmethod
     def get_object(self, bucket_name: str, key: str) -> bytes | None: ...
@@ -136,8 +136,9 @@ class S3ObjectStoreClient(ObjectStoreClient):
             f"endpoint_url={self._boto3_kwargs['endpoint_url']!r})"
         )
 
-    def put_object(self, bucket_name: str, key: str, data: bytes) -> None:
-        self._resource.Bucket(bucket_name).put_object(Key=key, Body=data)
+    def put_object(self, bucket_name: str, key: str, data: bytes, content_type: str | None = None) -> None:
+        extra = {"ContentType": content_type} if content_type else {}
+        self._resource.Bucket(bucket_name).put_object(Key=key, Body=data, **extra)
 
     def get_object(self, bucket_name: str, key: str) -> bytes | None:
         try:
@@ -240,11 +241,12 @@ class StorageClient:
     def upload_data_as_file(self, bucket_name: str, object_name: str, data: bytes) -> None:
         self._store.put_object(bucket_name, object_name, data)
 
-    def upload_media(self, object_name: str, data: bytes) -> None:
+    def upload_media(self, object_name: str, data: bytes, content_type: str) -> None:
         if self.bucket_type != "MEDIA":
             raise ValueError("This method is only for MEDIA bucket")
 
-        self.upload_data_as_file(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, object_name, data)
+        # The media bucket is served to browsers as-is, so nothing goes in without a type of its own.
+        self._store.put_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, object_name, data, content_type)
 
     def upload_sbom(self, data: bytes) -> str:
         if self.bucket_type != "SBOMS":

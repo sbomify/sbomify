@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import io
 import re
 import uuid
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any, cast
 
+from defusedxml.ElementTree import ParseError, iterparse
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -252,19 +253,71 @@ def update_team_branding_field(
     return 200, BrandingInfoWithUrls(**response_data)
 
 
-def generate_branding_filename(team: Team, field: str, file: Any) -> str:
-    file_ext = Path(file.name or "").suffix
+# Branding files are served straight from the public media bucket, so whether
+# one is stored, and its extension and ContentType, follow from its bytes and
+# never from the filename or type the client sent.
+_INVALID_BRANDING_IMAGE = "Upload a PNG, JPEG, WebP or plain SVG image."
+
+_SVG_ROOT = "{http://www.w3.org/2000/svg}svg"
+# Elements a browser runs as HTML or MathML even inside an SVG document.
+_LIVE_NAMESPACES = ("{http://www.w3.org/1999/xhtml}", "{http://www.w3.org/1998/Math/MathML}")
+# An in-document reference or an embedded raster image. Any other href loads or
+# runs something the check never saw.
+_INERT_HREF = re.compile(r"#|data:image/(png|jpeg|gif|webp)[;,]")
+
+
+def _is_inert_svg(data: bytes) -> bool:
+    """Whether ``data`` is an SVG that runs nothing when opened on its own.
+
+    Checked, never cleaned: a file is stored exactly as uploaded or not at all.
+    A DTD is refused because its entities and attribute defaults add content the
+    markup does not show, and an animation of an href or an event handler
+    because it swaps the checked value for another once the image loads.
+    """
+    try:
+        events = iterparse(io.BytesIO(data), events=("start", "pi"), forbid_dtd=True)
+        for index, (event, element) in enumerate(events):
+            if event == "pi" or (index == 0 and element.tag != _SVG_ROOT):
+                return False
+            if element.tag.rpartition("}")[2] == "script" or element.tag.startswith(_LIVE_NAMESPACES):
+                return False
+            for attribute, value in element.attrib.items():
+                name = attribute.rpartition("}")[2].lower()
+                animated = value.strip().rpartition(":")[2].lower() if name == "attributename" else ""
+                if name.startswith("on") or animated == "href" or animated.startswith("on"):
+                    return False
+                if name == "href" and not _INERT_HREF.match(value.strip().lower()):
+                    return False
+    except (ParseError, ValueError, LookupError):
+        return False
+    return True
+
+
+def _branding_image_type(data: bytes) -> tuple[str, str] | None:
+    """The extension and ContentType to store a branding image under, or None to reject it."""
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png", "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg", "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp", "image/webp"
+    if _is_inert_svg(data):
+        return ".svg", "image/svg+xml"
+    return None
+
+
+def generate_branding_filename(team: Team, field: str, extension: str) -> str:
     unique_id = str(uuid.uuid4())
-    return f"team_{team.key}_{field}_{unique_id}{file_ext}"
+    return f"team_{team.key}_{field}_{unique_id}{extension}"
 
 
 def upload_to_s3(
     filename: str,
-    file: Any,
+    data: bytes,
+    content_type: str,
 ) -> None:
     s3_client = StorageClient("MEDIA")
-    file.seek(0)
-    s3_client.upload_media(filename, file.read())
+    s3_client.upload_media(filename, data, content_type)
 
 
 def delete_from_s3(
@@ -315,6 +368,16 @@ def update_team_branding(
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
+    # Check every new file before storing any, so a rejected logo cannot leave a new icon half-applied.
+    images: dict[str, tuple[bytes, str, str]] = {}
+    for field in ["icon", "logo"]:
+        if (file := request.FILES.get(field)) and not getattr(payload, f"{field}_pending_deletion", False):
+            file.seek(0)
+            data = file.read()
+            if not (image_type := _branding_image_type(data)):
+                return 400, {"detail": _INVALID_BRANDING_IMAGE, "error_code": ErrorCode.VALIDATION_ERROR}
+            images[field] = (data, *image_type)
+
     # TODO: has to be a separate model
     branding_data = _normalize_branding_payload(team.branding_info)
     branding_info = BrandingInfo(**branding_data).model_dump()
@@ -325,10 +388,11 @@ def update_team_branding(
         if getattr(payload, f"{field}_pending_deletion", False):
             branding_info[field] = ""
         elif file := request.FILES.get(field):
-            branding_info[field] = generate_branding_filename(team, field, file)
+            data, extension, content_type = images[field]
+            branding_info[field] = generate_branding_filename(team, field, extension)
 
             try:
-                upload_to_s3(branding_info[field], file)
+                upload_to_s3(branding_info[field], data, content_type)
             except Exception as e:
                 logger.error(f"Failed to upload {field} file {file.name}: {e}")
                 raise e
@@ -386,21 +450,22 @@ def upload_branding_file(
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
+    data = file.read()
+    if not (image_type := _branding_image_type(data)):
+        return 400, {"detail": _INVALID_BRANDING_IMAGE, "error_code": ErrorCode.VALIDATION_ERROR}
+
     branding_data = _normalize_branding_payload(team.branding_info)
     current_branding = BrandingInfo(**branding_data)
     update_data = current_branding.model_dump()
     s3_client = StorageClient("MEDIA")
 
     # Generate new filename first
-    uploaded = request.FILES["file"]
-    file_ext = Path(getattr(uploaded, "name", "") or "").suffix
-    unique_id = str(uuid.uuid4())
-    new_filename = f"team_{team.key}_{file_type}_{unique_id}{file_ext}"
+    extension, content_type = image_type
+    new_filename = generate_branding_filename(team, file_type, extension)
     old_filename = update_data.get(file_type)
 
     # Upload new file first
-    file_obj = getattr(uploaded, "file", uploaded)
-    s3_client.upload_media(new_filename, file_obj.read())  # type: ignore[union-attr]
+    s3_client.upload_media(new_filename, data, content_type)
 
     try:
         # Update database atomically
