@@ -42,7 +42,6 @@ Credentials remain an explicit admin action; no token is stored in the browser.
                 </c-navigation.segmented>
             </div>
             <c-code-terminal code_id="repository-setup-command" code_binding="command" copy_disabled="!token || minting" />
-            <c-typography.description size="sm" x-show="runtime === 'docker'">Run in a Bash-compatible shell with Docker running. Local Docker connections use <c-code-inline>host.docker.internal</c-code-inline>.</c-typography.description>
             <c-typography.description size="sm" x-show="runtime === 'uv'" x-cloak>uv downloads the wizard and runs it locally. Use the command in a Bash-compatible shell.</c-typography.description>
             <div class="flex flex-wrap items-center gap-3">
                 <c-copy-button-primary copy_from="repository-setup-command" label="Copy command" ::disabled="!token || minting" />
