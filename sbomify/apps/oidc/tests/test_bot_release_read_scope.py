@@ -114,10 +114,9 @@ def test_bot_cannot_read_a_private_product_it_does_not_publish_to(path, bot_toke
 
 
 def test_bot_gets_the_public_view_of_a_public_product_it_does_not_publish_to(bot_token, public_other_release, builders):
-    assert _get(f"/api/v1/releases/{public_other_release.id}/download", bot_token).status_code == 200
+    for path in CONTENT_PATHS:
+        assert _get(f"/api/v1/releases/{public_other_release.id}/{path}", bot_token).status_code == 200, path
     assert builders["sbom"].call_args.kwargs["include_non_public"] is False
-
-    assert _get(f"/api/v1/releases/{public_other_release.id}/vex/download", bot_token).status_code == 200
     assert builders["vex"].call_args.kwargs["include_non_public"] is False
 
 
