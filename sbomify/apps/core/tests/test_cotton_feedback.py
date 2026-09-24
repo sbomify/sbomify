@@ -7,6 +7,7 @@ themselves.
 """
 
 import re
+from html import unescape
 
 import pytest
 from django.template import Context, Template
@@ -314,7 +315,7 @@ def test_action_spinner_forwards_state_and_inherits_control_colour(rendered: str
 
 def test_legacy_loading_tag_delegates_and_preserves_attributes() -> None:
     html = Template(
-        '{% load design_system %}'
+        "{% load design_system %}"
         '{% loading_state message="Loading examples..." row=True hx_swap_oob="true" x_show="busy" %}'
     ).render(Context())
     assert 'hx-swap-oob="true"' in html
@@ -328,8 +329,8 @@ def test_legacy_loading_tag_delegates_and_preserves_attributes() -> None:
 
 def test_toast_shell_and_accent(rendered: str) -> None:
     success = _probe(rendered, "toast-success")
-    assert "min-w-80 max-w-md" in success
-    assert "animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]" in success
+    assert "w-[min(28rem,calc(100vw-2rem))]" in success
+    assert "motion-safe:animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]" in success
     assert "[--toast-accent:var(--color-success)]" in success
     assert 'role="alert"' in success
     assert "[--toast-accent:var(--color-danger)]" in _probe(rendered, "toast-danger")
@@ -359,7 +360,7 @@ def test_toast_close_is_on_by_default_and_can_be_turned_off(rendered: str) -> No
 
 
 def test_toast_container_keeps_its_event_driven_alpine_markup(rendered: str) -> None:
-    body = rendered[rendered.index('id="toast-container"') :]
+    body = unescape(rendered[rendered.index('id="toast-container"') :])
     assert '@toast.window="addToast($event.detail)"' in body
     assert 'aria-live="polite"' in body
     assert '<template x-for="toast in toasts" :key="toast.id">' in body
@@ -369,17 +370,19 @@ def test_toast_container_keeps_its_event_driven_alpine_markup(rendered: str) -> 
 
 
 def test_toast_container_binds_only_the_accent_and_the_glyph(rendered: str) -> None:
-    body = rendered[rendered.index('id="toast-container"') :]
-    assert ":class=\"{ '[--toast-accent:var(--color-success)]': toast.type === 'success'" in body
-    assert ":class=\"{ 'fas fa-check-circle': toast.type === 'success'" in body
+    body = unescape(rendered[rendered.index('id="toast-container"') :])
+    assert ':data-variant="toast.type"' in body
+    assert "data-[variant=success]:[--toast-accent:var(--color-success)]" in body
+    assert ":class=\"{success: 'fas fa-check-circle'" in body
     # The surface itself is static, exactly as c-feedback.toast renders it.
-    assert "pointer-events-auto flex items-start gap-3 py-4 px-4.5 bg-surface rounded-xl" in body
+    assert "flex items-start gap-3 py-4 px-4.5 bg-surface rounded-xl" in body
+    assert "pointer-events-auto" in body
 
 
 def test_toast_container_surface_matches_the_toast_component(rendered: str) -> None:
     shared = (
         "bg-surface rounded-xl border border-solid border-border "
-        "shadow-[0_10px_40px_-10px_rgb(0_0_0/0.3)] min-w-80 max-w-md "
-        "animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]"
+        "shadow-[0_10px_40px_-10px_rgb(0_0_0/0.3)] w-[min(28rem,calc(100vw-2rem))] "
+        "motion-safe:animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]"
     )
     assert rendered.count(shared) == 3  # two toasts and the container's template

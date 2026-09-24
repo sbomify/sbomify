@@ -85,7 +85,7 @@
             {% elif component.component_type == 'document' %}
                 {% url 'documents:document_download' item.id as download_url %}
             {% endif %}
-            <c-buttons.primary href="{{ download_url }}" class="no-underline">
+            <c-buttons.secondary href="{{ download_url }}" class="no-underline">
             <i class="fas fa-download"></i>
             Download
             {% if component.component_type == 'bom' %}
@@ -93,7 +93,7 @@
             {% else %}
                 Document
             {% endif %}
-            </c-buttons.primary>
+            </c-buttons.secondary>
         </div>
     </div>
     {# Cryptographic Assets (CBOM) — lazy-loaded for SBOM artifacts; collapses when there are none #}

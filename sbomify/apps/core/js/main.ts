@@ -27,6 +27,7 @@ import {
 import { initHtmxLifecycle } from './htmx-lifecycle';
 import { registerHtmxConfig } from './htmx-config';
 import { initializeAlpine } from './alpine-init';
+import { initDjangoMessages } from './django-messages';
 
 // Make globals available
 declare global {
@@ -55,6 +56,6 @@ registerHtmxConfig();
 initHtmxLifecycle();
 
 // Initialize Alpine
-void initializeAlpine();
+void initializeAlpine().then(initDjangoMessages);
 
 export { };

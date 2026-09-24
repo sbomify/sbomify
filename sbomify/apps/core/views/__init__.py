@@ -160,19 +160,14 @@ def _get_access_tokens(user: Any) -> list[dict[str, Any]]:
     ]
 
 
-def _build_settings_context(user: Any, form: Any = None, new_token: Any = None) -> dict[str, Any]:
+def _build_settings_context(user: Any) -> dict[str, Any]:
     """Helper function to build context for settings page."""
-    from sbomify.apps.core.forms import CreateAccessTokenForm
     from sbomify.apps.teams.queries import get_pending_invitations_for_user
 
-    context = {
-        "create_access_token_form": form or CreateAccessTokenForm(),
+    return {
         "pending_invitations": get_pending_invitations_for_user(user),
         "access_tokens": _get_access_tokens(user),
     }
-    if new_token:
-        context["new_encoded_access_token"] = new_token
-    return context
 
 
 @never_cache

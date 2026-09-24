@@ -11,6 +11,7 @@ import './clipboard-global';
 import { initHtmxLifecycle } from './htmx-lifecycle';
 import { registerHtmxConfig } from './htmx-config';
 import { initializeAlpine } from './alpine-init';
+import { initDjangoMessages } from './django-messages';
 
 // Register HTMX config
 registerHtmxConfig();
@@ -19,7 +20,7 @@ registerHtmxConfig();
 initHtmxLifecycle();
 
 // Initialize Alpine
-void initializeAlpine();
+void initializeAlpine().then(initDjangoMessages);
 
 // Listen for successful document uploads and reload the page
 window.addEventListener('document-uploaded', () => {

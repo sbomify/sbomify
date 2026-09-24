@@ -410,9 +410,7 @@ the token on library buttons only. `c-buttons.primary` hardcodes `text-white`,
 so a filled library button there is white text over whatever colour the
 workspace picked, with no ink measurement: fine on navy, unreadable on pale
 amber. No token can fix it, because the ink is not a token. **So do not put a
-filled main-library button on a public page.** There are 8 today across 5 pages
-this branch has not touched; each needs a neutral button or an ink measured from
-`ink_on_color`.
+filled main-library button on a public page.**
 
 ### API Layer
 

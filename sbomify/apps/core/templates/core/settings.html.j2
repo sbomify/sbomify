@@ -9,65 +9,13 @@
         </div>
     {% endif %}
     <c-layout.section-header level="2" icon="fas fa-key" title="Personal access tokens" subtitle="Tokens let scripts and CI use the sbomify API as you." />
-    {# Token Generation Card #}
-    <c-cards.card>
-    <c-slot name="header">
-    <c-cards.header>
-    <h4 class="text-lg font-semibold text-text m-0">Generate new token</h4>
-    </c-cards.header>
+    <c-feedback.alert>
+    Select a workspace to generate a token with the scope and expiration you need.
+    <c-slot name="action">
+    <c-buttons.secondary href="{% url 'teams:teams_dashboard' %}">Select workspace</c-buttons.secondary>
     </c-slot>
-    <form method="post" id="tokenGenerationForm">
-        {% csrf_token %}
-        <div class="mb-4">
-            {% for field in create_access_token_form %}
-                <c-forms.label for="{{ field.id_for_label }}">{{ field.label }}</c-forms.label>
-                <c-forms.input id="{{ field.id_for_label }}" name="{{ field.html_name }}" value="{{ field.value|default:'' }}" placeholder="e.g., CI/CD Pipeline Token" class="max-w-md" />
-                {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
-            {% endfor %}
-        </div>
-        <div class="flex gap-3">
-            <c-buttons.primary type="submit">
-            <i class="fas fa-plus mr-2" aria-hidden="true"></i>
-            Generate Token
-            </c-buttons.primary>
-            <c-buttons.secondary @click="document.getElementById('tokenGenerationForm').reset()">
-            <i class="fas fa-times mr-2" aria-hidden="true"></i>
-            Clear
-            </c-buttons.secondary>
-        </div>
-    </form>
-    </c-cards.card>
-    {# New Token Display Card #}
-    {% if new_encoded_access_token %}
-        {% comment %} Only the header rule carries the warning tint. The card's own
-            border-warning/30 never reached the element: the legacy card class set the
-        border shorthand from unlayered CSS, which outranks a utility. {% endcomment %}
-        <c-cards.card>
-        <c-slot name="header">
-        <c-cards.header variant_class="border-warning/30">
-        <h4 class="text-lg font-semibold text-warning flex items-center gap-2 m-0">
-            <i class="fas fa-exclamation-triangle"></i>
-            Your New Personal Access Token
-        </h4>
-        </c-cards.header>
-        </c-slot>
-        <c-feedback.alert variant="warning" class="mb-4">
-        Make sure to copy your personal access token now. You won't be able to see it again!
-        </c-feedback.alert>
-        <div>
-            <c-forms.label>Personal Access Token</c-forms.label>
-            {% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}
-        </div>
-        </c-cards.card>
-    {% endif %}
-    {# Personal Access Tokens List Card #}
-    {# flush: the list and its table run to the card's edge, as they always have. #}
+    </c-feedback.alert>
     <c-cards.card flush>
-    <c-slot name="header">
-    <c-cards.header>
-    <h4 class="text-lg font-semibold text-text m-0">Personal Access Tokens</h4>
-    </c-cards.header>
-    </c-slot>
     {{ access_tokens|json_script:"access-tokens-data" }}
     <div x-data="accessTokensList({ tokensDataElementId: 'access-tokens-data', csrfToken: '{{ csrf_token }}' })"
          x-cloak>
