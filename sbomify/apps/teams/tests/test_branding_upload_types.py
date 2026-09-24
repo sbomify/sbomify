@@ -269,6 +269,10 @@ class TestBrandingSettingsForm:
             call(Key=team.branding_info["icon"], Body=PNG, ContentType="image/png"),
             call(Key=team.branding_info["logo"], Body=JPEG, ContentType="image/jpeg"),
         ]
+        assert s3.Object.call_args_list == [
+            call(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, "old_icon.png"),
+            call(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, "old_logo.png"),
+        ]
 
     def test_a_failed_upload_removes_this_save_s_uploads_and_keeps_the_old_files(self, owner, s3):
         client, team = owner
@@ -330,6 +334,7 @@ class TestBrandingSettingsForm:
 
         assert json.loads(response["HX-Trigger"])["messages"][0]["type"] == "success"
         s3.Bucket.return_value.put_object.assert_not_called()
+        s3.Object.assert_called_once_with(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, "old_logo.png")
         team.refresh_from_db()
         assert team.branding_info["logo"] == ""
 
