@@ -308,8 +308,13 @@ class _InertSvgTarget:
         for attribute, value in attrib.items():
             name = attribute.rpartition("}")[2].lower()
             animated = value.strip().rpartition(":")[2].lower() if name == "attributename" else ""
-            if name.startswith("on") or name == "base" or animated in ("href", "base") or animated.startswith("on"):
-                raise ValueError("event handler, xml:base or animated href")
+            if (
+                name.startswith("on")
+                or name in ("base", "ping")
+                or animated in ("href", "base", "ping")
+                or animated.startswith("on")
+            ):
+                raise ValueError("event handler, xml:base, ping or animated href")
             if name == "href" and not _INERT_HREF.match(value.strip().lower()):
                 raise ValueError("href that leaves the document")
             # Presentation attributes, style and animation values are CSS, and none of them has a namespace.
@@ -336,8 +341,9 @@ def _is_inert_svg(data: bytes) -> bool:
     Checked, never cleaned: a file is stored exactly as uploaded or not at all.
     A DTD is refused because its entities and attribute defaults add content the
     markup does not show, xml:base because it re-points every in-document href,
-    and an animation of an href, an event handler or xml:base because it swaps
-    the checked value for another once the image loads. CSS gets the href rule:
+    ping because following a link sends a request to it, and an animation of an
+    href, an event handler, xml:base or ping because it swaps the checked value
+    for another once the image loads. CSS gets the href rule:
     a url() stays in the document or holds a raster image, and @import and
     image-set(), which fetch from a plain string, are refused.
     """

@@ -110,6 +110,12 @@ class TestBrandingUploadEndpoint:
             pytest.param(svg("<image href='https://example.com/logo.png'/>"), id="external-reference"),
             pytest.param(svg("<use href='data:image/svg+xml;base64,PHN2Zy8+#x'/>"), id="svg-data-url"),
             pytest.param(
+                svg("<a href='#x' ping='https://example.com/beacon'><rect width='10' height='10'/></a>"), id="link-ping"
+            ),
+            pytest.param(
+                svg("<a href='#x'><set attributeName='ping' to='https://example.com/beacon'/></a>"), id="animated-ping"
+            ),
+            pytest.param(
                 svg("<a href='#x'><set attributeName='href' to='javascript:alert(1)'/></a>"), id="animated-href"
             ),
             pytest.param(svg("<set attributeName='onmouseover' to='alert(1)'/>"), id="animated-event-handler"),
