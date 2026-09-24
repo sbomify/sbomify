@@ -55,12 +55,12 @@
     {% if search %}
         {# djlint:off H008 #}
         {# The title quotes the search term, so the attribute itself has to take the single quotes. #}
-        <c-feedback.empty-state icon="fas fa-truck-field" icon_variant="neutral" title='No suppliers match "{{ search }}"' message="Try a different name or email." />
+        <c-feedback.empty-state icon="fas fa-truck-field" title='No suppliers match "{{ search }}"' message="Try a different name or email." />
         {# djlint:on #}
     {% else %}
-        <c-feedback.empty-state icon="fas fa-truck-field" icon_variant="neutral" title="No suppliers yet" message="Add the vendors you collect SBOMs and documents from.">
+        <c-feedback.empty-state icon="fas fa-truck-field" title="No suppliers yet" message="Add the vendors you collect SBOMs and documents from.">
         <c-buttons.primary @click="add()">
-        <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add your first supplier
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add supplier
         </c-buttons.primary>
         </c-feedback.empty-state>
     {% endif %}

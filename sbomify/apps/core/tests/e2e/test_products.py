@@ -54,7 +54,8 @@ class TestProductDetailsSnapshot:
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
-        assert authenticated_page.get_by_role("table", name="Components", exact=True).evaluate(
+        authenticated_page.set_viewport_size({"width": width, "height": 1080})
+        assert authenticated_page.locator("#product-components [data-empty-state]").evaluate(
             "el => el.scrollWidth <= el.parentElement.clientWidth"
         ), "The empty state must fit without horizontal scrolling"
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())

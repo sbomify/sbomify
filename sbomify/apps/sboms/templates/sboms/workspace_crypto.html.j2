@@ -107,16 +107,7 @@
         </c-tables.shell>
     {% else %}
         <c-cards.card flush>
-        <div class="p-12 text-center">
-            <c-chips.icon-chip size="lg" accent="neutral" class="mx-auto mb-4">
-            <i class="fas fa-lock text-lg" aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <h3 class="text-lg font-semibold text-text mb-2">No crypto data yet</h3>
-            <p class="text-text-muted text-sm mb-0 max-w-md mx-auto">
-                Upload a CBOM to a component, or enable the PQC readiness plugin so scanned SBOMs with embedded
-                crypto assets get assessed. Results roll up here per component.
-            </p>
-        </div>
+        <c-feedback.empty-state icon="fas fa-lock" title="No crypto data yet" message="Upload a CBOM or enable the PQC readiness plugin to assess cryptographic assets in your SBOMs." />
         </c-cards.card>
     {% endif %}
 {% endblock %}

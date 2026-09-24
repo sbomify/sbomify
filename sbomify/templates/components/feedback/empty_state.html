@@ -8,13 +8,18 @@ properties of the same circle. The mark's size lives in that segment too, not
 on the icon, so the small medallion carries the smaller mark rather than the
 full-size one shrunk into it.
 
+List empty states sit directly in their surface, outside table cells, so wide
+columns and truncation wrappers cannot constrain their alignment. Use the default
+size for lists and compact for embedded cards. Message spacing reserves room
+for an action only when one is present.
+
 size="sm" fits a small popover, including its type, mark and spacing.
 
 title is optional: the panel inside a detail view often has only the one line
 of explanation, and an empty heading would still take its own line.
 {% endcomment %}
 <c-vars icon="fas fa-inbox" icon_size icon_variant title message compact secondary_text secondary_url size class />
-<div class="flex flex-col items-center justify-center text-center {% if size == 'sm' %}px-5 py-8{% elif compact %}p-8{% else %}px-8 py-12{% endif %}{% if class %} {{ class }}{% endif %}"
+<div data-empty-state class="flex flex-col items-center justify-center text-center {% if size == 'sm' %}px-5 py-8{% elif compact %}px-8 py-8{% else %}px-8 py-12{% endif %}{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>
     <div class="flex items-center justify-center rounded-full {% if size == 'sm' %}w-10 h-10 text-base mb-3{% elif icon_size == 'sm' %}w-16 h-16 text-xl mb-4{% else %}w-20 h-20 text-2xl mb-6{% endif %} {% if icon_variant == 'neutral' %}bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] text-text-muted{% else %}bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_15%,transparent)_0%,color-mix(in_oklab,var(--color-primary)_5%,transparent)_100%)] text-primary{% endif %}">
         <i class="{{ icon }}" aria-hidden="true"></i>
@@ -25,7 +30,7 @@ of explanation, and an empty heading would still take its own line.
         </h3>
     {% endif %}
     {% if message %}
-        <p class="leading-[1.6] text-text-muted max-w-96 {% if size == 'sm' %}text-xs{% else %}text-sm mb-8{% endif %}">
+        <p class="leading-[1.6] text-text-muted max-w-96 {% if size == 'sm' %}text-xs{% else %}text-sm{% if slot.strip or secondary_text and secondary_url %} mb-8{% endif %}{% endif %}">
             {{ message }}
         </p>
     {% endif %}
