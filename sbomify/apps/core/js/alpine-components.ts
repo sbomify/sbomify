@@ -13,19 +13,14 @@ import { navbarSearch } from './navbar-search';
 import { scrollableTabs } from './components/scrollable-tabs';
 import { repositorySetup } from './components/repository-setup';
 import { registerCopyableValue } from './components/copyable-value';
-import { registerPublicStatusToggle } from './components/public-status-toggle';
 import { registerVisibilitySelector } from './components/visibility-selector';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerDeleteModal } from './components/delete-modal';
-import { registerReleaseList } from './components/release-list';
 import { registerCopyToken } from './components/copy-token';
 import { registerSiteNotifications } from './components/site-notifications';
-import { registerPlanCard } from './components/plan-card';
 import { registerEditableSingleField } from './components/editable-single-field';
 import { registerProductIdentifiers } from './components/product-identifiers';
-import { registerItemsListTable } from './components/items-list-table';
-import { registerItemAssignmentManager } from './components/item-assignment-manager';
 import { registerReleaseEditor } from './components/release-editor';
 import { registerReleaseArtifacts } from './components/release-artifacts';
 import { registerProductIdentifiersBarcodes } from './components/product-identifiers-barcodes';
@@ -57,7 +52,6 @@ import { registerSupplierEditor } from '../../sboms/js/supplier-editor';
 // ============================================
 import { registerDocumentUpload } from '../../documents/js/document-upload';
 import { registerPlanSelection } from '../../billing/js/plan-selection';
-import { registerAssessmentBadge } from '../../plugins/js/assessment-badge';
 import { vulnerabilityTrends } from '../../vulnerability_scanning/js/vulnerability-chart';
 
 // ============================================
@@ -219,7 +213,6 @@ export function registerAllComponents(): void {
 
     // Core components
     registerCopyableValue();
-    registerPublicStatusToggle();
     registerVisibilitySelector();
     registerWorkspaceSwitcher();
     registerAccessTokensList();
@@ -227,15 +220,11 @@ export function registerAllComponents(): void {
     // confirmModal is registered in alpine-init.ts (base template dependency)
     registerCopyToken();
     registerSiteNotifications();
-    registerPlanCard();
     registerEditableSingleField();
     registerProductIdentifiers();
-    registerItemsListTable();
-    registerItemAssignmentManager();
     registerReleaseEditor();
     registerReleaseArtifacts();
     registerProductIdentifiersBarcodes();
-    registerReleaseList();
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
     registerAccountDangerZone();
@@ -256,7 +245,6 @@ export function registerAllComponents(): void {
     // Other modules
     registerDocumentUpload();
     registerPlanSelection();
-    registerAssessmentBadge();
 
     // Compliance module
     registerCraScopeScreening();

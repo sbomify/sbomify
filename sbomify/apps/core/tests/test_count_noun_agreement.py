@@ -46,7 +46,7 @@ def test_the_grace_period_agrees_with_its_count(days, expected):
 
 @pytest.mark.parametrize(
     ("total", "expected"),
-    [(1, "1 vulnerability:"), (2, "2 vulnerabilities:")],
+    [(1, "1 vulnerability"), (2, "2 vulnerabilities")],
 )
 def test_the_scan_count_agrees_and_uses_the_whole_word(total, expected):
     """It read "1 vulns", which is two problems in four characters.
@@ -54,14 +54,15 @@ def test_the_scan_count_agrees_and_uses_the_whole_word(total, expected):
     The glossary makes "vulnerability" the user-facing word, so the
     abbreviation was wrong before the agreement was.
     """
-    activity = {
-        "type": "scan",
-        "scan_details": {"total": total, "critical": 0, "high": 0, "medium": 0, "low": 0},
-        "title": "scan",
-        "timestamp": None,
+    run = {
+        "id": "run1",
+        "plugin_name": "osv",
+        "category": "security",
+        "status": "completed",
+        "result": {"summary": {"by_severity": {"high": total}, "total_findings": total}},
     }
 
-    rendered = render_to_string("core/components/recent_activity.html.j2", {"activities": [activity]})
+    rendered = render_to_string("plugins/components/_assessment_run_item.html.j2", {"run": run, "loop_index": 1})
 
     assert expected in " ".join(rendered.split())
     assert "vulns" not in rendered
