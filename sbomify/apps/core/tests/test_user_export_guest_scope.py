@@ -12,6 +12,7 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.services.data_export import export_user_data
+from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.teams.models import Member, Team
@@ -26,6 +27,8 @@ def own_and_vendor_workspaces(sample_user, team_with_business_plan):
     SBOM.objects.create(name="own-sbom", component=own_component, format="cyclonedx", format_version="1.6")
 
     vendor = Team.objects.create(name="Vendor")
+    vendor.key = number_to_random_token(vendor.pk)
+    vendor.save(update_fields=["key"])
     Member.objects.create(team=vendor, user=sample_user, role="guest")
     private = Component.objects.create(name="vendor", team=vendor, visibility=Component.Visibility.PRIVATE)
     SBOM.objects.create(name="vendor-sbom", component=private, format="cyclonedx", format_version="1.6")
