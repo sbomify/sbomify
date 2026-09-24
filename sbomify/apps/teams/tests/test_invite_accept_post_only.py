@@ -75,6 +75,22 @@ def test_emailed_link_confirms_before_joining(invitee: Any, invitation: Invitati
 
 
 @pytest.mark.django_db
+def test_only_the_confirmation_logs_an_acceptance(mocker: MockerFixture, invitee: Any, invitation: Invitation) -> None:
+    log = mocker.patch("sbomify.apps.teams.views.log")
+    accepting = mocker.call("Accepting invitation %s", str(invitation.token))
+    client = Client()
+    client.force_login(invitee)
+
+    client.get(_url(invitation.token))
+
+    assert accepting not in log.info.call_args_list
+
+    client.post(_url(invitation.token))
+
+    assert accepting in log.info.call_args_list
+
+
+@pytest.mark.django_db
 def test_link_keeps_its_own_invitation_over_a_saved_token(invitee: Any, invitation: Invitation) -> None:
     saved = Invitation.objects.create(
         team=Team.objects.create(name="Saved Workspace"), email=invitee.email, role="member"

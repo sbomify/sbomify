@@ -356,8 +356,6 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
 
 @require_http_methods(["GET", "POST"])
 def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFound | HttpResponse:
-    log.info("Accepting invitation %s", invite_token)
-
     try:
         invitation = Invitation.objects.filter(token=invite_token).first()
     except ValidationError:
@@ -433,6 +431,8 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         return render(
             request, "teams/accept_invite.html.j2", {"invitation": invitation, "pending_invitations_count": 0}
         )
+
+    log.info("Accepting invitation %s", invite_token)
 
     # Check if we already have a membership
     try:
