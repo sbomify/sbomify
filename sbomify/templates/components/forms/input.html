@@ -18,6 +18,14 @@ Wrap it in c-forms.field for a label and a hint. required, disabled and
 readonly are declared props so a falsy value renders no attribute at all;
 everything else (autofocus, x-model, hx-*, aria-*) flows through attrs.
 size="sm" uses the compact height for settings rows and dense forms.
+
+readonly has to look different from editable, not just announce differently.
+The account tab shows a name and an email that come from the identity provider;
+with no read-only recipe they rendered as ordinary fields, so the only signal
+that typing would do nothing was the hint underneath. The variant carries no
+cursor: :read-only also matches a disabled input, and a second cursor utility
+on the same element would be resolved by stylesheet order rather than by which
+state is on.
 {% endcomment %}
 <c-vars name id type="text" size value placeholder state required disabled readonly class />
 <input type="{{ type }}"
@@ -25,7 +33,7 @@ size="sm" uses the compact height for settings rows and dense forms.
        {% if name %}name="{{ name }}"{% endif %}
        {% if value or value == 0 %}value="{{ value }}"{% endif %}
        {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
-       class="w-full {% if size == 'sm' %}px-3 py-1.5{% else %}px-4 py-3{% endif %} bg-surface border-[1.5px] border-solid rounded-lg text-text text-sm leading-[1.5] transition-all duration-200 placeholder:text-text-muted hover:not-focus:not-disabled:border-border-light focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-background {% if state == 'error' %}border-danger focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)]{% elif state == 'success' %}border-success focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-success)_15%,transparent)]{% else %}border-border focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent),var(--shadow-xs)]{% endif %} data-[state=error]:border-danger data-[state=error]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)] data-[state=success]:border-success data-[state=success]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-success)_15%,transparent)]{% if class %} {{ class }}{% endif %}"
+       class="w-full {% if size == 'sm' %}px-3 py-1.5{% else %}px-4 py-3{% endif %} bg-surface border-[1.5px] border-solid rounded-lg text-text text-sm leading-[1.5] transition-all duration-200 placeholder:text-text-muted hover:not-focus:not-disabled:border-border-light focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-background read-only:bg-background read-only:text-text-muted {% if state == 'error' %}border-danger focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)]{% elif state == 'success' %}border-success focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-success)_15%,transparent)]{% else %}border-border focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent),var(--shadow-xs)]{% endif %} data-[state=error]:border-danger data-[state=error]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)] data-[state=success]:border-success data-[state=success]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-success)_15%,transparent)]{% if class %} {{ class }}{% endif %}"
        {% if required %}required{% endif %}
        {% if disabled %}disabled{% endif %}
        {% if readonly %}readonly{% endif %}
