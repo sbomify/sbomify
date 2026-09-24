@@ -216,6 +216,7 @@ def test_repository_terminal_snapshot(
 @pytest.mark.django_db
 def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, settings: SettingsWrapper) -> None:
     from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import hash_token
 
     settings.APP_BASE_URL = "http://localhost:8000"
     page = authenticated_page
@@ -226,16 +227,19 @@ def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, se
     copy_prompt = page.get_by_role("button", name="Copy prompt", exact=True)
     expect(copy_prompt).to_be_disabled()
     assert not AccessToken.objects.exists()
-    page.get_by_role("button", name="Create setup token", exact=True).click()
+    with page.expect_response(lambda response: "/setup-token/" in response.url) as created:
+        page.get_by_role("button", name="Create setup token", exact=True).click()
     expect(copy_prompt).to_be_enabled()
     original = AccessToken.objects.get()
+    original_token = created.value.json()["token"]
+    assert hash_token(original_token) == original.token_hash
     page.get_by_role("button", name="Public", exact=True).click()
     copy_prompt.click()
     page.wait_for_function("window.setupCopiedText?.includes('Create everything as public.')")
     copied = page.evaluate("window.setupCopiedText")
     assert copied == page.locator("#repository-setup-prompt").text_content()
     assert "YOUR_SETUP_TOKEN" not in copied
-    assert original.encoded_token in copied
+    assert original_token in copied
     page.locator("#panel-setup-agent").get_by_role("button", name="Copy code", exact=True).click()
     assert page.evaluate("window.setupCopiedText") == copied
     agent_tab = page.get_by_role("tab", name="Coding agent", exact=True)
@@ -245,13 +249,16 @@ def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, se
     page.get_by_role("button", name="uv", exact=True).click()
     page.get_by_role("button", name="Copy command", exact=True).click()
     page.wait_for_function("window.setupCopiedText?.includes('uvx sbomify-action wizard')")
-    assert original.encoded_token in page.evaluate("window.setupCopiedText")
-    page.get_by_role("button", name="Reset token", exact=True).click()
+    assert original_token in page.evaluate("window.setupCopiedText")
+    with page.expect_response(lambda response: "/setup-token/" in response.url) as reset:
+        page.get_by_role("button", name="Reset token", exact=True).click()
     expect(page.get_by_role("button", name="Reset token", exact=True)).to_be_enabled()
     assert not AccessToken.objects.filter(pk=original.pk).exists()
     replacement = AccessToken.objects.get()
     assert replacement.pk != original.pk
-    expect(page.locator("#repository-setup-command")).to_contain_text(replacement.encoded_token)
+    replacement_token = reset.value.json()["token"]
+    assert hash_token(replacement_token) == replacement.token_hash
+    expect(page.locator("#repository-setup-command")).to_contain_text(replacement_token)
     page.get_by_role("tab", name="Terminal", exact=True).press("ArrowLeft")
     expect(agent_tab).to_have_attribute("aria-selected", "true")
     expect(page.locator("#repository-setup-prompt")).to_contain_text("Create everything as public.")

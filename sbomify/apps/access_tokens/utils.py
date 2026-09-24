@@ -29,9 +29,14 @@ log = logging.getLogger(__name__)
 audit_log = logging.getLogger("audit.token_auth")  # -> "sbomify.audit.token_auth"
 
 
-def _token_fingerprint(token: str) -> str:
+def hash_token(token: str) -> str:
+    """The form an access token is stored and looked up in. The token itself is never stored."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def token_fingerprint(token: str) -> str:
     """Non-reversible short fingerprint, for attributing failures without the raw token."""
-    return hashlib.sha256(token.encode()).hexdigest()[:12]
+    return hash_token(token)[:12]
 
 
 def _emit_token_auth_event(
@@ -52,7 +57,7 @@ def _emit_token_auth_event(
         "outcome": outcome,
         "reason": reason,
         "token_id": str(record.pk) if record is not None else None,
-        "token_fingerprint": _token_fingerprint(token),
+        "token_fingerprint": token_fingerprint(token),
         "user_id": user_id,
         # Keep None (JSON null) for a team-less token rather than the string "None".
         "team_id": str(record.team_id) if record is not None and record.team_id is not None else None,
@@ -273,7 +278,9 @@ def get_user_and_token_record(
        signature step.
     2. User liveness: the JWT's ``sub`` must resolve to a User row
        with ``is_active=True`` and ``deleted_at IS NULL``.
-    3. AccessToken DB row exists for ``(user, encoded_token)``.
+    3. AccessToken DB row exists for ``(user, hash_token(token), token_type)``,
+       where ``token_type`` is the JWT's signed claim, so the type the row
+       stores can never disagree with the token that authenticated.
     4. Row-level expiry: ``AccessToken.expires_at`` (if set) must be
        in the future. Defense-in-depth on top of the JWT-level
        ``exp`` check — if a future code path stripped JWT claims but
@@ -333,7 +340,12 @@ def get_user_and_token_record(
         emit("failure", reason="user_inactive_or_missing", user_id=user_id)
         return None, None
 
-    access_token_record = AccessToken.objects.filter(user=user, encoded_token=token).select_related("team").first()
+    token_type = TOKEN_TYPE_OIDC if payload.get("token_type") == TOKEN_TYPE_OIDC else TOKEN_TYPE_PAT
+    access_token_record = (
+        AccessToken.objects.filter(user=user, token_hash=hash_token(token), token_type=token_type)
+        .select_related("team")
+        .first()
+    )
     if access_token_record is None:
         log.warning(f"No DB record found for token belonging to user {user_id}")
         emit("failure", reason="no_token_record", user_id=user_id)

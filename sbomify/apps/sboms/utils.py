@@ -15,6 +15,7 @@ from django.core import signing
 from django.db import DatabaseError, IntegrityError, OperationalError
 from django.utils import timezone
 
+from sbomify.apps.access_tokens.utils import token_fingerprint
 from sbomify.apps.core.models import Component, Product
 
 # StorageClient import moved to function level to support test mocking
@@ -1582,10 +1583,10 @@ def verify_download_token(token: str, max_age: int = SIGNED_URL_MAX_AGE) -> dict
         payload: dict[str, Any] = get_signer().unsign_object(token, max_age=max_age)
         return payload
     except signing.BadSignature:
-        log.warning(f"Invalid signature in download token: {token}")
+        log.warning(f"Invalid signature in download token (fingerprint {token_fingerprint(token)})")
         return None
     except signing.SignatureExpired:
-        log.warning(f"Expired download token: {token}")
+        log.warning(f"Expired download token (fingerprint {token_fingerprint(token)})")
         return None
     except Exception as e:
         log.error(f"Error verifying download token: {e}")
