@@ -14,7 +14,6 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.apis import _MAX_SVG_BYTES, _branding_image_type
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 24
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 24
@@ -235,6 +234,8 @@ class TestBrandingSettingsForm:
 
 def test_an_svg_at_the_size_cap_is_checked_without_keeping_its_elements():
     """An element tree of this file would take over 50 MB. The check reads each element and keeps none."""
+    from sbomify.apps.teams.apis import _MAX_SVG_BYTES, _branding_image_type
+
     data = svg("<g/>" * 250_000)
     assert len(data) <= _MAX_SVG_BYTES
 
