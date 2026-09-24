@@ -9,6 +9,7 @@ from defusedxml.ElementTree import DefusedXMLParser, ParseError
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.files.uploadedfile import UploadedFile as DjangoUploadedFile
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 from ninja import File, Router
@@ -441,7 +442,7 @@ def update_team_branding(
 
     # Check every new file before storing any, so a rejected logo cannot leave a new icon half-applied.
     # Each file is read again for its upload, so only one sits in memory at a time.
-    images: dict[str, tuple[Any, str, str]] = {}
+    images: dict[str, tuple[DjangoUploadedFile, str, str]] = {}
     for field in ["icon", "logo"]:
         if (file := request.FILES.get(field)) and not getattr(payload, f"{field}_pending_deletion", False):
             file.seek(0)
@@ -561,13 +562,13 @@ def upload_branding_file(
             except Exception as e:
                 logger.warning(f"Failed to delete old {file_type} file {old_filename}: {e}")
 
-    except Exception as e:
+    except Exception:
         # Database save failed, clean up the new file we just uploaded
         try:
             s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, new_filename)
         except Exception as cleanup_error:
             logger.error(f"Failed to cleanup uploaded file {new_filename} after database error: {cleanup_error}")
-        raise e
+        raise
 
     # Create a new BrandingInfo object with the updated data to get correct URLs
     updated_branding_data = _normalize_branding_payload(team.branding_info)
