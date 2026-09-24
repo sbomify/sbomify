@@ -56,6 +56,7 @@ def test_emailed_link_confirms_before_joining(invitee: Any, invitation: Invitati
     body = response.content.decode()
     assert re.search(rf'<form[^>]*method="post"[^>]*action="{re.escape(url)}"', body)
     assert 'data-pending-invitations="1"' not in body, "the page repeats the settings toast"
+    assert "pending_invitation_token" not in client.session
     assert not Member.objects.filter(team=invitation.team, user=invitee).exists()
     assert Invitation.objects.filter(pk=invitation.pk).exists()
 
@@ -65,6 +66,27 @@ def test_emailed_link_confirms_before_joining(invitee: Any, invitation: Invitati
     assert response.url == reverse("core:dashboard")
     assert Member.objects.filter(team=invitation.team, user=invitee, role="member").exists()
     assert not Invitation.objects.filter(pk=invitation.pk).exists()
+
+
+@pytest.mark.django_db
+def test_link_keeps_its_own_invitation_over_a_saved_token(invitee: Any, invitation: Invitation) -> None:
+    saved = Invitation.objects.create(team=Team.objects.create(name="Saved Workspace"), email=invitee.email, role="member")
+    client = Client()
+    client.force_login(invitee)
+    session = client.session
+    session["pending_invitation_token"] = str(saved.token)
+    session.save()
+
+    body = client.get(_url(invitation.token)).content.decode()
+
+    assert f'action="{_url(invitation.token)}"' in body
+    assert _url(saved.token) not in body
+
+    client.post(_url(invitation.token))
+
+    assert Member.objects.filter(team=invitation.team, user=invitee).exists()
+    assert not Member.objects.filter(team=saved.team, user=invitee).exists()
+    assert client.session["pending_invitation_token"] == str(saved.token)
 
 
 @pytest.mark.django_db
