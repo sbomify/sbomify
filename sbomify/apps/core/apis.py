@@ -3603,6 +3603,19 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
 # =============================================================================
 
 
+def _can_read_release(request: HttpRequest, product: Product) -> bool:
+    """``release:read`` on ``product``, with an OIDC bot confined to the products it publishes to.
+
+    The bot holds ``release:read`` across its workspace so the publish workflow can list releases
+    and see whether one exists. The endpoints that serve what a release contains ask this instead,
+    which also requires the product to hold the bot's bound component, the rule ``create_release``
+    applies to the bot's writes.
+    """
+    from sbomify.apps.oidc.permissions import is_authorised_for_product
+
+    return can(request, "release:read", product).allowed and is_authorised_for_product(request, product)
+
+
 def _download_filename(product_name: str, release_name: str, extension: str) -> str:
     """Build a safe download filename from user-controlled product/release names.
 
@@ -3652,7 +3665,7 @@ def download_release(
 
         # Non-public product: internal members only. Guests hold no read tier;
         # public products already returned above.
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all SBOM artifacts in the release
@@ -3675,9 +3688,7 @@ def download_release(
     # aggregate, gated and private members included; everyone else gets the
     # public view. The authorized build bypasses the public aggregate cache.
     include_non_public = bool(
-        getattr(request, "user", None)
-        and request.user.is_authenticated
-        and can(request, "release:read", release.product)
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
     )
 
     try:
@@ -3752,7 +3763,7 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     from django.core.cache import cache
@@ -3773,9 +3784,7 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     # a package and a version, so publishing one for a withheld component would
     # disclose through the side door what the inventory refuses at the front.
     include_non_public = bool(
-        getattr(request, "user", None)
-        and request.user.is_authenticated
-        and can(request, "release:read", release.product)
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
     )
     # The flag is part of the key. Sharing one entry between the two audiences
     # would serve whichever build landed first to both, which is the disclosure
@@ -3854,7 +3863,7 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     document = _release_cbom_document(release, version)
@@ -3908,7 +3917,7 @@ def list_release_artifacts(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     if mode == "existing":
