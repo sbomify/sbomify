@@ -418,10 +418,9 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         redirect_url = reverse("teams:accept_invite", kwargs={"invite_token": invite_token})
         return redirect(f"{login_url}?next={quote(redirect_url)}")
 
-    # The URL names the invitation. A saved token is spent once the user is back
-    # on its own link; one saved by another link stays for that invitation.
-    if request.session.get("pending_invitation_token") == invite_token:
-        del request.session["pending_invitation_token"]
+    # The URL names the invitation. A token saved in the session never replaces it
+    # and is dropped either way, so a stale one cannot reach a later step.
+    request.session.pop("pending_invitation_token", None)
 
     if (request.user.email or "").lower() != invitation.email.lower():
         # Avoid revealing whether an invitation exists for another email

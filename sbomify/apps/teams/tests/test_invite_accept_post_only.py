@@ -40,6 +40,12 @@ def _form_token(response: Any) -> str:
     return match.group(1)
 
 
+def _save_token(client: Client, token: object) -> None:
+    session = client.session
+    session["pending_invitation_token"] = str(token)
+    session.save()
+
+
 @pytest.mark.django_db
 def test_emailed_link_confirms_before_joining(invitee: Any, invitation: Invitation) -> None:
     client = Client(enforce_csrf_checks=True)
@@ -70,23 +76,25 @@ def test_emailed_link_confirms_before_joining(invitee: Any, invitation: Invitati
 
 @pytest.mark.django_db
 def test_link_keeps_its_own_invitation_over_a_saved_token(invitee: Any, invitation: Invitation) -> None:
-    saved = Invitation.objects.create(team=Team.objects.create(name="Saved Workspace"), email=invitee.email, role="member")
+    saved = Invitation.objects.create(
+        team=Team.objects.create(name="Saved Workspace"), email=invitee.email, role="member"
+    )
     client = Client()
     client.force_login(invitee)
-    session = client.session
-    session["pending_invitation_token"] = str(saved.token)
-    session.save()
 
+    _save_token(client, saved.token)
     body = client.get(_url(invitation.token)).content.decode()
 
     assert f'action="{_url(invitation.token)}"' in body
     assert _url(saved.token) not in body
+    assert "pending_invitation_token" not in client.session
 
+    _save_token(client, saved.token)
     client.post(_url(invitation.token))
 
     assert Member.objects.filter(team=invitation.team, user=invitee).exists()
     assert not Member.objects.filter(team=saved.team, user=invitee).exists()
-    assert client.session["pending_invitation_token"] == str(saved.token)
+    assert "pending_invitation_token" not in client.session
 
 
 @pytest.mark.django_db
