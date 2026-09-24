@@ -150,3 +150,26 @@ def test_anonymous_page_post_creates_nothing(team_with_business_plan):
     assert response.status_code == 302
     assert not get_user_model().objects.filter(email="visitor@example.com").exists()
     assert not AccessRequest.objects.filter(team=team_with_business_plan).exists()
+
+
+def _page_url(team, access_request) -> str:
+    return reverse("documents:sign_nda", kwargs={"team_key": team.key, "request_id": access_request.id})
+
+
+def test_anonymous_caller_is_sent_to_sign_in_from_the_nda_page(team_with_business_plan, company_nda, pending_request):
+    response = Client().get(_page_url(team_with_business_plan, pending_request))
+
+    assert response.status_code == 302
+    assert response.url.startswith(reverse("core:keycloak_login"))
+
+
+def test_anonymous_page_post_cannot_sign_a_pending_nda(team_with_business_plan, company_nda, pending_request):
+    with patch("sbomify.apps.documents.views.access_requests.StorageClient") as storage:
+        storage.return_value.get_document_data.return_value = NDA_CONTENT
+        response = Client().post(
+            _page_url(team_with_business_plan, pending_request), {"signed_name": "Someone", "consent": "on"}
+        )
+
+    assert response.status_code == 302
+    assert response.url.startswith(reverse("core:keycloak_login"))
+    assert not NDASignature.objects.filter(access_request=pending_request).exists()

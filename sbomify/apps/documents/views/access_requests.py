@@ -1,6 +1,6 @@
 import hashlib
 import logging
-from typing import cast
+from typing import Any, cast
 from urllib.parse import quote
 
 from django.conf import settings
@@ -11,7 +11,7 @@ from django.core.cache import cache
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
 from django.db.models import QuerySet
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -399,6 +399,12 @@ class AccessRequestView(View):
 class NDASigningView(View):
     """View for signing NDA as part of access request."""
 
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        # Only the requester reads and signs their NDA, so they sign in first.
+        if not request.user.is_authenticated:
+            return redirect(f"{reverse('core:keycloak_login')}?next={quote(request.get_full_path())}")
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request: HttpRequest, team_key: str, request_id: str) -> HttpResponse:
         """Show NDA document for signing."""
         try:
@@ -412,20 +418,12 @@ class NDASigningView(View):
             return error_response(request, HttpResponse(status=404, content="Access request not found"))
 
         # Verify user owns the request
-        if request.user.is_authenticated:
-            if access_request.user != request.user:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
-        else:
-            # For unauthenticated, verify request is pending
-            if access_request.status != AccessRequest.Status.PENDING:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
+        if access_request.user != request.user:
+            return error_response(request, HttpResponse(status=403, content="Forbidden"))
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
         if not company_nda:
-            # For unauthenticated users, return 403 instead of 404 to avoid information disclosure
-            if not request.user.is_authenticated:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
             return error_response(request, HttpResponse(status=404, content="NDA document not found"))
 
         # Check if already signed for the current NDA document
@@ -467,20 +465,12 @@ class NDASigningView(View):
             return error_response(request, HttpResponse(status=404, content="Access request not found"))
 
         # Verify user owns the request
-        if request.user.is_authenticated:
-            if access_request.user != request.user:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
-        else:
-            # For unauthenticated, verify request is pending
-            if access_request.status != AccessRequest.Status.PENDING:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
+        if access_request.user != request.user:
+            return error_response(request, HttpResponse(status=403, content="Forbidden"))
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
         if not company_nda:
-            # For unauthenticated users, return 403 instead of 404 to avoid information disclosure
-            if not request.user.is_authenticated:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
             return error_response(request, HttpResponse(status=404, content="NDA document not found"))
 
         # Check if already signed for the current NDA document
