@@ -27,7 +27,9 @@ from sbomify.apps.teams.signals.handlers import _accept_pending_invitations
 
 @pytest.fixture
 def invited_user() -> User:
-    return User.objects.create_user(username="invitee", email="invitee@example.test", password="pw")  # nosec B106
+    return User.objects.create_user(  # nosec B106
+        username="invitee", email="invitee@example.test", password="pw", email_verified=True
+    )
 
 
 @pytest.fixture

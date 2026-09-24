@@ -20,6 +20,7 @@ from django.utils import timezone
 from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.queries import invitation_email
 from sbomify.apps.teams.utils import get_user_teams, update_user_teams_session, user_seat
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
     Returns a list of dicts with accepted invitation metadata (team_key, invitation_id)
     to drive session selection and downstream flows.
     """
-    if not user.email:
+    email = invitation_email(user)
+    if not email:
         return []
 
     # Skip auto-accept for existing users who already have workspaces
@@ -49,7 +51,7 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
     accepted: list[dict[str, Any]] = []
     has_default = Member.objects.filter(user=user, is_default_team=True).exists()
 
-    pending_invites = Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).select_related(
+    pending_invites = Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).select_related(
         "team"
     )
 

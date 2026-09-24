@@ -15,6 +15,18 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+def _provider_confirmed_email(sociallogin: SocialLogin) -> bool:
+    """Whether the identity provider confirmed the address this login carries.
+
+    allauth fills ``email_addresses`` from the provider's claims, and its own
+    email login trusts nothing else. The claim is not at the top of
+    ``extra_data``: since allauth 65.11 OpenID Connect keeps it under
+    ``userinfo`` and ``id_token``.
+    """
+    email = (sociallogin.user.email or "").lower()
+    return bool(email) and any(a.verified and a.email.lower() == email for a in sociallogin.email_addresses)
+
+
 class SpaceEncodedOAuth2Client(OAuth2Client):  # type: ignore[misc]
     """An authorize URL whose spaces are ``%20``, not ``+``.
 
@@ -164,7 +176,9 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
                     is_active=True,
                     deleted_at__isnull=True,
                 )
-                sociallogin.connect(request, existing_user)
+                # Only an address the provider confirmed may claim an existing account.
+                if _provider_confirmed_email(sociallogin):
+                    sociallogin.connect(request, existing_user)
             except User.DoesNotExist:
                 pass
 
@@ -174,7 +188,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
 
         # Extract email_verified from provider-specific field
         if provider == "keycloak":
-            email_verified = extra_data.get("email_verified", False)
+            email_verified = _provider_confirmed_email(sociallogin)
         elif provider == "github":
             email_verified = extra_data.get("email_verified", False)
         elif provider == "google":
@@ -211,7 +225,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
         if sociallogin.account.provider == "keycloak":
             # Set email verification status
             user.is_active = True  # Keycloak handles activation
-            user.email_verified = data.get("email_verified", False)
+            user.email_verified = _provider_confirmed_email(sociallogin)
 
             # Map Keycloak name fields directly to Django fields (try both possible keys)
             user.first_name = data.get("given_name") or data.get("first_name", "")

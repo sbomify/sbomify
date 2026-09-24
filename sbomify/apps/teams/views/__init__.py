@@ -38,7 +38,7 @@ from sbomify.apps.teams.models import (
     Team,
 )
 from sbomify.apps.teams.permissions import check_member_removal
-from sbomify.apps.teams.queries import count_team_members
+from sbomify.apps.teams.queries import count_team_members, invitation_email
 from sbomify.apps.teams.services.member_notifications import notify_owners_of_owner_invitation
 from sbomify.apps.teams.utils import (
     redirect_to_team_settings,
@@ -436,7 +436,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             invitation = session_invitation
             invite_token = pending_token
 
-    if (request.user.email or "").lower() != invitation.email.lower():
+    if invitation_email(request.user).lower() != invitation.email.lower():
         # Avoid revealing whether an invitation exists for another email
         return error_response(request, HttpResponseNotFound("Unknown invitation"))
 
