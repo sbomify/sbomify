@@ -813,7 +813,7 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
     if not can(request, "component:manage", sbom.component):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-    registered = RegisteredPlugin.objects.filter(name=plugin_name).only("name", "is_enabled").first()
+    registered = RegisteredPlugin.objects.filter(name=plugin_name).only("name", "display_name", "is_enabled").first()
     if registered is None:
         return 404, {"detail": f"Plugin '{plugin_name}' is not registered", "error_code": ErrorCode.NOT_FOUND}
     if not registered.is_enabled:
@@ -839,7 +839,7 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
     # setting, and the plan decides what it may run.
     if not team_has_plugin_access(sbom.component.team, plugin_name):
         return 403, {
-            "detail": f"Your plan does not include {plugin_name}. Upgrade to run it.",
+            "detail": f"Your plan does not include {registered.display_name or plugin_name}. Upgrade to run it.",
             "error_code": ErrorCode.FORBIDDEN,
         }
 

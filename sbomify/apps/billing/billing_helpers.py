@@ -193,8 +193,11 @@ def downgrade_ended_subscription(team_pk: int) -> bool:
         team.billing_plan = BillingPlan.KEY_COMMUNITY
         team.billing_plan_limits = limits
         team.save()
+        # Under the same row lock as the plan change: a payment that recovers in
+        # between would restore the paid plan, and publishing afterwards would
+        # then act on a workspace that pays again.
+        apply_community_downgrade(team)
 
-    apply_community_downgrade(team)
     logger.info("Subscription ended: moved workspace %s to Community", team.key)
     return True
 

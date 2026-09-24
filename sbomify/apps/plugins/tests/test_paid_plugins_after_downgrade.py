@@ -106,4 +106,5 @@ def test_rerun_refuses_a_plugin_the_plan_excludes(ensure_billing_plans, team_wit
         )
 
     assert response.status_code == 403
+    assert "Dependency Track" in response.json()["detail"]
     task.send.assert_not_called()
