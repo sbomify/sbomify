@@ -163,7 +163,10 @@ def test_workspace_cards(
     expect(card.get_by_text("Default", exact=True)).to_be_visible()
     expect(current.get_by_text("Current", exact=True)).to_be_visible()
     assert Member.objects.get(team=other, user=sample_user).is_default_team
-    card.get_by_role("button", name=re.compile(r"^Actions for")).click()
+    # The redirect renders the badge before Alpine binds the menu.
+    actions = card.get_by_role("button", name=re.compile(r"^Actions for"))
+    expect(actions).to_have_attribute("aria-expanded", "false")
+    actions.click()
     expect(page.get_by_role("menuitem", name="Default workspace", exact=True)).to_be_disabled()
     expect(page.get_by_role("menuitem", name="Delete workspace", exact=True)).to_be_hidden()
     page.keyboard.press("Escape")
