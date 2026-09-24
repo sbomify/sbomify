@@ -31,7 +31,7 @@
         </c-tables.page-size>
         </c-slot>
         </c-tables.toolbar>
-        <c-tables.table sized variant_class="min-w-144 sm:min-w-192 md:min-w-256" aria-label="Security advisories">
+        <c-tables.table x-show="filteredData.length > 0" sized variant_class="min-w-144 sm:min-w-192 md:min-w-256" aria-label="Security advisories">
         <c-tables.head>
         <c-tables.header-cell sort="severity" class="w-32">Severity</c-tables.header-cell>
         <c-tables.header-cell sort="title" nowrap>Advisory</c-tables.header-cell>
@@ -140,19 +140,11 @@
                 </c-tables.actions-cell>
                 </c-tables.row>
             </template>
-            <template x-if="paginatedData.length === 0">
-                <tr>
-                    <td colspan="6" class="text-center py-8 text-text-muted">
-                        <i class="fas fa-search text-2xl mb-2 opacity-50" aria-hidden="true"></i>
-                        <p>No advisories match your search</p>
-                        <button type="button"
-                                @click="search = ''; filter = 'all'"
-                                class="mt-3 text-xs text-primary hover:underline">Clear filters</button>
-                    </td>
-                </tr>
-            </template>
         </tbody>
         </c-tables.table>
+        <c-feedback.empty-state x-cloak x-show="filteredData.length === 0" icon="fas fa-search" title="No matching advisories" message="Try another search or clear the filters.">
+        <c-buttons.secondary @click="search = ''; filter = 'all'; currentPage = 1">Clear filters</c-buttons.secondary>
+        </c-feedback.empty-state>
         <c-tables.footer>
         <c-tables.info>
         Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
@@ -182,14 +174,14 @@
         </c-tables.footer>
         </c-tables.shell>
     {% else %}
-        <c-cards.card>
-        <c-feedback.empty-state icon="fas fa-shield-halved" title="No advisories yet" message="Security advisories track vulnerabilities in your products over time. Create one to open its timeline with a first update.">
+        <c-tables.shell>
+        <c-feedback.empty-state icon="fas fa-shield-halved" title="No advisories yet" message="Track vulnerabilities in your products with a security advisory.">
         {% if has_crud_permissions %}
             <c-buttons.primary href="{% url 'core:security_advisory_new' %}">
-            <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Your First Advisory
+            <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create advisory
             </c-buttons.primary>
         {% endif %}
         </c-feedback.empty-state>
-        </c-cards.card>
+        </c-tables.shell>
     {% endif %}
 </div>

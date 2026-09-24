@@ -993,7 +993,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     </c-cards.card>
     <h2 id="empty-states" class="text-xl font-semibold text-text">Empty states</h2>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <c-cards.card>
+        <c-cards.card flush>
         {% comment %}
         This section renders through the cotton component library
         (sbomify/templates/components/feedback/). The actions are the slot, so they
@@ -1003,12 +1003,17 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-buttons.primary href="#empty-states">Add component</c-buttons.primary>
         </c-feedback.empty-state>
         </c-cards.card>
-        <c-cards.card>
+        <c-cards.card flush>
         <c-feedback.empty-state compact icon="fas fa-tag" title="No releases yet" message="Tag a release when you ship." secondary_text="or read the docs" secondary_url="#empty-states">
         <c-buttons.secondary href="#empty-states">Create a release</c-buttons.secondary>
         </c-feedback.empty-state>
         </c-cards.card>
-        <c-cards.card>
+        <c-tables.shell>
+        <c-feedback.empty-state icon="fas fa-search" title="No matching products" message="Try another search or clear the filters.">
+        <c-buttons.secondary href="#empty-states">Clear filters</c-buttons.secondary>
+        </c-feedback.empty-state>
+        </c-tables.shell>
+        <c-cards.card flush>
         {# The small medallion carries the small mark, and a panel inside a detail view often has only the one line. #}
         <c-feedback.empty-state compact icon="fas fa-address-card" icon_size="sm" icon_variant="neutral" message="No entities in this profile" />
         </c-cards.card>
