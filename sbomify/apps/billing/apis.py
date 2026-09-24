@@ -148,11 +148,12 @@ def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, An
         # now. Any other Stripe error propagates and rolls this back: reading a
         # timeout as "no subscription" published a paying workspace's components.
         subscription = None
+        subscription_missing = False
         if subscription_id := billing_limits.get("stripe_subscription_id"):
             try:
                 subscription = stripe_client.get_subscription(subscription_id)
             except StripeResourceMissingError:
-                subscription = None
+                subscription_missing = True
 
         if subscription is not None and subscription.status not in ("canceled", "incomplete_expired"):
             if billing_limits.get("cancel_at_period_end") and billing_limits.get("scheduled_downgrade_plan"):
@@ -179,6 +180,11 @@ def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, An
             team.billing_plan = "community"
             existing_limits = billing_limits.copy()
             existing_limits.update(get_community_plan_limits())
+            if subscription_missing:
+                # Stripe has no such subscription, so forget both ids, as the sync's reconcile does.
+                existing_limits.pop("stripe_subscription_id", None)
+                existing_limits.pop("stripe_customer_id", None)
+                existing_limits["subscription_status"] = "canceled"
             team.billing_plan_limits = existing_limits
             handle_community_downgrade_visibility(team)
 

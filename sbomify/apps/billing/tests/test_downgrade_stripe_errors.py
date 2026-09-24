@@ -97,6 +97,10 @@ def test_a_subscription_missing_at_stripe_downgrades_locally(
     private_component.refresh_from_db()
     assert team_with_business_plan.billing_plan == "community"
     assert private_component.visibility == Component.Visibility.PUBLIC
+    limits = team_with_business_plan.billing_plan_limits
+    assert "stripe_subscription_id" not in limits
+    assert "stripe_customer_id" not in limits
+    assert limits["subscription_status"] == "canceled"
 
 
 def test_an_ended_subscription_downgrades_locally(ensure_billing_plans, team_with_business_plan, sample_user):
