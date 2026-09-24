@@ -264,17 +264,21 @@ class TestBrandingSettingsForm:
             Key=team.branding_info["icon"], Body=large_png, ContentType="image/png"
         )
 
-    def test_an_icon_and_a_logo_are_each_stored_from_their_own_bytes(self, owner, s3):
+    def test_an_icon_and_a_logo_are_stored_and_their_old_files_go_on_commit(
+        self, owner, s3, django_capture_on_commit_callbacks
+    ):
         client, team = owner
 
-        response = self.post(
-            client,
-            team,
-            {
-                "icon": SimpleUploadedFile("icon.png", PNG, content_type="image/png"),
-                "logo": SimpleUploadedFile("logo.jpg", JPEG, content_type="image/jpeg"),
-            },
-        )
+        with django_capture_on_commit_callbacks(execute=True):
+            response = self.post(
+                client,
+                team,
+                {
+                    "icon": SimpleUploadedFile("icon.png", PNG, content_type="image/png"),
+                    "logo": SimpleUploadedFile("logo.jpg", JPEG, content_type="image/jpeg"),
+                },
+            )
+            s3.Object.assert_not_called()
 
         assert json.loads(response["HX-Trigger"])["messages"][0]["type"] == "success"
         team.refresh_from_db()
@@ -339,15 +343,19 @@ class TestBrandingSettingsForm:
         }
         assert_nothing_stored(s3, team)
 
-    def test_a_file_sent_with_its_removal_is_ignored(self, owner, s3):
+    def test_a_file_sent_with_its_removal_is_ignored(self, owner, s3, django_capture_on_commit_callbacks):
         """Removal wins over a new file, so the file is neither checked nor stored."""
         client, team = owner
 
-        response = self.post(
-            client,
-            team,
-            {"logo_pending_deletion": "true", "logo": SimpleUploadedFile("logo.html", HTML, content_type="text/html")},
-        )
+        with django_capture_on_commit_callbacks(execute=True):
+            response = self.post(
+                client,
+                team,
+                {
+                    "logo_pending_deletion": "true",
+                    "logo": SimpleUploadedFile("logo.html", HTML, content_type="text/html"),
+                },
+            )
 
         assert json.loads(response["HX-Trigger"])["messages"][0]["type"] == "success"
         s3.Bucket.return_value.put_object.assert_not_called()

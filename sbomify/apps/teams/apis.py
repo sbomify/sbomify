@@ -455,7 +455,7 @@ def update_team_branding(
     branding_data = _normalize_branding_payload(team.branding_info)
     branding_info = BrandingInfo(**branding_data).model_dump()
 
-    # Old files go only once the new keys are saved, and a failure before then removes this request's uploads.
+    # Old files go only once the new keys are committed. A failed upload or save removes this request's uploads.
     uploaded: list[str] = []
     replaced: list[str] = []
     for field in ["icon", "logo"]:
@@ -494,7 +494,7 @@ def update_team_branding(
     except Exception:
         _delete_branding_files(uploaded)
         raise
-    _delete_branding_files(replaced)
+    transaction.on_commit(lambda: _delete_branding_files(replaced))
 
     updated_branding_data = _normalize_branding_payload(team.branding_info)
     updated_branding = BrandingInfo(**updated_branding_data)
