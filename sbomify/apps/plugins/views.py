@@ -237,3 +237,61 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "panel": found.panel,
             },
         )
+
+
+class AssessmentResultsCardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """The artifact page's assessments card, re-rendered on its own.
+
+    The card used to answer a completed assessment by reloading the whole page.
+    An assessment finishes when the queue says so, not when the reader is ready,
+    so that reload landed on a triage modal with a justification half typed, on
+    a filtered suppression list, on an expanded findings panel: all of it client
+    state that a reload cannot restore. This endpoint is what the card swaps in
+    instead.
+
+    Authorization is the one ``get_sbom_assessments`` already applies, which
+    answers the empty shape rather than an error for an SBOM the caller may not
+    read. Guests are blocked on top of that, matching the page this belongs to,
+    so a guest redirected off the artifact page cannot pull its fragments by URL.
+
+    One URL, two audiences, the same split the findings view makes: an HTMX
+    request gets the region, anything else lands on the artifact page.
+    """
+
+    def get(self, request: HttpRequest, sbom_id: str) -> HttpResponse:
+        from sbomify.apps.sboms.models import SBOM
+
+        from .apis import get_sbom_assessments
+
+        sbom = SBOM.objects.filter(pk=sbom_id).select_related("component").first()
+        if sbom is None:
+            return HttpResponseNotFound("Artifact not found")
+
+        if not request.headers.get("HX-Request"):
+            return HttpResponseRedirect(
+                reverse(
+                    "core:component_item",
+                    kwargs={
+                        "component_id": sbom.component_id,
+                        "item_type": "sboms",
+                        "item_id": str(sbom.id),
+                    },
+                )
+            )
+
+        try:
+            # Same two knobs the artifact page passes: the card reads counts from
+            # each run's summary and one title, and building every finding twice
+            # is what once made this payload 31 MB.
+            assessment_runs = get_sbom_assessments(
+                request, sbom_id, findings_limit=1, include_history=False
+            ).model_dump(mode="json")
+        except Exception:
+            logger.exception("Failed to refresh assessments for SBOM %s", sbom_id)
+            return HttpResponseNotFound("Assessments unavailable")
+
+        return render(
+            request,
+            "plugins/components/assessment_results_card.html.j2",
+            {"sbom_id": sbom_id, "assessment_runs": assessment_runs},
+        )
