@@ -4111,6 +4111,30 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             "error_code": ErrorCode.FORBIDDEN,
         }
 
+    # Confine an OIDC bot to releases of products that contain its bound component: the rule and
+    # the per-cause wording create_release uses. Fail closed for an orphan bot with no binding.
+    from sbomify.apps.oidc.permissions import bound_component_id_for_request, request_is_oidc_authed
+
+    if request_is_oidc_authed(request):
+        bound_component_id = bound_component_id_for_request(request)
+        if bound_component_id is None:
+            return 403, {
+                "detail": (
+                    "This OIDC token has no component binding, so it cannot add artifacts to releases. "
+                    "Re-create the trusted-publishing binding for the component."
+                ),
+                "error_code": ErrorCode.FORBIDDEN,
+            }
+        if not release.product.components.filter(id=bound_component_id).exists():
+            return 403, {
+                "detail": (
+                    f"Component {bound_component_id} is not part of product {release.product_id}, so this "
+                    "OIDC token cannot add artifacts to its releases. Add the component to the product, "
+                    "then retry."
+                ),
+                "error_code": ErrorCode.FORBIDDEN,
+            }
+
     # Prevent adding artifacts to latest releases
     if release.is_latest:
         return 400, {
