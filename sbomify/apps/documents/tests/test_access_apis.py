@@ -336,7 +336,7 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
+        client, _ = authenticated_api_client
         client.force_login(guest_user)
 
         # The requester signs for themselves, on their own session.
@@ -381,7 +381,7 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
+        client, _ = authenticated_api_client
         client.force_login(guest_user)
 
         # The requester signs for themselves, on their own session.
@@ -418,7 +418,7 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
+        client, _ = authenticated_api_client
         client.force_login(guest_user)
 
         headers = {
@@ -461,7 +461,7 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
+        client, _ = authenticated_api_client
         client.force_login(guest_user)
 
         # The requester signs for themselves, on their own session.

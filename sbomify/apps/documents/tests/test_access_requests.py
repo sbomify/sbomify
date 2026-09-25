@@ -117,7 +117,7 @@ class TestAccessRequestCreation:
         self, authenticated_api_client, team_with_business_plan, guest_user
     ):
         """Test creating an access request via API."""
-        client, access_token = authenticated_api_client
+        client, _ = authenticated_api_client
         client.force_login(guest_user)
         
         # API endpoint is /api/v1/teams/{team_key}/access-request

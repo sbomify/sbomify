@@ -47,7 +47,9 @@ def company_nda(team_with_business_plan):
 
 @pytest.fixture
 def pending_request(team_with_business_plan, guest_user):
-    return AccessRequest.objects.create(team=team_with_business_plan, user=guest_user, status="pending")
+    return AccessRequest.objects.create(
+        team=team_with_business_plan, user=guest_user, status=AccessRequest.Status.PENDING
+    )
 
 
 @pytest.fixture
