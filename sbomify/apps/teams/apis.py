@@ -263,9 +263,9 @@ _MAX_SVG_BYTES = 1024 * 1024
 _SVG_ROOT = "{http://www.w3.org/2000/svg}svg"
 # Elements a browser runs as HTML or MathML even inside an SVG document.
 _LIVE_NAMESPACES = ("{http://www.w3.org/1999/xhtml}", "{http://www.w3.org/1998/Math/MathML}")
-# An in-document reference or an embedded raster image, in an href or a CSS url().
+# An in-document reference or an embedded PNG, JPEG or WebP image, in an href or a CSS url().
 # Anything else loads or runs something the check never saw.
-_INERT_HREF = re.compile(r"#|data:image/(png|jpe?g|gif|webp)[;,]")
+_INERT_HREF = re.compile(r"#|data:image/(png|jpe?g|webp)[;,]")
 # CSS that fetches from a plain string, or the start of a url() whose target _INERT_HREF checks.
 _CSS_FETCH = re.compile(r"@import|image-set\(|url\(\s*['\"]?\s*")
 _CSS_ESCAPE = re.compile(r"\\(?:([0-9a-f]{1,6})[ \t\n]?|(.))", re.IGNORECASE | re.DOTALL)

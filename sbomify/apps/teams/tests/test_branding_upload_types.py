@@ -137,6 +137,7 @@ class TestBrandingUploadEndpoint:
             ),
             pytest.param(svg("<image href='https://example.com/logo.png'/>"), id="external-reference"),
             pytest.param(svg("<use href='data:image/svg+xml;base64,PHN2Zy8+#x'/>"), id="svg-data-url"),
+            pytest.param(svg("<image href='data:image/gif;base64,R0lGODlh'/>"), id="gif-data-url"),
             pytest.param(
                 svg("<a href='#x' ping='https://example.com/beacon'><rect width='10' height='10'/></a>"), id="link-ping"
             ),
