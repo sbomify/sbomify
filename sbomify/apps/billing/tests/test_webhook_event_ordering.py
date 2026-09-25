@@ -179,6 +179,18 @@ def test_a_late_payment_does_not_let_the_newest_event_apply_twice(workspace, not
     notify.assert_not_called()
 
 
+def test_a_resent_late_deletion_is_caught_after_a_newer_payment(workspace, notify):
+    billing_processing.handle_payment_succeeded(_invoice(), event=_event("evt_paid_1", 201))
+    deleted = _event("evt_deleted", 200)
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
+    billing_processing.handle_payment_succeeded(_invoice(), event=_event("evt_paid_2", 202))
+    notify.reset_mock()
+
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
+
+    notify.assert_not_called()
+
+
 def test_a_late_payment_delivered_twice_sends_one_receipt(workspace, notify):
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 200))
     late_payment = _event("evt_paid", 100)
@@ -186,6 +198,16 @@ def test_a_late_payment_delivered_twice_sends_one_receipt(workspace, notify):
     notify.reset_mock()
 
     billing_processing.handle_payment_succeeded(_invoice(), event=late_payment)
+
+    notify.assert_not_called()
+
+
+def test_a_payment_recorded_before_payments_had_their_own_key_is_not_recorded_twice(workspace, notify):
+    limits = dict(workspace.billing_plan_limits or {})
+    limits["last_processed_webhook_id"] = "evt_paid"
+    Team.objects.filter(pk=workspace.pk).update(billing_plan_limits=limits)
+
+    billing_processing.handle_payment_succeeded(_invoice(), event=_event("evt_paid", 100))
 
     notify.assert_not_called()
 
