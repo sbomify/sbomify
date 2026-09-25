@@ -293,8 +293,10 @@ class TestInvitations:
         team = Team.objects.create(name="Inviting Workspace")
         invitation = _invite(team)
         client.force_login(user)
+        url = reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)})
 
-        client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+        assert client.get(url).status_code == (200 if verified else 404)
+        client.post(url)
 
         assert Member.objects.filter(user=user, team=team).exists() is verified
 
