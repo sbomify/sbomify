@@ -361,15 +361,28 @@ def test_token_display_value_is_monospace_and_selectable(rendered: str) -> None:
 
 
 def test_token_display_masked_blurs_the_value_and_adds_the_reveal_toggle(rendered: str) -> None:
-    assert 'x-data="{ copied: false, masked: true }"' in _probe(rendered, "token-masked")
+    probe = _probe(rendered, "token-masked")
+    assert "copied: false" in probe
+    assert "masked: true" in probe
     section = _section(rendered, "token-masked")
     assert ":class=\"masked ? 'blur-[4px] select-none' : ''\"" in section
     assert ":aria-label=\"masked ? 'Show token' : 'Hide token'\"" in section
 
 
 def test_token_display_unmasked_starts_revealed_and_has_no_toggle(rendered: str) -> None:
-    assert 'x-data="{ copied: false, masked: false }"' in _probe(rendered, "token-plain")
+    assert "masked: false" in _probe(rendered, "token-plain")
     assert "Show token" not in _section(rendered, "token-plain")
+
+
+def test_token_display_copy_only_claims_success_once_the_write_resolves(rendered: str) -> None:
+    """The one secret shown once. A green check over a rejected write costs the user the token."""
+    probe = _probe(rendered, "token-masked")
+    assert "await navigator.clipboard.writeText" in probe
+    assert "catch" in probe
+    assert "Failed to copy to clipboard" in probe
+    # copied is set after the await resolves, never in the same statement list as the call.
+    assert "writeText($refs.token.textContent.trim()); copied = true" not in probe
+    assert '@click="copy()"' in _section(rendered, "token-masked")
 
 
 def test_token_display_copy_reads_the_value_by_ref(rendered: str) -> None:

@@ -245,7 +245,7 @@ def test_dangerzone_collapsible_assembles_the_whole_zone(rendered: str) -> None:
     assert "fa-chevron-down shrink-0 text-text-muted" in zone
     # The band reads before it warns: danger ink on the title, a quiet default
     # explainer under it, and the ground left alone.
-    assert "Danger Zone" in zone
+    assert "Danger zone" in zone
     assert "Actions here cannot be undone." in zone
     # The collapse lands on the padded body element.
     assert 'x-show="isExpanded"' in zone

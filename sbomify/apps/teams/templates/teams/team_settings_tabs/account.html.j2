@@ -20,21 +20,21 @@
     </c-forms.field>
     </c-cards.card>
     <c-cards.dangerzone-collapsible>
-    <c-layout.section-header title="Delete account" subtitle="Your account will be deactivated immediately and permanently removed after 14 days.">
+    <c-layout.section-header title="Delete account" subtitle="Your account is deactivated immediately and deleted for good after 14 days.">
     <c-slot name="actions"><c-buttons.danger size="sm" @click.prevent="openDeleteModal()" aria-label="Delete your account">Delete account</c-buttons.danger></c-slot>
     </c-layout.section-header>
     </c-cards.dangerzone-collapsible>
     {# Delete Account Modal #}
     <c-modal id="deleteAccountModal" show="showDeleteModal" title="Delete your account" icon="fas fa-exclamation-triangle" role="alertdialog" aria-describedby="deleteAccountModalDesc">
     <c-forms.hint id="deleteAccountModalDesc" class="mb-4">
-    Your account will be deactivated immediately and permanently deleted after <strong>14 days</strong>.
+    Your account is deactivated immediately and deleted for good after <strong>14 days</strong>.
     </c-forms.hint>
     <c-feedback.alert variant="warning" icon="fas fa-key" class="mb-4" x-show="tokenCount > 0" x-cloak>
-    You have <strong x-text="tokenCount"></strong> active API token(s) that will be <strong>immediately revoked</strong>. Any CI/CD pipelines using these tokens will stop working.
+    You have <strong x-text="tokenCount"></strong> active API <span x-text="tokenCount === 1 ? 'token' : 'tokens'"></span> that will be <strong>immediately revoked</strong>. Any CI/CD pipelines using <span x-text="tokenCount === 1 ? 'it' : 'them'"></span> will stop working.
     </c-feedback.alert>
     <c-feedback.alert variant="info" title="Immediate effects" class="mb-4">
     <ul class="pl-4 space-y-1">
-        <li>Account deactivated (cannot log in)</li>
+        <li>Account deactivated (cannot sign in)</li>
         <li>Personal access tokens revoked</li>
         <li>Pending invitations removed</li>
         <li>
@@ -45,10 +45,15 @@
     </c-feedback.alert>
     <c-feedback.alert variant="info" icon="fas fa-clock" title="After 14 days" class="mb-4">
     <ul class="pl-4 space-y-1">
-        <li>Account permanently deleted</li>
-        <li>Contact support to cancel deletion within the grace period</li>
+        <li>Account deleted for good</li>
     </ul>
     </c-feedback.alert>
+    {% comment %}
+        The way back sits outside the "After 14 days" list. It used to be the second
+        bullet there, which filed the only recovery instruction under the heading
+        for the moment recovery stops being possible.
+    {% endcomment %}
+    <c-forms.hint class="mb-4">Changed your mind? Contact support within the 14 days and we will stop the deletion.</c-forms.hint>
     {# Validation Error Display #}
     <c-feedback.alert variant="danger" class="mb-4" x-show="validationError" x-cloak>
     <span x-text="validationError"></span>
