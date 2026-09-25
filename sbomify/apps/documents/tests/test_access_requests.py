@@ -16,6 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.cache import cache
+from django.middleware.csrf import get_token
+from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
@@ -114,22 +116,23 @@ class TestAccessRequestCreation:
         ).exists()
 
     def test_create_access_request_api(
-        self, authenticated_api_client, team_with_business_plan, guest_user
+        self, team_with_business_plan, guest_user
     ):
         """Test creating an access request via API."""
-        client, _ = authenticated_api_client
+        # The requester asks for themselves, on their own session, sending its
+        # CSRF token as a browser does.
+        token = get_token(RequestFactory().get("/"))
+        client = Client(enforce_csrf_checks=True, headers={"X-CSRFToken": token})
+        client.cookies["csrftoken"] = token
         client.force_login(guest_user)
         
         # API endpoint is /api/v1/teams/{team_key}/access-request
         url = f"/api/v1/teams/{team_with_business_plan.key}/access-request"
-        # The requester asks for themselves, on their own session.
-        headers: dict[str, str] = {}
         
         response = client.post(
             url,
             {},
             content_type="application/json",
-            **headers,
         )
         
         assert response.status_code in [200, 201]
