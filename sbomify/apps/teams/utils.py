@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any, cast
@@ -45,6 +46,23 @@ ALLOWED_TABS = frozenset(
         "branding",
     }
 )
+
+
+def find_invitation_by_token(token: Any, **filters: Any) -> Invitation | None:
+    """Look up an invitation by token, treating an unusable token as no match.
+
+    ``Invitation.token`` is a UUIDField, so a truncated or mangled invite link —
+    mail clients wrap long URLs, and the legacy links carried a numeric id rather
+    than a token — reaches the ORM as a string it cannot coerce and raises
+    ValidationError straight out of the query. A bad link is a missing invitation,
+    which every caller here already handles, not a 500.
+    """
+    try:
+        uuid.UUID(str(token))
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+    return Invitation.objects.filter(token=token, **filters).first()
 
 
 def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> HttpResponseRedirect:
