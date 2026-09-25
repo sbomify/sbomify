@@ -36,7 +36,7 @@
                     <span class="flex items-center"
                           :class="activeContactsCount === 0 ? 'text-danger font-medium' : ''">
                         <i class="fas fa-users mr-1.5 text-xs opacity-60"></i>
-                        <span x-text="activeContactsCount + ' contact' + (activeContactsCount !== 1 ? 's' : '')"></span>
+                        <span x-text="$number(activeContactsCount) + ' contact' + (activeContactsCount !== 1 ? 's' : '')"></span>
                         <i class="fas fa-exclamation-circle ml-1 text-xs"
                            x-show="activeContactsCount === 0"></i>
                     </span>
@@ -153,7 +153,7 @@ https://example.com" x-model="websites" class="font-mono" />
                         <i class="fas fa-users text-text-muted mr-1.5"></i>Contacts
                     </h6>
                     <span class="text-danger text-xs">*</span>
-                    <c-badges.badge size="sm" x-text="activeContactsCount">0</c-badges.badge>
+                    <c-badges.badge size="sm" x-text="$number(activeContactsCount)">0</c-badges.badge>
                 </div>
                 <c-buttons.secondary size="sm" @click="addContact" title="Add a contact person">
                 <i class="fas fa-plus mr-1"></i>Add Contact

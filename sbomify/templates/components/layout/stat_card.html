@@ -1,7 +1,7 @@
 {% comment %}
 The shared stat card: a value, a sentence-case label and an optional icon.
 compact changes density only. Every size uses the same surface and hierarchy.
-value accepts numbers or formatted text; x_value binds an Alpine expression to
+value groups numbers with thousands separators and accepts formatted text; x_value binds an Alpine expression to
 the real value element. Zero values use neutral ink and tint in both cases.
 The optional slot holds a change indicator beside the value. Accents include
 semantic colours and the severity scale, so pages never supply a colour recipe.
@@ -10,6 +10,7 @@ Each card is its own description list and can sit in any grid or flex layout.
 loading replaces the value and label with decorative skeletons in the same
 grid, for c-feedback.loading-stats. Its parent supplies the loading announcement.
 {% endcomment %}
+{% load humanize %}
 <c-vars value="0" label icon accent compact x_value loading="" class />
 {% if not value or value == '0' %}
     {% firstof 'true' as stat_zero %}
@@ -34,9 +35,9 @@ grid, for c-feedback.loading-stats. Its parent supplies the loading announcement
         {% if loading %}
             <c-feedback.skeleton width="3rem" height="1lh" />
         {% elif x_value %}
-            <span x-text="{{ x_value }}">{{ value|default:0 }}</span>
+            <span x-text="$number({{ x_value }})">{{ value|default:0|intcomma }}</span>
         {% else %}
-            {{ value|default:0 }}
+            {{ value|default:0|intcomma }}
         {% endif %}
         {{ slot }}
     </dd>

@@ -2839,7 +2839,10 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     release = Release.get_or_create_latest_release(product)
-    document = _release_cbom_document(release, version)
+    include_non_public = bool(
+        getattr(request, "user", None) and request.user.is_authenticated and can(request, "release:read", product)
+    )
+    document = _release_cbom_document(release, version, include_non_public=include_non_public)
     if document is None:
         return 404, {"detail": "No CBOM available for this product", "error_code": ErrorCode.NOT_FOUND}
 
@@ -3813,11 +3816,13 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     return response
 
 
-def _release_cbom_document(release: Release, version: str) -> dict[str, Any] | None:
+def _release_cbom_document(release: Release, version: str, *, include_non_public: bool) -> dict[str, Any] | None:
     """The merged CBOM for a release, cached by slot state, or None when it has no CBOM.
 
     Same cache-by-slot-state approach as the VEX download: the merge fans out one
     S3 fetch per pinned CBOM and the endpoints serving it are open for public products.
+    The audience is part of the key, so a member's full document never answers a
+    caller who gets the public view.
     """
     from django.core.cache import cache
     from django.db.models import Count, Max
@@ -3828,10 +3833,13 @@ def _release_cbom_document(release: Release, version: str) -> dict[str, Any] | N
     slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
         n=Count("id"), newest=Max("sbom__created_at")
     )
-    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
+    scope = "all" if include_non_public else "public"
+    cache_key = f"release-cbom:{release.id}:{scope}:{version}:{slot_state['n']}:{slot_state['newest']}"
     document = cache.get(cache_key)
     if document is None:
-        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
+        document = build_release_cbom(release, spec_version=version, include_non_public=include_non_public) or {
+            "__absent__": True
+        }
         cache.set(cache_key, document, 900)
     return None if document.get("__absent__") else document
 
@@ -3866,7 +3874,12 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
         if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    document = _release_cbom_document(release, version)
+    include_non_public = bool(
+        getattr(request, "user", None)
+        and request.user.is_authenticated
+        and can(request, "release:read", release.product)
+    )
+    document = _release_cbom_document(release, version, include_non_public=include_non_public)
     if document is None:
         return 404, {"detail": "No CBOM available for this release", "error_code": ErrorCode.NOT_FOUND}
 
@@ -3920,14 +3933,26 @@ def list_release_artifacts(
         if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+    # The same rule as _build_release_response: to anyone who cannot manage the
+    # release, a private component's artifact is not listed.
+    can_manage = bool(
+        getattr(request, "user", None)
+        and request.user.is_authenticated
+        and can(request, "release:manage", release.product)
+    )
+
     if mode == "existing":
         # Return artifacts that are already in this release
+        existing_artifacts_queryset = ReleaseArtifact.objects.filter(release=release)
+        if not can_manage:
+            listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+            existing_artifacts_queryset = existing_artifacts_queryset.filter(
+                Q(sbom__component__visibility__in=listable) | Q(document__component__visibility__in=listable)
+            )
         existing_artifacts_queryset = (
             # component is read for every row below, so it belongs in the join:
             # page_size=-1 turns a missing one into a query per artifact.
-            ReleaseArtifact.objects.filter(release=release)
-            .select_related("sbom__component", "document__component")
-            .order_by("-created_at")
+            existing_artifacts_queryset.select_related("sbom__component", "document__component").order_by("-created_at")
         )
 
         # Extract pagination parameters properly
@@ -3979,8 +4004,12 @@ def list_release_artifacts(
         return {"items": artifacts, "pagination": pagination_meta}
 
     else:  # mode == "available" (default)
+        # The release editor's picker lists every artifact the product's
+        # components hold, so it answers only someone who can edit the release.
+        if not can_manage:
+            return 403, {"detail": "You don't have permission to edit this release", "error_code": ErrorCode.FORBIDDEN}
+
         # Return artifacts that can be added to this release (existing logic)
-        from sbomify.apps.core.models import Component
         from sbomify.apps.documents.models import Document
         from sbomify.apps.sboms.models import SBOM
 

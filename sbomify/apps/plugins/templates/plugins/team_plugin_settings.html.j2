@@ -1,3 +1,4 @@
+{% load humanize %}
 <form id="plugin-settings-form"
       class="flex min-w-0 flex-col gap-6"
       hx-post="{% url 'plugins:team_plugin_settings' team.key %}"
@@ -15,7 +16,7 @@
         {% for group in plugin_groups %}
             <c-cards.card flush class="overflow-hidden">
             <c-cards.header compact title="{{ group.grouper|default:'Other'|capfirst }}">
-            <c-badges.secondary>{{ group.list|length }}</c-badges.secondary>
+            <c-badges.secondary>{{ group.list|length|intcomma }}</c-badges.secondary>
             </c-cards.header>
             {% for plugin in group.list %}
                 <c-layout.select-row divided toggle_ref="toggle" :disabled="plugin.requires_upgrade" x_data="{ enabled: {{ plugin.is_enabled|yesno:'true,false' }} }">

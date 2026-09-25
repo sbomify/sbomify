@@ -1,7 +1,8 @@
+{% load humanize %}
 {% comment %}Server pagination reuses the library pager and native page-size select. The count describes the filtered result, not the workspace total.{% endcomment %}
 <c-vars inventory />
 <c-tables.footer>
-<c-tables.info role="status">Showing {{ inventory.page.start_index }} to {{ inventory.page.end_index }} of {{ inventory.page.paginator.count }}</c-tables.info>
+<c-tables.info role="status">Showing {{ inventory.page.start_index|intcomma }} to {{ inventory.page.end_index|intcomma }} of {{ inventory.page.paginator.count|intcomma }}</c-tables.info>
 <div class="flex flex-wrap items-center gap-4">
     <div class="flex items-center gap-2">
         <label for="{{ inventory.content_id|default:'inventory' }}-page-size" class="text-xs text-text-muted">Rows</label>

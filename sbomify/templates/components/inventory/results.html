@@ -33,7 +33,7 @@ headings so their minimum widths cannot clip the empty state on a small screen.
         <c-tables.row><c-tables.cell colspan="8">
         {% if inventory.total %}
             <c-feedback.empty-state compact icon_size="sm" icon="fas fa-cube" title="No matching {{ inventory.kind }}" message="Try another search or clear the filters.">
-            <c-buttons.secondary href="{{ inventory.reset_url }}" hx-boost="true">Clear filters</c-buttons.secondary>
+            <c-buttons.secondary href="{{ inventory.reset_url }}" hx-boost="true" hx-target="#{{ inventory.content_id }}">Clear filters</c-buttons.secondary>
             </c-feedback.empty-state>
         {% else %}
             <c-feedback.empty-state compact icon_size="sm" icon="fas fa-cube" title="No {{ inventory.kind }} yet" message="Create a {{ inventory.singular }} to get started." />

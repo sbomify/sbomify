@@ -403,13 +403,32 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         return False
 
 
+def current_period_end(subscription: Any) -> int | None:
+    """When the subscription's current period ends, as a Unix timestamp.
+
+    API version 2025-03-31 moved ``current_period_end`` from the subscription onto
+    each of its items. Requests use the pinned version, but webhook payloads follow
+    the endpoint's own, so both shapes arrive. Items can renew on different dates,
+    and the earliest end is the next renewal.
+    """
+
+    def field(obj: Any, name: str) -> Any:
+        # A StripeObject is a dict, so ``subscription.items`` is the dict method, not the items.
+        return obj.get(name) if isinstance(obj, dict) else getattr(obj, name, None)
+
+    if period_end := field(subscription, "current_period_end"):
+        return int(period_end)
+    items = field(field(subscription, "items"), "data") or []
+    return min((int(end) for item in items if (end := field(item, "current_period_end"))), default=None)
+
+
 def get_period_end_from_subscription(subscription: Any, subscription_id: str) -> str | None:
     """
     Extract period_end from subscription object, trying multiple methods.
 
     Priority:
     1. If cancel_at is set (subscription scheduled to cancel), use cancel_at
-    2. Otherwise, use current_period_end from subscription (dict or attribute access)
+    2. Otherwise, use current_period_end from the subscription or its items
     3. If not available, try to get from upcoming invoice (for next billing date)
     4. As last resort, use period_end from latest invoice (but this is past period)
 
@@ -432,12 +451,9 @@ def get_period_end_from_subscription(subscription: Any, subscription_id: str) ->
         period_end = cancel_at_value
         logger.debug("Using cancel_at as period_end")
 
-    # Priority 2: Try to get current_period_end from subscription
-    # Try both attribute access and dictionary access
+    # Priority 2: current_period_end, from the subscription or its items
     if not period_end:
-        period_end = getattr(subscription, "current_period_end", None)
-        if not period_end and isinstance(subscription, dict):
-            period_end = subscription.get("current_period_end")
+        period_end = current_period_end(subscription)
         if period_end:
             logger.debug("Using current_period_end")
 

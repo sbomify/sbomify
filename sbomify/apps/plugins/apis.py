@@ -624,11 +624,11 @@ def _resolve_dt_servers(team: Team | None = None) -> list[dict[str, Any]]:
     if plan_key != "enterprise":
         return []
 
-    from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+    from sbomify.apps.vulnerability_scanning.services import dt_servers_open_to
 
     return [
         {"value": str(s.id), "label": s.name or f"Server {s.id}"}
-        for s in DependencyTrackServer.objects.filter(is_active=True).order_by("priority", "name")
+        for s in dt_servers_open_to(team).order_by("priority", "name")
     ]
 
 

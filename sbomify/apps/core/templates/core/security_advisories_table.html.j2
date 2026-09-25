@@ -113,7 +113,7 @@
                     <span class="text-sm text-text-muted"
                           x-text="window.sbomifyFormatDate(advisory.updated)"></span>
                     <span class="text-xs text-text-muted/70"
-                          x-text="advisory.updates_count + (advisory.updates_count === 1 ? ' update' : ' updates')"></span>
+                          x-text="$number(advisory.updates_count) + (advisory.updates_count === 1 ? ' update' : ' updates')"></span>
                 </div>
                 </c-tables.cell>
                 {% comment %}
@@ -155,9 +155,9 @@
         </c-tables.table>
         <c-tables.footer>
         <c-tables.info>
-        Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
+        Showing <strong x-text="$number(startIndex)"></strong> to <strong x-text="$number(endIndex)"></strong> of <strong x-text="$number(filteredData.length)"></strong> entries
         <template x-if="search || filter !== 'all'">
-            <span>(filtered from <strong x-text="allAdvisories.length"></strong> total)</span>
+            <span>(filtered from <strong x-text="$number(allAdvisories.length)"></strong> total)</span>
         </template>
         </c-tables.info>
         {# Paging is client state here, so the buttons bind it rather than link to it. #}
@@ -172,7 +172,7 @@
                     <c-navigation.page-ellipsis />
                 </template>
                 <template x-if="page !== '...'">
-                    <c-navigation.page-button ::data-active="currentPage === page" @click="goToPage(page)" x-text="page" />
+                    <c-navigation.page-button ::data-active="currentPage === page" @click="goToPage(page)" x-text="$number(page)" />
                 </template>
             </template>
             <c-navigation.page-button nav label="Next page" ::disabled="currentPage === totalPages" @click="goToPage(currentPage + 1)">

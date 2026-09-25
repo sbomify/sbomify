@@ -158,14 +158,21 @@ def test_chrome_menus(authenticated_page: Page, width: int, theme: str) -> None:
     page.route("**/api/v1/notifications/", notifications)
     page.route("**/api/v1/notifications/clear/", clear)
     page.goto("/dashboard")
+    if width < 1024:
+        page.get_by_role("button", name="Toggle sidebar navigation").click()
+    expect(page.locator("#sidebar").get_by_role("link", name="API keys", exact=True)).to_have_attribute(
+        "href", re.compile("/settings/tokens$")
+    )
+    if width < 1024:
+        page.keyboard.press("Escape")
     account = page.get_by_role("button", name="Your account", exact=True)
     account.focus()
     page.keyboard.press("ArrowDown")
     menu = page.get_by_role("menu", name="User options")
     expect(menu.get_by_role("menuitem", name="My account settings")).to_be_focused()
-    expect(menu.get_by_role("menuitem", name="API tokens")).to_have_attribute("href", re.compile("/settings/tokens$"))
+    expect(menu.get_by_role("menuitem", name="API tokens")).to_have_count(0)
     page.keyboard.press("ArrowDown")
-    expect(menu.get_by_role("menuitem", name="API tokens")).to_be_focused()
+    expect(menu.get_by_role("menuitemradio", name="Light", exact=True)).to_be_focused()
     page.keyboard.press("Escape")
     expect(menu).to_be_hidden()
     expect(account).to_be_focused()
@@ -252,10 +259,15 @@ def test_notification_refresh_ignores_an_older_response(authenticated_page: Page
 @pytest.mark.django_db
 def test_clearing_notifications_reports_failure_and_keeps_the_list(authenticated_page: Page) -> None:
     page = authenticated_page
-    records = [{
-        "id": "example", "type": "alert", "message": "Example notification", "severity": "info",
-        "created_at": "2020-01-01T12:00:00Z",
-    }]
+    records = [
+        {
+            "id": "example",
+            "type": "alert",
+            "message": "Example notification",
+            "severity": "info",
+            "created_at": "2020-01-01T12:00:00Z",
+        }
+    ]
     page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=records))
     page.route("**/api/v1/notifications/clear/", lambda route: route.fulfill(status=503))
     page.goto("/dashboard")

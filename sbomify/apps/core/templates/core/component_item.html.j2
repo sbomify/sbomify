@@ -1,4 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
+{% load humanize %}
 {% load static %}
 {% load django_vite %}
 {% load advisory_tags %}
@@ -132,7 +133,7 @@
         {% if vulnerability_summary %}
             <div class="flex flex-col gap-4">
                 <c-layout.section-header level="2" title="Vulnerability scan">
-                <c-slot name="subtitle">{{ vulnerability_summary.total }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider|upper }}</c-slot>
+                <c-slot name="subtitle">{{ vulnerability_summary.total|intcomma }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider|upper }}</c-slot>
                 <c-slot name="actions">
                 <c-buttons.secondary size="sm" href="{% url 'sboms:sbom_vulnerabilities' item.id %}">
                 Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i>
@@ -157,7 +158,7 @@
                 <c-cards.header>
                 <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
                     Suppressed vulnerabilities
-                    <c-badges.secondary size="sm">{{ vex_suppressions|length }}</c-badges.secondary>
+                    <c-badges.secondary size="sm">{{ vex_suppressions|length|intcomma }}</c-badges.secondary>
                 </h4>
                 </c-cards.header>
                 {% if vex_suppressions %}
@@ -230,7 +231,7 @@
                     </c-tables.table>
                     <c-tables.footer>
                     <c-tables.info>
-                    Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+                    Showing <span x-text="$number(startIdx)"></span> to <span x-text="$number(endIdx)"></span> of <span x-text="$number(total)"></span>
                     </c-tables.info>
                     <c-tables.pager />
                     </c-tables.footer>
@@ -282,7 +283,6 @@
     </c-layout.frame>
 {% endblock %}
 {% block scripts %}
-    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% if is_sbom_backed %}
         {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
         {% vite_asset 'sbomify/apps/plugins/js/main.ts' %}

@@ -7,6 +7,7 @@ import intersect from '@alpinejs/intersect';
 import collapse from '@alpinejs/collapse';
 import anchor from '@alpinejs/anchor';
 import { parseJsonScript } from './utils';
+import { formatNumber } from './number-format';
 import { registerWebSocketStore } from './components/websocket-store';
 import { registerTooltipDirective } from './alpine-tooltip';
 import { registerConfirmModal } from './components/confirm-modal';
@@ -40,6 +41,8 @@ Alpine.plugin(focus);
 Alpine.plugin(intersect);
 Alpine.plugin(collapse);
 Alpine.plugin(anchor);
+
+Alpine.magic('number', () => formatNumber);
 
 // Register custom directives
 registerTooltipDirective(Alpine);
