@@ -376,7 +376,7 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
     try:
         team, billing_limits = _resolve_team_from_subscription(subscription)
 
-        valid_statuses = ["trialing", "active", "past_due", "canceled", "incomplete", "incomplete_expired"]
+        valid_statuses = LIVE_SUBSCRIPTION_STATUSES | TERMINAL_SUBSCRIPTION_STATUSES
         if subscription.status not in valid_statuses:
             raise StripeError(f"Invalid subscription status: {subscription.status}")
 
