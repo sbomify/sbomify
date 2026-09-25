@@ -2,9 +2,9 @@
 
 The downgrade read any Stripe failure as "this workspace has no subscription"
 and switched it to Community on the spot, publishing its components while the
-subscription kept billing. It now switches locally only when Stripe says the
-subscription is gone or ended, and otherwise schedules the cancellation on the
-subscription the workspace stored.
+subscription kept billing. It now switches locally only when the workspace
+stores no subscription or Stripe says the stored one is gone or ended, and
+otherwise schedules the cancellation on the subscription the workspace stored.
 """
 
 from __future__ import annotations
@@ -94,6 +94,26 @@ def test_any_other_stripe_error_changes_nothing(
     assert private_component.visibility == Component.Visibility.PRIVATE
 
 
+@pytest.mark.parametrize(
+    "error, status", [(BillingRetryableError("Could not connect"), 503), (StripeError("Bad"), 400)]
+)
+def test_a_failed_cancellation_changes_nothing(
+    ensure_billing_plans, team_with_business_plan, sample_user, private_component, error, status
+):
+    stripe = _stripe(subscription=_subscription("sub_test123", "active"))
+    stripe.modify_subscription.side_effect = error
+
+    response = _downgrade(team_with_business_plan, sample_user, stripe)
+
+    assert response.status_code == status
+    stripe.modify_subscription.assert_called_once_with("sub_test123", cancel_at_period_end=True)
+    team_with_business_plan.refresh_from_db()
+    private_component.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
+    assert private_component.visibility == Component.Visibility.PRIVATE
+
+
 def test_a_subscription_missing_at_stripe_downgrades_locally(
     ensure_billing_plans, team_with_business_plan, sample_user, private_component, scheduled_downgrade
 ):
@@ -132,6 +152,23 @@ def test_an_ended_subscription_downgrades_locally(
     assert limits["cancel_at_period_end"] is False
 
 
+def test_a_workspace_without_a_subscription_downgrades_without_asking_stripe(
+    ensure_billing_plans, team_with_business_plan, sample_user, private_component
+):
+    team_with_business_plan.billing_plan_limits = {"max_products": 10, "max_components": 100}
+    team_with_business_plan.save()
+    stripe = _stripe()
+
+    response = _downgrade(team_with_business_plan, sample_user, stripe)
+
+    assert response.status_code == 200
+    assert stripe.method_calls == []
+    team_with_business_plan.refresh_from_db()
+    private_component.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "community"
+    assert private_component.visibility == Component.Visibility.PUBLIC
+
+
 def test_the_downgrade_cancels_the_stored_subscription(ensure_billing_plans, team_with_business_plan, sample_user):
     stored = _subscription("sub_test123", "active")
     stripe = _stripe(subscription=stored, listed=[_subscription("sub_other", "active"), stored])
@@ -151,3 +188,29 @@ def test_the_downgrade_keeps_the_status_stripe_reports(ensure_billing_plans, tea
     limits = team_with_business_plan.billing_plan_limits
     assert limits["scheduled_downgrade_plan"] == "community"
     assert limits["subscription_status"] == "trialing"
+
+
+def test_the_downgrade_publishes_nothing_until_the_period_ends(
+    ensure_billing_plans, team_with_business_plan, sample_user, private_component
+):
+    stripe = _stripe(subscription=_subscription("sub_test123", "active"))
+
+    response = _downgrade(team_with_business_plan, sample_user, stripe)
+
+    assert response.status_code == 200
+    team_with_business_plan.refresh_from_db()
+    private_component.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+    assert private_component.visibility == Component.Visibility.PRIVATE
+
+
+def test_a_downgrade_already_scheduled_is_refused(
+    ensure_billing_plans, team_with_business_plan, sample_user, scheduled_downgrade
+):
+    stripe = _stripe(subscription=_subscription("sub_test123", "active"))
+
+    response = _downgrade(team_with_business_plan, sample_user, stripe)
+
+    assert response.status_code == 400
+    assert "already scheduled" in response.json()["detail"]
+    stripe.modify_subscription.assert_not_called()
