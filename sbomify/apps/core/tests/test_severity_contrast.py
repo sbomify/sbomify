@@ -23,10 +23,10 @@ from pathlib import Path
 import pytest
 
 STYLESHEET = Path(__file__).resolve().parents[3] / "assets" / "css" / "tailwind.src.css"
+COMPONENTS = Path(__file__).resolve().parents[3] / "templates" / "components"
 
 DARK_SURFACE = (30, 33, 50)
 WHITE = (255, 255, 255)
-TINT = 0.12
 
 # WCAG 2.1: 4.5 for text below 24px (badges are 12px), 3.0 for large text
 # (the 32px trend values) and for the fills' white label.
@@ -50,9 +50,34 @@ def contrast(foreground: tuple[float, ...], background: tuple[float, ...]) -> fl
     return (lighter + 0.05) / (darker + 0.05)
 
 
-def over(colour: tuple[int, ...], surface: tuple[int, ...]) -> tuple[float, ...]:
-    """The 12% tint the badge paints behind its own text."""
-    return tuple(TINT * colour[i] + (1 - TINT) * surface[i] for i in range(3))
+def over(colour: tuple[int, ...], surface: tuple[int, ...], tint: float) -> tuple[float, ...]:
+    """The tint a badge paints behind its own text."""
+    return tuple(tint * colour[i] + (1 - tint) * surface[i] for i in range(3))
+
+
+def painted_tints() -> set[float]:
+    """Every tint strength a component paints behind severity text.
+
+    Read out of the templates rather than hardcoded. c-badges.severity paints
+    12% and c-branded.badge paints 14%, and a ramp tuned only for the weaker one
+    fails on the stronger. A component added later with a third strength should
+    fail here, not on a customer's Trust Center.
+    """
+    found = set()
+    for template in COMPONENTS.rglob("*.html"):
+        body = template.read_text(encoding="utf-8")
+        for percent in re.findall(r"var\(--color-severity-[a-z]+\)_(\d+)%", body):
+            found.add(int(percent) / 100)
+        # c-branded.badge routes the token through --tone, so the percentage and
+        # the token name are not adjacent in the source.
+        if "--tone: " in body and "--color-severity-" in body:
+            for percent in re.findall(r"var\(--tone\)_(\d+)%", body):
+                found.add(int(percent) / 100)
+    # The 20%/32% border strengths come through the same patterns; only the
+    # strengths weak enough to sit behind text are a contrast question, and the
+    # border ones are always stronger, so they are a lower bound, not a risk.
+    assert found, "no severity tint found in the component library"
+    return {t for t in found if t <= 0.15}
 
 
 def _declarations(source: str, opener: str) -> dict[str, tuple[int, int, int]]:
@@ -94,17 +119,31 @@ def root(stylesheet: str) -> dict[str, tuple[int, int, int]]:
 
 
 @pytest.mark.parametrize("level", LEVELS)
-def test_dark_severity_text_is_readable_on_its_own_tint(dark, level: str) -> None:
+def test_dark_severity_text_is_readable_on_every_tint_in_use(dark, level: str) -> None:
     colour = dark[level]
-    assert contrast(colour, over(colour, DARK_SURFACE)) >= SMALL_TEXT
+    for tint in painted_tints():
+        assert contrast(colour, over(colour, DARK_SURFACE, tint)) >= SMALL_TEXT, tint
     assert contrast(colour, DARK_SURFACE) >= LARGE_TEXT
 
 
 @pytest.mark.parametrize("level", LEVELS)
-def test_light_severity_text_is_readable_on_its_own_tint(light, level: str) -> None:
+def test_light_severity_text_is_readable_on_every_tint_in_use(light, level: str) -> None:
     colour = light[level]
-    assert contrast(colour, over(colour, WHITE)) >= SMALL_TEXT
+    for tint in painted_tints():
+        assert contrast(colour, over(colour, WHITE, tint)) >= SMALL_TEXT, tint
     assert contrast(colour, WHITE) >= LARGE_TEXT
+
+
+def test_the_fill_ramp_survives_greyscale(root) -> None:
+    """Some fills carry no text of their own: a CVSS chip on an advisory with no
+    score prints a dash, and the row spine is aria-hidden. Colour is the only
+    signal there, so the ramp must separate by lightness too, or high and medium
+    are one colour to a red-green colour-blind reader and on a printed page."""
+    ordered = ["critical-fill", "high-fill", "medium-fill", "low-fill", "none-fill"]
+    luminances = [_relative_luminance(root[name]) for name in ordered]
+    assert luminances == sorted(luminances), "fill lightness must run with severity"
+    for first, second in zip(ordered, ordered[1:]):
+        assert contrast(root[first], root[second]) >= 1.2, f"{first} and {second} are too close"
 
 
 @pytest.mark.parametrize("level", LEVELS)

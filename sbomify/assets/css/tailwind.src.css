@@ -178,10 +178,10 @@
      Tailwind-scanned source mentions is tree-shaken out of the build, and every
      rule reading it would fall back to transparent. Verified against the
      production build, not assumed. */
-  --color-severity-critical-fill: rgb(185 28 28);  /* 6.47 under white text */
-  --color-severity-high-fill: rgb(172 81 6);       /* 5.34 */
-  --color-severity-medium-fill: rgb(138 101 8);    /* 5.32 */
-  --color-severity-low-fill: rgb(14 116 144);      /* 5.36 */
+  --color-severity-critical-fill: rgb(111 19 28);  /* 11.76 under white text */
+  --color-severity-high-fill: rgb(114 54 4);       /* 9.35 */
+  --color-severity-medium-fill: rgb(107 81 3);     /* 7.49 */
+  --color-severity-low-fill: rgb(10 109 129);      /* 5.97 */
   --color-severity-none-fill: rgb(100 116 139);    /* 4.76 */
 
   /* Primary Brand Colors */
@@ -308,13 +308,15 @@
   /* Severity text, light theme. The dark ramp was chosen against a near-black
      background; reused on white it measured 1.53 to 3.81 as badge text, all
      below the 4.5 it needs at 12px. These are the same four hues taken down
-     until each clears 4.5:1 on its own 12% tint and 3:1 on plain white, so a
-     32px trend value passes too. The badge always prints its level as text,
+     until each clears 4.5:1 on the strongest tint any component paints behind
+     it and 3:1 on plain white, so a 32px trend value passes too. Two tints are
+     in use: c-badges.severity paints 12%, c-branded.badge paints 14%, and the
+     14% one is the binding constraint. The badge always prints its level as text,
      so hue never carries the meaning alone. */
-  --color-severity-critical: rgb(185 28 28);    /* 5.28 on tint, 6.47 on white */
-  --color-severity-high: rgb(172 81 6);         /* 4.51, 5.34 */
-  --color-severity-medium: rgb(138 101 8);      /* 4.53, 5.32 */
-  --color-severity-low: rgb(14 116 144);        /* 4.54, 5.36 */
+  --color-severity-critical: rgb(197 39 54);    /* 4.52 on a 14% tint, 5.65 on white */
+  --color-severity-high: rgb(168 80 6);         /* 4.51, 5.50 */
+  --color-severity-medium: rgb(133 100 3);      /* 4.54, 5.50 */
+  --color-severity-low: rgb(11 115 136);        /* 4.51, 5.49 */
 
   /* Alert backgrounds (same across themes) */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */
