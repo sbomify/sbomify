@@ -118,6 +118,7 @@ def test_bot_gets_the_public_view_of_a_public_product_it_does_not_publish_to(bot
         assert _get(f"/api/v1/releases/{public_other_release.id}/{path}", bot_token).status_code == 200, path
     assert builders["sbom"].call_args.kwargs["include_non_public"] is False
     assert builders["vex"].call_args.kwargs["include_non_public"] is False
+    assert builders["cbom"].call_args.kwargs["include_non_public"] is False
 
 
 def test_bot_reads_the_whole_release_of_a_product_holding_its_component(bot_token, own_release, builders):
@@ -125,6 +126,19 @@ def test_bot_reads_the_whole_release_of_a_product_holding_its_component(bot_toke
         assert _get(f"/api/v1/releases/{own_release.id}/{path}", bot_token).status_code == 200, path
     assert builders["sbom"].call_args.kwargs["include_non_public"] is True
     assert builders["vex"].call_args.kwargs["include_non_public"] is True
+    assert builders["cbom"].call_args.kwargs["include_non_public"] is True
+
+
+@pytest.mark.parametrize(("publishes_to_it", "fixture"), [(True, "bound_component"), (False, "other_component")])
+def test_bot_product_cbom_audience_follows_its_binding(publishes_to_it, fixture, bot_token, builders, request):
+    """The product CBOM serves the latest release's CBOM, so the release rule picks its audience too.
+
+    Public products only: the product downloads refuse the bot on a private product.
+    """
+    product = _release(request.getfixturevalue(fixture), is_public=True).product
+
+    assert _get(f"/api/v1/products/{product.id}/cbom/download", bot_token).status_code == 200
+    assert builders["cbom"].call_args.kwargs["include_non_public"] is publishes_to_it
 
 
 def test_bot_without_a_binding_is_denied_its_own_product(bot_token, own_release, builders, mocker):

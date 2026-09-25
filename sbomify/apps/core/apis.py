@@ -2840,7 +2840,7 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
 
     release = Release.get_or_create_latest_release(product)
     include_non_public = bool(
-        getattr(request, "user", None) and request.user.is_authenticated and can(request, "release:read", product)
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, product)
     )
     document = _release_cbom_document(release, version, include_non_public=include_non_public)
     if document is None:
@@ -3875,9 +3875,7 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     include_non_public = bool(
-        getattr(request, "user", None)
-        and request.user.is_authenticated
-        and can(request, "release:read", release.product)
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
     )
     document = _release_cbom_document(release, version, include_non_public=include_non_public)
     if document is None:
