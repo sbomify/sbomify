@@ -5,7 +5,7 @@ and actions; only the columns that describe their domain differ. Links use real
 detail routes. No row is itself clickable, so menus and keyboard links stay independent.
 {% endcomment %}
 <c-vars row kind scope_product />
-<c-tables.row>
+<c-tables.row class="group">
 <c-tables.cell compact>
 <div class="min-w-40 max-w-72">
     <c-overview.record href="{{ row.url }}" title="{{ row.name }}" />
@@ -81,5 +81,5 @@ detail routes. No row is itself clickable, so menus and keyboard links stay inde
     <c-tables.cell compact><span class="whitespace-nowrap text-xs text-text-muted">{{ row.release_type }}</span></c-tables.cell>
 {% endif %}
 <c-tables.cell compact date muted><time datetime="{{ row.created_at|date:'c' }}">{{ row.created_at|date:'j M Y' }}</time></c-tables.cell>
-<c-tables.actions-cell compact><c-inventory.actions :row="row" kind="{{ kind }}" scope_product="{{ scope_product }}" /></c-tables.actions-cell>
+<c-tables.actions-cell compact pinned><c-inventory.actions :row="row" kind="{{ kind }}" scope_product="{{ scope_product }}" /></c-tables.actions-cell>
 </c-tables.row>

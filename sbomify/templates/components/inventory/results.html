@@ -22,7 +22,7 @@ headings so their minimum widths cannot clip the empty state on a small screen.
                     class="{% if header.key == 'name' %}{% elif header.key == 'vulnerabilities' %}w-48{% elif header.key == 'past_sla' %}w-24{% elif header.key == 'stale' or header.key == 'scan_label' %}w-36{% elif header.key == 'created_at' or header.key == 'freshness_label' %}w-32{% else %}w-28{% endif %}">{{ header.label }}</c-tables.header-cell>
                 {# djlint:on #}
             {% endfor %}
-            <c-tables.actions-cell as="th" compact />
+            <c-tables.actions-cell as="th" compact pinned />
         </tr>
     </thead>
 {% endif %}
