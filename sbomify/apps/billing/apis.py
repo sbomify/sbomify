@@ -180,7 +180,12 @@ def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, An
             team.billing_plan = "community"
             existing_limits = billing_limits.copy()
             existing_limits.update(get_community_plan_limits())
-            if subscription_missing:
+            # The downgrade happens now, so nothing is left scheduled.
+            existing_limits.pop("scheduled_downgrade_plan", None)
+            existing_limits["cancel_at_period_end"] = False
+            if subscription is not None:
+                existing_limits["subscription_status"] = subscription.status
+            elif subscription_missing:
                 # Stripe has no such subscription, so forget both ids, as the sync's reconcile does.
                 existing_limits.pop("stripe_subscription_id", None)
                 existing_limits.pop("stripe_customer_id", None)

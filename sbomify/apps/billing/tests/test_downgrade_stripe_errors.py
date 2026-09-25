@@ -59,6 +59,15 @@ def private_component(team_with_business_plan):
     return Component.objects.create(name="app", team=team_with_business_plan, visibility=Component.Visibility.PRIVATE)
 
 
+@pytest.fixture
+def scheduled_downgrade(team_with_business_plan):
+    team_with_business_plan.billing_plan_limits |= {
+        "cancel_at_period_end": True,
+        "scheduled_downgrade_plan": "community",
+    }
+    team_with_business_plan.save()
+
+
 def test_a_transient_stripe_error_changes_nothing(
     ensure_billing_plans, team_with_business_plan, sample_user, private_component
 ):
@@ -86,7 +95,7 @@ def test_any_other_stripe_error_changes_nothing(
 
 
 def test_a_subscription_missing_at_stripe_downgrades_locally(
-    ensure_billing_plans, team_with_business_plan, sample_user, private_component
+    ensure_billing_plans, team_with_business_plan, sample_user, private_component, scheduled_downgrade
 ):
     response = _downgrade(
         team_with_business_plan, sample_user, _stripe(error=StripeResourceMissingError("No such subscription"))
@@ -101,10 +110,15 @@ def test_a_subscription_missing_at_stripe_downgrades_locally(
     assert "stripe_subscription_id" not in limits
     assert "stripe_customer_id" not in limits
     assert limits["subscription_status"] == "canceled"
+    assert "scheduled_downgrade_plan" not in limits
+    assert limits["cancel_at_period_end"] is False
 
 
-def test_an_ended_subscription_downgrades_locally(ensure_billing_plans, team_with_business_plan, sample_user):
-    stripe = _stripe(subscription=_subscription("sub_test123", "canceled"))
+@pytest.mark.parametrize("status", ["canceled", "incomplete_expired"])
+def test_an_ended_subscription_downgrades_locally(
+    ensure_billing_plans, team_with_business_plan, sample_user, scheduled_downgrade, status
+):
+    stripe = _stripe(subscription=_subscription("sub_test123", status))
 
     response = _downgrade(team_with_business_plan, sample_user, stripe)
 
@@ -112,6 +126,10 @@ def test_an_ended_subscription_downgrades_locally(ensure_billing_plans, team_wit
     stripe.modify_subscription.assert_not_called()
     team_with_business_plan.refresh_from_db()
     assert team_with_business_plan.billing_plan == "community"
+    limits = team_with_business_plan.billing_plan_limits
+    assert limits["subscription_status"] == status
+    assert "scheduled_downgrade_plan" not in limits
+    assert limits["cancel_at_period_end"] is False
 
 
 def test_the_downgrade_cancels_the_stored_subscription(ensure_billing_plans, team_with_business_plan, sample_user):
