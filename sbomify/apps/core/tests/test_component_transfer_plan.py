@@ -1,16 +1,22 @@
 """Transferring a component follows the receiving workspace's plan.
 
-The receiving workspace's component limit applies, and a workspace that cannot
-hold private items receives the component as public.
+The receiving workspace gets the same billing checks as creating a component
+there, and a workspace that cannot hold private items receives the component
+as public.
 """
 
 from __future__ import annotations
 
+import datetime
+
 import pytest
+from django.conf import settings
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.core.apis import _enforce_limit_under_lock
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.sboms.models import Component
@@ -27,6 +33,12 @@ def _transfer(user, component: Component, target: Team):
     )
 
 
+def _paid_workspace(owner, **billing_plan_limits) -> Team:
+    workspace = Team.objects.create(name="Other paid", billing_plan="business", billing_plan_limits=billing_plan_limits)
+    Member.objects.create(team=workspace, user=owner, role="owner")
+    return workspace
+
+
 def test_a_workspace_at_its_component_limit_receives_nothing(
     sample_user, team_with_business_plan, team_with_community_plan
 ):
@@ -38,6 +50,31 @@ def test_a_workspace_at_its_component_limit_receives_nothing(
     response = _transfer(sample_user, component, team_with_community_plan)
 
     assert response.status_code == 403
+    component.refresh_from_db()
+    assert component.team == team_with_business_plan
+
+
+def test_a_workspace_suspended_for_payment_receives_nothing(sample_user, team_with_business_plan):
+    failed_at = timezone.now() - datetime.timedelta(days=settings.PAYMENT_GRACE_PERIOD_DAYS + 1)
+    target = _paid_workspace(sample_user, subscription_status="past_due", payment_failed_at=failed_at.isoformat())
+    component = Component.objects.create(name="moving", team=team_with_business_plan)
+
+    response = _transfer(sample_user, component, target)
+
+    assert response.status_code == 403
+    assert b"suspended due to payment failure" in response.content
+    component.refresh_from_db()
+    assert component.team == team_with_business_plan
+
+
+def test_a_key_with_no_workspace_behind_it_is_refused(sample_user, team_with_business_plan):
+    # The same answer as for a workspace the caller does not administer.
+    component = Component.objects.create(name="moving", team=team_with_business_plan)
+
+    response = _transfer(sample_user, component, Team(key=number_to_random_token(10**9)))
+
+    assert response.status_code == 403
+    assert b"Only allowed for admins or owners of the target team" in response.content
     component.refresh_from_db()
     assert component.team == team_with_business_plan
 
@@ -56,10 +93,7 @@ def test_a_workspace_that_cannot_hold_private_items_receives_it_public(
 
 
 def test_a_paid_workspace_keeps_the_component_private(sample_user, team_with_business_plan, ensure_billing_plans):
-    target = Team.objects.create(name="Other paid", billing_plan="business")
-    target.key = number_to_random_token(target.pk)
-    target.save(update_fields=["key"])
-    Member.objects.create(team=target, user=sample_user, role="owner")
+    target = _paid_workspace(sample_user)
     component = Component.objects.create(
         name="moving", team=team_with_business_plan, visibility=Component.Visibility.PRIVATE
     )
@@ -69,3 +103,25 @@ def test_a_paid_workspace_keeps_the_component_private(sample_user, team_with_bus
     component.refresh_from_db()
     assert component.team == target
     assert component.visibility == Component.Visibility.PRIVATE
+
+
+def test_the_plan_that_decides_visibility_is_read_under_the_lock(
+    sample_user, team_with_business_plan, ensure_billing_plans, mocker
+):
+    target = _paid_workspace(sample_user)
+    component = Component.objects.create(
+        name="moving", team=team_with_business_plan, visibility=Component.Visibility.PRIVATE
+    )
+
+    def downgrade_then_take_lock(team_id: str, resource_type: str):
+        # The plan changes after the view has read the workspace and before it locks it.
+        Team.objects.filter(pk=target.pk).update(billing_plan="community")
+        return _enforce_limit_under_lock(team_id, resource_type)
+
+    mocker.patch("sbomify.apps.core.views._enforce_limit_under_lock", side_effect=downgrade_then_take_lock)
+
+    _transfer(sample_user, component, target)
+
+    component.refresh_from_db()
+    assert component.team == target
+    assert component.visibility == Component.Visibility.PUBLIC
