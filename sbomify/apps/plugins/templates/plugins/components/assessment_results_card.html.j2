@@ -10,8 +10,14 @@
     finishes several plugins at once broadcasts once per plugin. hx-select
     because this template also emits the card's stylesheet link, which belongs
     to the page rather than to the region being swapped.
+
+    hx-disinherit because htmx passes hx-select and hx-swap down to descendants.
+    Each run's findings panel does its own hx-get when the reader opens the card,
+    and inheriting this select would have it look for #assessment-results in that
+    response and find nothing, so the panel never fills: the controls the reader
+    came for are simply absent.
 {% endcomment %}
-<c-layout.frame id="assessment-results" x-data hx-get="{% url 'plugins:assessment_results_card' sbom_id %}" hx-trigger="refresh-assessments from:body" hx-select="#assessment-results" hx-swap="morph" @ws:message.window=" if ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ sbom_id }}') { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
+<c-layout.frame id="assessment-results" x-data hx-get="{% url 'plugins:assessment_results_card' sbom_id %}" hx-trigger="refresh-assessments from:body" hx-select="#assessment-results" hx-swap="morph" hx-disinherit="hx-select hx-swap" @ws:message.window=" if ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ sbom_id }}') { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
 <c-layout.section-header level="2" title="Assessments">
 <c-slot name="actions">
 {% with status=assessment_runs.status_summary %}
