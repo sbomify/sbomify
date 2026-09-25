@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -87,6 +88,14 @@ def _browser(user=None) -> Client:
 
 def _post_json(client: Client, url: str, payload: dict) -> object:
     return client.post(url, json.dumps(payload), content_type="application/json")
+
+
+def _assert_sends_to_sign_in(response, then: str) -> None:
+    """The response sends the visitor to sign in, which then returns them to `then`."""
+    assert response.status_code == 302
+    location = urlsplit(response.url)
+    assert location.path == reverse("core:keycloak_login")
+    assert parse_qs(location.query) == {"next": [then]}
 
 
 def test_anonymous_api_request_cannot_act_for_an_existing_account(team_with_business_plan, guest_user):
@@ -179,7 +188,7 @@ def test_anonymous_page_post_creates_nothing(team_with_business_plan):
 
     response = _browser().post(url, {"email": "visitor@example.com", "name": "Visitor"})
 
-    assert response.status_code == 302
+    _assert_sends_to_sign_in(response, then=url)
     assert not get_user_model().objects.filter(email="visitor@example.com").exists()
     assert not AccessRequest.objects.filter(team=team_with_business_plan).exists()
 
@@ -188,20 +197,23 @@ def _page_url(team, access_request) -> str:
     return reverse("documents:sign_nda", kwargs={"team_key": team.key, "request_id": access_request.id})
 
 
-def test_anonymous_caller_is_sent_to_sign_in_from_the_nda_page(team_with_business_plan, company_nda, pending_request):
-    response = Client().get(_page_url(team_with_business_plan, pending_request))
+# Sign-in has to return the visitor to the whole link, escaped characters included.
+NDA_PAGE_QUERY = "?a=1&b=two%20words&c=%2Fpath"
 
-    assert response.status_code == 302
-    assert response.url.startswith(reverse("core:keycloak_login"))
+
+def test_anonymous_caller_is_sent_to_sign_in_from_the_nda_page(team_with_business_plan, company_nda, pending_request):
+    url = _page_url(team_with_business_plan, pending_request) + NDA_PAGE_QUERY
+
+    response = Client().get(url)
+
+    _assert_sends_to_sign_in(response, then=url)
 
 
 def test_anonymous_page_post_cannot_sign_a_pending_nda(team_with_business_plan, company_nda, pending_request):
+    url = _page_url(team_with_business_plan, pending_request) + NDA_PAGE_QUERY
     with patch("sbomify.apps.documents.views.access_requests.StorageClient") as storage:
         storage.return_value.get_document_data.return_value = NDA_CONTENT
-        response = _browser().post(
-            _page_url(team_with_business_plan, pending_request), {"signed_name": "Someone", "consent": "on"}
-        )
+        response = _browser().post(url, {"signed_name": "Someone", "consent": "on"})
 
-    assert response.status_code == 302
-    assert response.url.startswith(reverse("core:keycloak_login"))
+    _assert_sends_to_sign_in(response, then=url)
     assert not NDASignature.objects.filter(access_request=pending_request).exists()
