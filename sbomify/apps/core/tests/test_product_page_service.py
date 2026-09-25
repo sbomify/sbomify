@@ -44,7 +44,16 @@ def test_product_metrics_remain_unfiltered_and_releases_use_their_own_artifacts(
     ReleaseArtifact.objects.create(release=release, sbom=old)
     result = context(member, product, search="Clean")
     assert [row["id"] for row in result["inventory"]["rows"]] == [clean.id]
-    assert result["metrics"] == {"components": 4, "artifacts": 3, "open": 1, "past_sla": 0, "unassessed": 1}
+    # unmeasured is False because a component here has a completed scan: the
+    # counts are a real answer rather than a not-scanned-yet placeholder.
+    assert result["metrics"] == {
+        "components": 4,
+        "artifacts": 3,
+        "open": 1,
+        "past_sla": 0,
+        "unassessed": 1,
+        "unmeasured": False,
+    }
     row = next(row for row in result["release_inventory"]["rows"] if row["id"] == release.id)
     assert row["counts"]["high"] == 1
     result = context(member, product, risk="unassessed")

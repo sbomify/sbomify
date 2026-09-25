@@ -61,6 +61,13 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
         "open": sum(row["vulnerabilities"] for row in security_rows),
         "past_sla": sum(row["past_sla"] for row in security_rows),
         "unassessed": sum(row["unassessed"] for row in security_rows),
+        # Nothing scanned yet is not the same as nothing found. The counts above
+        # read the newest SBOM per component, so they drop to 0 the moment an
+        # SBOM is uploaded and stay there until its scan completes, which is the
+        # normal state after every upload. Printing 0 on the security surface of
+        # a product whose shipped release carries findings is worse than
+        # printing nothing, so the cards say so instead.
+        "unmeasured": not any(row["assessed"] for row in security_rows),
     }
     product_tei = get_product_tei_urn(product_id, workspace.id)
     copy_values = [{"value": product_id, "title": f"Product ID: {product_id} (click to copy)"}]

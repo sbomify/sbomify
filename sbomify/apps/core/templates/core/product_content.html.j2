@@ -35,8 +35,10 @@
 <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
     <c-layout.stat-card label="Components" :value="metrics.components" icon="fas fa-cube" />
     <c-layout.stat-card label="Artifacts" :value="metrics.artifacts" icon="fas fa-file-lines" />
-    <c-layout.stat-card label="Open vulnerabilities" :value="metrics.open" icon="fas fa-crosshairs" accent="warning" />
-    <c-layout.stat-card label="Past your patch SLA" :value="metrics.past_sla" icon="fas fa-clock" accent="danger" />
+    {# djlint:off #}
+    <c-layout.stat-card label="Open vulnerabilities" :value="metrics.open" :unmeasured="metrics.unmeasured" unmeasured_label="No completed scan yet" icon="fas fa-crosshairs" accent="warning" />
+    <c-layout.stat-card label="Past your patch SLA" :value="metrics.past_sla" :unmeasured="metrics.unmeasured" unmeasured_label="No completed scan yet" icon="fas fa-clock" accent="danger" />
+    {# djlint:on #}
 </div>
 {% if metrics.unassessed %}
     <c-feedback.alert variant="warning">{{ metrics.unassessed|intcomma }} component{{ metrics.unassessed|pluralize }} still need{{ metrics.unassessed|pluralize:'s,' }} a completed security assessment.</c-feedback.alert>
