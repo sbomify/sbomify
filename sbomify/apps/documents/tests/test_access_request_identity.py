@@ -15,7 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.test import Client
+from django.middleware.csrf import get_token
+from django.test import Client, RequestFactory
 from django.urls import reverse
 
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
@@ -73,19 +74,29 @@ def _nda_url(team, access_request) -> str:
     return reverse("api-1:get_nda_for_signing", kwargs={"team_key": team.key, "request_id": access_request.id})
 
 
+def _browser(user=None) -> Client:
+    """A client that sends a valid CSRF token, as any visitor's browser can, signed in as `user` if given."""
+    token = get_token(RequestFactory().get("/"))
+    client = Client(enforce_csrf_checks=True, headers={"X-CSRFToken": token})
+    client.cookies["csrftoken"] = token
+    if user is not None:
+        client.force_login(user)
+    return client
+
+
 def _post_json(client: Client, url: str, payload: dict) -> object:
     return client.post(url, json.dumps(payload), content_type="application/json")
 
 
 def test_anonymous_api_request_cannot_act_for_an_existing_account(team_with_business_plan, guest_user):
-    response = _post_json(Client(), _create_url(team_with_business_plan), {"email": guest_user.email})
+    response = _post_json(_browser(), _create_url(team_with_business_plan), {"email": guest_user.email})
 
     assert response.status_code == 401
     assert not AccessRequest.objects.filter(team=team_with_business_plan, user=guest_user).exists()
 
 
 def test_anonymous_api_request_creates_no_account(team_with_business_plan):
-    response = _post_json(Client(), _create_url(team_with_business_plan), {"email": "someone@example.com"})
+    response = _post_json(_browser(), _create_url(team_with_business_plan), {"email": "someone@example.com"})
 
     assert response.status_code == 401
     assert not get_user_model().objects.filter(email="someone@example.com").exists()
@@ -93,7 +104,7 @@ def test_anonymous_api_request_creates_no_account(team_with_business_plan):
 
 def test_anonymous_caller_cannot_sign_a_pending_nda(team_with_business_plan, company_nda, pending_request, nda_storage):
     response = _post_json(
-        Client(), _sign_url(team_with_business_plan, pending_request), {"signed_name": "Someone", "consent": True}
+        _browser(), _sign_url(team_with_business_plan, pending_request), {"signed_name": "Someone", "consent": True}
     )
 
     assert response.status_code == 401
@@ -103,14 +114,14 @@ def test_anonymous_caller_cannot_sign_a_pending_nda(team_with_business_plan, com
 def test_signed_in_user_cannot_sign_another_users_nda(
     team_with_business_plan, company_nda, pending_request, nda_storage, sample_user
 ):
-    client = Client()
-    client.force_login(sample_user)
+    client = _browser(sample_user)
 
     response = _post_json(
         client, _sign_url(team_with_business_plan, pending_request), {"signed_name": "Someone", "consent": True}
     )
 
     assert response.status_code == 403
+    assert response.json()["detail"] == "Forbidden"
     assert not NDASignature.objects.filter(access_request=pending_request).exists()
 
 
@@ -123,8 +134,7 @@ def test_anonymous_caller_cannot_fetch_the_nda(team_with_business_plan, company_
 def test_requester_can_still_sign_their_own_nda(
     team_with_business_plan, company_nda, pending_request, nda_storage, guest_user
 ):
-    client = Client()
-    client.force_login(guest_user)
+    client = _browser(guest_user)
 
     response = _post_json(
         client, _sign_url(team_with_business_plan, pending_request), {"signed_name": "Guest", "consent": True}
@@ -135,8 +145,7 @@ def test_requester_can_still_sign_their_own_nda(
 
 
 def test_signed_in_api_request_still_works(team_with_business_plan, guest_user):
-    client = Client()
-    client.force_login(guest_user)
+    client = _browser(guest_user)
 
     response = _post_json(client, _create_url(team_with_business_plan), {})
 
@@ -147,7 +156,7 @@ def test_signed_in_api_request_still_works(team_with_business_plan, guest_user):
 def test_anonymous_page_post_creates_nothing(team_with_business_plan):
     url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
 
-    response = Client().post(url, {"email": "visitor@example.com", "name": "Visitor"})
+    response = _browser().post(url, {"email": "visitor@example.com", "name": "Visitor"})
 
     assert response.status_code == 302
     assert not get_user_model().objects.filter(email="visitor@example.com").exists()
@@ -168,7 +177,7 @@ def test_anonymous_caller_is_sent_to_sign_in_from_the_nda_page(team_with_busines
 def test_anonymous_page_post_cannot_sign_a_pending_nda(team_with_business_plan, company_nda, pending_request):
     with patch("sbomify.apps.documents.views.access_requests.StorageClient") as storage:
         storage.return_value.get_document_data.return_value = NDA_CONTENT
-        response = Client().post(
+        response = _browser().post(
             _page_url(team_with_business_plan, pending_request), {"signed_name": "Someone", "consent": "on"}
         )
 
