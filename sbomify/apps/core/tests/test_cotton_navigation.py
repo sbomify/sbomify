@@ -12,7 +12,7 @@ import pytest
 from django.template.loader import render_to_string
 
 TAB = "relative shrink-0 whitespace-nowrap px-0 py-4 text-sm font-medium border-b-2 border-solid"
-CELL = "flex items-center justify-center min-w-8 h-8 px-2 rounded-md border border-solid border-transparent"
+CELL = "flex items-center justify-center min-w-8 h-8 max-sm:min-w-11 max-sm:min-h-11 px-2 rounded-md border border-solid border-transparent"
 CIRCLE = "relative shrink-0 flex items-center justify-center w-10 h-10 rounded-full"
 TRIGGER = "group flex w-full items-center justify-between px-6 py-5 text-left"
 RAIL = "flex-1 h-[3px] rounded-full overflow-hidden"
@@ -544,7 +544,7 @@ def test_segment_resting_ink_is_not_the_important_utility(rendered: str) -> None
 
 def test_segment_states_its_line_height_and_the_pill_shape(rendered: str) -> None:
     seg = _nav_probe(rendered, "segment")
-    assert "px-4 py-1.5 min-h-8 text-[0.8125rem] leading-5 font-medium rounded-md" in seg
+    assert "px-4 py-1.5 min-h-8 max-sm:min-h-11 text-[0.8125rem] leading-5 font-medium rounded-md" in seg
     assert "border-b" not in seg
 
 

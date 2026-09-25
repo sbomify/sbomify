@@ -1424,6 +1424,10 @@ first-of-type rule that drops the leading hairline reads the section's position
             <c-feedback.loading-page message="Loading page content..." />
             <c-code-inline>&lt;c-feedback.loading-page&gt;</c-code-inline>
         </div>
+        <div class="flex min-w-0 flex-col gap-3">
+            <c-feedback.loading-page heading sublines="3" :sections="loading_page_sections" message="Loading a catalogue..." />
+            <c-code-inline>&lt;c-feedback.loading-page heading sublines="3" :sections="[3, 1]"&gt;</c-code-inline>
+        </div>
         <c-cards.card title="Skeleton primitives">
         <div class="flex flex-col gap-4">
             <div class="flex items-start gap-3">

@@ -7,17 +7,28 @@ release and component inventory tabs. Capability flags are live, so this compone
      @click="sidebarMobileOpen = false"
      class="fixed inset-0 bg-navy/50 backdrop-blur-sm z-40 lg:hidden"
      aria-hidden="true"></div>
+{% comment %}
+The drawer moves focus to its own close button when it opens. x-trap holds
+focus inside once it is there, but cannot place it: the rail is still
+`invisible` in the frame the trap arms in, and an invisible element has no
+focusable children. The deferred callback re-reads the open state before
+focusing, because a drawer dismissed during its opening transition would
+otherwise pull focus back out of the page. See docs/ui-change-considerations.md.
+{% endcomment %}
 <aside id="sidebar"
        aria-label="Main navigation"
        :data-mobile-open="sidebarMobileOpen"
        x-trap.inert.noscroll="sidebarMobileOpen"
+       x-effect="if (sidebarMobileOpen) $nextTick(() => { if (sidebarMobileOpen) $refs.drawerClose?.focus() })"
        class="invisible lg:visible data-[mobile-open=true]:visible fixed inset-y-0 left-0 z-50 w-[var(--sidebar-width)] -translate-x-full data-[mobile-open=true]:translate-x-0 lg:translate-x-0 transition-transform duration-200 bg-surface border-r border-border flex flex-col">
     <div class="h-16 flex items-center px-6 shrink-0">
-        <a href="{% url 'core:dashboard' %}" aria-label="sbomify home">
+        <a href="{% url 'core:dashboard' %}"
+           aria-label="sbomify home"
+           class="inline-flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
             {% include 'core/components/brand/logo.html.j2' with class='h-6 w-auto text-text' %}
         </a>
         <div class="lg:hidden ml-auto">
-            <c-buttons.icon label="Close sidebar" @click="sidebarMobileOpen = false"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon>
+            <c-buttons.icon label="Close sidebar" x-ref="drawerClose" @click="sidebarMobileOpen = false"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon>
         </div>
     </div>
     <div class="px-3 pb-2">

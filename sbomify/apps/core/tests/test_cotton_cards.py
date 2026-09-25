@@ -183,14 +183,14 @@ def test_dangerzone_repaints_its_header_and_body(rendered: str) -> None:
 
 def test_dangerzone_header_ink_is_danger(rendered: str) -> None:
     header = _card_holding(rendered, "Danger body")
-    assert 'class="fas fa-exclamation-triangle text-danger"' in header
-    assert 'class="text-lg font-semibold m-0 text-danger"' in header
+    assert 'class="fas fa-exclamation-triangle text-danger-ink"' in header
+    assert 'class="text-lg font-semibold m-0 text-danger-ink"' in header
     assert "text-text-muted mr-2" not in header
 
 
 def test_dangerzone_icon_prop_overrides_the_warning_default(rendered: str) -> None:
     header = _card_holding(rendered, "Skulled")
-    assert 'class="fas fa-skull text-danger"' in header
+    assert 'class="fas fa-skull text-danger-ink"' in header
 
 
 def test_dangerzone_header_part_paints_the_same_band_as_the_title_header(rendered: str) -> None:
