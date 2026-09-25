@@ -33,7 +33,7 @@ IPV6_GLOBAL_UNICAST = ipaddress.IPv6Network("2000::/3")
 
 
 def _public_address(domain: str) -> str | None:
-    """The first address the domain resolves to that is on the public internet."""
+    """The domain's first public address in getaddrinfo's order, the one a plain connection tries first."""
     try:
         resolved = socket.getaddrinfo(domain, 443, type=socket.SOCK_STREAM)
     except (OSError, UnicodeError):
