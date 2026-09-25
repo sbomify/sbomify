@@ -155,6 +155,19 @@ def test_a_payment_after_the_cancellation_is_recorded_without_reactivating_it(wo
     notify.assert_called_once_with(workspace, email_notifications.notify_payment_succeeded)
 
 
+def test_a_trial_that_expired_here_gets_its_plan_back_when_stripe_converts_it(workspace):
+    # The trial ended here before Stripe's conversion events arrived.
+    trialing = _subscription("trialing", trial_end=100)
+    billing_processing.handle_subscription_updated(trialing, event=_event("evt_trial", 90))
+    # Stripe charges an hour after the trial ends, and that payment lands before the update.
+    billing_processing.handle_payment_succeeded(_invoice(), event=_event("evt_paid", 3700))
+    billing_processing.handle_subscription_updated(_subscription("active"), event=_event("evt_active", 100))
+
+    workspace.refresh_from_db()
+    assert workspace.billing_plan_limits["subscription_status"] == "active"
+    assert workspace.billing_plan == "business"
+
+
 def test_a_late_payment_does_not_let_the_newest_event_apply_twice(workspace, notify):
     deleted = _event("evt_deleted", 200)
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
