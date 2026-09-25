@@ -721,6 +721,9 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                 with transaction.atomic():
                     team = Team.objects.select_for_update().get(pk=team.pk)
                     billing_limits = (team.billing_plan_limits or {}).copy()
+                    if _was_applied(billing_limits, webhook_id, created):
+                        logger.info("Webhook already processed for deleted subscription (checked after lock)")
+                        return
                     billing_limits["subscription_status"] = "canceled"
                     billing_limits["last_updated"] = timezone.now().isoformat()
                     billing_limits.pop("scheduled_downgrade_plan", None)
@@ -749,6 +752,9 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                     with transaction.atomic():
                         team = Team.objects.select_for_update().get(pk=team.pk)
                         existing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
+                        if _was_applied(existing_limits, webhook_id, created):
+                            logger.info("Webhook already processed for deleted subscription (checked after lock)")
+                            return
                         existing_limits.update(
                             {
                                 "downgrade_exceeded": True,
@@ -774,6 +780,9 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                     with transaction.atomic():
                         team = Team.objects.select_for_update().get(pk=team.pk)
                         existing_limits = (team.billing_plan_limits or {}).copy()
+                        if _was_applied(existing_limits, webhook_id, created):
+                            logger.info("Webhook already processed for deleted subscription (checked after lock)")
+                            return
                         existing_limits.update(
                             {
                                 "max_products": target_plan.max_products,
@@ -803,6 +812,9 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
                 billing_limits = (team.billing_plan_limits or {}).copy()
+                if _was_applied(billing_limits, webhook_id, created):
+                    logger.info("Webhook already processed for deleted subscription (checked after lock)")
+                    return
                 billing_limits["subscription_status"] = "canceled"
                 billing_limits["last_updated"] = timezone.now().isoformat()
                 billing_limits["last_processed_webhook_id"] = webhook_id

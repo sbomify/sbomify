@@ -330,6 +330,31 @@ def test_a_payment_redelivery_caught_under_the_lock_sends_nothing(workspace, not
     notify.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("limits", "products"),
+    [
+        ({}, 0),
+        ({"cancel_at_period_end": True, "scheduled_downgrade_plan": "community"}, 0),
+        ({"cancel_at_period_end": True, "scheduled_downgrade_plan": "community"}, 2),
+        ({"cancel_at_period_end": True, "scheduled_downgrade_plan": "retired"}, 0),
+    ],
+    ids=["canceled", "downgraded", "downgrade_blocked", "plan_missing"],
+)
+def test_a_deletion_redelivery_caught_under_the_lock_sends_nothing(workspace, notify, mocker, limits, products):
+    Team.objects.filter(pk=workspace.pk).update(billing_plan_limits={**workspace.billing_plan_limits, **limits})
+    counts = {"products": products, "components": 0}
+    mocker.patch.object(billing_processing, "get_team_asset_counts", return_value=counts)
+    # What a concurrent delivery of the same event read before the first one committed.
+    before = Team.objects.get(pk=workspace.pk)
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 100))
+    notify.reset_mock()
+    mocker.patch.object(Team.objects, "get", return_value=before)
+
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 100))
+
+    notify.assert_not_called()
+
+
 def test_notifications_follow_the_status_read_under_the_lock(workspace, notify, mocker):
     billing_processing.handle_subscription_updated(_subscription("past_due"), event=_event("evt_past_due", 100))
     notify.reset_mock()
