@@ -7,8 +7,11 @@ the real value element. Zero values use neutral ink and tint in both cases.
 unmeasured is for a metric that has nothing to count yet, which is not the same
 as counting nothing. A security card whose components have never been scanned
 would otherwise print a confident 0 on the surface a reader acts on. It renders
-the neutral no-value dash with unmeasured_label behind it for a screen reader,
-and takes the zero ink, because an unmeasured card must never look alarming.
+the neutral no-value dash and takes the zero ink, because an unmeasured card
+must never look alarming. unmeasured_label replaces the label rather than
+hiding behind it: a bare dash tells a sighted reader nothing, and an
+explanation only a screen reader gets leaves the people the state is for worse
+informed than the people it is not.
 The optional slot holds a change indicator beside the value. Accents include
 semantic colours and the severity scale, so pages never supply a colour recipe.
 Value and icon ink use those tokens directly, never a mix with the text colour.
@@ -29,6 +32,8 @@ grid, for c-feedback.loading-stats. Its parent supplies the loading announcement
     <dt class="row-start-2 m-0 font-medium leading-[1.45] text-text-secondary text-[length:var(--stat-label-size)] sm:leading-[1.4]">
         {% if loading %}
             <c-feedback.skeleton width="65%" height="1lh" />
+        {% elif unmeasured %}
+            {{ label }}<span class="block text-text-muted">{{ unmeasured_label }}</span>
         {% else %}
             {{ label }}
         {% endif %}
@@ -41,7 +46,7 @@ grid, for c-feedback.loading-stats. Its parent supplies the loading announcement
         {% if loading %}
             <c-feedback.skeleton width="3rem" height="1lh" />
         {% elif unmeasured %}
-            <span aria-hidden="true">&ndash;</span><span class="sr-only">{{ unmeasured_label }}</span>
+            <span aria-hidden="true">&ndash;</span><span class="sr-only">{{ label }}: {{ unmeasured_label }}</span>
         {% elif x_value %}
             <span x-text="$number({{ x_value }})">{{ value|default:0|intcomma }}</span>
         {% else %}

@@ -66,7 +66,63 @@ def test_an_unscanned_product_does_not_claim_zero(product_with_component) -> Non
 
     html = _page(client, product)
 
-    assert "No completed scan yet" in html
+    assert "Not scanned yet" in html
+
+
+def test_one_scanned_component_does_not_vouch_for_an_unscanned_one(product_with_component) -> None:
+    """The first cut of this made the state all-or-nothing, so a single assessed
+    component restored the confident 0 and the reported bug survived on any
+    multi-component product, which is most of them."""
+    client, product, scanned_component = product_with_component
+    sbom = SBOM.objects.create(
+        component=scanned_component,
+        name="firmware",
+        format="cyclonedx",
+        format_version="1.6",
+        version="1.0",
+        sbom_filename="scanned.json",
+    )
+    AssessmentRun.objects.create(
+        sbom=sbom,
+        plugin_name="osv",
+        category="security",
+        status="completed",
+        result=_clean_security_result(),
+        result_summary=_clean_security_result()["summary"],
+    )
+    unscanned = Component.objects.create(
+        team=product.team, name="bootloader", component_type=Component.ComponentType.BOM
+    )
+    product.components.add(unscanned)
+    SBOM.objects.create(
+        component=unscanned,
+        name="bootloader",
+        format="cyclonedx",
+        format_version="1.6",
+        version="1.0",
+        sbom_filename="unscanned.json",
+    )
+
+    html = _page(client, product)
+
+    assert "Not scanned yet" in html
+
+
+def test_a_product_with_nothing_scannable_reports_a_real_zero(sample_team_with_owner_member: Member) -> None:
+    """A product with no components, or documents alone, has a genuine zero.
+    Marking that unmeasured would invent doubt where there is none."""
+    member = sample_team_with_owner_member
+    product = Product.objects.create(team=member.team, name="docs only")
+    document_component = Component.objects.create(
+        team=member.team, name="policy", component_type=Component.ComponentType.DOCUMENT
+    )
+    product.components.add(document_component)
+    client = Client()
+    setup_authenticated_client_session(client, member.team, member.user)
+
+    html = _page(client, product)
+
+    assert "Not scanned yet" not in html
 
 
 def test_a_scanned_product_reports_its_real_count(product_with_component) -> None:
@@ -91,4 +147,4 @@ def test_a_scanned_product_reports_its_real_count(product_with_component) -> Non
     html = _page(client, product)
 
     # A measured zero is a real answer and still reads as one.
-    assert "No completed scan yet" not in html
+    assert "Not scanned yet" not in html

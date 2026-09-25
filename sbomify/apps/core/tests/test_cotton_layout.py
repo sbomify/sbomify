@@ -106,7 +106,7 @@ def test_description_disclosure_is_scoped_and_accessible(rendered: str) -> None:
     header = rendered[rendered.index('data-probe="header-description"') :].split("</header>")[0]
     assert "A description with more context." in header
     assert ':aria-expanded="expanded"' in header
-    assert ':aria-controls="$id(\'page-description\')"' in header
+    assert ":aria-controls=\"$id('page-description')\"" in header
     assert "Show more" in header
 
 
@@ -270,6 +270,25 @@ def test_stat_icon_takes_the_cards_accent(rendered: str) -> None:
     icon = _classes(rendered, STAT_ICON, "fas fa-shield-halved")
     assert "border-[color-mix(in_oklab,var(--stat-accent)_13%,transparent)]" in icon
     assert "text-[color:var(--stat-accent)]" in icon
+
+
+def test_unmeasured_states_why_rather_than_showing_a_bare_dash(rendered: str) -> None:
+    """Nothing to count yet is not the same as counting nothing. The dash alone
+    says neither, so the reason replaces the label rather than hiding behind it:
+    an explanation only a screen reader gets would leave the people this state
+    is for worse informed than the people it is not."""
+    marker = "Unmeasured metric"
+    card_at = rendered.index(marker)
+    card = rendered[rendered.rindex("<dl ", 0, card_at) : rendered.index("</dl>", card_at)]
+    assert "Not scanned yet" in card
+    assert "&ndash;" in card
+    # The dash is decoration; the announced value names the metric and its state.
+    assert f'<span class="sr-only">{marker}: Not scanned yet</span>' in card
+
+
+def test_unmeasured_takes_the_zero_ink_so_it_never_looks_alarming(rendered: str) -> None:
+    card = _opening(rendered, STAT_CARD, "Unmeasured metric")
+    assert 'data-zero="true"' in card
 
 
 def test_stat_label_and_value_recipes(rendered: str) -> None:
