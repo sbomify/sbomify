@@ -3924,14 +3924,26 @@ def list_release_artifacts(
         if not can(request, "release:read", release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+    # The same rule as _build_release_response: to anyone who cannot manage the
+    # release, a private component's artifact is not listed.
+    can_manage = bool(
+        getattr(request, "user", None)
+        and request.user.is_authenticated
+        and can(request, "release:manage", release.product)
+    )
+
     if mode == "existing":
         # Return artifacts that are already in this release
+        existing_artifacts_queryset = ReleaseArtifact.objects.filter(release=release)
+        if not can_manage:
+            listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+            existing_artifacts_queryset = existing_artifacts_queryset.filter(
+                Q(sbom__component__visibility__in=listable) | Q(document__component__visibility__in=listable)
+            )
         existing_artifacts_queryset = (
             # component is read for every row below, so it belongs in the join:
             # page_size=-1 turns a missing one into a query per artifact.
-            ReleaseArtifact.objects.filter(release=release)
-            .select_related("sbom__component", "document__component")
-            .order_by("-created_at")
+            existing_artifacts_queryset.select_related("sbom__component", "document__component").order_by("-created_at")
         )
 
         # Extract pagination parameters properly
@@ -3983,8 +3995,12 @@ def list_release_artifacts(
         return {"items": artifacts, "pagination": pagination_meta}
 
     else:  # mode == "available" (default)
+        # The release editor's picker lists every artifact the product's
+        # components hold, so it answers only someone who can edit the release.
+        if not can_manage:
+            return 403, {"detail": "You don't have permission to edit this release", "error_code": ErrorCode.FORBIDDEN}
+
         # Return artifacts that can be added to this release (existing logic)
-        from sbomify.apps.core.models import Component
         from sbomify.apps.documents.models import Document
         from sbomify.apps.sboms.models import SBOM
 
