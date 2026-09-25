@@ -27,6 +27,18 @@ def _provider_confirmed_email(sociallogin: SocialLogin) -> bool:
     return bool(email) and any(a.verified and a.email.lower() == email for a in sociallogin.email_addresses)
 
 
+def _account_owns_its_email(user: Any) -> bool:
+    """Whether an account's address belongs to whoever signs in to it.
+
+    The identity provider confirmed the address, or nobody can have signed in
+    to the account yet: no login and no password, as with one the
+    access-request form made. allauth's own confirmation does not count: its
+    link binds the address to whichever account asked for it, not to the
+    person who clicked.
+    """
+    return bool(user.email_verified or (user.last_login is None and not user.has_usable_password()))
+
+
 class SpaceEncodedOAuth2Client(OAuth2Client):  # type: ignore[misc]
     """An authorize URL whose spaces are ``%20``, not ``+``.
 
@@ -176,8 +188,9 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
                     is_active=True,
                     deleted_at__isnull=True,
                 )
-                # Only an address the provider confirmed may claim an existing account.
-                if _provider_confirmed_email(sociallogin):
+                # Only an address the provider confirmed may claim an existing account, and only an
+                # account that owns that address too.
+                if _provider_confirmed_email(sociallogin) and _account_owns_its_email(existing_user):
                     sociallogin.connect(request, existing_user)
             except (User.DoesNotExist, User.MultipleObjectsReturned):
                 pass

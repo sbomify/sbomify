@@ -142,7 +142,7 @@ class TestCustomSocialAccountAdapter:
     def test_pre_social_login_existing_user(self, adapter, mock_request, mock_sociallogin):
         """Test connecting to existing user with same, confirmed email."""
         # Create existing user
-        existing_user = User.objects.create(username="existing", email="test@example.com")
+        existing_user = User.objects.create_user(username="existing", email="test@example.com")
 
         # Set up social login with same email
         mock_sociallogin.user.email = "test@example.com"

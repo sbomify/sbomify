@@ -30,6 +30,7 @@ from django.core import mail
 from django.http import HttpRequest, HttpResponse
 from django.test import Client, RequestFactory
 from django.urls import reverse
+from django.utils import timezone
 from pytest_mock import MockerFixture
 
 from sbomify.apps.core.context_processors import pending_invitations_context
@@ -140,6 +141,43 @@ class TestLinkingAnIdentity:
 
         assert not request.user.is_authenticated
         assert not SocialAccount.objects.exists()
+
+    def test_a_confirmed_email_does_not_link_an_account_an_unconfirmed_identity_signs_in_to(self) -> None:
+        _sign_in("holder@example.com", verified=False, sub="first")
+        holder = User.objects.get(email="holder@example.com")
+
+        request = _sign_in(holder.email, verified=True, sub="second")
+
+        assert request.user != holder
+        assert list(SocialAccount.objects.filter(user=holder).values_list("uid", flat=True)) == ["first"]
+
+    def test_a_confirmed_email_does_not_link_an_account_with_a_password(self) -> None:
+        holder = User.objects.create_user(username="holder", email="holder@example.com", password="chosen-by-someone")
+
+        request = _sign_in(holder.email, verified=True, sub="second")
+
+        assert request.user != holder
+        assert not SocialAccount.objects.filter(user=holder).exists()
+
+    def test_a_confirmed_email_links_a_signed_in_account_the_provider_confirmed_it_for(self) -> None:
+        holder = User.objects.create_user(
+            username="holder", email="holder@example.com", email_verified=True, last_login=timezone.now()
+        )
+
+        request = _sign_in(holder.email, verified=True, sub="second")
+
+        assert request.user == holder
+
+    @pytest.mark.parametrize("how", ["primary", "link"])
+    def test_a_confirmed_email_does_not_link_an_account_that_took_it_on_the_email_page(self, how: str) -> None:
+        holder = _linked_account()
+        _take_address(holder, "holder@example.com", how)
+        assert holder.email == "holder@example.com"
+
+        request = _sign_in(holder.email, verified=True, sub="second")
+
+        assert request.user != holder
+        assert list(SocialAccount.objects.filter(user=holder).values_list("uid", flat=True)) == ["linked"]
 
 
 @pytest.mark.django_db
