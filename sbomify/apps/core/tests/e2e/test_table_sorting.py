@@ -17,12 +17,26 @@ advisories = _advisories_fixture
 
 
 def geometry(table: Locator) -> list[float]:
-    """Column positions relative to the table, independent of intentional scrolling."""
+    """Column positions, each against the reference that scrolling must not move it from.
+
+    An ordinary column is measured against the table: it travels with the table
+    when the viewport scrolls sideways, so its offset there is the invariant. A
+    pinned column is measured against the scroll viewport instead, because
+    holding still against the viewport while the table slides under it is the
+    whole point of pinning. Measuring a pinned cell against the table would
+    record the scroll offset and report a column that is working as designed as
+    a column that moved.
+    """
     return table.evaluate("""table => {
         const bounds = table.getBoundingClientRect();
+        const viewport = (table.closest('[data-table-viewport]') || table).getBoundingClientRect();
         return [bounds.width, ...Array.from(table.querySelectorAll('th')).flatMap(cell => {
             const rect = cell.getBoundingClientRect();
-            return rect.width ? [rect.left - bounds.left, rect.width, rect.height] : [];
+            if (!rect.width) return [];
+            const pinned = getComputedStyle(cell).position === 'sticky'
+                && getComputedStyle(cell).right !== 'auto';
+            const origin = pinned ? viewport.left : bounds.left;
+            return [rect.left - origin, rect.width, rect.height];
         })];
     }""")
 
