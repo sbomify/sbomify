@@ -9,8 +9,6 @@ initThemeManager();
 import './layout-interactions';
 import './notifications-modal';
 
-// Shared Chart.js setup (makes window.Chart available)
-import './chart-setup';
 import Alpine from 'alpinejs';
 import './alerts-global';
 import './clipboard-global';
