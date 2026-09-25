@@ -1,3 +1,4 @@
+{% load humanize %}
 {% load static %}
 {% load json_extras %}
 {# WebSocket listener for real-time updates #}
@@ -24,7 +25,7 @@
                 </h4>
                 {% if show_view_all %}
                     <c-buttons.secondary href="{% url 'sboms:component_artifacts' component_id %}">
-                    View all {{ total_artifact_count }}
+                    View all {{ total_artifact_count|intcomma }}
                     <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
                     </c-buttons.secondary>
                 {% endif %}

@@ -24,6 +24,7 @@ c-navigation.page-link, so the pager owns the row and nothing else, and each
 cell is rendered `only`, on its own props, so nothing the pager holds (its
 class, above all) can fall through into it.
 {% endcomment %}
+{% load humanize %}
 <c-vars current total page_range base_url query page_param="page" label="Pagination" show_prev_next="1" class />
 {% with sep=query|default:""|yesno:"&," %}
     <nav aria-label="{{ label }}"
@@ -38,11 +39,11 @@ class, above all) can fall through into it.
         {% endif %}
         {% for page_num in page_range %}
             {% if page_num == current %}
-                <c-navigation.page-link active only>{{ page_num }}</c-navigation.page-link>
+                <c-navigation.page-link active only>{{ page_num|intcomma }}</c-navigation.page-link>
             {% elif page_num == '…' or page_num == '...' %}
                 <c-navigation.page-ellipsis />
             {% else %}
-                <c-navigation.page-link href="{{ base_url }}?{{ page_param }}={{ page_num }}{{ sep }}{{ query }}" only>{{ page_num }}</c-navigation.page-link>
+                <c-navigation.page-link href="{{ base_url }}?{{ page_param }}={{ page_num }}{{ sep }}{{ query }}" only>{{ page_num|intcomma }}</c-navigation.page-link>
             {% endif %}
         {% endfor %}
         {% if show_prev_next %}

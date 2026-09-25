@@ -1,3 +1,4 @@
+{% load humanize %}
 {% comment %}Evidence is current only when every component has an SBOM within its freshness policy. Missing and stale evidence remain distinct.{% endcomment %}
 <c-vars product />
 <div class="flex flex-col items-start gap-1">
@@ -7,12 +8,12 @@
         <c-feedback.status>Not applicable</c-feedback.status>
     {% else %}
         {% if product.stale %}
-            <c-feedback.status tone="warning">{{ product.stale }} stale SBOM{{ product.stale|pluralize }}</c-feedback.status>
+            <c-feedback.status tone="warning">{{ product.stale|intcomma }} stale SBOM{{ product.stale|pluralize }}</c-feedback.status>
         {% endif %}
         {% if product.missing_sboms %}
-            <c-feedback.status>{{ product.missing_sboms }} missing SBOM{{ product.missing_sboms|pluralize }}</c-feedback.status>
+            <c-feedback.status>{{ product.missing_sboms|intcomma }} missing SBOM{{ product.missing_sboms|pluralize }}</c-feedback.status>
         {% endif %}
-        {% if product.no_policy %}<c-feedback.status>{{ product.no_policy }} without policy</c-feedback.status>{% endif %}
+        {% if product.no_policy %}<c-feedback.status>{{ product.no_policy|intcomma }} without policy</c-feedback.status>{% endif %}
         {% if not product.stale and not product.missing_sboms and not product.no_policy %}
             <c-feedback.status tone="success">Current</c-feedback.status>
         {% endif %}

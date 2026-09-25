@@ -54,7 +54,7 @@
                         <c-badges.secondary x-text="release.name || release.version" />
                     </template>
                     <template x-if="item.releases.length > 2">
-                        <c-badges.secondary x-text="'+' + (item.releases.length - 2)" />
+                        <c-badges.secondary x-text="'+' + $number(item.releases.length - 2)" />
                     </template>
                 </div>
             </template>
@@ -93,9 +93,9 @@
     </c-tables.table>
     <c-tables.footer>
     <c-tables.info>
-    Showing <strong x-text="startItem"></strong> to <strong x-text="endItem"></strong> of <strong x-text="filteredData.length"></strong> entries
+    Showing <strong x-text="$number(startItem)"></strong> to <strong x-text="$number(endItem)"></strong> of <strong x-text="$number(filteredData.length)"></strong> entries
     <template x-if="search">
-        <span>(filtered from <strong x-text="allDocuments.length"></strong> total)</span>
+        <span>(filtered from <strong x-text="$number(allDocuments.length)"></strong> total)</span>
     </template>
     </c-tables.info>
     <c-tables.pager />

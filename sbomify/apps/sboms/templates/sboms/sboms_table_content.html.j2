@@ -112,16 +112,16 @@
                 <template x-if="item.vuln && item.vuln.total > 0">
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <template x-if="item.vuln.critical > 0">
-                            <c-badges.severity level="critical" x-text="item.vuln.critical + ' Critical'" />
+                            <c-badges.severity level="critical" x-text="$number(item.vuln.critical) + ' Critical'" />
                         </template>
                         <template x-if="item.vuln.high > 0">
-                            <c-badges.severity level="high" x-text="item.vuln.high + ' High'" />
+                            <c-badges.severity level="high" x-text="$number(item.vuln.high) + ' High'" />
                         </template>
                         <template x-if="item.vuln.medium > 0">
-                            <c-badges.severity level="medium" x-text="item.vuln.medium + ' Medium'" />
+                            <c-badges.severity level="medium" x-text="$number(item.vuln.medium) + ' Medium'" />
                         </template>
                         <template x-if="item.vuln.low > 0">
-                            <c-badges.severity level="low" x-text="item.vuln.low + ' Low'" />
+                            <c-badges.severity level="low" x-text="$number(item.vuln.low) + ' Low'" />
                         </template>
                     </div>
                 </template>
@@ -140,13 +140,13 @@
                         </template>
                         <!-- More indicator with count -->
                         <template x-if="item.assessments.plugins.length > 3">
-                            <c-chips.assessment ::title="(item.assessments.plugins.length - 3) + ' more assessment' + (item.assessments.plugins.length - 3 > 1 ? 's' : '')" x-text="'+' + (item.assessments.plugins.length - 3)" />
+                            <c-chips.assessment ::title="$number(item.assessments.plugins.length - 3) + ' more assessment' + (item.assessments.plugins.length - 3 > 1 ? 's' : '')" x-text="'+' + $number(item.assessments.plugins.length - 3)" />
                         </template>
                         <!-- Failure summary (only if there are hidden failures) -->
                         <template x-if="item.assessments.failing_count > 0 && item.assessments.plugins.slice(0, 3).filter(p => p.status === 'fail').length < item.assessments.failing_count">
                             <c-chips.assessment status="summary-fail" ::title="item.assessments.failing_count + ' assessment' + (item.assessments.failing_count > 1 ? 's' : '') + ' failed'">
                             <i class="fas fa-circle-exclamation"></i>
-                            <span x-text="item.assessments.failing_count + ' Failed'"></span>
+                            <span x-text="$number(item.assessments.failing_count) + ' Failed'"></span>
                             </c-chips.assessment>
                         </template>
                     </div>
@@ -197,8 +197,8 @@
     </c-tables.table>
     <c-tables.footer>
     <c-tables.info>
-    Showing <strong x-text="startItem"></strong> to <strong x-text="endItem"></strong> of <strong x-text="filteredData.length"></strong>
-    <template x-if="search"><span>(filtered from <strong x-text="allSboms.length"></strong> total)</span></template>
+    Showing <strong x-text="$number(startItem)"></strong> to <strong x-text="$number(endItem)"></strong> of <strong x-text="$number(filteredData.length)"></strong>
+    <template x-if="search"><span>(filtered from <strong x-text="$number(allSboms.length)"></strong> total)</span></template>
     </c-tables.info>
     <div x-show="totalPages > 1">
         <c-tables.pager />

@@ -1,3 +1,4 @@
+{% load humanize %}
 {% load public_url_tags %}
 {% comment %}
 The advisory index: filter sidebar beside the results table.
@@ -56,7 +57,7 @@ submit button applies the same filters, and the URL is the same either way.
         <label class="tc-filters-toggle" for="tcFiltersOpen">
             <i class="fas fa-sliders" aria-hidden="true"></i>
             <span>Filters</span>
-            {% if query.active_count %}<span class="tc-filters-badge">{{ query.active_count }}</span>{% endif %}
+            {% if query.active_count %}<span class="tc-filters-badge">{{ query.active_count|intcomma }}</span>{% endif %}
             <i class="fas fa-chevron-down tc-filters-chevron" aria-hidden="true"></i>
         </label>
         <div class="tc-filters-head">
@@ -81,7 +82,7 @@ submit button applies the same filters, and the URL is the same either way.
                                {% if facet.checked %}checked{% endif %}>
                         <span class="tc-facet-dot tc-severity-{{ facet.value }}" aria-hidden="true"></span>
                         <span class="tc-facet-label">{{ facet.label }}</span>
-                        <span class="tc-facet-count">{{ facet.count }}</span>
+                        <span class="tc-facet-count">{{ facet.count|intcomma }}</span>
                     </label>
                 {% endfor %}
             </div>
@@ -95,7 +96,7 @@ submit button applies the same filters, and the URL is the same either way.
                                    value="{{ facet.value }}"
                                    {% if facet.checked %}checked{% endif %}>
                             <span class="tc-facet-label">{{ facet.label }}</span>
-                            <span class="tc-facet-count">{{ facet.count }}</span>
+                            <span class="tc-facet-count">{{ facet.count|intcomma }}</span>
                         </label>
                     {% endfor %}
                 </div>
@@ -142,7 +143,7 @@ submit button applies the same filters, and the URL is the same either way.
         <div class="tc-results-bar">
             <span class="tc-results-count">
                 {% if total %}
-                    {{ start_index }}–{{ end_index }} of {{ total }}
+                    {{ start_index|intcomma }}–{{ end_index|intcomma }} of {{ total|intcomma }}
                 {% else %}
                     No advisories
                 {% endif %}
@@ -266,7 +267,7 @@ submit button applies the same filters, and the URL is the same either way.
                                             </div>
                                             {% if advisory.withheld_product_count %}
                                                 <p class="tc-adv-withheld">
-                                                    {{ advisory.withheld_product_count }} further product{{ advisory.withheld_product_count|pluralize }} not shown
+                                                    {{ advisory.withheld_product_count|intcomma }} further product{{ advisory.withheld_product_count|pluralize }} not shown
                                                 </p>
                                             {% endif %}
                                         </td>

@@ -1,3 +1,4 @@
+{% load humanize %}
 {% load teams %}
 <div class="flex flex-col gap-5">
     <c-layout.section-header level="2" title="Members" subtitle="Who has access to this workspace.">
@@ -30,7 +31,7 @@
         </c-cards.card>
     {% endif %}
     <c-cards.card flush>
-    <c-cards.header compact title="Workspace members" hint="{{ team.members|length }} member{{ team.members|length|pluralize }}" />
+    <c-cards.header compact title="Workspace members" hint="{{ team.members|length|intcomma }} member{{ team.members|length|pluralize }}" />
     <c-tables.table>
     <c-tables.head>
     <c-tables.header-cell compact>Member</c-tables.header-cell>
@@ -70,7 +71,7 @@
     </c-cards.card>
     {% if can_administer %}
         <c-cards.card flush>
-        <c-cards.header compact title="Pending invitations" hint="{{ team.invitations|length }} pending" />
+        <c-cards.header compact title="Pending invitations" hint="{{ team.invitations|length|intcomma }} pending" />
         {% if team.invitations %}
             <c-tables.table>
             <c-tables.head>

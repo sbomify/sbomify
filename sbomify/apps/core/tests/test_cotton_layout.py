@@ -515,6 +515,6 @@ def test_bound_stat_value_and_zero_state_use_the_same_expression(rendered: str) 
     start = rendered.index('data-probe="stat-bound"')
     card = rendered[rendered.rindex("<dl ", 0, start) : rendered.index("</dl>", start)]
     assert ':data-zero="Number(count) === 0"' in card
-    assert 'x-text="count"' in card
+    assert 'x-text="$number(count)"' in card
     assert "Bound count" in card
     assert "Updated" in card
