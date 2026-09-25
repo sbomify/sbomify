@@ -1,4 +1,18 @@
 ---
+# Docker's default json-file driver keeps every line a container has ever
+# written, with no size limit and no rotation, so a long-running deployment
+# accumulates container logs until the disk is full. Caddy logs every request to
+# stdout (the `log` blocks in Caddyfile), which makes it the largest writer by a
+# wide margin, and a disk full of them takes Postgres and Redis down with it.
+#
+# 10 MB x 3 files caps each container at 30 MB. Raise it via the environment if
+# you want deeper history and have the disk for it.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-10m}
+    max-file: "${LOG_MAX_FILE:-3}"
+
 # Common environment variables shared across services
 x-common-env: &common-env
   AM_I_IN_DOCKER_CONTAINER: ${AM_I_IN_DOCKER_CONTAINER:-1}
@@ -47,6 +61,7 @@ x-common-env: &common-env
 services:
   sbomify-db:
     image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    logging: *default-logging
     restart: ${POSTGRES_RESTART_POLICY:-always}
     environment:
       # We can't use anchors here, since anchors are resolved *after* these values are set.
@@ -66,6 +81,7 @@ services:
 
   sbomify-redis:
     image: ${REDIS_IMAGE:-redis:8-alpine}
+    logging: *default-logging
     restart: ${REDIS_RESTART_POLICY:-always}
     ports:
       - "${REDIS_PORT:-6379}:6379"
@@ -79,6 +95,7 @@ services:
 
   sbomify-backend:
     image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
+    logging: *default-logging
     build:
       context: ${BUILD_CONTEXT:-.}
       target: ${BUILD_TARGET:-python-app-prod}
@@ -117,6 +134,7 @@ services:
 
   sbomify-caddy:
     image: ${CADDY_IMAGE:-caddy:2-alpine}
+    logging: *default-logging
     restart: ${CADDY_RESTART_POLICY:-always}
     ports:
       - "${BIND_IP:-127.0.0.1}:${HTTP_PORT:-8000}:80"
@@ -141,6 +159,7 @@ services:
 
   sbomify-migrations:
     image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
+    logging: *default-logging
     build:
       context: ${BUILD_CONTEXT:-.}
       target: ${BUILD_TARGET:-python-app-prod}
@@ -157,6 +176,7 @@ services:
 
   sbomify-worker:
     image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
+    logging: *default-logging
     build:
       context: ${BUILD_CONTEXT:-.}
       target: ${BUILD_TARGET:-python-app-prod}
@@ -189,6 +209,7 @@ services:
 
   sbomify-scheduler:
     image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
+    logging: *default-logging
     build:
       context: ${BUILD_CONTEXT:-.}
       target: ${BUILD_TARGET:-python-app-prod}
@@ -215,6 +236,7 @@ services:
 
   ca-cert:
     image: alpine:3.21
+    logging: *default-logging
     profiles:
       - pki
     volumes:
