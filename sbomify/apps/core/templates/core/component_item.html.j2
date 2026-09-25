@@ -1,16 +1,9 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load static %}
 {% load django_vite %}
 {% load advisory_tags %}
 {% block title %}{{ component.get_component_type_display }}: {{ item.name }}{% endblock %}
-{% block extra_styles %}
-    <link rel="stylesheet"
-          href="{% static 'css/component-detailed-private.css' %}">
-    <link rel="stylesheet"
-          href="{% static 'css/components/vulnerability-trends.css' %}">
-{% endblock %}
 {% block content %}
-    {% comment %}The download title names the format and the kind of document. Both are settled here rather than inline in the attribute, which djlint is free to break across lines.{% endcomment %}
+    {% comment %}The download label names the format and the kind, so an SBOM, a VEX and a CBOM do not all read "Download CycloneDX". Both are settled here rather than inline in the tag, which djlint is free to break across lines.{% endcomment %}
     {% if item.format == 'cyclonedx' %}
         {% firstof "CycloneDX" as item_format_label %}
     {% elif item.format == 'spdx' %}
@@ -27,12 +20,12 @@
     {% endif %}
     <c-layout.page-header title="{{ item.name }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items">
     {% if is_sbom_backed %}
-        <c-buttons.secondary size="sm" href="{% url 'sboms:sbom_download' item.id %}" title="Download {{ item_format_label }} {{ item_kind_label }}">
-        <i class="fas fa-download" aria-hidden="true"></i>Download {{ item_format_label }}
+        <c-buttons.secondary size="sm" href="{% url 'sboms:sbom_download' item.id %}">
+        <i class="fas fa-download" aria-hidden="true"></i>Download {{ item_format_label }} {{ item_kind_label }}
         </c-buttons.secondary>
     {% elif item_type == 'documents' %}
-        <c-buttons.secondary size="sm" href="{% url 'documents:document_download' item.id %}">
-        <i class="fas fa-download" aria-hidden="true"></i>Download
+        <c-buttons.secondary size="sm" href="{% url 'documents:document_download' item.id %}" title="{{ item.name }}">
+        <i class="fas fa-download" aria-hidden="true"></i>Download document
         </c-buttons.secondary>
     {% endif %}
     </c-layout.page-header>

@@ -1,7 +1,16 @@
-{% comment %}The component panel and its filters swap together. Its modal remains outside this region.{% endcomment %}
+{% comment %}The component panel and its filters swap together. Its modal remains
+outside this region.
+
+A triage decision re-annotates findings in a background task, so the panel
+refreshes twice: once straight away for the decision the reader just made, and
+again when the re-apply broadcast lands. Both carry the active query, so a
+refresh keeps the filters and the page the reader was on, and morph keeps their
+scroll position and focus.{% endcomment %}
 <div id="component-vulnerabilities-table"
      hx-target="this"
-     hx-swap="outerHTML">
+     hx-swap="morph"
+     hx-get="{{ vuln_panel_url }}?{{ vuln_query_string }}"
+     hx-trigger="triage-saved from:body, vex-reapplied from:body">
     <c-tables.shell nested>
     <c-vulnerabilities.filters :panel="vuln_panel" url="{{ vuln_panel_url }}" target="component-vulnerabilities-table" id="vuln" prefix="vuln_" push_url="true" />
     <c-vulnerabilities.table :rows="vuln_panel.rows" :can_triage="can_triage" />

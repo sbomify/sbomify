@@ -319,3 +319,87 @@ class TestStatusMarkersAreNotVulnerabilities:
         html = _findings_of(run)
         assert "CVE-2025-1111" in html
         assert "findings-list" in html
+
+
+class TestUnreadableResultBadge:
+    """A run whose stored result failed schema validation.
+
+    ``_run_to_schema`` drops a result blob that does not validate to ``None`` so
+    one bad row cannot blank the whole page. Every count is then zero, which used
+    to fall through to "Warnings Only", a verdict the run never gave. A security
+    run carrying a critical finding read as warnings-only.
+    """
+
+    def test_a_run_without_a_result_does_not_claim_a_verdict(self):
+        html = _render(_run(result=None))
+
+        assert "Result unavailable" in html
+        assert "Warnings Only" not in html
+        assert "Passed" not in html
+
+    def test_it_is_not_coloured_as_a_warning(self):
+        """No verdict is not a warning, so the card keeps the neutral border."""
+        assert WARNING_BORDER not in _render(_run(result=None))
+
+    def test_a_real_warnings_only_run_still_reads_as_one(self):
+        """The guard above must not swallow the state it sits in front of."""
+        html = _render(_run(category="compliance"))
+
+        assert "Warnings Only" in html
+        assert "Result unavailable" not in html
+
+
+class TestBadgeCarriesItsVerdict:
+    """Every status used one neutral badge, so "issues found" and "all passed"
+    were the same grey and severity survived only as a border tint."""
+
+    def test_a_clean_security_run_is_a_success_badge(self):
+        # by_severity must be present for the card to read the run as a security
+        # run at all; a clean scan reports the buckets and zero in each.
+        run = _run()
+        run["result"]["summary"]["by_severity"] = {"critical": 0, "high": 0}
+        run["result"]["findings"] = []
+
+        assert "No vulnerabilities" in _render(run)
+
+    def test_a_security_run_with_findings_is_a_warning_badge(self):
+        run = _run()
+        run["result"]["summary"]["by_severity"] = {"critical": 1}
+
+        html = _render(run)
+
+        assert "1 vulnerability" in html
+
+    def test_a_failed_run_is_a_danger_badge(self):
+        """An errored run and a passing one must not render the same badge."""
+        danger = _render(_run(status="failed", category="compliance"))
+        success = _render(_run(status="completed", category="compliance", result=_passing_result()))
+
+        assert "Error" in danger
+        assert "Passed" in success
+        # The two badges differ in more than their text.
+        assert _badge_classes(danger) != _badge_classes(success)
+
+
+def _passing_result() -> dict:
+    return {
+        "summary": {
+            "total_findings": 1,
+            "pass_count": 1,
+            "fail_count": 0,
+            "warning_count": 0,
+            "error_count": 0,
+        },
+        "findings": [
+            {"id": "c1", "title": "A check", "description": "It passed.", "status": "pass"}
+        ],
+        "metadata": {},
+    }
+
+
+def _badge_classes(html: str) -> set[str]:
+    """Every class the header's badges carry, so a colour change is observable."""
+    import re
+
+    header = html.split('x-show="expanded"')[0]
+    return {c for m in re.findall(r'class="([^"]*)"', header) for c in m.split()}
