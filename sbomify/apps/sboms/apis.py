@@ -22,7 +22,7 @@ from sbomify.apps.core.authz import can
 from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
 from sbomify.apps.core.purl import extract_purl_qualifiers
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
-from sbomify.apps.core.services.access_control import check_component_access, check_component_access_for_user
+from sbomify.apps.core.services.access_control import check_component_access_for_user
 from sbomify.apps.core.utils import (
     ExtractSpec,
     broadcast_to_workspace,
@@ -1167,10 +1167,11 @@ def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, An
     # This handles public, gated (with approved guest access), and private components
     component = sbom.component
     # can() adds the API-token scope gate that check_component_access alone skips.
-    if not can(request, "component:access", component):
-        access_result = check_component_access(request, component)
-        # Provide helpful error message based on access result
-        if access_result.requires_access_request:
+    decision = can(request, "component:access", component)
+    if not decision:
+        # Only a gated_* reason is a denial an access request can lift. No
+        # approval widens a token's scope.
+        if decision.reason.startswith("gated_"):
             if not request.user.is_authenticated:
                 return 403, {
                     "detail": "Access denied. Please request access to download this SBOM.",
