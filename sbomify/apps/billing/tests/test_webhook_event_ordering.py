@@ -130,6 +130,28 @@ def test_an_older_payment_is_recorded_without_reactivating_a_canceled_subscripti
     notify.assert_called_once_with(workspace, email_notifications.notify_payment_succeeded)
 
 
+def test_a_late_payment_does_not_let_the_newest_event_apply_twice(workspace, notify):
+    deleted = _event("evt_deleted", 200)
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
+    billing_processing.handle_payment_succeeded(_invoice(), event=_event("evt_paid", 100))
+    notify.reset_mock()
+
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
+
+    notify.assert_not_called()
+
+
+def test_a_late_payment_delivered_twice_sends_one_receipt(workspace, notify):
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 200))
+    late_payment = _event("evt_paid", 100)
+    billing_processing.handle_payment_succeeded(_invoice(), event=late_payment)
+    notify.reset_mock()
+
+    billing_processing.handle_payment_succeeded(_invoice(), event=late_payment)
+
+    notify.assert_not_called()
+
+
 def test_a_deletion_applies_after_an_event_created_later(workspace):
     billing_processing.handle_payment_succeeded(_invoice(), event=_event("evt_final_invoice", 201))
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 200))

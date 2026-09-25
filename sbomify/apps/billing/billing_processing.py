@@ -901,7 +901,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         webhook_id = getattr(event, "id", None) if event else f"inv_succ_{invoice.id}_{invoice.created}"
         last_processed_id = billing_limits.get("last_processed_webhook_id")
 
-        if last_processed_id == webhook_id:
+        if webhook_id is not None and webhook_id in (last_processed_id, billing_limits.get("last_payment_webhook_id")):
             logger.info(f"Payment succeeded webhook already processed for invoice {invoice.id}, skipping")
             return
 
@@ -936,7 +936,9 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
             billing_limits["last_updated"] = timezone.now().isoformat()
             billing_limits["last_payment_amount"] = invoice.amount_paid / 100.0 if invoice.amount_paid else 0.0
             billing_limits["last_payment_currency"] = invoice.currency
-            billing_limits["last_processed_webhook_id"] = webhook_id
+            # Its own key, so recording a payment never displaces the id the other handlers
+            # use to catch a resend of the last event they applied.
+            billing_limits["last_payment_webhook_id"] = webhook_id
 
             if next_billing_date:
                 billing_limits["next_billing_date"] = next_billing_date
