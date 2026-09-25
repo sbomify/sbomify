@@ -194,3 +194,15 @@ def test_a_redelivery_caught_under_the_lock_sends_nothing(workspace, notify, moc
     billing_processing.handle_subscription_updated(_subscription("past_due"), event=_event("evt_past_due", 200))
 
     notify.assert_not_called()
+
+
+def test_notifications_follow_the_status_read_under_the_lock(workspace, notify, mocker):
+    billing_processing.handle_subscription_updated(_subscription("past_due"), event=_event("evt_past_due", 100))
+    notify.reset_mock()
+    # What the handler read before taking the lock, from before the past-due event landed.
+    stale = {"subscription_status": "active"}
+    mocker.patch.object(billing_processing, "_resolve_team_from_subscription", return_value=(workspace, stale))
+
+    billing_processing.handle_subscription_updated(_subscription("active"), event=_event("evt_active", 200))
+
+    notify.assert_called_once_with(workspace, email_notifications.notify_payment_succeeded)

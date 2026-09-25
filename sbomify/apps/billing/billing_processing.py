@@ -393,8 +393,10 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
 
         _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
 
-        previous_status = billing_limits.get("subscription_status")
-        if not _update_billing_from_subscription(team, subscription, webhook_id, _event_created(event)):
+        applied, previous_status = _update_billing_from_subscription(
+            team, subscription, webhook_id, _event_created(event)
+        )
+        if not applied:
             return
 
         _best_effort(
@@ -488,12 +490,15 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
     raise Team.DoesNotExist("No workspace holds the subscription in this webhook event")
 
 
-def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id: str, created: int | None) -> bool:
+def _update_billing_from_subscription(
+    team: Team, subscription: Any, webhook_id: str, created: int | None
+) -> tuple[bool, str | None]:
     """Update team billing limits from subscription data within a transaction.
 
     Returns:
-        Whether the event was applied: False when it was already processed or is
-        older than the newest event already applied.
+        Whether the event was applied, and the status it replaced, read under the
+        lock. The event is not applied when it was already processed or is older
+        than the newest event already applied.
     """
     with transaction.atomic():
         team = Team.objects.select_for_update().get(pk=team.pk)
@@ -501,12 +506,13 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
 
         if billing_limits.get("last_processed_webhook_id") == webhook_id:
             logger.info("Webhook already processed (checked after lock)")
-            return False
+            return False, None
 
         if _is_older_than_applied(billing_limits, created):
             logger.info("Ignoring a subscription event older than the last one applied")
-            return False
+            return False, None
 
+        previous_status = billing_limits.get("subscription_status")
         billing_limits["subscription_status"] = subscription.status
         billing_limits["stripe_subscription_id"] = subscription.id
         billing_limits["last_updated"] = timezone.now().isoformat()
@@ -621,7 +627,7 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
             # acknowledged with 200.
             raise BillingRetryableError(f"Trial-period processing failed: {e!s}") from e
 
-    return True
+    return True, previous_status
 
 
 def _send_subscription_notifications(team: Team, status: str, previous_status: Any) -> None:
