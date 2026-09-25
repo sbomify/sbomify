@@ -24,11 +24,14 @@ export function registerCopyableValue() {
             copiedTimer: undefined as ReturnType<typeof setTimeout> | undefined,
 
             async copyToClipboard() {
-                const valueToCopy = copySelector
+                // Values read out of the DOM carry the template's own
+                // indentation; a token pasted with a trailing newline fails
+                // wherever it is used, and the user cannot see why.
+                const valueToCopy = (copySelector
                     ? this.$el.closest('[data-copy-container]')?.querySelector(copySelector)?.textContent || ''
                     : this.copyFrom
                     ? document.getElementById(this.copyFrom)?.innerText || ''
-                    : this.value;
+                    : this.value).trim();
 
                 try {
                     await navigator.clipboard.writeText(valueToCopy);
