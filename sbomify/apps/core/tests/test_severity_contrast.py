@@ -46,9 +46,7 @@ def _relative_luminance(rgb: tuple[float, float, float]) -> float:
 
 
 def contrast(foreground: tuple[float, ...], background: tuple[float, ...]) -> float:
-    lighter, darker = sorted(
-        (_relative_luminance(foreground), _relative_luminance(background)), reverse=True
-    )
+    lighter, darker = sorted((_relative_luminance(foreground), _relative_luminance(background)), reverse=True)
     return (lighter + 0.05) / (darker + 0.05)
 
 
