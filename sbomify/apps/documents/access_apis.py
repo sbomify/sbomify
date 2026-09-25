@@ -21,7 +21,6 @@ from sbomify.apps.teams.models import Member, Team
 
 from .access_models import AccessRequest, NDASignature
 from .access_schemas import (
-    AccessRequestCreateRequest,
     AccessRequestListResponse,
     AccessRequestResponse,
     NDASignatureResponse,
@@ -90,13 +89,10 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
 def create_access_request(
     request: HttpRequest,
     team_key: str,
-    payload: AccessRequestCreateRequest | None = None,
 ) -> Any:
     """Create a blanket access request for all gated components in a team.
 
-    The caller must be signed in and asks for themselves. An email address in
-    the payload is not an identity: accepting one let a caller who was not
-    signed in file, and reset, requests on behalf of whoever held it.
+    The caller must be signed in and asks for themselves.
     """
     try:
         # Get team

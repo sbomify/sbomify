@@ -1,11 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
-
-
-class AccessRequestCreateRequest(BaseModel):
-    """Request schema for creating an access request."""
-
-    email: EmailStr | None = Field(None, description="Email for unauthenticated users (creates user account)")
-    name: str | None = Field(None, description="Optional name for unauthenticated users")
+from pydantic import BaseModel, Field
 
 
 class AccessRequestResponse(BaseModel):
