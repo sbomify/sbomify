@@ -23,6 +23,7 @@ from sbomify.apps.access_tokens.utils import (
     TOKEN_TYPE_OIDC,
     TOKEN_TYPE_PAT,
     create_personal_access_token,
+    decode_personal_access_token,
     get_user_and_token_record,
 )
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
@@ -46,6 +47,12 @@ def _stored_values() -> list[str]:
 
 def _oidc_token(user: AbstractBaseUser) -> str:
     return create_personal_access_token(user, expires_at=time() + 900, token_type=TOKEN_TYPE_OIDC)
+
+
+def _token_claiming(user: AbstractBaseUser, token_type: str | None) -> str:
+    """A token this deployment signed, whatever its token_type claim says."""
+    claims = {"iss": settings.JWT_ISSUER, "sub": str(user.pk), "salt": "salt", "token_type": token_type}
+    return jwt.encode(claims, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
 def _from_tokens_page(client: Client, member: Member) -> str:
@@ -123,6 +130,19 @@ def test_a_token_whose_stored_type_disagrees_with_its_signed_claim_is_refused(
     assert get_user_and_token_record(token) == (None, None)
 
 
+@pytest.mark.parametrize("claimed", ["bot", "PAT", "", None])
+def test_a_token_whose_type_claim_is_neither_pat_nor_oidc_is_refused(
+    sample_user: AbstractBaseUser, claimed: str | None
+) -> None:
+    """A null claim is refused too: only a token minted before the claim existed leaves it out."""
+    token = _token_claiming(sample_user, claimed)
+    AccessToken.objects.create(user=sample_user, encoded_token=token, description="t")
+
+    with pytest.raises(jwt.DecodeError):
+        decode_personal_access_token(token)
+    assert get_user_and_token_record(token) == (None, None)
+
+
 def test_the_admin_form_renders_neither_the_token_nor_its_hash(sample_user: AbstractBaseUser) -> None:
     token = create_personal_access_token(sample_user)
     record = AccessToken.objects.create(user=sample_user, encoded_token=token, description="CI")
@@ -186,6 +206,7 @@ def test_the_migration_keeps_every_existing_token_working(sample_user: AbstractB
         "legacy": jwt.encode(
             {"iss": settings.JWT_ISSUER, "sub": sample_user.pk}, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM
         ),
+        "unknown": _token_claiming(sample_user, "bot"),
         "junk": "not-a-jwt",
     }
     with connection.cursor() as cursor:
@@ -197,9 +218,11 @@ def test_the_migration_keeps_every_existing_token_working(sample_user: AbstractB
 
     for name in ("pat", "oidc", "legacy"):
         assert get_user_and_token_record(tokens[name])[0] == sample_user, name
+    assert get_user_and_token_record(tokens["unknown"]) == (None, None)
     assert dict(AccessToken.objects.values_list("description", "token_type")) == {
         "pat": TOKEN_TYPE_PAT,
         "oidc": TOKEN_TYPE_OIDC,
         "legacy": TOKEN_TYPE_PAT,
+        "unknown": TOKEN_TYPE_PAT,
         "junk": TOKEN_TYPE_PAT,
     }

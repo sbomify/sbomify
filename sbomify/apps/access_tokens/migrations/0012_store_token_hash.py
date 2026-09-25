@@ -24,7 +24,7 @@ HASH_AND_TYPE_EVERY_ROW = """
 
 
 def token_type_of(encoded_token: str) -> str:
-    """The token_type claim a token was signed with: oidc, or pat for anything else."""
+    """The token_type claim a token was signed with, pat or oidc. A token minted before the claim existed is a PAT."""
     try:
         claims = jwt.decode(
             encoded_token,
@@ -35,7 +35,9 @@ def token_type_of(encoded_token: str) -> str:
     except jwt.InvalidTokenError:
         # Not signed by this deployment, so it can never authenticate and its type does not matter.
         return "pat"
-    return "oidc" if claims.get("token_type") == "oidc" else "pat"
+    token_type = claims.get("token_type", "pat")
+    # Authentication refuses any other claim, so that token's type does not matter either.
+    return token_type if token_type in ("pat", "oidc") else "pat"
 
 
 def hash_stored_tokens(apps, schema_editor):

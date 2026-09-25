@@ -205,7 +205,8 @@ def decode_personal_access_token(token: str) -> dict[str, Any]:
                 "verify_nbf": False,
             },
         )
-        token_type = unverified.get("token_type")
+        # A token minted before the claim existed has none, and is a PAT.
+        token_type = unverified.get("token_type", TOKEN_TYPE_PAT)
 
         decode_kwargs: dict[str, Any] = {
             "key": settings.SECRET_KEY,
@@ -217,7 +218,7 @@ def decode_personal_access_token(token: str) -> dict[str, Any]:
             # / InvalidAudienceError on tamper.
             decode_kwargs["audience"] = settings.JWT_AUDIENCE
             decode_kwargs["options"] = {"require": ["sub", "exp", "aud", "token_type"]}
-        else:
+        elif token_type == TOKEN_TYPE_PAT:
             # PAT (or legacy token with no token_type) — exp/aud absent
             # by design; revocation lives entirely in the DB row check.
             decode_kwargs["options"] = {
@@ -225,6 +226,9 @@ def decode_personal_access_token(token: str) -> dict[str, Any]:
                 "verify_aud": False,
                 "verify_exp": False,
             }
+        else:
+            # Nothing mints another type. Refuse it rather than check it as a PAT.
+            raise InvalidTokenError("Unknown token_type claim")
 
         # Normalise ``sub`` to a string first (legacy tokens may have
         # int subs). Re-encoding lets PyJWT validate the normalised
@@ -275,7 +279,8 @@ def get_user_and_token_record(
        against ``SECRET_KEY``) AND — for OIDC-issued tokens
        (``token_type="oidc"``) — JWT-level ``exp`` and ``aud`` claims.
        Long-lived PATs (no ``exp``/``aud``) only fail at the
-       signature step.
+       signature step. A ``token_type`` claim other than ``pat`` or
+       ``oidc`` fails here too.
     2. User liveness: the JWT's ``sub`` must resolve to a User row
        with ``is_active=True`` and ``deleted_at IS NULL``.
     3. AccessToken DB row exists for ``(user, hash_token(token), token_type)``,
@@ -340,7 +345,7 @@ def get_user_and_token_record(
         emit("failure", reason="user_inactive_or_missing", user_id=user_id)
         return None, None
 
-    token_type = TOKEN_TYPE_OIDC if payload.get("token_type") == TOKEN_TYPE_OIDC else TOKEN_TYPE_PAT
+    token_type = payload.get("token_type", TOKEN_TYPE_PAT)
     access_token_record = (
         AccessToken.objects.filter(user=user, token_hash=hash_token(token), token_type=token_type)
         .select_related("team")
