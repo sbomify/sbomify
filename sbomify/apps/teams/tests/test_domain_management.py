@@ -1,4 +1,5 @@
 import pytest
+from django.utils import timezone
 
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.core.utils import number_to_random_token
@@ -73,6 +74,34 @@ def test_manage_team_domain(authenticated_api_client, sample_user):
     team.refresh_from_db()
     assert team.custom_domain is None
     assert team.custom_domain_validated is False
+
+
+@pytest.mark.django_db
+def test_a_new_domain_does_not_inherit_the_old_domains_backoff(authenticated_api_client, sample_user):
+    """The probe checks a newly saved domain on its next run."""
+    client, access_token = authenticated_api_client
+    team = Team.objects.create(
+        name="Backoff Team",
+        billing_plan="business",
+        custom_domain="old.example.com",
+        custom_domain_verification_failures=10,
+        custom_domain_last_checked_at=timezone.now(),
+    )
+    team.key = number_to_random_token(team.pk)
+    team.save()
+    Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
+
+    response = client.put(
+        f"/api/v1/workspaces/{team.key}/domain",
+        {"domain": "new.example.com"},
+        content_type="application/json",
+        **get_api_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    team.refresh_from_db()
+    assert team.custom_domain_verification_failures == 0
+    assert team.custom_domain_last_checked_at is None
 
 
 @pytest.mark.django_db
