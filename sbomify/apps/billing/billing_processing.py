@@ -423,8 +423,6 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
             logger.info("Webhook already processed, skipping")
             return
 
-        _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
-
         applied, previous_status = _update_billing_from_subscription(
             team, subscription, webhook_id, _event_created(event)
         )
@@ -543,6 +541,8 @@ def _update_billing_from_subscription(
         if _is_older_than_applied(billing_limits, created):
             logger.info("Ignoring a subscription event older than the last one applied")
             return False, None
+
+        _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
 
         previous_status = billing_limits.get("subscription_status")
         billing_limits["subscription_status"] = subscription.status

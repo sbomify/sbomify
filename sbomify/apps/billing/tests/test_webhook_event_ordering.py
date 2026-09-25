@@ -14,6 +14,7 @@ import pytest
 import stripe
 
 from sbomify.apps.billing import billing_processing, email_notifications
+from sbomify.apps.billing.stripe_client import BillingRetryableError
 from sbomify.apps.teams.models import Team
 
 pytestmark = pytest.mark.django_db
@@ -91,6 +92,28 @@ def test_an_older_update_does_not_replace_a_newer_status(workspace):
 
     workspace.refresh_from_db()
     assert workspace.billing_plan_limits["subscription_status"] == "past_due"
+
+
+def test_only_an_update_that_applies_clears_the_subscription_cache(workspace, mocker):
+    invalidate = mocker.patch.object(billing_processing, "invalidate_subscription_cache")
+    billing_processing.handle_subscription_updated(_subscription("past_due"), event=_event("evt_past_due", 200))
+    invalidate.assert_called_once_with("sub_test123", workspace.key)
+    invalidate.reset_mock()
+
+    billing_processing.handle_subscription_updated(_subscription("active"), event=_event("evt_active", 100))
+
+    invalidate.assert_not_called()
+
+
+def test_an_update_clears_the_subscription_cache_before_its_trial_handling_can_fail(workspace, mocker):
+    invalidate = mocker.patch.object(billing_processing, "invalidate_subscription_cache")
+    mocker.patch.object(billing_processing, "handle_trial_period", side_effect=BillingRetryableError("db blip"))
+    trialing = _subscription("trialing", trial_end=100)
+
+    with pytest.raises(BillingRetryableError):
+        billing_processing.handle_subscription_updated(trialing, event=_event("evt_trial", 90))
+
+    invalidate.assert_called_once_with("sub_test123", workspace.key)
 
 
 def test_a_late_trial_notice_does_not_end_a_trial_that_became_paid(workspace, notify):
