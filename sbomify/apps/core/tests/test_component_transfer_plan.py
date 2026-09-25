@@ -11,12 +11,13 @@ import datetime
 
 import pytest
 from django.conf import settings
+from django.db import transaction
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.apis import _enforce_limit_under_lock
+from sbomify.apps.core.apis import _check_billing_limits, _enforce_limit_under_lock
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.sboms.models import Component
@@ -125,3 +126,55 @@ def test_the_plan_that_decides_visibility_is_read_under_the_lock(
     component.refresh_from_db()
     assert component.team == target
     assert component.visibility == Component.Visibility.PUBLIC
+
+
+def test_the_count_under_the_lock_decides(sample_user, team_with_business_plan, team_with_community_plan, mocker):
+    limit = BillingPlan.objects.get(key="community").max_components
+    for index in range(limit - 1):
+        Component.objects.create(name=f"existing-{index}", team=team_with_community_plan)
+    component = Component.objects.create(name="moving", team=team_with_business_plan)
+
+    def pre_check_then_fill_the_last_slot(team_id: str, resource_type: str):
+        # The pre-check still sees room. Only the count under the lock sees the workspace full.
+        verdict = _check_billing_limits(team_id, resource_type)
+        Component.objects.create(name="arrived", team=team_with_community_plan)
+        return verdict
+
+    mocker.patch("sbomify.apps.core.views._check_billing_limits", side_effect=pre_check_then_fill_the_last_slot)
+
+    response = _transfer(sample_user, component, team_with_community_plan)
+
+    assert response.status_code == 403
+    assert f"You currently have {limit} components".encode() in response.content
+    component.refresh_from_db()
+    assert component.team == team_with_business_plan
+
+
+def test_the_receiving_workspace_is_counted_under_its_lock_inside_the_transaction(
+    sample_user, team_with_business_plan, ensure_billing_plans, mocker
+):
+    target = _paid_workspace(sample_user)
+    component = Component.objects.create(name="moving", team=team_with_business_plan)
+    depth: dict[str, int] = {}
+
+    def at_depth(name: str, check):
+        def record(team_id: str, resource_type: str):
+            # Savepoint depth, not in_atomic_block: the test itself runs inside a transaction.
+            depth[name] = len(transaction.get_connection().savepoint_ids)
+            return check(team_id, resource_type)
+
+        return record
+
+    pre_check = mocker.patch(
+        "sbomify.apps.core.views._check_billing_limits", side_effect=at_depth("pre-check", _check_billing_limits)
+    )
+    lock = mocker.patch(
+        "sbomify.apps.core.views._enforce_limit_under_lock", side_effect=at_depth("lock", _enforce_limit_under_lock)
+    )
+
+    response = _transfer(sample_user, component, target)
+
+    assert response.status_code == 302
+    pre_check.assert_called_once_with(str(target.id), "component")
+    lock.assert_called_once_with(str(target.id), "component")
+    assert depth["lock"] > depth["pre-check"]
