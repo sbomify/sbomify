@@ -321,7 +321,7 @@ def test_pager_drives_the_current_page_state(rendered: str) -> None:
     assert 'aria-label="Next page"' in pager
     assert ':disabled="currentPage === totalPages"' in pager
     assert '@click="if (currentPage < totalPages) currentPage++"' in pager
-    assert '<span x-text="currentPage"></span> / <span x-text="totalPages"></span>' in pager
+    assert '<span x-text="$number(currentPage)"></span> / <span x-text="$number(totalPages)"></span>' in pager
 
 
 def test_pager_arrows_render_through_the_shared_page_control(rendered: str) -> None:

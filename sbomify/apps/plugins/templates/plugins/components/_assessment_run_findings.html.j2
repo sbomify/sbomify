@@ -1,3 +1,4 @@
+{% load humanize %}
 {% load plugins_extras %}
 {% load advisory_tags %}
 {% comment %}One page of a single assessment run's findings, fetched when a reader opens the card.
@@ -142,7 +143,7 @@ filled.{% endcomment %}
                                         {% else %}
                                             <details class="group">
                                                 <summary class="text-xs text-primary cursor-pointer hover:underline">
-                                                    {{ finding.references|length }} references
+                                                    {{ finding.references|length|intcomma }} references
                                                 </summary>
                                                 <div class="mt-1 flex flex-col gap-1">
                                                     {% for ref in finding.references %}

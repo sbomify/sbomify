@@ -1,3 +1,4 @@
+{% load humanize %}
 {% comment %}
 A workspace in the switcher page. The shared card, avatar, badges and buttons
 provide the recipes. This component only arranges workspace identity and
@@ -28,9 +29,9 @@ permission checks and form destinations beside the workspace being acted on.
         </div>
     </div>
     <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs leading-5 text-text-muted">
-        <span class="inline-flex items-center gap-1.5"><i class="fas fa-users" aria-hidden="true"></i>{{ member_count }} member{{ member_count|pluralize }}</span>
+        <span class="inline-flex items-center gap-1.5"><i class="fas fa-users" aria-hidden="true"></i>{{ member_count|intcomma }} member{{ member_count|pluralize }}</span>
         {% if invitation_count and invitation_count != '0' %}
-            <span class="inline-flex items-center gap-1.5"><i class="fas fa-envelope" aria-hidden="true"></i>{{ invitation_count }} pending invitation{{ invitation_count|pluralize }}</span>
+            <span class="inline-flex items-center gap-1.5"><i class="fas fa-envelope" aria-hidden="true"></i>{{ invitation_count|intcomma }} pending invitation{{ invitation_count|pluralize }}</span>
         {% endif %}
     </div>
 </div>

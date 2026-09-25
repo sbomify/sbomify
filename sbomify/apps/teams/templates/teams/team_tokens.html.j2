@@ -24,7 +24,7 @@
             {% for t in unscoped_tokens %}{{ t.id }},{% endfor %}
             ])">Select all</c-forms.checkbox>
             <div class="flex flex-wrap items-center gap-2">
-                <c-buttons.danger size="sm" x-show="selected.length" x-cloak @click="showBulkModal = true"><span x-text="`Revoke selected (${selected.length})`">Revoke selected</span></c-buttons.danger>
+                <c-buttons.danger size="sm" x-show="selected.length" x-cloak @click="showBulkModal = true"><span x-text="`Revoke selected (${$number(selected.length)})`">Revoke selected</span></c-buttons.danger>
                 <c-buttons.ghost-danger size="sm" @click="showRevokeAllModal = true">Revoke all</c-buttons.ghost-danger>
             </div>
             </c-tables.toolbar>

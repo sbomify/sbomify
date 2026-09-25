@@ -1110,7 +1110,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         <i class="fas fa-chevron-left" aria-hidden="true"></i>
         </c-navigation.page-button>
         <template x-for="page in [1, 2, 3]" :key="page">
-            <c-navigation.page-button ::data-active="currentPage === page" @click="currentPage = page" x-text="page" />
+            <c-navigation.page-button ::data-active="currentPage === page" @click="currentPage = page" x-text="$number(page)" />
         </template>
         <c-navigation.page-ellipsis />
         <c-navigation.page-button ::data-active="currentPage === 5" @click="currentPage = 5">5</c-navigation.page-button>
@@ -1131,7 +1131,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         label and optional icon. The slot places a change indicator beside the value.
     </p>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <c-layout.stat-card value="1,234" label="Total products">
+        <c-layout.stat-card value="1234" label="Total products">
         <c-layout.stat.change-up><i class="fas fa-arrow-up" aria-hidden="true"></i> 12%</c-layout.stat.change-up>
         </c-layout.stat-card>
         <c-layout.stat-card accent="danger" icon="fas fa-shield-halved" value="17" label="Vulnerabilities">
@@ -1154,7 +1154,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     </p>
     <div x-data="{ count: 0 }" class="flex flex-wrap items-center gap-4">
         <c-layout.stat-card compact accent="warning" icon="fas fa-clock" x_value="count" label="Pending assessments" />
-        <c-buttons.secondary @click="count = count ? 0 : 3">Toggle example count</c-buttons.secondary>
+        <c-buttons.secondary @click="count = count ? 0 : 12345">Toggle example count</c-buttons.secondary>
     </div>
     <h2 id="severity" class="text-xl font-semibold text-text">Severity badges</h2>
     <c-cards.card>

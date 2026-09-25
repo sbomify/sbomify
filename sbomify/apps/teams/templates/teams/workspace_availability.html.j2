@@ -1,4 +1,5 @@
 {% extends "core/base.html.j2" %}
+{% load humanize %}
 {% block title %}Workspace availability{% endblock %}
 {% block main %}
     <main id="main-content" class="py-12 min-h-screen bg-background">
@@ -9,7 +10,7 @@
             <p class="text-lg text-text-muted mb-6">{{ error_message }}</p>
             <c-feedback.alert variant="warning" class="mb-6">
             {% if availability.member_limit %}
-                The {{ availability.plan_name }} plan allows {{ availability.member_limit }} member{{ availability.member_limit|pluralize }}.
+                The {{ availability.plan_name }} plan allows {{ availability.member_limit|intcomma }} member{{ availability.member_limit|pluralize }}.
                 This workspace currently has {{ availability.current_members }} member{{ availability.current_members|pluralize }}.
             {% else %}
                 {{ availability.team_name }} is at capacity for its current plan. Ask the workspace owner to review their billing plan or remove inactive members.

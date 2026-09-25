@@ -1,4 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
+{% load humanize %}
 {% load static public_url_tags %}
 {% block title %}{{ advisory.title }} · sbomify{% endblock %}
 {% block dashboard_content %}
@@ -78,7 +79,7 @@
         <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-lg font-semibold text-text">Timeline</h2>
-                <span class="text-xs text-text-muted">{{ advisory.updates_count }} update{{ advisory.updates_count|pluralize }}</span>
+                <span class="text-xs text-text-muted">{{ advisory.updates_count|intcomma }} update{{ advisory.updates_count|pluralize }}</span>
             </div>
             {# Always-visible composer as the top node — a quick addition. #}
             {% if has_crud_permissions %}
@@ -476,7 +477,7 @@
             <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
             <c-buttons.primary type="submit" form="linkVexForm" ::disabled="sel.length === 0" ::class="sel.length === 0 ? 'opacity-50 cursor-not-allowed' : ''">
             <i class="fas fa-file-shield mr-2"></i>
-            <span x-text="sel.length > 1 ? ('Link ' + sel.length + ' VEX documents') : 'Link VEX'"></span>
+            <span x-text="sel.length > 1 ? ('Link ' + $number(sel.length) + ' VEX documents') : 'Link VEX'"></span>
             </c-buttons.primary>
             </c-slot>
             </c-modal>

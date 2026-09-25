@@ -30,7 +30,7 @@
     Your account will be deactivated immediately and permanently deleted after <strong>14 days</strong>.
     </c-forms.hint>
     <c-feedback.alert variant="warning" icon="fas fa-key" class="mb-4" x-show="tokenCount > 0" x-cloak>
-    You have <strong x-text="tokenCount"></strong> active API token(s) that will be <strong>immediately revoked</strong>. Any CI/CD pipelines using these tokens will stop working.
+    You have <strong x-text="$number(tokenCount)"></strong> active API token(s) that will be <strong>immediately revoked</strong>. Any CI/CD pipelines using these tokens will stop working.
     </c-feedback.alert>
     <c-feedback.alert variant="info" title="Immediate effects" class="mb-4">
     <ul class="pl-4 space-y-1">

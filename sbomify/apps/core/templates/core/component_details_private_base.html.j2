@@ -1,4 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
+{% load humanize %}
 {% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
@@ -62,9 +63,9 @@
            aria-hidden="true"></i>
         <c-chips.metric.value>
         {% if component.component_type == 'bom' %}
-            {{ component.sbom_count|default:0 }}
+            {{ component.sbom_count|default:0|intcomma }}
         {% else %}
-            {{ component.document_count|default:0 }}
+            {{ component.document_count|default:0|intcomma }}
         {% endif %}
         </c-chips.metric.value>
         <c-chips.metric.label>
@@ -98,21 +99,21 @@
             <c-chips.metric-chip accent="{{ vuln_chip_accent }}">
             <i class="fas fa-triangle-exclamation text-xs" aria-hidden="true"></i>
             {% if vuln_summary.critical %}
-                <c-chips.metric.value>{{ vuln_summary.critical }} Critical</c-chips.metric.value>
+                <c-chips.metric.value>{{ vuln_summary.critical|intcomma }} Critical</c-chips.metric.value>
             {% endif %}
             {% if vuln_summary.high %}
                 {% if vuln_summary.critical %}<span class="text-text-muted">·</span>{% endif %}
-                <c-chips.metric.value>{{ vuln_summary.high }} High</c-chips.metric.value>
+                <c-chips.metric.value>{{ vuln_summary.high|intcomma }} High</c-chips.metric.value>
             {% endif %}
             {% if vuln_summary.medium %}
                 {% if vuln_summary.critical or vuln_summary.high %}<span class="text-text-muted">·</span>{% endif %}
-                <c-chips.metric.value>{{ vuln_summary.medium }} Medium</c-chips.metric.value>
+                <c-chips.metric.value>{{ vuln_summary.medium|intcomma }} Medium</c-chips.metric.value>
             {% endif %}
             {% if vuln_summary.low %}
                 {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium %}
                     <span class="text-text-muted">·</span>
                 {% endif %}
-                <c-chips.metric.value>{{ vuln_summary.low }} Low</c-chips.metric.value>
+                <c-chips.metric.value>{{ vuln_summary.low|intcomma }} Low</c-chips.metric.value>
             {% endif %}
             {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
             {% if vuln_summary.suppressed %}
