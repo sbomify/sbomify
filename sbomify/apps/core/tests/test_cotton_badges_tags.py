@@ -37,7 +37,7 @@ def _badge(rendered: str, label: str) -> str:
         ("Warning", "text-warning-ink bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)]"),
         ("Danger", "text-danger-ink bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)]"),
         ("Info", "text-info-ink bg-[color-mix(in_oklab,var(--color-info)_12%,transparent)]"),
-        ("Violet", "text-accent bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)]"),
+        ("Violet", "text-accent-ink bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)]"),
         ("Accent", "bg-[linear-gradient(135deg,var(--color-primary-dark)_0%,var(--color-accent-pink)_100%)]"),
         ("KEV", "text-white bg-danger"),
     ],
@@ -99,21 +99,23 @@ def test_badge_slot_carries_nested_markup(rendered: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("label", "token"),
+    ("label", "ink", "tint"),
     [
-        ("Critical", "var(--color-severity-critical)"),
-        ("High", "var(--color-severity-high)"),
-        ("Medium", "var(--color-severity-medium)"),
-        ("Low", "var(--color-severity-low)"),
-        ("Unknown", "var(--color-text-muted)"),
-        ("Off scale", "var(--color-text-muted)"),
+        ("Critical", "var(--color-severity-critical)", "var(--color-severity-critical)"),
+        ("High", "var(--color-severity-high)", "var(--color-severity-high)"),
+        ("Medium", "var(--color-severity-medium)", "var(--color-severity-medium)"),
+        ("Low", "var(--color-severity-low)", "var(--color-severity-low)"),
+        # The neutral band tints with the muted ink but reads with the secondary
+        # one: muted on its own 12% tint measures 4.17:1 on a white surface.
+        ("Unknown", "var(--color-text-secondary)", "var(--color-text-muted)"),
+        ("Off scale", "var(--color-text-secondary)", "var(--color-text-muted)"),
     ],
 )
-def test_severity_level_prop_picks_the_band_accent(rendered: str, label: str, token: str) -> None:
+def test_severity_level_prop_picks_the_band_accent(rendered: str, label: str, ink: str, tint: str) -> None:
     badge = _badge(rendered, label)
-    assert f"text-[color:{token}]" in badge
-    assert f"bg-[color-mix(in_oklab,{token}_12%,transparent)]" in badge
-    assert f"border-[color-mix(in_oklab,{token}_20%,transparent)]" in badge
+    assert f"text-[color:{ink}]" in badge
+    assert f"bg-[color-mix(in_oklab,{tint}_12%,transparent)]" in badge
+    assert f"border-[color-mix(in_oklab,{tint}_20%,transparent)]" in badge
 
 
 def test_severity_shape_segment_replaces_the_badge_shape(rendered: str) -> None:
@@ -153,7 +155,7 @@ def test_severity_dynamic_keys_every_band_off_the_attribute(rendered: str, label
 def test_severity_dynamic_rests_on_the_unknown_band(rendered: str) -> None:
     badge = _badge(rendered, "Runtime unknown")
     assert 'data-level="unknown"' in badge
-    assert "text-[color:var(--color-text-muted)]" in badge
+    assert "text-[color:var(--color-text-secondary)]" in badge
     assert "bg-[color-mix(in_oklab,var(--color-text-muted)_12%,transparent)]" in badge
 
 
@@ -174,7 +176,7 @@ def test_severity_dynamic_forwards_class_and_alpine_bindings(rendered: str) -> N
     ("label", "fmt", "recipe_bit"),
     [
         ("CycloneDX", "cyclonedx", "data-[format=cyclonedx]:text-success-ink"),
-        ("SPDX", "spdx", "data-[format=spdx]:text-accent"),
+        ("SPDX", "spdx", "data-[format=spdx]:text-accent-ink"),
     ],
 )
 def test_format_prop_writes_the_attribute_that_picks_the_colour(
@@ -288,10 +290,10 @@ def test_dynamic_badge_keeps_every_recipe_and_binds_only_the_variant(rendered: s
     assert "data-[variant=danger]:text-danger-ink" in danger
     assert "data-[variant=success]:text-success-ink" in danger
     # And the neutral tint is the resting state, so an unknown variant degrades quietly.
-    # Written as an arbitrary value: the text-text-muted utility is !important, which
+    # Written as an arbitrary value: the token's own utility is !important, which
     # would outrank every variant recipe and leave each one with neutral text.
-    assert "text-[color:var(--color-text-muted)]" in danger
-    assert " text-text-muted" not in danger
+    assert "text-[color:var(--color-text-secondary)]" in danger
+    assert " text-text-secondary" not in danger
 
 
 def test_dynamic_badge_defaults_to_the_neutral_variant(rendered: str) -> None:
@@ -306,7 +308,7 @@ def test_dynamic_badge_carries_the_violet_artifact_recipe(rendered: str) -> None
     """The artifact-type column picks violet for VEX, so the dynamic badge must hold it."""
     violet = _probe(rendered, "dyn-violet")
     assert 'data-variant="violet"' in violet
-    assert "data-[variant=violet]:text-accent" in violet
+    assert "data-[variant=violet]:text-accent-ink" in violet
     assert "data-[variant=violet]:bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)]" in violet
     assert "data-[variant=violet]:border-[color-mix(in_oklab,var(--color-accent)_20%,transparent)]" in violet
 

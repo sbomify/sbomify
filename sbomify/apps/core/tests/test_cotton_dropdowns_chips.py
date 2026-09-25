@@ -333,7 +333,7 @@ def test_assessment_pill_without_a_status_is_the_quiet_tint(rendered: str) -> No
     assert 'data-status=""' in pill
     classes = _classes(rendered, ASSESSMENT, "+2")
     assert (
-        "text-[color:var(--color-text-muted)] bg-[color-mix(in_oklab,var(--color-border)_20%,transparent)]" in classes
+        "text-[color:var(--color-text-secondary)] bg-[color-mix(in_oklab,var(--color-border)_20%,transparent)]" in classes
     )
     assert "border-[color-mix(in_oklab,var(--color-border)_40%,transparent)]" in classes
 
