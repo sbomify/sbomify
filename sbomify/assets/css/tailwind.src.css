@@ -144,17 +144,6 @@
   --color-severity-high: rgb(253 126 20);       /* 5.19 */
   --color-severity-medium: rgb(255 193 7);      /* 7.55 */
   --color-severity-low: rgb(13 202 240);        /* 6.46 */
-
-  /* Severity fills: solid chips and bars that always carry white text, on the
-     public Trust Center as well as in the app. Deliberately theme-independent
-     — the contrast partner is #fff either way, so there is nothing to retune
-     — and so not redeclared under :root.light. Same hues as the light
-     severity text ramp, which clears the same >= 4.5:1-against-white bar. */
-  --color-severity-critical-fill: rgb(185 28 28);  /* 6.47 under white text */
-  --color-severity-high-fill: rgb(172 81 6);       /* 5.34 */
-  --color-severity-medium-fill: rgb(138 101 8);    /* 5.32 */
-  --color-severity-low-fill: rgb(14 116 144);      /* 5.36 */
-  --color-severity-none-fill: rgb(100 116 139);    /* 4.76 */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */
   --color-alert-success-border: rgb(187 247 208); /* var(--color-alert-success-border) */
   --color-alert-danger-bg: rgb(254 242 242);    /* var(--color-alert-danger-bg) */
@@ -177,6 +166,24 @@
    Dark Theme (Default) - Refined Navy Palette
    ============================================ */
 :root {
+  /* Severity fills: solid chips and bars that always carry white text, on the
+     public Trust Center as well as in the app. Same hues as the light severity
+     text ramp, which clears the same >= 4.5:1-against-white bar.
+
+     Two deliberate placements. They are theme-independent, because the contrast
+     partner is #fff either way, so there is nothing to retune and they are not
+     redeclared under :root.light. And they live in this plain :root block
+     rather than in @theme, because their only consumer is static/css/
+     trust-center.css, which Tailwind does not process: an @theme variable no
+     Tailwind-scanned source mentions is tree-shaken out of the build, and every
+     rule reading it would fall back to transparent. Verified against the
+     production build, not assumed. */
+  --color-severity-critical-fill: rgb(185 28 28);  /* 6.47 under white text */
+  --color-severity-high-fill: rgb(172 81 6);       /* 5.34 */
+  --color-severity-medium-fill: rgb(138 101 8);    /* 5.32 */
+  --color-severity-low-fill: rgb(14 116 144);      /* 5.36 */
+  --color-severity-none-fill: rgb(100 116 139);    /* 4.76 */
+
   /* Primary Brand Colors */
 
   /* Background Layers (darkest to lightest for depth) */

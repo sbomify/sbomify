@@ -7,7 +7,11 @@ partner, so a value that looks fine in one place can fail in another:
   dark surface.
 * the same names under ``:root.light`` are text over that tint on white.
 * ``--color-severity-*-fill`` is a solid background that always carries white
-  text, in the app and on the public Trust Center.
+  text, in the app and on the public Trust Center. It is declared in the plain
+  ``:root`` block rather than in ``@theme``, because its only consumer is
+  ``static/css/trust-center.css``, which Tailwind does not scan: an ``@theme``
+  variable no scanned source mentions is tree-shaken out of the build, and the
+  rules reading it would resolve to transparent.
 
 These ran at 1.53 to 3.81 after the prototype migration reused the dark ramp on
 white, so the numbers are pinned here rather than left to a screenshot review.
@@ -86,6 +90,11 @@ def light(stylesheet: str) -> dict[str, tuple[int, int, int]]:
     return _declarations(stylesheet, ":root.light")
 
 
+@pytest.fixture(scope="module")
+def root(stylesheet: str) -> dict[str, tuple[int, int, int]]:
+    return _declarations(stylesheet, ":root")
+
+
 @pytest.mark.parametrize("level", LEVELS)
 def test_dark_severity_text_is_readable_on_its_own_tint(dark, level: str) -> None:
     colour = dark[level]
@@ -107,11 +116,32 @@ def test_each_level_has_a_distinct_light_value(light, dark, level: str) -> None:
 
 
 @pytest.mark.parametrize("level", (*LEVELS, "none"))
-def test_fills_carry_white_text(dark, level: str) -> None:
-    assert contrast(dark[f"{level}-fill"], WHITE) >= SMALL_TEXT
+def test_fills_carry_white_text(root, level: str) -> None:
+    assert contrast(root[f"{level}-fill"], WHITE) >= SMALL_TEXT
 
 
 def test_fills_are_theme_independent(light) -> None:
     """Fills sit under white text in both themes, so :root.light must not
     shadow them with a second value that could drift."""
     assert not [name for name in light if name.endswith("-fill")]
+
+
+def test_fills_are_declared_where_the_build_will_emit_them(dark, root) -> None:
+    """Tailwind tree-shakes an @theme variable that no scanned source mentions.
+
+    trust-center.css is plain static CSS, outside Tailwind's source scanning, so
+    a fill declared in @theme is dropped from the build and every rule reading it
+    falls back to transparent: the CVSS chip turns white-on-white and the facet
+    dots disappear. The plain :root block is emitted verbatim, so that is where
+    these belong.
+    """
+    assert not [name for name in dark if name.endswith("-fill")], (
+        "severity fills must not live in @theme; trust-center.css is not scanned by Tailwind"
+    )
+    assert sorted(name for name in root if name.endswith("-fill")) == [
+        "critical-fill",
+        "high-fill",
+        "low-fill",
+        "medium-fill",
+        "none-fill",
+    ]
