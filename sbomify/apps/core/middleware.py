@@ -647,11 +647,12 @@ class HtmxMessagesMiddleware:
 
 
 def _carries_signed_token(request: HttpRequest) -> bool:
-    """Whether the request's bearer token carries our signature.
+    """Whether the request's bearer token passes ``decode_personal_access_token()``.
 
-    ponytail: signature only, so a revoked token still passes here; the view's
-    own auth refuses it after the body is inflated. A full check here would
-    record every authentication twice.
+    That checks the signature and the required claims, plus the expiry and
+    audience on an OIDC token. It reads no database row, so a revoked token still
+    passes here; the view's own auth refuses it after the middleware inflates the
+    body. A full check here would record every authentication twice.
     """
     from jwt.exceptions import DecodeError
 
