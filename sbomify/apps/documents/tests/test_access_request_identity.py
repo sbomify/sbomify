@@ -21,6 +21,7 @@ from django.urls import reverse
 
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
+from sbomify.apps.teams.models import Member
 
 pytestmark = pytest.mark.django_db
 
@@ -129,6 +130,26 @@ def test_anonymous_caller_cannot_fetch_the_nda(team_with_business_plan, company_
     response = Client().get(_nda_url(team_with_business_plan, pending_request))
 
     assert response.status_code == 401
+
+
+def test_requester_can_fetch_their_nda(team_with_business_plan, company_nda, pending_request, nda_storage, guest_user):
+    response = _browser(guest_user).get(_nda_url(team_with_business_plan, pending_request))
+
+    assert response.status_code == 200
+    assert response.content == NDA_CONTENT
+
+
+@pytest.mark.parametrize(("role", "status"), [("owner", 200), ("admin", 200), ("member", 403), (None, 403)])
+def test_only_an_owner_or_admin_can_fetch_someone_elses_nda(
+    team_with_business_plan, company_nda, pending_request, nda_storage, role, status
+):
+    reader = get_user_model().objects.create_user(username="reader", email="reader@example.com")
+    if role:
+        Member.objects.create(team=team_with_business_plan, user=reader, role=role)
+
+    response = _browser(reader).get(_nda_url(team_with_business_plan, pending_request))
+
+    assert response.status_code == status
 
 
 def test_requester_can_still_sign_their_own_nda(
