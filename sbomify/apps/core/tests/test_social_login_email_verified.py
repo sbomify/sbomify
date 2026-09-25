@@ -160,7 +160,10 @@ class TestRecordingTheConfirmation:
         user.refresh_from_db()
         assert (user.email, user.email_verified) == ("new@example.com", False)
 
-    def test_the_backfill_reads_the_claims_each_last_login_stored(self) -> None:
+    @pytest.mark.parametrize("batch_size", [1, 2000])
+    def test_the_backfill_reads_the_claims_each_last_login_stored(
+        self, monkeypatch: pytest.MonkeyPatch, batch_size: int
+    ) -> None:
         """Logins before this fix recorded False whatever the provider said; the claims they stored were right."""
         cases = {
             "confirmed@example.com": ({"userinfo": {"email": "confirmed@example.com", "email_verified": True}}, True),
@@ -173,6 +176,7 @@ class TestRecordingTheConfirmation:
             SocialAccount.objects.create(user=user, provider="keycloak", uid=email, extra_data=extra_data)
 
         backfill = importlib.import_module("sbomify.apps.core.migrations.0029_user_email_verified_from_last_login")
+        monkeypatch.setattr(backfill, "BATCH_SIZE", batch_size)
         backfill.record_email_verified_from_last_login(apps, None)
 
         assert {u.email: u.email_verified for u in User.objects.all()} == {e: v for e, (_, v) in cases.items()}
