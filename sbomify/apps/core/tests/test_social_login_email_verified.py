@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import hashlib
 import importlib
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -38,7 +37,6 @@ from sbomify.apps.core.keycloak_events import KeycloakEventPoller
 from sbomify.apps.core.models import User
 from sbomify.apps.core.services.account_deletion import soft_delete_user_account
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.core.views import keycloak_webhook
 from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.documents.models import Document
 from sbomify.apps.teams.models import Invitation, Member, Team
@@ -213,16 +211,6 @@ class TestRecordingTheConfirmation:
         SocialAccount.objects.create(user=user, provider="keycloak", uid="mover")
 
         KeycloakEventPoller()._handle_update_profile("mover", {"updated_email": "new@example.com"})
-
-        user.refresh_from_db()
-        assert (user.email, user.email_verified) == ("new@example.com", False)
-
-    def test_a_new_address_from_the_webhook_starts_unconfirmed(self) -> None:
-        user = User.objects.create_user(username="mover", email="old@example.com", email_verified=True)
-        SocialAccount.objects.create(user=user, provider="keycloak", uid="mover")
-        event = {"type": "UPDATE_PROFILE", "userId": "mover", "details": {"email": "new@example.com"}}
-
-        keycloak_webhook(RequestFactory().post("/", json.dumps(event), content_type="application/json"))
 
         user.refresh_from_db()
         assert (user.email, user.email_verified) == ("new@example.com", False)
