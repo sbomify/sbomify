@@ -12,7 +12,7 @@ import pytest
 from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.base_user import AbstractBaseUser
-from django.db import connection, models
+from django.db import IntegrityError, connection, models, transaction
 from django.test import Client, RequestFactory
 from django.test.utils import isolate_apps
 from django.urls import reverse
@@ -81,6 +81,24 @@ def test_the_database_holds_the_token_hash_and_never_the_token(
     assert record is not None
     with pytest.raises(AttributeError):
         record.encoded_token
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        pytest.param({}, id="missing"),
+        pytest.param({"token_hash": "g" * 64}, id="not-hex"),
+        pytest.param({"token_hash": _sha256("token").upper()}, id="uppercase"),
+        pytest.param({"token_hash": _sha256("token")[:12]}, id="fingerprint"),
+        pytest.param({"token_hash": _sha256("token")[:63]}, id="63-characters"),
+    ],
+)
+def test_the_table_refuses_a_token_hash_that_is_not_a_sha256(
+    sample_user: AbstractBaseUser, fields: dict[str, str]
+) -> None:
+    """A mint path that forgets the hash would otherwise store a row no token can match."""
+    with pytest.raises(IntegrityError, match="access_token_stores_a_hash"), transaction.atomic():
+        AccessToken.objects.create(user=sample_user, description="t", **fields)
 
 
 def test_an_oidc_row_read_back_from_the_database_is_still_oidc(sample_user: AbstractBaseUser) -> None:
