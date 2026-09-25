@@ -2304,3 +2304,43 @@ def test_team_response_omits_oidc_bot_memberships(
     emails = [member.user.email for member in response.members]
     assert bot_user.email not in emails
     assert sample_team_with_owner_member.user.email in emails
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "invite_token",
+    [
+        "91a0cbcd-5aad-4de1-b18f",  # the truncation a mail client's line wrap produces
+        "not-a-token",
+        "42",  # a legacy numeric invite link
+    ],
+)
+def test_accept_invite_with_an_unparseable_token_is_not_found(django_user_model, community_plan, invite_token):
+    """``Invitation.token`` is a UUIDField, so an unusable token used to raise
+    ValidationError straight out of the query and 500 the request. A broken invite
+    link is a missing invitation."""
+    user = django_user_model.objects.create_user(
+        username="mangled-invite-recipient",
+        email="mangled-invite@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Mangled Invite Workspace", billing_plan=community_plan.key)
+    Member.objects.create(team=team, user=user, role="owner", is_default_team=True)
+
+    client = Client()
+    assert client.login(username="mangled-invite-recipient", password="secret")
+    setup_authenticated_client_session(client, team, user)
+
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": invite_token}))
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_accept_invite_with_an_unparseable_token_sends_a_signed_out_visitor_to_login():
+    """The anonymous branch reaches the same query first, so it 500'd too."""
+    client = Client()
+
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": "not-a-token"}))
+
+    assert response.status_code == 302

@@ -41,6 +41,7 @@ from sbomify.apps.teams.permissions import check_member_removal
 from sbomify.apps.teams.queries import count_team_members
 from sbomify.apps.teams.services.member_notifications import notify_owners_of_owner_invitation
 from sbomify.apps.teams.utils import (
+    find_invitation_by_token,
     redirect_to_team_settings,
     switch_active_workspace,
     update_user_teams_session,
@@ -357,7 +358,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
 def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFound | HttpResponse:
     log.info("Accepting invitation %s", invite_token)
 
-    invitation = Invitation.objects.filter(token=invite_token).first()
+    invitation = find_invitation_by_token(invite_token)
 
     # Backward compatibility for legacy numeric invite links
     if invitation is None and invite_token.isdigit():

@@ -40,3 +40,27 @@ def test_the_route_names_resolve_without_a_doubled_namespace():
     only reversing catches it."""
     assert reverse("tea:openapi-json").endswith("openapi.json")
     assert reverse("tea:api-root") == BASE
+
+
+WORKSPACE_BASE = f"/public/DBirHY9Rei/tea/v{TEA_API_VERSION}/"
+
+
+@pytest.mark.parametrize("path", ["docs", "openapi.json"])
+def test_the_openapi_surface_is_reachable_under_a_workspace_key(client: Client, path: str):
+    """The same surface on the workspace-key mount.
+
+    The API is mounted twice, and django-ninja reverses its own routes against
+    the single ``urls_namespace`` it was given. That name resolves to the
+    custom-domain mount, which takes no workspace_key, so both endpoints 500'd
+    here while the custom-domain ones stayed green.
+    """
+    response = client.get(f"{WORKSPACE_BASE}{path}")
+
+    assert response.status_code == 200
+
+
+def test_the_workspace_schema_points_back_at_the_workspace_mount(client: Client):
+    """The prefix has to carry the workspace key, or every documented path is wrong."""
+    schema = client.get(f"{WORKSPACE_BASE}openapi.json").json()
+
+    assert any(path.startswith(WORKSPACE_BASE) for path in schema["paths"])
