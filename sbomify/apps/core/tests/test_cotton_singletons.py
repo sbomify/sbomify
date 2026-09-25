@@ -393,10 +393,10 @@ def test_token_display_label_row(rendered: str) -> None:
 
 def test_token_display_with_nothing_to_do_drops_the_action_rail(rendered: str) -> None:
     section = _section(rendered, "token-nocopy")
-    # The token's own copy wiring, not a bare "copyableValue": a probe section
-    # runs to the next probe, and the copy-button probe next door uses the same
-    # shared component.
-    assert "copySelector: '[data-token-value]'" not in section
+    # This component's own copy control, by the label only it renders. A probe
+    # section runs past its probe into the next one, so a marker shared with any
+    # neighbour would make this assertion answer about the wrong element.
+    assert "Copy token" not in section
     assert "border-l border-solid" not in section
 
 
