@@ -95,6 +95,23 @@ class TestLinkingAnIdentity:
         assert request.user == holder
         assert SocialAccount.objects.get(uid="new-identity").user == holder
 
+    def test_a_confirmed_email_links_the_existing_account_whatever_its_case(self) -> None:
+        holder = User.objects.create_user(username="holder", email="Holder@example.com")
+
+        request = _sign_in("holder@example.com", verified=True)
+
+        assert request.user == holder
+        assert list(User.objects.all()) == [holder]
+
+    def test_a_confirmed_email_held_by_two_accounts_links_neither(self) -> None:
+        for username in ("holder", "other-holder"):
+            User.objects.create_user(username=username, email="holder@example.com")
+
+        request = _sign_in("holder@example.com", verified=True)
+
+        assert not request.user.is_authenticated
+        assert not SocialAccount.objects.exists()
+
 
 @pytest.mark.django_db
 class TestRecordingTheConfirmation:

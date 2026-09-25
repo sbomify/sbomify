@@ -172,14 +172,14 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
 
             try:
                 existing_user = User.objects.get(
-                    email=existing_user.email,
+                    email__iexact=existing_user.email,
                     is_active=True,
                     deleted_at__isnull=True,
                 )
                 # Only an address the provider confirmed may claim an existing account.
                 if _provider_confirmed_email(sociallogin):
                     sociallogin.connect(request, existing_user)
-            except User.DoesNotExist:
+            except (User.DoesNotExist, User.MultipleObjectsReturned):
                 pass
 
         # Sync email_verified status from social provider on every login
