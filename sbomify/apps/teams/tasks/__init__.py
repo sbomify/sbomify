@@ -1,10 +1,12 @@
+import ipaddress
 import json
 import logging
+import socket
 from datetime import timedelta
 from typing import cast
 
+import certifi
 import dramatiq
-import requests
 import urllib3
 from django.db.models import DateTimeField, F
 from django.db.models.functions import Coalesce, Greatest, Now
@@ -25,26 +27,58 @@ MAX_RETRIES = 10
 # Our domain-check answer is a few hundred bytes, and whoever runs the domain
 # chooses what answers the probe. A longer answer is not ours.
 PROBE_MAX_BYTES = 4096
+# Public IPv6 unicast is all allocated from this block. Outside it, is_global
+# still passes NAT64 and site-local addresses, which lead into private networks.
+IPV6_GLOBAL_UNICAST = ipaddress.IPv6Network("2000::/3")
+
+
+def _public_address(domain: str) -> str | None:
+    """The first address the domain resolves to that is on the public internet."""
+    try:
+        resolved = socket.getaddrinfo(domain, 443, type=socket.SOCK_STREAM)
+    except (OSError, UnicodeError):
+        return None
+    for *_, sockaddr in resolved:
+        address = ipaddress.ip_address(sockaddr[0])
+        # is_global also passes multicast.
+        if address.is_global and not address.is_multicast and (address.version == 4 or address in IPV6_GLOBAL_UNICAST):
+            return str(address)
+    return None
 
 
 def _serves_challenge(team_id: int, domain: str) -> bool:
-    """Whether the domain, fetched through public DNS, answers with its challenge."""
-    url = f"https://{domain}/.well-known/com.sbomify.domain-check"
-    headers = {"User-Agent": "sbomify-domain-verification/1.0"}
+    """Whether the domain, fetched from a public address, answers with its challenge."""
+    address = _public_address(domain)
+    if address is None:
+        logger.info(f"Custom domain {domain} has no public address to probe")
+        return False
+    headers = {"Host": domain, "User-Agent": "sbomify-domain-verification/1.0"}
     try:
-        # No redirects: the answer has to come from the domain itself. No retries:
-        # the task's backoff schedules the next attempt.
-        with requests.get(
-            url, headers=headers, timeout=10, verify=True, allow_redirects=False, stream=True
-        ) as response:
-            logger.debug(f"Probe response status: {response.status_code}")
-            if response.status_code != 200:
+        # Connected to the checked address rather than the name, so a DNS answer that
+        # changes after the check cannot move the request. The handshake still names
+        # the domain and checks its certificate. No redirects: the answer has to come
+        # from the domain itself. No retries: the task's backoff schedules the next attempt.
+        with (
+            urllib3.HTTPSConnectionPool(
+                address, 443, server_hostname=domain, cert_reqs="CERT_REQUIRED", ca_certs=certifi.where(), timeout=10
+            ) as pool,
+            pool.urlopen(
+                "GET",
+                "/.well-known/com.sbomify.domain-check",
+                headers=headers,
+                redirect=False,
+                retries=False,
+                preload_content=False,
+            ) as response,
+        ):
+            logger.debug(f"Probe response status: {response.status}")
+            if response.status != 200:
                 return False
-            body = response.raw.read(PROBE_MAX_BYTES + 1, decode_content=True)
+            body = response.read(PROBE_MAX_BYTES + 1, decode_content=True)
         if len(body) > PROBE_MAX_BYTES:
             return False
         answer = json.loads(body)
-    except (requests.RequestException, urllib3.exceptions.HTTPError, ValueError):
+    except (urllib3.exceptions.HTTPError, ValueError):
         return False
     served = answer.get("challenge") if isinstance(answer, dict) else None
     return isinstance(served, str) and served == custom_domain_challenge(team_id, domain)
