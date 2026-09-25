@@ -29,7 +29,8 @@
                 <div class="space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div class="text-center p-4 bg-surface-hover rounded-lg">
-                            <span class="block text-2xl font-bold text-text" x-text="totalComponents"></span>
+                            <span class="block text-2xl font-bold text-text"
+                                  x-text="$number(totalComponents)"></span>
                             <span class="text-sm text-text-muted">Total Components</span>
                         </div>
                         <div class="text-center p-4 bg-surface-hover rounded-lg">
@@ -49,7 +50,7 @@
                         <c-feedback.alert variant="warning" icon="fas fa-triangle-exclamation">
                         <c-slot name="body">
                         <p class="font-semibold m-0">
-                            <span x-text="totalComponents - componentsWithSbom"></span> component(s) missing SBOMs
+                            <span x-text="$number(totalComponents - componentsWithSbom)"></span> component(s) missing SBOMs
                         </p>
                         <p class="mt-0.5 mb-0 opacity-80">
                             Upload SBOMs for all components to achieve full CRA compliance. Components without SBOMs cannot be assessed for BSI TR-03183 conformance.

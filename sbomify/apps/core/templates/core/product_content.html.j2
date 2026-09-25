@@ -1,3 +1,4 @@
+{% load humanize %}
 <c-layout.frame id="product-content" x-data="{ assignOpen: false, removeTarget: null, isPublic: {{ product.is_public|yesno:'true,false' }} }" @remove-product-component.window="removeTarget = $event.detail" @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic" hx-get="{{ inventory.base_url }}" hx-include="#product-components-filters" hx-trigger="refresh-product from:body" hx-target="this" hx-swap="outerHTML show:none" hx-sync="this:replace">
 {% url 'core:product_details_public' product.id as product_public_url %}
 <c-layout.page-header title="{{ product.name }}" editable_item_type="{{ product.has_crud_permissions|yesno:'product,' }}" editable_item_id="{{ product.id }}" :copy_values="header_copy_values" x-data="publicSharing('{{ product_public_url|escapejs }}')">
@@ -38,13 +39,13 @@
     <c-layout.stat-card label="Past your patch SLA" :value="metrics.past_sla" icon="fas fa-clock" accent="danger" />
 </div>
 {% if metrics.unassessed %}
-    <c-feedback.alert variant="warning">{{ metrics.unassessed }} component{{ metrics.unassessed|pluralize }} still need{{ metrics.unassessed|pluralize:'s,' }} a completed security assessment.</c-feedback.alert>
+    <c-feedback.alert variant="warning">{{ metrics.unassessed|intcomma }} component{{ metrics.unassessed|pluralize }} still need{{ metrics.unassessed|pluralize:'s,' }} a completed security assessment.</c-feedback.alert>
 {% endif %}
 {% include 'core/product_components.html.j2' %}
 <div class="flex flex-col gap-4">
     <c-layout.section-header title="Releases" level="2">
     <c-slot name="actions">
-    <c-buttons.secondary size="sm" href="{% url 'core:product_releases' product.id %}">View all {{ release_inventory.total }}<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.secondary>
+    <c-buttons.secondary size="sm" href="{% url 'core:product_releases' product.id %}">View all {{ release_inventory.total|intcomma }}<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.secondary>
     </c-slot>
     </c-layout.section-header>
     <c-inventory.results :inventory="release_inventory" preview />

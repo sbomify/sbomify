@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import tempfile
 import typing
@@ -21,7 +20,6 @@ from django.http import (
     HttpResponse,
     HttpResponseBadRequest,
     HttpResponseForbidden,
-    HttpResponseNotAllowed,
     HttpResponseNotFound,
     HttpResponseServerError,
     JsonResponse,
@@ -443,89 +441,6 @@ def login_error(request: HttpRequest) -> HttpResponse:
 
     context = {"error_message": error_message, "error_description": error_description}
     return render(request, "socialaccount/authentication_error.html.j2", context)
-
-
-def keycloak_webhook(request: HttpRequest) -> HttpResponse:
-    """Handle Keycloak webhook events.
-
-    This endpoint receives events from Keycloak when properly configured with a
-    webhook extension. It processes user-related events like account deletion
-    and profile updates.
-
-    Args:
-        request: The HTTP request object containing the webhook payload
-
-    Returns:
-        HttpResponse: Response indicating success or failure of event processing
-    """
-    if request.method != "POST":
-        return HttpResponseNotAllowed(["POST"])
-
-    # Verify webhook secret if configured
-    webhook_secret = getattr(settings, "KEYCLOAK_WEBHOOK_SECRET", None)
-    if webhook_secret:
-        received_secret = request.headers.get("X-Keycloak-Secret")
-        if not received_secret or received_secret != webhook_secret:
-            logger.warning("Invalid webhook secret received")
-            return HttpResponseForbidden("Invalid webhook secret")
-
-    from allauth.socialaccount.models import SocialAccount
-
-    try:
-        data = json.loads(request.body)
-        event_type = data.get("type")
-        user_id = data.get("userId")
-        event_time = data.get("time")
-        details = data.get("details", {})
-
-        if not user_id:
-            return HttpResponse(status=204)  # No content to process
-
-        logger.info(f"Received Keycloak webhook event: {event_type} for user {user_id} at {event_time}")
-
-        # Handle different event types
-        if event_type == "DELETE_ACCOUNT":
-            try:
-                social_account = SocialAccount.objects.get(uid=user_id)
-                django_user = social_account.user
-                django_user.is_active = False
-                django_user.save()
-                logger.info(
-                    f"Deactivated user {django_user.username} (ID: {django_user.id}) after Keycloak account deletion"
-                )
-            except SocialAccount.DoesNotExist:
-                logger.warning(f"Cannot find Django user for Keycloak user ID {user_id}")
-
-        elif event_type == "UPDATE_PROFILE":
-            try:
-                social_account = SocialAccount.objects.get(uid=user_id)
-                django_user = social_account.user
-
-                # Update email if changed
-                if "email" in details:
-                    django_user.email = details["email"]
-                    django_user.save()
-                    logger.info(f"Updated email for user {django_user.username} to {details['email']}")
-
-                # Update extra_data in social account
-                social_account.extra_data.update(details)
-                social_account.save()
-
-            except SocialAccount.DoesNotExist:
-                logger.warning(f"Cannot find Django user for Keycloak user ID {user_id}")
-
-        elif event_type in ["LOGIN", "LOGOUT"]:
-            # Log these events for audit purposes
-            logger.info(f"User {user_id} performed {event_type} from IP {details.get('ipAddress', 'unknown')}")
-
-        return HttpResponse(status=200)
-
-    except json.JSONDecodeError:
-        logger.error("Invalid JSON received in webhook payload")
-        return HttpResponse("Invalid JSON", status=400)
-    except Exception as e:
-        logger.error(f"Error processing Keycloak webhook: {e}", exc_info=True)
-        return HttpResponse("Error processing webhook", status=500)
 
 
 # ============================================================================

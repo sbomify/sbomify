@@ -7,7 +7,7 @@
             aria-label="Previous page">
         <i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>
     </button>
-    <span class="text-sm text-text-muted">Page <span x-text="currentPage"></span> / <span x-text="totalPages"></span></span>
+    <span class="text-sm text-text-muted">Page <span x-text="$number(currentPage)"></span> / <span x-text="$number(totalPages)"></span></span>
     <button type="button"
             class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
             :disabled="currentPage === totalPages"

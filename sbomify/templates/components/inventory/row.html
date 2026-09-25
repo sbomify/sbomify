@@ -1,3 +1,4 @@
+{% load humanize %}
 {% comment %}
 One inventory row. The three entity kinds share compact cells, exposure, status
 and actions; only the columns that describe their domain differ. Links use real
@@ -10,7 +11,7 @@ detail routes. No row is itself clickable, so menus and keyboard links stay inde
     <c-overview.record href="{{ row.url }}" title="{{ row.name }}" />
     {% if not scope_product %}<p class="mt-1 mb-0 text-xs text-text-muted">
         {% if kind == 'products' %}
-            {{ row.component_count }} component{{ row.component_count|pluralize }}
+            {{ row.component_count|intcomma }} component{{ row.component_count|pluralize }}
         {% elif kind == 'releases' %}
             <a class="hover:text-text hover:underline"
                href="{% url 'core:product_details' row.product_id %}">{{ row.product_name }}</a>
@@ -27,9 +28,9 @@ detail routes. No row is itself clickable, so menus and keyboard links stay inde
 </c-tables.cell>
 <c-tables.cell compact><span class="tabular-nums">
 {% if kind == 'products' %}
-    {{ row.release_count }}
+    {{ row.release_count|intcomma }}
 {% else %}
-    {{ row.artifact_count }}
+    {{ row.artifact_count|intcomma }}
 {% endif %}
 </span></c-tables.cell>
 {% if kind == 'components' %}

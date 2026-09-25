@@ -1,3 +1,4 @@
+import { formatNumber } from '../../core/js/number-format';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { registerAlpineComponent } from '../../core/js/alpine-components';
@@ -261,7 +262,7 @@ function craStep5() {
         );
         if (resp.ok) {
           const data = await resp.json();
-          showSuccess(`${data.refreshed_count} document(s) refreshed`);
+          showSuccess(`${formatNumber(data.refreshed_count)} document(s) refreshed`);
           await this.loadStaleness();
         } else {
           showError('Failed to refresh');

@@ -1199,7 +1199,17 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
             old_domain = locked_team.custom_domain
             locked_team.custom_domain = normalized_domain
             locked_team.custom_domain_validated = False  # Reset validation on change
-            locked_team.save(update_fields=["custom_domain", "custom_domain_validated"])
+            # Start the backoff over, so the probe checks the new domain on its next run.
+            locked_team.custom_domain_verification_failures = 0
+            locked_team.custom_domain_last_checked_at = None
+            locked_team.save(
+                update_fields=[
+                    "custom_domain",
+                    "custom_domain_validated",
+                    "custom_domain_verification_failures",
+                    "custom_domain_last_checked_at",
+                ]
+            )
             is_first_time_set = not old_domain
 
         # Invalidate cache for both old and new domains

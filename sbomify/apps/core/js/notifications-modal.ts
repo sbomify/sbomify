@@ -1,4 +1,5 @@
 /** Notification data and lifecycle. Cotton templates own all rendered markup. */
+import { formatNumber } from './number-format';
 import { getCsrfToken } from './csrf';
 import { showError } from './alerts';
 import { formatCompactRelativeDate } from './utils';
@@ -71,7 +72,7 @@ function renderNotifications(): void {
   setHidden('notifications-clear', notifications.length === 0);
   setHidden('notifications-badge', notifications.length === 0);
   const count = document.querySelector('[data-notification-count]');
-  if (count) count.textContent = `${notifications.length} new ${notifications.length === 1 ? 'notification' : 'notifications'}`;
+  if (count) count.textContent = `${formatNumber(notifications.length)} new ${notifications.length === 1 ? 'notification' : 'notifications'}`;
 }
 
 async function fetchNotifications(): Promise<void> {

@@ -37,7 +37,7 @@
             <div class="tc-detail-meta">
                 <span class="tc-detail-meta-item">
                     <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
-                    {{ public_components|length }} component{{ public_components|length|pluralize }}
+                    {{ public_components|length|intcomma }} component{{ public_components|length|pluralize }}
                 </span>
                 {% for assessment in passing_assessments %}
                     {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
@@ -120,7 +120,7 @@
                 <div class="tc-facts">
                     <div>
                         <p class="tc-fact-label">Components</p>
-                        <p class="tc-fact-value">{{ public_components|length }}</p>
+                        <p class="tc-fact-value">{{ public_components|length|intcomma }}</p>
                     </div>
                     {% if product.release_date %}
                         <div>

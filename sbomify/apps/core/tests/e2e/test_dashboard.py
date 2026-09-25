@@ -287,7 +287,7 @@ def test_dashboard_view_switch_and_trend_filters(
     expect(chart).to_be_visible()
     chart_matches_theme = """() => {
         const canvas = document.querySelector('.vulnerability-chart-canvas');
-        const chart = Chart.getChart(canvas);
+        const chart = window.Chart?.getChart(canvas);
         if (!chart) return false;
         const styles = getComputedStyle(canvas);
         const token = name => styles.getPropertyValue(`--color-${name}`).trim();
@@ -297,7 +297,7 @@ def test_dashboard_view_switch_and_trend_filters(
     }"""
     page.wait_for_function(chart_matches_theme)
     page.wait_for_function(
-        "Chart.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'line'"
+        "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'line'"
     )
     take_screenshot(page, "trends", width=width, path=tmp_path / f"trends-{theme}-{width}.png")
     page.set_viewport_size({"width": width, "height": 900})
@@ -309,14 +309,14 @@ def test_dashboard_view_switch_and_trend_filters(
         page.evaluate("theme => window.themeManager.setTheme(theme)", selected_theme)
         page.wait_for_function("""() => {
             const canvas = document.querySelector('.vulnerability-chart-canvas');
-            const chart = Chart.getChart(canvas);
+            const chart = window.Chart?.getChart(canvas);
             return chart?.config.type === 'bar' && chart.options.scales.x.ticks.color ===
                 getComputedStyle(canvas).getPropertyValue('--color-text-muted').trim();
         }""")
     page.get_by_role("combobox", name="Time range").select_option("7")
     expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
     page.wait_for_function(
-        "Chart.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
+        "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
     )
 
     # A filter with no scans must leave its controls available to recover.
@@ -328,7 +328,7 @@ def test_dashboard_view_switch_and_trend_filters(
     expect(chart).to_be_visible()
     expect(page.get_by_role("button", name="Severity", exact=True)).to_have_attribute("aria-pressed", "true")
     page.wait_for_function(
-        "Chart.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
+        "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
     )
     expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
     scans = page.get_by_role("table", name="Recent SBOM scans")
@@ -338,7 +338,7 @@ def test_dashboard_view_switch_and_trend_filters(
     scans.get_by_role("link", name="sbom-0.json", exact=True).first.click()
     expect(page.locator("h1")).to_contain_text("sbom-0.json")
     page.go_back()
-    page.wait_for_function("Object.keys(Chart.instances).length === 1")
+    page.wait_for_function("window.Chart && Object.keys(window.Chart.instances).length === 1")
     page.locator('[x-data="vulnerabilityTrends"]').evaluate("element => element.remove()")
     page.wait_for_function("Object.keys(Chart.instances).length === 0")
     navigation.get_by_role("link", name="Summary").click()
