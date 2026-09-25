@@ -1,8 +1,7 @@
 import hashlib
 import logging
-from typing import Any
+from typing import Any, cast
 
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -13,6 +12,7 @@ from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
+from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
@@ -21,7 +21,6 @@ from sbomify.apps.teams.models import Member, Team
 
 from .access_models import AccessRequest, NDASignature
 from .access_schemas import (
-    AccessRequestCreateRequest,
     AccessRequestListResponse,
     AccessRequestResponse,
     NDASignatureResponse,
@@ -39,7 +38,6 @@ from .services.access_emails import (
 # ask for access they already have.
 ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 
-User = get_user_model()
 log = logging.getLogger(__name__)
 
 router = Router(tags=["Access Requests"], auth=(PersonalAccessTokenAuth(), django_auth))
@@ -79,18 +77,22 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
 
 @router.post(
     "/teams/{team_key}/access-request",
-    response={200: dict, 201: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,  # Allow unauthenticated users to request access
+    response={
+        200: dict,
+        201: AccessRequestResponse,
+        400: ErrorResponse,
+        401: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
 )
 def create_access_request(
     request: HttpRequest,
     team_key: str,
-    payload: AccessRequestCreateRequest | None = None,
 ) -> Any:
     """Create a blanket access request for all gated components in a team.
 
-    Supports both authenticated and unauthenticated users.
-    For unauthenticated users, creates a user account from email.
+    The caller must be signed in and asks for themselves.
     """
     try:
         # Get team
@@ -99,32 +101,7 @@ def create_access_request(
         except Team.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
-        # Get or create user
-        user = None
-        if request.user.is_authenticated:
-            user = request.user
-        else:
-            if not payload or not payload.email:
-                return 400, {"detail": "Email is required for unauthenticated users"}
-
-            # Check if user already exists
-            try:
-                user = User.objects.get(email=payload.email)
-            except User.DoesNotExist:
-                # Create new user
-                username = payload.email.split("@")[0]
-                # Ensure username is unique
-                base_username = username
-                counter = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{base_username}_{counter}"
-                    counter += 1
-
-                user = User.objects.create_user(
-                    username=username,
-                    email=payload.email,
-                    first_name=payload.name or "",
-                )
+        user = cast(User, request.user)
 
         # Check if user already has access
         try:
@@ -288,8 +265,14 @@ def create_access_request(
     # unvalidated. 400 and 500 are the two catch-alls at the bottom of the
     # body: undeclared, ninja raised ConfigError on them and the caller got an
     # opaque 500 instead of the status the handler chose.
-    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
-    auth=None,
+    response={
+        200: None,
+        400: ErrorResponse,
+        401: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) -> Any:
     """Get NDA document for signing."""
@@ -304,19 +287,13 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user owns the request or is admin
-        if request.user.is_authenticated:
-            if access_request.user != request.user:
-                # Check if user is admin/owner
-                try:
-                    member = Member.objects.get(team=team, user=request.user)
-                    if member.role not in ADMINISTER:
-                        return 403, {"detail": "Forbidden"}
-                except Member.DoesNotExist:
+        # Only the requester, or an owner or admin of the workspace, reads the NDA
+        if access_request.user != request.user:
+            try:
+                member = Member.objects.get(team=team, user=cast(User, request.user))
+                if member.role not in ADMINISTER:
                     return 403, {"detail": "Forbidden"}
-        else:
-            # For unauthenticated, we can't verify - allow if request is pending
-            if access_request.status != AccessRequest.Status.PENDING:
+            except Member.DoesNotExist:
                 return 403, {"detail": "Forbidden"}
 
         # Get company-wide NDA
@@ -357,12 +334,12 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
     response={
         200: NDASignatureResponse,
         400: ErrorResponse,
+        401: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
         # Storage is unreachable or the NDA will not read back.
         500: ErrorResponse,
     },
-    auth=None,
 )
 def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDASignRequest) -> Any:
     """Sign NDA for access request."""
@@ -377,14 +354,9 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user owns the request
-        if request.user.is_authenticated:
-            if access_request.user != request.user:
-                return 403, {"detail": "Forbidden"}
-        else:
-            # For unauthenticated, verify request is pending
-            if access_request.status != AccessRequest.Status.PENDING:
-                return 403, {"detail": "Forbidden"}
+        # Only the requester signs, for themselves
+        if access_request.user != request.user:
+            return 403, {"detail": "Forbidden"}
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()

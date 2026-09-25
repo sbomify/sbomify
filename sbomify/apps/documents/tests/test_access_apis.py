@@ -13,11 +13,22 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.middleware.csrf import get_token
+from django.test import Client, RequestFactory
 from django.urls import reverse
 
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.teams.models import Member
+
+
+def _session_client(user) -> Client:
+    """Sign `user` in on a session that sends its CSRF token, as a browser does."""
+    token = get_token(RequestFactory().get("/"))
+    client = Client(enforce_csrf_checks=True, headers={"X-CSRFToken": token})
+    client.cookies["csrftoken"] = token
+    client.force_login(user)
+    return client
 
 
 @pytest.fixture
@@ -325,7 +336,6 @@ class TestSignNDAAPI:
     def test_sign_nda_with_valid_hash(
         self,
         mock_s3_client,
-        authenticated_api_client,
         team_with_business_plan,
         pending_access_request,
         company_nda_document,
@@ -336,10 +346,8 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
-        client.force_login(guest_user)
-
-        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        # The requester signs for themselves, on their own session.
+        client = _session_client(guest_user)
         url = reverse(
             "api-1:sign_nda",
             kwargs={
@@ -352,7 +360,6 @@ class TestSignNDAAPI:
             url,
             json.dumps({"signed_name": "Test User", "consent": True}),
             content_type="application/json",
-            **headers,
         )
 
         assert response.status_code == 200
@@ -369,7 +376,6 @@ class TestSignNDAAPI:
     def test_sign_nda_with_invalid_hash(
         self,
         mock_s3_client,
-        authenticated_api_client,
         team_with_business_plan,
         pending_access_request,
         company_nda_document,
@@ -380,10 +386,8 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
-        client.force_login(guest_user)
-
-        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        # The requester signs for themselves, on their own session.
+        client = _session_client(guest_user)
         url = reverse(
             "api-1:sign_nda",
             kwargs={
@@ -396,7 +400,6 @@ class TestSignNDAAPI:
             url,
             json.dumps({"signed_name": "Test User", "consent": False}),
             content_type="application/json",
-            **headers,
         )
 
         assert response.status_code == 400
@@ -405,7 +408,6 @@ class TestSignNDAAPI:
     def test_sign_nda_captures_correct_ip_with_proxy(
         self,
         mock_s3_client,
-        authenticated_api_client,
         team_with_business_plan,
         pending_access_request,
         company_nda_document,
@@ -416,11 +418,9 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
-        client.force_login(guest_user)
+        client = _session_client(guest_user)
 
         headers = {
-            "HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}",
             "HTTP_X_REAL_IP": "203.0.113.42",  # Client IP set by reverse proxy
         }
         url = reverse(
@@ -449,7 +449,6 @@ class TestSignNDAAPI:
     def test_sign_nda_falls_back_to_remote_addr_without_proxy(
         self,
         mock_s3_client,
-        authenticated_api_client,
         team_with_business_plan,
         pending_access_request,
         company_nda_document,
@@ -460,10 +459,8 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
-        client.force_login(guest_user)
-
-        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        # The requester signs for themselves, on their own session.
+        client = _session_client(guest_user)
         url = reverse(
             "api-1:sign_nda",
             kwargs={
@@ -476,7 +473,6 @@ class TestSignNDAAPI:
             url,
             json.dumps({"signed_name": "Test User", "consent": True}),
             content_type="application/json",
-            **headers,
         )
 
         assert response.status_code == 200
