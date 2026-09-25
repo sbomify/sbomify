@@ -504,8 +504,6 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
                 # Update email if changed
                 if "email" in details:
                     django_user.email = details["email"]
-                    # The confirmation was for the old address; the next sign-in reads it again.
-                    django_user.email_verified = False
                     django_user.save()
                     logger.info(f"Updated email for user {django_user.username} to {details['email']}")
 

@@ -16,6 +16,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from allauth.account.models import EmailAddress, EmailConfirmationHMAC
 from allauth.core.context import request_context
 from allauth.socialaccount.adapter import get_adapter as get_social_adapter
 from allauth.socialaccount.helpers import complete_social_login
@@ -72,6 +73,34 @@ def _invitee(email_verified: bool, *, with_own_workspace: bool = False) -> User:
 
 def _invite(team: Team, role: str = "member") -> Invitation:
     return Invitation.objects.create(team=team, email="Invitee@example.com", role=role)
+
+
+def _linked_account() -> User:
+    """An account the access-request form made, then linked by its owner's confirmed sign-in.
+
+    allauth records no email address when it links an identity, so this account has no confirmed one on file.
+    """
+    account = User.objects.create_user(username="linked", email="linked@example.com")
+    _sign_in(account.email, verified=True, sub="linked")
+    account.refresh_from_db()
+    return account
+
+
+def _take_address(user: User, email: str, how: str) -> None:
+    """Add ``email`` on allauth's email page and make it the account's address.
+
+    ``how`` is "primary" to press Make Primary, or "link" for whoever reads the
+    mailbox to follow the confirmation link allauth mails there.
+    """
+    client = Client()
+    client.force_login(user)
+    client.post(reverse("account_email"), {"action_add": "", "email": email})
+    if how == "primary":
+        client.post(reverse("account_email"), {"action_primary": "", "email": email})
+    else:
+        address = EmailAddress.objects.get(user=user, email=email)
+        Client().post(reverse("account_confirm_email", args=[EmailConfirmationHMAC(address).key]))
+    user.refresh_from_db()
 
 
 @pytest.mark.django_db
@@ -158,6 +187,25 @@ class TestRecordingTheConfirmation:
         keycloak_webhook(RequestFactory().post("/", json.dumps(event), content_type="application/json"))
 
         user.refresh_from_db()
+        assert (user.email, user.email_verified) == ("new@example.com", False)
+
+    @pytest.mark.parametrize(("email", "still_confirmed"), [("old@example.com", True), ("new@example.com", False)])
+    def test_saving_keeps_the_confirmation_only_for_the_same_address(self, email: str, still_confirmed: bool) -> None:
+        user = User.objects.create_user(username="mover", email="old@example.com", email_verified=True)
+
+        user.email = email
+        user.save()
+
+        user.refresh_from_db()
+        assert user.email_verified is still_confirmed
+
+    @pytest.mark.parametrize("how", ["primary", "link"])
+    def test_an_address_taken_on_the_email_page_starts_unconfirmed(self, how: str) -> None:
+        user = _linked_account()
+        assert user.email_verified is True
+
+        _take_address(user, "new@example.com", how)
+
         assert (user.email, user.email_verified) == ("new@example.com", False)
 
     @pytest.mark.parametrize("batch_size", [1, 2000])

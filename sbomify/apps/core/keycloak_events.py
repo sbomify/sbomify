@@ -125,8 +125,6 @@ class KeycloakEventPoller:
             updated_email = details.get("updated_email")
             if updated_email:
                 django_user.email = updated_email
-                # The confirmation was for the old address; the next sign-in reads it again.
-                django_user.email_verified = False
                 django_user.save()
                 logger.info(f"Updated email for user {django_user.username} to {updated_email}")
 
