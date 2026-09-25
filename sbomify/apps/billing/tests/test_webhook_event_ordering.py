@@ -4,7 +4,8 @@ Stripe does not deliver events in the order it created them, and it retries a
 failed delivery for days. An event created before the newest one already applied
 to a workspace describes a state that has since changed. The handlers ignore it,
 except that they still record a payment it reports, and they always apply a
-deletion, since Stripe never revives a deleted subscription.
+deletion, since Stripe never revives a deleted subscription. For the same reason,
+a payment event leaves a canceled subscription canceled.
 """
 
 from __future__ import annotations
@@ -130,6 +131,30 @@ def test_an_older_payment_is_recorded_without_reactivating_a_canceled_subscripti
     notify.assert_called_once_with(workspace, email_notifications.notify_payment_succeeded)
 
 
+def test_a_payment_failure_after_the_cancellation_keeps_it_canceled(workspace, notify):
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 100))
+    notify.reset_mock()
+
+    billing_processing.handle_payment_failed(_invoice(), event=_event("evt_failed", 200))
+
+    workspace.refresh_from_db()
+    assert workspace.billing_plan_limits["subscription_status"] == "canceled"
+    assert "payment_failed_at" not in workspace.billing_plan_limits
+    notify.assert_not_called()
+
+
+def test_a_payment_after_the_cancellation_is_recorded_without_reactivating_it(workspace, notify):
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 100))
+    notify.reset_mock()
+
+    billing_processing.handle_payment_succeeded(_invoice(), event=_event("evt_final_invoice", 200))
+
+    workspace.refresh_from_db()
+    assert workspace.billing_plan_limits["subscription_status"] == "canceled"
+    assert workspace.billing_plan_limits["last_payment_amount"] == 199.0
+    notify.assert_called_once_with(workspace, email_notifications.notify_payment_succeeded)
+
+
 def test_a_late_payment_does_not_let_the_newest_event_apply_twice(workspace, notify):
     deleted = _event("evt_deleted", 200)
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
@@ -214,6 +239,23 @@ def test_a_redelivery_caught_under_the_lock_sends_nothing(workspace, notify, moc
     mocker.patch.object(billing_processing, "_resolve_team_from_subscription", return_value=(workspace, {}))
 
     billing_processing.handle_subscription_updated(_subscription("past_due"), event=_event("evt_past_due", 200))
+
+    notify.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "handler",
+    [billing_processing.handle_payment_failed, billing_processing.handle_payment_succeeded],
+    ids=["failed", "succeeded"],
+)
+def test_a_payment_redelivery_caught_under_the_lock_sends_nothing(workspace, notify, mocker, handler):
+    # What a concurrent delivery of the same event read before the first one committed.
+    before = Team.objects.get(pk=workspace.pk)
+    handler(_invoice(), event=_event("evt_invoice", 100))
+    notify.reset_mock()
+    mocker.patch.object(Team.objects, "get", return_value=before)
+
+    handler(_invoice(), event=_event("evt_invoice", 100))
 
     notify.assert_not_called()
 

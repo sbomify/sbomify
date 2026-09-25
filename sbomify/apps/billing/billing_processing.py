@@ -113,6 +113,18 @@ def _record_event_created(billing_limits: dict[str, Any], created: int | None) -
         billing_limits["latest_event_created"] = created
 
 
+def _payment_already_recorded(billing_limits: dict[str, Any], webhook_id: str | None) -> bool:
+    """Whether the payment event ``webhook_id`` was recorded already.
+
+    Rows written before payments had a key of their own hold the id in
+    ``last_processed_webhook_id``.
+    """
+    return webhook_id is not None and webhook_id in (
+        billing_limits.get("last_processed_webhook_id"),
+        billing_limits.get("last_payment_webhook_id"),
+    )
+
+
 class BillingResourceType(str, Enum):
     """Resource types that are subject to billing limits."""
 
@@ -837,6 +849,12 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
+            if billing_limits.get("last_processed_webhook_id") == webhook_id:
+                logger.info("Payment failed webhook already processed (checked after lock)")
+                return
+            if billing_limits.get("subscription_status") == "canceled":
+                logger.info("Ignoring a payment failure for a canceled subscription")
+                return
             created = _event_created(event)
             if _is_older_than_applied(billing_limits, created):
                 logger.info("Ignoring a payment failure older than the last event applied")
@@ -899,9 +917,8 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         billing_limits = team.billing_plan_limits or {}
 
         webhook_id = getattr(event, "id", None) if event else f"inv_succ_{invoice.id}_{invoice.created}"
-        last_processed_id = billing_limits.get("last_processed_webhook_id")
 
-        if webhook_id is not None and webhook_id in (last_processed_id, billing_limits.get("last_payment_webhook_id")):
+        if _payment_already_recorded(billing_limits, webhook_id):
             logger.info(f"Payment succeeded webhook already processed for invoice {invoice.id}, skipping")
             return
 
@@ -919,11 +936,17 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
+            if _payment_already_recorded(billing_limits, webhook_id):
+                logger.info("Payment succeeded webhook already processed (checked after lock)")
+                return
             created = _event_created(event)
             # A payment that went through stays true however late its event arrives, so it
             # is recorded, acknowledged and counted either way. Only an event no newer one
-            # has replaced moves the status.
-            if _is_older_than_applied(billing_limits, created):
+            # has replaced moves the status, and never off canceled: Stripe does not revive
+            # a deleted subscription.
+            if billing_limits.get("subscription_status") == "canceled":
+                logger.info("Recording a payment for a canceled subscription, status unchanged")
+            elif _is_older_than_applied(billing_limits, created):
                 logger.info("Recording a payment older than the last event applied, status unchanged")
             else:
                 billing_limits["subscription_status"] = "active"
