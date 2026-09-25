@@ -259,11 +259,17 @@ class AssessmentResultsCardView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
     """
 
     def get(self, request: HttpRequest, sbom_id: str) -> HttpResponse:
-        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.core.authz import can
 
-        from .apis import get_sbom_assessments
+        from .apis import _readable_sbom, get_sbom_assessments
 
-        sbom = SBOM.objects.filter(pk=sbom_id).select_related("component").first()
+        # Authorize before answering anything, including the 404 and the
+        # redirect. Both are observable: a bare existence check would let any
+        # signed-in user walk SBOM ids and read the owning component out of the
+        # redirect's Location. _readable_sbom is the same gate the assessments
+        # endpoint applies, and returning its miss as a plain 404 keeps an
+        # unreadable artifact indistinguishable from one that is not there.
+        sbom = _readable_sbom(request, sbom_id)
         if sbom is None:
             return HttpResponseNotFound("Artifact not found")
 
@@ -293,5 +299,12 @@ class AssessmentResultsCardView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         return render(
             request,
             "plugins/components/assessment_results_card.html.j2",
-            {"sbom_id": sbom_id, "assessment_runs": assessment_runs},
+            {
+                "sbom_id": sbom_id,
+                "assessment_runs": assessment_runs,
+                # The card's Re-run control gates on this. The page supplies it;
+                # without it here every Re-run badge would vanish on the first
+                # refresh and only a full page load would bring it back.
+                "can_rerun": can(request, "component:manage", sbom.component),
+            },
         )

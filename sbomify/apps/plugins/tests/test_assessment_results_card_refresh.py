@@ -102,6 +102,46 @@ def test_an_id_that_is_not_an_artifact_is_a_404(signed_in) -> None:
     assert client.get(url, headers={"hx-request": "true"}).status_code == 404
 
 
+def test_an_unreadable_artifact_is_indistinguishable_from_a_missing_one(
+    signed_in, sample_team_with_owner_member: Member
+) -> None:
+    """Authorization runs before the 404 and before the redirect. Both are
+    observable, so answering the existence question first would let any
+    signed-in user walk SBOM ids and read the owning component out of the
+    redirect's Location."""
+    from sbomify.apps.teams.models import Team
+
+    client, _ = signed_in
+    other_team = Team.objects.create(name="someone else")
+    stranger_component = Component.objects.create(
+        team=other_team, name="not-yours", component_type=Component.ComponentType.BOM
+    )
+    stranger_sbom = _sbom(stranger_component)
+
+    unreadable = client.get(_card_url(stranger_sbom), headers={"hx-request": "true"})
+    missing = client.get(
+        reverse("plugins:assessment_results_card", kwargs={"sbom_id": "nosuchsbom12"}),
+        headers={"hx-request": "true"},
+    )
+
+    assert unreadable.status_code == missing.status_code == 404
+    # A plain request must not leak it through the redirect either.
+    assert client.get(_card_url(stranger_sbom)).status_code == 404
+
+
+def test_the_rerun_control_survives_a_refresh(signed_in) -> None:
+    """The card's Re-run control gates on can_rerun, which the page supplies.
+    A fragment that omitted it would drop every Re-run badge on first refresh."""
+    client, component = signed_in
+    sbom = _sbom(component)
+
+    response = client.get(_card_url(sbom), headers={"hx-request": "true"})
+
+    assert response.status_code == 200
+    # can() answers a Decision, truthy iff allowed, exactly as the page passes it.
+    assert bool(response.context["can_rerun"]) is True
+
+
 def test_a_guest_is_redirected_off_the_fragment(sample_team_with_owner_member: Member) -> None:
     """``component:access`` is the path a guest legitimately reaches gated
     content through, so without the guest block a guest turned away from the
