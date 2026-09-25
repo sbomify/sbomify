@@ -66,7 +66,7 @@ class User(AbstractUser):
         update_fields = kwargs.get("update_fields")
         if self.pk and (update_fields is None or "email" in update_fields):
             stored = type(self).objects.filter(pk=self.pk).values_list("email", flat=True).first()
-            if stored is not None and stored != self.email:
+            if stored is not None and stored.lower() != (self.email or "").lower():
                 self.email_verified = False
                 if update_fields is not None:
                     kwargs["update_fields"] = {*update_fields, "email_verified"}

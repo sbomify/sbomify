@@ -227,7 +227,10 @@ class TestRecordingTheConfirmation:
         user.refresh_from_db()
         assert (user.email, user.email_verified) == ("new@example.com", False)
 
-    @pytest.mark.parametrize(("email", "still_confirmed"), [("old@example.com", True), ("new@example.com", False)])
+    @pytest.mark.parametrize(
+        ("email", "still_confirmed"),
+        [("old@example.com", True), ("Old@Example.com", True), ("new@example.com", False)],
+    )
     def test_saving_keeps_the_confirmation_only_for_the_same_address(self, email: str, still_confirmed: bool) -> None:
         user = User.objects.create_user(username="mover", email="old@example.com", email_verified=True)
 
