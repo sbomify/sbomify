@@ -234,9 +234,10 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
         from sbomify.apps.teams.models import Invitation
         from sbomify.apps.teams.queries import invitation_email
 
-        deleted_invites = Invitation.objects.filter(email=invitation_email(locked_user)).delete()[0]
-        if deleted_invites:
-            logger.info("Deleted %d incoming invitations during account deletion", deleted_invites)
+        if email := invitation_email(locked_user):
+            deleted_invites = Invitation.objects.filter(email__iexact=email).delete()[0]
+            if deleted_invites:
+                logger.info("Deleted %d incoming invitations during account deletion", deleted_invites)
 
         from sbomify.apps.access_tokens.models import AccessToken
 

@@ -270,9 +270,7 @@ class TestInvitations:
     @pytest.mark.parametrize("verified", [True, False])
     def test_deleting_an_account_removes_invitations_only_for_a_confirmed_email(self, verified: bool) -> None:
         user = _invitee(verified)
-        invitation = Invitation.objects.create(
-            team=Team.objects.create(name="Inviting Workspace"), email=user.email, role="member"
-        )
+        invitation = _invite(Team.objects.create(name="Inviting Workspace"))
 
         with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
             soft_delete_user_account(user)
