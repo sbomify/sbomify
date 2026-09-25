@@ -215,6 +215,41 @@ def test_events_created_in_the_same_second_apply_in_arrival_order(workspace):
     assert workspace.billing_plan_limits["subscription_status"] == "active"
 
 
+def test_a_resent_update_is_caught_after_a_same_second_sibling_applied(workspace, notify):
+    created = _event("evt_created", 100)
+    billing_processing.handle_subscription_updated(_subscription("incomplete"), event=created)
+    billing_processing.handle_subscription_updated(_subscription("active"), event=_event("evt_updated", 100))
+    notify.reset_mock()
+
+    billing_processing.handle_subscription_updated(_subscription("incomplete"), event=created)
+
+    workspace.refresh_from_db()
+    assert workspace.billing_plan_limits["subscription_status"] == "active"
+    notify.assert_not_called()
+
+
+def test_a_resent_payment_failure_is_caught_after_a_same_second_update(workspace, notify):
+    failed = _event("evt_failed", 100)
+    billing_processing.handle_payment_failed(_invoice(), event=failed)
+    billing_processing.handle_subscription_updated(_subscription("past_due"), event=_event("evt_past_due", 100))
+    notify.reset_mock()
+
+    billing_processing.handle_payment_failed(_invoice(), event=failed)
+
+    notify.assert_not_called()
+
+
+def test_a_resent_deletion_is_caught_after_a_same_second_update(workspace, notify):
+    deleted = _event("evt_deleted", 100)
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
+    billing_processing.handle_subscription_updated(_subscription("canceled"), event=_event("evt_updated", 100))
+    notify.reset_mock()
+
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
+
+    notify.assert_not_called()
+
+
 def test_the_order_is_checked_against_the_locked_row(workspace, mocker):
     billing_processing.handle_subscription_updated(_subscription("past_due"), event=_event("evt_past_due", 200))
     # What the handler read before taking the lock, from before the newer event landed.

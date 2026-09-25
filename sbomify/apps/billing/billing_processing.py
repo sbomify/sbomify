@@ -107,10 +107,30 @@ def _is_older_than_applied(billing_limits: dict[str, Any], created: int | None) 
     return created is not None and latest is not None and created < latest
 
 
-def _record_event_created(billing_limits: dict[str, Any], created: int | None) -> None:
-    """Remember ``created`` as the newest event applied, unless a newer one already is."""
-    if created is not None and not _is_older_than_applied(billing_limits, created):
+def _record_event_created(billing_limits: dict[str, Any], created: int | None, event_id: str | None) -> None:
+    """Remember ``created`` as the newest event applied, unless a newer one already is.
+
+    The ids of the events applied in that second are kept with it, for ``_was_applied``.
+    """
+    if created is None or _is_older_than_applied(billing_limits, created):
+        return
+    if created != billing_limits.get("latest_event_created"):
         billing_limits["latest_event_created"] = created
+        billing_limits["latest_event_ids"] = []
+    billing_limits["latest_event_ids"] = [*billing_limits.get("latest_event_ids", []), event_id]
+
+
+def _was_applied(billing_limits: dict[str, Any], webhook_id: str | None, created: int | None) -> bool:
+    """Whether the event was applied already.
+
+    ``last_processed_webhook_id`` holds one id, and a sibling from the same second
+    replaces it without being newer, so the ids from the newest second count too.
+    """
+    return billing_limits.get("last_processed_webhook_id") == webhook_id or (
+        created is not None
+        and created == billing_limits.get("latest_event_created")
+        and webhook_id in billing_limits.get("latest_event_ids", [])
+    )
 
 
 def _payment_already_recorded(billing_limits: dict[str, Any], webhook_id: str | None) -> bool:
@@ -516,7 +536,7 @@ def _update_billing_from_subscription(
         team = Team.objects.select_for_update().get(pk=team.pk)
         billing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
 
-        if billing_limits.get("last_processed_webhook_id") == webhook_id:
+        if _was_applied(billing_limits, webhook_id, created):
             logger.info("Webhook already processed (checked after lock)")
             return False, None
 
@@ -529,7 +549,7 @@ def _update_billing_from_subscription(
         billing_limits["stripe_subscription_id"] = subscription.id
         billing_limits["last_updated"] = timezone.now().isoformat()
         billing_limits["last_processed_webhook_id"] = webhook_id
-        _record_event_created(billing_limits, created)
+        _record_event_created(billing_limits, created, webhook_id)
 
         # The invoice event that starts or ends a payment failure can arrive after
         # this update and be ignored as older, so the grace period follows the
@@ -678,15 +698,13 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
         billing_limits = team.billing_plan_limits or {}
 
         webhook_id = generate_webhook_id(event, subscription, prefix="del")
-        last_processed_id = billing_limits.get("last_processed_webhook_id")
-
-        if last_processed_id == webhook_id:
-            logger.info("Webhook already processed for deleted subscription, skipping")
-            return
-
         # Never ignored as older: Stripe does not revive a deleted subscription, so
         # the deletion holds whatever newer event was applied first.
         created = _event_created(event)
+
+        if _was_applied(billing_limits, webhook_id, created):
+            logger.info("Webhook already processed for deleted subscription, skipping")
+            return
 
         _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
 
@@ -708,7 +726,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                     billing_limits.pop("scheduled_downgrade_plan", None)
                     billing_limits["cancel_at_period_end"] = False
                     billing_limits["last_processed_webhook_id"] = webhook_id
-                    _record_event_created(billing_limits, created)
+                    _record_event_created(billing_limits, created, webhook_id)
                     team.billing_plan_limits = billing_limits
                     team.save()
             else:
@@ -740,7 +758,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                                 "last_processed_webhook_id": webhook_id,
                             }
                         )
-                        _record_event_created(existing_limits, created)
+                        _record_event_created(existing_limits, created, webhook_id)
                         if "stripe_customer_id" not in existing_limits:
                             if hasattr(subscription, "customer"):
                                 existing_limits["stripe_customer_id"] = subscription.customer
@@ -766,7 +784,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                                 "last_processed_webhook_id": webhook_id,
                             }
                         )
-                        _record_event_created(existing_limits, created)
+                        _record_event_created(existing_limits, created, webhook_id)
                         if "stripe_customer_id" not in existing_limits:
                             if hasattr(subscription, "customer"):
                                 existing_limits["stripe_customer_id"] = subscription.customer
@@ -788,7 +806,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                 billing_limits["subscription_status"] = "canceled"
                 billing_limits["last_updated"] = timezone.now().isoformat()
                 billing_limits["last_processed_webhook_id"] = webhook_id
-                _record_event_created(billing_limits, created)
+                _record_event_created(billing_limits, created, webhook_id)
                 team.billing_plan_limits = billing_limits
                 team.save()
 
@@ -849,13 +867,13 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
-            if billing_limits.get("last_processed_webhook_id") == webhook_id:
+            created = _event_created(event)
+            if _was_applied(billing_limits, webhook_id, created):
                 logger.info("Payment failed webhook already processed (checked after lock)")
                 return
             if billing_limits.get("subscription_status") == "canceled":
                 logger.info("Ignoring a payment failure for a canceled subscription")
                 return
-            created = _event_created(event)
             if _is_older_than_applied(billing_limits, created):
                 logger.info("Ignoring a payment failure older than the last event applied")
                 return
@@ -868,7 +886,7 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
             if not billing_limits.get("payment_failed_at"):
                 billing_limits["payment_failed_at"] = timezone.now().isoformat()
             billing_limits["last_processed_webhook_id"] = webhook_id
-            _record_event_created(billing_limits, created)
+            _record_event_created(billing_limits, created, webhook_id)
             team.billing_plan_limits = billing_limits
             team.save()
 
@@ -955,7 +973,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
                 # webhook would otherwise reuse this stale timestamp and treat the next failure as
                 # already past grace.
                 billing_limits.pop("payment_failed_at", None)
-                _record_event_created(billing_limits, created)
+                _record_event_created(billing_limits, created, webhook_id)
             billing_limits["last_updated"] = timezone.now().isoformat()
             billing_limits["last_payment_amount"] = invoice.amount_paid / 100.0 if invoice.amount_paid else 0.0
             billing_limits["last_payment_currency"] = invoice.currency
