@@ -168,9 +168,14 @@ class TestBrandingUploadEndpoint:
             ),
             pytest.param(svg("<style>@import 'https://example.com/a.css';</style>"), id="css-import"),
             pytest.param(svg("<style>rect{fill:url(https://example.com/a.svg#g)}</style>"), id="css-external-url"),
+            pytest.param(svg("<style>rect{fill:URL(https://example.com/a.svg#g)}</style>"), id="css-url-in-capitals"),
             pytest.param(
                 svg("<style>rect{fill:u\\72l(https://example.com/a.svg#g)}</style>"),
                 id="css-url-written-with-an-escape",
+            ),
+            pytest.param(
+                svg("<style>rect{fill:u\\rl(https://example.com/a.svg#g)}</style>"),
+                id="css-url-written-with-a-non-hex-escape",
             ),
             pytest.param(
                 svg("<style>rect{fill:u\\72&#13;&#10;l(https://example.com/a.svg#g)}</style>"),
@@ -199,7 +204,8 @@ class TestBrandingUploadEndpoint:
                 id="animated-external-url",
             ),
             pytest.param(b"<?xml version='1.0' encoding='x-unknown'?>" + svg(), id="unknown-encoding"),
-            pytest.param(svg("<g/>" * 300_000), id="over-the-size-cap"),
+            # Well-formed however far it is read, so only the size cap can refuse it.
+            pytest.param(svg() + b" " * 1024 * 1024, id="over-the-size-cap"),
             pytest.param(svg()[:-1], id="malformed"),
             pytest.param(b"<note>hi</note>", id="not-svg"),
         ],
