@@ -556,7 +556,7 @@ def test_accept_invitation_updates_existing_member_role(django_user_model, commu
     setup_authenticated_client_session(client, team, user)
 
     # Accept the invitation
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
     assert response.url == reverse("core:dashboard")
 
@@ -631,7 +631,7 @@ def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_us
     setup_authenticated_client_session(client, team, user)
 
     # Accept the invitation
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     # Verify membership role was updated
@@ -668,7 +668,7 @@ def test_accept_invitation_never_demotes_an_owner(django_user_model, community_p
     assert client.login(username="demote-target-owner", password="secret")
     setup_authenticated_client_session(client, team, owner_user)
 
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     membership.refresh_from_db()
@@ -693,7 +693,7 @@ def test_accept_invitation_still_upgrades_to_owner(django_user_model, community_
     assert client.login(username="promote-to-owner", password="secret")
     setup_authenticated_client_session(client, team, user)
 
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     membership.refresh_from_db()
@@ -726,7 +726,7 @@ def test_accept_invitation_no_role_change_when_same_role(django_user_model, comm
     setup_authenticated_client_session(client, team, user)
 
     # Accept the invitation
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     # Verify membership role unchanged
@@ -759,7 +759,7 @@ def test_accept_invitation_workspace_full_status_page(django_user_model):
     client = Client()
     assert client.login(username="capacity-guest", password="secret")
 
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
 
     assert response.status_code == 403
     assert any(t.name == "teams/workspace_availability.html.j2" for t in response.templates)
