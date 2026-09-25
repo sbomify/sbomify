@@ -967,8 +967,8 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Check if user is already a member
             UserModel = get_user_model()
             try:
-                user = UserModel.objects.get(email__iexact=email)
-                if Member.objects.filter(team=team, user=user).exists():
+                invitee = UserModel.objects.get(email__iexact=email)
+                if Member.objects.filter(team=team, user=invitee).exists():
                     messages.error(request, f"{email} is already a member of this workspace")
                     if active_tab == "trust-center":
                         response = redirect(
