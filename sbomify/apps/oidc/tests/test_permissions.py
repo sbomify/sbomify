@@ -898,3 +898,50 @@ class TestBotReleaseConfinement:
             HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
         )
         assert resp.status_code == 201
+
+    @pytest.mark.parametrize("kind", ["sbom", "document"])
+    def test_bot_cannot_pin_into_release_of_product_without_its_component(
+        self, kind, oidc_sbomify_token, bound_component, other_component, team_with_business_plan
+    ):
+        """Pinning follows ``create_release``: the release's product must hold the bound component."""
+        from sbomify.apps.core.models import ReleaseArtifact
+        from sbomify.apps.documents.models import Document
+        from sbomify.apps.sboms.models import SBOM
+
+        product, release = self._release_in(team_with_business_plan, other_component)
+        if kind == "sbom":
+            sbom = SBOM.objects.create(name="b", component=bound_component, format="cyclonedx", format_version="1.6")
+            payload = {"sbom_id": sbom.id}
+        else:
+            payload = {"document_id": Document.objects.create(name="bd", component=bound_component).id}
+
+        resp = Client().post(
+            f"/api/v1/releases/{release.id}/artifacts",
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == 403
+        assert not ReleaseArtifact.objects.filter(release=release).exists()
+        detail = resp.json()["detail"]
+        assert bound_component.id in detail
+        assert product.id in detail
+
+    def test_bot_without_a_binding_cannot_pin(
+        self, oidc_sbomify_token, bound_component, team_with_business_plan, mocker
+    ):
+        """Patched for the reason ``test_bot_without_a_binding_says_so`` gives."""
+        from sbomify.apps.sboms.models import SBOM
+
+        _product, release = self._release_in(team_with_business_plan, bound_component)
+        sbom = SBOM.objects.create(name="b", component=bound_component, format="cyclonedx", format_version="1.6")
+        mocker.patch("sbomify.apps.oidc.permissions.bound_component_id_for_request", return_value=None)
+
+        resp = Client().post(
+            f"/api/v1/releases/{release.id}/artifacts",
+            data=json.dumps({"sbom_id": sbom.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == 403
+        assert "no component binding" in resp.json()["detail"]
