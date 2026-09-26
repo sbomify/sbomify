@@ -14,13 +14,20 @@ and the budget is met.
 
 from __future__ import annotations
 
+import copy
+import json
 import time
+from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
 
+from sbomify.apps.plugins.tests import spdx3_corpus as corpus
 from sbomify.apps.sboms import spdx3_validation
 from sbomify.apps.sboms.spdx3_validation import MAX_VALIDATED_ELEMENTS, spdx3_schema_errors
+
+YOCTO_3_0_1 = Path(__file__).resolve().parent / "test_data" / "yocto_core-image-minimal.spdx3.json"
 
 
 def _valid(elements: int) -> dict[str, Any]:
@@ -130,6 +137,178 @@ class TestTheVerdictsAreUnchanged:
         errors = spdx3_schema_errors(_invalid(), limit=limit)
 
         assert len(errors) <= limit
+
+
+class TestTheGateClosesWhatTheSchemaCloses:
+    """The schema closes every element and every inline object with
+    ``unevaluatedProperties: false``, and fastjsonschema does not implement that
+    keyword. So a property the schema refuses passed the gate, the enumerator was
+    never asked, and the document was accepted. jsonschema refuses each rejection
+    case here, and each one passed the gate until it checked keys itself.
+    """
+
+    def test_a_made_up_property_is_rejected(self) -> None:
+        document = _valid(3)
+        document["@graph"][2]["totally_made_up"] = 1
+
+        errors = spdx3_schema_errors(document)
+
+        assert errors
+        assert "totally_made_up" in errors[0]
+
+    def test_a_made_up_root_property_is_rejected(self) -> None:
+        document = _valid(3)
+        document["junk"] = 1
+
+        assert spdx3_schema_errors(document)
+
+    def test_a_property_another_class_declares_is_rejected(self) -> None:
+        """Checked per class: ``specVersion`` is an SPDX property, but a
+        CreationInfo's, not a package's."""
+        document = _valid(3)
+        document["@graph"][2]["specVersion"] = "3.0.1"
+
+        errors = spdx3_schema_errors(document)
+
+        assert errors
+        assert "specVersion" in errors[0]
+
+    def test_a_made_up_property_on_an_inline_object_is_rejected(self) -> None:
+        document = _valid(3)
+        document["@graph"][2]["verifiedUsing"] = [
+            {"type": "Hash", "algorithm": "sha256", "hashValue": "a" * 64, "totally_made_up": 1}
+        ]
+
+        assert spdx3_schema_errors(document)
+
+    @pytest.mark.parametrize("builder", corpus.SCHEMA_VALID_BUILDERS, ids=lambda b: b.__name__)
+    def test_a_made_up_property_is_rejected_on_every_element(self, builder: Callable[[], dict[str, Any]]) -> None:
+        """Every class the corpus uses, one element at a time."""
+        document = builder()
+        for index, element in enumerate(document["@graph"]):
+            mutated = copy.deepcopy(document)
+            mutated["@graph"][index]["totally_made_up"] = 1
+
+            assert spdx3_schema_errors(mutated), f"@graph/{index} ({element['type']}) accepted a made-up property"
+
+    def test_an_open_extension_carries_what_it_likes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The schema leaves an extension object open, and Yocto 6.0 writes
+        them. Its keys are not the gate's to refuse, and a document carrying one
+        must not pay the slow walk either."""
+
+        def _refuse() -> Any:
+            raise AssertionError("the enumerator was consulted for a valid document")
+
+        monkeypatch.setattr(spdx3_validation, "_enumerator", _refuse)
+        document = _valid(3)
+        document["@graph"][2]["extension"] = [
+            {"type": "https://example.test/ns/Note", "https://example.test/ns/text": "built on a Tuesday"}
+        ]
+
+        assert spdx3_schema_errors(document) == []
+
+    @pytest.mark.parametrize("builder", corpus.SCHEMA_VALID_BUILDERS, ids=lambda b: b.__name__)
+    def test_a_conformant_document_still_never_reaches_the_enumerator(
+        self, builder: Callable[[], dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The key check must vouch for every property a conformant document
+        uses, or the 2.3 s walk comes back for valid documents."""
+
+        def _refuse() -> Any:
+            raise AssertionError("the enumerator was consulted for a valid document")
+
+        monkeypatch.setattr(spdx3_validation, "_enumerator", _refuse)
+
+        assert spdx3_schema_errors(builder()) == []
+
+    def test_real_yocto_output_never_reaches_the_enumerator(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The same on a published Yocto document, whose elements carry far more
+        of the schema than the corpus does."""
+
+        def _refuse() -> Any:
+            raise AssertionError("the enumerator was consulted for a valid document")
+
+        monkeypatch.setattr(spdx3_validation, "_enumerator", _refuse)
+
+        assert spdx3_schema_errors(json.loads(YOCTO_3_0_1.read_text())) == []
+
+
+def _closed_objects(node: Any) -> Iterator[dict[str, Any]]:
+    """Every schema node that closes an object with ``unevaluatedProperties: false``."""
+    if isinstance(node, dict):
+        if node.get("unevaluatedProperties") is False:
+            yield node
+        for value in node.values():
+            yield from _closed_objects(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _closed_objects(value)
+
+
+class TestTheSchemaIsShapedTheWayTheKeyCheckReadsIt:
+    """The key check leans on two facts about the vendored schema. They are
+    pinned here, so a schema that breaks either fails a test rather than
+    quietly widening what the gate accepts."""
+
+    @pytest.fixture
+    def schema(self) -> dict[str, Any]:
+        schema: dict[str, Any] = json.loads(spdx3_validation.SCHEMA_PATH.read_text())
+        return schema
+
+    def test_every_closed_object_below_the_root_is_a_derived_class(self, schema: dict[str, Any]) -> None:
+        """So an object the gate passed at a closed site is an instance of a
+        class whose properties the derivation knows."""
+        defs = schema["$defs"]
+        declared = spdx3_validation._declared_properties_of(schema)
+        sites = [site for site in _closed_objects(schema) if site is not schema]
+
+        assert sites
+        for site in sites:
+            assert site.keys() <= {"type", "$ref", "anyOf", "unevaluatedProperties"}
+            refs = [site["$ref"]] if "$ref" in site else [member["$ref"] for member in site["anyOf"]]
+            names = [ref.removeprefix("#/$defs/") for ref in refs]
+            if names == ["AnyClass"]:
+                names = [member["$ref"].removeprefix("#/$defs/") for member in defs["AnyClass"]["anyOf"]]
+            assert all(name in declared for name in names), names
+
+    def test_every_closed_class_takes_its_own_name_as_its_type_and_nothing_else(self, schema: dict[str, Any]) -> None:
+        """So an object whose type names no closed class never passed the gate
+        through one, and leaving its own keys unchecked cannot miss anything."""
+        defs = schema["$defs"]
+        declared = spdx3_validation._declared_properties_of(schema)
+
+        for name, properties in declared.items():
+            if properties is not None:
+                dispatch = {"type": "object", "properties": {"type": {"const": name}}, "required": ["type"]}
+                assert defs[name]["if"] == dispatch
+
+
+class TestTheKeyCheckFailsClosed:
+    def test_a_conditional_property_is_refused_rather_than_guessed(self) -> None:
+        """Collecting properties through an ``anyOf`` would credit a class with
+        properties only some of its instances may carry, and an overcount here
+        is a document the gate waves through. So the derivation refuses."""
+        schema = {
+            "$defs": {
+                "AnyClass": {"anyOf": [{"$ref": "#/$defs/Thing"}]},
+                "Thing": {"allOf": [{"anyOf": [{"properties": {"a": {}}}, {"properties": {"b": {}}}]}]},
+            }
+        }
+
+        with pytest.raises(ValueError, match="anyOf"):
+            spdx3_validation._declared_properties_of(schema)
+
+    def test_a_schema_it_cannot_read_is_loud_not_a_rejection(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Resolved before the gate runs, like the gate itself: a derivation
+        that raises must not read as "this document is invalid"."""
+
+        def _unreadable() -> Any:
+            raise ValueError("cannot derive")
+
+        monkeypatch.setattr(spdx3_validation, "_declared_properties", _unreadable)
+
+        with pytest.raises(ValueError, match="cannot derive"):
+            spdx3_schema_errors(_valid(3))
 
 
 class TestTheCapIsUnchanged:
