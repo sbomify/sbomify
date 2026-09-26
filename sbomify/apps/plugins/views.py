@@ -237,3 +237,74 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "panel": found.panel,
             },
         )
+
+
+class AssessmentResultsCardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """The artifact page's assessments card, re-rendered on its own.
+
+    The card used to answer a completed assessment by reloading the whole page.
+    An assessment finishes when the queue says so, not when the reader is ready,
+    so that reload landed on a triage modal with a justification half typed, on
+    a filtered suppression list, on an expanded findings panel: all of it client
+    state that a reload cannot restore. This endpoint is what the card swaps in
+    instead.
+
+    Authorization is the one ``get_sbom_assessments`` already applies, which
+    answers the empty shape rather than an error for an SBOM the caller may not
+    read. Guests are blocked on top of that, matching the page this belongs to,
+    so a guest redirected off the artifact page cannot pull its fragments by URL.
+
+    One URL, two audiences, the same split the findings view makes: an HTMX
+    request gets the region, anything else lands on the artifact page.
+    """
+
+    def get(self, request: HttpRequest, sbom_id: str) -> HttpResponse:
+        from sbomify.apps.core.authz import can
+
+        from .apis import _readable_sbom, get_sbom_assessments
+
+        # Authorize before answering anything, including the 404 and the
+        # redirect. Both are observable: a bare existence check would let any
+        # signed-in user walk SBOM ids and read the owning component out of the
+        # redirect's Location. _readable_sbom is the same gate the assessments
+        # endpoint applies, and returning its miss as a plain 404 keeps an
+        # unreadable artifact indistinguishable from one that is not there.
+        sbom = _readable_sbom(request, sbom_id)
+        if sbom is None:
+            return HttpResponseNotFound("Artifact not found")
+
+        if not request.headers.get("HX-Request"):
+            return HttpResponseRedirect(
+                reverse(
+                    "core:component_item",
+                    kwargs={
+                        "component_id": sbom.component_id,
+                        "item_type": "sboms",
+                        "item_id": str(sbom.id),
+                    },
+                )
+            )
+
+        try:
+            # Same two knobs the artifact page passes: the card reads counts from
+            # each run's summary and one title, and building every finding twice
+            # is what once made this payload 31 MB.
+            assessment_runs = get_sbom_assessments(
+                request, sbom_id, findings_limit=1, include_history=False
+            ).model_dump(mode="json")
+        except Exception:
+            logger.exception("Failed to refresh assessments for SBOM %s", sbom_id)
+            return HttpResponseNotFound("Assessments unavailable")
+
+        return render(
+            request,
+            "plugins/components/assessment_results_card.html.j2",
+            {
+                "sbom_id": sbom_id,
+                "assessment_runs": assessment_runs,
+                # The card's Re-run control gates on this. The page supplies it;
+                # without it here every Re-run badge would vanish on the first
+                # refresh and only a full page load would bring it back.
+                "can_rerun": can(request, "component:manage", sbom.component),
+            },
+        )
