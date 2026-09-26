@@ -37,7 +37,7 @@
     <c-layout.stat-card label="Artifacts" :value="metrics.artifacts" icon="fas fa-file-lines" />
     {# djlint:off #}
     <c-layout.stat-card label="Open vulnerabilities" :value="metrics.open" :unmeasured="metrics.unmeasured_open" unmeasured_label="Not scanned yet" icon="fas fa-crosshairs" accent="warning" />
-    <c-layout.stat-card label="Past your patch SLA" :value="metrics.past_sla" :unmeasured="metrics.unmeasured_past_sla" unmeasured_label="Not scanned yet" icon="fas fa-clock" accent="danger" />
+    <c-layout.stat-card label="Past patch SLA" :value="metrics.past_sla" :unmeasured="metrics.unmeasured_past_sla" unmeasured_label="Not scanned yet" icon="fas fa-clock" accent="danger" />
     {# djlint:on #}
 </div>
 {% if metrics.unassessed %}
