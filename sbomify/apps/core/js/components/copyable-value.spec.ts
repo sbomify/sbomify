@@ -158,16 +158,45 @@ describe('Copyable Value', () => {
             component.destroy()
         })
 
-        test('copies an empty string when the referenced element is missing', async () => {
+        test('refuses to copy when the referenced element is missing', async () => {
+            // Writing '' succeeds, so the chip would go green while clearing the
+            // clipboard: the same false success this component exists to avoid.
             Object.defineProperty(globalThis, 'document', {
                 value: { getElementById: () => null },
                 configurable: true,
                 writable: true
             })
             const { component, clipboardWrite } = build({ value: 'ignored', copyFrom: 'missing' })
-            component.copyToClipboard()
-            await Promise.resolve()
-            expect(clipboardWrite).toHaveBeenCalledWith('')
+            const logged = mock(() => undefined)
+            console.error = logged
+            await component.copyToClipboard()
+            expect(clipboardWrite).not.toHaveBeenCalled()
+            expect(component.copied).toBe(false)
+            expect(component.$dispatch).toHaveBeenCalledWith('messages', {
+                value: [{ type: 'error', message: 'Failed to copy to clipboard' }]
+            })
+            component.destroy()
+        })
+
+        test('copies through copySelector, which is the branch the token display uses', async () => {
+            const tokenNode = { textContent: 'sbom_pat_9f2A' }
+            const container = { querySelector: (sel: string) => (sel === '[data-token-value]' ? tokenNode : null) }
+            const { component, clipboardWrite } = build({ value: '', copySelector: '[data-token-value]' })
+            component.$el = { closest: () => container } as unknown as HTMLElement
+            await component.copyToClipboard()
+            expect(clipboardWrite).toHaveBeenCalledWith('sbom_pat_9f2A')
+            expect(component.copied).toBe(true)
+            component.destroy()
+        })
+
+        test('refuses to copy when the selector resolves to nothing', async () => {
+            const { component, clipboardWrite } = build({ value: '', copySelector: '[data-token-value]' })
+            component.$el = { closest: () => ({ querySelector: () => null }) } as unknown as HTMLElement
+            const logged = mock(() => undefined)
+            console.error = logged
+            await component.copyToClipboard()
+            expect(clipboardWrite).not.toHaveBeenCalled()
+            expect(component.copied).toBe(false)
             component.destroy()
         })
     })
