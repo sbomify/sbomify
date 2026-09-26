@@ -787,7 +787,7 @@ def build_dramatiq_redis_options(location: str, ca_certs: str = "") -> dict[str,
 
 _dramatiq_redis_options: dict[str, Any] = build_dramatiq_redis_options(REDIS_WORKER_URL, REDIS_CA_CERTS)
 DRAMATIQ_BROKER = {
-    "BROKER": "dramatiq.brokers.redis.RedisBroker",
+    "BROKER": "sbomify.dramatiq_broker.RedisBroker",
     "OPTIONS": _dramatiq_redis_options,
     "MIDDLEWARE": [
         "dramatiq.middleware.Callbacks",
