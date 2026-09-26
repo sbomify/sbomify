@@ -233,8 +233,14 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
     except Team.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Team not found"))
 
+    # The inviter's own role decides which roles the form will accept. Read
+    # from the Member row rather than the session, which caches a role for
+    # 300 seconds and so can still say admin after a demotion.
+    actor = cast(User, request.user)
+    actor_role = Member.objects.filter(user=actor, team_id=team_id).values_list("role", flat=True).first()
+
     if request.method == "POST":
-        invite_user_form = InviteUserForm(request.POST)
+        invite_user_form = InviteUserForm(request.POST, actor_role=actor_role)
 
         # Advisory, so the limit shows as a form error rather than as a refusal
         # after the user has filled the form in. The authoritative check is taken
@@ -317,18 +323,12 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             captured_role = invite_user_form.cleaned_data["role"]
             captured_team_key = team.key
 
-            # Admins may invite at any level, including owner. That makes the
-            # "admins cannot remove an owner" rule bypassable in principle — an
-            # admin could mint an owner they control. The boundary is about
-            # preventing accidents, not defending against a malicious admin, so
-            # rather than forbidding it we make it visible: tell the existing
-            # owners whenever an owner-level invitation is created.
-            actor_role = (
-                Member.objects.filter(user=cast(User, request.user), team=team).values_list("role", flat=True).first()
-                or ""
-            )
+            # The form refuses a role above the inviter's own, so a non-owner
+            # cannot reach here with an owner-level invitation. The notice stays
+            # as a backstop: if another path ever lets one through, the existing
+            # owners still hear about it.
             if captured_role in OWNER_ONLY and actor_role not in OWNER_ONLY:
-                notify_owners_of_owner_invitation(team, cast(User, request.user), invited_email)
+                notify_owners_of_owner_invitation(team, actor, invited_email)
             transaction.on_commit(
                 lambda: capture_for_request(
                     request,
@@ -348,7 +348,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
         # If form has errors, fall through to render the form with errors
         context["invite_user_form"] = invite_user_form
     else:
-        invite_user_form = InviteUserForm()
+        invite_user_form = InviteUserForm(actor_role=actor_role)
         context["invite_user_form"] = invite_user_form
 
     return render(request, "teams/invite.html.j2", context)

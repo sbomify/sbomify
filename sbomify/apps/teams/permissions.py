@@ -29,6 +29,33 @@ class MemberRemovalDenial:
     level: int = messages.ERROR
 
 
+def grantable_roles(actor_role: str | None) -> list[tuple[str, str]]:
+    """The roles ``actor_role`` may hand out, as (value, label) pairs.
+
+    Relational, like the owner-protection rules below: what an actor may grant
+    depends on what the actor is, not on a capability either of them holds.
+    Nobody grants above themselves, so an owner offers owner, admin and member
+    while an admin offers admin and member.
+
+    Without this an admin could invite an owner. That is not a cosmetic gap in
+    a dropdown: owner is the tier holding the one capability admins are
+    deliberately denied, deleting the workspace, so an admin could mint the
+    role they are not trusted with and accept it at an address of their own.
+
+    ``guest`` is self-service through the trust centre and never invited.
+    ``bot`` is reserved for OIDC binding identities and must never be
+    human-assignable.
+    """
+    from django.conf import settings
+
+    invitable = [(role, label) for role, label in settings.TEAMS_SUPPORTED_ROLES if role not in ("guest", "bot")]
+    if actor_role == ROLE_OWNER:
+        return invitable
+    if actor_role == ROLE_ADMIN:
+        return [(role, label) for role, label in invitable if role != ROLE_OWNER]
+    return []
+
+
 def check_member_removal(actor: Any, target: Member) -> MemberRemovalDenial | None:
     """Can ``actor`` remove the ``target`` membership? ``None`` means yes.
 
