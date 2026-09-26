@@ -19,11 +19,11 @@ that was paying 2.3 s, never touches it.
 ``fastjsonschema`` stops at draft-07 and skips ``unevaluatedProperties``, a
 2019-09 keyword, without a word. That keyword is the only way the schema closes
 an element or an inline object: a property its class does not declare is
-refused there and nowhere else. So the gate also checks every object's keys
-against what its class declares, derived from the schema once. A key it does not
-find there sends the document to ``jsonschema``, whose verdict stands, so the
-key check can cost a slow walk but never a rejection ``jsonschema`` would not
-make.
+refused there and nowhere else. So the gate compiles the schema with each of
+those closures spelled out as the class's own list of property names, derived
+from the schema once. That is exact, because an object's type decides its
+class, and it makes the gate's verdict final: ``jsonschema`` only writes the
+messages.
 
 Two schemas, because 3.0.1 is a separate document rather than a relabelled
 3.0.0. It renamed ``software_File.software_contentType`` to ``contentType``,
@@ -39,16 +39,17 @@ pinned constant.
 ``jsonschema`` names violations element by element rather than over the whole
 document. The 3.0.0 root is a ``oneOf`` between the graph form and a single
 object, so a bad element anywhere surfaces as the root failing both, with the
-document itself as the message. ``jsonschema`` also costs up to 290 ms an
-element under 3.0.0, so walking a graph in order to reach one bad element could
-hold an upload for over a minute. The gate picks out the elements that fail, and
-only those reach ``jsonschema``.
+document itself as the message. Its cost also grows with an element's size
+and with how deeply objects nest in it, so the gate picks out the elements that
+fail and ``jsonschema`` itemises only what a budget allows. An element past the
+budget is still named, without the itemised reason.
 """
 
 from __future__ import annotations
 
+import copy
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -84,7 +85,7 @@ def _gate(schema_version: str) -> Any:
     """Is this document valid. Compiled once per schema, a few hundred ms, then reused."""
     import fastjsonschema
 
-    return fastjsonschema.compile(_load(schema_version))
+    return fastjsonschema.compile(_closed(_load(schema_version)))
 
 
 @cache
@@ -102,12 +103,6 @@ def _element_enumerator(schema_version: str) -> Any:
 
     schema = _load(schema_version)
     return Draft202012Validator({**_graph_items(schema), "$defs": schema["$defs"]})
-
-
-@cache
-def _declared_properties(schema_version: str) -> dict[str, frozenset[str] | None]:
-    """What the gate cannot check by itself. Derived once, then reused."""
-    return _declared_properties_of(_load(schema_version))
 
 
 @cache
@@ -135,28 +130,34 @@ _CLASS_CHAIN_KEYWORDS = frozenset({"type", "properties", "required", "allOf", "$
 
 # The root of a document in graph form, the only form SPDX3Schema lets reach
 # this module: the schema evaluates these two keys there and nothing else.
-_GRAPH_FORM = frozenset({"@context", "@graph"})
+_GRAPH_FORM = ["@context", "@graph"]
 
 
 def _declared_properties_of(schema: dict[str, Any]) -> dict[str, frozenset[str] | None]:
     """Per class an element may be, every property the schema evaluates on it.
 
     ``None`` marks a class the schema leaves open (``unevaluatedProperties:
-    true``), whose instances may carry anything.
+    true``), whose instances may carry anything. A closed class must require
+    ``type`` and pin it to its own name, so that no object can be two classes
+    at once: the closed gate is exact only while that holds.
     """
     defs = schema["$defs"]
 
-    def collect(node: dict[str, Any], names: set[str]) -> bool:
+    def collect(node: dict[str, Any], names: set[str], required: set[str], types: list[Any]) -> bool:
         """Add what ``node`` evaluates to ``names``. False if it evaluates everything."""
         if node.get("unevaluatedProperties") is True:
             return False
         if unexpected := node.keys() - _CLASS_CHAIN_KEYWORDS:
             raise ValueError(f"cannot derive SPDX class properties through {sorted(unexpected)}")
-        names.update(node.get("properties", ()))
+        properties = node.get("properties", {})
+        names.update(properties)
+        required.update(node.get("required", ()))
+        if "type" in properties:
+            types.append(properties["type"])
         parts = list(node.get("allOf", ()))
         if "$ref" in node:
             parts.append(defs[node["$ref"].removeprefix("#/$defs/")])
-        return all(collect(part, names) for part in parts)
+        return all(collect(part, names, required, types) for part in parts)
 
     declared: dict[str, frozenset[str] | None] = {}
     for member in defs["AnyClass"]["anyOf"]:
@@ -170,33 +171,65 @@ def _declared_properties_of(schema: dict[str, Any]) -> dict[str, frozenset[str] 
                 raise ValueError(f"cannot derive SPDX class properties for {name}")
             parts = [node["if"], node["then"]]
         names: set[str] = set()
-        declared[name] = frozenset(names) if all(collect(part, names) for part in parts) else None
+        required: set[str] = set()
+        types: list[Any] = []
+        if not all(collect(part, names, required, types) for part in parts):
+            declared[name] = None
+            continue
+        # The type pinned to the class's own name, as 3.0.1 and 3.0.0 spell it.
+        pinned = ({"const": name}, {"oneOf": [{"const": name}]})
+        if "type" not in required or not any(pin in types for pin in pinned):
+            raise ValueError(f"{name}: its type does not decide the class")
+        declared[name] = frozenset(names)
     return declared
 
 
-def _declares_every_property(document: dict[str, Any], declared: dict[str, frozenset[str] | None]) -> bool:
-    """Whether every key in the document is one its object's class declares.
+def _closed(schema: dict[str, Any]) -> dict[str, Any]:
+    """The schema with every ``unevaluatedProperties: false`` spelled out in
+    keywords ``fastjsonschema`` enforces.
 
-    Run after the gate, so every object the schema closes is already an
-    instance of a class it knows. One whose type names no closed class is an
-    extension, which the schema leaves open and Yocto 6.0 writes, or sits
-    where nothing is closed: its own keys go unchecked, and what it holds is
-    still walked.
+    Wherever the schema closes an object, each class the object may be becomes
+    that class plus a ``propertyNames`` list of what the class declares, and
+    the root takes only ``@context`` and ``@graph``. Exact for a document in
+    graph form, because at most one class matches an object, except in two
+    places where the gate is the stricter: a 3.0.0 root that is also an
+    extension object, which the 3.0.0 root ``oneOf`` lets stand in for the
+    whole graph, and a pattern-checked string ending in a newline (see
+    ``test_the_gate_decides_even_where_jsonschema_cannot_say_why``). The
+    ``@graph`` items schema also stops sitting beside a ``$ref``, where
+    ``fastjsonschema`` drops every other keyword, so its ``type: object`` is
+    enforced too.
     """
-    if not document.keys() <= _GRAPH_FORM:
-        return False
-    pending: list[Any] = [document.get("@graph")]
+    declared = _declared_properties_of(schema)
+    if any("@graph" in names for names in declared.values() if names is not None):
+        raise ValueError("a class declares @graph, so the root cannot be closed to the graph form")
+    closed = copy.deepcopy(schema)
+
+    def close(member: dict[str, Any]) -> dict[str, Any]:
+        name = member.get("$ref", "").removeprefix("#/$defs/")
+        if name not in declared:
+            raise ValueError(f"cannot close an object that may be {name or member}")
+        names = declared[name]
+        return member if names is None else {"allOf": [member, {"propertyNames": {"enum": sorted(names)}}]}
+
+    closed["$defs"]["ClosedAnyClass"] = {"anyOf": [close(member) for member in closed["$defs"]["AnyClass"]["anyOf"]]}
+    pending: list[Any] = [value for key, value in closed.items() if key != "$defs"] + list(closed["$defs"].values())
     while pending:
         node = pending.pop()
         if isinstance(node, list):
             pending.extend(node)
         elif isinstance(node, dict):
-            node_type = node.get("type")
-            allowed = declared.get(node_type) if isinstance(node_type, str) else None
-            if allowed is not None and not node.keys() <= allowed:
-                return False
+            if node.get("unevaluatedProperties") is False:
+                if node.get("$ref") == "#/$defs/AnyClass" and node.keys() <= {"type", "$ref", "unevaluatedProperties"}:
+                    del node["$ref"]
+                    node["allOf"] = [{"$ref": "#/$defs/ClosedAnyClass"}]
+                elif "anyOf" in node and node.keys() <= {"type", "anyOf", "unevaluatedProperties"}:
+                    node["anyOf"] = [close(member) for member in node["anyOf"]]
+                else:
+                    raise ValueError(f"cannot close {sorted(node)}")
             pending.extend(node.values())
-    return True
+    closed["propertyNames"] = {"enum": _GRAPH_FORM}
+    return closed
 
 
 def spdx3_schema_errors(document: dict[str, Any], schema_version: str, limit: int = 3) -> list[str]:
@@ -235,18 +268,15 @@ def spdx3_schema_errors(document: dict[str, Any], schema_version: str, limit: in
     # let an ImportError read as "this document is invalid": validation would
     # still be correct, every test would still pass, and the compiled path would
     # be silently off. A missing dependency has to be loud, and so does a schema
-    # the key check cannot read.
+    # the gate cannot be closed over.
     gate = _gate(schema_version)
-    declared = _declared_properties(schema_version)
     try:
         gate(document)
     except Exception:
         # Anything the gate rejects, including a document shaped so oddly the
-        # compiled validator raises something of its own, goes to the
-        # enumerator for messages a reader can act on.
-        return _violations(document, schema_version, limit)
-    if not _declares_every_property(document, declared):
-        return _violations(document, schema_version, limit)
+        # compiled validator raises something of its own, is rejected, and goes
+        # to the enumerator for messages a reader can act on.
+        return _violations(document, schema_version, limit) or [f"(document root): {_refused(schema_version)}"]
     return []
 
 
@@ -265,34 +295,79 @@ def _violations(document: dict[str, Any], schema_version: str, limit: int) -> li
     return errors
 
 
-def _faults(document: dict[str, Any], schema_version: str) -> Iterator[tuple[list[Any], str]]:
-    """Every violation as ``(path, message)``, the root's first and then each element's.
+# How much of a document ``jsonschema`` itemises. Its cost grows with a part's
+# size, and faster with how deep objects nest inside it, since it evaluates
+# every class a nested object might be at each level. So it takes at most this
+# many values per document, and only parts whose inline objects hold no objects
+# of their own, which keeps a rejection's messages to a second or so.
+_ITEMISED_VALUES = 64
+_ITEMISED_NESTING = 1
 
-    The root is checked with an empty graph, which leaves it only its own
-    faults, and each element on its own, which is all the schema checks of an
-    element: JSON Schema cannot follow a reference from one to another. The
-    two together are the whole schema for a document in graph form. An element
-    goes to ``jsonschema`` only once the gate or the key check has refused it,
-    gated alone under the ``@context`` the schema pins so a bad root cannot
-    make every element look bad.
+
+def _refused(schema_version: str) -> str:
+    return f"not valid under the SPDX {schema_version} schema"
+
+
+def _faults(document: dict[str, Any], schema_version: str) -> Iterator[tuple[list[Any], str]]:
+    """Every violation as ``(path, message)``, part by part.
+
+    ``jsonschema`` itemises each part the gate refuses while the budget lasts.
+    Past that, or where it finds nothing the gate did, the part is named plainly.
     """
-    enumerator = _enumerator(schema_version)
+    budget = _ITEMISED_VALUES
+    for path, value, enumerator in _refused_parts(document, schema_version):
+        itemised = False
+        if (size := _itemisable_size(value, budget)) is not None:
+            budget -= size
+            for error in enumerator(schema_version).iter_errors(value):
+                itemised = True
+                yield [*path, *error.absolute_path], error.message
+        if not itemised:
+            yield path, _refused(schema_version)
+
+
+def _refused_parts(
+    document: dict[str, Any], schema_version: str
+) -> Iterator[tuple[list[Any], Any, Callable[[str], Any]]]:
+    """The parts of the document the gate refuses, each with the enumerator that can itemise it.
+
+    The root is gated with an empty graph, which leaves it only its own faults,
+    and each element on its own, which is all the schema checks of an element:
+    JSON Schema cannot follow a reference from one to another. An element is
+    gated under the ``@context`` the schema pins, so a bad root cannot make
+    every element look bad.
+    """
+    gate = _gate(schema_version)
     graph = document.get("@graph")
     if not isinstance(graph, list):
-        for error in enumerator.iter_errors(document):
-            yield list(error.absolute_path), error.message
+        yield [], document, _enumerator
         return
-    for error in enumerator.iter_errors({**document, "@graph": []}):
-        yield list(error.absolute_path), error.message
-    gate = _gate(schema_version)
-    declared = _declared_properties(schema_version)
+    root = {**document, "@graph": []}
+    if not _passes(gate, root):
+        yield [], root, _enumerator
     context = _pinned_context(schema_version)
     for index, element in enumerate(graph):
-        alone = {"@context": context, "@graph": [element]}
-        if _passes(gate, alone) and _declares_every_property(alone, declared):
-            continue
-        for error in _element_enumerator(schema_version).iter_errors(element):
-            yield ["@graph", index, *error.absolute_path], error.message
+        if not _passes(gate, {"@context": context, "@graph": [element]}):
+            yield ["@graph", index], element, _element_enumerator
+
+
+def _itemisable_size(part: Any, budget: int) -> int | None:
+    """How many JSON values ``part`` holds, or None if ``jsonschema`` cannot
+    itemise it cheaply: more than ``budget`` values, or objects nested deeper
+    than ``_ITEMISED_NESTING`` levels below it."""
+    count, pending = 0, [(part, 0)]
+    while pending:
+        value, level = pending.pop()
+        count += 1
+        if count > budget:
+            return None
+        if isinstance(value, dict):
+            if level > _ITEMISED_NESTING:
+                return None
+            pending.extend((child, level + 1) for child in value.values())
+        elif isinstance(value, list):
+            pending.extend((child, level) for child in value)
+    return count
 
 
 def _passes(gate: Any, document: dict[str, Any]) -> bool:

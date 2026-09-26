@@ -8,8 +8,8 @@ compiled once and the walk disappears.
 Two validators do two jobs. The compiled one answers whether a document is
 valid; ``jsonschema`` is asked only to name the violations, and only once the
 first has already said no. These tests hold that arrangement to three things,
-under each vendored schema: the same documents pass and fail, a valid one never
-reaches the slow validator, and the budget is met.
+under each vendored schema: the verdicts are the schema's, a valid document
+never reaches the slow validator, and the budget is met.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from __future__ import annotations
 import copy
 import json
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -111,13 +111,13 @@ class TestTheSlowValidatorIsOnlyForMessages:
     def test_an_invalid_document_does_reach_it(self, version: str, monkeypatch: pytest.MonkeyPatch) -> None:
         """And it is what produces the messages, so it has to be consulted."""
         consulted: list[bool] = []
-        real = spdx3_validation._enumerator
+        real = spdx3_validation._element_enumerator
 
         def _spy(schema_version: str) -> Any:
             consulted.append(True)
             return real(schema_version)
 
-        monkeypatch.setattr(spdx3_validation, "_enumerator", _spy)
+        monkeypatch.setattr(spdx3_validation, "_element_enumerator", _spy)
 
         errors = spdx3_schema_errors(_invalid(version), version)
 
@@ -160,7 +160,7 @@ class TestTheGateClosesWhatTheSchemaCloses:
     ``unevaluatedProperties: false``, and fastjsonschema does not implement that
     keyword. So a property the schema refuses passed the gate, the enumerator was
     never asked, and the document was accepted. jsonschema refuses each rejection
-    case here, and each one passed the gate until it checked keys itself.
+    case here, and each one passed the gate until the gate closed objects itself.
     """
 
     @pytest.mark.parametrize("version", VERSIONS)
@@ -237,6 +237,40 @@ class TestTheGateClosesWhatTheSchemaCloses:
 
         assert spdx3_schema_errors(document, version) == []
 
+    @pytest.mark.parametrize("version", VERSIONS)
+    def test_a_closed_class_inside_an_open_extension_stays_open(
+        self, version: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Nothing under ``extension`` is closed, whatever type it names, so an
+        extra key there is not the gate's to refuse, nor a reason to send the
+        element to jsonschema."""
+
+        def _refuse(*_: Any) -> Any:
+            raise AssertionError("jsonschema was consulted for a valid document")
+
+        monkeypatch.setattr(spdx3_validation, "_enumerator", _refuse)
+        monkeypatch.setattr(spdx3_validation, "_element_enumerator", _refuse)
+        document = _valid(3, version)
+        document["@graph"][2]["extension"] = [
+            {
+                "type": "extension_CdxPropertiesExtension",
+                "extension_cdxProperty": [{"type": "extension_CdxPropertyEntry", "extension_cdxPropName": "a"}],
+                "junk": 1,
+            }
+        ]
+
+        assert spdx3_schema_errors(document, version) == []
+
+    @pytest.mark.parametrize("version", VERSIONS)
+    def test_a_graph_item_must_be_an_object(self, version: str) -> None:
+        """The items schema says ``type: object`` beside a ``$ref``, and
+        fastjsonschema ignores whatever sits beside one. Under 3.0.1 the string
+        below matched a class's ``else`` branch and passed."""
+        document = _valid(3, version)
+        document["@graph"].append("Not a Tool")
+
+        assert spdx3_schema_errors(document, version)
+
     @pytest.mark.parametrize(
         ("builder", "version"),
         [(builder, "3.0.1") for builder in corpus.SCHEMA_VALID_BUILDERS]
@@ -246,8 +280,8 @@ class TestTheGateClosesWhatTheSchemaCloses:
     def test_a_conformant_document_still_never_reaches_the_enumerator(
         self, builder: Callable[[], dict[str, Any]], version: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The key check must vouch for every property a conformant document
-        uses, or the 2.3 s walk comes back for valid documents."""
+        """The closed gate must pass every property a conformant document uses:
+        a refusal here would be a wrong rejection, found the slow way."""
 
         def _refuse(*_: Any) -> Any:
             raise AssertionError("the enumerator was consulted for a valid document")
@@ -273,9 +307,8 @@ class TestTheGateClosesWhatTheSchemaCloses:
 
 @pytest.mark.parametrize("version", VERSIONS)
 class TestOnlyARefusedElementReachesJsonschema:
-    """jsonschema costs up to 290 ms an element under 3.0.0. Walked in order, a
-    graph whose one bad element sits near the cap would hold the upload for over
-    a minute before the first message."""
+    """Walking the graph in order to reach one bad element would spend
+    jsonschema's time on every element before it."""
 
     def test_the_other_elements_never_reach_it(self, version: str, monkeypatch: pytest.MonkeyPatch) -> None:
         real = spdx3_validation._element_enumerator
@@ -315,89 +348,149 @@ class TestOnlyARefusedElementReachesJsonschema:
         assert errors == [f"/@context: 'https://spdx.org/rdf/{version}/spdx-context.jsonld' was expected"]
 
 
-def _closed_objects(node: Any) -> Iterator[dict[str, Any]]:
-    """Every schema node that closes an object with ``unevaluatedProperties: false``."""
-    if isinstance(node, dict):
-        if node.get("unevaluatedProperties") is False:
-            yield node
-        for value in node.values():
-            yield from _closed_objects(value)
-    elif isinstance(node, list):
-        for value in node:
-            yield from _closed_objects(value)
-
-
 @pytest.mark.parametrize("version", VERSIONS)
-class TestTheSchemaIsShapedTheWayTheKeyCheckReadsIt:
-    """The key check leans on two facts about each vendored schema. They are
-    pinned here, so a schema that breaks either fails a test rather than
-    quietly widening what the gate accepts."""
+class TestTheMessagesStayBounded:
+    """jsonschema's cost grows with an element's size and with its nesting. The
+    gate decides, and jsonschema itemises only what fits a budget."""
 
-    @pytest.fixture
-    def schema(self, version: str) -> dict[str, Any]:
-        schema: dict[str, Any] = json.loads(spdx3_validation.SCHEMA_PATHS[version].read_text())
-        return schema
+    def test_a_large_refused_element_is_named_without_jsonschema(
+        self, version: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _refuse(*_: Any) -> Any:
+            raise AssertionError("jsonschema was asked to itemise an element past the budget")
 
-    def test_every_closed_object_below_the_root_is_a_derived_class(self, schema: dict[str, Any]) -> None:
-        """So an object the gate passed at a closed site is an instance of a
-        class whose properties the derivation knows."""
-        defs = schema["$defs"]
-        declared = spdx3_validation._declared_properties_of(schema)
-        sites = [site for site in _closed_objects(schema) if site is not schema]
+        monkeypatch.setattr(spdx3_validation, "_element_enumerator", _refuse)
+        document = _valid(3, version)
+        document["@graph"].append(
+            {
+                "type": "Relationship",
+                "spdxId": "https://example.test/rel",
+                "creationInfo": "_:ci",
+                "relationshipType": "contains",
+                "from": "https://example.test/pkg-0",
+                "to": [f"https://example.test/pkg-{index}" for index in range(400)],
+                "junk": 1,
+            }
+        )
 
-        assert sites
-        for site in sites:
-            assert site.keys() <= {"type", "$ref", "anyOf", "unevaluatedProperties"}
-            refs = [site["$ref"]] if "$ref" in site else [member["$ref"] for member in site["anyOf"]]
-            names = [ref.removeprefix("#/$defs/") for ref in refs]
-            if names == ["AnyClass"]:
-                names = [member["$ref"].removeprefix("#/$defs/") for member in defs["AnyClass"]["anyOf"]]
-            assert all(name in declared for name in names), names
+        errors = spdx3_schema_errors(document, version)
 
-    def test_every_closed_class_takes_its_own_name_as_its_type_and_nothing_else(self, schema: dict[str, Any]) -> None:
-        """So an object whose type names no closed class never passed the gate
-        through one, and leaving its own keys unchecked cannot miss anything."""
-        defs = schema["$defs"]
-        declared = spdx3_validation._declared_properties_of(schema)
+        assert errors == [f"/@graph/5: not valid under the SPDX {version} schema"]
 
-        for name, properties in declared.items():
-            if properties is None:
-                continue
-            if "if" in defs[name]:  # 3.0.1
-                assert defs[name]["if"] == {
-                    "type": "object",
-                    "properties": {"type": {"const": name}},
-                    "required": ["type"],
-                }
-            else:  # 3.0.0 names the class in the first part of its allOf
-                assert defs[name]["allOf"][0]["properties"]["type"] == {"oneOf": [{"const": name}]}
+    def test_a_deeply_nested_refused_element_is_named_without_jsonschema(
+        self, version: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Only a part whose inline objects hold no objects of their own is
+        itemised, whatever its size."""
+
+        def _refuse(*_: Any) -> Any:
+            raise AssertionError("jsonschema was asked to itemise a deeply nested element")
+
+        monkeypatch.setattr(spdx3_validation, "_element_enumerator", _refuse)
+        chain: Any = "_:ci"
+        for level in range(3):
+            agent = {"type": "Person", "spdxId": f"https://example.test/agent-{level}", "creationInfo": chain}
+            chain = {
+                "type": "CreationInfo",
+                "specVersion": version,
+                "created": "2026-09-21T07:00:00Z",
+                "createdBy": [agent],
+            }
+        document = _valid(3, version)
+        document["@graph"][2]["creationInfo"] = chain
+        document["@graph"][2]["junk"] = 1
+
+        errors = spdx3_schema_errors(document, version)
+
+        assert errors == [f"/@graph/2: not valid under the SPDX {version} schema"]
+
+    def test_the_gate_decides_even_where_jsonschema_cannot_say_why(self, version: str) -> None:
+        """A JSON Schema pattern is an ECMA-262 regex, where ``$`` ends the
+        input. fastjsonschema reads it that way; jsonschema uses Python's
+        ``re``, where ``$`` also matches before a final newline and finds
+        nothing wrong. The refusal stands, named plainly."""
+        document = _valid(3, version)
+        document["@graph"][1]["created"] = "2026-09-21T07:00:00Z\n"
+
+        errors = spdx3_schema_errors(document, version)
+
+        assert errors == [f"/@graph/1: not valid under the SPDX {version} schema"]
+
+    def test_a_refusal_is_never_returned_as_a_pass(self, version: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Even if no part of the document could be singled out, the gate's
+        refusal is what the caller gets."""
+        monkeypatch.setattr(spdx3_validation, "_refused_parts", lambda *_: iter(()))
+
+        errors = spdx3_schema_errors(_invalid(version), version)
+
+        assert errors == [f"(document root): not valid under the SPDX {version} schema"]
 
 
-class TestTheKeyCheckFailsClosed:
+def _thing(**chain: Any) -> dict[str, Any]:
+    """A one-class schema whose class ``Thing`` is ``chain``."""
+    return {"$defs": {"AnyClass": {"anyOf": [{"$ref": "#/$defs/Thing"}]}, "Thing": chain}}
+
+
+class TestTheClosedGateFailsClosed:
+    """Each guard below refuses a schema shape under which spelling out
+    ``unevaluatedProperties`` would no longer be exact, rather than build a
+    gate that accepts or refuses what jsonschema would not."""
+
     def test_a_conditional_property_is_refused_rather_than_guessed(self) -> None:
         """Collecting properties through an ``anyOf`` would credit a class with
         properties only some of its instances may carry, and an overcount here
         is a document the gate waves through. So the derivation refuses."""
-        schema = {
-            "$defs": {
-                "AnyClass": {"anyOf": [{"$ref": "#/$defs/Thing"}]},
-                "Thing": {"allOf": [{"anyOf": [{"properties": {"a": {}}}, {"properties": {"b": {}}}]}]},
-            }
-        }
+        schema = _thing(allOf=[{"anyOf": [{"properties": {"a": {}}}, {"properties": {"b": {}}}]}])
 
         with pytest.raises(ValueError, match="anyOf"):
             spdx3_validation._declared_properties_of(schema)
 
-    def test_a_schema_it_cannot_read_is_loud_not_a_rejection(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Resolved before the gate runs, like the gate itself: a derivation
-        that raises must not read as "this document is invalid"."""
+    @pytest.mark.parametrize(
+        "head",
+        [
+            {"type": "object", "properties": {"type": {"oneOf": [{"const": "Thing"}]}}},
+            {"type": "object", "properties": {"type": {"type": "string"}}, "required": ["type"]},
+        ],
+        ids=["type not required", "type not pinned to the class"],
+    )
+    def test_a_class_its_type_does_not_decide_is_refused(self, head: dict[str, Any]) -> None:
+        """Closing each branch on its own is exact only while at most one class
+        can match an object. That holds because every class requires ``type``
+        and pins it to its own name."""
+        with pytest.raises(ValueError, match="type"):
+            spdx3_validation._declared_properties_of(_thing(allOf=[head]))
 
-        def _unreadable(*_: Any) -> Any:
-            raise ValueError("cannot derive")
+    def test_a_class_declaring_graph_is_refused(self) -> None:
+        """The root is closed to ``@context`` and ``@graph``, which is exact only
+        while no class could carry ``@graph`` as a property of its own."""
+        head = {"type": "object", "properties": {"type": {"oneOf": [{"const": "Thing"}]}, "@graph": {}}}
+        schema = _thing(allOf=[{**head, "required": ["type"]}])
 
-        monkeypatch.setattr(spdx3_validation, "_declared_properties", _unreadable)
+        with pytest.raises(ValueError, match="@graph"):
+            spdx3_validation._closed(schema)
 
-        with pytest.raises(ValueError, match="cannot derive"):
+    def test_a_closed_object_holding_something_other_than_a_class_is_refused(self) -> None:
+        schema = _thing(
+            allOf=[{"type": "object", "properties": {"type": {"oneOf": [{"const": "Thing"}]}}, "required": ["type"]}]
+        )
+        schema["$defs"]["Thing_derived"] = {
+            "anyOf": [{"type": "object", "unevaluatedProperties": False, "anyOf": [{"$ref": "#/$defs/Loose"}]}]
+        }
+        schema["$defs"]["Loose"] = {"type": "object"}
+
+        with pytest.raises(ValueError, match="Loose"):
+            spdx3_validation._closed(schema)
+
+    def test_a_gate_it_cannot_build_is_loud_not_a_rejection(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Resolved before the gate runs: a gate that cannot be built must not
+        read as "this document is invalid"."""
+
+        def _unbuildable(*_: Any) -> Any:
+            raise ValueError("cannot build")
+
+        monkeypatch.setattr(spdx3_validation, "_gate", _unbuildable)
+
+        with pytest.raises(ValueError, match="cannot build"):
             spdx3_schema_errors(_valid(3), "3.0.1")
 
 
