@@ -90,3 +90,33 @@ def test_cryptography_is_reachable_from_the_rail(
     assert contributor_page.status_code == 200
     assert b'aria-label="Cryptography"' in contributor_page.content
     assert destination in contributor_page.content
+
+
+def test_trends_page_hands_its_filters_to_the_fragment_it_fetches(
+    client: Client, sample_user: User, sample_team_with_owner_member: Member, mocker: MockerFixture
+) -> None:
+    """A bookmarked or shared Trends link opened on the defaults.
+
+    The page fetches its own content, so a filter in the address bar has to
+    travel with that fetch. The chart view is not one of them: only the browser
+    reads that, and sending it would mean the server rendered it too.
+    """
+    workspace = sample_team_with_owner_member.team
+    setup_authenticated_client_session(client, workspace, sample_user)
+    session = client.session
+    session["current_team"]["has_completed_wizard"] = True
+    session.save()
+    mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
+    fragment = reverse("vulnerability_scanning:vulnerability_trends")
+
+    bare = client.get(reverse("core:dashboard_trends"))
+    assert f'hx-get="{fragment}?show_product_filter=true"'.encode() in bare.content
+
+    filtered = client.get(
+        reverse("core:dashboard_trends"),
+        {"days": "7", "release_id": "", "chart": "severity", "not_a_filter": "x"},
+    )
+    assert filtered.status_code == 200
+    hx_get = re.search(rb'hx-get="([^"]+)"', filtered.content)
+    assert hx_get
+    assert hx_get[1].decode() == f"{fragment}?show_product_filter=true&amp;release_id=&amp;days=7"

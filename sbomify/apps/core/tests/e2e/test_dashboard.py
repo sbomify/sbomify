@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -344,3 +345,29 @@ def test_dashboard_view_switch_and_trend_filters(
     navigation.get_by_role("link", name="Summary").click()
     expect(navigation.locator('[aria-current="page"]')).to_have_text("Summary")
     expect(page.get_by_role("group", name="Key metrics")).to_be_visible()
+
+
+@pytest.mark.django_db
+def test_trend_filters_and_chart_view_survive_a_reload(authenticated_page: Page, dashboard: dict[str, Any]) -> None:
+    """They survived a filter swap but not the address bar, so a bookmark, a
+    refresh or a shared link opened on the defaults."""
+    page = authenticated_page
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto("/dashboard/trends/")
+    chart = page.locator(".vulnerability-chart-canvas")
+    expect(chart).to_be_visible()
+
+    page.get_by_role("button", name="Severity", exact=True).click()
+    page.get_by_role("combobox", name="Time range").select_option("7")
+    expect(page).to_have_url(re.compile(r"[?&]days=7\b"))
+    expect(page).to_have_url(re.compile(r"[?&]chart=severity\b"))
+    shared = page.url
+
+    page.reload()
+    expect(chart).to_be_visible()
+    page.wait_for_function(
+        "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
+    )
+    expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
+    expect(page.get_by_role("button", name="Severity", exact=True)).to_have_attribute("aria-pressed", "true")
+    assert page.url == shared
