@@ -51,6 +51,15 @@ def get_member_role_by_key(user: Any, team_key: str | None) -> str | None:
     return Member.objects.filter(user=user, team__key=team_key).values_list("role", flat=True).first()
 
 
+def invitation_email(user: User) -> str:
+    """The address ``user``'s invitations are matched on, or "" if there is none.
+
+    Only an address the identity provider confirmed counts: an unconfirmed one
+    does not show who reads that mailbox, so it claims no invitation sent there.
+    """
+    return user.email if user.email_verified else ""
+
+
 def has_pending_invitation(email: str) -> bool:
     """Is there a live invitation for this address?
 
@@ -75,7 +84,8 @@ def get_pending_invitations_for_email(email: str) -> list[Invitation]:
 
 def get_pending_invitations_for_user(user: User) -> list[dict[str, object]]:
     """Return pending invitations as dicts suitable for template context."""
-    if not user.email:
+    email = invitation_email(user)
+    if not email:
         return []
     return [
         {
@@ -85,7 +95,7 @@ def get_pending_invitations_for_user(user: User) -> list[dict[str, object]]:
             "created_at": inv.created_at,
             "expires_at": inv.expires_at,
         }
-        for inv in get_pending_invitations_for_email(user.email)
+        for inv in get_pending_invitations_for_email(email)
     ]
 
 

@@ -17,7 +17,10 @@ from sbomify.apps.teams.models import Invitation, Team
 def invitation(sample_user) -> Generator[Invitation, None, None]:  # noqa: F811
     """An invitation waiting for the signed-in user, which is the only thing
     that keeps /settings on the settings page: with a workspace selected the
-    view redirects into the workspace's own settings."""
+    view redirects into the workspace's own settings. Only a confirmed address
+    sees its invitations."""
+    sample_user.email_verified = True
+    sample_user.save(update_fields=["email_verified"])
     team = Team.objects.create(name="Contoso Industries")
     yield Invitation.objects.create(team=team, email=sample_user.email, role="admin")
 

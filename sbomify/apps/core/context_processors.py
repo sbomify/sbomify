@@ -123,8 +123,9 @@ def pending_invitations_context(request: Any) -> Any:
 
     from sbomify.apps.core.utils import sanitize_email_for_cache_key
     from sbomify.apps.teams.models import Invitation
+    from sbomify.apps.teams.queries import invitation_email
 
-    email = request.user.email or ""
+    email = invitation_email(request.user)
     sanitized_email = sanitize_email_for_cache_key(email, user_id=getattr(getattr(request, "user", None), "id", None))
     if not sanitized_email:
         return {

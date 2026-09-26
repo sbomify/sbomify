@@ -214,6 +214,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
     from django.utils import timezone
 
     from sbomify.apps.teams.models import Invitation, Member
+    from sbomify.apps.teams.queries import invitation_email
     from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace, user_seat
 
     user = cast(User, request.user)
@@ -228,7 +229,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         return redirect("core:settings")
 
     # Verify invitation belongs to this user
-    if (user.email or "").lower() != invitation.email.lower():
+    if invitation_email(user).lower() != invitation.email.lower():
         messages.add_message(request, messages.ERROR, "This invitation is not for your account.")
         return redirect("core:settings")
 
@@ -299,6 +300,7 @@ def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
     from django.db import transaction
 
     from sbomify.apps.teams.models import Invitation
+    from sbomify.apps.teams.queries import invitation_email
 
     user = cast(User, request.user)
 
@@ -312,7 +314,7 @@ def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         return redirect("core:settings")
 
     # Verify invitation belongs to this user
-    if (user.email or "").lower() != invitation.email.lower():
+    if invitation_email(user).lower() != invitation.email.lower():
         messages.add_message(request, messages.ERROR, "This invitation is not for your account.")
         return redirect("core:settings")
 

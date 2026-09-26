@@ -38,6 +38,7 @@ from sbomify.apps.documents.services.access_emails import (
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.queries import invitation_email
 from sbomify.apps.teams.utils import (
     switch_active_workspace,
     update_user_teams_session,
@@ -578,7 +579,7 @@ class NDASigningView(View):
             if pending_invitation_token:
                 current_user = cast(User, request.user)
                 invitation = Invitation.objects.filter(token=pending_invitation_token, team=team).first()
-                if invitation and (current_user.email or "").lower() == invitation.email.lower():
+                if invitation and invitation_email(current_user).lower() == invitation.email.lower():
                     # Get inviter from cache if available
                     cache_key = f"invitation_inviter:{invitation.token}"
                     inviter_id = cache.get(cache_key)
@@ -966,8 +967,8 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Check if user is already a member
             UserModel = get_user_model()
             try:
-                user = UserModel.objects.get(email__iexact=email)
-                if Member.objects.filter(team=team, user=user).exists():
+                invitee = UserModel.objects.get(email__iexact=email)
+                if Member.objects.filter(team=team, user=invitee).exists():
                     messages.error(request, f"{email} is already a member of this workspace")
                     if active_tab == "trust-center":
                         response = redirect(
@@ -1003,9 +1004,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             cache_key = f"invitation_inviter:{invitation.token}"
             cache.set(cache_key, user.id, timeout=60 * 60 * 24 * 7)  # 7 days (same as invitation expiry)
 
-            # If user already exists, create/update AccessRequest with inviter set as decided_by
+            # If user already exists, create/update AccessRequest with inviter set as decided_by.
+            # Only an account that confirmed the address counts as its holder.
             try:
-                invited_user = User.objects.get(email__iexact=email)
+                invited_user = User.objects.get(email__iexact=email, email_verified=True)
                 access_request, created = AccessRequest.objects.get_or_create(
                     team=team,
                     user=invited_user,

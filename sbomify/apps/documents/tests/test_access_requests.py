@@ -26,7 +26,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Member
+from sbomify.apps.teams.models import Invitation, Member
 
 
 @pytest.fixture
@@ -180,6 +180,28 @@ class TestAccessRequestCreation:
         # Should update existing request to PENDING
         request.refresh_from_db()
         assert request.status == AccessRequest.Status.PENDING
+
+
+@pytest.mark.django_db
+class TestTrustCenterInvitation:
+    """Test inviting an address to the trust center."""
+
+    def test_inviting_an_existing_account_records_the_admin_as_inviter(
+        self, authenticated_web_client, team_with_business_plan, sample_user, guest_user
+    ):
+        """The invited account's request and the invitation name the admin who sent it."""
+        guest_user.email_verified = True
+        guest_user.save(update_fields=["email_verified"])
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+
+        authenticated_web_client.post(
+            reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key}),
+            {"action": "invite", "email": guest_user.email},
+        )
+
+        invitation = Invitation.objects.get(team=team_with_business_plan, email=guest_user.email)
+        assert AccessRequest.objects.get(team=team_with_business_plan, user=guest_user).decided_by == sample_user
+        assert cache.get(f"invitation_inviter:{invitation.token}") == sample_user.id
 
 
 @pytest.mark.django_db
