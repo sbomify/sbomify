@@ -59,3 +59,34 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
     guest_page = client.get(reverse("core:dashboard"))
     assert guest_page.status_code == 302
     assert guest_page.url != reverse("core:dashboard")
+
+
+def test_cryptography_is_reachable_from_the_rail(
+    client: Client, sample_user: User, sample_team_with_owner_member: Member, mocker: MockerFixture
+) -> None:
+    """The workspace crypto page lost its only entry point in the prototype
+    migration: the Overview quick-actions tile that used to link to it was
+    replaced by a creation-only strip, and nothing took its place. The page
+    kept working, so only a link check catches it."""
+    member = sample_team_with_owner_member
+    workspace = member.team
+    setup_authenticated_client_session(client, workspace, sample_user)
+    session = client.session
+    session["current_team"]["has_completed_wizard"] = True
+    session.save()
+    mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
+
+    destination = reverse("sboms:workspace_crypto", args=[workspace.key]).encode()
+
+    owner_page = client.get(reverse("core:dashboard"))
+    assert owner_page.status_code == 200
+    assert b'aria-label="Cryptography"' in owner_page.content
+    assert destination in owner_page.content
+
+    # WorkspaceCryptoView admits every role but guest, so a contributor keeps it.
+    member.role = "member"
+    member.save(update_fields=["role"])
+    contributor_page = client.get(reverse("core:dashboard"))
+    assert contributor_page.status_code == 200
+    assert b'aria-label="Cryptography"' in contributor_page.content
+    assert destination in contributor_page.content
