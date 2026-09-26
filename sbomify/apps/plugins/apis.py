@@ -33,6 +33,19 @@ logger = getLogger(__name__)
 
 router = Router(tags=["plugins"])
 
+# How many historical runs ``get_sbom_assessments`` returns when the caller does
+# not say. A scheduled scanner writes one run per SBOM per cycle, so an SBOM's
+# history is a function of how long it has existed rather than of anything the
+# caller asked for: at an hourly cadence the unbounded response grew by 24 runs
+# a day, each carrying its own findings array, on an endpoint reachable without
+# authentication for a public component.
+#
+# Generous rather than tight, because this is a default on a published contract:
+# enough that a history panel has something to page through, small enough that
+# the response size stops tracking the artifact's age. Callers that want more
+# pass ``history_limit``; ``all_runs_total`` tells them whether there is more.
+DEFAULT_HISTORY_LIMIT = 50
+
 
 def _readable_sbom(request: HttpRequest, sbom_id: str) -> SBOM | None:
     """Return the SBOM when the caller may read its component (public or authorized), else None."""
@@ -333,13 +346,15 @@ def get_sbom_assessments(
     *,
     findings_limit: int | None = None,
     include_history: bool = True,
+    history_limit: int = DEFAULT_HISTORY_LIMIT,
 ) -> SBOMAssessmentsResponse:
-    """Get all assessment runs for an SBOM.
+    """Get assessment runs for an SBOM: the latest per plugin, plus recent history.
 
-    Returns both the latest run per plugin and the full history.
-
-    Two knobs for callers that render a summary rather than a list, both
-    defaulting to the full response so the HTTP contract is unchanged:
+    Three knobs, because the unbounded version of this response is a denial of
+    service on a public endpoint. ``auth=None``: for a public component, any
+    unauthenticated caller could make the server de-TOAST an SBOM's entire scan
+    history, and a scheduled scanner writes a run per SBOM per cycle, so that
+    history grows without limit for as long as the artifact exists.
 
     ``findings_limit`` bounds the findings carried per run. The artifact page's
     card shows counts from ``result.summary`` and exactly one title, and the
@@ -350,6 +365,17 @@ def get_sbom_assessments(
     validated and serialised twice, once for the latest run per plugin and again
     for the same run inside the history, and the artifact page reads only the
     former.
+
+    ``history_limit`` bounds how many runs ``all_runs`` carries. This is the one
+    that makes the response size a function of the request rather than of how
+    long the SBOM has existed. ``all_runs_total`` reports the true count so a
+    caller can see that it was truncated.
+
+    The blob is fetched for exactly the runs that get serialised. An identity
+    pass over two small columns picks them, so the newest run per plugin is
+    still found even when it falls outside the history window — selecting the
+    history first and deriving the latest from it would have hidden a plugin
+    whose last run predates the newest ``history_limit`` runs.
     """
     # Only expose results for an SBOM whose component the caller may read (public, or an
     # authorized member/token). Otherwise return the empty "no assessments" shape so neither
@@ -360,34 +386,50 @@ def get_sbom_assessments(
             status_summary=AssessmentStatusSummary(overall_status="no_assessments"),
             latest_runs=[],
             all_runs=[],
+            all_runs_total=0,
         )
 
-    # Get all runs for this SBOM, ordered newest-first. Prefetch the
-    # ``releases`` M2M so per-run serialization doesn't trigger N+1.
-    all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).prefetch_related("releases").order_by("-created_at"))
+    # Identity pass: two small columns for every run, so neither the blob nor
+    # the M2M is touched while deciding which runs the response carries. The
+    # ``-id`` tiebreak makes "newest" deterministic for runs written in one
+    # transaction, which share a timestamp.
+    run_index = list(
+        AssessmentRun.objects.filter(sbom_id=sbom_id).order_by("-created_at", "-id").values_list("id", "plugin_name")
+    )
 
     # Latest-per-plugin selection: under the scan-once-per-SBOM model, each
     # plugin produces at most one current run for an SBOM, so a single pass
-    # over the newest-first list picks the right row per plugin_name.
+    # over the newest-first index picks the right row per plugin_name.
     seen_plugins: set[str] = set()
-    latest_runs: list[AssessmentRun] = []
-    for run in all_runs:
-        if run.plugin_name in seen_plugins:
+    latest_ids: list[Any] = []
+    for run_id, plugin_name in run_index:
+        if plugin_name in seen_plugins:
             continue
-        seen_plugins.add(run.plugin_name)
-        latest_runs.append(run)
+        seen_plugins.add(plugin_name)
+        latest_ids.append(run_id)
+
+    history_ids = [run_id for run_id, _ in run_index[: max(0, history_limit)]] if include_history else []
+
+    # One fetch for the union, so a run appearing in both lists is loaded and
+    # serialised against the same instance. dict.fromkeys dedupes in order.
+    wanted_ids = list(dict.fromkeys([*latest_ids, *history_ids]))
+    runs_by_id = {run.id: run for run in AssessmentRun.objects.filter(id__in=wanted_ids).prefetch_related("releases")}
+    latest_runs = [runs_by_id[run_id] for run_id in latest_ids if run_id in runs_by_id]
+    history_runs = [runs_by_id[run_id] for run_id in history_ids if run_id in runs_by_id]
 
     # Compute status summary from latest runs only
     status_summary = _compute_status_summary(latest_runs)
 
     # Prefetch display names for all plugin_names present in this response
     # in a single query so serialization stays O(n) without per-run lookups.
-    display_names = _get_plugin_display_names_map({run.plugin_name for run in all_runs})
+    display_names = _get_plugin_display_names_map({plugin_name for _, plugin_name in run_index})
 
     from sbomify.apps.vulnerability_scanning.euvd import euvd_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
 
-    has_security = any(run.category == "security" for run in all_runs)
+    # Catalogue lookups exist to stamp the findings being serialised, so they
+    # follow the runs actually in the response rather than the whole history.
+    has_security = any(run.category == "security" for run in runs_by_id.values())
     kev_ids = kev_ids_for_serialization() if has_security else frozenset()
     euvd_ids = euvd_ids_for_serialization() if has_security else frozenset()
 
@@ -395,11 +437,8 @@ def get_sbom_assessments(
         sbom_id=sbom_id,
         status_summary=status_summary,
         latest_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in latest_runs],
-        all_runs=(
-            [_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in all_runs]
-            if include_history
-            else []
-        ),
+        all_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in history_runs],
+        all_runs_total=len(run_index),
     )
 
 
