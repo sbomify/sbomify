@@ -3,9 +3,22 @@ The priority panel composes shared table primitives. SLA, decisions and product
 membership come from the workspace service. Review opens the existing
 component controls; no triage state is held in the browser.
 {% endcomment %}
+{% load humanize %}
 <c-vars dashboard workspace_key />
 <c-cards.card flush>
-<c-cards.header compact title="What to fix first" hint="Ranked by exploitation and patch SLA" />
+{% comment %}
+The panel is a top-4 of a longer list, and a ranked list whose length is hidden
+is one the reader re-sorts for themselves. The count leads the hint rather than
+trailing it, so a narrow column wraps the sentence instead of orphaning the
+number. It appears only when there is more than fits, and it counts findings
+rather than occurrences: a summary-only scanner reports occurrences with
+nothing itemised to rank, and the alert above this panel accounts for those.
+{% endcomment %}
+{% if dashboard.needs_attention_total > dashboard.needs_attention|length %}
+    <c-cards.header compact title="What to fix first" hint="Top {{ dashboard.needs_attention|length|intcomma }} of {{ dashboard.needs_attention_total|intcomma }}, ranked by exploitation and patch SLA" />
+{% else %}
+    <c-cards.header compact title="What to fix first" hint="Ranked by exploitation and patch SLA" />
+{% endif %}
 {% if dashboard.needs_attention %}
     <c-overview.table aria-label="Priority vulnerabilities">
     <c-tables.head>

@@ -20,6 +20,7 @@ from sbomify.apps.teams.models import Team
 
 _CACHE_TTL_SECONDS = 60
 _DIGEST_LIMIT = 4
+_PRODUCT_LIMIT = 8
 
 
 def get_first_component(team_id: int) -> ServiceResult[Component]:
@@ -129,6 +130,11 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     context = {
         "is_first_visit": not has_artifacts,
         "needs_attention": picture["findings"][:_DIGEST_LIMIT],
+        # The digest is a top-4. Its panel says so, and it counts findings
+        # rather than occurrences: the occurrences a summary-only scanner
+        # reports have no itemised finding to rank, and the alert above the
+        # panel is where those are accounted for.
+        "needs_attention_total": len(picture["findings"]),
         "metrics": {
             "open": sum(count["total"] for count in counts.values()),
             "critical_high": sum(count["critical"] + count["high"] for count in counts.values()),
@@ -140,7 +146,7 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
             "stale": len(stale_components),
         },
         "unassessed": len(picture["unassessed"]),
-        "products": products[:8],
+        "products": products[:_PRODUCT_LIMIT],
         "product_count": len(products),
     }
     # The first upload must replace setup immediately, without waiting for a
