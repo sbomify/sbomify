@@ -244,14 +244,14 @@ def test_change_plan_invalid_plan(
 def test_change_plan_to_business_monthly(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_community_plan: Team,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
     """Test changing to business plan with monthly billing."""
     client.force_login(sample_user)
     response = client.post(
         reverse("api-1:change_plan"),
-        json.dumps({"team_key": team_with_business_plan.key, "plan": "business", "billing_period": "monthly"}),
+        json.dumps({"team_key": team_with_community_plan.key, "plan": "business", "billing_period": "monthly"}),
         content_type="application/json",
     )
 
@@ -264,14 +264,14 @@ def test_change_plan_to_business_monthly(
 def test_change_plan_to_business_annual(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_community_plan: Team,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
     """Test changing to business plan with annual billing."""
     client.force_login(sample_user)
     response = client.post(
         reverse("api-1:change_plan"),
-        json.dumps({"team_key": team_with_business_plan.key, "plan": "business", "billing_period": "annual"}),
+        json.dumps({"team_key": team_with_community_plan.key, "plan": "business", "billing_period": "annual"}),
         content_type="application/json",
     )
 
@@ -284,7 +284,7 @@ def test_change_plan_to_business_annual(
 def test_change_plan_business_upgrade_passes_allow_promotion_codes(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_community_plan: Team,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -314,7 +314,7 @@ def test_change_plan_business_upgrade_passes_allow_promotion_codes(
     client.force_login(sample_user)
     response = client.post(
         reverse("api-1:change_plan"),
-        json.dumps({"team_key": team_with_business_plan.key, "plan": "business", "billing_period": "monthly"}),
+        json.dumps({"team_key": team_with_community_plan.key, "plan": "business", "billing_period": "monthly"}),
         content_type="application/json",
     )
 

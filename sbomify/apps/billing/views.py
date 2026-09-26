@@ -570,6 +570,12 @@ class BillingReturnView(LoginRequiredMixin, View):
                         )
                         return redirect("core:dashboard")
 
+                    # The checkout webhook cancels the subscription this one
+                    # replaces, but only if it lands before this return. Whichever
+                    # comes first has to, or both subscriptions keep billing.
+                    if existing_subscription_id:
+                        billing_processing.cancel_replaced_subscription(existing_subscription_id)
+
                     billing_period = "monthly"
                     items_data = getattr(subscription, "items", None)
                     if items_data and hasattr(items_data, "data") and items_data.data:
