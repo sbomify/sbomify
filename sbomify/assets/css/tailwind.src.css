@@ -137,10 +137,13 @@
   --color-gray-700: rgb(51 65 85);      /* var(--color-gray-700) */
   --color-gray-800: rgb(30 41 59);      /* var(--color-gray-800) */
   --color-gray-900: rgb(15 23 42);      /* var(--color-text) */
-  --color-severity-critical: rgb(220 53 69);    /* var(--color-danger) */
-  --color-severity-high: rgb(253 126 20);       /* var(--color-severity-high) */
-  --color-severity-medium: rgb(255 193 7);      /* var(--color-severity-medium) */
-  --color-severity-low: rgb(13 202 240);        /* var(--color-severity-low) */
+  /* Severity text, dark theme. Used as text over a 12% tint of itself, so each
+     value is pitched against that tint rather than against the surface.
+     Critical is lifted off the unlifted Bootstrap red, which measured 3.21. */
+  --color-severity-critical: rgb(239 122 133);  /* 4.92 on its own tint */
+  --color-severity-high: rgb(253 126 20);       /* 5.19 */
+  --color-severity-medium: rgb(255 193 7);      /* 7.55 */
+  --color-severity-low: rgb(13 202 240);        /* 6.46 */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */
   --color-alert-success-border: rgb(187 247 208); /* var(--color-alert-success-border) */
   --color-alert-danger-bg: rgb(254 242 242);    /* var(--color-alert-danger-bg) */
@@ -163,6 +166,24 @@
    Dark Theme (Default) - Refined Navy Palette
    ============================================ */
 :root {
+  /* Severity fills: solid chips and bars that always carry white text, on the
+     public Trust Center as well as in the app. Same hues as the light severity
+     text ramp, which clears the same >= 4.5:1-against-white bar.
+
+     Two deliberate placements. They are theme-independent, because the contrast
+     partner is #fff either way, so there is nothing to retune and they are not
+     redeclared under :root.light. And they live in this plain :root block
+     rather than in @theme, because their only consumer is static/css/
+     trust-center.css, which Tailwind does not process: an @theme variable no
+     Tailwind-scanned source mentions is tree-shaken out of the build, and every
+     rule reading it would fall back to transparent. Verified against the
+     production build, not assumed. */
+  --color-severity-critical-fill: rgb(111 19 28);  /* 11.76 under white text */
+  --color-severity-high-fill: rgb(114 54 4);       /* 9.35 */
+  --color-severity-medium-fill: rgb(107 81 3);     /* 7.49 */
+  --color-severity-low-fill: rgb(10 109 129);      /* 5.97 */
+  --color-severity-none-fill: rgb(100 116 139);    /* 4.76 */
+
   /* Primary Brand Colors */
 
   /* Background Layers (darkest to lightest for depth) */
@@ -284,11 +305,18 @@
   --color-gray-800: rgb(30 41 59);      /* var(--color-gray-800) */
   --color-gray-900: rgb(15 23 42);      /* var(--color-text) */
 
-  /* Severity colors (same across themes) */
-  --color-severity-critical: rgb(220 53 69);    /* var(--color-danger) */
-  --color-severity-high: rgb(253 126 20);       /* var(--color-severity-high) */
-  --color-severity-medium: rgb(255 193 7);      /* var(--color-severity-medium) */
-  --color-severity-low: rgb(13 202 240);        /* var(--color-severity-low) */
+  /* Severity text, light theme. The dark ramp was chosen against a near-black
+     background; reused on white it measured 1.53 to 3.81 as badge text, all
+     below the 4.5 it needs at 12px. These are the same four hues taken down
+     until each clears 4.5:1 on the strongest tint any component paints behind
+     it and 3:1 on plain white, so a 32px trend value passes too. Two tints are
+     in use: c-badges.severity paints 12%, c-branded.badge paints 14%, and the
+     14% one is the binding constraint. The badge always prints its level as text,
+     so hue never carries the meaning alone. */
+  --color-severity-critical: rgb(197 39 54);    /* 4.52 on a 14% tint, 5.65 on white */
+  --color-severity-high: rgb(168 80 6);         /* 4.51, 5.50 */
+  --color-severity-medium: rgb(133 100 3);      /* 4.54, 5.50 */
+  --color-severity-low: rgb(11 115 136);        /* 4.51, 5.49 */
 
   /* Alert backgrounds (same across themes) */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */
