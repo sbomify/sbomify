@@ -7,9 +7,9 @@ compiled once and the walk disappears.
 
 Two validators do two jobs. The compiled one answers whether a document is
 valid; ``jsonschema`` is asked only to name the violations, and only once the
-first has already said no. These tests hold that arrangement to three things:
-the same documents pass and fail, a valid one never reaches the slow validator,
-and the budget is met.
+first has already said no. These tests hold that arrangement to three things,
+under each vendored schema: the same documents pass and fail, a valid one never
+reaches the slow validator, and the budget is met.
 """
 
 from __future__ import annotations
@@ -27,10 +27,15 @@ from sbomify.apps.plugins.tests import spdx3_corpus as corpus
 from sbomify.apps.sboms import spdx3_validation
 from sbomify.apps.sboms.spdx3_validation import MAX_VALIDATED_ELEMENTS, spdx3_schema_errors
 
-YOCTO_3_0_1 = Path(__file__).resolve().parent / "test_data" / "yocto_core-image-minimal.spdx3.json"
+TEST_DATA = Path(__file__).resolve().parent / "test_data"
+YOCTO_OUTPUT = {
+    "3.0.0": TEST_DATA / "yocto_core-image-minimal.spdx3.0.0.json",
+    "3.0.1": TEST_DATA / "yocto_core-image-minimal.spdx3.json",
+}
+VERSIONS = sorted(spdx3_validation.SCHEMA_PATHS)
 
 
-def _valid(elements: int) -> dict[str, Any]:
+def _valid(elements: int, version: str = "3.0.1") -> dict[str, Any]:
     graph: list[dict[str, Any]] = [
         {
             "type": "SpdxDocument",
@@ -42,7 +47,7 @@ def _valid(elements: int) -> dict[str, Any]:
         {
             "type": "CreationInfo",
             "@id": "_:ci",
-            "specVersion": "3.0.1",
+            "specVersion": version,
             "created": "2026-09-21T07:00:00Z",
             "createdBy": ["https://example.test/tool"],
         },
@@ -57,36 +62,38 @@ def _valid(elements: int) -> dict[str, Any]:
                 "software_packageVersion": "1.0",
             }
         )
-    return {"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": graph}
+    return {"@context": f"https://spdx.org/rdf/{version}/spdx-context.jsonld", "@graph": graph}
 
 
-def _invalid() -> dict[str, Any]:
-    document = _valid(2)
+def _invalid(version: str = "3.0.1") -> dict[str, Any]:
+    document = _valid(2, version)
     # spdxId must be an IRI, and creationInfo must be present.
     document["@graph"][2] = {"type": "software_Package", "spdxId": 17}
     return document
 
 
+@pytest.mark.parametrize("version", VERSIONS)
 class TestTheBudget:
-    def test_a_full_cap_of_elements_validates_well_inside_the_budget(self) -> None:
+    def test_a_full_cap_of_elements_validates_well_inside_the_budget(self, version: str) -> None:
         """The number #1333 set, against the case that used to miss it sevenfold.
 
         The threshold is the budget itself rather than the 84 ms measured, so
         this fails on a real regression and not on a slow CI runner.
         """
-        document = _valid(MAX_VALIDATED_ELEMENTS)
-        spdx3_schema_errors(document)  # compile once, outside the measurement
+        document = _valid(MAX_VALIDATED_ELEMENTS, version)
+        spdx3_schema_errors(document, version)  # compile once, outside the measurement
 
         started = time.perf_counter()
-        errors = spdx3_schema_errors(document)
+        errors = spdx3_schema_errors(document, version)
         elapsed_ms = (time.perf_counter() - started) * 1000
 
         assert errors == []
         assert elapsed_ms < 500, f"{elapsed_ms:.0f} ms against a 500 ms budget"
 
 
+@pytest.mark.parametrize("version", VERSIONS)
 class TestTheSlowValidatorIsOnlyForMessages:
-    def test_a_valid_document_never_reaches_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_a_valid_document_never_reaches_it(self, version: str, monkeypatch: pytest.MonkeyPatch) -> None:
         """The whole point of the change.
 
         Without this, an ImportError or a compile failure would fall through to
@@ -94,47 +101,56 @@ class TestTheSlowValidatorIsOnlyForMessages:
         quietly back.
         """
 
-        def _refuse() -> Any:
+        def _refuse(*_: Any) -> Any:
             raise AssertionError("the enumerator was consulted for a valid document")
 
         monkeypatch.setattr(spdx3_validation, "_enumerator", _refuse)
 
-        assert spdx3_schema_errors(_valid(20)) == []
+        assert spdx3_schema_errors(_valid(20, version), version) == []
 
-    def test_an_invalid_document_does_reach_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_an_invalid_document_does_reach_it(self, version: str, monkeypatch: pytest.MonkeyPatch) -> None:
         """And it is what produces the messages, so it has to be consulted."""
         consulted: list[bool] = []
         real = spdx3_validation._enumerator
 
-        def _spy() -> Any:
+        def _spy(schema_version: str) -> Any:
             consulted.append(True)
-            return real()
+            return real(schema_version)
 
         monkeypatch.setattr(spdx3_validation, "_enumerator", _spy)
 
-        errors = spdx3_schema_errors(_invalid())
+        errors = spdx3_schema_errors(_invalid(version), version)
 
         assert consulted == [True]
         assert errors
 
 
+@pytest.mark.parametrize("version", VERSIONS)
 class TestTheVerdictsAreUnchanged:
-    def test_a_valid_document_passes(self) -> None:
-        assert spdx3_schema_errors(_valid(3)) == []
+    def test_a_valid_document_passes(self, version: str) -> None:
+        assert spdx3_schema_errors(_valid(3, version), version) == []
 
-    def test_an_invalid_document_fails(self) -> None:
-        assert spdx3_schema_errors(_invalid())
+    def test_an_invalid_document_fails(self, version: str) -> None:
+        assert spdx3_schema_errors(_invalid(version), version)
 
-    def test_the_messages_still_read_as_pointers(self) -> None:
+    def test_the_messages_still_read_as_pointers(self, version: str) -> None:
         """``schemas.py`` puts these straight into an API error response."""
-        errors = spdx3_schema_errors(_invalid())
+        errors = spdx3_schema_errors(_invalid(version), version)
 
         assert all(": " in error for error in errors)
         assert all(error.startswith("/") or error.startswith("(document root)") for error in errors)
 
+    def test_the_messages_point_at_the_element_not_the_document(self, version: str) -> None:
+        """The 3.0.0 root is a oneOf, so over the whole document a bad element
+        reads as the root failing, with the document itself as the message."""
+        errors = spdx3_schema_errors(_invalid(version), version)
+
+        assert errors
+        assert all(error.startswith("/@graph/2") for error in errors)
+
     @pytest.mark.parametrize("limit", [1, 3, 5])
-    def test_the_limit_still_bounds_the_list(self, limit: int) -> None:
-        errors = spdx3_schema_errors(_invalid(), limit=limit)
+    def test_the_limit_still_bounds_the_list(self, version: str, limit: int) -> None:
+        errors = spdx3_schema_errors(_invalid(version), version, limit=limit)
 
         assert len(errors) <= limit
 
@@ -147,90 +163,156 @@ class TestTheGateClosesWhatTheSchemaCloses:
     case here, and each one passed the gate until it checked keys itself.
     """
 
-    def test_a_made_up_property_is_rejected(self) -> None:
-        document = _valid(3)
+    @pytest.mark.parametrize("version", VERSIONS)
+    def test_a_made_up_property_is_rejected(self, version: str) -> None:
+        document = _valid(3, version)
         document["@graph"][2]["totally_made_up"] = 1
 
-        errors = spdx3_schema_errors(document)
+        errors = spdx3_schema_errors(document, version)
 
         assert errors
         assert "totally_made_up" in errors[0]
 
-    def test_a_made_up_root_property_is_rejected(self) -> None:
-        document = _valid(3)
+    @pytest.mark.parametrize("version", VERSIONS)
+    def test_a_made_up_root_property_is_rejected(self, version: str) -> None:
+        document = _valid(3, version)
         document["junk"] = 1
 
-        assert spdx3_schema_errors(document)
+        assert spdx3_schema_errors(document, version)
 
-    def test_a_property_another_class_declares_is_rejected(self) -> None:
+    @pytest.mark.parametrize("version", VERSIONS)
+    def test_a_property_another_class_declares_is_rejected(self, version: str) -> None:
         """Checked per class: ``specVersion`` is an SPDX property, but a
         CreationInfo's, not a package's."""
-        document = _valid(3)
-        document["@graph"][2]["specVersion"] = "3.0.1"
+        document = _valid(3, version)
+        document["@graph"][2]["specVersion"] = version
 
-        errors = spdx3_schema_errors(document)
+        errors = spdx3_schema_errors(document, version)
 
         assert errors
         assert "specVersion" in errors[0]
 
-    def test_a_made_up_property_on_an_inline_object_is_rejected(self) -> None:
-        document = _valid(3)
+    @pytest.mark.parametrize("version", VERSIONS)
+    def test_a_made_up_property_on_an_inline_object_is_rejected(self, version: str) -> None:
+        document = _valid(3, version)
         document["@graph"][2]["verifiedUsing"] = [
             {"type": "Hash", "algorithm": "sha256", "hashValue": "a" * 64, "totally_made_up": 1}
         ]
 
-        assert spdx3_schema_errors(document)
+        assert spdx3_schema_errors(document, version)
 
-    @pytest.mark.parametrize("builder", corpus.SCHEMA_VALID_BUILDERS, ids=lambda b: b.__name__)
-    def test_a_made_up_property_is_rejected_on_every_element(self, builder: Callable[[], dict[str, Any]]) -> None:
+    @pytest.mark.parametrize(
+        ("builder", "version"),
+        [(builder, "3.0.1") for builder in corpus.SCHEMA_VALID_BUILDERS]
+        + [(corpus.spdx_3_0_0, "3.0.0"), (corpus.syft_shaped, "3.0.0")],
+        ids=lambda value: getattr(value, "__name__", value),
+    )
+    def test_a_made_up_property_is_rejected_on_every_element(
+        self, builder: Callable[[], dict[str, Any]], version: str
+    ) -> None:
         """Every class the corpus uses, one element at a time."""
         document = builder()
         for index, element in enumerate(document["@graph"]):
             mutated = copy.deepcopy(document)
             mutated["@graph"][index]["totally_made_up"] = 1
 
-            assert spdx3_schema_errors(mutated), f"@graph/{index} ({element['type']}) accepted a made-up property"
+            assert spdx3_schema_errors(mutated, version), (
+                f"@graph/{index} ({element['type']}) accepted a made-up property"
+            )
 
-    def test_an_open_extension_carries_what_it_likes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("version", VERSIONS)
+    def test_an_open_extension_carries_what_it_likes(self, version: str, monkeypatch: pytest.MonkeyPatch) -> None:
         """The schema leaves an extension object open, and Yocto 6.0 writes
         them. Its keys are not the gate's to refuse, and a document carrying one
         must not pay the slow walk either."""
 
-        def _refuse() -> Any:
+        def _refuse(*_: Any) -> Any:
             raise AssertionError("the enumerator was consulted for a valid document")
 
         monkeypatch.setattr(spdx3_validation, "_enumerator", _refuse)
-        document = _valid(3)
+        document = _valid(3, version)
         document["@graph"][2]["extension"] = [
             {"type": "https://example.test/ns/Note", "https://example.test/ns/text": "built on a Tuesday"}
         ]
 
-        assert spdx3_schema_errors(document) == []
+        assert spdx3_schema_errors(document, version) == []
 
-    @pytest.mark.parametrize("builder", corpus.SCHEMA_VALID_BUILDERS, ids=lambda b: b.__name__)
+    @pytest.mark.parametrize(
+        ("builder", "version"),
+        [(builder, "3.0.1") for builder in corpus.SCHEMA_VALID_BUILDERS]
+        + [(corpus.spdx_3_0_0, "3.0.0"), (corpus.syft_shaped, "3.0.0")],
+        ids=lambda value: getattr(value, "__name__", value),
+    )
     def test_a_conformant_document_still_never_reaches_the_enumerator(
-        self, builder: Callable[[], dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+        self, builder: Callable[[], dict[str, Any]], version: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The key check must vouch for every property a conformant document
         uses, or the 2.3 s walk comes back for valid documents."""
 
-        def _refuse() -> Any:
+        def _refuse(*_: Any) -> Any:
             raise AssertionError("the enumerator was consulted for a valid document")
 
         monkeypatch.setattr(spdx3_validation, "_enumerator", _refuse)
 
-        assert spdx3_schema_errors(builder()) == []
+        assert spdx3_schema_errors(builder(), version) == []
 
-    def test_real_yocto_output_never_reaches_the_enumerator(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("version", VERSIONS)
+    def test_real_yocto_output_never_reaches_the_enumerator(
+        self, version: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """The same on a published Yocto document, whose elements carry far more
         of the schema than the corpus does."""
 
-        def _refuse() -> Any:
+        def _refuse(*_: Any) -> Any:
             raise AssertionError("the enumerator was consulted for a valid document")
 
         monkeypatch.setattr(spdx3_validation, "_enumerator", _refuse)
 
-        assert spdx3_schema_errors(json.loads(YOCTO_3_0_1.read_text())) == []
+        assert spdx3_schema_errors(json.loads(YOCTO_OUTPUT[version].read_text()), version) == []
+
+
+@pytest.mark.parametrize("version", VERSIONS)
+class TestOnlyARefusedElementReachesJsonschema:
+    """jsonschema costs up to 290 ms an element under 3.0.0. Walked in order, a
+    graph whose one bad element sits near the cap would hold the upload for over
+    a minute before the first message."""
+
+    def test_the_other_elements_never_reach_it(self, version: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        real = spdx3_validation._element_enumerator
+        asked: list[Any] = []
+
+        class _Spy:
+            def __init__(self, inner: Any) -> None:
+                self.inner = inner
+
+            def iter_errors(self, element: dict[str, Any]) -> Any:
+                asked.append(element.get("spdxId"))
+                return self.inner.iter_errors(element)
+
+        monkeypatch.setattr(spdx3_validation, "_element_enumerator", lambda schema_version: _Spy(real(schema_version)))
+        document = _valid(300, version)
+        document["@graph"][250] = {"type": "software_Package", "spdxId": 17}
+
+        errors = spdx3_schema_errors(document, version)
+
+        assert errors
+        assert all(error.startswith("/@graph/250") for error in errors)
+        assert asked == [17]
+
+    def test_a_bad_root_does_not_send_every_element(self, version: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Each element is gated alone under the ``@context`` the schema pins,
+        not the document's, or one wrong root would condemn them all."""
+
+        def _refuse(*_: Any) -> Any:
+            raise AssertionError("an element was sent to jsonschema for a fault at the root")
+
+        monkeypatch.setattr(spdx3_validation, "_element_enumerator", _refuse)
+        document = _valid(300, version)
+        document["@context"] = "https://spdx.org/rdf/3.0.9/spdx-context.jsonld"
+
+        errors = spdx3_schema_errors(document, version)
+
+        assert errors == [f"/@context: 'https://spdx.org/rdf/{version}/spdx-context.jsonld' was expected"]
 
 
 def _closed_objects(node: Any) -> Iterator[dict[str, Any]]:
@@ -245,14 +327,15 @@ def _closed_objects(node: Any) -> Iterator[dict[str, Any]]:
             yield from _closed_objects(value)
 
 
+@pytest.mark.parametrize("version", VERSIONS)
 class TestTheSchemaIsShapedTheWayTheKeyCheckReadsIt:
-    """The key check leans on two facts about the vendored schema. They are
+    """The key check leans on two facts about each vendored schema. They are
     pinned here, so a schema that breaks either fails a test rather than
     quietly widening what the gate accepts."""
 
     @pytest.fixture
-    def schema(self) -> dict[str, Any]:
-        schema: dict[str, Any] = json.loads(spdx3_validation.SCHEMA_PATH.read_text())
+    def schema(self, version: str) -> dict[str, Any]:
+        schema: dict[str, Any] = json.loads(spdx3_validation.SCHEMA_PATHS[version].read_text())
         return schema
 
     def test_every_closed_object_below_the_root_is_a_derived_class(self, schema: dict[str, Any]) -> None:
@@ -278,9 +361,16 @@ class TestTheSchemaIsShapedTheWayTheKeyCheckReadsIt:
         declared = spdx3_validation._declared_properties_of(schema)
 
         for name, properties in declared.items():
-            if properties is not None:
-                dispatch = {"type": "object", "properties": {"type": {"const": name}}, "required": ["type"]}
-                assert defs[name]["if"] == dispatch
+            if properties is None:
+                continue
+            if "if" in defs[name]:  # 3.0.1
+                assert defs[name]["if"] == {
+                    "type": "object",
+                    "properties": {"type": {"const": name}},
+                    "required": ["type"],
+                }
+            else:  # 3.0.0 names the class in the first part of its allOf
+                assert defs[name]["allOf"][0]["properties"]["type"] == {"oneOf": [{"const": name}]}
 
 
 class TestTheKeyCheckFailsClosed:
@@ -302,13 +392,13 @@ class TestTheKeyCheckFailsClosed:
         """Resolved before the gate runs, like the gate itself: a derivation
         that raises must not read as "this document is invalid"."""
 
-        def _unreadable() -> Any:
+        def _unreadable(*_: Any) -> Any:
             raise ValueError("cannot derive")
 
         monkeypatch.setattr(spdx3_validation, "_declared_properties", _unreadable)
 
         with pytest.raises(ValueError, match="cannot derive"):
-            spdx3_schema_errors(_valid(3))
+            spdx3_schema_errors(_valid(3), "3.0.1")
 
 
 class TestTheCapIsUnchanged:
@@ -321,4 +411,4 @@ class TestTheCapIsUnchanged:
     def test_a_graph_past_the_cap_is_still_checked_on_a_prefix(self) -> None:
         document = _valid(MAX_VALIDATED_ELEMENTS + 50)
 
-        assert spdx3_schema_errors(document) == []
+        assert spdx3_schema_errors(document, "3.0.1") == []

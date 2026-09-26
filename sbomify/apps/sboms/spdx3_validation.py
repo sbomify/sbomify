@@ -1,9 +1,10 @@
-"""Strict validation of SPDX 3.0.1+ documents against the vendored schema.
+"""Strict validation of SPDX 3.0.x documents against the vendored schemas.
 
-The official 259 KB ``spdx_3.0.1-schema.json`` ships in this repo; this module
-is its only runtime consumer. The compiled validator is cached at module
-level — the schema declares Draft 2020-12 and compiling it per upload is
-measurable.
+The official ``spdx_3.0.0-schema.json`` and ``spdx_3.0.1-schema.json`` ship in
+this repo, each the shacl2code output published at
+``spdx.org/schema/<version>/spdx-json-schema.json``; this module is their only
+runtime consumer. The compiled validators are cached at module level: the
+schemas declare Draft 2020-12 and compiling one per upload is measurable.
 
 Two validators, for two different questions. ``fastjsonschema`` compiles the
 schema to Python once and answers "is this valid" in 84 ms for 500 elements,
@@ -24,22 +25,41 @@ find there sends the document to ``jsonschema``, whose verdict stands, so the
 key check can cost a slow walk but never a rejection ``jsonschema`` would not
 make.
 
-Only documents that claim 3.0.1 or later are held to it: 3.0.0 producers
-(syft, sbom-tool, JFrog) predate the schema and there is no vendored 3.0.0
-schema to hold them to, and legacy ``spdxVersion``/``elements`` documents
-declare themselves non-conformant by shape. A formatting-only 3.0.x patch
-above 3.0.1 validates cleanly — the schema's ``specVersion`` is a semver
-pattern, not a pinned constant.
+Two schemas, because 3.0.1 is a separate document rather than a relabelled
+3.0.0. It renamed ``software_File.software_contentType`` to ``contentType``,
+``SpdxDocument.imports`` to ``import`` and ``build_Build.build_parameters`` to
+``build_parameter``, and added ``IndividualElement``, so a document correct
+under one is refused by the other. ``validate_spdx_sbom`` in ``schemas.py``
+picks the schema from the version a document claims, and legacy
+``spdxVersion``/``elements`` documents, which declare themselves non-conformant
+by shape, never get here. A formatting-only 3.0.x patch above 3.0.1 validates
+against the 3.0.1 schema, whose ``specVersion`` is a semver pattern, not a
+pinned constant.
+
+``jsonschema`` names violations element by element rather than over the whole
+document. The 3.0.0 root is a ``oneOf`` between the graph form and a single
+object, so a bad element anywhere surfaces as the root failing both, with the
+document itself as the message. ``jsonschema`` also costs up to 290 ms an
+element under 3.0.0, so walking a graph in order to reach one bad element could
+hold an upload for over a minute. The gate picks out the elements that fail, and
+only those reach ``jsonschema``.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from functools import cache
 from pathlib import Path
 from typing import Any
 
-SCHEMA_PATH = Path(__file__).resolve().parent / "schemas" / "spdx_3.0.1-schema.json"
+SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
+
+# One per SPDX 3 release, keyed by the version it defines.
+SCHEMA_PATHS = {
+    "3.0.0": SCHEMA_DIR / "spdx_3.0.0-schema.json",
+    "3.0.1": SCHEMA_DIR / "spdx_3.0.1-schema.json",
+}
 
 # A valid document pays the full walk, so this bounds it. The compiled gate
 # validates 500 elements in ~84 ms and 20,000 in ~3.4 s, so the number is no
@@ -54,26 +74,57 @@ SCHEMA_PATH = Path(__file__).resolve().parent / "schemas" / "spdx_3.0.1-schema.j
 MAX_VALIDATED_ELEMENTS = 500
 
 
+def _load(schema_version: str) -> dict[str, Any]:
+    schema: dict[str, Any] = json.loads(SCHEMA_PATHS[schema_version].read_text())
+    return schema
+
+
 @cache
-def _gate() -> Any:
-    """Is this document valid. Compiled once, ~333 ms, then reused."""
+def _gate(schema_version: str) -> Any:
+    """Is this document valid. Compiled once per schema, a few hundred ms, then reused."""
     import fastjsonschema
 
-    return fastjsonschema.compile(json.loads(SCHEMA_PATH.read_text()))
+    return fastjsonschema.compile(_load(schema_version))
 
 
 @cache
-def _enumerator() -> Any:
+def _enumerator(schema_version: str) -> Any:
     """Why it is not. Only built once something has already failed the gate."""
     from jsonschema import Draft202012Validator
 
-    return Draft202012Validator(json.loads(SCHEMA_PATH.read_text()))
+    return Draft202012Validator(_load(schema_version))
 
 
 @cache
-def _declared_properties() -> dict[str, frozenset[str] | None]:
+def _element_enumerator(schema_version: str) -> Any:
+    """Why one ``@graph`` element is not, against what the schema holds every element to."""
+    from jsonschema import Draft202012Validator
+
+    schema = _load(schema_version)
+    return Draft202012Validator({**_graph_items(schema), "$defs": schema["$defs"]})
+
+
+@cache
+def _declared_properties(schema_version: str) -> dict[str, frozenset[str] | None]:
     """What the gate cannot check by itself. Derived once, then reused."""
-    return _declared_properties_of(json.loads(SCHEMA_PATH.read_text()))
+    return _declared_properties_of(_load(schema_version))
+
+
+@cache
+def _pinned_context(schema_version: str) -> str:
+    """The ``@context`` the schema requires, so one element can be gated alone."""
+    context: str = _load(schema_version)["properties"]["@context"]["const"]
+    return context
+
+
+def _graph_items(schema: dict[str, Any]) -> dict[str, Any]:
+    """What the schema holds every ``@graph`` element to, wherever its root
+    keeps it: under ``then`` in 3.0.1, in the first ``oneOf`` branch in 3.0.0."""
+    for branch in (schema.get("then"), *schema.get("oneOf", ())):
+        if isinstance(branch, dict) and "@graph" in branch.get("properties", {}):
+            items: dict[str, Any] = branch["properties"]["@graph"]["items"]
+            return items
+    raise ValueError("the schema defines no @graph elements")
 
 
 # What a schema node between a class and its properties may say. Anything that
@@ -148,8 +199,9 @@ def _declares_every_property(document: dict[str, Any], declared: dict[str, froze
     return True
 
 
-def spdx3_schema_errors(document: dict[str, Any], limit: int = 3) -> list[str]:
-    """The first ``limit`` schema violations as ``pointer: message`` strings.
+def spdx3_schema_errors(document: dict[str, Any], schema_version: str, limit: int = 3) -> list[str]:
+    """The first ``limit`` violations of the ``schema_version`` schema as
+    ``pointer: message`` strings.
 
     The full error list on a large document can run to thousands of entries;
     the first few name the offending property paths, which is what an API
@@ -184,30 +236,68 @@ def spdx3_schema_errors(document: dict[str, Any], limit: int = 3) -> list[str]:
     # still be correct, every test would still pass, and the compiled path would
     # be silently off. A missing dependency has to be loud, and so does a schema
     # the key check cannot read.
-    gate = _gate()
-    declared = _declared_properties()
+    gate = _gate(schema_version)
+    declared = _declared_properties(schema_version)
     try:
         gate(document)
     except Exception:
         # Anything the gate rejects, including a document shaped so oddly the
         # compiled validator raises something of its own, goes to the
         # enumerator for messages a reader can act on.
-        return _violations(document, limit)
+        return _violations(document, schema_version, limit)
     if not _declares_every_property(document, declared):
-        return _violations(document, limit)
+        return _violations(document, schema_version, limit)
     return []
 
 
-def _violations(document: dict[str, Any], limit: int) -> list[str]:
+def _violations(document: dict[str, Any], schema_version: str, limit: int) -> list[str]:
     """The first ``limit`` violations, named. Only reached once one exists."""
     errors: list[str] = []
-    for error in _enumerator().iter_errors(document):
+    for path, message in _faults(document, schema_version):
         # Pointer-shaped location labels for a human reader: tokens are
         # RFC 6901-escaped so a / or ~ in a property name stays one token,
         # and the document root reads as words rather than an empty string.
-        path_parts = [str(part).replace("~", "~0").replace("/", "~1") for part in error.absolute_path]
+        path_parts = [str(part).replace("~", "~0").replace("/", "~1") for part in path]
         pointer = "/" + "/".join(path_parts) if path_parts else "(document root)"
-        errors.append(f"{pointer}: {error.message[:200]}")
+        errors.append(f"{pointer}: {message[:200]}")
         if len(errors) >= limit:
             break
     return errors
+
+
+def _faults(document: dict[str, Any], schema_version: str) -> Iterator[tuple[list[Any], str]]:
+    """Every violation as ``(path, message)``, the root's first and then each element's.
+
+    The root is checked with an empty graph, which leaves it only its own
+    faults, and each element on its own, which is all the schema checks of an
+    element: JSON Schema cannot follow a reference from one to another. The
+    two together are the whole schema for a document in graph form. An element
+    goes to ``jsonschema`` only once the gate or the key check has refused it,
+    gated alone under the ``@context`` the schema pins so a bad root cannot
+    make every element look bad.
+    """
+    enumerator = _enumerator(schema_version)
+    graph = document.get("@graph")
+    if not isinstance(graph, list):
+        for error in enumerator.iter_errors(document):
+            yield list(error.absolute_path), error.message
+        return
+    for error in enumerator.iter_errors({**document, "@graph": []}):
+        yield list(error.absolute_path), error.message
+    gate = _gate(schema_version)
+    declared = _declared_properties(schema_version)
+    context = _pinned_context(schema_version)
+    for index, element in enumerate(graph):
+        alone = {"@context": context, "@graph": [element]}
+        if _passes(gate, alone) and _declares_every_property(alone, declared):
+            continue
+        for error in _element_enumerator(schema_version).iter_errors(element):
+            yield ["@graph", index, *error.absolute_path], error.message
+
+
+def _passes(gate: Any, document: dict[str, Any]) -> bool:
+    try:
+        gate(document)
+    except Exception:
+        return False
+    return True
