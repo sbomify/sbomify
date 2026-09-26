@@ -369,6 +369,29 @@ class AssessmentRun(models.Model):
         blank=True,
         help_text="S3 key for raw tool output (optional)",
     )
+    # Where ``result`` went once it stopped being the current answer for its
+    # (sbom, plugin, release set). The blob is a document: multiple MB of
+    # scanner output, read on demand and never queried by the database, which is
+    # where every other document in this system already lives. Keeping it in a
+    # JSONB column means paying for it on the primary's disk, in the WAL, on
+    # every replica and in every base backup.
+    #
+    # Empty string means the result is inline in ``result``, which is the state
+    # of every run as it is written. Exactly one of the two holds the payload:
+    # the sweep sets this key and nulls ``result`` in a single UPDATE, so no row
+    # can be seen with neither. A run that never produced a result (pending,
+    # failed) has both empty, which is why the pair is not a constraint.
+    #
+    # Keyed by content hash under the run's own prefix, so a re-annotated result
+    # is a new object rather than an overwrite and the old bytes stay verifiable
+    # against the hash they are named for.
+    result_object_key = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        editable=False,
+        help_text="Object-storage key holding the offloaded result payload. Empty when result is inline.",
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

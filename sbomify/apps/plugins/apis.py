@@ -142,8 +142,27 @@ def _result_with_kev(
     bound below applies to every category, because a compliance plugin checks
     each component and reports per component, so its list grows with the SBOM
     exactly as a scanner's does.
+
+    The payload is loaded through the result store rather than read off the
+    field, because a superseded run's payload may have been demoted to object
+    storage. An unreadable one degrades to no payload — the run's status, plugin
+    metadata and stored counts still render, the same treatment a result that
+    fails schema validation already gets — rather than raising and blanking the
+    whole response. A missing payload must never be shown as a run that found
+    nothing, which is why the counts on every other surface come from
+    ``result_summary`` and not from here.
     """
-    result = run.result
+    from sbomify.apps.plugins.result_store import ResultObjectMissing, load_result
+
+    try:
+        result = load_result(run)
+    except ResultObjectMissing:
+        logger.warning(
+            "AssessmentRun %s (plugin %s) has an offloaded result that could not be read; serialising without it",
+            run.id,
+            run.plugin_name,
+        )
+        return None
     if not isinstance(result, dict):
         return result
     findings = result.get("findings")
