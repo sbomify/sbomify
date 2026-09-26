@@ -44,7 +44,7 @@ from sbomify.task_utils import format_task_error
 
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError, SBOMGoneError
 from ..sdk.base import RetryLaterError
-from ..sdk.enums import RunReason, ScanMode
+from ..sdk.enums import RunReason, RunStatus, ScanMode
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,90 @@ BACKFILL_CUTOFF_HOURS = 24
 # sooner just repeats the rejection; a day still picks up a scanner upgrade
 # that closes the gap without anyone having to intervene.
 UNSUPPORTED_INPUT_SKIP_HOURS = 24
+
+# How long a scheduled sweep leaves an SBOM alone after its last run *failed*,
+# indexed by how many times in a row it has now failed.
+#
+# A failed run deliberately does not fill the ordinary skip window — a failure
+# may well be transient, and waiting out a whole cadence to find out is the
+# wrong default. What was missing is the other half: a failure that keeps
+# happening. Without a backoff, an SBOM whose Dependency Track project cannot be
+# polled is re-enqueued on every tick, which at ``skip_hours=1`` is an hourly
+# retry for as long as the artifact exists, each attempt writing another run row
+# and another error to the tracker.
+#
+# So the first failure is still retried on the very next sweep, and only a
+# repeating one escalates. The ceiling matches UNSUPPORTED_INPUT_SKIP_HOURS for
+# the same reason it does: a day is short enough that a server-side fix is picked
+# up promptly and long enough that the retry cost stops mattering.
+FAILURE_BACKOFF_HOURS = (0, 2, 4, 8, 24)
+
+# How far back the consecutive-failure count is read. Comfortably past the
+# ceiling above, so a run of failures is counted whole rather than truncated, and
+# bounded so the query stays indexed rather than walking the table. Truncating
+# would only shorten a backoff, never lengthen one.
+FAILURE_HISTORY_HOURS = 24 * 7
+
+
+def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any) -> set[str]:
+    """SBOMs whose latest run failed, recently enough that retrying now would
+    just fail again.
+
+    Keyed on the *latest* run and on the length of the failure streak ending
+    there, so the two cases the sweep has to tell apart stay apart:
+
+    * One failure, or a failure followed by a success — nothing is held back.
+      ``FAILURE_BACKOFF_HOURS`` starts at zero precisely so the common transient
+      case keeps exactly the cadence it has today.
+    * A streak — the wait grows with it, and a standing failure settles at one
+      attempt a day instead of one an hour.
+
+    Pending and running runs are excluded rather than counted either way. An
+    in-flight run has not failed and has not succeeded, and treating it as
+    either would make the streak depend on when the sweep happened to look: as a
+    success it would clear the backoff the moment a retry was enqueued, as a
+    failure it would extend it before the attempt had a verdict. The sweep's own
+    skip window already covers in-flight work.
+
+    Only small columns are selected, so the fat ``result`` blob is never fetched.
+    """
+    from ..models import AssessmentRun
+
+    rows = (
+        AssessmentRun.objects.filter(
+            plugin_name=plugin_name,
+            created_at__gte=now - timedelta(hours=FAILURE_HISTORY_HOURS),
+            sbom__component__team_id__in=team_ids,
+        )
+        .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
+        .order_by("sbom_id", "-created_at", "-id")
+        .values_list("sbom_id", "status", "created_at")
+    )
+
+    # Newest first within each SBOM, so the streak is the leading run of failures
+    # and the first non-failure settles that SBOM for good. Ties break on id, for
+    # the same reason the retention sweep breaks them there: runs created in one
+    # transaction can share a timestamp, and an unstable order would let a
+    # success sort below a failure it actually followed.
+    streak: dict[str, int] = {}
+    newest_failure_at: dict[str, Any] = {}
+    settled: set[str] = set()
+    for sbom_id, status, created_at in rows:
+        key = str(sbom_id)
+        if key in settled:
+            continue
+        if status != RunStatus.FAILED.value:
+            settled.add(key)
+            continue
+        streak[key] = streak.get(key, 0) + 1
+        newest_failure_at.setdefault(key, created_at)
+
+    backed_off: set[str] = set()
+    for key, count in streak.items():
+        wait = FAILURE_BACKOFF_HOURS[min(count, len(FAILURE_BACKOFF_HOURS)) - 1]
+        if wait and now - newest_failure_at[key] < timedelta(hours=wait):
+            backed_off.add(key)
+    return backed_off
 
 
 def _backed_off_sbom_ids(plugin_name: str, team_ids: set[int], since: Any) -> set[str]:
@@ -1256,6 +1340,13 @@ def _run_scheduled_security_scans(
         incapable_cutoff = now - timedelta(hours=UNSUPPORTED_INPUT_SKIP_HOURS)
         if incapable_cutoff < cutoff:
             recent_sbom_ids.update(_backed_off_sbom_ids(plugin_name, team_ids, incapable_cutoff))
+
+        # The same shape for the other way a sweep can spin: a run that failed
+        # does not fill the window above, so an SBOM that fails every time is
+        # re-enqueued every time. One failure still retries on the next tick; a
+        # streak backs off. Only ever adds to the skip set, so no cadence gets
+        # shorter than it is today.
+        recent_sbom_ids.update(_failure_backed_off_sbom_ids(plugin_name, team_ids, now))
 
         # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
         # with at least one ReleaseArtifact link is eligible — the scan will
