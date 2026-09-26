@@ -14,7 +14,7 @@ model, HTML injection and stylesheets are not dependencies of the app.
 | What to fix first | The latest completed provider results for each component's latest SBOM, merged by advisory alias and filtered by VEX. Malicious packages and known exploitation lead, followed by a breached patch SLA, severity and the nearest deadline. Rows show the current VEX decision and product membership. |
 | Exposure by product | The same workspace snapshot grouped through product membership, with severity bars and an explicit unassessed state. Shared components count once in workspace totals and appear under each product that contains them. Evidence distinguishes stale SBOMs, missing SBOMs and current uploads. |
 | First visit | Metrics, actions and both panels remain visible with honest empty states. A compact callout opens the existing repository setup and upload dialogs. A workspace containing documents is not mistaken for an empty workspace. |
-| Trends | Moved to a dedicated page, linked by View trends and Spotlight. The existing product, release and date filters remain intact. |
+| Trends | Moved to a dedicated page, reached from the Overview view switch and Spotlight. The existing product, release and date filters remain intact, and the page URL carries them. |
 
 Every visual recipe lives under `templates/components`. Chrome and overview
 panels compose shared layout, button, badge, card, table and feedback components.

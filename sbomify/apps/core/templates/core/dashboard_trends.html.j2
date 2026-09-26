@@ -2,7 +2,7 @@
 {% block title %}Trends · Overview · sbomify{% endblock %}
 {% block dashboard_content %}
     <c-overview.header active="trends" />
-    <c-layout.frame hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true" hx-trigger="load" hx-swap="innerHTML">
+    <c-layout.frame hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?{{ trends_query }}" hx-trigger="load" hx-swap="innerHTML">
     <c-feedback.loading-chart message="Loading vulnerability trends..." />
     </c-layout.frame>
 {% endblock %}
