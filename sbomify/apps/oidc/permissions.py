@@ -119,8 +119,8 @@ def request_is_oidc_authed(request: Any) -> bool:
     ``token_type`` claim (needs ``SECRET_KEY``) AND delete the
     ``OIDCBinding`` row without taking down the bot user.
 
-    Performance: ``request_is_oidc_authed`` is only reached on the
-    component-scoped upload endpoints, and runs at most one JWT verify
+    Performance: ``request_is_oidc_authed`` is reached on the upload
+    endpoints and the release endpoints, and runs at most one JWT verify
     plus (for a PAT) one unique-indexed probe on ``OIDCBinding.bot_user_id``
     per request. Both are memoised — the ``token_type`` decode on the
     token-record instance (``_token_is_oidc_typed``) and the binding
@@ -173,3 +173,20 @@ def is_authorised_for_component(request: Any, component: Any) -> bool:
     if bound_id is None:
         return False
     return bound_id == str(component.id)
+
+
+def is_authorised_for_product(request: Any, product: Any) -> bool:
+    """Authorise OIDC tokens for products that contain the bound component only.
+
+    The product-level counterpart of ``is_authorised_for_component``, for
+    release reads: the bot's ``release:read`` holds across its whole
+    workspace, and a release's contents span every component of its
+    product. Same contract: ``True`` for non-OIDC requests, ``False`` for
+    an orphan bot.
+    """
+    if not request_is_oidc_authed(request):
+        return True
+    bound_id = bound_component_id_for_request(request)
+    if bound_id is None:
+        return False
+    return bool(product.components.filter(id=bound_id).exists())
