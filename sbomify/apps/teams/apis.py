@@ -3,12 +3,13 @@ from __future__ import annotations
 import re
 import uuid
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any, cast
 
+from defusedxml.ElementTree import DefusedXMLParser, ParseError
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.files.uploadedfile import UploadedFile as DjangoUploadedFile
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 from ninja import File, Router
@@ -252,19 +253,135 @@ def update_team_branding_field(
     return 200, BrandingInfoWithUrls(**response_data)
 
 
-def generate_branding_filename(team: Team, field: str, file: Any) -> str:
-    file_ext = Path(file.name or "").suffix
+# Branding files are served straight from the public media bucket, so whether
+# one is stored, and its extension and ContentType, follow from its bytes and
+# never from the filename or type the client sent.
+_INVALID_BRANDING_IMAGE = "Upload a PNG, JPEG or WebP image, or a plain SVG under 1 MB."
+# Checking an SVG runs Python for every element and attribute, so SVGs get a size cap of their own.
+_MAX_SVG_BYTES = 1024 * 1024
+
+_SVG_ROOT = "{http://www.w3.org/2000/svg}svg"
+# Elements a browser runs as HTML or MathML even inside an SVG document.
+_LIVE_NAMESPACES = ("{http://www.w3.org/1999/xhtml}", "{http://www.w3.org/1998/Math/MathML}")
+# An in-document reference or an embedded PNG, JPEG or WebP image, in an href or a CSS url().
+# Anything else loads or runs something the check never saw.
+_INERT_HREF = re.compile(r"#|data:image/(png|jpe?g|webp)[;,]")
+# CSS that fetches from a plain string, or the start of a url() whose target _INERT_HREF checks.
+_CSS_FETCH = re.compile(r"@import|image-set\(|url\(\s*['\"]?\s*")
+_CSS_ESCAPE = re.compile(r"\\(?:([0-9a-f]{1,6})[ \t\n]?|(.))", re.IGNORECASE | re.DOTALL)
+
+
+def _css_fetches(css: str) -> bool:
+    """Whether ``css`` fetches anything but an in-document reference or an embedded raster image."""
+    if "\\" in css:
+        # Decode escapes as a browser does, where CRLF, CR and form feed each read as one line break.
+        css = _CSS_ESCAPE.sub(
+            lambda escape: chr(min(int(escape[1], 16), 0x10FFFF)) if escape[1] else escape[2],
+            re.sub(r"\r\n?|\f", "\n", css),
+        )
+    css = css.lower()
+    return any(
+        not fetch[0].startswith("url(") or not _INERT_HREF.match(css, fetch.end()) for fetch in _CSS_FETCH.finditer(css)
+    )
+
+
+class _InertSvgTarget:
+    """Parser target that raises at the first thing a browser could run or fetch.
+
+    It keeps no element, so no tree builds up, only the text of a style sheet it is inside.
+    """
+
+    root_seen = False
+    style_sheet: list[str] | None = None
+
+    def start(self, tag: str, attrib: dict[str, str]) -> None:
+        if not self.root_seen and tag != _SVG_ROOT:
+            raise ValueError("not an SVG")
+        self.root_seen = True
+        # A browser drops an element inside a style sheet and joins the text on either side of it.
+        if self.style_sheet is not None:
+            raise ValueError("element inside a style sheet")
+        element = tag.rpartition("}")[2]
+        if element == "script" or tag.startswith(_LIVE_NAMESPACES):
+            raise ValueError("script, HTML or MathML element")
+        if element == "style":
+            self.style_sheet = []
+        for attribute, value in attrib.items():
+            name = attribute.rpartition("}")[2].lower()
+            animated = value.strip().rpartition(":")[2].lower() if name == "attributename" else ""
+            if (
+                name.startswith("on")
+                or name in ("base", "ping")
+                or animated in ("href", "base", "ping")
+                or animated.startswith("on")
+            ):
+                raise ValueError("event handler, xml:base, ping or animated href")
+            if name == "href" and not _INERT_HREF.match(value.strip().lower()):
+                raise ValueError("href that leaves the document")
+            # Presentation attributes, style and animation values are CSS, and none of them has a namespace.
+            if "}" not in attribute and _css_fetches(value):
+                raise ValueError("CSS that fetches")
+
+    def data(self, text: str) -> None:
+        if self.style_sheet is not None:
+            self.style_sheet.append(text)
+
+    def end(self, tag: str) -> None:
+        if self.style_sheet is not None:
+            if _css_fetches("".join(self.style_sheet)):
+                raise ValueError("CSS that fetches")
+            self.style_sheet = None
+
+    def pi(self, target: str, data: str) -> None:
+        raise ValueError("processing instruction")
+
+
+def _is_inert_svg(data: bytes) -> bool:
+    """Whether ``data`` is an SVG that runs nothing and fetches nothing when opened on its own.
+
+    Checked, never cleaned: a file is stored exactly as uploaded or not at all.
+    A DTD is refused because its entities and attribute defaults add content the
+    markup does not show, xml:base because it re-points every in-document href,
+    ping because following a link sends a request to it, and an animation of an
+    href, an event handler, xml:base or ping because it swaps the checked value
+    for another once the image loads. CSS gets the href rule:
+    a url() stays in the document or holds a raster image, and @import and
+    image-set(), which fetch from a plain string, are refused.
+    """
+    parser = DefusedXMLParser(target=_InertSvgTarget(), forbid_dtd=True)
+    try:
+        parser.feed(data)
+        parser.close()
+    except (ParseError, ValueError, LookupError):
+        return False
+    return True
+
+
+def _branding_image_type(data: bytes) -> tuple[str, str] | None:
+    """The extension and ContentType to store a branding image under, or None to reject it."""
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png", "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg", "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp", "image/webp"
+    if len(data) <= _MAX_SVG_BYTES and _is_inert_svg(data):
+        return ".svg", "image/svg+xml"
+    return None
+
+
+def generate_branding_filename(team: Team, field: str, extension: str) -> str:
     unique_id = str(uuid.uuid4())
-    return f"team_{team.key}_{field}_{unique_id}{file_ext}"
+    return f"team_{team.key}_{field}_{unique_id}{extension}"
 
 
 def upload_to_s3(
     filename: str,
-    file: Any,
+    data: bytes,
+    content_type: str,
 ) -> None:
     s3_client = StorageClient("MEDIA")
-    file.seek(0)
-    s3_client.upload_media(filename, file.read())
+    s3_client.upload_media(filename, data, content_type)
 
 
 def delete_from_s3(
@@ -272,6 +389,14 @@ def delete_from_s3(
 ) -> None:
     s3_client = StorageClient("MEDIA")
     s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
+
+
+def _delete_branding_files(filenames: Sequence[str]) -> None:
+    for filename in filenames:
+        try:
+            delete_from_s3(filename)
+        except Exception as e:
+            logger.warning(f"Failed to delete branding file {filename}: {e}")
 
 
 def _refresh_workspace_list_session(request: HttpRequest) -> None:
@@ -315,31 +440,46 @@ def update_team_branding(
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
+    # Check every new file before storing any, so a rejected logo cannot leave a new icon half-applied.
+    # Each file is read again for its upload, so only one sits in memory at a time.
+    images: dict[str, tuple[DjangoUploadedFile, str, str]] = {}
+    for field in ["icon", "logo"]:
+        if (file := request.FILES.get(field)) and not getattr(payload, f"{field}_pending_deletion", False):
+            file.seek(0)
+            # A raster is typed by its signature and a longer SVG fails the cap, so one byte past it is enough.
+            if not (image_type := _branding_image_type(file.read(_MAX_SVG_BYTES + 1))):
+                return 400, {"detail": _INVALID_BRANDING_IMAGE, "error_code": ErrorCode.VALIDATION_ERROR}
+            images[field] = (file, *image_type)
+
     # TODO: has to be a separate model
     branding_data = _normalize_branding_payload(team.branding_info)
     branding_info = BrandingInfo(**branding_data).model_dump()
 
+    # Old files go only once the new keys are committed. A failed upload or save removes this request's uploads.
+    uploaded: list[str] = []
+    replaced: list[str] = []
     for field in ["icon", "logo"]:
         old_filename = branding_info.get(field)
 
         if getattr(payload, f"{field}_pending_deletion", False):
             branding_info[field] = ""
-        elif file := request.FILES.get(field):
-            branding_info[field] = generate_branding_filename(team, field, file)
+        elif field in images:
+            file, extension, content_type = images[field]
+            branding_info[field] = generate_branding_filename(team, field, extension)
+            file.seek(0)
 
             try:
-                upload_to_s3(branding_info[field], file)
-            except Exception as e:
-                logger.error(f"Failed to upload {field} file {file.name}: {e}")
-                raise e
+                upload_to_s3(branding_info[field], file.read(), content_type)
+            except Exception:
+                logger.exception(f"Failed to upload {field} file {branding_info[field]}")
+                _delete_branding_files([*uploaded, branding_info[field]])
+                raise
+            uploaded.append(branding_info[field])
         else:
             continue
 
-        try:
-            if old_filename:
-                delete_from_s3(old_filename)
-        except Exception as e:
-            logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
+        if old_filename:
+            replaced.append(old_filename)
 
     branding_info["brand_color"] = payload.brand_color or branding_info.get("brand_color")
     branding_info["accent_color"] = payload.accent_color or branding_info.get("accent_color")
@@ -349,7 +489,12 @@ def update_team_branding(
         branding_info["branding_enabled"] = payload.branding_enabled
 
     team.branding_info = branding_info
-    team.save(update_fields=["branding_info"])
+    try:
+        team.save(update_fields=["branding_info"])
+    except Exception:
+        _delete_branding_files(uploaded)
+        raise
+    transaction.on_commit(lambda: _delete_branding_files(replaced))
 
     updated_branding_data = _normalize_branding_payload(team.branding_info)
     updated_branding = BrandingInfo(**updated_branding_data)
@@ -386,21 +531,24 @@ def upload_branding_file(
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
+    file.seek(0)
+    # As in update_team_branding, one byte past the SVG cap is enough to type the file.
+    if not (image_type := _branding_image_type(file.read(_MAX_SVG_BYTES + 1))):
+        return 400, {"detail": _INVALID_BRANDING_IMAGE, "error_code": ErrorCode.VALIDATION_ERROR}
+
     branding_data = _normalize_branding_payload(team.branding_info)
     current_branding = BrandingInfo(**branding_data)
     update_data = current_branding.model_dump()
     s3_client = StorageClient("MEDIA")
 
     # Generate new filename first
-    uploaded = request.FILES["file"]
-    file_ext = Path(getattr(uploaded, "name", "") or "").suffix
-    unique_id = str(uuid.uuid4())
-    new_filename = f"team_{team.key}_{file_type}_{unique_id}{file_ext}"
+    extension, content_type = image_type
+    new_filename = generate_branding_filename(team, file_type, extension)
     old_filename = update_data.get(file_type)
 
     # Upload new file first
-    file_obj = getattr(uploaded, "file", uploaded)
-    s3_client.upload_media(new_filename, file_obj.read())  # type: ignore[union-attr]
+    file.seek(0)
+    s3_client.upload_media(new_filename, file.read(), content_type)
 
     try:
         # Update database atomically
@@ -416,13 +564,13 @@ def upload_branding_file(
             except Exception as e:
                 logger.warning(f"Failed to delete old {file_type} file {old_filename}: {e}")
 
-    except Exception as e:
+    except Exception:
         # Database save failed, clean up the new file we just uploaded
         try:
             s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, new_filename)
         except Exception as cleanup_error:
             logger.error(f"Failed to cleanup uploaded file {new_filename} after database error: {cleanup_error}")
-        raise e
+        raise
 
     # Create a new BrandingInfo object with the updated data to get correct URLs
     updated_branding_data = _normalize_branding_payload(team.branding_info)
