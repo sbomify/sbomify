@@ -135,3 +135,55 @@ def get_http_session() -> requests.Session:
     session = requests.Session()
     session.headers.update({"User-Agent": get_user_agent()})
     return session
+
+
+# Plugins a billing plan must include before a workspace can run them, keyed to
+# the BillingPlan property that says so. A plugin missing here is open to every plan.
+PLUGIN_PLAN_FEATURES: dict[str, str] = {
+    "ntia-minimum-elements-2021": "has_ntia_compliance",
+    "fda-medical-device-2025": "has_fda_compliance",
+    "dependency-track": "has_dependency_track_access",
+}
+
+
+def plugin_plan_requirement(plugin_name: str) -> str | None:
+    """The plan feature a plugin needs, or None when every plan may run it."""
+    return PLUGIN_PLAN_FEATURES.get(plugin_name)
+
+
+def team_has_plugin_access(team: Any, plugin_name: str) -> bool:
+    """Whether the workspace's billing plan lets it run the plugin."""
+    from sbomify.apps.billing.config import is_billing_enabled
+    from sbomify.apps.billing.models import BillingPlan
+
+    if not is_billing_enabled():
+        return True
+
+    required_feature = plugin_plan_requirement(plugin_name)
+    if required_feature is None:
+        return True
+
+    if not team.billing_plan:
+        return False
+
+    plan = BillingPlan.objects.filter(key=team.billing_plan).first()
+    return bool(plan and getattr(plan, required_feature, False))
+
+
+def drop_plugins_outside_plan(team: Any) -> list[str]:
+    """Remove the plugins the workspace's plan no longer includes. Returns what it removed.
+
+    Written with a queryset update: saving the settings row fires the signal that
+    re-assesses recent SBOMs, and dropping a plugin is no reason to re-run the rest.
+    """
+    from .models import TeamPluginSettings
+
+    settings = TeamPluginSettings.objects.filter(team=team).only("id", "enabled_plugins").first()
+    if settings is None or not settings.enabled_plugins:
+        return []
+
+    kept = [name for name in settings.enabled_plugins if team_has_plugin_access(team, name)]
+    dropped = [name for name in settings.enabled_plugins if name not in kept]
+    if dropped:
+        TeamPluginSettings.objects.filter(pk=settings.pk).update(enabled_plugins=kept)
+    return dropped

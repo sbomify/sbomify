@@ -121,11 +121,11 @@ def check_rate_limit(key: str, limit: int = 5, period: int = 60) -> bool:
 
 
 def handle_community_downgrade_visibility(team: Team) -> None:
-    """Set all components to PUBLIC when downgrading to community plan.
+    """Set all components and products to PUBLIC when downgrading to community plan.
 
     Logs an audit trail of the visibility change for traceability.
     """
-    from sbomify.apps.sboms.models import Component
+    from sbomify.apps.sboms.models import Component, Product
     from sbomify.apps.security_advisories.signals import track_component_changes
 
     components = Component.objects.filter(team=team).exclude(visibility=Component.Visibility.PUBLIC)
@@ -137,6 +137,72 @@ def handle_community_downgrade_visibility(team: Team) -> None:
             affected,
             team.key,
         )
+
+    # One save each, not a bulk update: the CSAF feed marker listens on product saves.
+    private_products = list(Product.objects.filter(team=team, is_public=False))
+    for product in private_products:
+        product.is_public = True
+        product.save(update_fields=["is_public"])
+    if private_products:
+        logger.warning(
+            "Community downgrade: set %d product(s) to PUBLIC for team %s",
+            len(private_products),
+            team.key,
+        )
+
+
+def apply_community_downgrade(team: Team) -> None:
+    """Apply Community's rules to a workspace that has just left a paid plan.
+
+    ``team`` must already carry the Community plan: the plugins it keeps are the
+    ones that plan includes.
+    """
+    from sbomify.apps.plugins.utils import drop_plugins_outside_plan
+
+    handle_community_downgrade_visibility(team)
+    dropped = drop_plugins_outside_plan(team)
+    if dropped:
+        logger.info("Community downgrade: disabled %s for team %s", ", ".join(dropped), team.key)
+
+
+# Stripe statuses after which a subscription no longer pays for anything. ``unpaid``
+# and ``paused`` can come back to ``active``; the plan follows it back when they do.
+ENDED_SUBSCRIPTION_STATUSES = frozenset({"canceled", "unpaid", "incomplete_expired", "paused"})
+
+
+def downgrade_ended_subscription(team_pk: int) -> bool:
+    """Move a workspace whose subscription ended onto Community.
+
+    Every path that learns a subscription ended calls this, so none of them can
+    leave the workspace on the paid plan it no longer pays for. Enterprise plans
+    are set by hand rather than by Stripe, so they stay put. Returns whether the
+    plan changed.
+    """
+    from django.db import transaction
+
+    from sbomify.apps.teams.models import Team
+
+    from .models import BillingPlan
+
+    with transaction.atomic():
+        team = Team.objects.select_for_update().get(pk=team_pk)
+        if team.billing_plan in (BillingPlan.KEY_COMMUNITY, BillingPlan.KEY_ENTERPRISE):
+            return False
+        limits = (team.billing_plan_limits or {}).copy()
+        limits.update(get_community_plan_limits())
+        # The downgrade a scheduled cancel was waiting for has now happened.
+        limits.pop("scheduled_downgrade_plan", None)
+        limits["cancel_at_period_end"] = False
+        team.billing_plan = BillingPlan.KEY_COMMUNITY
+        team.billing_plan_limits = limits
+        team.save()
+        # Under the same row lock as the plan change: a payment that recovers in
+        # between would restore the paid plan, and publishing afterwards would
+        # then act on a workspace that pays again.
+        apply_community_downgrade(team)
+
+    logger.info("Subscription ended: moved workspace %s to Community", team.key)
+    return True
 
 
 def get_community_plan_limits() -> dict[str, int | None]:

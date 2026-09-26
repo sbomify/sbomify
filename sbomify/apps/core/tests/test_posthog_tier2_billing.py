@@ -37,7 +37,7 @@ def test_handle_trial_period_emits_trial_expired_only_once(
     # The downgrade calls notify_billing_managers → email_notifications.notify_trial_expired;
     # patch them out so the test does not depend on SMTP fixtures.
     mocker.patch("sbomify.apps.billing.billing_processing.email_notifications")
-    mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")
+    mocker.patch("sbomify.apps.billing.billing_processing.apply_community_downgrade")
 
     subscription = MagicMock()
     subscription.status = "trialing"

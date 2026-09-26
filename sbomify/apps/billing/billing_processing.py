@@ -20,9 +20,11 @@ from sbomify.logging import getLogger
 
 from . import email_notifications
 from .billing_helpers import (
+    ENDED_SUBSCRIPTION_STATUSES,
+    apply_community_downgrade,
+    downgrade_ended_subscription,
     generate_webhook_id,
     get_community_plan_limits,
-    handle_community_downgrade_visibility,
     notify_billing_managers,
     parse_cancel_at,
 )
@@ -308,7 +310,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 team.save()
 
             if should_run_side_effects:
-                handle_community_downgrade_visibility(team)
+                apply_community_downgrade(team)
                 notify_billing_managers(team, email_notifications.notify_trial_expired)
                 logger.info("Trial expired — downgraded team %s to community plan", team.key)
 
@@ -357,7 +359,16 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
     try:
         team, billing_limits = _resolve_team_from_subscription(subscription)
 
-        valid_statuses = ["trialing", "active", "past_due", "canceled", "incomplete", "incomplete_expired"]
+        valid_statuses = [
+            "trialing",
+            "active",
+            "past_due",
+            "canceled",
+            "incomplete",
+            "incomplete_expired",
+            "unpaid",
+            "paused",
+        ]
         if subscription.status not in valid_statuses:
             raise StripeError(f"Invalid subscription status: {subscription.status}")
 
@@ -527,7 +538,9 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
         if items_obj is not None:
             items_data = items_obj.get("data") if isinstance(items_obj, dict) else getattr(items_obj, "data", None)
 
-        if items_data:
+        # An ended subscription still lists its prices; reading the plan off them
+        # would put the workspace back on the plan it stopped paying for.
+        if items_data and subscription.status not in ENDED_SUBSCRIPTION_STATUSES:
             try:
                 found_plan = None
 
@@ -567,6 +580,9 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
 
         team.billing_plan_limits = billing_limits
         team.save()
+
+    if subscription.status in ENDED_SUBSCRIPTION_STATUSES:
+        downgrade_ended_subscription(team.pk)
 
     if subscription.status == "trialing" and subscription.trial_end:
         try:
@@ -650,6 +666,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                     billing_limits["last_processed_webhook_id"] = webhook_id
                     team.billing_plan_limits = billing_limits
                     team.save()
+                downgrade_ended_subscription(team.pk)
             else:
                 counts = get_team_asset_counts(str(team.id))
                 product_count = counts["products"]
@@ -689,7 +706,10 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                         team.billing_plan_limits = existing_limits
                         team.save()
 
-                    logger.warning(f"Downgrade blocked due to exceeded limits: {', '.join(exceeded_resources)}")
+                    # Over the limits or not, nobody pays for the plan now. Existing
+                    # resources stay; the Community limits stop new ones.
+                    downgrade_ended_subscription(team.pk)
+                    logger.warning(f"Downgraded over Community limits: {', '.join(exceeded_resources)}")
                 else:
                     with transaction.atomic():
                         team = Team.objects.select_for_update().get(pk=team.pk)
@@ -715,7 +735,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                         team.save()
 
                     if target_plan.key == BillingPlan.KEY_COMMUNITY:
-                        handle_community_downgrade_visibility(team)
+                        apply_community_downgrade(team)
 
                     logger.info(f"Completed downgrade to {target_plan.key}")
         else:
@@ -727,6 +747,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                 billing_limits["last_processed_webhook_id"] = webhook_id
                 team.billing_plan_limits = billing_limits
                 team.save()
+            downgrade_ended_subscription(team.pk)
 
         _best_effort(
             "subscription ended notification",
