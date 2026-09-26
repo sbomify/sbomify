@@ -7,6 +7,7 @@ body stays within the ceiling an uncompressed body gets.
 from __future__ import annotations
 
 import gzip
+import json
 import time
 from types import SimpleNamespace
 
@@ -55,6 +56,16 @@ def test_a_compressed_body_without_a_signed_token_is_not_inflated(authorization)
 
     assert response.status_code == 401
     assert reached == []
+
+
+def test_the_refusal_is_the_json_every_api_401_carries():
+    response, _ = _run(_compressed_request(None))
+
+    assert response["Content-Type"] == "application/json"
+    assert json.loads(response.content) == {
+        "detail": "A compressed request body needs a valid API token",
+        "error_code": "UNAUTHORIZED",
+    }
 
 
 @pytest.mark.parametrize(

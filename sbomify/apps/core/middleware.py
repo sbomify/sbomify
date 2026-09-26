@@ -12,10 +12,11 @@ from typing import TYPE_CHECKING, Any, Callable, Protocol
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import DisallowedHost
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from django.utils.http import http_date
 
+from sbomify.apps.core.schemas import ErrorCode
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.teams.utils import normalize_host
 
@@ -701,7 +702,13 @@ class GzipRequestDecompressionMiddleware:
             return HttpResponseBadRequest("Unsupported multiple Content-Encoding values")
 
         if not _carries_signed_token(request):
-            return HttpResponse("A compressed request body needs a valid API token", status=401)
+            return JsonResponse(
+                {
+                    "detail": "A compressed request body needs a valid API token",
+                    "error_code": ErrorCode.UNAUTHORIZED.value,
+                },
+                status=401,
+            )
 
         max_size: int = getattr(settings, "GZIP_REQUEST_MAX_SIZE", 200 * 1024 * 1024)
 
