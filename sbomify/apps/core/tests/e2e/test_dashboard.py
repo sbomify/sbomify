@@ -344,3 +344,23 @@ def test_dashboard_view_switch_and_trend_filters(
     navigation.get_by_role("link", name="Summary").click()
     expect(navigation.locator('[aria-current="page"]')).to_have_text("Summary")
     expect(page.get_by_role("group", name="Key metrics")).to_be_visible()
+
+
+@pytest.mark.django_db
+def test_the_trends_fragment_url_lands_on_the_trends_page(authenticated_page: Page, dashboard: dict[str, Any]) -> None:
+    """Both URLs used to render Trends, with different release defaults and a
+    different set of controls, so the same workspace reported two totals."""
+    page = authenticated_page
+    page.goto("/dashboard/trends/")
+    expect(page.locator(".vulnerability-chart-canvas")).to_be_visible()
+    metrics = page.get_by_role("group", name="Vulnerability metrics")
+    expected = metrics.inner_text()
+    controls = page.locator("#vuln-trends-body select").count()
+
+    page.goto("/vulnerability-trends/")
+
+    expect(page.locator(".vulnerability-chart-canvas")).to_be_visible()
+    assert page.url.endswith("/dashboard/trends/")
+    assert metrics.inner_text() == expected
+    assert page.locator("#vuln-trends-body select").count() == controls
+    expect(page.locator("#sidebar a[aria-current='page']")).to_have_text("Overview")
