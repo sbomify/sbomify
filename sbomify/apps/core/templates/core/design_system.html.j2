@@ -359,6 +359,13 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-forms.input name="ds-form-section-title" placeholder="e.g. Improper authentication in SAML assertion handling" />
         </c-forms.field>
         </c-layout.form-section>
+        <c-layout.form-section stacked title="Stacked form section" description="A single-column section with a quiet divider.">
+        <c-slot name="actions"><c-buttons.secondary size="sm">Edit details</c-buttons.secondary></c-slot>
+        <dl class="mb-4">
+            <c-layout.description-row label="Legal name">Example manufacturer</c-layout.description-row>
+        </dl>
+        <c-forms.field label="Intended use" for="gallery-stacked-use"><c-forms.textarea id="gallery-stacked-use" rows="2" placeholder="Describe how the product is used" /></c-forms.field>
+        </c-layout.form-section>
         <c-layout.form-section step="2" accent="neutral" title="What else is known" description="Optional. You can add these later.">
         <c-forms.field label="CVE or reference" for="ds-form-section-cve">
         <c-forms.input name="ds-form-section-cve" placeholder="CVE-2026-0000" />
