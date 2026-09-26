@@ -591,7 +591,8 @@ class Invitation(models.Model):
     # above + Python clean() below). ``guest`` IS valid here because
     # the trust-center auto-accept flow creates guest-role invitations.
     # InviteUserForm UI further restricts choices but the model layer
-    # allows the broader set so non-UI flows work.
+    # allows the broader set so non-UI flows work. ``operator`` is invited
+    # like any other internal role and needs no special handling.
     role = models.CharField(max_length=255, choices=settings.TEAMS_INVITABLE_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=calculate_invitation_expiry)

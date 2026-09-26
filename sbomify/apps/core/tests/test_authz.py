@@ -56,52 +56,111 @@ def _resource_for(res_key, team, component):
 _MATRIX = {
     # Admins are near-owners: workspace governance, member management, billing
     # and deletion of domain resources are all theirs.
-    "workspace:administer": ("team", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
-    "billing:manage": ("team", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
-    "member:manage": ("team", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
-    "component:manage": ("component", {"owner": True, "member": True, "admin": True, "guest": False, "bot": False}),
-    "component:delete": ("component", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
-    "product:delete": ("product", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
-    "release:delete": ("product", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
-    "sbom:delete": ("component", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
-    "document:delete": ("component", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
+    "workspace:administer": (
+        "team",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "billing:manage": (
+        "team",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "member:manage": (
+        "team",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "component:manage": (
+        "component",
+        {"owner": True, "operator": False, "member": True, "admin": True, "guest": False, "bot": False},
+    ),
+    "component:delete": (
+        "component",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "product:delete": (
+        "product",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "release:delete": (
+        "product",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "sbom:delete": (
+        "component",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "document:delete": (
+        "component",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
     # ...except the two OWNER_ONLY carve-outs. Deleting the workspace is the only
     # capability an admin lacks; "an admin may not remove an owner" is relational
     # and lives in the member-removal guards, not here.
-    "workspace:delete": ("team", {"owner": True, "member": False, "admin": False, "guest": False, "bot": False}),
+    "workspace:delete": (
+        "team",
+        {"owner": True, "operator": False, "member": False, "admin": False, "guest": False, "bot": False},
+    ),
     # Guests hold NO capability — they are external trust-center visitors and
     # reach restricted content only through the ABAC component:access path.
     # Every guest column below being False is the point of this table.
-    "artifact:publish": ("component", {"owner": True, "member": True, "admin": True, "guest": False, "bot": True}),
-    "workspace:read": ("team", {"owner": True, "member": True, "admin": True, "guest": False, "bot": False}),
+    "artifact:publish": (
+        "component",
+        {"owner": True, "operator": False, "member": True, "admin": True, "guest": False, "bot": True},
+    ),
+    "workspace:read": (
+        "team",
+        {"owner": True, "operator": True, "member": True, "admin": True, "guest": False, "bot": False},
+    ),
     "component:administer": (
         "component",
-        {"owner": True, "member": False, "admin": True, "guest": False, "bot": False},
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
     ),
     # The carve-outs: a member maintains a component but does not decide the
     # world can see it, nor hand an external repo a standing publish grant.
     "product:set_visibility": (
         "product",
-        {"owner": True, "member": False, "admin": True, "guest": False, "bot": False},
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
     ),
     "component:set_visibility": (
         "component",
-        {"owner": True, "member": False, "admin": True, "guest": False, "bot": False},
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
     ),
     "component:manage_publishers": (
         "component",
-        {"owner": True, "member": False, "admin": True, "guest": False, "bot": False},
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
     ),
-    "product:read": ("product", {"owner": True, "member": True, "admin": True, "guest": False, "bot": False}),
+    "product:read": (
+        "product",
+        {"owner": True, "operator": True, "member": True, "admin": True, "guest": False, "bot": False},
+    ),
     # CI/OIDC publish workflow: a release-cutting bot reads (to check existence),
     # creates, and tags releases — but cannot rename or delete them.
-    "release:read": ("product", {"owner": True, "member": True, "admin": True, "guest": False, "bot": True}),
-    "release:create": ("product", {"owner": True, "member": True, "admin": True, "guest": False, "bot": True}),
-    "release:tag": ("product", {"owner": True, "member": True, "admin": True, "guest": False, "bot": True}),
-    "release:manage": ("product", {"owner": True, "member": True, "admin": True, "guest": False, "bot": False}),
+    "release:read": (
+        "product",
+        {"owner": True, "operator": True, "member": True, "admin": True, "guest": False, "bot": True},
+    ),
+    "release:create": (
+        "product",
+        {"owner": True, "operator": False, "member": True, "admin": True, "guest": False, "bot": True},
+    ),
+    "release:tag": (
+        "product",
+        {"owner": True, "operator": False, "member": True, "admin": True, "guest": False, "bot": True},
+    ),
+    "release:manage": (
+        "product",
+        {"owner": True, "operator": False, "member": True, "admin": True, "guest": False, "bot": False},
+    ),
+    # The operator's one capability beyond reading, and the reason the role
+    # exists: rule on a finding without being able to change the inventory.
+    "artifact:publish_vex": (
+        "component",
+        {"owner": True, "operator": True, "member": True, "admin": True, "guest": False, "bot": True},
+    ),
 }
 _CASES = [
-    (a, role, exp[role]) for a, (_res, exp) in _MATRIX.items() for role in ("owner", "admin", "member", "guest", "bot")
+    (a, role, exp[role])
+    for a, (_res, exp) in _MATRIX.items()
+    for role in ("owner", "admin", "member", "operator", "guest", "bot")
 ]
 
 
@@ -125,7 +184,13 @@ def test_role_capability_matrix(workspace, action, role, expected):
 # absent: it is a synthetic OIDC publishing identity that sits outside the
 # ladder (it can publish releases but cannot read most internal data), so
 # including it would make the invariant below meaningless.
-_ROLE_LADDER = (authz.ROLE_GUEST, authz.ROLE_MEMBER, authz.ROLE_ADMIN, authz.ROLE_OWNER)
+_ROLE_LADDER = (
+    authz.ROLE_GUEST,
+    authz.ROLE_OPERATOR,
+    authz.ROLE_MEMBER,
+    authz.ROLE_ADMIN,
+    authz.ROLE_OWNER,
+)
 
 
 @pytest.mark.parametrize("action", sorted(authz._ROLE_ACTIONS))
@@ -152,7 +217,13 @@ def test_role_descriptions_cover_every_human_role():
     """The members page explains roles from ROLE_DESCRIPTIONS; a role missing
     there is invisible to users even though it is assignable."""
     described = {role for role, _label, _desc in authz.ROLE_DESCRIPTIONS}
-    human_roles = {authz.ROLE_OWNER, authz.ROLE_ADMIN, authz.ROLE_MEMBER, authz.ROLE_GUEST}
+    human_roles = {
+        authz.ROLE_OWNER,
+        authz.ROLE_ADMIN,
+        authz.ROLE_MEMBER,
+        authz.ROLE_OPERATOR,
+        authz.ROLE_GUEST,
+    }
     assert described == human_roles
     assert authz.ROLE_BOT not in described  # synthetic identity, never shown
     for _role, label, description in authz.ROLE_DESCRIPTIONS:
@@ -171,7 +242,7 @@ def test_non_member_is_always_denied(workspace, action):
 def test_can_decision_equals_verify_item_access(workspace):
     """The faithfulness guarantee: can() == verify_item_access for every role."""
     team, component = workspace
-    for role in ("owner", "admin", "member", "guest", "bot"):
+    for role in ("owner", "admin", "member", "operator", "guest", "bot"):
         user = _user(f"equiv-{role}")
         _member(team, user, role)
         req = HttpRequest()
@@ -183,6 +254,65 @@ def test_can_decision_equals_verify_item_access(workspace):
         assert can(user, "artifact:publish", component).allowed == verify_item_access(
             req, component, list(authz.PUBLISH)
         )
+
+
+# The operator role, stated as its own contract rather than read off the matrix.
+# An operator is a read-only user who rules on vulnerability findings:
+# these two tests are the whole definition, and they fail loudly if a later tier
+# change hands the role a write it should not have.
+_OPERATOR_GRANTED = ("workspace:read", "product:read", "component:read_internal", "artifact:publish_vex")
+_OPERATOR_DENIED = (
+    "product:create",
+    "product:manage",
+    "component:create",
+    "component:manage",
+    "release:create",
+    "artifact:publish",
+    "product:delete",
+    "component:delete",
+    "workspace:administer",
+    "member:manage",
+)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("action", _OPERATOR_GRANTED)
+def test_operator_reads_the_workspace_and_triages(workspace, action):
+    team, component = workspace
+    user = _user(f"op-yes-{action.replace(':', '-')}")
+    _member(team, user, authz.ROLE_OPERATOR)
+    resource = team if action.startswith("workspace:") else component
+    if action == "product:read":
+        resource = Product.objects.create(name="op-prod", team=team)
+    assert can(user, action, resource).allowed is True
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("action", _OPERATOR_DENIED)
+def test_operator_cannot_change_the_inventory(workspace, action):
+    """The point of the role: no products, no components, no uploads."""
+    team, component = workspace
+    user = _user(f"op-no-{action.replace(':', '-')}")
+    _member(team, user, authz.ROLE_OPERATOR)
+    resource = team if action.startswith(("workspace:", "member:")) else component
+    if action.startswith(("product:", "release:")):
+        resource = Product.objects.create(name=f"op-prod-{action[-6:]}", team=team)
+    assert can(user, action, resource).allowed is False
+
+
+@pytest.mark.django_db
+def test_operator_cannot_upload_a_vex_file(workspace):
+    """``artifact:publish_vex`` alone is not upload permission.
+
+    The VEX upload endpoints require ``artifact:publish`` *as well*, which is
+    what keeps triage (a judgement) separate from publishing (an artifact). If
+    this ever passes for both actions, an operator has become a publisher.
+    """
+    team, component = workspace
+    user = _user("op-vex-upload")
+    _member(team, user, authz.ROLE_OPERATOR)
+    assert can(user, "artifact:publish_vex", component).allowed is True
+    assert can(user, "artifact:publish", component).allowed is False
 
 
 @pytest.mark.django_db
@@ -436,9 +566,7 @@ def test_no_view_gates_on_the_cached_session_role():
     # and a template gate — ``current_team.role == 'owner'`` in
     # teams/team_settings.html.j2 — sat behind both holes until an audit found
     # it. A guardrail that covers one of the two dialects is not a guardrail.
-    pattern = re.compile(
-        r"""current_team(?:\.get\(["']role["']\)|\[["']role["']\]|\.role\b)"""
-    )
+    pattern = re.compile(r"""current_team(?:\.get\(["']role["']\)|\[["']role["']\]|\.role\b)""")
     exempt = {"teams/utils.py"}
 
     # Prose *about* the rule is not a violation of it. Docstrings here quote the
