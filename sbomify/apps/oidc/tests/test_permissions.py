@@ -174,6 +174,7 @@ class TestRequestPredicate:
         )
         row = AccessToken.objects.create(
             encoded_token=encoded,
+            token_type=TOKEN_TYPE_OIDC,
             description="orphan",
             user=orphan_bot,
             expires_at=timezone.now() + datetime.timedelta(seconds=900),
@@ -301,15 +302,10 @@ class TestRequestPredicate:
         assert is_authorised_for_component(fake_req, mocker.MagicMock(id="any-component")) is True
 
     @pytest.mark.django_db
-    def test_oidc_type_decoded_at_most_once_per_request(self, mocker, bound_component: Component) -> None:
-        """The signed ``token_type`` is verified at most once per request.
-
-        ``is_authorised_for_component`` calls ``request_is_oidc_authed``,
-        then ``bound_component_id_for_request`` calls it again — so the
-        JWT-decode in ``_token_is_oidc_typed`` would run twice without
-        memoisation. The result is cached on the per-request token-record
-        instance; this pins that an upload request never re-verifies the
-        JWT (regression guard for the round-3 Copilot perf finding).
+    def test_oidc_type_is_read_without_decoding_a_jwt(self, mocker, bound_component: Component) -> None:
+        """The row holds only the token's hash, so the OIDC check reads the
+        stored ``token_type`` and never decodes a JWT, however often an
+        upload request asks (the gate, then the bound-component lookup).
         """
         import datetime
 
@@ -339,6 +335,7 @@ class TestRequestPredicate:
         )
         row = AccessToken.objects.create(
             encoded_token=encoded,
+            token_type=TOKEN_TYPE_OIDC,
             description="oidc once",
             user=bot,
             expires_at=timezone.now() + datetime.timedelta(seconds=900),
@@ -349,10 +346,8 @@ class TestRequestPredicate:
             delattr(fake_req, "_oidc_binding_cache")
 
         spy = mocker.spy(at_utils, "decode_personal_access_token")
-        # Runs request_is_oidc_authed twice internally (the gate + the
-        # bound-component lookup) yet decodes the JWT at most once.
         assert is_authorised_for_component(fake_req, bound_component) is True
-        assert spy.call_count <= 1
+        assert spy.call_count == 0
 
 
 class TestSBOMUploadScope:

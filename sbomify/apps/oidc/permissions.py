@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Any
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
 
 
 def _lookup_binding(request: Any) -> Any:
@@ -61,36 +62,11 @@ def _cached_binding(request: Any) -> Any:
 def _token_is_oidc_typed(token_record: AccessToken) -> bool:
     """True iff the token's signed JWT carries ``token_type="oidc"``.
 
-    This is the authoritative OIDC signal: the claim is covered by the
-    HMAC signature (so it can't be forged without ``SECRET_KEY``) and is
-    ``"oidc"`` only for OIDC-issued tokens. We re-decode here rather than
-    keying on ``expires_at`` because, since #1007, PATs may also set a
-    DB-row ``expires_at`` (default 90 days) — making that column useless
-    as an OIDC discriminator. The token reaching this point already
-    passed authentication, so the decode succeeds and isn't expired; any
-    decode failure falls through to the binding-based fallback.
-
-    Memoised on the token-record instance: ``request_is_oidc_authed``
-    runs twice per upload request (once in ``is_authorised_for_component``
-    and again in ``bound_component_id_for_request``), and
-    ``request.access_token_record`` is that same per-request instance both
-    times — so the JWT is verified at most once per request without a
-    request-scoped cache attribute (cf. ``_cached_binding``).
+    Authentication only matches a row whose stored ``token_type`` equals the
+    signed claim, so the column is as trustworthy as the HMAC over the claim.
+    PATs can carry an ``expires_at`` too, so that column can't tell them apart.
     """
-    cached = getattr(token_record, "_is_oidc_typed", None)
-    if cached is not None:
-        return bool(cached)
-
-    from jwt.exceptions import DecodeError
-
-    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, decode_personal_access_token
-
-    try:
-        result = decode_personal_access_token(token_record.encoded_token).get("token_type") == TOKEN_TYPE_OIDC
-    except DecodeError:
-        result = False
-    setattr(token_record, "_is_oidc_typed", result)
-    return result
+    return token_record.token_type == TOKEN_TYPE_OIDC
 
 
 def request_is_oidc_authed(request: Any) -> bool:
@@ -120,11 +96,9 @@ def request_is_oidc_authed(request: Any) -> bool:
     ``OIDCBinding`` row without taking down the bot user.
 
     Performance: ``request_is_oidc_authed`` is only reached on the
-    component-scoped upload endpoints, and runs at most one JWT verify
-    plus (for a PAT) one unique-indexed probe on ``OIDCBinding.bot_user_id``
-    per request. Both are memoised — the ``token_type`` decode on the
-    token-record instance (``_token_is_oidc_typed``) and the binding
-    lookup via ``_cached_binding`` — so the second call this predicate
+    component-scoped upload endpoints, and for a PAT runs one unique-indexed
+    probe on ``OIDCBinding.bot_user_id`` per request. The binding lookup is
+    memoised via ``_cached_binding``, so the second call this predicate
     receives within a request (``is_authorised_for_component`` then
     ``bound_component_id_for_request``) is effectively free.
     """
