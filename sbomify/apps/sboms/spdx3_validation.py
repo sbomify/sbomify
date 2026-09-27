@@ -48,8 +48,10 @@ budget is still named, without the itemised reason.
 from __future__ import annotations
 
 import copy
+import itertools
 import json
 from collections.abc import Callable, Iterator
+from contextlib import suppress
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -75,6 +77,7 @@ SCHEMA_PATHS = {
 MAX_VALIDATED_ELEMENTS = 500
 
 
+@cache
 def _load(schema_version: str) -> dict[str, Any]:
     schema: dict[str, Any] = json.loads(SCHEMA_PATHS[schema_version].read_text())
     return schema
@@ -88,21 +91,37 @@ def _gate(schema_version: str) -> Any:
     return fastjsonschema.compile(_closed(_load(schema_version)))
 
 
-@cache
-def _enumerator(schema_version: str) -> Any:
+def _enumerator(schema_version: str, steps: Iterator[int]) -> Any:
     """Why it is not. Only built once something has already failed the gate."""
-    from jsonschema import Draft202012Validator
-
-    return Draft202012Validator(_load(schema_version))
+    return _metered(_load(schema_version), steps)
 
 
-@cache
-def _element_enumerator(schema_version: str) -> Any:
+def _element_enumerator(schema_version: str, steps: Iterator[int]) -> Any:
     """Why one ``@graph`` element is not, against what the schema holds every element to."""
-    from jsonschema import Draft202012Validator
-
     schema = _load(schema_version)
-    return Draft202012Validator({**_graph_items(schema), "$defs": schema["$defs"]})
+    return _metered({**_graph_items(schema), "$defs": schema["$defs"]}, steps)
+
+
+class _Spent(Exception):
+    """The document's itemising steps ran out."""
+
+
+def _metered(schema: dict[str, Any], steps: Iterator[int]) -> Any:
+    """``jsonschema`` over ``schema``, taking one of ``steps`` for every keyword
+    it evaluates and raising ``_Spent`` once ``_ITEMISED_STEPS`` are gone."""
+    from jsonschema import Draft202012Validator
+    from jsonschema.validators import extend
+
+    def meter(keyword: Callable[..., Any]) -> Callable[..., Any]:
+        def metered(validator: Any, value: Any, instance: Any, subschema: Any) -> Any:
+            if next(steps) >= _ITEMISED_STEPS:
+                raise _Spent
+            return keyword(validator, value, instance, subschema)
+
+        return metered
+
+    keywords = {name: meter(keyword) for name, keyword in Draft202012Validator.VALIDATORS.items()}
+    return extend(Draft202012Validator, keywords)(schema)  # type: ignore[no-untyped-call]
 
 
 @cache
@@ -297,11 +316,19 @@ def _violations(document: dict[str, Any], schema_version: str, limit: int) -> li
 
 # How much of a document ``jsonschema`` itemises. Its cost grows with a part's
 # size, and faster with how deep objects nest inside it, since it evaluates
-# every class a nested object might be at each level. So it takes at most this
-# many values per document, and only parts whose inline objects hold no objects
-# of their own, which keeps a rejection's messages to a second or so.
+# every class a nested object might be at each level. Under 3.0.0 a small,
+# shallow part can cost as much: its classes do not dispatch on ``type``, so it
+# evaluates every class a value might be in full, once for each class declaring
+# the property that holds the value. So each keyword it evaluates takes one of
+# ``_ITEMISED_STEPS`` per document, and ``_faults`` names plainly any part not
+# itemised when the steps run out. ``_itemisable_size`` applies the other three
+# limits, to skip parts not worth starting. The text limit also keeps each step
+# cheap, because a message quotes the value it is about. Together they hold a
+# rejection's messages to a second or so.
 _ITEMISED_VALUES = 64
 _ITEMISED_NESTING = 1
+_ITEMISED_CHARACTERS = 4096
+_ITEMISED_STEPS = 25_000
 
 
 def _refused(schema_version: str) -> str:
@@ -314,21 +341,22 @@ def _faults(document: dict[str, Any], schema_version: str) -> Iterator[tuple[lis
     ``jsonschema`` itemises each part the gate refuses while the budget lasts.
     Past that, or where it finds nothing the gate did, the part is named plainly.
     """
-    budget = _ITEMISED_VALUES
+    budget, steps = _ITEMISED_VALUES, itertools.count()
     for path, value, enumerator in _refused_parts(document, schema_version):
         itemised = False
         if (size := _itemisable_size(value, budget)) is not None:
             budget -= size
-            for error in enumerator(schema_version).iter_errors(value):
-                itemised = True
-                yield [*path, *error.absolute_path], error.message
+            with suppress(_Spent):
+                for error in enumerator(schema_version, steps).iter_errors(value):
+                    itemised = True
+                    yield [*path, *error.absolute_path], error.message
         if not itemised:
             yield path, _refused(schema_version)
 
 
 def _refused_parts(
     document: dict[str, Any], schema_version: str
-) -> Iterator[tuple[list[Any], Any, Callable[[str], Any]]]:
+) -> Iterator[tuple[list[Any], Any, Callable[[str, Iterator[int]], Any]]]:
     """The parts of the document the gate refuses, each with the enumerator that can itemise it.
 
     The root is gated with an empty graph, which leaves it only its own faults,
@@ -353,20 +381,26 @@ def _refused_parts(
 
 def _itemisable_size(part: Any, budget: int) -> int | None:
     """How many JSON values ``part`` holds, or None if ``jsonschema`` cannot
-    itemise it cheaply: more than ``budget`` values, or objects nested deeper
-    than ``_ITEMISED_NESTING`` levels below it."""
-    count, pending = 0, [(part, 0)]
+    itemise it cheaply: more than ``budget`` values, more than
+    ``_ITEMISED_CHARACTERS`` characters in its keys and strings, or objects
+    nested deeper than ``_ITEMISED_NESTING`` levels below it."""
+    count, characters, pending = 0, 0, [(part, 0)]
     while pending:
         value, level = pending.pop()
         count += 1
         if count > budget:
             return None
-        if isinstance(value, dict):
+        if isinstance(value, str):
+            characters += len(value)
+        elif isinstance(value, dict):
             if level > _ITEMISED_NESTING:
                 return None
+            characters += sum(len(key) for key in value)
             pending.extend((child, level + 1) for child in value.values())
         elif isinstance(value, list):
             pending.extend((child, level) for child in value)
+        if characters > _ITEMISED_CHARACTERS:
+            return None
     return count
 
 

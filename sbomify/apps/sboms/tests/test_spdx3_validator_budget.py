@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -113,9 +114,9 @@ class TestTheSlowValidatorIsOnlyForMessages:
         consulted: list[bool] = []
         real = spdx3_validation._element_enumerator
 
-        def _spy(schema_version: str) -> Any:
+        def _spy(*args: Any) -> Any:
             consulted.append(True)
-            return real(schema_version)
+            return real(*args)
 
         monkeypatch.setattr(spdx3_validation, "_element_enumerator", _spy)
 
@@ -261,6 +262,24 @@ class TestTheGateClosesWhatTheSchemaCloses:
 
         assert spdx3_schema_errors(document, version) == []
 
+    def test_an_open_class_in_the_graph_carries_what_it_likes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """3.0.0 leaves ``extension_Extension`` open, and an ``@graph`` element
+        may be one, typed by that name or by any IRI. The gate closes every
+        other class but not that one."""
+
+        def _refuse(*_: Any) -> Any:
+            raise AssertionError("jsonschema was consulted for a valid document")
+
+        monkeypatch.setattr(spdx3_validation, "_enumerator", _refuse)
+        monkeypatch.setattr(spdx3_validation, "_element_enumerator", _refuse)
+        document = _valid(3, "3.0.0")
+        document["@graph"] += [
+            {"type": "extension_Extension", "junk": 1},
+            {"type": "https://example.test/ns/Note", "https://example.test/ns/text": "built on a Tuesday"},
+        ]
+
+        assert spdx3_schema_errors(document, "3.0.0") == []
+
     @pytest.mark.parametrize("version", VERSIONS)
     def test_a_graph_item_must_be_an_object(self, version: str) -> None:
         """The items schema says ``type: object`` beside a ``$ref``, and
@@ -322,7 +341,7 @@ class TestOnlyARefusedElementReachesJsonschema:
                 asked.append(element.get("spdxId"))
                 return self.inner.iter_errors(element)
 
-        monkeypatch.setattr(spdx3_validation, "_element_enumerator", lambda schema_version: _Spy(real(schema_version)))
+        monkeypatch.setattr(spdx3_validation, "_element_enumerator", lambda *args: _Spy(real(*args)))
         document = _valid(300, version)
         document["@graph"][250] = {"type": "software_Package", "spdxId": 17}
 
@@ -404,6 +423,83 @@ class TestTheMessagesStayBounded:
 
         assert errors == [f"/@graph/2: not valid under the SPDX {version} schema"]
 
+    @pytest.mark.parametrize("text", ["value", "key"])
+    def test_a_refused_element_holding_long_text_is_named_without_jsonschema(
+        self, version: str, text: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """jsonschema quotes the value a message is about, once for every class
+        it tries, so long text makes every step of its walk dearer."""
+
+        def _refuse(*_: Any) -> Any:
+            raise AssertionError("jsonschema was asked to itemise an element holding too much text")
+
+        monkeypatch.setattr(spdx3_validation, "_element_enumerator", _refuse)
+        document = _valid(3, version)
+        long_text = "x" * (spdx3_validation._ITEMISED_CHARACTERS + 1)
+        if text == "value":
+            document["@graph"][2].update(name=long_text, junk=1)
+        else:
+            document["@graph"][2][long_text] = 1
+
+        errors = spdx3_schema_errors(document, version)
+
+        assert errors == [f"/@graph/2: not valid under the SPDX {version} schema"]
+
+    @pytest.mark.parametrize(
+        "part",
+        [
+            {"to": [{} for _ in range(60)]},
+            {"type": "Relationship", "to": [{"type": "xx_NotAClass"} for _ in range(28)]},
+            {"to": [f"https://example.test/pkg-{index}" for index in range(60)]},
+        ],
+        ids=["empty objects", "objects of no class", "IRIs"],
+    )
+    @pytest.mark.parametrize("where", ["element", "root"])
+    def test_a_part_inside_the_limits_costs_about_a_second_at_most(
+        self, version: str, part: dict[str, Any], where: str
+    ) -> None:
+        """How a part is shaped does not predict jsonschema's cost. Under 3.0.0,
+        whose classes do not dispatch on ``type``, it evaluates every class a
+        value in ``to`` might be, in full, once for each class declaring ``to``.
+        Each part here fits the value and nesting limits, and under 3.0.0 cost
+        seconds until the steps were capped."""
+        document = _valid(3, version)
+        if where == "element":
+            document["@graph"].append(part)
+        else:
+            document.update(part)
+        spdx3_schema_errors(_invalid(version), version)  # build the validators outside the measurement
+
+        started = time.process_time()
+        errors = spdx3_schema_errors(document, version)
+        elapsed = time.process_time() - started
+
+        assert errors
+        assert elapsed < 1, f"{elapsed:.1f} s of CPU to refuse one part"
+
+    def test_the_value_budget_is_spent_across_the_document(self, version: str) -> None:
+        """Every itemised part draws on the one budget, so a part past it is
+        named plainly even though it would fit the budget on its own."""
+        document = _valid(3, version)
+        for index in range(3):
+            document["@graph"].append(
+                {
+                    "type": "software_Package",
+                    "spdxId": f"https://example.test/extra-{index}",
+                    "creationInfo": "_:ci",
+                    "name": "extra",
+                    "junk": list(range(20)),
+                }
+            )
+
+        errors = spdx3_schema_errors(document, version, limit=5)
+
+        assert errors == [
+            "/@graph/5: Unevaluated properties are not allowed ('junk' was unexpected)",
+            "/@graph/6: Unevaluated properties are not allowed ('junk' was unexpected)",
+            f"/@graph/7: not valid under the SPDX {version} schema",
+        ]
+
     def test_the_gate_decides_even_where_jsonschema_cannot_say_why(self, version: str) -> None:
         """A JSON Schema pattern is an ECMA-262 regex, where ``$`` ends the
         input. fastjsonschema reads it that way; jsonschema uses Python's
@@ -424,6 +520,24 @@ class TestTheMessagesStayBounded:
         errors = spdx3_schema_errors(_invalid(version), version)
 
         assert errors == [f"(document root): not valid under the SPDX {version} schema"]
+
+
+class TestTheStepsAreCountedPerDocument:
+    def test_a_part_that_spends_them_leaves_none_for_the_parts_after_it(self) -> None:
+        """Under 3.0.0 the middle part would cost seconds. It spends what is
+        left instead, and the part after it is named plainly rather than given
+        a fresh allowance."""
+        document = _valid(3, "3.0.0")
+        refused = {"type": "software_Package", "spdxId": "https://example.test/x", "creationInfo": "_:ci", "junk": 1}
+        document["@graph"] += [refused, {"to": [{} for _ in range(30)]}, dict(refused)]
+
+        errors = spdx3_schema_errors(document, "3.0.0", limit=5)
+
+        assert errors == [
+            "/@graph/5: Unevaluated properties are not allowed ('junk' was unexpected)",
+            "/@graph/6: not valid under the SPDX 3.0.0 schema",
+            "/@graph/7: not valid under the SPDX 3.0.0 schema",
+        ]
 
 
 def _thing(**chain: Any) -> dict[str, Any]:
@@ -479,6 +593,18 @@ class TestTheClosedGateFailsClosed:
         schema["$defs"]["Loose"] = {"type": "object"}
 
         with pytest.raises(ValueError, match="Loose"):
+            spdx3_validation._closed(schema)
+
+    def test_a_closed_object_of_no_known_shape_is_refused(self) -> None:
+        """The schema closes an object by pointing at every class or by listing
+        some. A closure shaped any other way cannot be spelled out, so it is
+        refused rather than left open."""
+        schema = _thing(
+            allOf=[{"type": "object", "properties": {"type": {"oneOf": [{"const": "Thing"}]}}, "required": ["type"]}]
+        )
+        schema["$defs"]["Loose"] = {"type": "object", "properties": {"a": {}}, "unevaluatedProperties": False}
+
+        with pytest.raises(ValueError, match=re.escape("cannot close ['properties', 'type', 'unevaluatedProperties']")):
             spdx3_validation._closed(schema)
 
     def test_a_gate_it_cannot_build_is_loud_not_a_rejection(self, monkeypatch: pytest.MonkeyPatch) -> None:
