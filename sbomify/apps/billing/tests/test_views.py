@@ -334,6 +334,31 @@ def test_select_community_after_the_subscription_ended_switches_the_plan(
 
 
 @pytest.mark.django_db
+def test_select_community_with_a_past_due_invoice_keeps_the_plan(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+):
+    """Stripe still retries a past-due invoice, so the subscription has not ended."""
+    client.force_login(sample_user)
+
+    with patch(
+        "sbomify.apps.billing.stripe_sync.stripe_client.get_subscription",
+        return_value=_subscription_with_status("past_due"),
+    ):
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
+        )
+
+    assert response.status_code == 302
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan_limits["subscription_status"] == "past_due"
+    assert team_with_business_plan.billing_plan == "business"
+
+
+@pytest.mark.django_db
 def test_stripe_webhook_missing_signature(factory):
     """Test webhook with missing signature returns 403."""
     from sbomify.apps.billing.views import StripeWebhookView
