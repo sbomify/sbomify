@@ -217,6 +217,33 @@ class TestSyncEndedSubscription:
         assert team.billing_plan_limits["cancel_at_period_end"] is False
         assert "scheduled_downgrade_plan" not in team.billing_plan_limits
 
+    @pytest.mark.parametrize("status", ["unpaid", "paused"])
+    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
+    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
+    def test_unpaid_or_paused_keeps_a_pending_cancel_or_applies_the_downgrade(
+        self, mock_client, mock_cache, status, team_with_subscription, mock_stripe_subscription
+    ):
+        """Stripe can still resume these statuses, so a pending cancel stays recorded while the plan is paid."""
+        team = team_with_subscription
+
+        mock_stripe_subscription.status = status
+        mock_stripe_subscription.cancel_at_period_end = True
+        mock_stripe_subscription.cancel_at = int(timezone.now().timestamp())
+        mock_cache.return_value = mock_stripe_subscription
+
+        for _ in range(2):
+            assert sync_subscription_from_stripe(team) is True
+
+            team.refresh_from_db()
+            limits = team.billing_plan_limits
+            # Community has nothing left to downgrade
+            if team.billing_plan == BillingPlan.KEY_COMMUNITY:
+                assert limits["cancel_at_period_end"] is False
+                assert "scheduled_downgrade_plan" not in limits
+            else:
+                assert limits["cancel_at_period_end"] is True
+                assert limits["scheduled_downgrade_plan"] == "community"
+
 
 class TestSyncNextBillingDate:
     """Test next_billing_date synchronization."""
