@@ -168,6 +168,29 @@ class TestSyncEndedSubscription:
         assert team.billing_plan_limits["cancel_at_period_end"] is False
         assert "scheduled_downgrade_plan" not in team.billing_plan_limits
 
+    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
+    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
+    def test_sync_keeps_the_schedule_when_cancelled_at_once(
+        self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
+    ):
+        """Stripe answers a cancel at once with the flag false, which the sync must not take for a reactivation."""
+        team = team_with_subscription
+        # Still stored as active: the deleted event that follows downgrades only by a stored schedule
+        team.billing_plan_limits["cancel_at_period_end"] = True
+        team.billing_plan_limits["scheduled_downgrade_plan"] = "community"
+        team.save()
+
+        mock_stripe_subscription.status = "canceled"
+        mock_stripe_subscription.cancel_at_period_end = False
+        mock_stripe_subscription.cancel_at = None
+        mock_cache.return_value = mock_stripe_subscription
+
+        assert sync_subscription_from_stripe(team) is True
+
+        team.refresh_from_db()
+        assert team.billing_plan_limits["cancel_at_period_end"] is True
+        assert team.billing_plan_limits["scheduled_downgrade_plan"] == "community"
+
 
 class TestSyncNextBillingDate:
     """Test next_billing_date synchronization."""
