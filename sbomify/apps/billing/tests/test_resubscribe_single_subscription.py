@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import stripe
 from django.contrib.messages import get_messages
-from django.db import connection, connections
+from django.db import DatabaseError, connection, connections
 from django.test import Client
 from django.urls import reverse
 
@@ -197,15 +197,24 @@ def test_checkout_webhook_retries_when_the_cancel_fails(failing, stripe_client, 
 
 
 def test_event_for_a_replaced_subscription_leaves_the_workspace_alone(stripe_client, team_with_business_plan):
+    """It emails no one and reports nothing to analytics about the old subscription."""
     _set_limits(team_with_business_plan, stripe_subscription_id="sub_new", subscription_status="active")
 
-    billing_processing.handle_subscription_updated(
-        _subscription("sub_old", "canceled"), event=_event("evt_old_canceled")
-    )
+    with (
+        patch("sbomify.apps.billing.billing_processing.notify_billing_managers") as notify,
+        patch("sbomify.apps.core.posthog_service.capture") as capture,
+        patch("sbomify.apps.core.posthog_service.group_identify") as group_identify,
+    ):
+        billing_processing.handle_subscription_updated(
+            _subscription("sub_old", "canceled"), event=_event("evt_old_canceled")
+        )
 
     team_with_business_plan.refresh_from_db()
     assert team_with_business_plan.billing_plan_limits["stripe_subscription_id"] == "sub_new"
     assert team_with_business_plan.billing_plan_limits["subscription_status"] == "active"
+    notify.assert_not_called()
+    capture.assert_not_called()
+    group_identify.assert_not_called()
 
 
 def test_event_for_the_replacement_applies_when_the_stored_subscription_ended(stripe_client, team_with_business_plan):
@@ -224,6 +233,44 @@ def test_an_unknown_subscription_status_is_refused(status, stripe_client, team_w
 
     with pytest.raises(StripeError, match=f"Invalid subscription status: {status}"):
         billing_processing.handle_subscription_updated(_subscription("sub_live", status), event=_event("evt_status"))
+
+
+def test_the_downgrade_rolls_back_when_the_visibility_change_fails(team_with_business_plan, ensure_billing_plans):
+    """Committed alone, the plan change marks the event processed and the retry leaves the components private."""
+    team = team_with_business_plan
+    _set_limits(
+        team,
+        stripe_subscription_id="sub_old",
+        subscription_status="active",
+        cancel_at_period_end=True,
+        scheduled_downgrade_plan="community",
+    )
+    private = [
+        Component.objects.create(name=f"Private {i}", team=team, visibility=Component.Visibility.PRIVATE).pk
+        for i in range(2)
+    ]
+    ended = _subscription("sub_old", "canceled")
+    event = _event("evt_old_deleted")
+
+    with (
+        patch(
+            "sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility",
+            side_effect=DatabaseError,
+        ),
+        pytest.raises(BillingRetryableError),
+    ):
+        billing_processing.handle_subscription_deleted(ended, event=event)
+
+    team.refresh_from_db()
+    assert team.billing_plan == "business"
+
+    billing_processing.handle_subscription_deleted(ended, event=event)
+
+    team.refresh_from_db()
+    assert team.billing_plan == "community"
+    assert set(Component.objects.filter(pk__in=private).values_list("visibility", flat=True)) == {
+        Component.Visibility.PUBLIC
+    }
 
 
 def _change_plan(client: Client, team: Team):
