@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import tempfile
@@ -3759,17 +3760,9 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     from django.core.cache import cache
-    from django.db.models import Count, Max
 
-    from sbomify.apps.sboms.models import SBOM
     from sbomify.apps.vulnerability_scanning import vex as vex_module
 
-    # The merge fans out one S3 fetch per pinned VEX and the endpoint is open for
-    # public products, so cache the built document. The key carries the slot state
-    # (count + newest artifact), invalidating naturally when the release changes.
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.VEX).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
-    )
     # A member reading a public product's release gets the whole VEX, gated and
     # private components included. Everyone else gets the public view, matching
     # what the aggregate SBOM download hands the same caller: a statement names
@@ -3780,14 +3773,22 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
         and request.user.is_authenticated
         and can(request, "release:read", release.product)
     )
-    # The flag is part of the key. Sharing one entry between the two audiences
-    # would serve whichever build landed first to both, which is the disclosure
-    # this is closing rather than a caching detail.
+    # The merge fans out one S3 fetch per VEX it reads and the endpoint is open for
+    # public products, so cache the built document. The key fingerprints the rows
+    # this audience's build reads, and the build merges that same list, so any change
+    # to what it reads, a component's visibility included, builds a fresh document.
+    rows = vex_module.release_vex_rows(release, include_non_public=include_non_public)
+    fingerprint = hashlib.sha256(",".join(sorted(row.id for row in rows)).encode()).hexdigest()
+    # The flag stays in the key although the rows already differ wherever the two
+    # audiences' documents do: should the build ever read the audience beyond its
+    # rows, one shared entry would hand a member's document to the public.
     scope = "all" if include_non_public else "public"
-    cache_key = f"release-vex:{release.id}:{scope}:{slot_state['n']}:{slot_state['newest']}"
+    cache_key = f"release-vex:{release.id}:{scope}:{fingerprint}"
     document = cache.get(cache_key)
     if document is None:
-        document = vex_module.build_release_vex(release, include_non_public=include_non_public) or {"__absent__": True}
+        document = vex_module.build_release_vex(release, include_non_public=include_non_public, rows=rows) or {
+            "__absent__": True
+        }
         cache.set(cache_key, document, 900)
     if document.get("__absent__"):
         return 404, {"detail": "No VEX available for this release", "error_code": ErrorCode.NOT_FOUND}
