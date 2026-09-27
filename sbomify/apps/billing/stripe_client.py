@@ -18,6 +18,9 @@ from .utils import STRIPE_API_LIMIT
 
 logger = getLogger(__name__)
 
+# Statuses Stripe never moves a subscription out of.
+TERMINAL_SUBSCRIPTION_STATUSES = frozenset({"canceled", "incomplete_expired"})
+
 F = TypeVar("F", bound=Callable[..., Any])
 
 

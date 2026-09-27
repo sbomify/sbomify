@@ -41,7 +41,13 @@ from .billing_helpers import (
 )
 from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
-from .stripe_client import BillingRetryableError, StripeError, WorkspaceGoneError, get_stripe_client
+from .stripe_client import (
+    TERMINAL_SUBSCRIPTION_STATUSES,
+    BillingRetryableError,
+    StripeError,
+    WorkspaceGoneError,
+    get_stripe_client,
+)
 from .stripe_pricing_service import StripePricingService
 from .stripe_sync import sync_subscription_from_stripe
 from .tasks import send_enterprise_inquiry_email
@@ -207,7 +213,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
         sub_status = billing_limits.get("subscription_status")
         cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
 
-        if sub_status == "canceled" or not sub_id:
+        if sub_status in TERMINAL_SUBSCRIPTION_STATUSES or not sub_id:
             messages.info(request, "Your subscription has ended. Please select a new plan to continue.")
             return redirect("billing:select_plan", team_key=team.key)
 
@@ -353,7 +359,7 @@ class SelectPlanView(LoginRequiredMixin, View):
         if plan.key == BillingPlan.KEY_COMMUNITY and cancel_at_period_end:
             return self._handle_scheduled_downgrade(team, team_key, scheduled_downgrade_plan, request)
 
-        if not stripe_sub_id or current_sub_status == "canceled":
+        if not stripe_sub_id or current_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
             result = self._handle_subscription_cancel(team, team_key, plan, request)
             if result is not None:
                 return result
