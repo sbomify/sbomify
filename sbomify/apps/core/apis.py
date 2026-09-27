@@ -601,18 +601,15 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
             except BillingPlan.DoesNotExist:
                 log.warning("Target plan not found for scheduled downgrade, skipping check")
             else:
-                # Get current usage
                 if resource_type == "product":
-                    current_count = get_team_asset_count(team_id, "product")
                     max_allowed = target_plan.max_products
                 elif resource_type == "component":
-                    current_count = get_team_asset_count(team_id, "component")
                     max_allowed = target_plan.max_components
                 else:
                     max_allowed = None
 
                 # Check if creating this resource would exceed target plan limits
-                if max_allowed is not None and (current_count + 1) > max_allowed:
+                if max_allowed is not None and (get_team_asset_count(team_id, resource_type) + 1) > max_allowed:
                     error_message = (
                         f"You cannot create this {resource_type} because your scheduled downgrade to "
                         f"{target_plan.name} would exceed the plan limit of {max_allowed} {resource_type}s. "
@@ -1240,10 +1237,10 @@ def update_product_identifier(
             "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductIdentifier
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductIdentifier
 
+    try:
         identifier = ProductIdentifier.objects.get(pk=identifier_id, product=product)
     except ProductIdentifier.DoesNotExist:
         return 404, {"detail": "Product identifier not found"}
@@ -1306,10 +1303,10 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
             "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductIdentifier
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductIdentifier
 
+    try:
         identifier = ProductIdentifier.objects.get(pk=identifier_id, product=product)
     except ProductIdentifier.DoesNotExist:
         return 404, {"detail": "Product identifier not found"}
@@ -1529,10 +1526,10 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
             "error_code": ErrorCode.FORBIDDEN,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductLink
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductLink
 
+    try:
         link = ProductLink.objects.get(pk=link_id, product=product)
     except ProductLink.DoesNotExist:
         return 404, {"detail": "Product link not found"}
@@ -1586,10 +1583,10 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> 
             "error_code": ErrorCode.FORBIDDEN,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductLink
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductLink
 
+    try:
         link = ProductLink.objects.get(pk=link_id, product=product)
     except ProductLink.DoesNotExist:
         return 404, {"detail": "Product link not found"}
@@ -4303,9 +4300,9 @@ def list_document_releases(
     page_size: int = Query(15),  # type: ignore[type-arg]
 ) -> Any:
     """List all releases that contain this document."""
-    try:
-        from sbomify.apps.documents.models import Document
+    from sbomify.apps.documents.models import Document
 
+    try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4365,9 +4362,9 @@ def list_document_releases(
 )
 def add_document_to_releases(request: HttpRequest, document_id: str, payload: DocumentReleaseTaggingSchema) -> Any:
     """Add a document to multiple releases."""
-    try:
-        from sbomify.apps.documents.models import Document
+    from sbomify.apps.documents.models import Document
 
+    try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4451,9 +4448,9 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 )
 def remove_document_from_release(request: HttpRequest, document_id: str, release_id: str) -> Any:
     """Remove a document from a specific release."""
-    try:
-        from sbomify.apps.documents.models import Document
+    from sbomify.apps.documents.models import Document
 
+    try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4493,9 +4490,9 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
 @decorate_view(optional_token_auth)
 def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
     """List all releases that contain this SBOM."""
-    try:
-        from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM
 
+    try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4556,9 +4553,9 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
 )
 def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleaseTaggingSchema) -> Any:
     """Add an SBOM to multiple releases."""
-    try:
-        from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM
 
+    try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4640,9 +4637,9 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
 )
 def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str) -> Any:
     """Remove an SBOM from a specific release."""
-    try:
-        from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM
 
+    try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
