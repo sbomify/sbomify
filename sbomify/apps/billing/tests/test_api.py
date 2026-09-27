@@ -157,6 +157,8 @@ def test_change_plan_token_scope_gate(
     limits = team.billing_plan_limits
     stripe = mocker.MagicMock()
     stripe.create_checkout_session.return_value.url = "https://checkout.stripe.com/test"
+    # Stripe has no subscription either, so a downgrade past the gate would make the component public at once.
+    stripe.list_subscriptions.return_value.data = []
     mocker.patch("sbomify.apps.billing.apis.get_stripe_client", return_value=stripe)
 
     def tok(scopes: list[str] | None) -> str:
