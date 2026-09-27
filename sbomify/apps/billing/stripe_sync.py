@@ -200,9 +200,10 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             real_cancel_at_period_end = True
             logger.debug("cancel_at is set, treating as scheduled cancellation")
         # Stripe keeps both fields after the subscription ends, as a record of how it
-        # ended. Nothing is left to schedule or reverse then, so what is stored stands.
+        # ended. Keep what is stored until the downgrade it schedules has happened;
+        # once the workspace is on Community there is nothing left to schedule.
         if real_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
-            real_cancel_at_period_end = current_cancel_at_period_end
+            real_cancel_at_period_end = current_cancel_at_period_end and team.billing_plan != BillingPlan.KEY_COMMUNITY
 
         logger.debug("Checking cancel status")
 
