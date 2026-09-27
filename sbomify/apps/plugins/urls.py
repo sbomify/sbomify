@@ -2,13 +2,7 @@
 
 from django.urls import path
 
-from .views import (
-    AssessmentResultsCardView,
-    AssessmentRunFindingsView,
-    PluginsPageView,
-    PluginsSummaryView,
-    TeamPluginSettingsView,
-)
+from .views import AssessmentRunFindingsView, PluginsPageView, PluginsSummaryView, TeamPluginSettingsView
 
 app_name = "plugins"
 
@@ -33,11 +27,6 @@ urlpatterns = [
         "assessments/runs/<str:run_id>/findings/",
         AssessmentRunFindingsView.as_view(),
         name="assessment_run_findings",
-    ),
-    path(
-        "assessments/sboms/<str:sbom_id>/card/",
-        AssessmentResultsCardView.as_view(),
-        name="assessment_results_card",
     ),
 ]
 
