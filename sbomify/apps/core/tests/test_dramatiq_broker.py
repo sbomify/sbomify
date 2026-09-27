@@ -7,9 +7,10 @@ its heartbeat has gone stale. A live worker heartbeats with every command, so
 they waited for the next deploy, and an assessment run queued behind one of them
 stayed pending, its artifact reading "Processing", for as long.
 
-These run against the test stack's Redis. The outage is Redis refusing every
-command while it lasts, which is what a worker sees while the server restarts,
-once the client's own retries have given up.
+These run against the test stack's Redis. The outage is Redis failing every
+command while it lasts, once the client's own retries have given up: refused
+while the server restarts, or timed out while its host is unreachable. The
+``tasks`` fixture runs each test that uses it under both.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ QUEUE = "delayed"
 
 
 class _Outage(Middleware):
-    """Redis refusing every command while ``refusing`` is set."""
+    """Redis failing every command while ``refusing`` is set."""
 
     def __init__(self) -> None:
         self.refusing = threading.Event()
@@ -66,15 +67,16 @@ class _Tasks:
             pytest.fail(f"messages were left unprocessed in Redis, and only {self.ran} ran")
 
 
-@pytest.fixture
-def tasks(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Tasks]:
+@pytest.fixture(params=[redis.ConnectionError, redis.TimeoutError], ids=lambda error: error.__name__)
+def tasks(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Tasks]:
+    lost_connection: type[redis.RedisError] = request.param
     client = redis.Redis.from_url(settings.REDIS_WORKER_URL)
     outage = _Outage()
     send = client.execute_command
 
     def execute_command(*args: Any, **options: Any) -> Any:
         if outage.refusing.is_set():
-            raise redis.ConnectionError("Connection refused.")
+            raise lost_connection("Redis is unreachable.")
         return send(*args, **options)
 
     monkeypatch.setattr(client, "execute_command", execute_command)

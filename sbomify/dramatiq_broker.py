@@ -10,9 +10,10 @@ Dramatiq loses them in two places, up to at least 2.2.1:
 
 * On a connection error, the consumer thread discards its delayed messages
   before it closes, so there is nothing left to hand back.
-* When a due message fails to enqueue, the consumer closes and tries to hand the
-  rest back. That requeue raises Redis's own error, which ``close()`` does not
-  catch, and the error kills the consumer thread for that queue.
+* When a due message fails to enqueue, or a fetch times out, the consumer closes
+  and tries to hand the rest back. That requeue raises Redis's own error, which
+  ``close()`` does not catch, and the error kills the consumer thread for that
+  queue.
 """
 
 from __future__ import annotations
@@ -23,6 +24,10 @@ import redis
 from dramatiq.broker import Consumer
 from dramatiq.brokers.redis import RedisBroker as DramatiqRedisBroker
 from dramatiq.errors import ConnectionClosed
+
+# How a lost connection reaches the client: refused while Redis restarts, or
+# timed out while its host is unreachable.
+_LOST_CONNECTION = (redis.ConnectionError, redis.TimeoutError)
 
 
 class RedisBroker(DramatiqRedisBroker):
@@ -46,19 +51,20 @@ class RedisBroker(DramatiqRedisBroker):
             try:
                 if message_ids := cast(set[bytes], self.client.smembers(fetched)):
                     self.do_requeue(queue_name, *message_ids)
-            except redis.ConnectionError as e:
+            except _LOST_CONNECTION as e:
                 raise ConnectionClosed(e) from None  # type: ignore[no-untyped-call]
         return super().consume(queue_name, prefetch, timeout)
 
     def do_requeue(self, queue_name: str, *message_ids: str | bytes) -> None:
         """Requeue, raising the connection error dramatiq's callers expect.
 
-        Dramatiq's Redis consumer turns a lost connection into ``ConnectionClosed``
-        on fetch, ack and nack, but not on requeue. So a requeue during an outage
-        raised Redis's own error, which neither the consumer's ``close()`` nor
-        the worker's shutdown catches.
+        Dramatiq's Redis consumer turns Redis's ``ConnectionError`` into
+        ``ConnectionClosed`` on fetch, ack and nack, but not on requeue, and its
+        ``TimeoutError`` never. So a requeue during an outage raised Redis's own
+        error, which neither the consumer's ``close()`` nor the worker's shutdown
+        catches.
         """
         try:
             self._dispatch("requeue")(queue_name, *message_ids)  # type: ignore[no-untyped-call]
-        except redis.ConnectionError as e:
+        except _LOST_CONNECTION as e:
             raise ConnectionClosed(e) from None  # type: ignore[no-untyped-call]
