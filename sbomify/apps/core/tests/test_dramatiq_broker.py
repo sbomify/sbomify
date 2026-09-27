@@ -112,6 +112,7 @@ def tasks(redis_url: str, request: pytest.FixtureRequest, monkeypatch: pytest.Mo
         outage.refusing.clear()
         for key in client.scan_iter(f"{namespace}:*"):
             client.delete(key)
+        client.close()
 
 
 @pytest.fixture
