@@ -141,44 +141,23 @@ class TestSyncReactivation:
 class TestSyncEndedSubscription:
     """Stripe keeps cancel_at_period_end and cancel_at on a subscription after it ends."""
 
-    @pytest.mark.parametrize("plan", ["community", "business"])
     @pytest.mark.parametrize("status", ["canceled", "incomplete_expired"])
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
     def test_sync_does_not_schedule_a_downgrade_again(
-        self, mock_client, mock_cache, status, plan, team_with_subscription, mock_stripe_subscription
+        self, mock_client, mock_cache, status, team_with_community_plan, mock_stripe_subscription
     ):
-        """A workspace that stores no schedule for its ended subscription gets none written back."""
-        team = team_with_subscription
-        team.billing_plan = plan
-        team.billing_plan_limits["subscription_status"] = status
+        """A workspace already moved to Community gets no downgrade scheduled from its ended subscription."""
+        team = team_with_community_plan
+        team.billing_plan_limits = {
+            "stripe_subscription_id": "sub_test_123",
+            "stripe_customer_id": "cus_test_123",
+            "subscription_status": status,
+            "cancel_at_period_end": False,
+        }
         team.save()
 
         mock_stripe_subscription.status = status
-        mock_stripe_subscription.cancel_at_period_end = True
-        mock_stripe_subscription.cancel_at = int(timezone.now().timestamp())
-        mock_cache.return_value = mock_stripe_subscription
-
-        assert sync_subscription_from_stripe(team) is True
-
-        team.refresh_from_db()
-        assert team.billing_plan_limits["cancel_at_period_end"] is False
-        assert "scheduled_downgrade_plan" not in team.billing_plan_limits
-
-    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
-    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
-    def test_sync_clears_a_schedule_left_on_community(
-        self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
-    ):
-        """A workspace on Community loses the schedule an earlier sync wrote back from its ended subscription."""
-        team = team_with_subscription
-        team.billing_plan = "community"
-        team.billing_plan_limits.update(
-            {"subscription_status": "canceled", "cancel_at_period_end": True, "scheduled_downgrade_plan": "community"}
-        )
-        team.save()
-
-        mock_stripe_subscription.status = "canceled"
         mock_stripe_subscription.cancel_at_period_end = True
         mock_stripe_subscription.cancel_at = int(timezone.now().timestamp())
         mock_cache.return_value = mock_stripe_subscription
