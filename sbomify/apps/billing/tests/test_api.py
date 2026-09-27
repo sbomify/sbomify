@@ -150,6 +150,9 @@ def test_change_plan_token_scope_gate(
     workspace's private components public.
     """
     team = team_with_business_plan
+    # No subscription on file, so the billing:manage token below can start a checkout.
+    team.billing_plan_limits = {"max_products": 10, "max_components": 100}
+    team.save()
     component = Component.objects.create(name="Private", team=team, visibility=Component.Visibility.PRIVATE)
     limits = team.billing_plan_limits
     stripe = mocker.MagicMock()
