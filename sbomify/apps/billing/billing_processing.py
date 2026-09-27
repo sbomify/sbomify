@@ -467,9 +467,11 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
         customer = None
         customer_unreadable = True
 
-    if customer is not None and customer.metadata and "team_key" in customer.metadata:
+    # A deleted customer comes back as a stub without metadata.
+    metadata = getattr(customer, "metadata", None)
+    if metadata and "team_key" in metadata:
         try:
-            team = Team.objects.get(key=customer.metadata["team_key"])
+            team = Team.objects.get(key=metadata["team_key"])
         except Team.DoesNotExist:
             pass
         else:
@@ -654,7 +656,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
         event: Optional Stripe event object for idempotency checking
     """
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
+        team, _ = _resolve_team_from_subscription(subscription)
 
         webhook_id = generate_webhook_id(event, subscription, prefix="del")
 

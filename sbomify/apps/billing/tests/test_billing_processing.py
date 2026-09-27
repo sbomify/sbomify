@@ -4,6 +4,7 @@ import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
+import stripe
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.http import HttpResponseForbidden
@@ -296,6 +297,20 @@ class TestBillingProcessing:
 
         with pytest.raises(WorkspaceGoneError):
             billing_processing.handle_subscription_updated(self.subscription)
+
+    @pytest.mark.parametrize("handler", ["handle_subscription_updated", "handle_subscription_deleted"])
+    def test_a_workspace_deleted_with_its_stripe_customer_says_so(self, handler):
+        """Deleting a workspace deletes its Stripe customer too, and Stripe returns that customer without metadata."""
+        from sbomify.apps.billing.stripe_client import WorkspaceGoneError
+
+        self.subscription.id = "sub_unmapped_e2e"
+        self.subscription.customer = "cus_unmapped_e2e"
+        self.stripe_client.get_customer.return_value = stripe.Customer.construct_from(
+            {"id": "cus_unmapped_e2e", "object": "customer", "deleted": True}, "sk_test_x"
+        )
+
+        with pytest.raises(WorkspaceGoneError):
+            getattr(billing_processing, handler)(self.subscription)
 
     def test_a_terminal_stripe_failure_is_not_a_missing_workspace(self):
         """The narrower class must not swallow the errors that are still worth an alert."""
