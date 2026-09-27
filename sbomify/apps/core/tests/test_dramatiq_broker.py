@@ -7,10 +7,10 @@ its heartbeat has gone stale. A live worker heartbeats with every command, so
 they waited for the next deploy, and an assessment run queued behind one of them
 stayed pending, its artifact reading "Processing", for as long.
 
-These run against the test stack's Redis. The outage is Redis failing every
-command while it lasts, once the client's own retries have given up: refused
-while the server restarts, or timed out while its host is unreachable. The
-``tasks`` fixture runs each test that uses it under both.
+These run against the test stack's Redis, and skip without one. The outage is
+Redis failing every command while it lasts, once the client's own retries have
+given up: refused while the server restarts, or timed out while its host is
+unreachable. The ``tasks`` fixture runs each test that uses it under both.
 """
 
 from __future__ import annotations
@@ -30,6 +30,8 @@ from django.utils.module_loading import import_string
 from dramatiq import Worker
 from dramatiq.errors import ConnectionClosed, QueueJoinTimeout
 from dramatiq.middleware import Middleware
+from redis.backoff import NoBackoff
+from redis.retry import Retry
 
 from sbomify import settings as production_settings
 from sbomify.dramatiq_broker import RedisBroker
@@ -67,12 +69,25 @@ class _Tasks:
             pytest.fail(f"messages were left unprocessed in Redis, and only {self.ran} ran")
 
 
+@pytest.fixture(scope="module")
+def redis_url() -> str:
+    """The test stack's Redis. Where none answers, as in a run outside Docker, the tests that need it skip."""
+    probe = redis.Redis.from_url(settings.REDIS_WORKER_URL, socket_connect_timeout=1, retry=Retry(NoBackoff(), 0))
+    try:
+        probe.ping()
+    except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError):
+        pytest.skip("no Redis answers at REDIS_WORKER_URL")
+    finally:
+        probe.close()
+    return settings.REDIS_WORKER_URL
+
+
 @pytest.fixture(
     params=[redis.exceptions.ConnectionError, redis.exceptions.TimeoutError], ids=lambda error: error.__name__
 )
-def tasks(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Tasks]:
+def tasks(redis_url: str, request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Tasks]:
     lost_connection: type[redis.exceptions.RedisError] = request.param
-    client = redis.Redis.from_url(settings.REDIS_WORKER_URL)
+    client = redis.Redis.from_url(redis_url)
     outage = _Outage()
     send = client.execute_command
 
