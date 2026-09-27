@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.utils import timezone
 
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeError
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 
@@ -170,7 +171,7 @@ class TestSyncEndedSubscription:
 
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
-    def test_sync_keeps_the_schedule_when_cancelled_at_once(
+    def test_cancel_at_once_keeps_or_applies_the_downgrade(
         self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
     ):
         """Stripe answers a cancel at once with the flag false, which the sync must not take for a reactivation."""
@@ -188,8 +189,33 @@ class TestSyncEndedSubscription:
         assert sync_subscription_from_stripe(team) is True
 
         team.refresh_from_db()
-        assert team.billing_plan_limits["cancel_at_period_end"] is True
-        assert team.billing_plan_limits["scheduled_downgrade_plan"] == "community"
+        limits = team.billing_plan_limits
+        # The schedule still waits for the deleted event, unless the sync moved the workspace to Community itself
+        if team.billing_plan == BillingPlan.KEY_COMMUNITY:
+            assert limits["cancel_at_period_end"] is False
+            assert "scheduled_downgrade_plan" not in limits
+        else:
+            assert limits["cancel_at_period_end"] is True
+            assert limits["scheduled_downgrade_plan"] == "community"
+
+    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
+    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
+    def test_a_subscription_stripe_ended_sets_neither_key(
+        self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
+    ):
+        """A subscription Stripe has ended sets neither key, whatever the workspace stored."""
+        team = team_with_subscription
+
+        mock_stripe_subscription.status = "canceled"
+        mock_stripe_subscription.cancel_at_period_end = True
+        mock_stripe_subscription.cancel_at = int(timezone.now().timestamp())
+        mock_cache.return_value = mock_stripe_subscription
+
+        assert sync_subscription_from_stripe(team) is True
+
+        team.refresh_from_db()
+        assert team.billing_plan_limits["cancel_at_period_end"] is False
+        assert "scheduled_downgrade_plan" not in team.billing_plan_limits
 
 
 class TestSyncNextBillingDate:
