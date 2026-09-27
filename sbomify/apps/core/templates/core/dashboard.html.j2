@@ -1,4 +1,5 @@
 {% extends 'core/dashboard_base.htmx.j2' %}
+{% load humanize %}
 {% load django_vite %}
 {% block title %}
     {% if show_repository_setup %}
@@ -33,10 +34,10 @@
         {% if dashboard.unassessed or dashboard.metrics.sla_unknown %}
             <c-feedback.alert variant="info">
             {% if dashboard.unassessed %}
-                {{ dashboard.unassessed }} component{{ dashboard.unassessed|pluralize }} still need{{ dashboard.unassessed|pluralize:'s,' }} a completed security assessment.
+                {{ dashboard.unassessed|intcomma }} component{{ dashboard.unassessed|pluralize }} still need{{ dashboard.unassessed|pluralize:'s,' }} a completed security assessment.
             {% endif %}
             {% if dashboard.metrics.sla_unknown %}
-                Patch SLA is unavailable for {{ dashboard.metrics.sla_unknown }} occurrence{{ dashboard.metrics.sla_unknown|pluralize }} without scan history.
+                Patch SLA is unavailable for {{ dashboard.metrics.sla_unknown|intcomma }} occurrence{{ dashboard.metrics.sla_unknown|pluralize }} without scan history.
             {% endif %}
             </c-feedback.alert>
         {% endif %}

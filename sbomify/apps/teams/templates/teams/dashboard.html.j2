@@ -1,4 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
+{% load humanize %}
 {% load teams %}
 {% block title %}Workspaces · sbomify{% endblock %}
 {% block content %}
@@ -8,7 +9,7 @@
     {% if teams %}
         <section class="flex flex-col gap-3" aria-label="Your workspaces">
             <c-layout.section-header title="Your workspaces" level="2">
-            <c-slot name="actions"><c-badges.secondary size="sm">{{ teams|length }} workspace{{ teams|length|pluralize }}</c-badges.secondary></c-slot>
+            <c-slot name="actions"><c-badges.secondary size="sm">{{ teams|length|intcomma }} workspace{{ teams|length|pluralize }}</c-badges.secondary></c-slot>
             </c-layout.section-header>
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {% for team in teams %}

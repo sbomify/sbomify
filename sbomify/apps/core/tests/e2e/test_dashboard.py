@@ -287,7 +287,7 @@ def test_dashboard_view_switch_and_trend_filters(
     expect(chart).to_be_visible()
     chart_matches_theme = """() => {
         const canvas = document.querySelector('.vulnerability-chart-canvas');
-        const chart = Chart.getChart(canvas);
+        const chart = window.Chart?.getChart(canvas);
         if (!chart) return false;
         const styles = getComputedStyle(canvas);
         const token = name => styles.getPropertyValue(`--color-${name}`).trim();
@@ -297,7 +297,7 @@ def test_dashboard_view_switch_and_trend_filters(
     }"""
     page.wait_for_function(chart_matches_theme)
     page.wait_for_function(
-        "Chart.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'line'"
+        "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'line'"
     )
     take_screenshot(page, "trends", width=width, path=tmp_path / f"trends-{theme}-{width}.png")
     page.set_viewport_size({"width": width, "height": 900})
@@ -309,14 +309,14 @@ def test_dashboard_view_switch_and_trend_filters(
         page.evaluate("theme => window.themeManager.setTheme(theme)", selected_theme)
         page.wait_for_function("""() => {
             const canvas = document.querySelector('.vulnerability-chart-canvas');
-            const chart = Chart.getChart(canvas);
+            const chart = window.Chart?.getChart(canvas);
             return chart?.config.type === 'bar' && chart.options.scales.x.ticks.color ===
                 getComputedStyle(canvas).getPropertyValue('--color-text-muted').trim();
         }""")
     page.get_by_role("combobox", name="Time range").select_option("7")
     expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
     page.wait_for_function(
-        "Chart.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
+        "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
     )
 
     # A filter with no scans must leave its controls available to recover.
@@ -328,7 +328,7 @@ def test_dashboard_view_switch_and_trend_filters(
     expect(chart).to_be_visible()
     expect(page.get_by_role("button", name="Severity", exact=True)).to_have_attribute("aria-pressed", "true")
     page.wait_for_function(
-        "Chart.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
+        "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
     )
     expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
     scans = page.get_by_role("table", name="Recent SBOM scans")
@@ -338,9 +338,56 @@ def test_dashboard_view_switch_and_trend_filters(
     scans.get_by_role("link", name="sbom-0.json", exact=True).first.click()
     expect(page.locator("h1")).to_contain_text("sbom-0.json")
     page.go_back()
-    page.wait_for_function("Object.keys(Chart.instances).length === 1")
+    page.wait_for_function("window.Chart && Object.keys(window.Chart.instances).length === 1")
     page.locator('[x-data="vulnerabilityTrends"]').evaluate("element => element.remove()")
     page.wait_for_function("Object.keys(Chart.instances).length === 0")
     navigation.get_by_role("link", name="Summary").click()
     expect(navigation.locator('[aria-current="page"]')).to_have_text("Summary")
     expect(page.get_by_role("group", name="Key metrics")).to_be_visible()
+
+
+@pytest.mark.django_db
+def test_trends_load_failure_is_visible_and_recoverable(authenticated_page: Page, dashboard: dict[str, Any]) -> None:
+    """A failed fragment used to leave the skeleton up for good, so a broken
+    page and a slow one were the same picture. It now says so and offers a way
+    back, and the retry loads the chart the first request did not."""
+    page = authenticated_page
+    failures = {"count": 0}
+
+    def fail_once(route: Any) -> None:
+        failures["count"] += 1
+        if failures["count"] == 1:
+            route.fulfill(status=500, body="boom")
+        else:
+            route.continue_()
+
+    page.route("**/vulnerability-trends/**", fail_once)
+    page.goto("/dashboard/trends/")
+
+    alert = page.get_by_role("alert").filter(has_text="Could not load vulnerability trends")
+    expect(alert).to_be_visible()
+    expect(page.locator("#main-content [data-content-loading]")).to_be_hidden()
+
+    alert.get_by_role("button", name="Try again", exact=True).click()
+    expect(page.locator(".vulnerability-chart-canvas")).to_be_visible()
+    expect(page.get_by_role("alert").filter(has_text="Could not load vulnerability trends")).to_have_count(0)
+
+
+@pytest.mark.django_db
+def test_the_trends_fragment_url_lands_on_the_trends_page(authenticated_page: Page, dashboard: dict[str, Any]) -> None:
+    """Both URLs used to render Trends, with different release defaults and a
+    different set of controls, so the same workspace reported two totals."""
+    page = authenticated_page
+    page.goto("/dashboard/trends/")
+    expect(page.locator(".vulnerability-chart-canvas")).to_be_visible()
+    metrics = page.get_by_role("group", name="Vulnerability metrics")
+    expected = metrics.inner_text()
+    controls = page.locator("#vuln-trends-body select").count()
+
+    page.goto("/vulnerability-trends/")
+
+    expect(page.locator(".vulnerability-chart-canvas")).to_be_visible()
+    assert page.url.endswith("/dashboard/trends/")
+    assert metrics.inner_text() == expected
+    assert page.locator("#vuln-trends-body select").count() == controls
+    expect(page.locator("#sidebar a[aria-current='page']")).to_have_text("Overview")

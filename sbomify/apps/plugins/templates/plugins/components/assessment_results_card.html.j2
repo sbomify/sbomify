@@ -1,3 +1,4 @@
+{% load humanize %}
 {% load static plugins_extras %}
 <link rel="stylesheet"
       href="{% static 'css/components/assessment-results-card.css' %}">
@@ -36,19 +37,19 @@
     {% if status.total_assessments > 0 %}
         <div class="flex flex-wrap gap-2">
             <c-chips.metric-chip>
-            <c-chips.metric.value>{{ status.total_assessments }}</c-chips.metric.value>
+            <c-chips.metric.value>{{ status.total_assessments|intcomma }}</c-chips.metric.value>
             <c-chips.metric.label>assessment{{ status.total_assessments|pluralize }}</c-chips.metric.label>
             </c-chips.metric-chip>
             <c-chips.metric-chip accent="success">
-            <c-chips.metric.value>{{ status.passing_count }}</c-chips.metric.value>
+            <c-chips.metric.value>{{ status.passing_count|intcomma }}</c-chips.metric.value>
             <c-chips.metric.label>Passed</c-chips.metric.label>
             </c-chips.metric-chip>
             <c-chips.metric-chip accent="warning">
-            <c-chips.metric.value>{{ status.failing_count }}</c-chips.metric.value>
+            <c-chips.metric.value>{{ status.failing_count|intcomma }}</c-chips.metric.value>
             <c-chips.metric.label>Issues</c-chips.metric.label>
             </c-chips.metric-chip>
             <c-chips.metric-chip accent="info">
-            <c-chips.metric.value>{{ status.pending_count|add:status.in_progress_count }}</c-chips.metric.value>
+            <c-chips.metric.value>{{ status.pending_count|add:status.in_progress_count|intcomma }}</c-chips.metric.value>
             <c-chips.metric.label>Pending</c-chips.metric.label>
             </c-chips.metric-chip>
         </div>

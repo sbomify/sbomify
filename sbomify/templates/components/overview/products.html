@@ -1,3 +1,4 @@
+{% load humanize %}
 {% comment %}Product exposure uses the same occurrence snapshot as the metrics. Evidence distinguishes absent SBOMs from old ones.{% endcomment %}
 <c-vars products />
 <c-cards.card flush>
@@ -16,7 +17,7 @@
     <tbody>
         {% for product in products %}
             <c-tables.row>
-            <c-tables.cell><c-overview.record href="{% url 'core:product_details' product.id %}" title="{{ product.name }}" detail="{{ product.component_count }} component{{ product.component_count|pluralize }}" /></c-tables.cell>
+            <c-tables.cell><c-overview.record href="{% url 'core:product_details' product.id %}" title="{{ product.name }}" detail="{{ product.component_count|intcomma }} component{{ product.component_count|pluralize }}" /></c-tables.cell>
             <c-tables.cell>
             {% if product.security_component_count %}
                 <c-overview.exposure :counts="product.counts" :unassessed="product.unassessed" />

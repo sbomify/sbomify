@@ -98,11 +98,12 @@ def test_menu_panel_carries_the_keyboard_handling(rendered: str) -> None:
 def test_menu_keys_reach_a_choice_row_as_well_as_a_command(rendered: str) -> None:
     """A row that is a setting, not a command, is still stepped through.
 
-    The keys match on the menuitem prefix, so menuitemradio and
-    menuitemcheckbox rows are walked with the rest rather than skipped.
+    The keys match whitespace-separated role tokens, so formatted radio and
+    checkbox roles are walked with the rest rather than skipped.
     """
     panel = _opening(rendered, PANEL, "Component actions")
-    assert "[role^=menuitem]" in panel
+    for role in ("menuitem", "menuitemradio", "menuitemcheckbox"):
+        assert f"[role~={role}]" in panel
     assert "[role=menuitem]" not in panel
 
 

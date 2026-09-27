@@ -44,7 +44,18 @@ def test_product_metrics_remain_unfiltered_and_releases_use_their_own_artifacts(
     ReleaseArtifact.objects.create(release=release, sbom=old)
     result = context(member, product, search="Clean")
     assert [row["id"] for row in result["inventory"]["rows"]] == [clean.id]
-    assert result["metrics"] == {"components": 4, "artifacts": 3, "open": 1, "past_sla": 0, "unassessed": 1}
+    # Open is a real count, so it is reported even though one component is
+    # unassessed. Past your patch SLA is a zero standing beside that unassessed
+    # component, which is a zero the page cannot stand behind.
+    assert result["metrics"] == {
+        "components": 4,
+        "artifacts": 3,
+        "open": 1,
+        "past_sla": 0,
+        "unassessed": 1,
+        "unmeasured_open": False,
+        "unmeasured_past_sla": True,
+    }
     row = next(row for row in result["release_inventory"]["rows"] if row["id"] == release.id)
     assert row["counts"]["high"] == 1
     result = context(member, product, risk="unassessed")

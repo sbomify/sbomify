@@ -292,6 +292,32 @@ def test_actions_cell_states_its_own_column_gutters(rendered: str) -> None:
     assert "max-sm:px-2" not in header
 
 
+def test_pinned_actions_column_holds_the_right_edge(rendered: str) -> None:
+    """The inventory table is wider than the content column on a 1440 or 1366
+    laptop, so the trailing actions column scrolled out of sight. It is the only
+    route to download, edit, delete and several other actions, and the only clue
+    it exists is a scrollbar under the last row."""
+    body = _element_holding(rendered, "td", "Pinned component actions")
+    assert "sticky right-0" in body
+    header = _element_holding(rendered, "th", "Pinned row actions")
+    assert "sticky right-0" in header
+
+
+def test_pinned_actions_cell_paints_its_own_background(rendered: str) -> None:
+    """A row's hover tint is transparent, so a pinned cell that did not paint
+    itself would show the scrolling cells sliding underneath it."""
+    body = _element_holding(rendered, "td", "Pinned component actions")
+    assert "bg-surface" in body
+    assert "group-hover:bg-[color-mix(in_oklab,var(--color-primary)_4%,var(--color-surface))]" in body
+
+
+def test_an_unpinned_actions_cell_is_unchanged(rendered: str) -> None:
+    # The exact pinned recipe, not its parts: the icon button nested in this
+    # cell carries hover:bg-surface of its own.
+    body = _element_holding(rendered, "td", "Component actions")
+    assert "sticky right-0" not in body
+
+
 def test_actions_cell_forwards_attrs_and_nests_its_menu_button(rendered: str) -> None:
     body = _element_holding(rendered, "td", "Component actions")
     assert "@click.stop" in body
@@ -321,7 +347,7 @@ def test_pager_drives_the_current_page_state(rendered: str) -> None:
     assert 'aria-label="Next page"' in pager
     assert ':disabled="currentPage === totalPages"' in pager
     assert '@click="if (currentPage < totalPages) currentPage++"' in pager
-    assert '<span x-text="currentPage"></span> / <span x-text="totalPages"></span>' in pager
+    assert '<span x-text="$number(currentPage)"></span> / <span x-text="$number(totalPages)"></span>' in pager
 
 
 def test_pager_arrows_render_through_the_shared_page_control(rendered: str) -> None:
