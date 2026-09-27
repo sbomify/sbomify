@@ -423,12 +423,14 @@ class TestTheMessagesStayBounded:
 
         assert errors == [f"/@graph/2: not valid under the SPDX {version} schema"]
 
-    @pytest.mark.parametrize("text", ["value", "key"])
+    @pytest.mark.parametrize("text", ["value", "key", "number"])
     def test_a_refused_element_holding_long_text_is_named_without_jsonschema(
         self, version: str, text: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """jsonschema quotes the value a message is about, once for every class
-        it tries, so long text makes every step of its walk dearer."""
+        it tries, so long text makes every step of its walk dearer. A number is
+        quoted too, and writing out a long integer costs more per digit the
+        longer it is."""
 
         def _refuse(*_: Any) -> Any:
             raise AssertionError("jsonschema was asked to itemise an element holding too much text")
@@ -438,8 +440,10 @@ class TestTheMessagesStayBounded:
         long_text = "x" * (spdx3_validation._ITEMISED_CHARACTERS + 1)
         if text == "value":
             document["@graph"][2].update(name=long_text, junk=1)
-        else:
+        elif text == "key":
             document["@graph"][2][long_text] = 1
+        else:
+            document["@graph"][2]["junk"] = 10**spdx3_validation._ITEMISED_CHARACTERS
 
         errors = spdx3_schema_errors(document, version)
 
@@ -451,8 +455,9 @@ class TestTheMessagesStayBounded:
             {"to": [{} for _ in range(60)]},
             {"type": "Relationship", "to": [{"type": "xx_NotAClass"} for _ in range(28)]},
             {"to": [f"https://example.test/pkg-{index}" for index in range(60)]},
+            {"to": [10**4299 for _ in range(60)]},
         ],
-        ids=["empty objects", "objects of no class", "IRIs"],
+        ids=["empty objects", "objects of no class", "IRIs", "long integers"],
     )
     @pytest.mark.parametrize("where", ["element", "root"])
     def test_a_part_inside_the_limits_costs_about_a_second_at_most(
@@ -462,7 +467,9 @@ class TestTheMessagesStayBounded:
         whose classes do not dispatch on ``type``, it evaluates every class a
         value in ``to`` might be, in full, once for each class declaring ``to``.
         Each part here fits the value and nesting limits, and under 3.0.0 cost
-        seconds until the steps were capped."""
+        seconds until the steps were capped. The integers, 4300 digits each and
+        the longest ``json.loads`` reads, still cost two seconds after that,
+        until their digits counted as text."""
         document = _valid(3, version)
         if where == "element":
             document["@graph"].append(part)

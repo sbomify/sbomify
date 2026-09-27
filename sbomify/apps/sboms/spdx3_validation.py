@@ -323,8 +323,9 @@ def _violations(document: dict[str, Any], schema_version: str, limit: int) -> li
 # ``_ITEMISED_STEPS`` per document, and ``_faults`` names plainly any part not
 # itemised when the steps run out. ``_itemisable_size`` applies the other three
 # limits, to skip parts not worth starting. The text limit also keeps each step
-# cheap, because a message quotes the value it is about. Together they hold a
-# rejection's messages to a second or so.
+# cheap, because a message quotes the value it is about. It counts an integer's
+# digits too, since writing out a long integer costs more per digit the longer
+# it is. Together they hold a rejection's messages to a second or so.
 _ITEMISED_VALUES = 64
 _ITEMISED_NESTING = 1
 _ITEMISED_CHARACTERS = 4096
@@ -382,7 +383,7 @@ def _refused_parts(
 def _itemisable_size(part: Any, budget: int) -> int | None:
     """How many JSON values ``part`` holds, or None if ``jsonschema`` cannot
     itemise it cheaply: more than ``budget`` values, more than
-    ``_ITEMISED_CHARACTERS`` characters in its keys and strings, or objects
+    ``_ITEMISED_CHARACTERS`` characters in its keys, strings and integers, or objects
     nested deeper than ``_ITEMISED_NESTING`` levels below it."""
     count, characters, pending = 0, 0, [(part, 0)]
     while pending:
@@ -392,6 +393,9 @@ def _itemisable_size(part: Any, budget: int) -> int | None:
             return None
         if isinstance(value, str):
             characters += len(value)
+        elif isinstance(value, int):
+            # Its digits, give or take one, without writing it out: log10(2) is 0.30103.
+            characters += value.bit_length() * 30103 // 100000 + 1
         elif isinstance(value, dict):
             if level > _ITEMISED_NESTING:
                 return None
