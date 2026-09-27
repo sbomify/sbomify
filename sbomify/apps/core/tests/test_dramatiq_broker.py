@@ -67,9 +67,11 @@ class _Tasks:
             pytest.fail(f"messages were left unprocessed in Redis, and only {self.ran} ran")
 
 
-@pytest.fixture(params=[redis.ConnectionError, redis.TimeoutError], ids=lambda error: error.__name__)
+@pytest.fixture(
+    params=[redis.exceptions.ConnectionError, redis.exceptions.TimeoutError], ids=lambda error: error.__name__
+)
 def tasks(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Tasks]:
-    lost_connection: type[redis.RedisError] = request.param
+    lost_connection: type[redis.exceptions.RedisError] = request.param
     client = redis.Redis.from_url(settings.REDIS_WORKER_URL)
     outage = _Outage()
     send = client.execute_command

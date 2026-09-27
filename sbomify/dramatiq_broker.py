@@ -27,7 +27,7 @@ from dramatiq.errors import ConnectionClosed
 
 # How a lost connection reaches the client: refused while Redis restarts, or
 # timed out while its host is unreachable.
-_LOST_CONNECTION = (redis.ConnectionError, redis.TimeoutError)
+_LOST_CONNECTION = (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError)
 
 
 class RedisBroker(DramatiqRedisBroker):
