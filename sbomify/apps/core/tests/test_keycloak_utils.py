@@ -102,3 +102,29 @@ class TestKeycloakManagerConstruction:
         assert connection.user_realm_name == "master"
         assert connection.username == "admin"
         assert manager.master_admin.connection.realm_name == "master"
+
+
+class TestKeycloakEventPolling:
+    def test_poll_calls_the_installed_get_events(self, settings, mocker):
+        """Only the HTTP call is faked, so a keyword the pinned get_events lacks fails here."""
+        from requests import Response
+
+        from keycloak.openid_connection import KeycloakOpenIDConnection
+        from sbomify.apps.core.keycloak_events import KeycloakEventPoller
+
+        settings.KEYCLOAK_SERVER_URL = "https://keycloak.example.com/"
+        settings.KEYCLOAK_REALM = "sbomify"
+        settings.KEYCLOAK_ADMIN_USERNAME = "admin"
+        settings.KEYCLOAK_ADMIN_PASSWORD = "secret"
+
+        response = Response()
+        response.status_code = 200
+        response._content = b'[{"type": "UPDATE_PROFILE", "userId": "u1"}]'
+        raw_get = mocker.patch.object(KeycloakOpenIDConnection, "raw_get", return_value=response)
+
+        events = KeycloakEventPoller().poll_events()
+
+        assert events == [{"type": "UPDATE_PROFILE", "userId": "u1"}]
+        query = raw_get.call_args.kwargs
+        assert "dateFrom" in query
+        assert "UPDATE_PROFILE" in query["type"]
