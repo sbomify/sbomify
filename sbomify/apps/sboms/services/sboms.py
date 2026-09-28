@@ -54,7 +54,7 @@ def _lock_sbom_file(key: str) -> None:
 
 
 def upload_sbom_file(s3: StorageClient, data: bytes) -> str:
-    """Store SBOM bytes and return their key. Save the row in the same transaction.
+    """Store SBOM bytes and return their key. The caller saves the SBOM row in this same transaction.
 
     Identical bytes share one key across every workspace, so the lock taken here
     keeps a concurrent ``deleting_sbom_files`` from removing the object before
