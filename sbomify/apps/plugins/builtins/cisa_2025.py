@@ -384,7 +384,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
             has_identifier = (isinstance(purl, str) and bool(purl)) or any(
                 spdx2_reference_type(ref) in SPDX2_IDENTIFIER_TYPES for ref in external_refs
             )
-            if not has_identifier and package.get("SPDXID") not in source_downloads:
+            if not has_identifier and str(package.get("SPDXID") or "") not in source_downloads:
                 identifier_failures.append(package_name)
 
             # 6. Component Hash (NEW - check checksums)

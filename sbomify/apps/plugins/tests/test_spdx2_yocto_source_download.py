@@ -99,3 +99,11 @@ def test_malformed_creation_info_exempts_nothing(creation_info: Any) -> None:
     document["creationInfo"] = creation_info
 
     assert spdx2_yocto_source_downloads(document) == frozenset()
+
+
+@pytest.mark.parametrize(("plugin_cls", "finding_id", "extra_args"), PLUGINS)
+def test_a_malformed_spdxid_does_not_stop_the_check(plugin_cls: type, finding_id: str, extra_args: tuple) -> None:
+    document = _document(_download())
+    document["packages"][0]["SPDXID"] = ["SPDXRef-Recipe-openssl"]
+
+    _identifier_finding(plugin_cls, finding_id, extra_args, document)

@@ -1064,7 +1064,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             tallies["component_version"].record(name, package.get("versionInfo"))
             tallies["component_identifiers"].note(
                 name,
-                stated=package.get("SPDXID") in source_downloads or self._spdx2_has_identifier(package),
+                stated=str(package.get("SPDXID") or "") in source_downloads or self._spdx2_has_identifier(package),
             )
 
             checksums = package.get("checksums")

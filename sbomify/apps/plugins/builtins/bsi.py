@@ -1397,7 +1397,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         identifier_warnings = []
         source_downloads = spdx2_yocto_source_downloads(data)
         for i, pkg in enumerate(packages):
-            if _is_file_pkg(pkg) or pkg.get("SPDXID") in source_downloads:
+            if _is_file_pkg(pkg) or str(pkg.get("SPDXID") or "") in source_downloads:
                 continue
             purl = pkg.get("purl")
             external_refs = pkg.get("externalRefs")
