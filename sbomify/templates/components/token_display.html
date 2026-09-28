@@ -13,10 +13,16 @@ complete Alpine binding rather than a class layered over the resting one: two
 utilities for the same property would be resolved by stylesheet order, not by
 which is "on". The focus ring is the library floor; the tw-* rules never had
 one on these buttons.
+
+Copying goes through the shared copyableValue component, which awaits the write
+and raises an error if it fails. This value is the one thing in the product a
+user cannot ask for again, so a green check on a write that never happened
+costs them the token.
 {% endcomment %}
 <c-vars label token masked copyable="true" class />
 <div class="relative flex flex-col gap-2{% if class %} {{ class }}{% endif %}"
-     x-data="{ copied: false, masked: {{ masked|yesno:'true,false' }} }"
+     x-data="{ masked: {{ masked|yesno:'true,false' }} }"
+     data-copy-container
      {{ attrs }}>
     {% if label %}
         <div class="flex items-center justify-between gap-2">
@@ -26,7 +32,7 @@ one on these buttons.
     <div class="relative flex items-stretch overflow-hidden bg-background border-[1.5px] border-solid border-border rounded-[0.625rem] transition-all duration-200 focus-within:border-primary focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_10%,transparent)]">
         <div class="flex-1 px-4 py-3 font-mono text-[0.8125rem] font-medium leading-normal tracking-[0.025em] text-text bg-transparent break-all selection:bg-[color-mix(in_oklab,var(--color-primary)_20%,transparent)]"
              :class="masked ? 'blur-[4px] select-none' : ''"
-             x-ref="token">{{ token }}</div>
+             data-token-value>{{ token }}</div>
         {% comment %}
             No copy and nothing to reveal means no rail: an empty one is just a
             band of surface down the right-hand edge.
@@ -39,7 +45,8 @@ one on these buttons.
                             :class="copied ? 'bg-success text-white' : 'bg-transparent text-text-muted hover:bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] hover:text-primary'"
                             :title="copied ? 'Copied' : 'Copy token'"
                             :aria-label="copied ? 'Copied' : 'Copy token'"
-                            @click="navigator.clipboard.writeText($refs.token.textContent.trim()); copied = true; setTimeout(() => copied = false, 2000)">
+                            x-data="copyableValue({ value: '', copySelector: '[data-token-value]' })"
+                            @click="copyToClipboard()">
                         <i :class="copied ? 'fas fa-check' : 'far fa-copy'" aria-hidden="true"></i>
                     </button>
                 {% endif %}
