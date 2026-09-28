@@ -5,7 +5,6 @@ from unittest.mock import patch
 import pytest
 import stripe
 from django.test import RequestFactory
-from django.utils import timezone
 
 from sbomify.apps.billing.billing_processing import check_billing_limits
 from sbomify.apps.billing.notifications import check_downgrade_limit_exceeded
@@ -31,7 +30,8 @@ def _subscription(**fields) -> stripe.Subscription:
 
 
 ENDED_AT_ONCE = {"status": "canceled"}
-CANCEL_AT_SET = {"cancel_at": int(timezone.now().timestamp()) + 86400}
+# Only whether cancel_at is set matters, so a fixed date keeps the case the same on every run
+CANCEL_AT_SET = {"cancel_at": 1893456000}
 REACTIVATED: dict = {}
 
 
