@@ -1,4 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
+{% load humanize %}
 {% load static %}
 {% load django_vite %}
 {% block title %}sbomify Product: {{ release.product.name }} - {{ release.name }}{% endblock %}
@@ -100,7 +101,7 @@
         </c-chips.metric-chip>
         <c-chips.metric-chip>
         <i class="fas fa-puzzle-piece text-primary text-xs" aria-hidden="true"></i>
-        <c-chips.metric.value>{{ release.artifacts_count|default:0 }}</c-chips.metric.value>
+        <c-chips.metric.value>{{ release.artifacts_count|default:0|intcomma }}</c-chips.metric.value>
         <c-chips.metric.label>Artifact{{ release.artifacts_count|default:0|pluralize }}</c-chips.metric.label>
         </c-chips.metric-chip>
     </div>
@@ -165,7 +166,4 @@
         </div>
     {% endif %}
     </c-layout.frame>
-{% endblock %}
-{% block scripts %}
-    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
 {% endblock %}

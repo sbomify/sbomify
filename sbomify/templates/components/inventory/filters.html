@@ -6,7 +6,8 @@ submission and HTMX replacement; options and selected values come from its servi
 <c-tables.toolbar flush>
 <c-forms.search-input size="sm" name="search" id="{{ inventory.content_id|default:'inventory' }}-search" label="Search {{ inventory.kind }}" placeholder="Search {{ inventory.kind }}" value="{{ inventory.params.search }}" />
 {% if inventory.kind != 'products' and not inventory.scope_product %}
-    <c-forms.select size="md" name="product" id="{{ inventory.content_id|default:'inventory' }}-product" label="Filter by product" class="max-w-full">
+    {# Product scope also changes the links between inventory tabs. #}
+    <c-forms.select hx-get="{{ inventory.base_url }}" hx-trigger="change" hx-include="closest form" hx-target="#{{ inventory.content_id }}" size="md" name="product" id="{{ inventory.content_id|default:'inventory' }}-product" label="Filter by product" class="max-w-full">
     <option value="">All products</option>
     {% if inventory.kind == 'components' %}
         <option value="unassigned"

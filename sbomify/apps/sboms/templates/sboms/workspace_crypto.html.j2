@@ -1,4 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
+{% load humanize %}
 {% load pqc_extras %}
 {% block title %}Cryptography{% endblock %}
 {% block dashboard_content %}
@@ -81,12 +82,12 @@
                     always rendered in the body colour.
                 {% endcomment %}
                 <c-tables.cell class="{{ row.counts.quantum_vulnerable|yesno:'font-semibold,' }}">
-                {{ row.counts.quantum_vulnerable }}
+                {{ row.counts.quantum_vulnerable|intcomma }}
                 </c-tables.cell>
                 <c-tables.cell class="{{ row.counts.review|yesno:'font-semibold,' }}">
-                {{ row.counts.review }}
+                {{ row.counts.review|intcomma }}
                 </c-tables.cell>
-                <c-tables.cell>{{ row.counts.quantum_safe }}</c-tables.cell>
+                <c-tables.cell>{{ row.counts.quantum_safe|intcomma }}</c-tables.cell>
                 <c-tables.cell>
                 {% if row.certificates %}
                     {% if row.certificates.expired %}
@@ -94,7 +95,7 @@
                     {% elif row.certificates.expiring_soon %}
                         <c-badges.severity level="high">{{ row.certificates.expiring_soon }} expiring</c-badges.severity>
                     {% else %}
-                        <span class="text-text-muted">{{ row.certificates.count }}</span>
+                        <span class="text-text-muted">{{ row.certificates.count|intcomma }}</span>
                     {% endif %}
                 {% else %}
                     <span class="text-text-muted">—</span>

@@ -22,7 +22,7 @@ headings so their minimum widths cannot clip the empty state on a small screen.
                     class="{% if header.key == 'name' %}{% elif header.key == 'vulnerabilities' %}w-48{% elif header.key == 'past_sla' %}w-24{% elif header.key == 'stale' or header.key == 'scan_label' %}w-36{% elif header.key == 'created_at' or header.key == 'freshness_label' %}w-32{% else %}w-28{% endif %}">{{ header.label }}</c-tables.header-cell>
                 {# djlint:on #}
             {% endfor %}
-            <c-tables.actions-cell as="th" compact />
+            <c-tables.actions-cell as="th" compact pinned />
         </tr>
     </thead>
     <tbody>
@@ -34,7 +34,7 @@ headings so their minimum widths cannot clip the empty state on a small screen.
 {% else %}
     {% if inventory.total %}
         <c-feedback.empty-state :compact="preview" icon="fas fa-cube" title="No matching {{ inventory.kind }}" message="Try another search or clear the filters.">
-        <c-buttons.secondary href="{{ inventory.reset_url }}" hx-boost="true">Clear filters</c-buttons.secondary>
+        <c-buttons.secondary href="{{ inventory.reset_url }}" hx-boost="true" hx-target="#{{ inventory.content_id }}">Clear filters</c-buttons.secondary>
         </c-feedback.empty-state>
     {% else %}
         <c-feedback.empty-state :compact="preview" icon="fas fa-cube" title="No {{ inventory.kind }} yet" message="

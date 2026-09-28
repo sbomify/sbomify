@@ -9,6 +9,6 @@ chevron is never the only thing naming it.
 <div class="flex items-center gap-2{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>
     <c-navigation.page-button nav label="Previous page" ::disabled="currentPage === 1" @click="if (currentPage > 1) currentPage--"><i class="fas fa-chevron-left text-xs" aria-hidden="true"></i></c-navigation.page-button>
-    <span class="text-sm text-text-muted">Page <span x-text="currentPage"></span> / <span x-text="totalPages"></span></span>
+    <span class="text-sm text-text-muted">Page <span x-text="$number(currentPage)"></span> / <span x-text="$number(totalPages)"></span></span>
     <c-navigation.page-button nav label="Next page" ::disabled="currentPage === totalPages" @click="if (currentPage < totalPages) currentPage++"><i class="fas fa-chevron-right text-xs" aria-hidden="true"></i></c-navigation.page-button>
 </div>

@@ -1,12 +1,19 @@
+import ipaddress
+import json
 import logging
+import socket
 from datetime import timedelta
+from typing import cast
 
+import certifi
 import dramatiq
-import requests
+import urllib3
+from django.db.models import DateTimeField, F
+from django.db.models.functions import Coalesce, Greatest, Now
 from django.utils import timezone
 
-from sbomify.apps.core.integrations.http import request_with_retry
 from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.utils import custom_domain_challenge, invalidate_custom_domain_cache
 from sbomify.task_utils import record_task_breadcrumb
 
 logger = logging.getLogger(__name__)
@@ -17,6 +24,94 @@ BASE_DELAY_MINUTES = 5
 # Note: This doesn't stop verification attempts, it just caps the backoff delay at ~3.5 days
 # The system will continue checking indefinitely at this maximum interval
 MAX_RETRIES = 10
+# Our domain-check answer is a few hundred bytes, and whoever runs the domain
+# chooses what answers the probe. A longer answer is not ours.
+PROBE_MAX_BYTES = 4096
+# Public IPv6 unicast is all allocated from this block. Outside it, is_global
+# still passes NAT64 and site-local addresses, which lead into private networks.
+IPV6_GLOBAL_UNICAST = ipaddress.IPv6Network("2000::/3")
+
+
+def _public_address(domain: str) -> str | None:
+    """The domain's first public address in getaddrinfo's order, the one a plain connection tries first."""
+    try:
+        resolved = socket.getaddrinfo(domain, 443, type=socket.SOCK_STREAM)
+    except (OSError, UnicodeError):
+        return None
+    for *_, sockaddr in resolved:
+        address = ipaddress.ip_address(sockaddr[0])
+        # is_global also passes multicast.
+        if address.is_global and not address.is_multicast and (address.version == 4 or address in IPV6_GLOBAL_UNICAST):
+            return str(address)
+    return None
+
+
+def _serves_challenge(team_id: int, domain: str) -> bool:
+    """Whether the domain, fetched from a public address, answers with its challenge."""
+    address = _public_address(domain)
+    if address is None:
+        logger.info(f"Custom domain {domain} has no public address to probe")
+        return False
+    headers = {"Host": domain, "User-Agent": "sbomify-domain-verification/1.0"}
+    try:
+        # Connected to the checked address rather than the name, so a DNS answer that
+        # changes after the check cannot move the request. The handshake still names
+        # the domain and checks its certificate. No redirects: the answer has to come
+        # from the domain itself. No retries: the task's backoff schedules the next attempt.
+        with (
+            urllib3.HTTPSConnectionPool(
+                address, 443, server_hostname=domain, cert_reqs="CERT_REQUIRED", ca_certs=certifi.where(), timeout=10
+            ) as pool,
+            pool.urlopen(
+                "GET",
+                "/.well-known/com.sbomify.domain-check",
+                headers=headers,
+                redirect=False,
+                retries=False,
+                preload_content=False,
+            ) as response,
+        ):
+            logger.debug(f"Probe response status: {response.status}")
+            if response.status != 200:
+                return False
+            body = response.read(PROBE_MAX_BYTES + 1, decode_content=True)
+        if len(body) > PROBE_MAX_BYTES:
+            return False
+        answer = json.loads(body)
+    except (urllib3.exceptions.HTTPError, ValueError):
+        return False
+    served = answer.get("challenge") if isinstance(answer, dict) else None
+    return isinstance(served, str) and served == custom_domain_challenge(team_id, domain)
+
+
+@dramatiq.actor(queue_name="domain_verification", max_retries=0, time_limit=60000)
+def probe_custom_domain(team_id: int, domain: str) -> None:
+    """Validate one domain if it answers with its challenge.
+
+    One message per domain, so a domain that answers slowly spends its own time
+    limit instead of holding up the domains queued after it.
+    """
+    if not _serves_challenge(team_id, domain):
+        return
+
+    # Conditional on the domain the probe fetched: the workspace may have
+    # changed it while the request was in flight.
+    validated = Team.objects.filter(pk=team_id, custom_domain=domain, custom_domain_validated=False).update(
+        custom_domain_validated=True,
+        # Validation is what makes the custom domain the preferred one,
+        # so it rewrites every absolute URL in the CSAF distribution.
+        # This bypasses the model signal, so it bumps the marker itself.
+        csaf_feed_updated_at=Greatest(
+            Coalesce(F("csaf_feed_updated_at"), Now(), output_field=DateTimeField()),
+            Now(),
+            output_field=DateTimeField(),
+        ),
+        custom_domain_verification_failures=0,
+        custom_domain_last_checked_at=timezone.now(),
+    )
+    if validated:
+        invalidate_custom_domain_cache(domain)
+        logger.info(f"Successfully validated domain {domain}")
 
 
 @dramatiq.actor(time_limit=900000)  # 15 minutes
@@ -24,7 +119,7 @@ def verify_custom_domains() -> None:
     """
     Periodic task to verify unvalidated custom domains.
 
-    This task iterates through unvalidated domains and sends a probe request.
+    This task iterates through unvalidated domains and queues a probe for each one due.
     It uses exponential backoff to avoid spamming domains that are not yet configured.
 
     Time limit: 15 minutes to accommodate large numbers of domains.
@@ -61,46 +156,17 @@ def verify_custom_domains() -> None:
         )
 
         try:
-            # Send a probe request
-            # We use a short timeout because we just want to see if it reaches us
-            # We expect the request to hit our middleware, which will validate the domain
-            # even if this request eventually returns 404 or something else.
-            # However, for the middleware to trigger, the DNS must point to us.
-
-            # We add a special header so we can potentially identify these probes if needed
-            headers = {"User-Agent": "sbomify-domain-verification/1.0"}
-
-            # Use .well-known/com.sbomify.domain-check endpoint to ensure ALLOWED_HOSTS is validated
-            # This prevents random domains from using our server as a verification endpoint
-            protocol = "https"
-            url = f"{protocol}://{team.custom_domain}/.well-known/com.sbomify.domain-check"
-
-            try:
-                response = request_with_retry("GET", url, headers=headers, timeout=10, verify=True)
-                logger.debug(f"Probe response status: {response.status_code}")
-                # If we get a response (even 404), it means DNS is likely configured
-                # and pointing to a server. If it points to US, our middleware
-                # should have intercepted it and marked it valid.
-
-                # Check if it was validated by the middleware (refresh from DB)
-                team.refresh_from_db()
-                if team.custom_domain_validated:
-                    logger.info(f"Successfully validated domain {team.custom_domain}")
-                    continue
-
-            except requests.RequestException:
-                # HTTPS failed, try HTTP? Or just count as failure.
-                # Let's count as failure for now.
-                pass
-
-            # If we are here, validation failed (endpoint didn't validate or request failed)
+            # Counted before the probe runs, so a probe that times out still backs off.
+            # Only if the domain is still the one read above and still pending.
             # Use F() expression for atomic increment to prevent race conditions
-            from django.db.models import F
-
-            Team.objects.filter(pk=team.pk).update(
+            counted = Team.objects.filter(
+                pk=team.pk, custom_domain=team.custom_domain, custom_domain_validated=False
+            ).update(
                 custom_domain_verification_failures=F("custom_domain_verification_failures") + 1,
                 custom_domain_last_checked_at=now,
             )
+            if counted:
+                probe_custom_domain.send(team.pk, cast(str, team.custom_domain))
 
         except Exception as e:
             logger.error(f"Error verifying domain {team.custom_domain}: {e}")

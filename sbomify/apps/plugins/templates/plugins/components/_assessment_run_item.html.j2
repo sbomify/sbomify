@@ -1,3 +1,4 @@
+{% load humanize %}
 {# Individual assessment run collapsible card - rendered server-side #}
 {% load design_system %}
 {% load plugins_extras %}
@@ -13,9 +14,9 @@
                 {% comment %}A skipped run keeps the neutral base border: it produced no verdict, so it is neither a warning nor a clean scan.{% endcomment %}
                 {# The level must render as one bare word, so its branch stays on one line. #}
                 {# djlint:off #}
-                <c-cards.collapsible level="{% if skipped %}{% elif security_total %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ expanded: false }">
+                <c-cards.collapsible level="{% if skipped %}{% elif security_total %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ get expanded() { return $store.openAssessments.isOpen('{{ run.id }}') } }">
                 {# djlint:on #}
-                <c-cards.collapsible-trigger bare state="expanded" @click="expanded = !expanded" id="run-trigger-{{ run.id }}">
+                <c-cards.collapsible-trigger bare state="expanded" @click="$store.openAssessments.toggle('{{ run.id }}')" id="run-trigger-{{ run.id }}">
                 <div class="flex items-center gap-3 flex-grow min-w-0">
                     <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
                     {# release_names is populated by _run_to_schema from the M2M #}
@@ -36,7 +37,7 @@
                             </c-badges.secondary>
                         {% elif security_total %}
                             <c-badges.secondary>
-                            <i class="fas fa-shield-alt mr-1"></i>{{ security_total }} vulnerabilit{{ security_total|pluralize:"y,ies" }}
+                            <i class="fas fa-shield-alt mr-1"></i>{{ security_total|intcomma }} vulnerabilit{{ security_total|pluralize:"y,ies" }}
                             </c-badges.secondary>
                         {% else %}
                             <c-badges.secondary>
@@ -61,7 +62,7 @@
                     {% if skipped %}
                         <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
                     {% elif run.result.summary and not security_total %}
-                        <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} check{{ run.result.summary.total_findings|default:0|pluralize }}</span>
+                        <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0|intcomma }} check{{ run.result.summary.total_findings|default:0|pluralize }}</span>
                     {% endif %}
                 </div>
                 </c-cards.collapsible-trigger>
@@ -108,13 +109,22 @@
                     {% endif %}
                     {% comment %}Fetched when the card is opened, not when the page is built: see
                     _assessment_run_findings.html.j2. The trigger beside this carries the hx-get, so one
-                    click both expands the card and asks for the page.{% endcomment %}
-                    <div id="findings-{{ run.id }}"
-                         class="run-findings"
-                         hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
-                         hx-trigger="click once from:#run-trigger-{{ run.id }}"
-                         hx-swap="outerHTML">
-                        <c-feedback.loading-table nested message="Loading assessment results..." />
+                    click both expands the card and asks for the page.
+
+The host around it is preserved through a page refresh. The server always
+                    sends the unopened placeholder, and the once trigger has already fired, so a
+                    morph would leave a spinner nothing ever fetches. The mark sits on the host
+                    rather than on the panel because the panel replaces itself, and an element that
+                    is both preserved and self-replacing never loads at all: htmx restores the old
+                    one over its own response.{% endcomment %}
+                    <div id="findings-host-{{ run.id }}" hx-preserve>
+                        <div id="findings-{{ run.id }}"
+                             class="run-findings"
+                             hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
+                             hx-trigger="click once from:#run-trigger-{{ run.id }}"
+                             hx-swap="outerHTML">
+                            <c-feedback.loading-table nested message="Loading assessment results..." />
+                        </div>
                     </div>
                 {% else %}
                     {# Pending state #}
@@ -128,9 +138,9 @@
             {% comment %}A skipped run keeps the neutral base border: it produced no verdict, so it is neither a warning nor a pass.{% endcomment %}
             {# The level must render as one bare word, so its branch stays on one line. #}
             {# djlint:off #}
-            <c-cards.collapsible level="{% if skipped %}{% elif error_count %}danger{% elif fail_count %}warning{% elif run.status == 'completed' and pass_count == 0 %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ expanded: false }">
+            <c-cards.collapsible level="{% if skipped %}{% elif error_count %}danger{% elif fail_count %}warning{% elif run.status == 'completed' and pass_count == 0 %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ get expanded() { return $store.openAssessments.isOpen('{{ run.id }}') } }">
             {# djlint:on #}
-            <c-cards.collapsible-trigger bare state="expanded" @click="expanded = !expanded" id="run-trigger-{{ run.id }}">
+            <c-cards.collapsible-trigger bare state="expanded" @click="$store.openAssessments.toggle('{{ run.id }}')" id="run-trigger-{{ run.id }}">
             <div class="flex items-center gap-3 flex-grow min-w-0">
                 <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
                 {# release_names is populated by _run_to_schema from the M2M #}
@@ -180,7 +190,7 @@
                 {% if skipped %}
                     <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
                 {% elif run.result.summary %}
-                    <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} check{{ run.result.summary.total_findings|default:0|pluralize }}</span>
+                    <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0|intcomma }} check{{ run.result.summary.total_findings|default:0|pluralize }}</span>
                 {% endif %}
             </div>
             </c-cards.collapsible-trigger>
@@ -223,13 +233,16 @@
                 {% endif %}
                 {% comment %}Fetched when the card is opened, not when the page is built: see
                 _assessment_run_findings.html.j2. The trigger beside this carries the hx-get, so one
-                click both expands the card and asks for the page.{% endcomment %}
-                <div id="findings-{{ run.id }}"
-                     class="run-findings"
-                     hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
-                     hx-trigger="click once from:#run-trigger-{{ run.id }}"
-                     hx-swap="outerHTML">
-                    <c-feedback.loading-table nested message="Loading assessment results..." />
+                click both expands the card and asks for the page. The preserved host is there
+                for the same reason as the branch above.{% endcomment %}
+                <div id="findings-host-{{ run.id }}" hx-preserve>
+                    <div id="findings-{{ run.id }}"
+                         class="run-findings"
+                         hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
+                         hx-trigger="click once from:#run-trigger-{{ run.id }}"
+                         hx-swap="outerHTML">
+                        <c-feedback.loading-table nested message="Loading assessment results..." />
+                    </div>
                 </div>
                 {% if run.result.metadata.standard_name %}
                     {# Standard Info (for compliance plugins) #}
