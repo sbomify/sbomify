@@ -15,7 +15,8 @@ from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
-from sbomify.apps.documents.access_models import AccessRequest, AccessRequestDecision
+from sbomify.apps.documents.access_models import AccessRequest, AccessRequestDecision, NDASignature
+from sbomify.apps.documents.models import Document
 
 pytestmark = pytest.mark.django_db
 
@@ -66,6 +67,25 @@ def test_asking_again_keeps_the_previous_decision(
     if status == AccessRequest.Status.REVOKED:
         assert past.revoked_at == decided_at
         assert past.revoked_by == sample_user
+
+
+@pytest.mark.parametrize(("ask", "expected_status"), [(_ask_via_api, 201), (_ask_via_page, 302)])
+def test_asking_again_supersedes_a_live_signature(team_with_business_plan, guest_user, ask, expected_status):
+    nda = Document.objects.create(
+        name="NDA",
+        component=team_with_business_plan.get_or_create_company_wide_component(),
+        document_type=Document.DocumentType.NDA,
+    )
+    access_request = AccessRequest.objects.create(
+        team=team_with_business_plan, user=guest_user, status=AccessRequest.Status.REJECTED
+    )
+    signature = NDASignature.objects.create(access_request=access_request, nda_document=nda, signed_name="Guest")
+
+    assert ask(team_with_business_plan, guest_user).status_code == expected_status
+
+    signature.refresh_from_db()
+    assert signature.superseded_at is not None
+    assert access_request.nda_signature is None
 
 
 def test_each_cycle_adds_a_decision(team_with_business_plan, sample_user, guest_user):
