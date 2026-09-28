@@ -29,14 +29,17 @@ class AssessmentCoverage:
     """What the card needs beyond the stored runs.
 
     ``plugins_enabled`` is whether the workspace has any plugin turned on that
-    its plan includes. ``unassessed`` lists the ones that apply to this artifact
-    and have no run for it, as ``{"plugin_name", "plugin_display_name"}``.
+    its plan includes. ``plan_excludes_plugins`` is whether it has plugins turned
+    on but its plan includes none of them, as after a downgrade. ``unassessed``
+    lists the ones that apply to this artifact and have no run for it, as
+    ``{"plugin_name", "plugin_display_name"}``.
     ``outdated`` maps a plugin name to its current version, for each latest run
     produced by a different one. ``runnable`` names every plugin the re-run
     endpoint would accept for this workspace.
     """
 
     plugins_enabled: bool = False
+    plan_excludes_plugins: bool = False
     unassessed: list[dict[str, str]] = field(default_factory=list)
     outdated: dict[str, str] = field(default_factory=dict)
     runnable: frozenset[str] = frozenset()
@@ -80,6 +83,7 @@ def get_assessment_coverage(
     return ServiceResult.success(
         AssessmentCoverage(
             plugins_enabled=bool(offered),
+            plan_excludes_plugins=bool(registered) and not offered,
             unassessed=unassessed,
             outdated=outdated,
             runnable=frozenset(plugin.name for plugin in offered),

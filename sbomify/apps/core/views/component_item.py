@@ -447,6 +447,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 coverage = get_assessment_coverage(item_id, component.team, assessment_runs["latest_runs"])
                 if coverage.ok and coverage.value is not None:
                     assessment_runs["plugins_enabled"] = coverage.value.plugins_enabled
+                    assessment_runs["plan_excludes_plugins"] = coverage.value.plan_excludes_plugins
                     assessment_runs["unassessed_plugins"] = coverage.value.unassessed
                     for run in assessment_runs["latest_runs"]:
                         run["current_version"] = coverage.value.outdated.get(run["plugin_name"])

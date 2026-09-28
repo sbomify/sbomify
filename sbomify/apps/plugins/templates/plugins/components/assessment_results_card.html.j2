@@ -80,8 +80,6 @@
         <div class="flex flex-col gap-3">
             {% for run in assessment_runs.latest_runs %}
                 {% include 'plugins/components/_assessment_run_item.html.j2' with run=run loop_index=forloop.counter %}
-            {% empty %}
-                <c-feedback.empty-state compact title="No assessments found" />
             {% endfor %}
             {% for plugin in assessment_runs.unassessed_plugins %}
                 {% include 'plugins/components/_unassessed_plugin_item.html.j2' %}
@@ -95,6 +93,12 @@
         </div>
     {% elif assessment_runs.plugins_enabled %}
         <c-feedback.empty-state compact icon="fas fa-circle-minus" icon_variant="neutral" title="No assessments apply" message="None of this workspace's plugins check this type of artifact." />
+    {% elif assessment_runs.plan_excludes_plugins %}
+        <c-feedback.empty-state compact icon="fas fa-circle-minus" icon_variant="neutral" title="Not included in your plan" message="Your plan does not include the plugins this workspace has turned on.">
+        {% if can_manage_plugins %}
+            <c-buttons.secondary size="sm" href="{% url 'teams:switch_team' team_key %}?next={% url 'plugins:plugins_page' %}">Manage plugins</c-buttons.secondary>
+        {% endif %}
+        </c-feedback.empty-state>
     {% else %}
         {% comment %}Nothing is scheduled, so nothing is processing. Saying results are on their way here once kept a workspace waiting on a run that never existed.{% endcomment %}
         <c-feedback.empty-state compact icon="fas fa-circle-minus" icon_variant="neutral" title="No assessments turned on" message="This workspace has no plugins turned on, so artifacts are not checked.">

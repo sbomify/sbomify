@@ -84,6 +84,7 @@ class TestCoverage:
         coverage = _coverage(sample_sbom)
 
         assert coverage.plugins_enabled is False
+        assert coverage.plan_excludes_plugins is False
         assert coverage.unassessed == []
 
     def test_an_enabled_plugin_with_no_run_is_unassessed(self, sample_sbom, plugins):
@@ -123,6 +124,7 @@ class TestCoverage:
         coverage = _coverage(sample_sbom)
 
         assert coverage.plugins_enabled is False
+        assert coverage.plan_excludes_plugins is True
         assert coverage.unassessed == []
 
     def test_a_result_from_an_older_version_is_outdated(self, sample_sbom, plugins):
@@ -183,6 +185,18 @@ class TestArtifactPage:
 
         assert "No assessments turned on" in html
         assert reverse("plugins:plugins_page") not in html
+
+    def test_plugins_the_plan_excludes_are_not_called_turned_off(self, sample_sbom, sample_user, plugins, settings):
+        settings.BILLING = True
+        team = sample_sbom.component.team
+        team.billing_plan = None
+        team.save(update_fields=["billing_plan"])
+        _enable(team, NTIA)
+
+        html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
+
+        assert "Not included in your plan" in html
+        assert "No assessments turned on" not in html
 
     def test_an_unassessed_plugin_gets_a_row_and_a_run_button(self, sample_sbom, sample_user, plugins):
         _enable(sample_sbom.component.team, NTIA)
