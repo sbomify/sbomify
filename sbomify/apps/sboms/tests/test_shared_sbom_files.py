@@ -83,6 +83,30 @@ def test_deleting_the_last_sbom_using_a_file_deletes_it(
 
 
 @pytest.mark.django_db
+def test_signature_and_provenance_files_go_only_after_the_delete_commits(
+    sample_sbom: SBOM,
+    sample_access_token: AccessToken,
+    delete_object: MagicMock,
+    django_capture_on_commit_callbacks: Any,
+) -> None:
+    sample_sbom.signature_blob_key = "own.sig"
+    sample_sbom.provenance_blob_key = "own.provenance.json"
+    sample_sbom.save(update_fields=["signature_blob_key", "provenance_blob_key"])
+    url = reverse("api-1:delete_sbom", kwargs={"sbom_id": sample_sbom.id})
+
+    with django_capture_on_commit_callbacks() as callbacks:
+        response = Client().delete(url, **get_api_headers(sample_access_token))
+
+    assert response.status_code == 204
+    delete_object.assert_not_called()
+
+    for callback in callbacks:
+        callback()
+
+    assert {"own.sig", "own.provenance.json"} <= set(_deleted_keys(delete_object))
+
+
+@pytest.mark.django_db
 def test_deleting_a_component_keeps_a_file_another_workspace_uses(
     sample_sbom: SBOM,
     other_workspace_sbom: SBOM,
@@ -191,7 +215,8 @@ def test_delete_waits_for_an_upload_of_the_same_bytes(sample_component: Componen
             with transaction.atomic():
                 filename = upload_sbom_file(s3, data)
                 upload_locked.set()
-                finish_upload.wait(10)
+                if not finish_upload.wait(10):
+                    raise AssertionError("the test never released the upload")
                 SBOM.objects.create(
                     name="new", component=sample_component, format="spdx", version="2", sbom_filename=filename
                 )

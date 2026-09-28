@@ -125,12 +125,19 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
         sbom.delete()
 
     # Signature and provenance keys carry the SBOM id, so no other row uses them.
-    s3 = StorageClient("SBOMS")
-    for blob_key in filter(None, [sbom.signature_blob_key, sbom.provenance_blob_key]):
-        try:
-            s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, blob_key)
-        except Exception as exc:
-            log.warning("Failed to delete S3 object %s: %s", blob_key, exc)
+    # They go after commit too, so a rolled-back delete keeps them.
+    blob_keys = [key for key in (sbom.signature_blob_key, sbom.provenance_blob_key) if key]
+
+    def _delete_blobs() -> None:
+        s3 = StorageClient("SBOMS")
+        for blob_key in blob_keys:
+            try:
+                s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, blob_key)
+            except Exception as exc:
+                log.warning("Failed to delete S3 object %s: %s", blob_key, exc)
+
+    if blob_keys:
+        transaction.on_commit(_delete_blobs)
 
     from sbomify.apps.core.analytics import events
     from sbomify.apps.core.posthog_service import capture_for_request
