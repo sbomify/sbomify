@@ -180,6 +180,10 @@ def _access_record(path: str) -> logging.LogRecord:
             "/login/?next=%2Fworkspaces%2Faccept_invite%2F[redacted]%2F",
         ),
         ("/onboarding/unsubscribe/MTI:1uAbCd:sIgNaTuRe_-x/", "/onboarding/unsubscribe/[redacted]/"),
+        (
+            "/login/?next=%2Faccounts%2Fconfirm-email%2FMQ%3A1uAbCd%3AsIgNaTuRe%2F",
+            "/login/?next=%2Faccounts%2Fconfirm-email%2F[redacted]%2F",
+        ),
         ("/accounts/confirm-email/MQ:1uAbCd:sIgNaTuRe/", "/accounts/confirm-email/[redacted]/"),
         ("/accounts/password/reset/key/1-cxyz-0123abcd/", "/accounts/password/reset/key/[redacted]/"),
         ("/accounts/password/reset/key/done/", "/accounts/password/reset/key/done/"),
@@ -204,6 +208,7 @@ def _access_record(path: str) -> logging.LogRecord:
         "invitation link in next",
         "encoded invitation link in next",
         "unsubscribe link",
+        "encoded email confirmation key in next",
         "email confirmation key",
         "password reset key",
         "password reset done page",

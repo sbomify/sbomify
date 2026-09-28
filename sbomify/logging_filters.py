@@ -74,10 +74,14 @@ _TOKEN_QUERY_VALUE = re.compile(r"([?&]token=)[^&\s\"]*")
 
 # Routes whose next path segment is the credential: invitation links, the
 # emailed unsubscribe link, and allauth's email confirmation and password reset
-# keys. ``%2F`` covers the same paths URL-encoded inside a ``next`` parameter.
+# keys. ``%2F`` covers the same paths URL-encoded inside a ``next`` parameter,
+# where the key's own characters are percent-encoded too, so the segment ends
+# at the next separator, raw or encoded, rather than at the first ``%``.
+_SLASH = r"(?:/|%2F)"
 _SECRET_PATH_SEGMENT = re.compile(
-    r"((?:accept_invite|onboarding/unsubscribe|accounts/confirm-email|accounts/password/reset/key)(?:/|%2F))"
-    r"(?!done/)[^/?&#\s\"%]+",
+    rf"((?:accept_invite|onboarding{_SLASH}unsubscribe|accounts{_SLASH}confirm-email"
+    rf"|accounts{_SLASH}password{_SLASH}reset{_SLASH}key){_SLASH})"
+    rf"(?!done{_SLASH})(?:(?!%2F)[^/?&#\s\"])+",
     re.IGNORECASE,
 )
 
