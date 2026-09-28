@@ -82,8 +82,21 @@ _SECRET_PATH_SEGMENT = re.compile(
 )
 
 
+# allauth provider callbacks (``/accounts/<provider>/login/callback/`` and
+# ``/accounts/oidc/<id>/login/callback/``) carry the one-time authorization
+# ``code`` and the ``state`` in the query string.
+_OAUTH_CALLBACK_QUERY = re.compile(r"(/accounts/(?:[\w.-]+/){1,2}login/callback/?\?)([^\s\"#]*)")
+_OAUTH_CALLBACK_PARAM = re.compile(r"((?:^|&)(?:code|state)=)[^&]*")
+
+
+def _redact_oauth_callback(match: re.Match[str]) -> str:
+    return match.group(1) + _OAUTH_CALLBACK_PARAM.sub(r"\1[redacted]", match.group(2))
+
+
 def _redact(value: str) -> str:
-    return _SECRET_PATH_SEGMENT.sub(r"\1[redacted]", _TOKEN_QUERY_VALUE.sub(r"\1[redacted]", value))
+    value = _TOKEN_QUERY_VALUE.sub(r"\1[redacted]", value)
+    value = _OAUTH_CALLBACK_QUERY.sub(_redact_oauth_callback, value)
+    return _SECRET_PATH_SEGMENT.sub(r"\1[redacted]", value)
 
 
 def redact_access_log_secrets(record: logging.LogRecord) -> bool:

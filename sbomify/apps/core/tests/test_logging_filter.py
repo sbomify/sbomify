@@ -184,6 +184,15 @@ def _access_record(path: str) -> logging.LogRecord:
         ("/accounts/password/reset/key/1-cxyz-0123abcd/", "/accounts/password/reset/key/[redacted]/"),
         ("/accounts/password/reset/key/done/", "/accounts/password/reset/key/done/"),
         ("/workspaces/invite/abc123/", "/workspaces/invite/abc123/"),
+        (
+            "/accounts/oidc/keycloak/login/callback/?state=St4te&session_state=s1&code=C0de.x-y",
+            "/accounts/oidc/keycloak/login/callback/?state=[redacted]&session_state=s1&code=[redacted]",
+        ),
+        (
+            "/accounts/github/login/callback/?code=C0de&state=St4te",
+            "/accounts/github/login/callback/?code=[redacted]&state=[redacted]",
+        ),
+        ("/api/v1/products?code=kept&state=kept", "/api/v1/products?code=kept&state=kept"),
     ],
     ids=[
         "signed sbom download",
@@ -199,6 +208,9 @@ def _access_record(path: str) -> logging.LogRecord:
         "password reset key",
         "password reset done page",
         "invite form keeps the workspace key",
+        "oidc provider callback",
+        "provider callback",
+        "code and state elsewhere",
     ],
 )
 def test_access_log_credentials_are_redacted(path: str, expected: str) -> None:
