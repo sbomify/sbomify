@@ -21,6 +21,7 @@ def _past_due(team, failed_days_ago: int) -> None:
 @pytest.fixture
 def dashboard(authenticated_web_client, mocker, settings):
     settings.BILLING = True
+    settings.PAYMENT_GRACE_PERIOD_DAYS = 3
     session = authenticated_web_client.session
     session["current_team"]["has_completed_wizard"] = True
     session.save()
