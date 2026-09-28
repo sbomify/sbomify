@@ -19,13 +19,13 @@
         <c-tables.shell nested>
         {# Search + severity filter toolbar #}
         <c-tables.toolbar>
-        <c-tables.search id="cbom-issue-search" label="Search CBOM issues" placeholder="Search CBOM issues..." class="max-w-xs" x-model="search" />
-        <c-tables.select id="cbom-issue-sev-filter" label="Filter by severity" x-model="sevFilter">
+        <c-forms.search-input size="sm" id="cbom-issue-search" label="Search CBOM issues" placeholder="Search CBOM issues..." class="max-w-xs" x-model="search" />
+        <c-forms.select size="md" id="cbom-issue-sev-filter" label="Filter by severity" x-model="sevFilter">
         <option value="all">All Severities</option>
         <template x-for="v in sevOptions" :key="v">
             <option :value="v" x-text="v.charAt(0).toUpperCase() + v.slice(1)"></option>
         </template>
-        </c-tables.select>
+        </c-forms.select>
         </c-tables.toolbar>
         <c-tables.table x-cloak>
         <c-tables.head>
@@ -73,7 +73,7 @@
         <c-tables.footer>
         <div class="flex flex-wrap items-center gap-4">
             <c-tables.info>
-            Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+            Showing <span x-text="$number(startIdx)"></span> to <span x-text="$number(endIdx)"></span> of <span x-text="$number(total)"></span>
             </c-tables.info>
             {% if latest_cbom_id %}
                 <a href="{% url 'core:component_item' component_id=component.id item_type=latest_cbom_item_type|default:'cbom' item_id=latest_cbom_id %}"

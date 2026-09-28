@@ -57,7 +57,7 @@ class TestTeamTokensView:
             reverse("teams:team_tokens", kwargs={"team_key": team.key}), headers={"hx-request": "true"}
         )
         assert response.status_code == 200
-        assert b"Generate new token" in response.content
+        assert b"Generate token" in response.content
         assert b"Your tokens" in response.content
 
     def test_get_shows_existing_tokens(self, client: Client, sample_team_with_owner_member):

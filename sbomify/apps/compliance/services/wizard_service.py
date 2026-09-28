@@ -159,6 +159,11 @@ def _auto_fill_from_product(assessment: CRAAssessment) -> None:
     product = assessment.product
     if not assessment.support_period_end and product.end_of_support:
         assessment.support_period_end = product.end_of_support
+    elif not assessment.support_period_end and assessment.team.default_support_period_years:
+        reference_date = product.release_date or datetime.date.today()
+        year = reference_date.year + assessment.team.default_support_period_years
+        day = min(reference_date.day, calendar.monthrange(year, reference_date.month)[1])
+        assessment.support_period_end = reference_date.replace(year=year, day=day)
 
 
 def get_or_create_assessment(

@@ -13,6 +13,6 @@ element itself rather than on a span inside it:
 <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>
     <div class="text-xs text-text-muted">{{ label }}</div>
-    <div class="text-sm font-medium text-text"
+    <div class="text-sm font-medium text-text break-words"
          {% if value_x_text %}x-text="{{ value_x_text }}"{% endif %}>{{ slot }}</div>
 </div>

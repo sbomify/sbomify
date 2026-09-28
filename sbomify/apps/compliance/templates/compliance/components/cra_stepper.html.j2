@@ -2,7 +2,7 @@
 {# Expects: step (int), step_names (dict), completed_steps (list), assessment_id (str) #}
 {# A completed step is a link back to it: the anchor wraps the step, because a #}
 {# step is not a link everywhere else the rail is used. #}
-<nav aria-label="Wizard progress" class="mb-8">
+<nav aria-label="Wizard progress">
     <c-navigation.stepper>
     {% for step_num, step_label in step_names.items %}
         {% if step_num in completed_steps and step_num != step %}

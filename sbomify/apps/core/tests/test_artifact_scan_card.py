@@ -18,8 +18,10 @@ which is what a clean scan looks like.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from html import unescape
 from typing import Any
 
 import pytest
@@ -409,7 +411,20 @@ class TestTheFindingsListArrivesWhenAsked:
         assert "CVE-2026-00024" in html
         # 25 to a page, so the twenty-sixth belongs to the next one.
         assert "CVE-2026-00025" not in html
-        assert "Page 1 / 12" in html
+        assert "Showing 1 to 25 of 300 vulnerabilities" in html
+        assert re.search(r'aria-current="page"\s*>\s*1\s*</span>', html)
+
+        next_link = re.search(r'<a\s[^>]*href="([^"]+)"[^>]*aria-label="Next page"', html)
+        assert next_link is not None
+        response = client.get(unescape(next_link.group(1)), headers={"hx-request": "true"})
+
+        assert response.status_code == 200
+        next_html = response.content.decode()
+        assert "Showing 26 to 50 of 300 vulnerabilities" in next_html
+        assert "CVE-2026-00025" in next_html
+        assert "CVE-2026-00049" in next_html
+        assert "CVE-2026-00024" not in next_html
+        assert "CVE-2026-00050" not in next_html
 
     def test_the_last_finding_is_reachable(self, signed_in) -> None:
         """The whole point of paging rather than dropping."""

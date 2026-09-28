@@ -9,6 +9,9 @@ small context of lists and assert on the output; it is not routed anywhere.
 <c-navigation.tab panel="quiet">Quiet tab</c-navigation.tab>
 <c-navigation.tab panel="settings" icon="fas fa-gear" aria-label="Settings" />
 </c-navigation.tabs>
+<c-navigation.tabs inset aria-label="Live tabs">
+<c-navigation.tab panel="live" active_binding="view === 'live'" @click="view = 'live'" data-probe="live-tab">Live tab</c-navigation.tab>
+</c-navigation.tabs>
 <c-navigation.breadcrumbs :items="probe_crumbs" class="mb-2" data-probe="crumbs" />
 <c-navigation.breadcrumbs :items="probe_marked_crumbs" data-probe="marked-crumbs" />
 <c-navigation.pagination :current="3" :total="8" :page_range="probe_page_range" base_url="/components" class="mt-2" data-probe="pager" />
@@ -45,15 +48,15 @@ small context of lists and assert on the output; it is not routed anywhere.
 </c-navigation.accordion>
 {# The details/summary twin, added with the trusted-publishers migration. #}
 <c-navigation.accordion density="sm" data-probe="disclosures">
-<c-navigation.disclosure label_class="flex items-center gap-2" data-probe="disclosure">
+<c-navigation.accordion-item native label_class="flex items-center gap-2" data-probe="disclosure">
 <c-slot name="label">
 <i class="fas fa-code" aria-hidden="true"></i>Configure the workflow
 </c-slot>
 <p class="m-0">The step a workflow needs.</p>
-</c-navigation.disclosure>
-<c-navigation.disclosure label="Already open" open data-probe="disclosure-open">
+</c-navigation.accordion-item>
+<c-navigation.accordion-item native label="Already open" open data-probe="disclosure-open">
 <p class="m-0">Open on arrival.</p>
-</c-navigation.disclosure>
+</c-navigation.accordion-item>
 </c-navigation.accordion>
 {# The Alpine pager twin, added with the advisories migration. #}
 <c-navigation.page-button data-probe="page-btn" @click="goToPage(2)">2</c-navigation.page-button>

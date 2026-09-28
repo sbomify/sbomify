@@ -1,56 +1,8 @@
-from datetime import timedelta
-
 import pytest
-from django.utils import timezone
 from playwright.sync_api import Page
 
-from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 
-
-@pytest.fixture
-def priced_plans(team_with_business_plan):  # noqa: F811
-    """All three plans, priced, so the plan page renders every card it can.
-
-    The business plan the shared fixture creates carries no prices, which
-    leaves every card reading "Contact us"; giving it prices, a promotion and
-    a fresh sync stamp makes the pricing service serve from the database and
-    the cards render their real numbers. The renewal date turns on the
-    subscription alert, and the enterprise plan brings the gradient button.
-    """
-    business = BillingPlan.objects.get(key="business")
-    business.monthly_price = 199
-    business.annual_price = 1990
-    business.discount_percent_monthly = 20
-    business.discount_percent_annual = 20
-    business.promo_message = "Launch offer"
-    business.last_synced_at = timezone.now()
-    business.save()
-
-    BillingPlan.objects.get_or_create(
-        key="community",
-        defaults={
-            "name": "Community",
-            "description": "For open source and evaluation",
-            "max_products": 1,
-            "max_components": 5,
-            "max_users": 1,
-        },
-    )
-    BillingPlan.objects.get_or_create(
-        key="enterprise",
-        defaults={
-            "name": "Enterprise",
-            "description": "For organisations with custom needs",
-        },
-    )
-
-    limits = dict(team_with_business_plan.billing_plan_limits or {})
-    limits["next_billing_date"] = (timezone.now() + timedelta(days=21)).date().isoformat()
-    team_with_business_plan.billing_plan_limits = limits
-    team_with_business_plan.save(update_fields=["billing_plan_limits"])
-
-    return team_with_business_plan
+pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
 
 
 @pytest.mark.django_db

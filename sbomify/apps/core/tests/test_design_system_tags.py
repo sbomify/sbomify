@@ -46,25 +46,24 @@ class TestLeafTags:
 
 class TestBlockTags:
     def test_content_is_placed_inside_the_container(self) -> None:
-        out = render('{% page_header title="Releases" %}{% badge text="3" %}{% endpage_header %}')
-        assert "tw-page-header" in out
+        out = render('{% modal id="releases" title="Releases" %}{% badge text="3" %}{% endmodal %}')
+        assert "tw-modal" in out
         assert "Releases" in out
-        # The badge must land inside the header, after its title.
-        assert out.index("tw-page-header-title") < out.index("tw-badge")
+        assert out.index("Releases") < out.index("tw-badge")
 
     def test_nested_containers_compose(self) -> None:
         out = render(
-            '{% page_header title="Products" %}'
+            '{% modal id="products" title="Products" %}'
             '{% actions_menu label="Product actions" %}<span class="tw-dropdown-item">Open</span>{% endactions_menu %}'
-            "{% endpage_header %}"
+            "{% endmodal %}"
         )
-        assert "tw-page-header" in out
+        assert "tw-modal" in out
         assert "Product actions" in out
-        assert out.index("tw-page-header") < out.index("tw-dropdown-item")
+        assert out.index("tw-modal") < out.index("tw-dropdown-item")
 
     def test_block_content_still_sees_the_outer_context(self) -> None:
         out = render(
-            '{% page_header title="Products" %}{{ product_name }}{% endpage_header %}',
+            '{% modal id="products" title="Products" %}{{ product_name }}{% endmodal %}',
             product_name="Acme Gateway",
         )
         assert "Acme Gateway" in out

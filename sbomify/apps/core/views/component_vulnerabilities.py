@@ -69,8 +69,7 @@ def vulnerabilities_panel_context(
         return context
 
     query = panel["query"]
-    context["vuln_prev_url"] = f"{panel_url}?{query_string(query, page=panel['prev_page'])}"
-    context["vuln_next_url"] = f"{panel_url}?{query_string(query, page=panel['next_page'])}"
+    context["vuln_query_string"] = query_string(query, page=1)
     return context
 
 

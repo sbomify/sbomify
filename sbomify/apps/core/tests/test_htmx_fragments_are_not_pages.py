@@ -60,6 +60,7 @@ def _urls(team, component, product, sbom) -> list[str]:
         reverse("sboms:component_crypto_posture", kwargs={"component_id": component.id}),
         reverse("sboms:component_vex_documents", kwargs={"component_id": component.id}),
         reverse("core:component_metadata_form", kwargs={"component_id": component.id}),
+        reverse("controls:product_controls", kwargs={"team_key": team.key, "product_id": product.id}),
     ]
 
 

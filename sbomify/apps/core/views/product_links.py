@@ -52,7 +52,6 @@ class ProductLinksView(GuestAccessBlockedMixin, LoginRequiredMixin, HtmxFragment
             return htmx_error_response("Product not found")
 
         response = render(request, self.template_name, context)
-        response["HX-Trigger"] = "closeModal"
         return response
 
 
