@@ -173,7 +173,8 @@ class TestArtifactPage:
         html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
 
         assert "No assessments turned on" in html
-        assert reverse("plugins:plugins_page") in html
+        switch = reverse("teams:switch_team", args=[sample_sbom.component.team.key])
+        assert f'href="{switch}?next={reverse("plugins:plugins_page")}"' in html
         assert "processing completes" not in html
 
     def test_no_plugins_offers_a_member_no_settings_link(self, sample_sbom, sample_user, plugins, django_user_model):
@@ -277,7 +278,7 @@ class TestRunningNeedsThePlan:
         )
 
         assert response.status_code == 403
-        assert response.json()["detail"] == f"Your plan does not include '{NTIA}'"
+        assert response.json()["detail"] == "Your plan does not include NTIA Minimum Elements (2021)."
         send.assert_not_called()
 
     def test_a_plugin_on_the_plan_still_runs(self, sample_sbom, sample_user, plugins, on_plan, mocker):
@@ -290,3 +291,26 @@ class TestRunningNeedsThePlan:
 
         assert response.status_code == 202
         send.assert_called_once()
+
+
+class TestRerunHiddenWhenRefused:
+    def test_no_rerun_on_a_run_the_plan_excludes(self, sample_sbom, sample_user, plugins, settings):
+        """The endpoint refuses it, so the card must not offer it."""
+        settings.BILLING = True
+        team = sample_sbom.component.team
+        team.billing_plan = None
+        team.save(update_fields=["billing_plan"])
+        _enable(team, NTIA)
+        _run(sample_sbom, "1.1.0")
+
+        html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
+
+        assert f"/api/v1/plugins/assessments/{sample_sbom.id}/" not in html
+
+    def test_rerun_offered_on_a_run_the_workspace_runs(self, sample_sbom, sample_user, plugins):
+        _enable(sample_sbom.component.team, NTIA)
+        _run(sample_sbom, "1.1.0")
+
+        html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
+
+        assert f"/api/v1/plugins/assessments/{sample_sbom.id}/" in html

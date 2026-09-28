@@ -32,12 +32,14 @@ class AssessmentCoverage:
     its plan includes. ``unassessed`` lists the ones that apply to this artifact
     and have no run for it, as ``{"plugin_name", "plugin_display_name"}``.
     ``outdated`` maps a plugin name to its current version, for each latest run
-    produced by a different one.
+    produced by a different one. ``runnable`` names every plugin the re-run
+    endpoint would accept for this workspace.
     """
 
     plugins_enabled: bool = False
     unassessed: list[dict[str, str]] = field(default_factory=list)
     outdated: dict[str, str] = field(default_factory=dict)
+    runnable: frozenset[str] = frozenset()
 
 
 def get_assessment_coverage(
@@ -76,5 +78,10 @@ def get_assessment_coverage(
             unassessed.append({"plugin_name": plugin.name, "plugin_display_name": plugin.display_name})
 
     return ServiceResult.success(
-        AssessmentCoverage(plugins_enabled=bool(offered), unassessed=unassessed, outdated=outdated)
+        AssessmentCoverage(
+            plugins_enabled=bool(offered),
+            unassessed=unassessed,
+            outdated=outdated,
+            runnable=frozenset(plugin.name for plugin in offered),
+        )
     )

@@ -99,7 +99,8 @@
         {% comment %}Nothing is scheduled, so nothing is processing. Saying results are on their way here once kept a workspace waiting on a run that never existed.{% endcomment %}
         <c-feedback.empty-state compact icon="fas fa-circle-minus" icon_variant="neutral" title="No assessments turned on" message="This workspace has no plugins turned on, so artifacts are not checked.">
         {% if can_manage_plugins %}
-            <c-buttons.secondary size="sm" href="{% url 'plugins:plugins_page' %}">Turn on plugins</c-buttons.secondary>
+            {% comment %}The plugins page configures the session's workspace, so switch to the artifact's first.{% endcomment %}
+            <c-buttons.secondary size="sm" href="{% url 'teams:switch_team' team_key %}?next={% url 'plugins:plugins_page' %}">Turn on plugins</c-buttons.secondary>
         {% endif %}
         </c-feedback.empty-state>
     {% endif %}

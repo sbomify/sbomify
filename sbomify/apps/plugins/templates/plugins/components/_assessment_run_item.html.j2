@@ -60,7 +60,7 @@
                     {% endif %}
                     {% comment %}Set when the plugin's version has moved on since this run, so the verdict may not be what the current checks would give. The Re-run control is in the body.{% endcomment %}
                     {% if run.current_version %}
-                        <c-badges.secondary title="Produced by v{{ run.plugin_version }}. The plugin is now v{{ run.current_version }}.">
+                        <c-badges.secondary class="whitespace-nowrap" title="Produced by v{{ run.plugin_version }}. The plugin is now v{{ run.current_version }}.">
                         <i class="fas fa-clock-rotate-left mr-1" aria-hidden="true"></i>Out of date
                         </c-badges.secondary>
                     {% endif %}
@@ -195,7 +195,7 @@ The host around it is preserved through a page refresh. The server always
                 {% endif %}
                 {% comment %}Set when the plugin's version has moved on since this run, so the verdict may not be what the current checks would give. The Re-run control is in the body.{% endcomment %}
                 {% if run.current_version %}
-                    <c-badges.secondary title="Produced by v{{ run.plugin_version }}. The plugin is now v{{ run.current_version }}.">
+                    <c-badges.secondary class="whitespace-nowrap" title="Produced by v{{ run.plugin_version }}. The plugin is now v{{ run.current_version }}.">
                     <i class="fas fa-clock-rotate-left mr-1" aria-hidden="true"></i>Out of date
                     </c-badges.secondary>
                 {% endif %}

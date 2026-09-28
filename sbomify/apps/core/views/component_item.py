@@ -450,6 +450,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     assessment_runs["unassessed_plugins"] = coverage.value.unassessed
                     for run in assessment_runs["latest_runs"]:
                         run["current_version"] = coverage.value.outdated.get(run["plugin_name"])
+                        run["run_blocked"] = run["plugin_name"] not in coverage.value.runnable
             except Exception:
                 # Degrade to no assessments section rather than failing the page,
                 # but leave a trace — a silent None here hides real data problems.
