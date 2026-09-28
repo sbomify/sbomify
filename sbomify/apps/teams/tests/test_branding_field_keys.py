@@ -87,11 +87,11 @@ def test_clearing_a_legacy_own_key_deletes_it(sample_team_with_owner_member, own
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     "stored",
-    ["team_otherkey_icon_abc.png", "sboms/some-object.json", "otherkey_icon.png"],
+    ["team_otherkey_icon_abc.png", "sboms/some-object.json", "otherkey_icon.png", "{key}_icon"],
 )
 def test_clearing_a_key_from_elsewhere_leaves_the_object(sample_team_with_owner_member, owner_client, storage, stored):
     team = sample_team_with_owner_member.team
-    _set_branding(team, icon=stored)
+    _set_branding(team, icon=stored.format(key=team.key))
 
     response = owner_client.patch(
         f"/api/v1/workspaces/{team.key}/branding/icon", {"value": None}, content_type="application/json"

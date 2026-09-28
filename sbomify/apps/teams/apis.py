@@ -271,7 +271,10 @@ def _is_own_branding_key(team: Team, field: str, filename: str) -> bool:
     """True when the key is one this workspace's uploads generate, current or legacy."""
     if "/" in filename:
         return False
-    return filename.startswith(f"team_{team.key}_{field}_") or filename == f"{team.key}_{field}{Path(filename).suffix}"
+    if filename.startswith(f"team_{team.key}_{field}_"):
+        return True
+    suffix = Path(filename).suffix
+    return bool(suffix) and filename == f"{team.key}_{field}{suffix}"
 
 
 def delete_from_s3(team: Team, field: str, filename: str) -> None:
