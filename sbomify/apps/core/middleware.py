@@ -9,6 +9,7 @@ import re
 import time
 from typing import TYPE_CHECKING, Any, Callable, Protocol
 
+import requests
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import DisallowedHost
@@ -16,6 +17,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonR
 from django.utils.deprecation import MiddlewareMixin
 from django.utils.http import http_date
 
+from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ErrorCode
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.teams.utils import normalize_host
@@ -485,6 +487,25 @@ class RealIPMiddleware(MiddlewareMixin):
         client_ip = get_client_ip(request)
         if client_ip:
             request.META["REMOTE_ADDR"] = client_ip
+
+
+_OIDC_URL_NAMES = frozenset({"openid_connect_login", "openid_connect_callback"})
+
+
+class IdentityProviderUnavailableMiddleware(MiddlewareMixin):
+    """
+    Answer 503 instead of 500 when the identity provider cannot be reached during sign-in.
+
+    allauth fetches the OpenID discovery document on every login and callback without
+    catching network errors, so a provider outage surfaces as an unhandled exception.
+    """
+
+    def process_exception(self, request: HttpRequest, exception: Exception) -> HttpResponse | None:
+        match = request.resolver_match
+        if not isinstance(exception, requests.RequestException) or not match or match.url_name not in _OIDC_URL_NAMES:
+            return None
+        logger.warning("Identity provider unreachable during sign-in: %s", exception)
+        return error_response(request, HttpResponse("Sign-in is unavailable. Try again in a minute.", status=503))
 
 
 def _policy_has_report_uri(policy: str) -> bool:
