@@ -115,9 +115,9 @@ mv core-image-minimal-qemux86-64.rootfs.spdx.json \
 
 A single JSON-LD document under the 3.0.0 `@context`: 2066 graph elements, 129
 `software_Package`s, with CPEs as `cpe23` external identifiers and no purls.
-All 2066 elements validate against the vendored `spdx_3.0.0-schema.json`, which
-took `jsonschema` about seven minutes here, so like the large sample it is
-checked in full out-of-band and on its first 500 elements per commit.
+All 2066 elements validate against the vendored `spdx_3.0.0-schema.json`. Like
+the large sample, it is checked in full out-of-band and on its first 500
+elements per commit.
 
 ### SPDX 3.0: core-image-sato-sdk (large)
 

@@ -369,8 +369,7 @@ class TestOnlyARefusedElementReachesJsonschema:
 
 @pytest.mark.parametrize("version", VERSIONS)
 class TestTheMessagesStayBounded:
-    """jsonschema's cost grows with an element's size and with its nesting. The
-    gate decides, and jsonschema itemises only what fits a budget."""
+    """The gate decides, and jsonschema itemises only what fits a budget."""
 
     def test_a_large_refused_element_is_named_without_jsonschema(
         self, version: str, monkeypatch: pytest.MonkeyPatch
@@ -428,9 +427,8 @@ class TestTheMessagesStayBounded:
         self, version: str, text: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """jsonschema quotes the value a message is about, once for every class
-        it tries, so long text makes every step of its walk dearer. A number is
-        quoted too, and writing out a long integer costs more per digit the
-        longer it is."""
+        it tries, so text past the limit is not itemised. A number is quoted
+        too, so an integer's digits count as text."""
 
         def _refuse(*_: Any) -> Any:
             raise AssertionError("jsonschema was asked to itemise an element holding too much text")
@@ -460,16 +458,12 @@ class TestTheMessagesStayBounded:
         ids=["empty objects", "objects of no class", "IRIs", "long integers"],
     )
     @pytest.mark.parametrize("where", ["element", "root"])
-    def test_a_part_inside_the_limits_costs_about_a_second_at_most(
+    def test_a_part_inside_the_limits_stays_within_the_cpu_bound(
         self, version: str, part: dict[str, Any], where: str
     ) -> None:
-        """How a part is shaped does not predict jsonschema's cost. Under 3.0.0,
-        whose classes do not dispatch on ``type``, it evaluates every class a
-        value in ``to`` might be, in full, once for each class declaring ``to``.
-        Each part here fits the value and nesting limits, and under 3.0.0 cost
-        seconds until the steps were capped. The integers, 4300 digits each and
-        the longest ``json.loads`` reads, still cost two seconds after that,
-        until their digits counted as text."""
+        """Each part here fits the value, nesting and text limits. Its messages
+        are itemised within the fixed per-document step allowance under both
+        schemas, whatever the part holds."""
         document = _valid(3, version)
         if where == "element":
             document["@graph"].append(part)
@@ -531,9 +525,9 @@ class TestTheMessagesStayBounded:
 
 class TestTheStepsAreCountedPerDocument:
     def test_a_part_that_spends_them_leaves_none_for_the_parts_after_it(self) -> None:
-        """Under 3.0.0 the middle part would cost seconds. It spends what is
-        left instead, and the part after it is named plainly rather than given
-        a fresh allowance."""
+        """The middle part draws on the same allowance and spends what is left,
+        so the part after it is named plainly rather than given a fresh
+        allowance."""
         document = _valid(3, "3.0.0")
         refused = {"type": "software_Package", "spdxId": "https://example.test/x", "creationInfo": "_:ci", "junk": 1}
         document["@graph"] += [refused, {"to": [{} for _ in range(30)]}, dict(refused)]

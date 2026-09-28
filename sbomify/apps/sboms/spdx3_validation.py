@@ -39,9 +39,8 @@ pinned constant.
 ``jsonschema`` names violations element by element rather than over the whole
 document. The 3.0.0 root is a ``oneOf`` between the graph form and a single
 object, so a bad element anywhere surfaces as the root failing both, with the
-document itself as the message. Its cost also grows with an element's size
-and with how deeply objects nest in it, so the gate picks out the elements that
-fail and ``jsonschema`` itemises only what a budget allows. An element past the
+document itself as the message. So the gate picks out the elements that fail
+and ``jsonschema`` itemises only what a budget allows. An element past the
 budget is still named, without the itemised reason.
 """
 
@@ -314,18 +313,13 @@ def _violations(document: dict[str, Any], schema_version: str, limit: int) -> li
     return errors
 
 
-# How much of a document ``jsonschema`` itemises. Its cost grows with a part's
-# size, and faster with how deep objects nest inside it, since it evaluates
-# every class a nested object might be at each level. Under 3.0.0 a small,
-# shallow part can cost as much: its classes do not dispatch on ``type``, so it
-# evaluates every class a value might be in full, once for each class declaring
-# the property that holds the value. So each keyword it evaluates takes one of
-# ``_ITEMISED_STEPS`` per document, and ``_faults`` names plainly any part not
-# itemised when the steps run out. ``_itemisable_size`` applies the other three
-# limits, to skip parts not worth starting. The text limit also keeps each step
-# cheap, because a message quotes the value it is about. It counts an integer's
-# digits too, since writing out a long integer costs more per digit the longer
-# it is. Together they hold a rejection's messages to a second or so.
+# How much of a document ``jsonschema`` itemises. Messages are itemised within a
+# fixed per-document allowance: each keyword it evaluates takes one of
+# ``_ITEMISED_STEPS``, and ``_faults`` names plainly any part not itemised when
+# the steps run out. ``_itemisable_size`` applies the other three limits, to
+# skip parts not worth starting. The text limit also keeps each step small,
+# because a message quotes the value it is about, and it counts an integer's
+# digits as text.
 _ITEMISED_VALUES = 64
 _ITEMISED_NESTING = 1
 _ITEMISED_CHARACTERS = 4096
