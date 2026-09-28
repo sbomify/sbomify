@@ -3,8 +3,8 @@
 Beside every recipe, Yocto's create-spdx emits one package per fetched source:
 ``SPDXRef-Download-openssl-1``, named ``openssl-source-1``, carrying the
 tarball URL and its SHA256 and no purl, CPE or SWID. No producer can add one,
-so every Yocto recipe document scored one identifier short. It is exempted the
-way CycloneDX ``type=file`` components are. Ordinary packages are not.
+so every Yocto recipe document scored one identifier short. It is exempted just
+as CycloneDX ``type=file`` components are. Ordinary packages are not.
 """
 
 from __future__ import annotations
