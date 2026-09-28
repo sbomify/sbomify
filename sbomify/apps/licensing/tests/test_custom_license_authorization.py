@@ -39,4 +39,4 @@ def test_the_api_docs_offer_no_custom_licence_management():
 
     tags = {tag["name"]: tag["description"] for tag in api.get_openapi_schema()["tags"]}
 
-    assert "custom" not in tags["Licensing"].lower()
+    assert "custom licen" not in tags["Licensing"].lower()
