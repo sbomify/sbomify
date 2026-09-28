@@ -10,7 +10,7 @@
     through the frame's own trigger, so there is one request definition and the
     skeleton returns while it runs.
     {% endcomment %}
-    <c-layout.frame x-data="{ failed: false }" hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true" hx-trigger="load, retry-trends" hx-swap="innerHTML" @htmx:before-request="failed = false" @htmx:response-error="failed = true" @htmx:send-error="failed = true" @htmx:timeout="failed = true">
+    <c-layout.frame x-data="{ failed: false }" hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?{{ trends_query }}" hx-trigger="load, retry-trends" hx-swap="innerHTML" @htmx:before-request="failed = false" @htmx:response-error="failed = true" @htmx:send-error="failed = true" @htmx:timeout="failed = true">
     <c-feedback.loading-chart message="Loading vulnerability trends..." x-show="!failed" />
     <template x-if="failed">
         <c-feedback.alert variant="danger" title="Could not load vulnerability trends">
