@@ -20,6 +20,7 @@ from sbomify.apps.sboms.utils import (
     make_download_token,
     should_use_signed_url,
     should_use_signed_url_for_document,
+    verify_download_token,
 )
 
 
@@ -449,6 +450,24 @@ class TestSignedURLs:
                 team=self.team, user=guest_user, status=AccessRequest.Status.REVOKED
             )
             assert self.client.get(url, {"token": token}).status_code == 403
+
+
+def test_expired_download_token_is_reported_as_expired():
+    token = make_download_token("sbom-id", "user-id")
+
+    with patch("sbomify.apps.sboms.utils.log") as log:
+        assert verify_download_token(token, max_age=-1) is None
+
+    assert log.warning.call_args.args[0].startswith("Expired download token")
+
+
+def test_tampered_download_token_is_reported_as_invalid():
+    token = make_download_token("sbom-id", "user-id") + "x"
+
+    with patch("sbomify.apps.sboms.utils.log") as log:
+        assert verify_download_token(token) is None
+
+    assert log.warning.call_args.args[0].startswith("Invalid signature in download token")
 
 
 @pytest.mark.django_db

@@ -1581,11 +1581,11 @@ def verify_download_token(token: str, max_age: int = SIGNED_URL_MAX_AGE) -> dict
     try:
         payload: dict[str, Any] = get_signer().unsign_object(token, max_age=max_age)
         return payload
-    except signing.BadSignature:
-        log.warning(f"Invalid signature in download token: {token}")
-        return None
     except signing.SignatureExpired:
         log.warning(f"Expired download token: {token}")
+        return None
+    except signing.BadSignature:
+        log.warning(f"Invalid signature in download token: {token}")
         return None
     except Exception as e:
         log.error(f"Error verifying download token: {e}")
