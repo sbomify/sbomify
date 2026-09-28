@@ -18,8 +18,8 @@ from sbomify.apps.sboms.models import SBOM
 def _release_with_components(team, *, is_public: bool):
     product = Product.objects.create(name="P", team=team, is_public=is_public)
     release = Release.objects.create(product=product, name="v1")
-    c1 = Component.objects.create(name="c1", team=team)
-    c2 = Component.objects.create(name="c2", team=team)
+    c1 = Component.objects.create(name="c1", team=team, visibility=Component.Visibility.PUBLIC)
+    c2 = Component.objects.create(name="c2", team=team, visibility=Component.Visibility.PUBLIC)
     return product, release, c1, c2
 
 
@@ -211,7 +211,7 @@ def _product_with_cbom_component(team, *, is_public: bool):
     """A product whose component carries a CBOM, linked so the rolling latest
     release picks the artifact up when the download endpoint resolves it."""
     product = Product.objects.create(name="P", team=team, is_public=is_public)
-    component = Component.objects.create(name="c1", team=team)
+    component = Component.objects.create(name="c1", team=team, visibility=Component.Visibility.PUBLIC)
     product.components.add(component)
     sbom = _cbom_sbom(component, "c1.cbom.json")
     return product, sbom

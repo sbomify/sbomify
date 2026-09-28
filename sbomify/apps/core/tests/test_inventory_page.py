@@ -171,3 +171,158 @@ def test_release_summary_only_and_skipped_results(sample_team_with_owner_member:
     assert row["unassessed"] == 1
     assert not row["assessed"]
     assert not any(r["id"] == release.id for r in inventory(member, view="releases", risk="clear")["rows"])
+
+
+@pytest.mark.parametrize("kind", ["products", "components", "releases"])
+@pytest.mark.parametrize("scoped", [False, True])
+def test_inventory_only_hydrates_models_used_by_selected_view(
+    sample_team_with_owner_member: Member, mocker: MockerFixture, kind: str, scoped: bool
+) -> None:
+    from sbomify.apps.core.services.inventory_page import build_inventory_snapshot
+
+    workspace = sample_team_with_owner_member.team
+    product = Product.objects.create(team=workspace, name="Selected product")
+    component = Component.objects.create(team=workspace, name="Selected component")
+    product.components.add(component)
+    Release.objects.create(product=product, name="v1")
+    other = Product.objects.create(team=workspace, name="Other product")
+    other.components.add(Component.objects.create(team=workspace, name="Other component"))
+    release_count = Release.objects.filter(product=product).count() if scoped else Release.objects.count()
+    component_loads = mocker.spy(Component, "from_db")
+    release_loads = mocker.spy(Release, "from_db")
+
+    snapshot = build_inventory_snapshot(workspace, kind, product_id=product.id if scoped else "")
+
+    assert snapshot["counts"] == {
+        "products": 1 if scoped else 2,
+        "components": 1 if scoped else 2,
+        "releases": release_count,
+    }
+    assert snapshot["rows"]
+    if kind == "releases":
+        component_loads.assert_not_called()
+    else:
+        release_loads.assert_not_called()
+
+
+@pytest.fixture
+def populated_inventory(sample_team_with_owner_member: Member) -> Member:
+    member = sample_team_with_owner_member
+    for index in range(13):
+        product = Product.objects.create(
+            team=member.team,
+            name=f"Product {index:02}",
+            description="Searchable description",
+            is_public=index % 2 == 0,
+        )
+        component = Component.objects.create(
+            team=member.team,
+            name=f"Component {index:02}",
+            visibility="public" if index % 2 == 0 else "private",
+            component_type="document" if index == 12 else "bom",
+        )
+        product.components.add(component)
+        release = Release.objects.create(product=product, name=f"Version {index:02}", is_prerelease=index % 2 == 0)
+        if index % 3 != 0 and index != 12:
+            sbom = scan(component, f"CVE-EXAMPLE-{index}" if index % 3 == 1 else None)
+            ReleaseArtifact.objects.create(release=release, sbom=sbom)
+    Component.objects.create(team=member.team, name="Unassigned Straße")
+    return member
+
+
+@pytest.mark.parametrize("kind", ["products", "components", "releases"])
+def test_inventory_assesses_only_the_visible_page(
+    populated_inventory: Member, mocker: MockerFixture, kind: str
+) -> None:
+    from sbomify.apps.core.services import inventory_page
+
+    component_picture = mocker.spy(inventory_page, "build_component_security_picture")
+    release_picture = mocker.spy(inventory_page, "build_release_vuln_postures")
+    result = inventory(populated_inventory, view=kind, page="2")
+    ids = {row["id"] for row in result["rows"]}
+    assert result["page"].paginator.count > 10
+    assert ids
+    if kind == "releases":
+        component_picture.assert_not_called()
+        assert {release.id for release in release_picture.call_args.args[0]} == ids
+    else:
+        release_picture.assert_not_called()
+        expected = (
+            ids
+            if kind == "components"
+            else set(
+                Component.objects.filter(team=populated_inventory.team, products__id__in=ids).values_list(
+                    "id", flat=True
+                )
+            )
+        )
+        assert set(component_picture.call_args.args[0]) == expected
+
+
+@pytest.mark.parametrize("kind", ["products", "components", "releases"])
+def test_paged_inventory_preserves_full_snapshot_filter_and_sort_contract(
+    populated_inventory: Member, kind: str
+) -> None:
+    from sbomify.apps.core.services.inventory_page import COLUMNS, build_inventory_snapshot, build_inventory_table
+
+    member = populated_inventory
+    snapshot = build_inventory_snapshot(member.team, kind)
+    cases = [
+        {},
+        {"page": "2"},
+        {"page": "999"},
+        {"page": "bad"},
+        {"page": "-1"},
+        {"per_page": "25"},
+        {"search": "missing"},
+        {"search": "strasse"},
+        {"search": "Product 01"},
+        {"search": "Searchable description"},
+        {"visibility": "public"},
+        {"visibility": "private"},
+        {"risk": "attention"},
+        {"risk": "clear"},
+        {"risk": "unassessed"},
+        {"search": "01", "risk": "attention", "direction": "desc"},
+        {"sort": "bad", "direction": "bad", "per_page": "0", "risk": "bad", "visibility": "bad"},
+        *({"sort": column, "direction": direction} for column, _ in COLUMNS[kind] for direction in ("asc", "desc")),
+    ]
+    if kind != "products":
+        cases.append({"product": snapshot["products"][0]["id"]})
+    if kind == "components":
+        cases.append({"product": "unassigned"})
+    for params in cases:
+        request = RequestFactory().get("/products/", {"view": kind, **params})
+        expected = build_inventory_table(request, snapshot, kind=kind)
+        assert expected.ok and expected.value is not None
+        actual = inventory(member, view=kind, **params)
+        expected_table = expected.value["inventory"]
+        assert actual["rows"] == expected_table["rows"], params
+        assert actual["page"].number == expected_table["page"].number, params
+        assert actual["page"].paginator.count == expected_table["page"].paginator.count, params
+        for field in ("total", "tabs", "products", "headers", "query", "refresh_url"):
+            assert actual[field] == expected_table[field], (params, field)
+
+
+@pytest.mark.parametrize("kind", ["products", "components", "releases"])
+def test_inventory_narrows_security_work_before_risk_filter(
+    populated_inventory: Member, mocker: MockerFixture, kind: str
+) -> None:
+    from sbomify.apps.core.services import inventory_page
+
+    picture = mocker.spy(inventory_page, "build_component_security_picture")
+    postures = mocker.spy(inventory_page, "build_release_vuln_postures")
+    result = inventory(populated_inventory, view=kind, search="01", risk="attention")
+    assert result["rows"]
+    if kind == "releases":
+        # Search includes the product name, so both its pinned and rolling
+        # releases match. Both must be assessed before filtering by risk.
+        expected_ids = set(
+            Release.objects.filter(product__team=populated_inventory.team, product__name="Product 01").values_list(
+                "id", flat=True
+            )
+        )
+        assert {release.id for release in postures.call_args.args[0]} == expected_ids
+    else:
+        assert len(result["rows"]) == 1
+        assert len(picture.call_args.args[0]) == 1

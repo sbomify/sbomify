@@ -1,3 +1,4 @@
+{% load humanize %}
 {% load pqc_extras %}
 {% comment %}
 Lazy-loaded crypto-asset (CBOM) inventory card, rendered as a standalone HTMX
@@ -19,7 +20,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
     <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
         <i class="fas fa-lock text-primary" aria-hidden="true"></i>
         Cryptographic Assets
-        <c-badges.secondary size="sm">{{ crypto_inventory.count }}</c-badges.secondary>
+        <c-badges.secondary size="sm">{{ crypto_inventory.count|intcomma }}</c-badges.secondary>
         {% comment %}
             The readiness verdict is a filter's output rather than one of a
             handful the template can branch on, so the badge takes the value on
@@ -57,7 +58,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
                         :class="tab === 'certificates' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
                         @click="tab = 'certificates'">
                     Certificates
-                    <c-badges.secondary size="sm">{{ certificates|length }}</c-badges.secondary>
+                    <c-badges.secondary size="sm">{{ certificates|length|intcomma }}</c-badges.secondary>
                 </button>
             {% endif %}
             {% if protocols %}
@@ -67,7 +68,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
                         :class="tab === 'protocols' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
                         @click="tab = 'protocols'">
                     Protocols
-                    <c-badges.secondary size="sm">{{ protocols|length }}</c-badges.secondary>
+                    <c-badges.secondary size="sm">{{ protocols|length|intcomma }}</c-badges.secondary>
                 </button>
             {% endif %}
         </div>
@@ -240,7 +241,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
         </c-tables.table>
         <c-tables.footer>
         <c-tables.info>
-        Showing <strong x-text="startIdx"></strong> to <strong x-text="endIdx"></strong> of <strong x-text="total"></strong>
+        Showing <strong x-text="$number(startIdx)"></strong> to <strong x-text="$number(endIdx)"></strong> of <strong x-text="$number(total)"></strong>
         </c-tables.info>
         <c-tables.pager />
         </c-tables.footer>

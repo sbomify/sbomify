@@ -70,7 +70,7 @@ size themselves naturally on smaller screens.
                         {% if limit.count is None %}
                             Unlimited {{ limit.label }}s
                         {% else %}
-                            {{ limit.count }} {{ limit.label }}{{ limit.count|pluralize }}
+                            {{ limit.count|intcomma }} {{ limit.label }}{{ limit.count|pluralize }}
                         {% endif %}
                     </span>
                 </li>

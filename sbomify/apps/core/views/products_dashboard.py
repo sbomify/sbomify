@@ -37,8 +37,10 @@ class InventoryView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         result = build_inventory_context(request, kind=self.inventory_kind)
         if not result.ok:
             return HttpResponse(result.error, status=result.status_code or 400)
-        partial = request.headers.get("HX-Target") == "inventory-content"
-        template = "core/products_inventory.html.j2" if partial else "core/products_dashboard.html.j2"
+        template = {
+            "inventory-content": "core/products_inventory.html.j2",
+            "inventory-content-results": "core/products_inventory_results.html.j2",
+        }.get(request.headers.get("HX-Target", ""), "core/products_dashboard.html.j2")
         return render(request, template, result.value)
 
 

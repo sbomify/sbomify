@@ -26,7 +26,9 @@
         <div>
             <c-layout.section-header density="compact" title="Pending requests" class="mb-3">
             <c-slot name="actions">
-            {% if pending_requests %}<c-badges.warning size="sm">{{ pending_requests|length }}</c-badges.warning>{% endif %}
+            {% if pending_requests %}
+                <c-badges.warning size="sm">{{ pending_requests|length|intcomma }}</c-badges.warning>
+            {% endif %}
             </c-slot>
             </c-layout.section-header>
             {% if pending_requests %}
@@ -67,7 +69,7 @@
                         {% if req.nda_signatures.all|length > 1 %}
                             <div class="text-xs text-text-muted mt-1"
                                  title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }}, {{ sig.signed_name }}, {{ sig.signed_at|date:'j M Y, H:i' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
-                                {{ req.nda_signatures.all|length }} signatures on record
+                                {{ req.nda_signatures.all|length|intcomma }} signatures on record
                             </div>
                         {% endif %}
                         </c-tables.cell>
@@ -115,7 +117,9 @@
         <div class="pt-4 border-t border-border">
             <c-layout.section-header density="compact" title="Pending invitations" class="mb-3">
             <c-slot name="actions">
-            {% if pending_invitations %}<c-badges.info size="sm">{{ pending_invitations|length }}</c-badges.info>{% endif %}
+            {% if pending_invitations %}
+                <c-badges.info size="sm">{{ pending_invitations|length|intcomma }}</c-badges.info>
+            {% endif %}
             </c-slot>
             </c-layout.section-header>
             {% if pending_invitations %}
@@ -159,7 +163,9 @@
         <div class="pt-4 border-t border-border">
             <c-layout.section-header density="compact" title="Approved requests" class="mb-3">
             <c-slot name="actions">
-            {% if approved_requests %}<c-badges.success size="sm">{{ approved_requests|length }}</c-badges.success>{% endif %}
+            {% if approved_requests %}
+                <c-badges.success size="sm">{{ approved_requests|length|intcomma }}</c-badges.success>
+            {% endif %}
             </c-slot>
             </c-layout.section-header>
             {% if approved_requests %}
@@ -206,7 +212,7 @@
                         {% if req.nda_signatures.all|length > 1 %}
                             <div class="text-xs text-text-muted mt-1"
                                  title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }}, {{ sig.signed_name }}, {{ sig.signed_at|date:'j M Y, H:i' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
-                                {{ req.nda_signatures.all|length }} signatures on record
+                                {{ req.nda_signatures.all|length|intcomma }} signatures on record
                             </div>
                         {% endif %}
                         </c-tables.cell>
@@ -234,7 +240,9 @@
         <div class="pt-4 border-t border-border">
             <c-layout.section-header density="compact" title="Rejected requests" class="mb-3">
             <c-slot name="actions">
-            {% if rejected_requests %}<c-badges.danger size="sm">{{ rejected_requests|length }}</c-badges.danger>{% endif %}
+            {% if rejected_requests %}
+                <c-badges.danger size="sm">{{ rejected_requests|length|intcomma }}</c-badges.danger>
+            {% endif %}
             </c-slot>
             </c-layout.section-header>
             {% if rejected_requests %}
