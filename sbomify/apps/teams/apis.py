@@ -225,15 +225,15 @@ def update_team_branding_field(
     current_branding = BrandingInfo(**branding_data)
     update_data = current_branding.model_dump()
 
-    s3_client = StorageClient("MEDIA")
-
-    # Handle file deletions
-    if field in ["icon", "logo"] and data.value is None and update_data.get(field):
-        old_filename = update_data[field]
-        try:
-            s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, old_filename)
-        except Exception as e:
-            logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
+    if field in ["icon", "logo"]:
+        # A file key only ever comes from an upload; this endpoint can only clear it.
+        if data.value is not None:
+            return 400, {"detail": f"Upload a file to set the {field}."}
+        if old_filename := update_data.get(field):
+            try:
+                delete_from_s3(team, field, old_filename)
+            except Exception as e:
+                logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
         update_data[field] = ""
     else:
         update_data[field] = data.value
@@ -267,9 +267,18 @@ def upload_to_s3(
     s3_client.upload_media(filename, file.read())
 
 
-def delete_from_s3(
-    filename: str,
-) -> None:
+def _is_own_branding_key(team: Team, field: str, filename: str) -> bool:
+    """True when the key is one this workspace's uploads generate, current or legacy."""
+    if "/" in filename:
+        return False
+    return filename.startswith(f"team_{team.key}_{field}_") or filename == f"{team.key}_{field}{Path(filename).suffix}"
+
+
+def delete_from_s3(team: Team, field: str, filename: str) -> None:
+    """Delete a replaced or cleared branding file, only if this workspace uploaded it."""
+    if not _is_own_branding_key(team, field, filename):
+        logger.warning(f"Not deleting {field} key {filename!r}: not an upload of workspace {team.key}")
+        return
     s3_client = StorageClient("MEDIA")
     s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
 
@@ -337,7 +346,7 @@ def update_team_branding(
 
         try:
             if old_filename:
-                delete_from_s3(old_filename)
+                delete_from_s3(team, field, old_filename)
         except Exception as e:
             logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
 
@@ -412,7 +421,7 @@ def upload_branding_file(
         # Only delete old file after successful database commit
         if old_filename:
             try:
-                s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, old_filename)
+                delete_from_s3(team, file_type, old_filename)
             except Exception as e:
                 logger.warning(f"Failed to delete old {file_type} file {old_filename}: {e}")
 
