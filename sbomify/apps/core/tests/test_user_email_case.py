@@ -11,8 +11,10 @@ import importlib
 from unittest.mock import patch
 
 import pytest
+from allauth.core.exceptions import ImmediateHttpResponse
 from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.core.management import CommandError, call_command
 from django.db import IntegrityError, connection, transaction
 from django.test import Client, RequestFactory
@@ -96,17 +98,23 @@ def test_sign_in_joins_the_account_stored_in_other_case():
     assert sociallogin.user.pk == holder.pk
 
 
-def test_sign_in_joins_no_account_when_two_hold_the_address(without_constraint, mocker):
+def test_sign_in_is_refused_when_two_accounts_hold_the_address(without_constraint, mocker):
     first = _user_stored_as("first", "Holder@example.com")
     second = _user_stored_as("second", "HOLDER@example.com")
     sociallogin = _SocialLogin("holder@example.com")
     warning = mocker.patch("sbomify.apps.core.adapters.logger.warning")
 
-    CustomSocialAccountAdapter().pre_social_login(RequestFactory().get("/"), sociallogin)
+    request = RequestFactory().get("/")
+    request.user = AnonymousUser()
 
+    with pytest.raises(ImmediateHttpResponse) as refused:
+        CustomSocialAccountAdapter().pre_social_login(request, sociallogin)
+
+    assert refused.value.response.status_code == 409
     assert sociallogin.user.pk is None
+    assert User.objects.filter(email__iexact="holder@example.com").count() == 2
     warning.assert_called_once_with(
-        "Social sign-in not linked: accounts %s share one email address", sorted([first.pk, second.pk])
+        "Social sign-in refused: accounts %s share one email address", sorted([first.pk, second.pk])
     )
 
 

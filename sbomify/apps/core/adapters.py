@@ -169,7 +169,18 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
                 pass
             except User.MultipleObjectsReturned:
                 ids = sorted(User.objects.filter(email__iexact=existing_user.email).values_list("id", flat=True))
-                logger.warning("Social sign-in not linked: accounts %s share one email address", ids)
+                logger.warning("Social sign-in refused: accounts %s share one email address", ids)
+                from allauth.core.exceptions import ImmediateHttpResponse
+                from django.shortcuts import render
+
+                raise ImmediateHttpResponse(
+                    render(
+                        request,
+                        "socialaccount/authentication_error.html.j2",
+                        {"error_message": "More than one account uses this email address. Contact support to sign in."},
+                        status=409,
+                    )
+                )
 
         # Sync email_verified status from social provider on every login
         extra_data = sociallogin.account.extra_data or {}
