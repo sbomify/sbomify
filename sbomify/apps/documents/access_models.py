@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.validators import MaxLengthValidator
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
@@ -96,25 +96,27 @@ class AccessRequest(models.Model):
         """
         if self.status not in (self.Status.REJECTED, self.Status.REVOKED):
             raise ValueError(f"Only a rejected or revoked access request can be reopened, not {self.status}")
-        AccessRequestDecision.objects.create(
-            access_request=self,
-            status=self.status,
-            requested_at=self.requested_at,
-            decided_at=self.decided_at,
-            decided_by=self.decided_by,
-            revoked_at=self.revoked_at,
-            revoked_by=self.revoked_by,
-            notes=self.notes,
-        )
-        self.nda_signatures.live().update(superseded_at=timezone.now())
-        self.status = self.Status.PENDING
-        self.requested_at = timezone.now()
-        self.decided_at = None
-        self.decided_by = None
-        self.revoked_at = None
-        self.revoked_by = None
-        self.notes = ""
-        self.save()
+        now = timezone.now()
+        with transaction.atomic():
+            AccessRequestDecision.objects.create(
+                access_request=self,
+                status=self.status,
+                requested_at=self.requested_at,
+                decided_at=self.decided_at,
+                decided_by=self.decided_by,
+                revoked_at=self.revoked_at,
+                revoked_by=self.revoked_by,
+                notes=self.notes,
+            )
+            self.nda_signatures.live().update(superseded_at=now)
+            self.status = self.Status.PENDING
+            self.requested_at = now
+            self.decided_at = None
+            self.decided_by = None
+            self.revoked_at = None
+            self.revoked_by = None
+            self.notes = ""
+            self.save()
 
 
 class AccessRequestDecision(models.Model):
@@ -128,10 +130,21 @@ class AccessRequestDecision(models.Model):
     class Meta:
         db_table = "documents_access_request_decisions"
         ordering = ["-archived_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=("rejected", "revoked")),
+                name="access_request_decision_is_closed",
+            )
+        ]
+
+    CLOSED_STATUSES = [
+        (AccessRequest.Status.REJECTED.value, AccessRequest.Status.REJECTED.label),
+        (AccessRequest.Status.REVOKED.value, AccessRequest.Status.REVOKED.label),
+    ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     access_request = models.ForeignKey(AccessRequest, on_delete=models.CASCADE, related_name="past_decisions")
-    status = models.CharField(max_length=20, choices=AccessRequest.Status.choices)
+    status = models.CharField(max_length=20, choices=CLOSED_STATUSES)
     requested_at = models.DateTimeField()
     decided_at = models.DateTimeField(null=True, blank=True)
     decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")

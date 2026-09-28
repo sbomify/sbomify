@@ -29,12 +29,7 @@ class Migration(migrations.Migration):
                 (
                     "status",
                     models.CharField(
-                        choices=[
-                            ("pending", "Pending"),
-                            ("approved", "Approved"),
-                            ("rejected", "Rejected"),
-                            ("revoked", "Revoked"),
-                        ],
+                        choices=[("rejected", "Rejected"), ("revoked", "Revoked")],
                         max_length=20,
                     ),
                 ),
@@ -80,6 +75,12 @@ class Migration(migrations.Migration):
             options={
                 "db_table": "documents_access_request_decisions",
                 "ordering": ["-archived_at"],
+                "constraints": [
+                    models.CheckConstraint(
+                        condition=models.Q(("status__in", ("rejected", "revoked"))),
+                        name="access_request_decision_is_closed",
+                    )
+                ],
             },
         ),
     ]
