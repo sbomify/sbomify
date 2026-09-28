@@ -464,6 +464,7 @@ def test_expired_download_token_is_reported_as_expired():
     ):
         assert verify_download_token(token) is None
 
+    log.warning.assert_called_once()
     assert log.warning.call_args.args[0].startswith("Expired download token")
 
 
@@ -473,6 +474,7 @@ def test_tampered_download_token_is_reported_as_invalid():
     with patch("sbomify.apps.sboms.utils.log") as log:
         assert verify_download_token(token) is None
 
+    log.warning.assert_called_once()
     assert log.warning.call_args.args[0].startswith("Invalid signature in download token")
 
 
