@@ -338,3 +338,25 @@ def test_the_issue_chip_agrees_with_its_count(failing: int, label: str):
 
     text = " ".join(strip_tags(html).split())
     assert re.search(rf"\b{failing} {label}\b", text), text
+
+
+def test_a_crowded_run_header_wraps_and_leaves_the_chevron_clear():
+    """At 375 px one-line badges ran into the chevron. The row wraps instead,
+    and the trigger keeps a gap the chevron never gives up."""
+    run = {
+        "id": "r1",
+        "plugin_name": NTIA,
+        "plugin_display_name": "BSI TR-03183-2 v2.1 (EU CRA SBOM)",
+        "plugin_version": "1.0.0",
+        "current_version": "1.1.0",
+        "category": "compliance",
+        "status": "completed",
+        "result": {"summary": {"total_findings": 5, "fail_count": 3, "pass_count": 2}, "findings": []},
+    }
+    html = render_to_string("plugins/components/_assessment_run_item.html.j2", {"run": run, "loop_index": 1})
+
+    assert "flex w-full items-center justify-between gap-3 px-6" in html
+    assert "fa-chevron-down shrink-0" in html
+    assert '<div class="flex flex-wrap items-center gap-x-3 gap-y-2 flex-grow min-w-0">' in html
+    assert '<span class="min-w-0 font-semibold text-text">' in html
+    assert html.count("whitespace-nowrap") >= 2  # "3 Issues" and "Out of date"

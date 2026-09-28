@@ -17,8 +17,8 @@
                 <c-cards.collapsible level="{% if skipped %}{% elif security_total %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ get expanded() { return $store.openAssessments.isOpen('{{ run.id }}') } }">
                 {# djlint:on #}
                 <c-cards.collapsible-trigger bare state="expanded" @click="$store.openAssessments.toggle('{{ run.id }}')" id="run-trigger-{{ run.id }}">
-                <div class="flex items-center gap-3 flex-grow min-w-0">
-                    <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-2 flex-grow min-w-0">
+                    <span class="min-w-0 font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
                     {# release_names is populated by _run_to_schema from the M2M #}
                     {% if run.release_names %}
                         <span class="flex items-center gap-1 flex-wrap">
@@ -148,8 +148,8 @@ The host around it is preserved through a page refresh. The server always
             <c-cards.collapsible level="{% if skipped %}{% elif error_count %}danger{% elif fail_count %}warning{% elif run.status == 'completed' and pass_count == 0 %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ get expanded() { return $store.openAssessments.isOpen('{{ run.id }}') } }">
             {# djlint:on #}
             <c-cards.collapsible-trigger bare state="expanded" @click="$store.openAssessments.toggle('{{ run.id }}')" id="run-trigger-{{ run.id }}">
-            <div class="flex items-center gap-3 flex-grow min-w-0">
-                <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 flex-grow min-w-0">
+                <span class="min-w-0 font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
                 {# release_names is populated by _run_to_schema from the M2M #}
                 {% if run.release_names %}
                     <span class="flex items-center gap-1 flex-wrap">
