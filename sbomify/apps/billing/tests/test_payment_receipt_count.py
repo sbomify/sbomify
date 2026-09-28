@@ -11,7 +11,7 @@ from sbomify.apps.billing import billing_processing, email_notifications
 
 pytestmark = pytest.mark.django_db
 
-T0 = 1_790_000_000
+T0 = 1_600_000_000
 
 
 def _subscription(**fields: Any) -> stripe.Subscription:
