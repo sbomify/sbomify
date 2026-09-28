@@ -137,6 +137,38 @@ class TestSyncReactivation:
         assert "scheduled_downgrade_plan" not in team.billing_plan_limits
 
 
+class TestSyncAfterSubscriptionReplaced:
+    """A checkout can store a new subscription while the sync is still asking Stripe about the old one."""
+
+    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
+    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
+    def test_old_subscription_state_is_not_written_over_the_new_one(
+        self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
+    ):
+        stale_team = team_with_subscription
+        stale_team.billing_plan_limits["cancel_at_period_end"] = True
+        stale_team.billing_plan_limits["scheduled_downgrade_plan"] = "community"
+        stale_team.save()
+
+        new_limits = {
+            "stripe_subscription_id": "sub_new_456",
+            "stripe_customer_id": "cus_test_123",
+            "subscription_status": "active",
+            "cancel_at_period_end": False,
+            "next_billing_date": "2030-01-01T00:00:00+00:00",
+        }
+        type(stale_team).objects.filter(pk=stale_team.pk).update(billing_plan_limits=new_limits)
+
+        mock_stripe_subscription.status = "canceled"
+        mock_stripe_subscription.cancel_at_period_end = False
+        mock_cache.return_value = mock_stripe_subscription
+
+        assert sync_subscription_from_stripe(stale_team) is True
+
+        stale_team.refresh_from_db()
+        assert stale_team.billing_plan_limits == new_limits
+
+
 class TestSyncNextBillingDate:
     """Test next_billing_date synchronization."""
 
