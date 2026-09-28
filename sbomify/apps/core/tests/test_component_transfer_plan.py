@@ -12,6 +12,7 @@ import datetime
 import pytest
 from django.conf import settings
 from django.db import transaction
+from django.db.models.signals import post_save
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
@@ -156,14 +157,24 @@ def test_the_receiving_workspace_is_counted_under_its_lock_inside_the_transactio
     target = _paid_workspace(sample_user)
     component = Component.objects.create(name="moving", team=team_with_business_plan)
     depth: dict[str, int] = {}
+    savepoint: dict[str, str] = {}
 
     def at_depth(name: str, check):
         def record(team_id: str, resource_type: str):
             # Savepoint depth, not in_atomic_block: the test itself runs inside a transaction.
-            depth[name] = len(transaction.get_connection().savepoint_ids)
+            savepoints = transaction.get_connection().savepoint_ids
+            depth[name] = len(savepoints)
+            if savepoints:
+                savepoint[name] = savepoints[-1]
             return check(team_id, resource_type)
 
         return record
+
+    def record_move(sender, instance, **kwargs):
+        if instance.pk == component.pk:
+            savepoint["move"] = transaction.get_connection().savepoint_ids[-1]
+
+    post_save.connect(record_move, weak=False)
 
     pre_check = mocker.patch(
         "sbomify.apps.core.views._check_billing_limits", side_effect=at_depth("pre-check", _check_billing_limits)
@@ -172,9 +183,14 @@ def test_the_receiving_workspace_is_counted_under_its_lock_inside_the_transactio
         "sbomify.apps.core.views._enforce_limit_under_lock", side_effect=at_depth("lock", _enforce_limit_under_lock)
     )
 
-    response = _transfer(sample_user, component, target)
+    try:
+        response = _transfer(sample_user, component, target)
+    finally:
+        post_save.disconnect(record_move)
 
     assert response.status_code == 302
     pre_check.assert_called_once_with(str(target.id), "component")
     lock.assert_called_once_with(str(target.id), "component")
     assert depth["lock"] > depth["pre-check"]
+    # The move is saved in the transaction that took the lock, so the lock holds until it commits.
+    assert savepoint["move"] == savepoint["lock"]
