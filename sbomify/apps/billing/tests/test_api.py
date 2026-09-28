@@ -3,6 +3,7 @@
 import json
 
 import pytest
+import stripe
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
 from django.urls import reverse
@@ -24,6 +25,16 @@ from sbomify.apps.sboms.models import SBOM, Component
 # Import SBOM-related fixtures from sboms app
 from sbomify.apps.sboms.tests.fixtures import sample_component, sample_sbom  # noqa: F401
 from sbomify.apps.teams.models import Member, Team
+
+
+@pytest.fixture
+def subscription_gone_at_stripe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stripe no longer has the workspace's stored subscription, so a downgrade applies at once."""
+
+    def retrieve(subscription_id: str, **kwargs) -> None:
+        raise stripe.error.InvalidRequestError("No such subscription", param="id", code="resource_missing")
+
+    monkeypatch.setattr(stripe.Subscription, "retrieve", retrieve)
 
 
 @pytest.mark.django_db
@@ -171,6 +182,7 @@ def test_change_plan_to_community(
     sample_user: AbstractBaseUser,  # noqa: F811
     team_with_business_plan: Team,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811,
+    subscription_gone_at_stripe: None,
 ):
     """Test downgrading to community plan."""
     client.force_login(sample_user)
@@ -244,14 +256,14 @@ def test_change_plan_invalid_plan(
 def test_change_plan_to_business_monthly(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_community_plan: Team,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
     """Test changing to business plan with monthly billing."""
     client.force_login(sample_user)
     response = client.post(
         reverse("api-1:change_plan"),
-        json.dumps({"team_key": team_with_business_plan.key, "plan": "business", "billing_period": "monthly"}),
+        json.dumps({"team_key": team_with_community_plan.key, "plan": "business", "billing_period": "monthly"}),
         content_type="application/json",
     )
 
@@ -264,14 +276,14 @@ def test_change_plan_to_business_monthly(
 def test_change_plan_to_business_annual(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_community_plan: Team,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
     """Test changing to business plan with annual billing."""
     client.force_login(sample_user)
     response = client.post(
         reverse("api-1:change_plan"),
-        json.dumps({"team_key": team_with_business_plan.key, "plan": "business", "billing_period": "annual"}),
+        json.dumps({"team_key": team_with_community_plan.key, "plan": "business", "billing_period": "annual"}),
         content_type="application/json",
     )
 
@@ -284,7 +296,7 @@ def test_change_plan_to_business_annual(
 def test_change_plan_business_upgrade_passes_allow_promotion_codes(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_community_plan: Team,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -314,7 +326,7 @@ def test_change_plan_business_upgrade_passes_allow_promotion_codes(
     client.force_login(sample_user)
     response = client.post(
         reverse("api-1:change_plan"),
-        json.dumps({"team_key": team_with_business_plan.key, "plan": "business", "billing_period": "monthly"}),
+        json.dumps({"team_key": team_with_community_plan.key, "plan": "business", "billing_period": "monthly"}),
         content_type="application/json",
     )
 
@@ -330,6 +342,7 @@ def test_change_plan_to_community_with_active_subscription(
     sample_user: AbstractBaseUser,  # noqa: F811
     team_with_business_plan: Team,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811,
+    subscription_gone_at_stripe: None,
 ):
     """Test downgrading to community plan with an active subscription."""
     client.force_login(sample_user)
@@ -357,6 +370,7 @@ def test_changing_to_community_makes_sboms_public(
     sample_component: Component,  # noqa: F811
     sample_sbom: SBOM,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811
+    subscription_gone_at_stripe: None,
 ):
     """Test that changing to community plan makes all team's SBOMs public."""
     # Create 3 private components with their SBOMs

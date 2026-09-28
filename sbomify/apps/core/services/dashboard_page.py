@@ -45,7 +45,10 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.freshness import freshness_state
 
-    cache_key = f"dashboard-page:v3:{team_id}"
+    # v4 adds the unmeasured flags below. An entry cached by the previous
+    # release has no such key, and a missing flag reads as false in the
+    # template, which is the confident zero this change exists to stop.
+    cache_key = f"dashboard-page:v4:{team_id}"
     cached = django_cache.get(cache_key)
     if cached is not None:
         return ServiceResult.success(cast("dict[str, Any]", cached))
@@ -127,6 +130,10 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     counts = picture["counts"]
     for finding in picture["findings"]:
         finding["products"] = product_names_by_component.get(finding["component_id"], [])
+    open_findings = sum(count["total"] for count in counts.values())
+    past_sla = sum(overdue_by_component.values())
+    known_exploited = sum(bool(finding["kev"]) for finding in picture["findings"])
+    unassessed = len(picture["unassessed"])
     context = {
         "is_first_visit": not has_artifacts,
         "needs_attention": picture["findings"][:_DIGEST_LIMIT],
@@ -136,16 +143,30 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
         # panel is where those are accounted for.
         "needs_attention_total": len(picture["findings"]),
         "metrics": {
-            "open": sum(count["total"] for count in counts.values()),
+            "open": open_findings,
             "critical_high": sum(count["critical"] + count["high"] for count in counts.values()),
-            "past_sla": sum(overdue_by_component.values()),
+            "past_sla": past_sla,
             "sla_unknown": sum(count["total"] for count in counts.values())
             - len(picture["findings"])
             + sum(finding["sla"]["label"] == "Awaiting history" for finding in picture["findings"]),
-            "known_exploited": sum(bool(finding["kev"]) for finding in picture["findings"]),
+            "known_exploited": known_exploited,
             "stale": len(stale_components),
+            # The same zero the product page cannot stand behind, on the surface
+            # a reader lands on first. All three counts read the newest SBOM per
+            # component, so a component whose newest SBOM has not finished
+            # scanning contributes nothing, and scanning is asynchronous: that is
+            # the normal state after every upload, not an edge case.
+            #
+            # Only a zero, and only while something is unassessed. A non-zero
+            # count is real information even when partial, and the alert under
+            # the cards already says what is still missing. "Components with
+            # stale SBOMs" is measured from upload timestamps rather than scan
+            # results, so its zero is always honest and stays a number.
+            "unmeasured_open": open_findings == 0 and unassessed > 0,
+            "unmeasured_past_sla": past_sla == 0 and unassessed > 0,
+            "unmeasured_known_exploited": known_exploited == 0 and unassessed > 0,
         },
-        "unassessed": len(picture["unassessed"]),
+        "unassessed": unassessed,
         "products": products[:_PRODUCT_LIMIT],
         "product_count": len(products),
     }
