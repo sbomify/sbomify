@@ -36,7 +36,7 @@ def dashboard(authenticated_web_client, mocker, settings):
 
 @pytest.mark.parametrize(
     ("failed_days_ago", "shown", "hidden"),
-    [(0, "Payment Failed", "Account Suspended"), (30, "Account Suspended", "Payment Failed")],
+    [(0, "Payment failed", "Account suspended"), (30, "Account suspended", "Payment failed")],
 )
 def test_past_due_workspace_shows_the_banner(dashboard, team_with_business_plan, failed_days_ago, shown, hidden):
     _past_due(team_with_business_plan, failed_days_ago)
@@ -51,5 +51,5 @@ def test_past_due_workspace_shows_the_banner(dashboard, team_with_business_plan,
 def test_active_workspace_shows_no_banner(dashboard):
     content = dashboard()
 
-    assert "Payment Failed" not in content
-    assert "Account Suspended" not in content
+    assert "Payment failed" not in content
+    assert "Account suspended" not in content

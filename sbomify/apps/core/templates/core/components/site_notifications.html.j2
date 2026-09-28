@@ -6,14 +6,14 @@
         as one sentence.
     {% endcomment %}
     {% if team.is_in_grace_period %}
-        <c-feedback.alert variant="warning" title="Payment Failed">
+        <c-feedback.alert variant="warning" title="Payment failed">
         Your grace period is active. Update your payment method within {{ grace_period_days }} day{{ grace_period_days|pluralize }} to avoid service interruption.
-        <c-buttons.warning size="sm" href="{% url 'billing:create_portal_session' team.key %}" class="ml-2 align-middle no-underline">Fix Payment</c-buttons.warning>
+        <c-buttons.warning size="sm" href="{% url 'billing:create_portal_session' team.key %}" class="ml-2 align-middle no-underline">Fix payment</c-buttons.warning>
         </c-feedback.alert>
     {% else %}
-        <c-feedback.alert variant="danger" title="Account Suspended" icon="fas fa-ban">
+        <c-feedback.alert variant="danger" title="Account suspended" icon="fas fa-ban">
         Your account is restricted due to payment failure. Creation of new resources is blocked.
-        <c-buttons.danger size="sm" href="{% url 'billing:create_portal_session' team.key %}" class="ml-2 align-middle no-underline">Reactivate Subscription</c-buttons.danger>
+        <c-buttons.danger size="sm" href="{% url 'billing:create_portal_session' team.key %}" class="ml-2 align-middle no-underline">Reactivate subscription</c-buttons.danger>
         </c-feedback.alert>
     {% endif %}
 {% endif %}
