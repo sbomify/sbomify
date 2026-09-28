@@ -262,18 +262,36 @@ def _get_passing_assessments_by_sbom(
     scanner results carry the whole findings list, and a component with many
     SBOM versions would otherwise pull every one of them into memory.
     """
-    latest_ids = (
-        AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-        .order_by("sbom_id", "plugin_name", "-created_at", "-id")
-        .distinct("sbom_id", "plugin_name")
-        .values("id")
-    )
-    runs = (
-        AssessmentRun.objects.filter(id__in=latest_ids)
-        .only("id", "sbom_id", "plugin_name", "category", "status", "completed_at")
-        .annotate(summary_slice=F("result__summary"), metadata_slice=F("result__metadata"))
-        .order_by("plugin_name")
-    )
+
+    def read_runs(latest_ids: Any) -> list[Any]:
+        return list(
+            AssessmentRun.objects.filter(id__in=latest_ids)
+            .only("id", "sbom_id", "plugin_name", "category", "status", "completed_at")
+            .annotate(summary_slice=F("result__summary"), metadata_slice=F("result__metadata"))
+            .order_by("plugin_name")
+        )
+
+    try:
+        runs = read_runs(
+            AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
+            .order_by("sbom_id", "plugin_name", "-created_at", "-id")
+            .distinct("sbom_id", "plugin_name")
+            .values("id")
+        )
+    except NotSupportedError:
+        # Fallback for databases that don't support DISTINCT ON (e.g., SQLite in tests)
+        runs = read_runs(
+            AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
+            .values("sbom_id", "plugin_name")
+            .annotate(
+                latest_id=Subquery(
+                    AssessmentRun.objects.filter(sbom_id=OuterRef("sbom_id"), plugin_name=OuterRef("plugin_name"))
+                    .order_by("-created_at", "-id")
+                    .values("id")[:1]
+                )
+            )
+            .values_list("latest_id", flat=True)
+        )
     passing_by_sbom: dict[str, list[PassingAssessment]] = {sbom_id: [] for sbom_id in sbom_ids}
     for run in runs:
         # The two helpers read nothing else from ``result``.
