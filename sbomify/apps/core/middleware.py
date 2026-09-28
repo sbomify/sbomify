@@ -492,6 +492,13 @@ class RealIPMiddleware(MiddlewareMixin):
 _OIDC_URL_NAMES = frozenset({"openid_connect_login", "openid_connect_callback"})
 
 
+def _provider_unreachable(exception: Exception) -> bool:
+    """A network failure or a 5xx from the provider; bad URLs and 4xx are configuration errors and stay 500s."""
+    if isinstance(exception, requests.HTTPError):
+        return exception.response is not None and exception.response.status_code >= 500
+    return isinstance(exception, (requests.ConnectionError, requests.Timeout))
+
+
 class IdentityProviderUnavailableMiddleware(MiddlewareMixin):
     """
     Answer 503 instead of 500 when the identity provider cannot be reached during sign-in.
@@ -502,7 +509,7 @@ class IdentityProviderUnavailableMiddleware(MiddlewareMixin):
 
     def process_exception(self, request: HttpRequest, exception: Exception) -> HttpResponse | None:
         match = request.resolver_match
-        if not isinstance(exception, requests.RequestException) or not match or match.url_name not in _OIDC_URL_NAMES:
+        if not _provider_unreachable(exception) or not match or match.url_name not in _OIDC_URL_NAMES:
             return None
         logger.warning("Identity provider unreachable during sign-in: %s", exception)
         return error_response(request, HttpResponse("Sign-in is unavailable. Try again in a minute.", status=503))

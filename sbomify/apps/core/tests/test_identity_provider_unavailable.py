@@ -14,11 +14,15 @@ from sbomify.apps.core.middleware import IdentityProviderUnavailableMiddleware
 LOGIN_URL = "/accounts/oidc/keycloak/login/"
 
 
-def _unavailable_response(*args: object, **kwargs: object) -> requests.Response:
+def _provider_response(status_code: int) -> requests.Response:
     response = requests.Response()
-    response.status_code = 503
+    response.status_code = status_code
     response.url = "https://kc.example.test/realms/sbomify/.well-known/openid-configuration"
     return response
+
+
+def _unavailable_response(*args: object, **kwargs: object) -> requests.Response:
+    return _provider_response(503)
 
 
 @pytest.mark.django_db
@@ -44,3 +48,18 @@ def test_network_errors_elsewhere_are_left_alone() -> None:
     middleware = IdentityProviderUnavailableMiddleware(lambda r: None)
 
     assert middleware.process_exception(request, requests.ReadTimeout()) is None
+
+
+@pytest.mark.parametrize(
+    "exception",
+    [
+        requests.exceptions.MissingSchema("Invalid URL"),
+        requests.HTTPError(response=_provider_response(404)),
+    ],
+)
+def test_configuration_errors_at_sign_in_are_left_alone(exception: Exception) -> None:
+    request = RequestFactory().get(LOGIN_URL)
+    request.resolver_match = resolve(LOGIN_URL)
+    middleware = IdentityProviderUnavailableMiddleware(lambda r: None)
+
+    assert middleware.process_exception(request, exception) is None
