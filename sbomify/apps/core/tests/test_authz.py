@@ -69,6 +69,7 @@ _MATRIX = {
     # capability an admin lacks; "an admin may not remove an owner" is relational
     # and lives in the member-removal guards, not here.
     "workspace:delete": ("team", {"owner": True, "member": False, "admin": False, "guest": False, "bot": False}),
+    "member:grant_owner": ("team", {"owner": True, "member": False, "admin": False, "guest": False, "bot": False}),
     # Guests hold NO capability — they are external trust-center visitors and
     # reach restricted content only through the ABAC component:access path.
     # Every guest column below being False is the point of this table.

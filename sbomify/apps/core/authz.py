@@ -57,11 +57,11 @@ ROLE_BOT = "bot"
 # enforces the invariant; keeping it is what stops this degenerating into
 # per-role permission soup where "what can an admin do" needs a codebase search.
 OWNER_ONLY: tuple[str, ...] = (ROLE_OWNER,)
-"""Reserved to the workspace owner. Deliberately tiny: deleting the workspace is
-the only *capability* an admin lacks. The other owner-exclusive rule — an admin
-may not remove an owner — is relational (it depends on the target member's role,
-not just the actor's), so it cannot be expressed as a tier and lives in the
-member-removal guards instead."""
+"""Reserved to the workspace owner. Deliberately tiny: deleting the workspace and
+granting the owner role are the only *capabilities* an admin lacks. The other
+owner-exclusive rule — an admin may not remove an owner — is relational (it
+depends on the target member's role, not just the actor's), so it cannot be
+expressed as a tier and lives in the member-removal guards instead."""
 
 ADMINISTER: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 """Workspace governance: settings, custom domain, trust-center config, branding,
@@ -118,15 +118,15 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         ROLE_OWNER,
         "Owner",
         "Full control of the workspace. Everything an admin can do, plus deleting "
-        "the workspace and removing other owners.",
+        "the workspace, inviting owners and removing other owners.",
     ),
     (
         ROLE_ADMIN,
         "Admin",
         "Runs the workspace day to day: create, edit and delete products, "
         "components and releases; upload artifacts; manage workspace settings, "
-        "the Trust Center, integrations, members and billing. Cannot remove an "
-        "owner or delete the workspace.",
+        "the Trust Center, integrations, members and billing. Cannot invite or "
+        "remove an owner, or delete the workspace.",
     ),
     (
         ROLE_MEMBER,
@@ -164,6 +164,9 @@ class Decision:
 _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # owner-only
     "workspace:delete": OWNER_ONLY,
+    # Inviting someone as owner. Without it an admin could invite an address
+    # they control and step past "an admin may not remove an owner".
+    "member:grant_owner": OWNER_ONLY,
     # owner + admin governance
     "workspace:administer": ADMINISTER,
     "billing:manage": ADMINISTER,

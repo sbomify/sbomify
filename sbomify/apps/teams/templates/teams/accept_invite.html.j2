@@ -6,7 +6,7 @@
         <c-typography.eyebrow>Workspace invitation</c-typography.eyebrow>
         {# The subtitle must render as one sentence, so its article branch stays on one line. #}
         {# djlint:off #}
-        <c-layout.page-header title="{{ invitation.team.display_name }}" subtitle="You're invited as {% if invitation.role|first in 'aeiou' %}an{% else %}a{% endif %} {{ invitation.get_role_display|lower }}." />
+        <c-layout.page-header title="{{ invitation.team.display_name }}" subtitle="You're invited as {% if invitation.granted_role|first in 'aeiou' %}an{% else %}a{% endif %} {{ invitation.granted_role }}." />
         {# djlint:on #}
     </div>
     <form method="post"

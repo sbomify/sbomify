@@ -595,6 +595,27 @@ class Invitation(models.Model):
     role = models.CharField(max_length=255, choices=settings.TEAMS_INVITABLE_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=calculate_invitation_expiry)
+    # Who issued it, read again at accept time: an owner invitation only makes
+    # someone an owner while its issuer is still an owner. Null on rows written
+    # before this was recorded, and on trust-center guest invitations.
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    @property
+    def granted_role(self) -> str:
+        """The role accepting this invitation gives.
+
+        An owner invitation whose issuer is no longer an owner, or is unknown,
+        gives admin instead.
+        """
+        from sbomify.apps.core.authz import ROLE_ADMIN, ROLE_OWNER, can
+
+        if self.role != ROLE_OWNER:
+            return self.role
+        if self.invited_by is not None and can(self.invited_by, "member:grant_owner", self.team):
+            return ROLE_OWNER
+        return ROLE_ADMIN
 
     def clean(self) -> None:
         # Friendly Python-level guard, invoked by Django forms and any

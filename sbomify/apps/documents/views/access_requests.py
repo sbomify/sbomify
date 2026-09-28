@@ -561,20 +561,21 @@ class NDASigningView(View):
                                 has_default_team = Member.objects.filter(
                                     user=current_user, is_default_team=True
                                 ).exists()
+                                joined_role = invitation.granted_role
                                 Member.objects.create(
                                     team=team,
                                     user=current_user,
-                                    role=invitation.role,
+                                    role=joined_role,
                                     is_default_team=not has_default_team,
                                 )
                                 update_user_teams_session(request, current_user)
-                                switch_active_workspace(request, team, invitation.role)
+                                switch_active_workspace(request, team, joined_role)
 
                                 # NDA-gated invitations bypass both accept_invite and the
                                 # login auto-accept signal; without this capture the
                                 # collaboration funnel undercounts invited users who had
                                 # to sign an NDA before joining.
-                                invitation_role = invitation.role
+                                invitation_role = joined_role
                                 transaction.on_commit(
                                     lambda: capture_for_request(
                                         request,

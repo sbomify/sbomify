@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
 
+from sbomify.apps.core.authz import ROLE_OWNER
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 
 if TYPE_CHECKING:
@@ -68,6 +69,16 @@ class InviteUserForm(forms.Form):
         initial="member",
         widget=forms.Select(attrs={"class": "form-control"}),
     )
+
+    def __init__(self, *args: Any, can_grant_owner: bool = False, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if not can_grant_owner:
+            role_field = cast(forms.ChoiceField, self.fields["role"])
+            role_field.choices = [
+                (role, label)
+                for role, label in settings.TEAMS_SUPPORTED_ROLES
+                if role not in ("guest", "bot", ROLE_OWNER)
+            ]
 
 
 class TeamBrandingForm(forms.Form):

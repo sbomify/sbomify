@@ -247,7 +247,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
     # Capture team and role before deleting invitation, because the invitation object
     # will be invalidated after deletion and its attributes will no longer be accessible.
     team = invitation.team
-    role = invitation.role
+    role = invitation.granted_role
 
     # The seat is counted and taken under one lock: checking capacity and then
     # creating the membership in separate statements let two acceptances both
