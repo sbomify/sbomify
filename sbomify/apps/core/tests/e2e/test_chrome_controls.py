@@ -326,8 +326,8 @@ def test_account_menu_arrow_keys_reach_the_theme_control(authenticated_page: Pag
         """el => [...el.querySelectorAll('[role^=menuitem]')].map(i =>
                i.getAttribute('aria-label') || i.textContent.trim())"""
     ) == [
+        # API tokens left this menu for the rail; the rove is what this pins.
         "My account settings",
-        "API tokens",
         "Light",
         "Dark",
         "Auto",
@@ -337,7 +337,6 @@ def test_account_menu_arrow_keys_reach_the_theme_control(authenticated_page: Pag
     ]
 
     for role, name in (
-        ("menuitem", "API tokens"),
         ("menuitemradio", "Light"),
         ("menuitemradio", "Dark"),
         ("menuitemradio", "Auto"),
@@ -347,9 +346,7 @@ def test_account_menu_arrow_keys_reach_the_theme_control(authenticated_page: Pag
         expect(menu.get_by_role(role, name=name, exact=True)).to_be_focused()
 
     # A menu owns menuitems, groups and separators — not anonymous divs.
-    assert menu.evaluate(
-        "el => [...el.children].every(c => c.getAttribute('role') !== null)"
-    )
+    assert menu.evaluate("el => [...el.children].every(c => c.getAttribute('role') !== null)")
 
 
 @pytest.mark.django_db

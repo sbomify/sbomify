@@ -21,7 +21,7 @@
         </div>
     </div>
     <c-dropdowns.divider />
-    <c-dropdowns.header>Preferences</c-dropdowns.header>
+    <c-dropdowns.header role="presentation">Preferences</c-dropdowns.header>
     {% if request.session.current_team and request.session.current_team.key %}
         <c-dropdowns.item compact icon="far fa-user" href="{% url 'teams:team_settings_tab' team_key=request.session.current_team.key tab='account' %}">My account settings</c-dropdowns.item>
     {% else %}
@@ -29,7 +29,7 @@
     {% endif %}
     <c-chrome.theme-picker />
     <c-dropdowns.divider />
-    <c-dropdowns.header>Help</c-dropdowns.header>
+    <c-dropdowns.header role="presentation">Help</c-dropdowns.header>
     <c-dropdowns.item compact icon="fas fa-book-open" href="https://sbomify.com/guides/" target="_blank" rel="noopener noreferrer">
     Documentation
     <i class="fas fa-arrow-up-right-from-square ml-auto text-[10px] text-text-muted"
