@@ -6,12 +6,15 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE, badge_seal_url
 
 # The gallery's index and its section order come from here, so a component can
 # never be demoed without appearing in the index (or listed without a demo).
 GALLERY_SECTIONS: list[dict[str, str]] = [
+    {"id": "settings-controls", "label": "Settings controls", "group": "Layout"},
+    {"id": "app-overview", "label": "App chrome and overview", "group": "Layout"},
     {"id": "colors", "label": "Colour tokens", "group": "Foundations"},
     {"id": "typography", "label": "Typography", "group": "Foundations"},
     {"id": "icon-chips", "label": "Icon chips", "group": "Foundations"},
@@ -22,9 +25,13 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "forms", "label": "Form controls", "group": "Controls"},
     {"id": "choice-group", "label": "Choice group", "group": "Controls"},
     {"id": "search", "label": "Search input", "group": "Controls"},
+    {"id": "visibility", "label": "Visibility", "group": "Controls"},
+    {"id": "navigation-search", "label": "Navigation search", "group": "Controls"},
     {"id": "file-upload", "label": "File upload", "group": "Controls"},
     {"id": "date-picker", "label": "Date picker", "group": "Controls"},
     {"id": "cards", "label": "Cards", "group": "Containers"},
+    {"id": "plan-cards", "label": "Plan cards", "group": "Containers"},
+    {"id": "workspace-cards", "label": "Workspace cards", "group": "Containers"},
     {"id": "collapsible", "label": "Collapsible card", "group": "Containers"},
     {"id": "accordion", "label": "Accordion", "group": "Containers"},
     {"id": "modals", "label": "Modals", "group": "Containers"},
@@ -64,7 +71,71 @@ class DesignSystemView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         if not settings.DEBUG:
             raise Http404
+        from sbomify.apps.vulnerability_scanning.services.finding_browse import browse_finding_rows, parse_finding_query
+
+        vulnerability_demo = browse_finding_rows(
+            [
+                {
+                    "id": "CVE-2026-10001",
+                    "title": "Request parser vulnerability",
+                    "severity": "high",
+                    "package": "example-parser",
+                    "version": "1.0",
+                    "purl": "pkg:pypi/example-parser@1.0",
+                    "kev": True,
+                    "aliases": [],
+                    "vex_state": "in_triage",
+                    "fixed": "1.1",
+                }
+            ],
+            parse_finding_query(request.GET, prefix="demo_"),
+        )
         context = {
+            "vulnerability_demo": vulnerability_demo,
+            "plan_card_demos": [
+                {
+                    "key": "community",
+                    "features": PLAN_FEATURES["community"],
+                    "name": "Community",
+                    "description": "For public projects.",
+                    "current": True,
+                    "limits": [
+                        {"label": "member", "count": 1},
+                        {"label": "product", "count": 1},
+                        {"label": "component", "count": 5},
+                    ],
+                },
+                {
+                    "key": "business",
+                    "features": PLAN_FEATURES["business"],
+                    "name": "Business",
+                    "description": "For teams sharing private artifacts.",
+                    "limits": [
+                        {"label": "member", "count": 5},
+                        {"label": "product", "count": None},
+                        {"label": "component", "count": None},
+                    ],
+                    "prices": [
+                        {"period": "monthly", "amount": 199, "unit": "month"},
+                        {"period": "annual", "amount": 1990, "unit": "year"},
+                    ],
+                },
+                {
+                    "key": "enterprise",
+                    "features": PLAN_FEATURES["enterprise"],
+                    "name": "Enterprise",
+                    "description": "For custom requirements.",
+                    "limits": [
+                        {"label": "member", "count": None},
+                        {"label": "product", "count": None},
+                        {"label": "component", "count": None},
+                    ],
+                },
+            ],
+            "overview_demo_counts": {"total": 6, "critical": 1, "high": 2, "medium": 2, "low": 1, "other": 3},
+            "overview_demo_sla": {"label": "3 days over", "overdue": True},
+            "overview_demo_evidence": {"component_count": 3, "stale": 1, "missing_sboms": 1},
+            "overview_demo_empty": {"is_first_visit": True, "metrics": {"open": 0}},
             "team": request.session.get("current_team", {}),
             "sections": GALLERY_SECTIONS,
             # One row per brand, chosen to show the ink switching rather than to
@@ -90,6 +161,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 for index, (key, meta) in enumerate(BADGE_CATALOGUE.items())
             ],
             "demo_tokens": [
+                "navy",
                 "primary",
                 "primary-dark",
                 "primary-light",
@@ -97,14 +169,27 @@ class DesignSystemView(LoginRequiredMixin, View):
                 "accent-pink",
                 "accent-orange",
                 "success",
+                "success-dark",
                 "warning",
+                "warning-dark",
                 "danger",
+                "danger-dark",
+                "info",
+                "severity-critical",
+                "severity-high",
+                "severity-medium",
+                "severity-low",
                 "background",
                 "surface",
                 "surface-elevated",
+                "surface-hover",
                 "border",
+                "border-light",
+                "border-focus",
                 "text",
+                "text-secondary",
                 "text-muted",
+                "text-disabled",
             ],
             # The toast demo's Alpine handlers now live in the template: a cotton
             # component takes @click directly, so the attrs string this context used
@@ -231,4 +316,52 @@ class DesignSystemView(LoginRequiredMixin, View):
                 '  -F "file=@bom.cdx.json"'
             ),
         }
+        from datetime import datetime, timezone
+
+        from django.core.paginator import Paginator
+        from django.urls import reverse
+
+        from sbomify.apps.core.services.inventory_page import COLUMNS
+
+        inventory_url = reverse("core:products_dashboard")
+        row = {
+            "id": "example",
+            "name": "Example product",
+            "url": inventory_url,
+            "component_count": 3,
+            "security_component_count": 3,
+            "security_applicable": True,
+            "release_count": 2,
+            "counts": context["overview_demo_counts"],
+            "unassessed": 1,
+            "past_sla": 2,
+            "stale": 1,
+            "missing_sboms": 0,
+            "no_policy": 0,
+            "visibility": "public",
+            "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+        }
+        context["inventory_demo"] = {
+            "base_url": inventory_url,
+            "content_id": "example-inventory",
+            "total": 1,
+            "singular": "product",
+            "kind": "products",
+            "params": {"per_page": "10"},
+            "products": [],
+            "rows": [row],
+            "headers": [
+                {
+                    "key": key,
+                    "label": label,
+                    "href": f"{inventory_url}?sort={key}&direction=desc",
+                    "order": "ascending" if key == "name" else "none",
+                }
+                for key, label in COLUMNS["products"]
+            ],
+            "page": Paginator([row], 10).page(1),
+            "page_range": [1],
+        }
+        if request.headers.get("HX-Target") == "ds-vulnerability-report":
+            return render(request, "core/components/vulnerability_demo.html.j2", context)
         return render(request, "core/design_system.html.j2", context)

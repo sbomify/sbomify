@@ -16,6 +16,8 @@ from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.teams.models import Member
 from sbomify.logging import getLogger
 
+from .stripe_client import TERMINAL_SUBSCRIPTION_STATUSES
+
 if TYPE_CHECKING:
     from sbomify.apps.teams.models import Team
 
@@ -167,7 +169,7 @@ def apply_community_downgrade(team: Team) -> None:
 
 # Stripe statuses after which a subscription no longer pays for anything. ``unpaid``
 # and ``paused`` can come back to ``active``; the plan follows it back when they do.
-ENDED_SUBSCRIPTION_STATUSES = frozenset({"canceled", "unpaid", "incomplete_expired", "paused"})
+ENDED_SUBSCRIPTION_STATUSES = TERMINAL_SUBSCRIPTION_STATUSES | {"unpaid", "paused"}
 
 
 def downgrade_ended_subscription(team_pk: int) -> bool:

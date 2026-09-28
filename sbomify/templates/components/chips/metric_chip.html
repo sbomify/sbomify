@@ -9,10 +9,13 @@ conditional segment carrying the fill, the border colour and the text colour
 together, so no two of them ever land on the same chip. The label stays muted
 under every accent; the value and the icon take it.
 
+The parts wrap inside the chip on narrow screens; the chip never widens the
+page to keep a scan summary on one line.
+
 The line-height is stated because the chip's height is its value's line box:
 text-sm alone brings 1.25rem where the old rule inherited 1.5, which took a
 pixel off every chip and off the strip they sit in.
 {% endcomment %}
 <c-vars accent class />
-<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5] whitespace-nowrap {% if accent == 'info' %}bg-[color-mix(in_oklab,var(--color-info)_10%,transparent)] border-[color-mix(in_oklab,var(--color-info)_30%,transparent)] text-[color:color-mix(in_oklab,var(--color-info)_60%,var(--color-text))]{% elif accent == 'success' %}bg-[color-mix(in_oklab,var(--color-success)_10%,transparent)] border-[color-mix(in_oklab,var(--color-success)_30%,transparent)] text-[color:color-mix(in_oklab,var(--color-success)_60%,var(--color-text))]{% elif accent == 'warning' %}bg-[color-mix(in_oklab,var(--color-warning)_10%,transparent)] border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] text-[color:color-mix(in_oklab,var(--color-warning)_60%,var(--color-text))]{% elif accent == 'danger' %}bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] text-[color:color-mix(in_oklab,var(--color-danger)_60%,var(--color-text))]{% else %}bg-surface border-border text-text{% endif %}{% if class %} {{ class }}{% endif %}"
+<span class="inline-flex flex-wrap items-center min-w-0 max-w-full gap-1.5 px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5] [overflow-wrap:anywhere] {% if accent == 'info' %}bg-[color-mix(in_oklab,var(--color-info)_10%,transparent)] border-[color-mix(in_oklab,var(--color-info)_30%,transparent)] text-[color:var(--color-info)]{% elif accent == 'success' %}bg-[color-mix(in_oklab,var(--color-success)_10%,transparent)] border-[color-mix(in_oklab,var(--color-success)_30%,transparent)] text-[color:var(--color-success)]{% elif accent == 'warning' %}bg-[color-mix(in_oklab,var(--color-warning)_10%,transparent)] border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] text-[color:var(--color-warning)]{% elif accent == 'danger' %}bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] text-[color:var(--color-danger)]{% else %}bg-surface border-border text-text{% endif %}{% if class %} {{ class }}{% endif %}"
       {{ attrs }}>{{ slot }}</span>

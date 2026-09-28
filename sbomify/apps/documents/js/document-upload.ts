@@ -11,7 +11,6 @@ export function registerDocumentUpload(): void {
     Alpine.data('documentUpload', (componentId: string, maxFileSizeMb: number = DEFAULT_MAX_FILE_SIZE_MB) => ({
         componentId,
         maxFileSizeMb,
-        expanded: false,
         isDragOver: false,
         isUploading: false,
         selectedFile: null as File | null,
@@ -126,6 +125,7 @@ export function registerDocumentUpload(): void {
                     this.documentDescription = '';
                     this.clearSelectedFile();
                     window.dispatchEvent(new CustomEvent('document-uploaded'));
+                    window.dispatchEvent(new CustomEvent('close-upload'));
                 } else {
                     const errorMessage = (data.detail as string) || `Upload failed with status ${response.status}`;
                     showError(errorMessage);

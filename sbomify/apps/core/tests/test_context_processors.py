@@ -1,17 +1,86 @@
 """Tests for context processors."""
 
 import os
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.test import override_settings
+from django.http import HttpRequest
+from django.test import RequestFactory, override_settings
+from django.urls import ResolverMatch
 
 from sbomify.apps.core.context_processors import (
+    app_context,
     pending_invitations_context,
     posthog_context,
     sentry_context,
     version_context,
 )
+from sbomify.apps.core.models import User
+from sbomify.apps.teams.models import Member, Team
+
+
+def _context_request(member: Member) -> HttpRequest:
+    request = RequestFactory().get("/products/")
+    request.user = member.user
+    request.session = {"current_team": {"key": member.team.key, "role": "owner"}}
+    return request
+
+
+@pytest.mark.django_db
+def test_nested_renders_reuse_request_context(
+    sample_team_with_owner_member: Member, django_assert_num_queries: Any
+) -> None:
+    request = _context_request(sample_team_with_owner_member)
+    with patch("sbomify.apps.core.context_processors.version", return_value="1.2.3") as version:
+        first = app_context(request)
+        with django_assert_num_queries(0):
+            for _ in range(10):
+                repeated = app_context(request)
+                assert repeated == first
+                assert repeated is not first
+        version.assert_called_once()
+    assert first["can_administer"]
+
+
+@pytest.mark.django_db
+def test_new_request_reads_role_changes(sample_team_with_owner_member: Member) -> None:
+    member = sample_team_with_owner_member
+    assert app_context(_context_request(member))["can_administer"]
+    member.role = "member"
+    member.save(update_fields=["role"])
+    context = app_context(_context_request(member))
+    assert context["can_manage"]
+    assert not context["can_administer"]
+    assert not context["is_owner"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("scope", ["session", "url"])
+def test_request_context_follows_workspace_changes(sample_team_with_owner_member: Member, scope: str) -> None:
+    member = sample_team_with_owner_member
+    workspace = Team.objects.create(name="Other workspace")
+    Member.objects.create(team=workspace, user=member.user, role="member")
+    request = _context_request(member)
+    assert app_context(request)["can_administer"]
+    if scope == "session":
+        request.session["current_team"]["key"] = workspace.key
+    else:
+        request.resolver_match = ResolverMatch(lambda request: None, (), {"team_key": workspace.key})
+    context = app_context(request)
+    assert context["team"] == workspace
+    assert context["can_manage"]
+    assert not context["can_administer"]
+
+
+@pytest.mark.django_db
+def test_request_context_follows_user_changes(sample_team_with_owner_member: Member, guest_user: User) -> None:
+    request = _context_request(sample_team_with_owner_member)
+    assert app_context(request)["can_manage"]
+    request.user = guest_user
+    context = app_context(request)
+    assert not context["can_manage"]
+    assert not context["can_administer"]
 
 
 class TestVersionContext:

@@ -62,9 +62,9 @@
                     Please sign the NDA to access this component.
                 {% endif %}
                 <c-slot name="action">
-                <c-buttons.primary href="{% url 'documents:sign_nda' team.key nda_access_request_id %}">
+                <c-buttons.secondary href="{% url 'documents:sign_nda' team.key nda_access_request_id %}">
                 <i class="fas fa-signature" aria-hidden="true"></i> Sign NDA
-                </c-buttons.primary>
+                </c-buttons.secondary>
                 </c-slot>
                 </c-feedback.alert>
             {% elif user_has_gated_access %}
@@ -75,9 +75,9 @@
                 <c-feedback.alert variant="warning" icon="fas fa-file-signature">
                 <strong>NDA Required:</strong> Please sign the NDA to complete your access request.
                 <c-slot name="action">
-                <c-buttons.primary href="{% url 'documents:sign_nda' team.key pending_request_id %}">
+                <c-buttons.secondary href="{% url 'documents:sign_nda' team.key pending_request_id %}">
                 <i class="fas fa-signature" aria-hidden="true"></i> Sign NDA
-                </c-buttons.primary>
+                </c-buttons.secondary>
                 </c-slot>
                 </c-feedback.alert>
             {% elif access_request_status == 'pending' %}
@@ -89,16 +89,16 @@
                 <c-feedback.alert variant="danger" icon="fas fa-times-circle">
                 <strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.
                 <c-slot name="action">
-                <c-buttons.primary href="{% url 'documents:request_access' team.key %}">Request Access Again</c-buttons.primary>
+                <c-buttons.secondary href="{% url 'documents:request_access' team.key %}">Request Access Again</c-buttons.secondary>
                 </c-slot>
                 </c-feedback.alert>
             {% else %}
                 <c-feedback.alert variant="warning" icon="fas fa-lock">
                 <strong>Gated Component:</strong> This component requires approval to download.
                 <c-slot name="action">
-                <c-buttons.primary href="{% url 'documents:request_access' team.key %}">
+                <c-buttons.secondary href="{% url 'documents:request_access' team.key %}">
                 <i class="fas fa-key" aria-hidden="true"></i> Request Access
-                </c-buttons.primary>
+                </c-buttons.secondary>
                 </c-slot>
                 </c-feedback.alert>
             {% endif %}

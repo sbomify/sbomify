@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from django.test import Client
 from django.urls import reverse
@@ -36,7 +38,7 @@ class TestBaseTemplate:
 
         # Test navigation elements
         assert 'id="sidebar"' in content
-        assert 'role="navigation"' in content
+        assert re.search(r'<nav\b[^>]*aria-label="Primary navigation"', content)
 
         # Test user info is present in dropdown (updated for new structure)
         assert any([sample_user.username in content, "account_logout" in content, "Sign out" in content])
@@ -83,10 +85,8 @@ class TestBaseTemplate:
         response = client.get(reverse("core:dashboard"))
         content = response.content.decode()
 
-        # Check for active state in new sidebar structure (uses bg-primary for active)
-        assert "bg-primary text-white" in content
-        assert ">Dashboard</span>" in content
+        assert re.search(r'<a\b[^>]*aria-label="Overview"[^>]*aria-current="page"', content)
 
         # Test other navigation items present
         assert ">Products</span>" in content
-        assert ">Components</span>" in content
+        assert ">Vulnerability scans</span>" in content

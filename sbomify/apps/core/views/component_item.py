@@ -13,7 +13,7 @@ from sbomify.apps.core.apis import _build_item_response, get_component
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
-    build_custom_domain_url,
+    custom_domain_redirect,
     get_component_public_slug,
     get_public_path,
     get_workspace_public_url,
@@ -195,7 +195,9 @@ class ComponentItemPublicView(View):
                 item_type=item_type,
                 item_id=item_id,
             )
-            return HttpResponseRedirect(build_custom_domain_url(component.team, path, request.is_secure()))
+            redirect = custom_domain_redirect(component.team, path, request.is_secure())
+            if redirect is not None:
+                return redirect
 
         # After the redirect, so a gated artifact lands on the workspace's own
         # domain exactly as a public one does; a gate served from the app domain
@@ -466,9 +468,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         # to a caller the API would actually accept.
         can_rerun = can(request, "component:manage", component)
 
-        # Page-header context: the icon is conditional and the copy chip and
-        # breadcrumb trail are lists, so the view builds them per the design
-        # system contract.
+        # The header takes the copy chip and breadcrumb trail as lists.
         if is_vex:
             item_kind = "VEX"
         elif is_cbom:
@@ -477,7 +477,6 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             item_kind = "SBOM"
         else:
             item_kind = "Document"
-        header_icon = "fas fa-file-code" if is_sbom_backed else "fas fa-file-alt"
         header_copy_values = [{"value": item_id, "title": f"ID: {item_id} (click to copy)"}]
         breadcrumb_items = [
             {"label": component.name, "url": reverse("core:component_details", args=[component_id])},
@@ -491,7 +490,6 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "APP_BASE_URL": settings.APP_BASE_URL,
                 "item": item,
                 "item_type": item_type,
-                "header_icon": header_icon,
                 "header_copy_values": header_copy_values,
                 "breadcrumb_items": breadcrumb_items,
                 "component": component,

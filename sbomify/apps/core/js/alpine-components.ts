@@ -2,36 +2,41 @@
  * Alpine.js Component Registry
  * 
  * Centralized registration of all Alpine.data components.
- * Import registerAllComponents() to register all Alpine components in one place.
+ * initializeAlpine() registers this set before any entry point starts the DOM.
  */
 import Alpine from 'alpinejs';
 
 // ============================================
 // COMPONENT IMPORTS - Core
 // ============================================
+import { navbarSearch } from './navbar-search';
+import { scrollableTabs } from './components/scrollable-tabs';
+import { repositorySetup } from './components/repository-setup';
 import { registerCopyableValue } from './components/copyable-value';
-import { registerPublicStatusToggle } from './components/public-status-toggle';
-import { registerComponentVisibilitySelector } from './components/component-visibility-selector';
+import { registerVisibilitySelector } from './components/visibility-selector';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerDeleteModal } from './components/delete-modal';
-import { registerReleaseList } from './components/release-list';
 import { registerCopyToken } from './components/copy-token';
 import { registerSiteNotifications } from './components/site-notifications';
-import { registerPlanCard } from './components/plan-card';
 import { registerEditableSingleField } from './components/editable-single-field';
 import { registerProductIdentifiers } from './components/product-identifiers';
-import { registerItemsListTable } from './components/items-list-table';
-import { registerItemAssignmentManager } from './components/item-assignment-manager';
-import { registerProductReleases } from './components/product-releases';
+import { registerReleaseEditor } from './components/release-editor';
 import { registerReleaseArtifacts } from './components/release-artifacts';
 import { registerProductIdentifiersBarcodes } from './components/product-identifiers-barcodes';
 import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
+import { registerTeamGeneral } from '../../teams/js/team-general';
+import { registerSettingsNavigation } from '../../teams/js/settings-navigation';
+import { registerTeamBranding, registerCustomDomain } from '../../teams/js/team-branding';
+import { registerFileDragAndDrop } from './components/file-drag-and-drop';
 import { registerAccountDangerZone } from './components/account-danger-zone';
 import { registerDatePicker } from './components/date-picker';
 import { advisoryProductPicker } from './components/advisory-product-picker';
 import { actionsMenu } from './components/actions-menu';
+import { publicSharing } from './components/public-sharing';
+import { uploadDialog } from './components/upload-dialog';
+import { catalogImport } from '../../controls/js/catalog-import';
 
 // ============================================
 // COMPONENT IMPORTS - SBOM Module
@@ -47,7 +52,7 @@ import { registerSupplierEditor } from '../../sboms/js/supplier-editor';
 // ============================================
 import { registerDocumentUpload } from '../../documents/js/document-upload';
 import { registerPlanSelection } from '../../billing/js/plan-selection';
-import { registerAssessmentBadge } from '../../plugins/js/assessment-badge';
+import { vulnerabilityTrends } from '../../vulnerability_scanning/js/vulnerability-chart';
 
 // ============================================
 // COMPONENT IMPORTS - Compliance Module
@@ -174,17 +179,6 @@ export function formState() {
     };
 }
 
-/**
- * Chart Selector Component
- */
-export function chartSelector(defaultChart = 'timeline') {
-    return {
-        activeChart: defaultChart,
-        setChart(chartType: string): void { this.activeChart = chartType; },
-        isActive(chartType: string): boolean { return this.activeChart === chartType; }
-    };
-}
-
 // ============================================
 // REGISTRATION FUNCTIONS
 // ============================================
@@ -193,97 +187,52 @@ export function chartSelector(defaultChart = 'timeline') {
  * Register common inline components (dangerZone, modalState, etc.)
  */
 export function registerCommonComponents(): void {
+    registerAlpineComponent('navbarSearch', navbarSearch);
+    registerAlpineComponent('scrollableTabs', scrollableTabs);
+    registerAlpineComponent('vulnerabilityTrends', vulnerabilityTrends);
     registerAlpineComponent('dangerZone', dangerZone);
     registerAlpineComponent('modalState', modalState);
     registerAlpineComponent('collapsible', collapsible);
     registerAlpineComponent('formState', formState);
-    registerAlpineComponent('chartSelector', chartSelector);
     registerAlpineComponent('advisoryProductPicker', advisoryProductPicker);
     registerAlpineComponent('actionsMenu', actionsMenu);
+    registerAlpineComponent('publicSharing', publicSharing);
+    registerAlpineComponent('uploadDialog', uploadDialog);
+    registerAlpineComponent('catalogImport', catalogImport);
 }
 
 /**
  * Register all Alpine.js components from across the application.
- * Call this once from main.ts or htmx-bundle.ts.
+ * Called once by initializeAlpine(), including when a page bundle starts first.
  */
 export function registerAllComponents(): void {
+    Alpine.data('repositorySetup', repositorySetup);
     // Common inline components
     registerCiCdToken();
     registerCommonComponents();
 
     // Core components
     registerCopyableValue();
-    registerPublicStatusToggle();
-    registerComponentVisibilitySelector();
+    registerVisibilitySelector();
     registerWorkspaceSwitcher();
     registerAccessTokensList();
     registerDeleteModal();
     // confirmModal is registered in alpine-init.ts (base template dependency)
     registerCopyToken();
     registerSiteNotifications();
-    registerPlanCard();
     registerEditableSingleField();
     registerProductIdentifiers();
-    registerItemsListTable();
-    registerItemAssignmentManager();
-    registerProductReleases();
+    registerReleaseEditor();
     registerReleaseArtifacts();
     registerProductIdentifiersBarcodes();
-    registerReleaseList();
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
     registerAccountDangerZone();
-    registerDatePicker();
-
-    // SBOM module components
-    registerSbomUpload();
-    registerSbomsTable();
-    registerLicensesEditor();
-    registerContactsEditor();
-    registerSupplierEditor();
-
-    // Other modules
-    registerDocumentUpload();
-    registerPlanSelection();
-    registerAssessmentBadge();
-
-    // Compliance module
-    registerCraScopeScreening();
-    registerCraStep1();
-    registerCraStep2();
-    registerCraStep3();
-    registerCraStep4();
-    registerCraStep5();
-    registerCraDocSignature();
-}
-
-/**
- * Register components needed for HTMX bundle (subset, no releaseList/barcodes)
- */
-export function registerHtmxBundleComponents(): void {
-    // Common inline components
-    registerCommonComponents();
-
-    // Core components
-    registerCopyableValue();
-    registerPublicStatusToggle();
-    registerComponentVisibilitySelector();
-    registerWorkspaceSwitcher();
-    registerAccessTokensList();
-    registerDeleteModal();
-    // confirmModal is registered in alpine-init.ts (base template dependency)
-    registerCopyToken();
-    registerSiteNotifications();
-    registerPlanCard();
-    registerEditableSingleField();
-    registerProductIdentifiers();
-    registerItemsListTable();
-    registerItemAssignmentManager();
-    registerProductReleases();
-    registerReleaseArtifacts();
-    registerComponentMetaInfoEditor();
-    registerComponentMetaInfo();
-    registerAccountDangerZone();
+    registerTeamGeneral();
+    registerSettingsNavigation();
+    registerTeamBranding();
+    registerCustomDomain();
+    registerFileDragAndDrop();
     registerDatePicker();
 
     // SBOM module components
@@ -313,11 +262,9 @@ export default {
     getRegisteredComponents,
     registerCommonComponents,
     registerAllComponents,
-    registerHtmxBundleComponents,
     // Common components
     dangerZone,
     modalState,
     collapsible,
-    formState,
-    chartSelector
+    formState
 };

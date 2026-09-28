@@ -1,3 +1,4 @@
+{% load humanize %}
 {% comment %}
 VEX Documents card for the component detail page. Lists the VEX documents
 uploaded for the component (file uploader or API); the sbomify-triage overlay
@@ -11,7 +12,7 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
         <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
             <i class="fas fa-shield-halved text-primary" aria-hidden="true"></i>VEX Documents
         </h4>
-        <c-badges.secondary>{{ vex_documents|length }}</c-badges.secondary>
+        <c-badges.secondary>{{ vex_documents|length|intcomma }}</c-badges.secondary>
     </div>
     {% if vex_documents %}
         <c-tables.table>
@@ -46,7 +47,9 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
                 {% if doc.statement_count %}
                     <div class="flex flex-wrap gap-1 items-center">
                         {% for c in doc.cve_summary %}<c-badges.info title="{{ c.state }}">{{ c.id }}</c-badges.info>{% endfor %}
-                        {% if doc.extra_cve_count %}<span class="text-text-muted text-xs">+{{ doc.extra_cve_count }}</span>{% endif %}
+                        {% if doc.extra_cve_count %}
+                            <span class="text-text-muted text-xs">+{{ doc.extra_cve_count|intcomma }}</span>
+                        {% endif %}
                     </div>
                 {% else %}
                     <span class="text-text-muted text-xs">No suppressions</span>

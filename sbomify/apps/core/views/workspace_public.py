@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.db.models import Count, Q
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
 
@@ -11,7 +11,7 @@ from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.url_utils import (
-    build_custom_domain_url,
+    custom_domain_redirect,
     get_component_public_slug,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
@@ -163,7 +163,9 @@ class WorkspacePublicView(View):
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain
         if should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request):
-            return HttpResponseRedirect(build_custom_domain_url(team, "/", request.is_secure()))
+            redirect = custom_domain_redirect(team, "/", request.is_secure())
+            if redirect is not None:
+                return redirect
 
         brand = build_branding_context(team)
 

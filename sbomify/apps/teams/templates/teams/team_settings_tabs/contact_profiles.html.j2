@@ -1,47 +1,17 @@
-{% comment %}
-    Contacts, in the settings-tab style the branding tab set: no card chrome,
-    an h2 and one explainer line up top with the tab's one action beside them.
-    The region below swaps between a data table and a form, and each brings its
-    own gutters, so the bordered panel here only draws the frame.
-{% endcomment %}
-<div>
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-lg font-semibold text-text m-0">Contacts</h2>
-            <p class="text-sm text-text-muted mt-1 m-0">Security and compliance contacts, reused across components.</p>
-        </div>
-        <c-buttons.primary size="sm" hx-get="{% url 'teams:contact_profiles_form' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML">
-        <i class="fas fa-plus mr-1"></i>
-        Add profile
-        </c-buttons.primary>
-    </div>
-    <div class="mt-6 border border-border rounded-xl bg-surface overflow-hidden">
-        <div id="contact-profiles-content"
-             hx-get="{% url 'teams:contact_profiles_list' team.key %}"
-             hx-trigger="load, refreshProfileList from:body"
-             hx-swap="innerHTML"
-             data-edit-url="{% url 'teams:contact_profiles_detail_form' team.key '0000' %}"
-             data-list-url="{% url 'teams:contact_profiles_list' team.key %}">
-            {# Skeleton Loading State #}
-            <div class="p-6">
-                <div class="space-y-3">
-                    {% for i in "123" %}
-                        <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg">
-                            <div class="w-10 h-10 rounded-full bg-border/50 animate-pulse"></div>
-                            <div class="flex-1">
-                                <div class="h-4 w-40 bg-border/50 rounded animate-pulse"></div>
-                                <div class="h-3 w-56 bg-border/30 rounded animate-pulse mt-2"></div>
-                            </div>
-                            <div class="h-8 w-8 bg-border/30 rounded-lg animate-pulse"></div>
-                        </div>
-                    {% endfor %}
-                </div>
-                <div class="flex items-center justify-center py-4 mt-4">
-                    <c-feedback.spinner size="sm" class="mx-auto" />
-                    <span class="ml-3 text-text-muted text-sm">Loading contact profiles...</span>
-                </div>
-            </div>
-        </div>
-    </div>
+{% url 'teams:contact_profiles_list' team.key as profile_list_url %}
+<div class="flex flex-col gap-5">
+    <c-layout.section-header level="2" title="Parties" subtitle="Supplier, manufacturer and security contacts, reused across components.">
+    <c-slot name="actions">
+    <c-buttons.primary size="sm" hx-get="{% url 'teams:contact_profiles_form' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML settle:0">Add profile</c-buttons.primary>
+    </c-slot>
+    </c-layout.section-header>
+    <c-cards.card flush>
+    <div id="contact-profiles-content"
+         hx-get="{{ profile_list_url }}"
+         hx-trigger="refreshProfileList from:body"
+         hx-swap="innerHTML settle:0"
+         data-edit-url="{% url 'teams:contact_profiles_detail_form' team.key '0000' %}"
+         data-list-url="{{ profile_list_url }}">{% include 'teams/contact_profiles/profile_list.html.j2' %}</div>
+    </c-cards.card>
 </div>
-{% include "teams/contact_profiles/partials/alpine_components.html.j2" %}
+{% include 'teams/contact_profiles/partials/alpine_components.html.j2' %}

@@ -8,9 +8,9 @@ the live gallery.
 Containers are block tags, so a container genuinely contains library components::
 
     {% load design_system %}
-    {% page_header title="Releases" %}
+    {% actions_menu label="Release actions" %}
         {% button text="New release" variant="primary" hx_get=new_release_url %}
-    {% endpage_header %}
+    {% endactions_menu %}
 
 Leaves are inline tags::
 
@@ -77,7 +77,6 @@ _LEAF_COMPONENTS = (
 _BLOCK_COMPONENTS = (
     "actions_menu",
     "modal",
-    "page_header",
 )
 
 

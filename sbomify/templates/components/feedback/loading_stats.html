@@ -1,0 +1,5 @@
+{% comment %}Summary cards before their counts arrive. count matches the known summary layout; compact passes through to the stat card so its dimensions and hierarchy stay the same while loading.{% endcomment %}
+<c-vars message="Loading summary..." count="4" compact class="" />
+<c-feedback.loading message="{{ message }}" variant_class="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]" class="{{ class }}" :attrs="attrs">
+{% for item in "123456"|make_list|slice:count %}<c-layout.stat-card loading :compact="compact" />{% endfor %}
+</c-feedback.loading>

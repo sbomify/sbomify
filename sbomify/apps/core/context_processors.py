@@ -6,6 +6,8 @@ from functools import wraps
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Callable
 
+from django.http import HttpRequest
+
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -20,31 +22,29 @@ def once_per_request(processor: Callable[[Any], Any]) -> Callable[[Any], Any]:
     measured at 443 invitation lookups and 889 member lookups on one artifact
     scan report, 3,116 queries for a single page.
 
-    None of these answers can change inside one request, so the first one is
-    kept on the request object. A render with no request (cotton's fully
-    isolated mode builds a plain ``Context``) never reaches a processor at all.
-
-    One thing does write to the session mid-render: ``user_workspaces`` in
-    teams/templatetags repairs ``current_team`` when the session points at a
-    workspace the user has lost. Caching means the rest of the page keeps the
-    answer from before that repair, which is what Django gives you anyway, since
-    processors normally run at bind time, before any tag executes. Re-binding
-    per component made a later component sometimes see the repair and sometimes
-    not, depending on where it sat on the page. One answer per page is the
-    correct one.
+    Cache only within the same user and workspace scope. A session repair or
+    workspace switch must not reuse another workspace's capability flags.
     """
     name = processor.__name__
 
     @wraps(processor)
     def wrapper(request: Any) -> Any:
+        session = getattr(request, "session", {})
+        resolver_match = getattr(request, "resolver_match", None)
+        scope = (
+            getattr(getattr(request, "user", None), "pk", None),
+            (session.get("current_team") or {}).get("key"),
+            resolver_match.kwargs.get("team_key") if resolver_match else None,
+        )
         cache = getattr(request, "_ctx_cache", None)
-        if not isinstance(cache, dict):
+        if not isinstance(cache, dict) or getattr(request, "_ctx_cache_scope", None) != scope:
             # A plain attribute would be read straight off a Mock, which answers
             # every getattr, and the processor would never run under test. A
             # dict has to be one we put there.
             cache = {}
             try:
                 request._ctx_cache = cache
+                request._ctx_cache_scope = scope
             except AttributeError:
                 # Not every object handed to a processor accepts attributes.
                 return processor(request)
@@ -53,6 +53,28 @@ def once_per_request(processor: Callable[[Any], Any]) -> Callable[[Any], Any]:
         return cache[name]
 
     return wrapper
+
+
+def app_context(request: HttpRequest) -> dict[str, Any]:
+    """Build shared context once per request, including nested Cotton renders.
+
+    Isolated components create their own RequestContext. Repeating the app
+    processors there multiplies workspace queries by the number of components.
+    Keep the result on this request only, so each new request reads live roles.
+    A user or workspace switch within a request also gets a fresh context.
+    """
+    context: dict[str, Any] = {}
+    for processor in (
+        version_context,
+        pending_invitations_context,
+        pending_access_requests_context,
+        global_modals_context,
+        team_context,
+        sentry_context,
+        posthog_context,
+    ):
+        context.update(processor(request))
+    return context
 
 
 @once_per_request
@@ -254,7 +276,6 @@ def team_context(request: Any) -> Any:
     try:
         from sbomify.apps.teams.models import Member, Team
 
-        # We could use select_related hooks or simple caching here if performance is an issue
         try:
             team = Team.objects.get(key=team_key)
         except Team.DoesNotExist:

@@ -4,7 +4,8 @@ from urllib.parse import urlparse
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
-from playwright.sync_api import BrowserContext, Page
+from django.urls import reverse
+from playwright.sync_api import BrowserContext, Page, expect
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
@@ -83,6 +84,11 @@ class TestSettingsSnapshot:
     ) -> None:
         no_workspace_page.goto("/settings")
         no_workspace_page.wait_for_load_state("networkidle")
+
+        expect(no_workspace_page.get_by_role("button", name="Generate token", exact=False)).to_have_count(0)
+        expect(no_workspace_page.get_by_role("link", name="Select workspace", exact=True)).to_have_attribute(
+            "href", reverse("teams:teams_dashboard")
+        )
 
         baseline = snapshot.get_or_create_baseline_screenshot(no_workspace_page, width=width)
         current = snapshot.take_screenshot(no_workspace_page, width=width)

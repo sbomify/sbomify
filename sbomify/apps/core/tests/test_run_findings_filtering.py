@@ -123,6 +123,25 @@ class TestTheReaderCanNarrowTheList:
 
         assert [row["id"] for row in panel["rows"]] == ["CVE-2026-00017"]
 
+    @pytest.mark.parametrize("field", ["title", "summary"])
+    def test_search_matches_the_vulnerability_name(self, signed_in, field) -> None:
+        client, component = signed_in
+        named = _finding(30, title="")
+        named[field] = "Parser overflow"
+        run = _run_with(component, [_finding(n) for n in range(30)] + [named])
+
+        panel = _open(client, run, run_search="parser overflow").context["panel"]
+
+        assert [row["id"] for row in panel["rows"]] == ["CVE-2026-00030"]
+
+    def test_severity_filter_accepts_scanner_uppercase(self, signed_in) -> None:
+        client, component = signed_in
+        run = _run_with(component, [_finding(0, severity="HIGH"), _finding(1, severity="low")])
+
+        panel = _open(client, run, run_severity="high").context["panel"]
+
+        assert [row["id"] for row in panel["rows"]] == ["CVE-2026-00000"]
+
     def test_severity_narrows_the_list(self, signed_in) -> None:
         client, component = signed_in
         run = _run_with(
@@ -228,7 +247,7 @@ class TestPagingAndFiltersTravelTogether:
 
         response = _open(client, run, run_severity="critical")
 
-        assert "run_severity=critical" in response.context["next_url"]
+        assert "run_page=2&amp;run_submitted=1&amp;run_severity=critical" in response.content.decode()
 
     def test_filtering_changes_how_many_pages_there_are(self, signed_in) -> None:
         client, component = signed_in
