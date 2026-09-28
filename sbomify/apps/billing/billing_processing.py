@@ -305,7 +305,8 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             team.billing_plan_limits = billing_limits
             team.save()
 
-        if days_remaining <= settings.TRIAL_ENDING_NOTIFICATION_DAYS:
+        # An ended trial gets the expiry notice below instead.
+        if not trial_has_ended and days_remaining <= settings.TRIAL_ENDING_NOTIFICATION_DAYS:
             notify_billing_managers(team, email_notifications.notify_trial_ending, days_remaining)
             logger.info("Trial ending notification sent")
 

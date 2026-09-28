@@ -148,6 +148,7 @@ class TestBillingProcessing:
         assert self.team.billing_plan_limits["subscription_status"] == "canceled"
         assert self.team.billing_plan_limits["is_trial"] is False
         mock_email.notify_trial_expired.assert_called_once()
+        mock_email.notify_trial_ending.assert_not_called()
 
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_handle_checkout_completed_trial(self, mock_email):
