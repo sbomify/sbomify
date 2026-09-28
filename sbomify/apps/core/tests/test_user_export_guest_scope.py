@@ -67,3 +67,22 @@ def test_export_endpoint_leaves_out_guest_workspace_artifacts(sample_user, own_a
 
     assert response.status_code == 200
     assert "vendor-sbom" not in {sbom["name"] for sbom in response.json()["sboms"]}
+
+
+@pytest.mark.parametrize("role", ["admin", "member"])
+def test_export_includes_artifacts_from_admin_and_member_workspaces(sample_user, role):
+    team = Team.objects.create(name=f"Works in as {role}")
+    team.key = number_to_random_token(team.pk)
+    team.save(update_fields=["key"])
+    Member.objects.create(team=team, user=sample_user, role=role)
+    component = Component.objects.create(name=f"{role}-component", team=team)
+    SBOM.objects.create(name=f"{role}-sbom", component=component, format="cyclonedx", format_version="1.6")
+    document_component = Component.objects.create(
+        name=f"{role}-docs", team=team, component_type=Component.ComponentType.DOCUMENT
+    )
+    Document.objects.create(name=f"{role}-doc", component=document_component, document_filename=f"{role}.pdf")
+
+    data = export_user_data(sample_user)
+
+    assert {sbom["name"] for sbom in data["sboms"]} == {f"{role}-sbom"}
+    assert {document["name"] for document in data["documents"]} == {f"{role}-doc"}
