@@ -5,6 +5,8 @@
 asks for a plugin that no longer exists.
 """
 
+from itertools import batched
+
 from django.db import migrations
 from django.db.models import Q
 
@@ -16,12 +18,11 @@ def drop_removed_plugin(apps, schema_editor):
     candidates = TeamPluginSettings.objects.filter(
         Q(enabled_plugins__contains=[REMOVED_PLUGIN]) | Q(plugin_configs__has_key=REMOVED_PLUGIN)
     )
-    changed = []
-    for settings in candidates.iterator(chunk_size=1000):
-        settings.enabled_plugins = [name for name in settings.enabled_plugins or [] if name != REMOVED_PLUGIN]
-        settings.plugin_configs = {k: v for k, v in (settings.plugin_configs or {}).items() if k != REMOVED_PLUGIN}
-        changed.append(settings)
-    TeamPluginSettings.objects.bulk_update(changed, ["enabled_plugins", "plugin_configs"], batch_size=1000)
+    for batch in batched(candidates.iterator(chunk_size=1000), 1000):
+        for settings in batch:
+            settings.enabled_plugins = [name for name in settings.enabled_plugins or [] if name != REMOVED_PLUGIN]
+            settings.plugin_configs = {k: v for k, v in (settings.plugin_configs or {}).items() if k != REMOVED_PLUGIN}
+        TeamPluginSettings.objects.bulk_update(batch, ["enabled_plugins", "plugin_configs"])
 
 
 class Migration(migrations.Migration):
