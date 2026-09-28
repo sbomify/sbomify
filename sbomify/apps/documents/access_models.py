@@ -132,7 +132,7 @@ class AccessRequestDecision(models.Model):
         ordering = ["-archived_at"]
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(status__in=("rejected", "revoked")),
+                condition=models.Q(status__in=(AccessRequest.Status.REJECTED, AccessRequest.Status.REVOKED)),
                 name="access_request_decision_is_closed",
             )
         ]
