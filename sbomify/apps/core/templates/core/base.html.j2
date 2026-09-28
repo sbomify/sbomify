@@ -19,7 +19,10 @@
                     if (theme === 'system') {
                         effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                     }
-                    document.documentElement.classList.add(effectiveTheme);
+                    // Set native controls, canvas and scrollbar geometry before external assets arrive.
+                    document.documentElement.classList.add(effectiveTheme, 'no-transitions');
+                    document.documentElement.style.colorScheme = effectiveTheme;
+                    document.documentElement.style.scrollbarGutter = 'stable';
                 })();
             </script>
             <meta http-equiv="X-UA-Compatible" content="IE=edge">

@@ -1,4 +1,5 @@
 {% extends "core/public_base.htmx.j2" %}
+{% load humanize %}
 {% load static %}
 {% load django_vite %}
 {% load public_url_tags %}
@@ -31,9 +32,9 @@
             {% endif %}
             </c-slot>
             <c-branded.stats>
-            <c-branded.stat label="Advisor{{ advisories.total|pluralize:'y,ies' }}">{{ advisories.total }}</c-branded.stat>
-            <c-branded.stat label="Product{{ products|length|pluralize }}">{{ products|length }}</c-branded.stat>
-            <c-branded.stat label="Compliance artifact{{ global_components|length|pluralize }}">{{ global_components|length }}</c-branded.stat>
+            <c-branded.stat label="Advisor{{ advisories.total|pluralize:'y,ies' }}">{{ advisories.total|intcomma }}</c-branded.stat>
+            <c-branded.stat label="Product{{ products|length|pluralize }}">{{ products|length|intcomma }}</c-branded.stat>
+            <c-branded.stat label="Compliance artifact{{ global_components|length|pluralize }}">{{ global_components|length|intcomma }}</c-branded.stat>
             <c-branded.stat label="Latest advisory">{{ advisories.latest_display|default:"Not yet" }}</c-branded.stat>
             </c-branded.stats>
             </c-branded.page-header>
@@ -147,11 +148,11 @@
                             <div class="text-xs opacity-75 mt-1" title="{{ product.description }}">{{ product.description|truncatechars:80 }}</div>
                         {% endif %}
                         <div class="md:hidden text-xs opacity-75 mt-1">
-                            {{ product.component_count }} component{{ product.component_count|pluralize }}
+                            {{ product.component_count|intcomma }} component{{ product.component_count|pluralize }}
                         </div>
                         </c-tables.cell>
                         <c-tables.cell class="hidden md:table-cell whitespace-nowrap">
-                        {{ product.component_count }} component{{ product.component_count|pluralize }}
+                        {{ product.component_count|intcomma }} component{{ product.component_count|pluralize }}
                         </c-tables.cell>
                         <c-tables.cell class="hidden md:table-cell">
                         {% if product.passing_assessments %}
@@ -188,9 +189,9 @@
                      x-show="rows.length > perPage"
                      x-cloak>
                     <c-tables.info>
-                    Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="matched.length"></strong> products
+                    Showing <strong x-text="$number(startIndex)"></strong> to <strong x-text="$number(endIndex)"></strong> of <strong x-text="$number(matched.length)"></strong> products
                     <template x-if="needle">
-                        <span>(filtered from <strong x-text="rows.length"></strong> total)</span>
+                        <span>(filtered from <strong x-text="$number(rows.length)"></strong> total)</span>
                     </template>
                     </c-tables.info>
                     <c-tables.pager />
