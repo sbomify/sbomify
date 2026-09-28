@@ -10,7 +10,8 @@ from django.core.cache import cache
 
 from sbomify.logging import getLogger
 
-from .stripe_client import StripeError, get_stripe_client
+from .billing_helpers import parse_cancel_at
+from .stripe_client import TERMINAL_SUBSCRIPTION_STATUSES, StripeError, get_stripe_client
 
 logger = getLogger(__name__)
 
@@ -97,6 +98,13 @@ def get_subscription_cancel_at_period_end(subscription_id: str, team_key: str, f
 
     subscription = get_cached_subscription(subscription_id, team_key)
     if subscription:
+        # An ended subscription keeps no pending cancel to reverse, so what the
+        # workspace stored stands until the deleted event settles it.
+        if getattr(subscription, "status", None) in TERMINAL_SUBSCRIPTION_STATUSES:
+            return fallback_value
+        # A cancel set through cancel_at is as pending as one set at period end.
+        if parse_cancel_at(getattr(subscription, "cancel_at", None)) is not None:
+            return True
         return bool(getattr(subscription, "cancel_at_period_end", fallback_value))
 
     # Fallback to cached database value on error
