@@ -6,13 +6,12 @@ from unittest.mock import patch
 
 import pytest
 import stripe
-from django.utils import timezone
 
 from sbomify.apps.billing import billing_processing, email_notifications
 
 pytestmark = pytest.mark.django_db
 
-T0 = int(timezone.now().timestamp())
+T0 = 1_790_000_000
 
 
 def _subscription(**fields: Any) -> stripe.Subscription:
@@ -33,9 +32,9 @@ def _subscription(**fields: Any) -> stripe.Subscription:
     )
 
 
-def _invoice() -> SimpleNamespace:
+def _invoice(created: int) -> SimpleNamespace:
     return SimpleNamespace(
-        id="in_first", created=T0, amount_paid=19900, currency="usd", subscription="sub_test123", parent=None
+        id="in_first", created=created, amount_paid=19900, currency="usd", subscription="sub_test123", parent=None
     )
 
 
@@ -46,11 +45,18 @@ def _update(status: str, created: int, **fields: Any) -> None:
 
 
 def _payment(created: int) -> None:
-    billing_processing.handle_payment_succeeded(_invoice(), SimpleNamespace(id=f"evt_paid_{created}", created=created))
+    billing_processing.handle_payment_succeeded(
+        _invoice(created), SimpleNamespace(id=f"evt_paid_{created}", created=created)
+    )
 
 
 def _receipts(notify) -> int:
-    return sum(1 for call in notify.call_args_list if call.args[1] is email_notifications.notify_payment_succeeded)
+    return sum(
+        1
+        for call in notify.call_args_list
+        if (call.args[1] if len(call.args) > 1 else call.kwargs.get("notification_fn"))
+        is email_notifications.notify_payment_succeeded
+    )
 
 
 @pytest.fixture
