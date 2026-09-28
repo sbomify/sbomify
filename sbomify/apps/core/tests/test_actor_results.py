@@ -30,10 +30,10 @@ def _returns_a_value(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 
 def _unstored_actors() -> list[str]:
     offenders = []
-    for path in ROOT.rglob("*.py"):
+    for path in sorted(ROOT.rglob("*.py")):
         if "tests" in path.parts or "migrations" in path.parts:
             continue
-        for fn in ast.walk(ast.parse(path.read_text())):
+        for fn in ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))):
             if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             actors = [d for d in fn.decorator_list if _is_actor(d)]

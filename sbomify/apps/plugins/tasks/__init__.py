@@ -1434,7 +1434,7 @@ def sweep_stranded_runs_task() -> None:
     """
     from sbomify.apps.plugins.stranded import sweep_stranded_runs
 
-    sweep_stranded_runs()
+    logger.info(f"[TASK_sweep_stranded_runs] settled {sweep_stranded_runs()} runs")
 
 
 @cron("15 3 * * *")  # type: ignore[untyped-decorator]  # Daily, before the other sweeps
