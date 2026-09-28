@@ -62,7 +62,13 @@ from .schemas import (
     validate_cyclonedx_sbom,
     validate_spdx_sbom,
 )
-from .services.sboms import delete_sbom_record, get_crypto_inventory, get_sbom_detail, schedule_vex_reapply
+from .services.sboms import (
+    delete_sbom_record,
+    get_crypto_inventory,
+    get_sbom_detail,
+    schedule_vex_reapply,
+    upload_sbom_file,
+)
 
 log = logging.getLogger(__name__)
 
@@ -138,7 +144,6 @@ def _store_external_vex(
     version = "" if raw_version is None else str(raw_version)
 
     s3 = StorageClient("SBOMS")
-    filename = s3.upload_sbom(file_content)
 
     sbom = SBOM(
         name=component.name,
@@ -147,12 +152,13 @@ def _store_external_vex(
         format_version=format_version[:20],
         version=version,
         source=source,
-        sbom_filename=filename,
         sha256_hash=sha256_hash,
         bom_type=SBOM.BomType.VEX.value,
     )
     try:
         with transaction.atomic():
+            filename = upload_sbom_file(s3, file_content)
+            sbom.sbom_filename = filename
             sbom.save()
     except IntegrityError:
         _cleanup_orphaned_s3_object(filename)
@@ -647,10 +653,8 @@ def sbom_upload_cyclonedx(
             }
 
         s3 = StorageClient("SBOMS")
-        filename = s3.upload_sbom(request.body)
 
         sbom_dict["format"] = sbom_format
-        sbom_dict["sbom_filename"] = filename
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
         sbom_dict["sha256_hash"] = sha256_hash
@@ -659,6 +663,8 @@ def sbom_upload_cyclonedx(
 
         try:
             with transaction.atomic():
+                filename = upload_sbom_file(s3, request.body)
+                sbom_dict["sbom_filename"] = filename
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError as e:
@@ -892,15 +898,15 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
             }
 
         s3 = StorageClient("SBOMS")
-        filename = s3.upload_sbom(request.body)
 
         sbom_dict["version"] = sbom_version
-        sbom_dict["sbom_filename"] = filename
         sbom_dict["qualifiers"] = sbom_qualifiers
         sbom_dict["bom_type"] = bom_type
 
         try:
             with transaction.atomic():
+                filename = upload_sbom_file(s3, request.body)
+                sbom_dict["sbom_filename"] = filename
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError as e:
@@ -1465,15 +1471,15 @@ def sbom_upload_file(
                 }
 
             s3 = StorageClient("SBOMS")
-            filename = s3.upload_sbom(file_content)
 
             sbom_dict["version"] = sbom_version
-            sbom_dict["sbom_filename"] = filename
             sbom_dict["qualifiers"] = sbom_qualifiers
             sbom_dict["bom_type"] = bom_type
 
             try:
                 with transaction.atomic():
+                    filename = upload_sbom_file(s3, file_content)
+                    sbom_dict["sbom_filename"] = filename
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError as e:
@@ -1580,10 +1586,8 @@ def sbom_upload_file(
                 }
 
             s3 = StorageClient("SBOMS")
-            filename = s3.upload_sbom(file_content)
 
             sbom_dict["format"] = sbom_format
-            sbom_dict["sbom_filename"] = filename
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
             sbom_dict["sha256_hash"] = sha256_hash
@@ -1592,6 +1596,8 @@ def sbom_upload_file(
 
             try:
                 with transaction.atomic():
+                    filename = upload_sbom_file(s3, file_content)
+                    sbom_dict["sbom_filename"] = filename
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError as e:

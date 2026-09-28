@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
 from django.db.models import Q
@@ -25,7 +24,6 @@ from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_
 from sbomify.apps.core.analytics import events
 from sbomify.apps.core.api.errors import CSV_RESPONSE_DOCS
 from sbomify.apps.core.authz import MANAGE, READ_INTERNAL, can
-from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.queries import (
     get_team_asset_count,
@@ -37,6 +35,7 @@ from sbomify.apps.core.url_utils import get_component_public_slug
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
 from sbomify.apps.sboms.freshness import with_latest_sbom
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
+from sbomify.apps.sboms.services.sboms import deleting_sbom_files
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
 from sbomify.apps.teams.apis import serialize_contact_profile
 from sbomify.apps.teams.models import ContactProfile, Team
@@ -2171,19 +2170,9 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
     component_name = component.name
 
     try:
-        # Delete associated SBOMs from S3 storage
-        sboms = component.sbom_set.all()
-        s3 = StorageClient("SBOMS") if sboms.exists() else None
-
-        for sbom in sboms:
-            if sbom.sbom_filename and s3:
-                try:
-                    s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, sbom.sbom_filename)
-                except Exception as e:
-                    log.warning(f"Failed to delete SBOM file {sbom.sbom_filename} from S3: {str(e)}")
-
-        # Delete the component (CASCADE will handle related objects)
-        component.delete()
+        # CASCADE removes the SBOM rows; their stored files go only when no other row uses them.
+        with deleting_sbom_files(component.sbom_set.values_list("sbom_filename", flat=True)):
+            component.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if workspace_key:

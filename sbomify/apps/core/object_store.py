@@ -246,11 +246,16 @@ class StorageClient:
 
         self.upload_data_as_file(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, object_name, data)
 
+    @staticmethod
+    def sbom_object_name(data: bytes) -> str:
+        """The key ``upload_sbom`` stores ``data`` under: identical bytes share one object."""
+        return hashlib.sha256(data).hexdigest() + ".json"
+
     def upload_sbom(self, data: bytes) -> str:
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
 
-        object_name = hashlib.sha256(data).hexdigest() + ".json"
+        object_name = self.sbom_object_name(data)
         self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)
 
         return object_name

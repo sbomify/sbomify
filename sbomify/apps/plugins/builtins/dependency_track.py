@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.utils import timezone as dj_timezone
 
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
@@ -765,7 +765,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         from sbomify.apps.core.object_store import StorageClient
         from sbomify.apps.sboms.models import SBOM as SBOMModel
-        from sbomify.apps.sboms.services.sboms import schedule_vex_reapply
+        from sbomify.apps.sboms.services.sboms import schedule_vex_reapply, upload_sbom_file
 
         component = version_row.sbom.component
         normalized = self._normalized_vex(doc)
@@ -786,18 +786,19 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         # Store the raw response bytes so the artifact is byte-for-byte what
         # Dependency Track produced — sbomify never rewrites security artifacts.
-        filename = s3.upload_sbom(raw)
         metadata_component = (doc.get("metadata") or {}).get("component") or {}
-        vex = SBOMModel.objects.create(
-            component=component,
-            bom_type=SBOMModel.BomType.VEX.value,
-            name=metadata_component.get("name") or f"{component.name}-vex",
-            version=dj_timezone.now().strftime("dt-triage-%Y%m%d%H%M%S"),
-            format="cyclonedx",
-            format_version=str(doc.get("specVersion") or ""),
-            sbom_filename=filename,
-            source="dependency-track",
-        )
+        with transaction.atomic():
+            filename = upload_sbom_file(s3, raw)
+            vex = SBOMModel.objects.create(
+                component=component,
+                bom_type=SBOMModel.BomType.VEX.value,
+                name=metadata_component.get("name") or f"{component.name}-vex",
+                version=dj_timezone.now().strftime("dt-triage-%Y%m%d%H%M%S"),
+                format="cyclonedx",
+                format_version=str(doc.get("specVersion") or ""),
+                sbom_filename=filename,
+                source="dependency-track",
+            )
         logger.info(
             "[DT] Synced triage VEX %s for component %s (%d decided statements)",
             vex.id,
