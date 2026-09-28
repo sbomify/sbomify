@@ -203,7 +203,7 @@ class TestSyncEndedSubscription:
     def test_a_subscription_stripe_ended_sets_neither_key(
         self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
     ):
-        """A subscription Stripe has ended sets neither key, whatever the workspace stored."""
+        """A subscription Stripe has ended schedules nothing, even when Stripe still reports a pending cancel."""
         team = team_with_subscription
 
         mock_stripe_subscription.status = "canceled"
