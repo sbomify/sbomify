@@ -2,6 +2,7 @@
 Tests for signed URL functionality for private component SBOMs and documents.
 """
 
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +14,7 @@ from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # n
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import (
+    SIGNED_URL_MAX_AGE,
     generate_signed_download_url,
     get_download_url_for_document,
     get_download_url_for_sbom,
@@ -455,8 +457,12 @@ class TestSignedURLs:
 def test_expired_download_token_is_reported_as_expired():
     token = make_download_token("sbom-id", "user-id")
 
-    with patch("sbomify.apps.sboms.utils.log") as log:
-        assert verify_download_token(token, max_age=-1) is None
+    after_expiry = time.time() + SIGNED_URL_MAX_AGE + 1
+    with (
+        patch("django.core.signing.time.time", return_value=after_expiry),
+        patch("sbomify.apps.sboms.utils.log") as log,
+    ):
+        assert verify_download_token(token) is None
 
     assert log.warning.call_args.args[0].startswith("Expired download token")
 
