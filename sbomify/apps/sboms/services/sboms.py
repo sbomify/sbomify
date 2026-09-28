@@ -72,13 +72,27 @@ def deleting_sbom_files(keys: Iterable[str]) -> Iterator[None]:
 
     Identical uploads share one stored file, in any workspace, so a file is only
     removed once no SBOM row references it. The locks are taken before the body
-    deletes anything, in key order, and held to commit.
+    deletes anything, in key order, and held to commit. The files are removed
+    only once the outermost transaction commits, so a rollback keeps them.
     """
     keys = sorted({key for key in keys if key})
     with transaction.atomic():
         for key in keys:
             _lock_sbom_file(key)
         yield
+        if keys:
+            transaction.on_commit(lambda: _delete_unused_sbom_files(keys))
+
+
+def _delete_unused_sbom_files(keys: list[str]) -> None:
+    """Remove the stored files in ``keys`` that no SBOM row references.
+
+    Runs after the delete has committed, so it takes the locks again: an upload
+    of the same bytes may have started since, and its row must be counted.
+    """
+    with transaction.atomic():
+        for key in keys:
+            _lock_sbom_file(key)
         still_used = set(SBOM.objects.filter(sbom_filename__in=keys).values_list("sbom_filename", flat=True))
         unused = [key for key in keys if key not in still_used]
         if unused:
