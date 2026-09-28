@@ -73,7 +73,7 @@
         <c-tables.footer>
         <div class="flex flex-wrap items-center gap-4">
             <c-tables.info>
-            Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+            Showing <span x-text="$number(startIdx)"></span> to <span x-text="$number(endIdx)"></span> of <span x-text="$number(total)"></span>
             </c-tables.info>
             {% if latest_cbom_id %}
                 <a href="{% url 'core:component_item' component_id=component.id item_type=latest_cbom_item_type|default:'cbom' item_id=latest_cbom_id %}"

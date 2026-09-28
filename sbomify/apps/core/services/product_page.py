@@ -55,12 +55,28 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
     )
     rows = components["rows"]
     security_rows = [row for row in rows if row["security_applicable"]]
+    open_findings = sum(row["vulnerabilities"] for row in security_rows)
+    past_sla = sum(row["past_sla"] for row in security_rows)
+    unassessed = sum(row["unassessed"] for row in security_rows)
     metrics = {
         "components": len(rows),
         "artifacts": sum(row["artifact_count"] for row in rows),
-        "open": sum(row["vulnerabilities"] for row in security_rows),
-        "past_sla": sum(row["past_sla"] for row in security_rows),
-        "unassessed": sum(row["unassessed"] for row in security_rows),
+        "open": open_findings,
+        "past_sla": past_sla,
+        "unassessed": unassessed,
+        # A zero we cannot stand behind. These counts read the newest SBOM per
+        # component, so a component whose newest SBOM has not finished scanning
+        # contributes nothing, and scanning is asynchronous: that is the normal
+        # state after every upload. A zero printed while some component is
+        # unassessed is a clean bill of health for a window whose length is set
+        # by the scan queue, on the surface a user acts on.
+        #
+        # Only a zero. A non-zero count is real information even when partial,
+        # and the unassessed alert below the cards says what is still missing.
+        # And only when something scannable exists: a product with no
+        # components, or with documents alone, has a genuine zero to report.
+        "unmeasured_open": open_findings == 0 and unassessed > 0,
+        "unmeasured_past_sla": past_sla == 0 and unassessed > 0,
     }
     product_tei = get_product_tei_urn(product_id, workspace.id)
     copy_values = [{"value": product_id, "title": f"Product ID: {product_id} (click to copy)"}]

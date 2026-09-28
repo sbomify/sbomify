@@ -10,7 +10,7 @@
             <c-navigation.segment class="shrink-0" role="tab" id="tab-checklist" aria-controls="panel-checklist" ::aria-selected="activeTab === 'checklist'" ::tabindex="activeTab === 'checklist' ? 0 : -1" ::data-active="activeTab === 'checklist'" @click="activeTab = 'checklist'">
             <i class="fas fa-clipboard-check" aria-hidden="true"></i>
             Security checklist
-            <c-badges.danger size="sm" x-show="unansweredCount > 0" x-text="unansweredCount + ' unanswered'" />
+            <c-badges.danger size="sm" x-show="unansweredCount > 0" x-text="$number(unansweredCount) + ' unanswered'" />
             </c-navigation.segment>
             <c-navigation.segment class="shrink-0" role="tab" id="tab-vulnerability" aria-controls="panel-vulnerability" ::aria-selected="activeTab === 'vulnerability'" ::tabindex="activeTab === 'vulnerability' ? 0 : -1" ::data-active="activeTab === 'vulnerability'" @click="activeTab = 'vulnerability'">
             <i class="fas fa-bug" aria-hidden="true"></i>
@@ -91,7 +91,7 @@
                                         Saved on next update
                                     </span>
                                     <span class="text-text-muted tabular-nums"
-                                          x-text="`${(finding.justification || '').length} chars`"></span>
+                                          x-text="`${$number((finding.justification || '').length)} chars`"></span>
                                 </div>
                                 </c-feedback.callout-body>
                                 </c-feedback.callout>
