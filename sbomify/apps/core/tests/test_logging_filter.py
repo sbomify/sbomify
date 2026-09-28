@@ -4,7 +4,11 @@ import logging
 
 import pytest
 
-from sbomify.logging_filters import is_benign_shielded_future_error, is_on_demand_tls_ask_denial, redact_token_query
+from sbomify.logging_filters import (
+    is_benign_shielded_future_error,
+    is_on_demand_tls_ask_denial,
+    redact_access_log_secrets,
+)
 
 
 def _make_record(message: str, *, name: str = "asyncio", level: int = logging.ERROR) -> logging.LogRecord:
@@ -159,16 +163,51 @@ def _access_record(path: str) -> logging.LogRecord:
         ),
         ("/api/v1/products?page=2", "/api/v1/products?page=2"),
         ("/api/v1/products?access_token=kept", "/api/v1/products?access_token=kept"),
+        (
+            "/workspaces/accept_invite/0b5c3f9e-6c1d-4b8e-9d7a-2f1e3c4b5a69/",
+            "/workspaces/accept_invite/[redacted]/",
+        ),
+        (
+            "/workspace/accept_invite/0b5c3f9e-6c1d-4b8e-9d7a-2f1e3c4b5a69/",
+            "/workspace/accept_invite/[redacted]/",
+        ),
+        (
+            "/login/?next=/workspaces/accept_invite/0b5c3f9e-6c1d-4b8e-9d7a-2f1e3c4b5a69/",
+            "/login/?next=/workspaces/accept_invite/[redacted]/",
+        ),
+        (
+            "/login/?next=%2Fworkspaces%2Faccept_invite%2F0b5c3f9e-6c1d-4b8e-9d7a-2f1e3c4b5a69%2F",
+            "/login/?next=%2Fworkspaces%2Faccept_invite%2F[redacted]%2F",
+        ),
+        ("/onboarding/unsubscribe/MTI:1uAbCd:sIgNaTuRe_-x/", "/onboarding/unsubscribe/[redacted]/"),
+        ("/accounts/confirm-email/MQ:1uAbCd:sIgNaTuRe/", "/accounts/confirm-email/[redacted]/"),
+        ("/accounts/password/reset/key/1-cxyz-0123abcd/", "/accounts/password/reset/key/[redacted]/"),
+        ("/accounts/password/reset/key/done/", "/accounts/password/reset/key/done/"),
+        ("/workspaces/invite/abc123/", "/workspaces/invite/abc123/"),
     ],
-    ids=["signed sbom download", "token among other params", "no token", "a different param"],
+    ids=[
+        "signed sbom download",
+        "token among other params",
+        "no token",
+        "a different param",
+        "invitation link",
+        "legacy invitation link",
+        "invitation link in next",
+        "encoded invitation link in next",
+        "unsubscribe link",
+        "email confirmation key",
+        "password reset key",
+        "password reset done page",
+        "invite form keeps the workspace key",
+    ],
 )
-def test_access_log_token_query_value_is_redacted(path: str, expected: str) -> None:
+def test_access_log_credentials_are_redacted(path: str, expected: str) -> None:
     record = _access_record(path)
 
-    assert redact_token_query(record) is True
+    assert redact_access_log_secrets(record) is True
     assert record.getMessage() == f'203.0.113.7:5000 - "GET {expected} HTTP/1.1" 200'
 
 
 def test_access_logger_carries_the_redaction_filter() -> None:
     """Settings attach the filter to the logger the server writes access lines to."""
-    assert redact_token_query in logging.getLogger("uvicorn.access").filters
+    assert redact_access_log_secrets in logging.getLogger("uvicorn.access").filters

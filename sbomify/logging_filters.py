@@ -72,16 +72,27 @@ def is_on_demand_tls_ask_denial(record: logging.LogRecord) -> bool:
 # Signed download URLs carry their credential in the ``token`` query parameter.
 _TOKEN_QUERY_VALUE = re.compile(r"([?&]token=)[^&\s\"]*")
 
+# Routes whose next path segment is the credential: invitation links, the
+# emailed unsubscribe link, and allauth's email confirmation and password reset
+# keys. ``%2F`` covers the same paths URL-encoded inside a ``next`` parameter.
+_SECRET_PATH_SEGMENT = re.compile(
+    r"((?:accept_invite|onboarding/unsubscribe|accounts/confirm-email|accounts/password/reset/key)(?:/|%2F))"
+    r"(?!done/)[^/?&#\s\"%]+",
+    re.IGNORECASE,
+)
 
-def redact_token_query(record: logging.LogRecord) -> bool:
-    """Replace the value of any ``token`` query parameter in the record's args.
+
+def _redact(value: str) -> str:
+    return _SECRET_PATH_SEGMENT.sub(r"\1[redacted]", _TOKEN_QUERY_VALUE.sub(r"\1[redacted]", value))
+
+
+def redact_access_log_secrets(record: logging.LogRecord) -> bool:
+    """Replace credentials carried in a URL with ``[redacted]`` in the record's args.
 
     The server's access log writes the full request path, query string
-    included, so a signed download URL would otherwise be stored with the
-    credential that grants the download.
+    included, so signed and emailed links would otherwise be stored with the
+    credential that grants them.
     """
     if isinstance(record.args, tuple):
-        record.args = tuple(
-            _TOKEN_QUERY_VALUE.sub(r"\1[redacted]", arg) if isinstance(arg, str) else arg for arg in record.args
-        )
+        record.args = tuple(_redact(arg) if isinstance(arg, str) else arg for arg in record.args)
     return True
