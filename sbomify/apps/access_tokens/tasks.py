@@ -145,4 +145,4 @@ def send_expiry_warnings() -> int:
 @cron("0 6 * * *")  # type: ignore[untyped-decorator]  # Daily, before working hours
 @dramatiq.actor(queue_name="token_expiry", max_retries=1, time_limit=300000)
 def warn_expiring_tokens() -> None:
-    send_expiry_warnings()
+    logger.info("Sent %s token expiry warnings", send_expiry_warnings())

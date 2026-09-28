@@ -8,7 +8,14 @@ import sbomify
 ROOT = Path(sbomify.__file__).parent
 
 
-def _returns_a_value(fn: ast.FunctionDef) -> bool:
+def _is_actor(decorator: ast.expr) -> bool:
+    target = decorator.func if isinstance(decorator, ast.Call) else decorator
+    return (isinstance(target, ast.Attribute) and target.attr == "actor") or (
+        isinstance(target, ast.Name) and target.id == "actor"
+    )
+
+
+def _returns_a_value(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     stack: list[ast.AST] = list(fn.body)
     while stack:
         node = stack.pop()
@@ -27,9 +34,9 @@ def _unstored_actors() -> list[str]:
         if "tests" in path.parts or "migrations" in path.parts:
             continue
         for fn in ast.walk(ast.parse(path.read_text())):
-            if not isinstance(fn, ast.FunctionDef):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            actors = [d for d in fn.decorator_list if "dramatiq.actor" in ast.unparse(d)]
+            actors = [d for d in fn.decorator_list if _is_actor(d)]
             if not actors:
                 continue
             stores = any(
