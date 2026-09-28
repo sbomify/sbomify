@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
-import yaml
 from django.http import HttpRequest
 from ninja import Router, Schema
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 
-from .loader import get_license_list, load_custom_licenses, validate_expression
+from .loader import get_license_list, validate_expression
 
 router = Router(tags=["Licensing"], auth=(PersonalAccessTokenAuth(), django_auth))
 
@@ -49,15 +47,6 @@ class ValidationResponseSchema(Schema):
     error: str | None = None
 
 
-class CustomLicenseRequestSchema(Schema):
-    key: str
-    name: str
-    url: str | None = None
-    text: str | None = None
-    category: str = "proprietary"
-    origin: str = "Custom"
-
-
 @router.get("/licenses")
 def list_licenses(request: HttpRequest) -> list[dict[str, Any]]:
     """Get a list of all available licenses."""
@@ -68,29 +57,3 @@ def list_licenses(request: HttpRequest) -> list[dict[str, Any]]:
 def validate_license_expression(request: HttpRequest, data: ValidationRequestSchema) -> dict[str, Any]:
     """Validate a license expression and return detailed information."""
     return validate_expression(data.expression)
-
-
-@router.post("/custom-licenses")
-def add_custom_license(request: HttpRequest, data: CustomLicenseRequestSchema) -> dict[str, Any]:
-    """Add a custom license to the non_spdx.yaml file and reload."""
-    yaml_path = os.path.join(os.path.dirname(__file__), "data", "non_spdx.yaml")
-    # Load current custom licenses
-    custom_licenses = load_custom_licenses()
-    # Add or update the license
-    custom_licenses[data.key] = {
-        "name": data.name,
-        "category": data.category,
-        "origin": data.origin,
-        "url": data.url,
-        "text": data.text,
-    }
-    # Write back to YAML
-    with open(yaml_path, "w") as f:
-        yaml.dump(custom_licenses, f, sort_keys=False, allow_unicode=True)
-    # Reload in-memory
-    from . import loader
-
-    loader.CUSTOM_SYMBOLS = load_custom_licenses()
-    loader.ALL_LICENSES = {**loader.SPDX_SYMBOLS, **loader.CUSTOM_SYMBOLS}
-    result: dict[str, Any] = custom_licenses[data.key]
-    return result

@@ -30,7 +30,7 @@ def test_delete_empty_or_incomplete_profile(
     page.goto(reverse("teams:team_settings_tab", args=[team_with_business_plan.key, "contact-profiles"]))
     page.get_by_role("button", name="Profile actions").click()
     page.get_by_role("menuitem", name="Delete profile", exact=True).click()
-    page.get_by_role("button", name="Delete Profile", exact=True).click()
+    page.get_by_role("button", name="Delete profile", exact=True).click()
 
     expect(page.get_by_text("No contact profiles yet", exact=True)).to_be_visible()
     assert not ContactProfile.objects.filter(pk=profile.pk).exists()

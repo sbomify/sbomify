@@ -6,14 +6,16 @@ the stepper parts and the accordion, so pages can rely on the components
 without ever writing a class themselves.
 """
 
+from html import unescape
+
 import pytest
 from django.template.loader import render_to_string
 
-TAB = "relative px-5 py-3.5 text-sm font-medium border-b-2 border-solid -mb-px"
+TAB = "relative shrink-0 whitespace-nowrap px-0 py-4 text-sm font-medium border-b-2 border-solid"
 CELL = "flex items-center justify-center min-w-8 h-8 px-2 rounded-md border border-solid border-transparent"
 CIRCLE = "relative shrink-0 flex items-center justify-center w-10 h-10 rounded-full"
 TRIGGER = "group flex w-full items-center justify-between px-6 py-5 text-left"
-RAIL = "flex-1 h-[3px] mx-4 rounded-full overflow-hidden"
+RAIL = "flex-1 h-[3px] rounded-full overflow-hidden"
 VERTICAL_RAIL = "[[data-stepper-vertical]_&]:w-[3px]"
 
 PROBE_CONTEXT = {
@@ -75,7 +77,7 @@ def _classes(rendered: str, marker: str) -> str:
 def test_tab_row_is_a_tablist_with_the_underline_recipe(rendered: str) -> None:
     row = _chunk(rendered, "div", 'data-probe="tabs"')
     assert 'role="tablist"' in row
-    assert "flex gap-1 border-b border-solid border-border" in row
+    assert "flex w-max min-w-full items-center gap-6 border-b border-solid border-border" in row
 
 
 def test_tab_row_carries_the_arrow_home_and_end_keys(rendered: str) -> None:
@@ -92,21 +94,24 @@ def test_tab_row_carries_the_arrow_home_and_end_keys(rendered: str) -> None:
 
 def test_pills_variant_swaps_the_recipe_and_marks_the_row(rendered: str) -> None:
     row = _open_tag(rendered, "div", 'data-probe="pills"')
-    assert "flex gap-0 bg-background p-1 rounded-lg" in row
+    assert "flex w-max min-w-full items-center gap-0.5 rounded-lg border border-solid border-border bg-surface-hover p-0.5" in row
     assert "data-tabs-pills" in row
-    assert "border-b" not in row
+    assert "border-b " not in row
     assert "gap-1" not in row
 
 
 def test_row_class_never_falls_through_to_its_tabs(rendered: str) -> None:
     row = _chunk(rendered, "div", 'data-probe="tabs"')
-    assert row.count("mb-4") == 1
+    assert "mb-4" not in row
+    assert rendered.count("max-w-full mb-4") == 1
+    assert rendered.count("max-w-full w-fit mb-4") == 1
 
 
 def test_selected_tab_segment(rendered: str) -> None:
     tab = _chunk(rendered, "button", "Hand built")
     assert TAB in tab
-    assert "text-primary border-b-primary" in tab
+    assert "data-[active=true]:text-text data-[active=true]:border-b-text" in tab
+    assert 'data-active="true"' in tab
     assert "text-text-muted" not in _classes(rendered, "Hand built")
     assert 'aria-selected="true"' in tab
     assert 'tabindex="0"' in tab
@@ -114,8 +119,8 @@ def test_selected_tab_segment(rendered: str) -> None:
 
 def test_quiet_tab_segment(rendered: str) -> None:
     tab = _chunk(rendered, "button", "Quiet tab")
-    assert "text-text-muted border-b-transparent" in tab
-    assert "border-b-primary" not in tab
+    assert "text-[color:var(--color-text-muted)]" in tab
+    assert 'data-active="false"' in tab
     assert 'aria-selected="false"' in tab
     assert 'tabindex="-1"' in tab
 
@@ -133,7 +138,7 @@ def test_pills_utilities_hang_off_the_row_marker(rendered: str) -> None:
         "[[data-tabs-pills]_&]:mb-0",
         "[[data-tabs-pills]_&]:rounded-md",
         "[[data-tabs-pills]_&]:border-b-0",
-        "[[data-tabs-pills]_&]:bg-surface",
+        "[[data-tabs-pills]_&]:data-[active=true]:bg-surface",
     ):
         assert bit in tab
 
@@ -158,19 +163,28 @@ def test_tab_forwards_attrs(rendered: str) -> None:
     assert 'hx-get="/probe/hand"' in tab
 
 
+def test_live_tab_binds_selection_focus_and_visual_state_together(rendered: str) -> None:
+    tab = unescape(_open_tag(rendered, "button", 'data-probe="live-tab"'))
+    assert 'role="tab"' in tab
+    assert 'aria-controls="panel-live"' in tab
+    assert ":aria-selected=\"view === 'live'\"" in tab
+    assert ":data-active=\"view === 'live'\"" in tab
+    assert ":tabindex=\"view === 'live' ? 0 : -1\"" in tab
+
+
 # ── Breadcrumbs ───────────────────────────────────────────────────────────
 
 
 def test_breadcrumbs_are_a_labelled_trail(rendered: str) -> None:
     crumbs = _chunk(rendered, "nav", 'data-probe="crumbs"')
     assert 'aria-label="Breadcrumb"' in crumbs
-    assert '<ol class="flex items-center gap-2 text-sm">' in crumbs
+    assert '<ol class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">' in crumbs
     assert 'class="mb-2"' in crumbs
 
 
 def test_breadcrumb_separator_sits_between_crumbs_only(rendered: str) -> None:
     crumbs = _chunk(rendered, "nav", 'data-probe="crumbs"')
-    assert crumbs.count('class="fas fa-chevron-right text-xs text-text-muted"') == 2
+    assert crumbs.count('class="fas fa-chevron-right shrink-0 text-xs text-text-muted"') == 2
 
 
 def test_breadcrumb_links_lead_to_the_current_page_as_text(rendered: str) -> None:
@@ -178,7 +192,7 @@ def test_breadcrumb_links_lead_to_the_current_page_as_text(rendered: str) -> Non
     assert '<a href="/products"' in crumbs
     assert "text-text-muted hover:text-text transition-colors" in crumbs
     current = _open_tag(rendered, "span", "Releases")
-    assert 'class="text-text font-medium"' in current
+    assert 'class="min-w-0 text-text font-medium"' in current
     assert 'aria-current="page"' in current
 
 
@@ -217,20 +231,20 @@ def test_pager_class_never_falls_through_to_its_cells(rendered: str) -> None:
 def test_page_links_carry_the_cell_recipe_and_their_page(rendered: str) -> None:
     link = _chunk(rendered, "a", ">1</a>")
     assert CELL in link
-    assert "bg-transparent text-text-muted font-medium cursor-pointer" in link
-    assert "hover:bg-surface hover:border-border hover:text-text active:scale-95" in link
+    assert "bg-transparent text-[color:var(--color-text-muted)] font-medium cursor-pointer" in link
+    assert "hover:bg-surface hover:border-border hover:text-text" in link
     assert 'href="/components?page=1"' in link
 
 
 def test_current_page_is_a_span_that_says_so(rendered: str) -> None:
     current = _chunk(rendered, "span", ">3</span>")
     assert 'aria-current="page"' in current
-    assert "bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)]" in current
-    assert "text-white font-semibold" in current
-    assert "shadow-[0_2px_4px_color-mix(in_oklab,var(--color-primary)_30%,transparent)]" in current
-    classes = _classes(rendered, ">3</span>")
-    assert "hover:" not in classes
-    assert "text-text-muted" not in classes
+    assert "data-[active=true]:bg-surface-hover" in current
+    assert 'data-active="true"' in current
+    assert "data-[active=true]:text-text" in current
+    assert "data-[active=true]:font-semibold" in current
+    assert "data-[active=true]:border-border" in current
+    assert "linear-gradient" not in current
 
 
 def test_ellipsis_is_a_bare_cell(rendered: str) -> None:
@@ -252,13 +266,11 @@ def test_nav_cells_take_the_smaller_type_and_never_both_sizes(rendered: str) -> 
 def test_a_dead_nav_cell_says_aria_disabled_not_disabled(rendered: str) -> None:
     single = _between(rendered, 'data-probe="single"', 'data-probe="numbers"')
     dead = _chunk(single, "a", 'aria-label="Previous page"')
-    assert 'href="#"' in dead
+    assert "href=" not in dead.split(">", 1)[0]
     assert 'aria-disabled="true"' in dead
     assert 'tabindex="-1"' in dead
-    assert "opacity-40 cursor-not-allowed" in dead
-    classes = _classes(single, 'aria-label="Previous page"')
-    assert "hover:" not in classes
-    assert "active:scale-95" not in classes
+    assert "aria-disabled:opacity-40" in dead
+    assert "aria-disabled:pointer-events-none" in dead
 
 
 def test_numbers_only_pager_drops_the_chevrons(rendered: str) -> None:
@@ -423,7 +435,8 @@ def test_disclosure_is_a_details_element_divided_like_an_accordion_item(rendered
 
 def test_disclosure_summary_carries_the_trigger_recipe_and_the_density_hook(rendered: str) -> None:
     section = _chunk(rendered, "details", "Configure the workflow")
-    assert "flex w-full cursor-pointer items-center justify-between px-6 py-5 text-left" in section
+    assert "flex w-full items-center justify-between px-6 py-5 text-left" in section
+    assert "cursor-pointer" in section
     assert "hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)]" in section
     assert "focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in section
     assert "[[data-accordion-sm]_&]:px-4 [[data-accordion-sm]_&]:py-3" in section
@@ -464,7 +477,7 @@ def test_page_button_states_hang_off_data_active_and_disabled(rendered: str) -> 
     btn = _nav_probe(rendered, "page-btn")
     assert btn.startswith("<button ")
     assert 'data-active="false"' in btn
-    assert "data-[active=true]:text-white" in btn
+    assert "data-[active=true]:text-text" in btn
     assert "disabled:opacity-40" in btn
 
 
@@ -506,18 +519,18 @@ def test_segmented_is_a_group_wearing_the_pills_tray(rendered: str) -> None:
     tray = _nav_probe(rendered, "segmented")
     assert tray.startswith("<div ")
     assert 'role="group"' in tray
-    assert "flex gap-0 bg-background p-1 rounded-lg mt-2" in tray
-    assert "role=\"tablist\"" not in tray
+    assert "inline-flex w-fit max-w-full items-center gap-0.5 rounded-lg border border-solid border-border" in tray
+    assert "bg-surface-hover p-0.5 mt-2" in tray
+    assert 'role="tablist"' not in tray
 
 
 def test_segment_states_hang_off_data_active(rendered: str) -> None:
     seg = _nav_probe(rendered, "segment")
     assert seg.startswith("<button ")
     assert 'data-active="false"' in seg
-    assert ':data-active="chart === \'timeline\'"' in seg
+    assert ":data-active=\"chart === 'timeline'\"" in seg
     assert "@click=\"pick('timeline')\"" in seg
-    assert "data-[active=true]:text-primary data-[active=true]:bg-surface" in seg
-    assert "data-[active=true]:hover:bg-surface" in seg
+    assert "data-[active=true]:text-text data-[active=true]:bg-surface" in seg
     assert "data-[active=true]:shadow-[var(--shadow-xs)]" in seg
 
 
@@ -531,7 +544,7 @@ def test_segment_resting_ink_is_not_the_important_utility(rendered: str) -> None
 
 def test_segment_states_its_line_height_and_the_pill_shape(rendered: str) -> None:
     seg = _nav_probe(rendered, "segment")
-    assert "px-5 py-3.5 text-sm leading-[1.5] font-medium rounded-md" in seg
+    assert "px-4 py-1.5 min-h-8 text-[0.8125rem] leading-5 font-medium rounded-md" in seg
     assert "border-b" not in seg
 
 

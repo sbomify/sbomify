@@ -125,7 +125,12 @@ def _get_plugin_display_names_map(plugin_names: set[str]) -> dict[str, str]:
     }
 
 
-def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None, euvd_ids: frozenset[str] | None = None) -> Any:
+def _result_with_kev(
+    run: AssessmentRun,
+    kev_ids: frozenset[str] | None,
+    euvd_ids: frozenset[str] | None = None,
+    findings_limit: int | None = None,
+) -> Any:
     """A copy of the run's result with the read-time finding flags stamped in.
 
     Three flags, all derived rather than stored: ``kev`` from the cached CISA
@@ -133,36 +138,39 @@ def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None, euvd_id
     already inside the finding. Deriving them here means every run ever
     recorded carries them without a rescan.
 
-    The stored blob is never mutated. Non-security runs pass through as-is.
+    The stored blob is never mutated. Only the flags are security-only; the
+    bound below applies to every category, because a compliance plugin checks
+    each component and reports per component, so its list grows with the SBOM
+    exactly as a scanner's does.
     """
     result = run.result
-    if run.category != "security" or not isinstance(result, dict):
+    if not isinstance(result, dict):
         return result
     findings = result.get("findings")
-    if not isinstance(findings, list):
+
+    # Bounded before the stamping below, so a caller that renders a count and one
+    # title does not pay KEV lookup, schema validation and JSON serialisation per
+    # finding for thousands it will never read.
+    # Clamped at zero because the endpoint above takes this as a query parameter
+    # from anyone: a negative limit would slice from the end and hand back all
+    # but the last finding, which is the response this bound exists to prevent.
+    if isinstance(findings, list) and findings_limit is not None:
+        limit = max(findings_limit, 0)
+        if len(findings) > limit:
+            result = {**result, "findings": findings[:limit]}
+            findings = result["findings"]
+
+    if run.category != "security" or not isinstance(findings, list):
         return result
 
-    from sbomify.apps.vulnerability_scanning.kev import finding_in_kev
+    from sbomify.apps.vulnerability_scanning.kev import stamp_exploited
     from sbomify.apps.vulnerability_scanning.malicious import stamp_malicious
 
-    # Build a new findings list only once a match is actually found — the common
-    # case (no matches) returns the original result with no allocation.
-    # finding_in_kev is a generic id-or-alias set membership test, so the EUVD
-    # list reuses it rather than growing a twin.
-    stamped: list[Any] | None = None
-    if kev_ids or euvd_ids:
-        for i, finding in enumerate(findings):
-            if not isinstance(finding, dict):
-                continue
-            flags: dict[str, bool] = {}
-            if kev_ids and finding_in_kev(finding, kev_ids):
-                flags["kev"] = True
-            if euvd_ids and finding_in_kev(finding, euvd_ids):
-                flags["euvd"] = True
-            if flags:
-                if stamped is None:
-                    stamped = list(findings)
-                stamped[i] = {**finding, **flags}
+    # Both stampers return the list they were given when nothing matched, so the
+    # common case allocates nothing and the identity check below reads as "did
+    # anything change".
+    flagged = stamp_exploited(findings, kev_ids, euvd_ids)
+    stamped: list[Any] | None = flagged if flagged is not findings else None
 
     findings_out, malicious_count = stamp_malicious(stamped if stamped is not None else findings)
     if findings_out is not (stamped if stamped is not None else findings):
@@ -184,6 +192,7 @@ def _run_to_schema(
     display_names: dict[str, str] | None = None,
     kev_ids: frozenset[str] | None = None,
     euvd_ids: frozenset[str] | None = None,
+    findings_limit: int | None = None,
 ) -> AssessmentRunSchema:
     """Convert an AssessmentRun model to schema.
 
@@ -230,7 +239,7 @@ def _run_to_schema(
         "started_at": run.started_at,
         "completed_at": run.completed_at,
         "error_message": run.error_message or None,
-        "result": _result_with_kev(run, kev_ids, euvd_ids),
+        "result": _result_with_kev(run, kev_ids, euvd_ids, findings_limit),
         "created_at": run.created_at,
     }
     try:
@@ -318,10 +327,29 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
 
 @router.get("/assessments/{sbom_id}", response=SBOMAssessmentsResponse, auth=None)
 @decorate_view(optional_auth)
-def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsResponse:
+def get_sbom_assessments(
+    request: HttpRequest,
+    sbom_id: str,
+    *,
+    findings_limit: int | None = None,
+    include_history: bool = True,
+) -> SBOMAssessmentsResponse:
     """Get all assessment runs for an SBOM.
 
     Returns both the latest run per plugin and the full history.
+
+    Two knobs for callers that render a summary rather than a list, both
+    defaulting to the full response so the HTTP contract is unchanged:
+
+    ``findings_limit`` bounds the findings carried per run. The artifact page's
+    card shows counts from ``result.summary`` and exactly one title, and the
+    findings list behind it reached 31 MB on a four-thousand-finding scan, which
+    is a 504 at the gateway before the page is ever written.
+
+    ``include_history`` drops ``all_runs``. Every finding was otherwise stamped,
+    validated and serialised twice, once for the latest run per plugin and again
+    for the same run inside the history, and the artifact page reads only the
+    former.
     """
     # Only expose results for an SBOM whose component the caller may read (public, or an
     # authorized member/token). Otherwise return the empty "no assessments" shape so neither
@@ -366,8 +394,12 @@ def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsR
     return SBOMAssessmentsResponse(
         sbom_id=sbom_id,
         status_summary=status_summary,
-        latest_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids) for run in latest_runs],
-        all_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids) for run in all_runs],
+        latest_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in latest_runs],
+        all_runs=(
+            [_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in all_runs]
+            if include_history
+            else []
+        ),
     )
 
 
@@ -493,6 +525,19 @@ class TeamPluginSettingsResponse(BaseModel):
     enabled_plugins: list[str]
     plugin_configs: dict[str, Any]
     available_plugins: list[dict[str, Any]]
+    # The handler has always returned this and the schema never declared it, so
+    # it went undocumented while the settings page read it straight off the
+    # dict. It says which plugins the workspace may enable at all, which is
+    # exactly what an API caller needs before it tries.
+    team_plan: str
+
+
+class UpdateTeamPluginSettingsResponse(BaseModel):
+    """What a workspace's plugin list looks like after an update."""
+
+    message: str
+    enabled_plugins: list[str]
+    plugin_configs: dict[str, Any]
 
 
 class UpdateTeamPluginSettingsRequest(BaseModel):
@@ -579,11 +624,11 @@ def _resolve_dt_servers(team: Team | None = None) -> list[dict[str, Any]]:
     if plan_key != "enterprise":
         return []
 
-    from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+    from sbomify.apps.vulnerability_scanning.services import dt_servers_open_to
 
     return [
         {"value": str(s.id), "label": s.name or f"Server {s.id}"}
-        for s in DependencyTrackServer.objects.filter(is_active=True).order_by("priority", "name")
+        for s in dt_servers_open_to(team).order_by("priority", "name")
     ]
 
 
@@ -616,6 +661,27 @@ def _resolve_config_schema(schema: list[dict[str, Any]], team: Team | None = Non
     return resolved
 
 
+def _token_may_manage_plugins(request: HttpRequest, team: Team) -> bool:
+    """Whether a token caller's scope reaches this workspace's plugin settings.
+
+    The Member check in both handlers is the authority on *who* may change
+    them, and it is enough for the settings page, which posts a session. A token
+    carries a second, narrower question: its owner may well be an admin, and the
+    token may still be scoped to reads or to another workspace. ``can`` answers
+    that, and is a no-op for a session because there is no token record on the
+    request to narrow against.
+    """
+    if getattr(request, "access_token_record", None) is None:
+        return True
+    return bool(can(request, "workspace:manage", team))
+
+
+@router.get(
+    "/workspaces/{team_key}/settings",
+    response={200: TeamPluginSettingsResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    throttle=[AccessTokenRateThrottle()],
+)
 def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, dict[str, Any]]:
     """Get plugin settings for a team.
 
@@ -631,6 +697,8 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
     if not request.user.is_authenticated:
         return 403, {"detail": "You don't have permission to view this workspace's plugins"}
     if not Member.objects.filter(user=request.user, team=team, role__in=("owner", "admin")).exists():
+        return 403, {"detail": "You don't have permission to view this workspace's plugins"}
+    if not _token_may_manage_plugins(request, team):
         return 403, {"detail": "You don't have permission to view this workspace's plugins"}
 
     # Get or create team plugin settings
@@ -671,6 +739,17 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
     }
 
 
+@router.put(
+    "/workspaces/{team_key}/settings",
+    response={
+        200: UpdateTeamPluginSettingsResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    throttle=[AccessTokenRateThrottle()],
+)
 def update_team_plugin_settings(
     request: HttpRequest, team_key: str, payload: UpdateTeamPluginSettingsRequest
 ) -> tuple[int, dict[str, Any]]:
@@ -689,6 +768,8 @@ def update_team_plugin_settings(
     if not request.user.is_authenticated:
         return 403, {"detail": "You don't have permission to manage this workspace's plugins"}
     if not Member.objects.filter(user=request.user, team=team, role__in=("owner", "admin")).exists():
+        return 403, {"detail": "You don't have permission to manage this workspace's plugins"}
+    if not _token_may_manage_plugins(request, team):
         return 403, {"detail": "You don't have permission to manage this workspace's plugins"}
 
     # Validate that all enabled plugins are registered and enabled

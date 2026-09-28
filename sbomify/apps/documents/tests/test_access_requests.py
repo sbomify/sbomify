@@ -16,6 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.cache import cache
+from django.middleware.csrf import get_token
+from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
@@ -114,21 +116,23 @@ class TestAccessRequestCreation:
         ).exists()
 
     def test_create_access_request_api(
-        self, authenticated_api_client, team_with_business_plan, guest_user
+        self, team_with_business_plan, guest_user
     ):
         """Test creating an access request via API."""
-        client, access_token = authenticated_api_client
+        # The requester asks for themselves, on their own session, sending its
+        # CSRF token as a browser does.
+        token = get_token(RequestFactory().get("/"))
+        client = Client(enforce_csrf_checks=True, headers={"X-CSRFToken": token})
+        client.cookies["csrftoken"] = token
         client.force_login(guest_user)
         
         # API endpoint is /api/v1/teams/{team_key}/access-request
         url = f"/api/v1/teams/{team_with_business_plan.key}/access-request"
-        headers = get_api_headers(access_token)
         
         response = client.post(
             url,
             {},
             content_type="application/json",
-            **headers,
         )
         
         assert response.status_code in [200, 201]
@@ -1102,11 +1106,16 @@ class TestAccessRequestQueueView:
     def test_access_request_queue_shows_pending_requests(
         self, authenticated_web_client, team_with_business_plan, pending_access_request, sample_user
     ):
-        """Test that queue view shows pending requests."""
+        """Test that queue view shows pending requests.
+
+        Fetched the way the trust-center tab fetches it. The template is a
+        section with no page around it, so a plain browser GET is sent to the
+        tab that renders it instead.
+        """
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url)
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         assert str(pending_access_request.user.email).encode() in response.content
@@ -1118,7 +1127,7 @@ class TestAccessRequestQueueView:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url, {"partial": "true"})
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         # Should render the partial template
@@ -1139,7 +1148,7 @@ class TestAccessRequestQueueView:
         )
         
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url)
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         assert str(pending_access_request.user.email).encode() in response.content

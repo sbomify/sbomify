@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import tempfile
 import typing
@@ -21,7 +20,6 @@ from django.http import (
     HttpResponse,
     HttpResponseBadRequest,
     HttpResponseForbidden,
-    HttpResponseNotAllowed,
     HttpResponseNotFound,
     HttpResponseServerError,
     JsonResponse,
@@ -41,6 +39,9 @@ from sbomify.apps.core.views.component_details_public import ComponentDetailsPub
 from sbomify.apps.core.views.component_item import ComponentItemPublicView as ComponentItemPublicView
 from sbomify.apps.core.views.component_item import ComponentItemView as ComponentItemView
 from sbomify.apps.core.views.component_scope import ComponentScopeView as ComponentScopeView
+from sbomify.apps.core.views.component_vulnerabilities import (
+    ComponentVulnerabilitiesPanelView as ComponentVulnerabilitiesPanelView,
+)
 from sbomify.apps.core.views.components_dashboard import ComponentCreateView as ComponentCreateView
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView as ComponentsDashboardView
 from sbomify.apps.core.views.components_dashboard import ComponentsTableView as ComponentsTableView
@@ -57,6 +58,7 @@ from sbomify.apps.core.views.product_releases_public import ProductReleasesPubli
 from sbomify.apps.core.views.products_dashboard import ProductCreateView as ProductCreateView
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
 from sbomify.apps.core.views.products_dashboard import ProductsTableView as ProductsTableView
+from sbomify.apps.core.views.release_create import ReleaseCreateView as ReleaseCreateView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
@@ -156,19 +158,14 @@ def _get_access_tokens(user: Any) -> list[dict[str, Any]]:
     ]
 
 
-def _build_settings_context(user: Any, form: Any = None, new_token: Any = None) -> dict[str, Any]:
+def _build_settings_context(user: Any) -> dict[str, Any]:
     """Helper function to build context for settings page."""
-    from sbomify.apps.core.forms import CreateAccessTokenForm
     from sbomify.apps.teams.queries import get_pending_invitations_for_user
 
-    context = {
-        "create_access_token_form": form or CreateAccessTokenForm(),
+    return {
         "pending_invitations": get_pending_invitations_for_user(user),
         "access_tokens": _get_access_tokens(user),
     }
-    if new_token:
-        context["new_encoded_access_token"] = new_token
-    return context
 
 
 @never_cache
@@ -217,7 +214,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
     from django.utils import timezone
 
     from sbomify.apps.teams.models import Invitation, Member
-    from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, switch_active_workspace
+    from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace, user_seat
 
     user = cast(User, request.user)
 
@@ -247,19 +244,27 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         invitation.delete()
         return redirect("core:settings")
 
-    # Check team capacity
-    can_add, error_message = can_add_user_to_team(invitation.team)
-    if not can_add:
-        messages.add_message(request, messages.ERROR, f"Cannot join {invitation.team.display_name}: {error_message}")
-        return redirect("core:settings")
-
     # Capture team and role before deleting invitation, because the invitation object
     # will be invalidated after deletion and its attributes will no longer be accessible.
     team = invitation.team
     role = invitation.role
 
-    # Create membership in atomic transaction to ensure it's committed
-    with transaction.atomic():
+    # The seat is counted and taken under one lock: checking capacity and then
+    # creating the membership in separate statements let two acceptances both
+    # pass the same count.
+    #
+    # Joining via an invite, because this user is already one of the pending
+    # invitations the count includes, and the row is deleted a few lines below.
+    # Without it a workspace whose members plus invitations reach the plan limit
+    # refuses the very invitations making up that total, and the same person is
+    # let in by the token link and the sign-up auto-accept, which both pass it.
+    with user_seat(team, is_joining_via_invite=True) as (can_add, error_message):
+        if not can_add:
+            messages.add_message(
+                request, messages.ERROR, f"Cannot join {invitation.team.display_name}: {error_message}"
+            )
+            return redirect("core:settings")
+
         has_default_team = Member.objects.filter(user=user, is_default_team=True).exists()
         Member.objects.create(
             user=user,
@@ -434,89 +439,6 @@ def login_error(request: HttpRequest) -> HttpResponse:
 
     context = {"error_message": error_message, "error_description": error_description}
     return render(request, "socialaccount/authentication_error.html.j2", context)
-
-
-def keycloak_webhook(request: HttpRequest) -> HttpResponse:
-    """Handle Keycloak webhook events.
-
-    This endpoint receives events from Keycloak when properly configured with a
-    webhook extension. It processes user-related events like account deletion
-    and profile updates.
-
-    Args:
-        request: The HTTP request object containing the webhook payload
-
-    Returns:
-        HttpResponse: Response indicating success or failure of event processing
-    """
-    if request.method != "POST":
-        return HttpResponseNotAllowed(["POST"])
-
-    # Verify webhook secret if configured
-    webhook_secret = getattr(settings, "KEYCLOAK_WEBHOOK_SECRET", None)
-    if webhook_secret:
-        received_secret = request.headers.get("X-Keycloak-Secret")
-        if not received_secret or received_secret != webhook_secret:
-            logger.warning("Invalid webhook secret received")
-            return HttpResponseForbidden("Invalid webhook secret")
-
-    from allauth.socialaccount.models import SocialAccount
-
-    try:
-        data = json.loads(request.body)
-        event_type = data.get("type")
-        user_id = data.get("userId")
-        event_time = data.get("time")
-        details = data.get("details", {})
-
-        if not user_id:
-            return HttpResponse(status=204)  # No content to process
-
-        logger.info(f"Received Keycloak webhook event: {event_type} for user {user_id} at {event_time}")
-
-        # Handle different event types
-        if event_type == "DELETE_ACCOUNT":
-            try:
-                social_account = SocialAccount.objects.get(uid=user_id)
-                django_user = social_account.user
-                django_user.is_active = False
-                django_user.save()
-                logger.info(
-                    f"Deactivated user {django_user.username} (ID: {django_user.id}) after Keycloak account deletion"
-                )
-            except SocialAccount.DoesNotExist:
-                logger.warning(f"Cannot find Django user for Keycloak user ID {user_id}")
-
-        elif event_type == "UPDATE_PROFILE":
-            try:
-                social_account = SocialAccount.objects.get(uid=user_id)
-                django_user = social_account.user
-
-                # Update email if changed
-                if "email" in details:
-                    django_user.email = details["email"]
-                    django_user.save()
-                    logger.info(f"Updated email for user {django_user.username} to {details['email']}")
-
-                # Update extra_data in social account
-                social_account.extra_data.update(details)
-                social_account.save()
-
-            except SocialAccount.DoesNotExist:
-                logger.warning(f"Cannot find Django user for Keycloak user ID {user_id}")
-
-        elif event_type in ["LOGIN", "LOGOUT"]:
-            # Log these events for audit purposes
-            logger.info(f"User {user_id} performed {event_type} from IP {details.get('ipAddress', 'unknown')}")
-
-        return HttpResponse(status=200)
-
-    except json.JSONDecodeError:
-        logger.error("Invalid JSON received in webhook payload")
-        return HttpResponse("Invalid JSON", status=400)
-    except Exception as e:
-        logger.error(f"Error processing Keycloak webhook: {e}", exc_info=True)
-        return HttpResponse("Error processing webhook", status=500)
 
 
 # ============================================================================

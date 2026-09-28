@@ -1,0 +1,35 @@
+<c-navigation.accordion-item native label="How to prepare your NDA">
+<p>
+    Nobody signs the PDF itself. A requester reads it in the browser, types their
+    full name, and confirms acceptance. sbomify then records their name, the time,
+    their IP address, and a cryptographic fingerprint of the exact document version
+    they accepted. Draft the document for that process:
+</p>
+<ul>
+    <li>
+        Write it as a one-way agreement: obligations on the recipient, covering
+        "information made available through this Trust Center".
+    </li>
+    <li>Replace the signature block with an electronic-execution clause, for example:</li>
+</ul>
+<blockquote>
+    This Agreement is executed electronically. By typing your name and confirming
+    acceptance, you agree to be bound by it; your typed name, the date and time,
+    your IP address, and a fingerprint of this document version are recorded
+    together and constitute your signature. You represent that you are authorized
+    to enter into this Agreement on behalf of the organization for which you are
+    requesting access.
+</blockquote>
+<ul>
+    <li>Leave no blank name, date, or signature lines: they stay empty forever.</li>
+    <li>
+        If your company should appear as a signatory, put its name, title, and date
+        (or a scanned signature) in the PDF before uploading, so every acceptance is
+        against an already-countersigned document.
+    </li>
+    <li>
+        Finalize the wording first: uploading a replacement version invalidates every
+        existing signature and all requesters sign again.
+    </li>
+</ul>
+</c-navigation.accordion-item>

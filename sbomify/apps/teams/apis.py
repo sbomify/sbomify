@@ -541,6 +541,16 @@ def _upsert_entities(
     existing_ids = [getattr(e, "id") for e in valid_entities if getattr(e, "id", None)]
 
     if is_update:
+        # Reject IDs that are not part of this profile *before* deleting anything:
+        # the delete below removes every entity not named in ``existing_ids``, so a
+        # foreign or stale ID would wipe the profile and then be skipped by the
+        # update loop, committing an empty profile.
+        if existing_ids:
+            known_ids = set(profile.entities.filter(id__in=existing_ids).values_list("id", flat=True))
+            unknown_ids = [entity_id for entity_id in existing_ids if entity_id not in known_ids]
+            if unknown_ids:
+                raise ValueError(f"Entity '{unknown_ids[0]}' does not belong to this contact profile.")
+
         profile.entities.exclude(id__in=existing_ids).delete()
 
     for entity_data in valid_entities:
@@ -561,12 +571,15 @@ def _upsert_entities(
                 # Model's save() calls full_clean() automatically
                 entity.save()
             except ContactEntity.DoesNotExist:
+                # IDs are validated above, so this is only reachable if a concurrent
+                # write removed the row mid-transaction. Fail the update so it rolls
+                # back instead of silently committing a profile with fewer entities.
                 logger.warning(
-                    "Entity %s not found in profile %s during update - skipping",
+                    "Entity %s vanished from profile %s during update",
                     entity_id,
                     profile.id,
                 )
-                continue
+                raise ValueError(f"Entity '{entity_id}' does not belong to this contact profile.") from None
         else:
             # Check if this is an author-only entity
             is_author_only = (
@@ -991,6 +1004,11 @@ def update_contact_profile(
             if payload.authors is not None:
                 _upsert_authors(profile, payload.authors, fallback_email)
 
+            # Same postcondition as creation, enforced inside the transaction so an
+            # update that would empty the profile rolls back entirely.
+            if not profile.entities.exists():
+                raise ValueError("Add at least one entity before saving a contact profile.")
+
         # Re-fetch with prefetch_related for efficient serialization
         profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
         return 200, serialize_contact_profile(profile)
@@ -1202,7 +1220,17 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
             old_domain = locked_team.custom_domain
             locked_team.custom_domain = normalized_domain
             locked_team.custom_domain_validated = False  # Reset validation on change
-            locked_team.save(update_fields=["custom_domain", "custom_domain_validated"])
+            # Start the backoff over, so the probe checks the new domain on its next run.
+            locked_team.custom_domain_verification_failures = 0
+            locked_team.custom_domain_last_checked_at = None
+            locked_team.save(
+                update_fields=[
+                    "custom_domain",
+                    "custom_domain_validated",
+                    "custom_domain_verification_failures",
+                    "custom_domain_last_checked_at",
+                ]
+            )
             is_first_time_set = not old_domain
 
         # Invalidate cache for both old and new domains

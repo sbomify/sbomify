@@ -1,10 +1,15 @@
 {% comment %}
 The card header band: a hairline rule under it and a faint elevated wash above
-the body. Standalone, for a header that is not a title and a subtitle. A
+the body. The slot supports a custom heading.
+compact is the dense heading above a table, which supplies its own rule.
+title and hint are optional; the slot supports custom headings or actions. A
 variant passes its whole tint through variant_class (the danger zone repaints
 both the rule and the wash), so the band's colour is one segment.
 {% endcomment %}
-<c-vars variant_class class />
-<div class="px-6 py-5 border-b border-solid {% if variant_class %}{{ variant_class }}{% else %}border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-surface-elevated)_50%,transparent),transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
-     {{ attrs }}>{{ slot }}
+<c-vars variant_class compact title hint class />
+<div class="{% if compact %}flex flex-wrap items-center justify-between gap-2 px-5 pt-5 pb-3{% else %}px-6 py-5 border-b border-solid {% if variant_class %}{{ variant_class }}{% else %}border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-surface-elevated)_50%,transparent),transparent)]{% endif %}{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    {% if title %}<h2 class="m-0 text-base font-semibold text-text">{{ title }}</h2>{% endif %}
+    {% if hint %}<p class="m-0 text-xs text-text-muted">{{ hint }}</p>{% endif %}
+    {{ slot }}
 </div>

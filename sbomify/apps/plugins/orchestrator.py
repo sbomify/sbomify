@@ -479,12 +479,58 @@ class PluginOrchestrator:
         Idempotent: if the run is already in a terminal state, no-op.
         Returns the run on success, ``None`` if the run isn't found.
         """
+        return self._finalize_unfinished(
+            run_id,
+            kind="retry-exhausted",
+            title="Assessment Retry Budget Exhausted",
+            description=(
+                "The plugin reported a transient condition for every retry attempt "
+                "in the configured budget. The condition may have become permanent "
+                f"(e.g., the upstream resource never became available). Last error: {error_message}"
+            ),
+            error_message=f"Retry budget exhausted: {error_message}",
+            last_error=error_message,
+        )
+
+    def finalize_stranded(self, run_id: str, reason: str) -> AssessmentRun | None:
+        """Settle a run nothing will come back for, such as one whose delayed task was lost.
+
+        The same write as ``finalize_retry_exhausted``, but the finding says the
+        work never finished. Blaming a retry budget would be wrong: such a run
+        usually never started, so it spent none.
+        """
+        return self._finalize_unfinished(
+            run_id,
+            kind="stranded",
+            title="Assessment Never Completed",
+            description=reason,
+            error_message=reason,
+            last_error=reason,
+        )
+
+    def _finalize_unfinished(
+        self,
+        run_id: str,
+        *,
+        kind: str,
+        title: str,
+        description: str,
+        error_message: str,
+        last_error: str,
+    ) -> AssessmentRun | None:
+        """Write a failing result onto a run that will not finish on its own.
+
+        ``finalize_retry_exhausted`` explains why the result is a completed
+        failure and how the conditional update keeps a racing worker's result.
+        ``kind`` names the finding and the metadata marker.
+        """
         from django.db import transaction
 
+        marker = kind.replace("-", "_")
         try:
             run = AssessmentRun.objects.get(id=run_id)
         except AssessmentRun.DoesNotExist:
-            logger.warning(f"[PLUGIN] finalize_retry_exhausted: run {run_id} not found")
+            logger.warning(f"[PLUGIN] finalize {kind}: run {run_id} not found")
             return None
 
         if run.status not in (RunStatus.PENDING.value, RunStatus.RUNNING.value):
@@ -493,7 +539,7 @@ class PluginOrchestrator:
 
         now = timezone.now()
         # ``schema_version`` mirrors ``AssessmentResult.to_dict()`` (sdk/results.py)
-        # so retry-exhausted payloads share the same on-disk shape as plugin-emitted
+        # so settled payloads share the same on-disk shape as plugin-emitted
         # ones — consumers that key off ``result["schema_version"]`` keep working.
         synthesized_result = {
             "schema_version": "1.0",
@@ -510,19 +556,15 @@ class PluginOrchestrator:
             },
             "findings": [
                 {
-                    "id": f"{run.plugin_name}:retry-exhausted",
-                    "title": "Assessment Retry Budget Exhausted",
-                    "description": (
-                        "The plugin reported a transient condition for every retry attempt "
-                        "in the configured budget. The condition may have become permanent "
-                        f"(e.g., the upstream resource never became available). Last error: {error_message}"
-                    ),
+                    "id": f"{run.plugin_name}:{kind}",
+                    "title": title,
+                    "description": description,
                     "status": "error",
                     "severity": "high",
-                    "metadata": {"retry_exhausted": True, "last_error": error_message},
+                    "metadata": {marker: True, "last_error": last_error},
                 }
             ],
-            "metadata": {"retry_exhausted": True},
+            "metadata": {marker: True},
         }
 
         with transaction.atomic():
@@ -533,7 +575,7 @@ class PluginOrchestrator:
                 status=RunStatus.COMPLETED.value,
                 result=synthesized_result,
                 result_schema_version="1.0",
-                error_message=f"Retry budget exhausted: {error_message}",
+                error_message=error_message,
                 completed_at=now,
             )
             if updated == 0:
@@ -542,23 +584,23 @@ class PluginOrchestrator:
                 # overwrite legitimate result data.
                 run.refresh_from_db()
                 logger.info(
-                    f"[PLUGIN] finalize_retry_exhausted: run {run_id} was finalised by another path "
+                    f"[PLUGIN] finalize {kind}: run {run_id} was finalised by another path "
                     f"(status={run.status}); leaving its result in place"
                 )
                 return run
 
             run.refresh_from_db()
             # Populate the AssessmentRun↔Release M2M from the current ReleaseArtifact
-            # state so retry-exhausted runs surface against the correct releases —
+            # state so settled runs surface against the correct releases —
             # same contract as a normal completion.
             self._sync_run_releases(run, str(run.sbom_id))
 
-        logger.info(f"[PLUGIN] finalize_retry_exhausted: marked run {run_id} as COMPLETED with retry-exhausted finding")
+        logger.info(f"[PLUGIN] finalize {kind}: marked run {run_id} as COMPLETED with {kind} finding")
 
         # ``QuerySet.update()`` bypasses Django's ``post_save`` signals, so
         # the dependent-trigger receiver in ``plugins.signals`` doesn't run
         # automatically here. Invoke the same helper directly so dependents
-        # (e.g. BSI's attestation gate) refresh after a retry-exhausted
+        # (e.g. BSI's attestation gate) refresh after a settled
         # completion the same way they would after a normal completion.
         try:
             from .signals import enqueue_dependents_for_completion
@@ -566,7 +608,7 @@ class PluginOrchestrator:
             enqueue_dependents_for_completion(run)
         except Exception:  # noqa: BLE001
             logger.warning(
-                f"[PLUGIN] finalize_retry_exhausted: dependent-trigger cascade failed for run {run_id}",
+                f"[PLUGIN] finalize {kind}: dependent-trigger cascade failed for run {run_id}",
                 exc_info=True,
             )
 

@@ -7,10 +7,12 @@ with custom domain support.
 
 import pytest
 from django.conf import settings
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
+from pytest_mock import MockerFixture
 
 from sbomify.apps.core.url_utils import (
     build_custom_domain_url,
+    custom_domain_redirect,
     get_public_path,
     get_public_url_base,
     is_public_url_path,
@@ -205,6 +207,66 @@ class TestBuildCustomDomainUrl:
         with override_settings(TRUST_CENTER_DOMAIN="trustcenters.io"):
             url = build_custom_domain_url(custom_domain_team, "/product/123/", secure=True)
             assert url == "https://trust.example.com/product/123/"
+
+
+@pytest.mark.django_db
+class TestCustomDomainRedirect:
+    @pytest.mark.parametrize("secure, scheme", [(True, "https"), (False, "http")])
+    def test_verified_domain(self, custom_domain_team: Team, secure: bool, scheme: str) -> None:
+        response = custom_domain_redirect(custom_domain_team, "/product/123/", secure)
+        assert response is not None
+        assert response.url == f"{scheme}://trust.example.com/product/123/"
+
+    @override_settings(TRUST_CENTER_DOMAIN="trust.example.com")
+    def test_unverified_domain_uses_workspace_subdomain(self, custom_domain_team: Team) -> None:
+        custom_domain_team.custom_domain_validated = False
+        custom_domain_team.slug = "example"
+        response = custom_domain_redirect(custom_domain_team, "/advisories/")
+        assert response is not None
+        assert response.url == "https://example.trust.example.com/advisories/"
+
+    @override_settings(TRUST_CENTER_DOMAIN="")
+    def test_unverified_domain_without_subdomain(self, custom_domain_team: Team) -> None:
+        custom_domain_team.custom_domain_validated = False
+        assert custom_domain_redirect(custom_domain_team, "/") is None
+
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "trust.example.com@evil.example.com",
+            "trust.example.com/evil",
+            "trust.example.com?next=evil",
+            "trust.example.com#fragment",
+            "trust.example.com\\evil",
+            "trust.example.com:443",
+            "trust.example.com\n",
+        ],
+    )
+    def test_malformed_verified_host(self, custom_domain_team: Team, host: str) -> None:
+        custom_domain_team.custom_domain = host
+        assert custom_domain_redirect(custom_domain_team, "/") is None
+
+    @override_settings(TRUST_CENTER_DOMAIN="trust.example.com")
+    @pytest.mark.parametrize("slug", ["evil.example.com/", "evil@host", "evil\\host", "evil?next="])
+    def test_malformed_workspace_slug(self, trust_center_team: Team, slug: str) -> None:
+        trust_center_team.slug = slug
+        assert custom_domain_redirect(trust_center_team, "/") is None
+
+    @pytest.mark.parametrize(
+        "target",
+        [
+            "https://evil.example.com/",
+            "https://trust.example.com.evil.example.com/",
+            "https://trust.example.com@evil.example.com/",
+            "https://evil.example.com@trust.example.com/",
+            "https://trust.example.com:8443/",
+            "http://trust.example.com/",
+            "javascript:alert(1)",
+        ],
+    )
+    def test_rejects_unexpected_target(self, custom_domain_team: Team, mocker: MockerFixture, target: str) -> None:
+        mocker.patch("sbomify.apps.core.url_utils.build_custom_domain_url", return_value=target)
+        assert custom_domain_redirect(custom_domain_team, "/") is None
 
 
 @pytest.mark.django_db

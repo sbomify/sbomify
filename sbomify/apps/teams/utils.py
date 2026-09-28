@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, cast
 from urllib.parse import urlparse
 
@@ -28,7 +30,7 @@ from .queries import count_team_members, get_team_user_counts
 # Valid tab names for team settings - used for input validation
 # Names still linked to by fragment that have no settings page of their own.
 # Kept as literals so a redirect to one cannot carry a request-derived string.
-FRAGMENT_ONLY_TABS: tuple[str, ...] = ("controls", "integrations")
+FRAGMENT_ONLY_TABS: tuple[str, ...] = ("integrations",)
 
 ALLOWED_TABS = frozenset(
     {
@@ -331,6 +333,39 @@ def get_user_default_team(user: User) -> int | None:
         return None
 
 
+@contextmanager
+def user_seat(team: Team, *, is_joining_via_invite: bool = False) -> Iterator[tuple[bool, str]]:
+    """Hold the workspace row while a seat is counted and then taken.
+
+    ``can_add_user_to_team`` counts and returns a verdict, and a verdict cannot
+    hold a lock past its own return. Every caller wrote afterwards in a separate
+    statement, so two invitations accepted at the same moment both read the same
+    count, both passed, and the workspace went over ``max_users``. This is the
+    same defect the product and component checks had, in the one resource that
+    check does not cover.
+
+    So the count and the write happen under one lock. The caller's write goes
+    inside the ``with`` block, which is what makes the verdict still true when it
+    runs:
+
+        with user_seat(team) as (can_add, error):
+            if not can_add:
+                return refuse(error)
+            Member.objects.create(...)
+
+    ``is_joining_via_invite`` needs this most rather than least. It deliberately
+    allows ``total == max`` because the pending user already occupies a slot, and
+    that reasoning only holds if nobody else can take the slot between the count
+    and the acceptance.
+
+    Nested inside an outer transaction the lock is simply held until that one
+    commits, which is the behaviour wanted either way.
+    """
+    with transaction.atomic():
+        locked = Team.objects.select_for_update().get(pk=team.pk)
+        yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite)
+
+
 def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tuple[bool, str]:
     """
     Check if a team can add more users based on their billing plan limits.
@@ -433,6 +468,11 @@ def create_user_team_and_subscription(user: User) -> Team | None:
         if pending_invitations:
             joinable_invites = []
             for invitation in pending_invitations:
+                # Unlocked on purpose. Nothing is written on the strength of
+                # this: it only decides whether to auto-create a personal
+                # workspace, and the real check runs again under a lock when the
+                # invitation is actually accepted. Holding a workspace row for an
+                # advisory read would block the acceptances that matter.
                 can_add, _ = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
                 if can_add:
                     joinable_invites.append(invitation)
@@ -647,6 +687,19 @@ def on_demand_tls_cache_key(domain_normalized: str) -> str:
     import hashlib
 
     return f"ondemand_tls:{hashlib.sha256(domain_normalized.encode()).hexdigest()}"
+
+
+def custom_domain_challenge(team_pk: int, domain: str) -> str:
+    """The value this deployment serves on a claimed domain's domain-check path.
+
+    Public on purpose: the verification probe fetches it from the domain through
+    public DNS, and a match shows the domain's operator serves it, normally by
+    pointing the domain here. Keyed on SECRET_KEY, so another deployment serving
+    the same name cannot produce it.
+    """
+    from django.utils.crypto import salted_hmac
+
+    return salted_hmac("sbomify.custom-domain-challenge", f"{team_pk}:{domain}", algorithm="sha256").hexdigest()
 
 
 def invalidate_custom_domain_cache(domain: str | None) -> None:

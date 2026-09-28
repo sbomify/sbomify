@@ -35,7 +35,8 @@ leaves it empty and the button is not offered rather than 500ing the page.
     needs an id that still resolves.
 {% endcomment %}
 {% firstof component.id 'onboarding' as cicd_copy_suffix %}
-<div x-data="{ cicdOpen: false }"
+<div class="contents"
+     x-data="{ cicdOpen: false }"
      @open-cicd.window="cicdOpen = true"
      @keydown.escape.window="if (cicdOpen) cicdOpen = false">
     <c-modal show="cicdOpen" title="Get started" icon="fas fa-rocket" x-data="ciCdToken('{{ ci_token_url|escapejs }}')">

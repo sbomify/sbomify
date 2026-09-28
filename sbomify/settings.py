@@ -34,8 +34,9 @@ from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
-from sbomify.logging_filters import is_benign_shielded_future_error
+from sbomify.logging_filters import is_benign_shielded_future_error, is_on_demand_tls_ask_denial
 from sbomify.sentry_config import (
+    is_repeat_self_healing_notice,
     resolve_environment,
     should_warn_missing_dsn,
     throttle_self_healing_notices,
@@ -327,7 +328,8 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
 ]
 
-GZIP_REQUEST_MAX_SIZE = 200 * 1024 * 1024  # 200 MB – safety limit for decompressed request bodies
+# A compressed body inflates no further than an uncompressed one may weigh.
+GZIP_REQUEST_MAX_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
 
 if REQUEST_TIMING_LOGGING_ENABLED:
     MIDDLEWARE.insert(
@@ -377,13 +379,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "sbomify.apps.core.context_processors.version_context",
-                "sbomify.apps.core.context_processors.pending_invitations_context",
-                "sbomify.apps.core.context_processors.pending_access_requests_context",
-                "sbomify.apps.core.context_processors.global_modals_context",
-                "sbomify.apps.core.context_processors.team_context",
-                "sbomify.apps.core.context_processors.sentry_context",
-                "sbomify.apps.core.context_processors.posthog_context",
+                "sbomify.apps.core.context_processors.app_context",
             ],
         },
     },
@@ -875,12 +871,30 @@ LOGGING = {
             "()": "django.utils.log.CallbackFilter",
             "callback": lambda record: not is_benign_shielded_future_error(record),
         },
+        # These two run on every console record, so both bail on a cheap
+        # attribute check before formatting a message. Between them they are
+        # most of what made the production log stream unreadable: a third of it
+        # was one repeated 404 path, and the error-level portion was dominated
+        # by faults that had already recovered.
+        "suppress_on_demand_tls_ask_denials": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_on_demand_tls_ask_denial(record),
+        },
+        # Keeps the first line of each distinct fault per five-minute window and
+        # drops the repeats, so an outage that lasts is still reported for as
+        # long as it lasts. Same throttle the Sentry before_send hook applies,
+        # with its own window.
+        "throttle_self_healing_notices": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_repeat_self_healing_notice(record),
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
             "formatter": "default",
+            "filters": ["suppress_on_demand_tls_ask_denials", "throttle_self_healing_notices"],
         },
         "console_asyncio": {
             "class": "logging.StreamHandler",
@@ -1002,7 +1016,6 @@ KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
 KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
-KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
 
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {

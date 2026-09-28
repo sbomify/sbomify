@@ -133,3 +133,98 @@ def test_delete_incomplete_profile_from_every_list_render(
     assert not ContactProfile.objects.filter(pk=empty_profile.pk).exists()
     assert json.loads(deletion["HX-Trigger"])["refreshProfileList"] is True
     assert parser.action == list_url
+
+
+def create_profile_via_api(client: Client, token: AccessToken, workspace: Team, name: str, entity_name: str) -> str:
+    """Create a profile with a single complete entity and return its id."""
+    response = client.post(
+        f"/api/v1/workspaces/{workspace.key}/contact-profiles",
+        json.dumps(
+            {
+                "name": name,
+                "entities": [
+                    {
+                        "name": entity_name,
+                        "email": "entity@example.com",
+                        "is_manufacturer": True,
+                        "contacts": [{"name": "Alice", "email": "alice@example.com"}],
+                    }
+                ],
+            }
+        ),
+        content_type="application/json",
+        **get_api_headers(token),
+    )
+    assert response.status_code == 201, response.content
+    return response.json()["id"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("foreign_entity", [False, True])
+def test_api_update_rejects_unknown_entity_id_without_emptying_profile(
+    sample_team_with_owner_member: Member,
+    authenticated_api_client: tuple[Client, AccessToken],
+    foreign_entity: bool,
+) -> None:
+    """``_upsert_entities`` deletes every entity not named in the payload before it
+    resolves the submitted IDs, so an ID belonging to another profile (or to nothing
+    at all) must fail the whole update rather than commit an empty profile."""
+    workspace = sample_team_with_owner_member.team
+    client, token = authenticated_api_client
+
+    profile_id = create_profile_via_api(client, token, workspace, "Target", "Target Corp")
+    if foreign_entity:
+        other_id = create_profile_via_api(client, token, workspace, "Other", "Other Corp")
+        entity_id = ContactProfile.objects.get(pk=other_id).entities.get().pk
+    else:
+        entity_id = "does-not-exist"
+
+    response = client.patch(
+        f"/api/v1/workspaces/{workspace.key}/contact-profiles/{profile_id}",
+        json.dumps(
+            {
+                "entities": [
+                    {
+                        "id": entity_id,
+                        "name": "Hijacked",
+                        "email": "hijacked@example.com",
+                        "is_manufacturer": True,
+                        "contacts": [{"name": "Mallory", "email": "mallory@example.com"}],
+                    }
+                ]
+            }
+        ),
+        content_type="application/json",
+        **get_api_headers(token),
+    )
+
+    assert response.status_code == 400, response.content
+    assert "does not belong" in response.json()["detail"]
+    target_entities = ContactProfile.objects.get(pk=profile_id).entities.all()
+    assert [entity.name for entity in target_entities] == ["Target Corp"]
+    if foreign_entity:
+        assert ContactEntity.objects.filter(pk=entity_id).values_list("name", flat=True)[0] == "Other Corp"
+
+
+@pytest.mark.django_db
+def test_api_update_with_empty_entities_list_keeps_existing_entities(
+    sample_team_with_owner_member: Member,
+    authenticated_api_client: tuple[Client, AccessToken],
+) -> None:
+    """``entities: []`` means "don't touch the entities", so the profile must keep
+    them and stay non-empty rather than be silently cleared."""
+    workspace = sample_team_with_owner_member.team
+    client, token = authenticated_api_client
+    profile_id = create_profile_via_api(client, token, workspace, "Keep", "Keep Corp")
+
+    response = client.patch(
+        f"/api/v1/workspaces/{workspace.key}/contact-profiles/{profile_id}",
+        json.dumps({"name": "Renamed", "entities": []}),
+        content_type="application/json",
+        **get_api_headers(token),
+    )
+
+    assert response.status_code == 200, response.content
+    profile = ContactProfile.objects.get(pk=profile_id)
+    assert profile.name == "Renamed"
+    assert [entity.name for entity in profile.entities.all()] == ["Keep Corp"]

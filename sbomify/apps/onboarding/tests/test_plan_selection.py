@@ -147,7 +147,7 @@ class TestOnboardingPlanSelectionGet:
         client, user, team = authed_client
         resp = client.get(_wizard_plan_url())
         assert resp.status_code == 200
-        assert b"Choose Your Plan" in resp.content
+        assert b"Choose your plan" in resp.content
 
     def test_redirects_if_already_selected(self, billing_enabled, existing_user):
         user, team = existing_user
