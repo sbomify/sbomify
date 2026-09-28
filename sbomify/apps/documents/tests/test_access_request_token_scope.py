@@ -63,6 +63,7 @@ def _decide(api_client, access_request, verb, scopes):
 
 
 _DECISIONS = [("approve", "pending"), ("reject", "pending"), ("revoke", "approved")]
+_DECIDED = {"approve": "approved", "reject": "rejected", "revoke": "revoked"}
 
 
 @pytest.mark.parametrize("preset", NARROW_PRESETS)
@@ -82,13 +83,17 @@ def test_a_narrow_token_cannot_decide_a_request(
 
 @pytest.mark.parametrize("verb,status", _DECISIONS)
 def test_a_full_token_still_decides_a_request(
-    authenticated_api_client, team_with_business_plan, guest_user, verb, status
+    authenticated_api_client, team_with_business_plan, guest_user, sample_user, verb, status
 ):
     access_request = AccessRequest.objects.create(team=team_with_business_plan, user=guest_user, status=status)
 
     response = _decide(authenticated_api_client, access_request, verb, SCOPE_PRESETS["full"])
 
     assert response.status_code == 200
+    access_request.refresh_from_db()
+    assert access_request.status == _DECIDED[verb]
+    decider = access_request.revoked_by if verb == "revoke" else access_request.decided_by
+    assert decider == sample_user
 
 
 def test_a_token_bound_to_another_workspace_cannot_approve(
