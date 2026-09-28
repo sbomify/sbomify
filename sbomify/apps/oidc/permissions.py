@@ -95,11 +95,11 @@ def request_is_oidc_authed(request: Any) -> bool:
     ``token_type`` claim (needs ``SECRET_KEY``) AND delete the
     ``OIDCBinding`` row without taking down the bot user.
 
-    Performance: ``request_is_oidc_authed`` is only reached on the
-    component-scoped upload endpoints, and for a PAT runs one unique-indexed
-    probe on ``OIDCBinding.bot_user_id`` per request. The binding lookup is
-    memoised via ``_cached_binding``, so the second call this predicate
-    receives within a request (``is_authorised_for_component`` then
+    Performance: ``request_is_oidc_authed`` is reached on the upload
+    endpoints and the release endpoints, and for a PAT runs one
+    unique-indexed probe on ``OIDCBinding.bot_user_id`` per request. The
+    binding lookup is memoised via ``_cached_binding``, so the second call
+    this predicate receives within a request (``is_authorised_for_component`` then
     ``bound_component_id_for_request``) is effectively free.
     """
     token_record: AccessToken | None = getattr(request, "access_token_record", None)
@@ -147,3 +147,20 @@ def is_authorised_for_component(request: Any, component: Any) -> bool:
     if bound_id is None:
         return False
     return bound_id == str(component.id)
+
+
+def is_authorised_for_product(request: Any, product: Any) -> bool:
+    """Authorise OIDC tokens for products that contain the bound component only.
+
+    The product-level counterpart of ``is_authorised_for_component``, for
+    release reads: the bot's ``release:read`` holds across its whole
+    workspace, and a release's contents span every component of its
+    product. Same contract: ``True`` for non-OIDC requests, ``False`` for
+    an orphan bot.
+    """
+    if not request_is_oidc_authed(request):
+        return True
+    bound_id = bound_component_id_for_request(request)
+    if bound_id is None:
+        return False
+    return bool(product.components.filter(id=bound_id).exists())

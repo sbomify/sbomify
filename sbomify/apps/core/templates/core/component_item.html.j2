@@ -1,4 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
+{% load humanize %}
 {% load static %}
 {% load django_vite %}
 {% load advisory_tags %}
@@ -36,7 +37,26 @@
         </c-buttons.secondary>
     {% endif %}
     </c-layout.page-header>
-    <c-layout.frame>
+    {% comment %}
+        The artifact page refreshes itself as a whole region rather than a
+        reload. An assessment finishes on the queue's schedule, not the
+        reader's, and a reload lands on whatever they were doing: a triage
+        justification half typed, a filtered suppression list, an expanded
+        findings panel. None of that is in the URL.
+
+        It is the whole region rather than one card because the counts here are
+        rendered in three places that have to agree: the vulnerability summary,
+        the suppressed list the triage POST writes server-side, and the
+        assessment card itself. Refreshing one of them is what produces a page
+        showing two different numbers.
+
+        morph-preserve, and ignore the inherited alpine-morph, because both
+        claim the morph style and only one of them honours hx-preserve. The
+        panels below cannot be re-rendered from the server, which does not know
+        what the reader has opened. hx-disinherit keeps the select and the swap
+        off descendants that do their own requests.
+    {% endcomment %}
+    <c-layout.frame id="artifact-content" x-data hx-ext="ignore:alpine-morph, morph-preserve" hx-get="{% url 'core:component_item' component_id=component_id item_type=item_type item_id=item.id %}" hx-trigger="refresh-assessments from:body" hx-select="#artifact-content" hx-swap="morph" hx-disinherit="hx-select hx-swap" @ws:message.window=" if (($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ item.id }}') || ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}')) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
     {# Stats Badges #}
     <div class="flex flex-wrap gap-2">
         {% if is_sbom_backed %}
@@ -132,7 +152,7 @@
         {% if vulnerability_summary %}
             <div class="flex flex-col gap-4">
                 <c-layout.section-header level="2" title="Vulnerability scan">
-                <c-slot name="subtitle">{{ vulnerability_summary.total }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider|upper }}</c-slot>
+                <c-slot name="subtitle">{{ vulnerability_summary.total|intcomma }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider|upper }}</c-slot>
                 <c-slot name="actions">
                 <c-buttons.secondary size="sm" href="{% url 'sboms:sbom_vulnerabilities' item.id %}">
                 Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i>
@@ -157,7 +177,7 @@
                 <c-cards.header>
                 <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
                     Suppressed vulnerabilities
-                    <c-badges.secondary size="sm">{{ vex_suppressions|length }}</c-badges.secondary>
+                    <c-badges.secondary size="sm">{{ vex_suppressions|length|intcomma }}</c-badges.secondary>
                 </h4>
                 </c-cards.header>
                 {% if vex_suppressions %}
@@ -230,7 +250,7 @@
                     </c-tables.table>
                     <c-tables.footer>
                     <c-tables.info>
-                    Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+                    Showing <span x-text="$number(startIdx)"></span> to <span x-text="$number(endIdx)"></span> of <span x-text="$number(total)"></span>
                     </c-tables.info>
                     <c-tables.pager />
                     </c-tables.footer>
@@ -252,9 +272,6 @@
         {% if assessment_runs and not is_vex %}
             <div>
                 {% include 'plugins/components/assessment_results_card.html.j2' with sbom_id=item.id assessment_runs=assessment_runs %}
-                {% if can_triage %}
-                    {% include 'plugins/components/triage_modal.html.j2' %}
-                {% endif %}
             </div>
         {% endif %}
         {# Danger Zone #}
@@ -280,9 +297,18 @@
         </c-cards.card>
     {% endif %}
     </c-layout.frame>
+    {% comment %}
+        The triage dialog sits outside the refreshed region on purpose. It holds
+        the justification the reader is typing, and a refresh arriving mid
+        sentence must not take it. Keeping it out of the morph is simpler and
+        sturdier than preserving it inside one: a dialog is page furniture, not
+        part of the artifact's content.
+    {% endcomment %}
+    {% if is_sbom_backed and assessment_runs and not is_vex and can_triage %}
+        {% include 'plugins/components/triage_modal.html.j2' %}
+    {% endif %}
 {% endblock %}
 {% block scripts %}
-    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% if is_sbom_backed %}
         {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
         {% vite_asset 'sbomify/apps/plugins/js/main.ts' %}

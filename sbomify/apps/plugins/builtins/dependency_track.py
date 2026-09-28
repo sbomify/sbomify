@@ -551,15 +551,14 @@ class DependencyTrackPlugin(AssessmentPlugin):
         Returns:
             DependencyTrackServer instance.
         """
-        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
-        from sbomify.apps.vulnerability_scanning.services import VulnerabilityScanningService
+        from sbomify.apps.vulnerability_scanning.services import VulnerabilityScanningService, dt_servers_open_to
 
         dt_server_id = self.config.get("dt_server_id")
         if dt_server_id:
-            try:
-                return DependencyTrackServer.objects.get(id=dt_server_id, is_active=True)
-            except DependencyTrackServer.DoesNotExist:
-                logger.warning(f"[DT] Configured server {dt_server_id} not found/inactive, falling back to pool")
+            server = dt_servers_open_to(team).filter(id=dt_server_id).first()
+            if server is not None:
+                return server
+            logger.warning(f"[DT] Configured server {dt_server_id} is not available to this workspace, using the pool")
 
         service = VulnerabilityScanningService()
         return service.select_dependency_track_server(team)

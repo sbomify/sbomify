@@ -1,4 +1,5 @@
-<c-layout.frame id="inventory-content" hx-get="{{ inventory.refresh_url }}" hx-trigger="refresh-products from:body, refresh-components from:body, refresh-releases from:body, refresh-inventory from:body" @ws:message.window.debounce.500ms="if (['product_created', 'product_updated', 'product_deleted', 'component_created', 'component_updated', 'component_deleted', 'release_created', 'release_updated', 'release_deleted', 'sbom_uploaded', 'sbom_deleted', 'document_uploaded', 'document_deleted', 'assessment_complete'].includes($event.detail.type)) $dispatch('refresh-inventory')" hx-sync="#inventory-content:replace" hx-target="this" hx-swap="outerHTML show:none">
+{# Result swaps leave this frame mounted, so background refreshes must use the current URL. #}
+<c-layout.frame id="inventory-content" hx-get="{{ inventory.refresh_url }}" hx-trigger="refresh-products from:body, refresh-components from:body, refresh-releases from:body, refresh-inventory from:body" @ws:message.window.debounce.500ms="if (['product_created', 'product_updated', 'product_deleted', 'component_created', 'component_updated', 'component_deleted', 'release_created', 'release_updated', 'release_deleted', 'sbom_uploaded', 'sbom_deleted', 'document_uploaded', 'document_deleted', 'assessment_complete'].includes($event.detail.type)) $dispatch('refresh-inventory')" hx-on::config-request="if (event.detail.elt === this) event.detail.path = window.location.pathname + window.location.search" hx-sync="#inventory-content:replace" hx-target="this" hx-swap="outerHTML show:none">
 <c-layout.page-header title="Products" subtitle="Everything this workspace ships, and the evidence behind it.">
 {% if can_manage %}
     {% if inventory.kind == 'products' %}
@@ -11,5 +12,5 @@
 {% endif %}
 </c-layout.page-header>
 <c-navigation.tabs links :tabs="inventory.tabs" active="{{ inventory.kind }}" aria-label="Product inventory" hx-boost="true" hx-target="#inventory-content" />
-<c-inventory.table :inventory="inventory" />
+<c-inventory.table :inventory="inventory" results_only />
 </c-layout.frame>
