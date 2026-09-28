@@ -10,6 +10,7 @@ import Alpine from 'alpinejs';
 // COMPONENT IMPORTS - Core
 // ============================================
 import { navbarSearch } from './navbar-search';
+import { inventoryTabs } from './components/inventory-tabs';
 import { scrollableTabs } from './components/scrollable-tabs';
 import { repositorySetup } from './components/repository-setup';
 import { registerCopyableValue } from './components/copyable-value';
@@ -189,6 +190,7 @@ export function formState() {
 export function registerCommonComponents(): void {
     registerAlpineComponent('navbarSearch', navbarSearch);
     registerAlpineComponent('scrollableTabs', scrollableTabs);
+    registerAlpineComponent('inventoryTabs', inventoryTabs);
     registerAlpineComponent('vulnerabilityTrends', vulnerabilityTrends);
     registerAlpineComponent('dangerZone', dangerZone);
     registerAlpineComponent('modalState', modalState);

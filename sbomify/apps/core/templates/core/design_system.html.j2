@@ -118,8 +118,8 @@
     </c-layout.frame>
     <c-layout.frame>
     <c-layout.page-header title="Product inventory" subtitle="Linked tabs, compact server-sorted cells, severity breakdowns and shared filters." />
-    <c-navigation.tabs links aria-label="Example inventory views">
-    <c-navigation.tab href="{% url 'core:products_dashboard' %}" badge="1" active>Products</c-navigation.tab>
+    <c-navigation.tabs links aria-label="Example inventory views" x-data="{ selectedInventory: 'products' }">
+    <c-navigation.tab href="{% url 'core:products_dashboard' %}" active_binding="selectedInventory === 'products'" badge="1" active>Products</c-navigation.tab>
     <c-navigation.tab href="{% url 'core:products_dashboard' %}?view=releases" badge="2">Releases</c-navigation.tab>
     <c-navigation.tab href="{% url 'core:products_dashboard' %}?view=components" badge="3">Components</c-navigation.tab>
     </c-navigation.tabs>
