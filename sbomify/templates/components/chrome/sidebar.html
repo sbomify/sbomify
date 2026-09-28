@@ -32,6 +32,10 @@ release and component inventory tabs. Capability flags are live, so this compone
         <c-chrome.nav-item href="{% url 'core:dashboard' %}" label="Overview" icon="fas fa-border-all" match="core:dashboard" />
         {% if request.session.current_team.key %}
             <c-chrome.nav-item href="{% url 'vulnerability_scanning:vulnerability_scans' request.session.current_team.key %}" label="Vulnerability scans" icon="fas fa-bullseye" match="vulnerability_scanning:" />
+            {% if can_manage %}
+                {# can_manage is owner, admin and member, which is who WorkspaceCryptoView admits: every role but guest, and bot, which never holds a session. #}
+                <c-chrome.nav-item href="{% url 'sboms:workspace_crypto' request.session.current_team.key %}" label="Cryptography" icon="fas fa-lock" match="sboms:workspace_crypto" />
+            {% endif %}
         {% endif %}
         </c-chrome.nav-group>
         <c-chrome.nav-group label="Ship">
@@ -52,7 +56,15 @@ release and component inventory tabs. Capability flags are live, so this compone
             <c-chrome.nav-item href="{% url 'plugins:plugins_page' %}" label="Plugins" icon="fas fa-plug" match="plugins:" />
         {% endif %}
         {% if request.session.current_team.key %}
-            <c-chrome.nav-item href="{% url 'teams:team_settings' request.session.current_team.key %}" label="Settings" icon="fas fa-gear" match="teams:team_settings" />
+            {% if request.resolver_match.view_name == 'teams:team_settings_tab' and request.resolver_match.kwargs.tab == 'tokens' %}
+                {% firstof 'true' as tokens_active %}
+            {% else %}
+                {% firstof 'teams:team_settings' as settings_match %}
+            {% endif %}
+            {% if can_manage %}
+                <c-chrome.nav-item :active="tokens_active" href="{% url 'teams:team_settings_tab' team_key=request.session.current_team.key tab='tokens' %}" label="API keys" icon="fas fa-key" />
+            {% endif %}
+            <c-chrome.nav-item href="{% url 'teams:team_settings' request.session.current_team.key %}" label="Settings" icon="fas fa-gear" match="{{ settings_match }}" />
         {% endif %}
     </div>
 </aside>

@@ -293,6 +293,15 @@
       "roles": ["owner", "admin"]
     },
     {
+      "title": "Cryptography",
+      "url_name": "sboms:workspace_crypto",
+      "section": "navigate",
+      "icon": "fa-lock",
+      "keywords": ["crypto", "cryptography", "crypto readiness", "quantum", "post-quantum", "pqc", "algorithms", "certificates", "cbom"],
+      "args": ["team_key"],
+      "roles": ["owner", "admin", "member"]
+    },
+    {
       "title": "Public Trust Center page",
       "url_name": "core:workspace_public_current",
       "section": "actions",

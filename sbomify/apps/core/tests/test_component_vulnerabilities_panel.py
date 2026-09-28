@@ -156,7 +156,7 @@ class TestTheReportedIncident:
 
         assert response.context["vuln_summary"]["total"] == 2390
         assert response.context["vuln_panel"]["page_count"] == 478
-        assert "Showing 1 to 5 of 2390" in response.content.decode()
+        assert "Showing 1 to 5 of 2,390" in response.content.decode()
 
     @pytest.mark.slow
     def test_the_last_finding_is_still_reachable(self, sample_team_with_owner_member, sample_user):

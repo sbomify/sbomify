@@ -1,3 +1,4 @@
+{% load humanize %}
 {% comment %}
 The shared exposure summary always opens a severity breakdown. compact only
 changes the bar dimensions. The panel uses the existing floating dropdown and
@@ -15,7 +16,7 @@ as clean.
                 @click.stop="toggle()"
                 :aria-expanded="open"
                 aria-haspopup="dialog"
-                aria-label="Vulnerability breakdown: {{ counts.total }} open"
+                aria-label="Vulnerability breakdown: {{ counts.total|intcomma }} open"
                 class="inline-flex items-center gap-2 rounded-md cursor-pointer hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
             <c-overview.severity-bar :counts="counts" :compact="compact" />
             <i class="fas fa-chevron-down text-[0.5rem] text-text-muted"
@@ -24,28 +25,28 @@ as clean.
         <template x-teleport="body">
             <c-dropdowns.dropdown floating role="dialog" aria-label="Vulnerability breakdown" x-ref="menu" tabindex="-1" x-show="open" x-cloak ::style="style" @click.outside="close()">
             <div class="px-3 py-2">
-                <p class="mb-3 text-sm font-semibold text-text">{{ counts.total }} open vulnerabilities</p>
+                <p class="mb-3 text-sm font-semibold text-text">{{ counts.total|intcomma }} open vulnerabilities</p>
                 <dl class="grid grid-cols-2 gap-x-8 gap-y-2 text-xs text-text-muted">
                     <dt>Critical</dt>
                     <dd class="m-0 text-right tabular-nums text-text">
-                        {{ counts.critical }}
+                        {{ counts.critical|intcomma }}
                     </dd>
                     <dt>High</dt>
                     <dd class="m-0 text-right tabular-nums text-text">
-                        {{ counts.high }}
+                        {{ counts.high|intcomma }}
                     </dd>
                     <dt>Medium</dt>
                     <dd class="m-0 text-right tabular-nums text-text">
-                        {{ counts.medium }}
+                        {{ counts.medium|intcomma }}
                     </dd>
                     <dt>Low</dt>
                     <dd class="m-0 text-right tabular-nums text-text">
-                        {{ counts.low }}
+                        {{ counts.low|intcomma }}
                     </dd>
                     {% if counts.unknown %}
                         <dt>Unknown</dt>
                         <dd class="m-0 text-right tabular-nums text-text">
-                            {{ counts.unknown }}
+                            {{ counts.unknown|intcomma }}
                         </dd>
                     {% endif %}
                 </dl>

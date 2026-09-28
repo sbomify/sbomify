@@ -307,10 +307,10 @@
     background: var(--gray-200);
 }
 
-.tc-severity-critical { background: #dc2626; }
-.tc-severity-high     { background: #ea580c; }
-.tc-severity-medium   { background: #d97706; }
-.tc-severity-low      { background: #2563eb; }
+.tc-severity-critical { background: var(--color-severity-critical-fill); }
+.tc-severity-high     { background: var(--color-severity-high-fill); }
+.tc-severity-medium   { background: var(--color-severity-medium-fill); }
+.tc-severity-low      { background: var(--color-severity-low-fill); }
 .tc-severity-none     { background: var(--gray-200); }
 
 .tc-advisory-id {
@@ -978,11 +978,15 @@
     background: var(--gray-200);
 }
 
-.tc-facet-dot.tc-severity-critical { background: #b91c1c; }
-.tc-facet-dot.tc-severity-high     { background: #ea580c; }
-.tc-facet-dot.tc-severity-medium   { background: #d97706; }
-.tc-facet-dot.tc-severity-low      { background: #2563eb; }
-.tc-facet-dot.tc-severity-none     { background: #94a3b8; }
+/* Same ramp as the CVSS chip and the row spine. These stay as compound
+   selectors: .tc-facet-dot's own background is declared later in this file at
+   equal specificity, so a bare .tc-severity-* would lose to it and every dot
+   would render grey. */
+.tc-facet-dot.tc-severity-critical { background: var(--color-severity-critical-fill); }
+.tc-facet-dot.tc-severity-high     { background: var(--color-severity-high-fill); }
+.tc-facet-dot.tc-severity-medium   { background: var(--color-severity-medium-fill); }
+.tc-facet-dot.tc-severity-low      { background: var(--color-severity-low-fill); }
+.tc-facet-dot.tc-severity-none     { background: var(--color-severity-none-fill); }
 
 .tc-facet-label {
     flex: 1;
@@ -1177,14 +1181,14 @@
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: #ffffff;
-    background: #64748b;
+    background: var(--color-severity-none-fill);
 }
 
-.tc-cvss-critical { background: #b91c1c; }
-.tc-cvss-high     { background: #ea580c; }
-.tc-cvss-medium   { background: #d97706; }
-.tc-cvss-low      { background: #2563eb; }
-.tc-cvss-none     { background: #64748b; }
+.tc-cvss-critical { background: var(--color-severity-critical-fill); }
+.tc-cvss-high     { background: var(--color-severity-high-fill); }
+.tc-cvss-medium   { background: var(--color-severity-medium-fill); }
+.tc-cvss-low      { background: var(--color-severity-low-fill); }
+.tc-cvss-none     { background: var(--color-severity-none-fill); }
 
 .tc-adv-link {
     display: block;

@@ -43,6 +43,9 @@ def test_inventory_navigation_and_filters(
             "return row.getBoundingClientRect().top - row.previousElementSibling.getBoundingClientRect().bottom; }"
         ) == pytest.approx(24)
         expect(navigation.get_by_role("link", name=re.compile(f"^{kind}"))).to_have_attribute("aria-current", "page")
+    # Filtering and paging must retain the live controls, not recreate the page.
+    filters = page.locator("#inventory-content-filters").element_handle()
+    navigation_element = navigation.element_handle()
     page.get_by_role("link", name="Next page", exact=True).click()
     expect(table.locator("tbody tr")).to_have_count(2)
     expect(page).to_have_url(re.compile("page=2"))
@@ -52,6 +55,9 @@ def test_inventory_navigation_and_filters(
     expect(table.locator("tbody tr")).to_have_count(1)
     expect(table.get_by_role("link", name="Test Product 0", exact=True)).to_be_visible()
     expect(page).to_have_url(re.compile(r"search=Test(?:%20|\+)Product(?:%20|\+)0"))
+    expect(page.get_by_role("searchbox", name="Search products", exact=True)).to_be_focused()
+    assert filters and filters.evaluate("el => el.isConnected")
+    assert navigation_element and navigation_element.evaluate("el => el.isConnected")
     page.get_by_label("Filter by visibility").select_option("private")
     expect(table.get_by_text("No matching products")).to_be_visible()
     table.get_by_role("link", name="Clear filters").click()
@@ -73,8 +79,13 @@ def test_inventory_navigation_and_filters(
     page.get_by_role("navigation", name="Product inventory").get_by_role("link", name=re.compile("^Components")).click()
     components = page.get_by_role("table", name="Components", exact=True)
     expect(components).to_be_visible()
+    product = dashboard["products"][0]
+    page.get_by_label("Filter by product").select_option(product.id)
+    release_tab = page.get_by_role("navigation", name="Product inventory").get_by_role("link", name=re.compile("^Releases"))
+    expect(release_tab).to_have_attribute("href", re.compile(f"product={product.id}"))
     page.get_by_label("Filter by product").select_option("unassigned")
     expect(components).to_contain_text("Unassigned")
+    expect(release_tab).to_have_attribute("href", re.compile(r"[?&]product=(&|$)"))
     page.get_by_role("navigation", name="Product inventory").get_by_role("link", name=re.compile("^Releases")).click()
     expect(page.get_by_role("table", name="Releases", exact=True)).to_be_visible()
     page.get_by_role("link", name="Create release", exact=True).click()
@@ -88,3 +99,37 @@ def test_inventory_navigation_and_filters(
     expect(page.locator("#inventory-content")).to_have_count(1)
     expect(page.locator("#sidebar")).to_have_count(1)
     assert page.locator("body").evaluate("el => el.scrollWidth <= innerWidth")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", ["products", "components", "releases"])
+def test_inventory_result_swaps_keep_sort_refresh_and_history(
+    authenticated_page: Page, dashboard: dict[str, Any], kind: str
+) -> None:
+    page = authenticated_page
+    page.goto(f"/products/?view={kind}")
+    table = page.get_by_role("table", name=kind.title(), exact=True)
+    search = page.get_by_role("searchbox", name=f"Search {kind}", exact=True)
+    search_element = search.element_handle()
+    table.locator("thead a").first.click()
+    expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
+    search.fill("Test")
+    expect(page).to_have_url(re.compile("search=Test"))
+    expect(page).to_have_url(re.compile("direction=desc"))
+    expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
+    assert search_element and search_element.evaluate("el => el.isConnected")
+    expect(search).to_be_focused()
+    filtered_url = page.url
+    # The enclosing refresh URL must follow result-only navigation too.
+    with page.expect_response(lambda response: response.url == filtered_url):
+        page.evaluate("document.body.dispatchEvent(new Event('refresh-inventory'))")
+    expect(page.locator("#inventory-content")).not_to_have_class(re.compile("htmx-settling"))
+    expect(search).to_have_value("Test")
+    expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
+    page.go_back()
+    expect(search).to_have_value("")
+    expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
+    page.go_forward()
+    expect(search).to_have_value("Test")
+    expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
+    expect(page.locator("#sidebar")).to_have_count(1)

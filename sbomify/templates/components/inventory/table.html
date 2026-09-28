@@ -2,25 +2,31 @@
 A complete server-driven inventory browser. List and detail pages share the
 GET form, filters, results and pagination. The service supplies a unique root,
 base URL and optional fixed product scope; the parent owns HTMX replacement.
+results_only keeps the filters mounted and requires a results fragment response.
 {% endcomment %}
-<c-vars inventory />
+<c-vars inventory results_only />
 <form id="{{ inventory.content_id }}-filters"
       method="get"
       action="{{ inventory.base_url }}"
       class="flex flex-col gap-4"
       hx-get="{{ inventory.base_url }}"
-      hx-target="#{{ inventory.content_id }}"
+      hx-target="#{{ inventory.content_id }}{% if results_only %}-results{% endif %}"
       hx-push-url="true"
       hx-swap="outerHTML show:none"
       hx-sync="#{{ inventory.content_id }}:replace"
-      hx-trigger="submit, change target:select, input changed delay:350ms target:input[type=search]"
+      hx-trigger="submit, change target:select:not([name=product]), input changed delay:350ms target:input[type=search]"
       {{ attrs }}>
     <input type="hidden" name="view" value="{{ inventory.kind }}">
-    <input type="hidden" name="sort" value="{{ inventory.params.sort }}">
-    <input type="hidden"
-           name="direction"
-           value="{{ inventory.params.direction }}">
+    {% if not results_only %}
+        <input type="hidden" name="sort" value="{{ inventory.params.sort }}">
+        <input type="hidden"
+               name="direction"
+               value="{{ inventory.params.direction }}">
+    {% endif %}
     <c-inventory.filters :inventory="inventory" />
-    <c-inventory.results :inventory="inventory" />
-
+    {% if results_only %}
+        <c-inventory.list-results :inventory="inventory" />
+    {% else %}
+        <c-inventory.results :inventory="inventory" />
+    {% endif %}
 </form>
