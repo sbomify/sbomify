@@ -17,9 +17,9 @@ from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
-from ..apis import _check_team_has_plugin_access
 from ..models import RegisteredPlugin, TeamPluginSettings
 from ..orchestrator import load_plugin_class, plugin_applies_to
+from .access import team_has_plugin_access
 
 logger = getLogger(__name__)
 
@@ -58,7 +58,7 @@ def get_assessment_coverage(
     settings = TeamPluginSettings.objects.filter(team=team).first()
     enabled = (settings.enabled_plugins or []) if settings else []
     registered = {p.name: p for p in RegisteredPlugin.objects.filter(is_enabled=True, name__in=enabled)}
-    offered = [registered[name] for name in enabled if name in registered and _check_team_has_plugin_access(team, name)]
+    offered = [registered[name] for name in enabled if name in registered and team_has_plugin_access(team, name)]
 
     runs = {run["plugin_name"]: run for run in latest_runs}
     unassessed: list[dict[str, str]] = []

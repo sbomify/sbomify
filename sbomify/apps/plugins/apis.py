@@ -27,6 +27,7 @@ from .schemas import (
     SBOMAssessmentsResponse,
 )
 from .sdk.enums import RunReason, RunStatus
+from .services.access import plugin_plan_requirement, team_has_plugin_access
 from .tasks import run_assessment_task
 
 logger = getLogger(__name__)
@@ -573,44 +574,6 @@ def _plugin_supported_bom_types(plugin_class_path: str) -> tuple[str, ...]:
     return result
 
 
-def _get_plugin_plan_requirement(plugin_name: str) -> str | None:
-    """Get the required plan feature for a plugin.
-
-    Returns the plan feature name or None if available to all plans.
-    """
-    # Map plugin names to their required plan features
-    plan_requirements = {
-        "ntia-minimum-elements-2021": "has_ntia_compliance",
-        "fda-medical-device-2025": "has_fda_compliance",
-        "dependency-track": "has_dependency_track_access",
-        # Future plugins can be added here
-    }
-    return plan_requirements.get(plugin_name)
-
-
-def _check_team_has_plugin_access(team: Team, plugin_name: str) -> bool:
-    """Check if a team's billing plan allows access to a plugin."""
-    from sbomify.apps.billing.config import is_billing_enabled
-    from sbomify.apps.billing.models import BillingPlan
-
-    # If billing is disabled, grant access to all plugins
-    if not is_billing_enabled():
-        return True
-
-    required_feature = _get_plugin_plan_requirement(plugin_name)
-    if required_feature is None:
-        return True  # No plan requirement
-
-    if not team.billing_plan:
-        return False  # No billing plan means community (free) tier
-
-    try:
-        plan = BillingPlan.objects.get(key=team.billing_plan)
-        return getattr(plan, required_feature, False)
-    except BillingPlan.DoesNotExist:
-        return False
-
-
 def _resolve_dt_servers(team: Team | None = None) -> list[dict[str, Any]]:
     """Resolve available Dependency Track servers for select field.
 
@@ -707,8 +670,8 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
     # Get all available plugins with plan availability info
     available_plugins = []
     for p in RegisteredPlugin.objects.filter(is_enabled=True):
-        has_access = _check_team_has_plugin_access(team, p.name)
-        required_feature = _get_plugin_plan_requirement(p.name)
+        has_access = team_has_plugin_access(team, p.name)
+        required_feature = plugin_plan_requirement(p.name)
 
         available_plugins.append(
             {
@@ -779,9 +742,7 @@ def update_team_plugin_settings(
         return 400, {"detail": f"Invalid plugins: {', '.join(invalid_plugins)}"}
 
     # Validate that team has access to all enabled plugins based on billing plan
-    inaccessible_plugins = [
-        plugin for plugin in payload.enabled_plugins if not _check_team_has_plugin_access(team, plugin)
-    ]
+    inaccessible_plugins = [plugin for plugin in payload.enabled_plugins if not team_has_plugin_access(team, plugin)]
     if inaccessible_plugins:
         return 403, {
             "detail": f"Your plan does not include access to: {', '.join(inaccessible_plugins)}. "
@@ -876,7 +837,7 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
 
     # A downgrade leaves the plugin in the enabled list, so the plan is checked
     # here too, by the same rule that decides what the settings page offers.
-    if not _check_team_has_plugin_access(sbom.component.team, plugin_name):
+    if not team_has_plugin_access(sbom.component.team, plugin_name):
         return 403, {
             "detail": f"Your plan does not include {registered.display_name or plugin_name}.",
             "error_code": ErrorCode.FORBIDDEN,
