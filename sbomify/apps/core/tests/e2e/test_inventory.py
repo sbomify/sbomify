@@ -85,11 +85,13 @@ def test_inventory_navigation_and_filters(
     expect(components).to_be_visible()
     product = dashboard["products"][0]
     page.get_by_label("Filter by product").select_option(product.id)
-    release_tab = page.get_by_role("navigation", name="Product inventory").get_by_role("link", name=re.compile("^Releases"))
+    release_tab = page.get_by_role("navigation", name="Product inventory").get_by_role(
+        "link", name=re.compile("^Releases")
+    )
     expect(release_tab).to_have_attribute("href", re.compile(f"product={product.id}"))
     page.get_by_label("Filter by product").select_option("unassigned")
     expect(components).to_contain_text("Unassigned")
-    expect(release_tab).to_have_attribute("href", re.compile(r"[?&]product=(&|$)"))
+    expect(release_tab).to_have_attribute("href", "/releases/")
     page.get_by_role("navigation", name="Product inventory").get_by_role("link", name=re.compile("^Releases")).click()
     expect(page.get_by_role("table", name="Releases", exact=True)).to_be_visible()
     page.get_by_role("link", name="Create release", exact=True).click()
