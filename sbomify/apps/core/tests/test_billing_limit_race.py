@@ -110,9 +110,9 @@ def test_the_product_limit_check_runs_locked_inside_the_create_transaction(
 ):
     team = sample_team_with_owner_member.team
     _plan_with_room(team)
-    seen, stop_spying = _spy_on_the_limit_check(monkeypatch, Product)
     client = Client()
     _as_owner(client, team, sample_team_with_owner_member.user)
+    seen, stop_spying = _spy_on_the_limit_check(monkeypatch, Product)
 
     try:
         response = client.post(
@@ -139,9 +139,9 @@ def test_the_component_limit_check_runs_locked_inside_the_create_transaction(
 ):
     team = sample_team_with_owner_member.team
     _plan_with_room(team)
-    seen, stop_spying = _spy_on_the_limit_check(monkeypatch, Component)
     client = Client()
     _as_owner(client, team, sample_team_with_owner_member.user)
+    seen, stop_spying = _spy_on_the_limit_check(monkeypatch, Component)
 
     try:
         response = client.post(
