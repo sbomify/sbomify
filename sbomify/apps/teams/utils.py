@@ -689,6 +689,19 @@ def on_demand_tls_cache_key(domain_normalized: str) -> str:
     return f"ondemand_tls:{hashlib.sha256(domain_normalized.encode()).hexdigest()}"
 
 
+def custom_domain_challenge(team_pk: int, domain: str) -> str:
+    """The value this deployment serves on a claimed domain's domain-check path.
+
+    Public on purpose: the verification probe fetches it from the domain through
+    public DNS, and a match shows the domain's operator serves it, normally by
+    pointing the domain here. Keyed on SECRET_KEY, so another deployment serving
+    the same name cannot produce it.
+    """
+    from django.utils.crypto import salted_hmac
+
+    return salted_hmac("sbomify.custom-domain-challenge", f"{team_pk}:{domain}", algorithm="sha256").hexdigest()
+
+
 def invalidate_custom_domain_cache(domain: str | None) -> None:
     """
     Invalidate the cache for a custom domain.

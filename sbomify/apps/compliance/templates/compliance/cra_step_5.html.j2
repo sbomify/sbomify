@@ -36,7 +36,7 @@
                         </div>
                         <div class="flex-1 text-sm text-text-muted space-y-1">
                             <p>
-                                <span class="font-medium text-text" x-text="satisfiedCount"></span> / <span x-text="totalControls"></span> controls satisfied
+                                <span class="font-medium text-text" x-text="$number(satisfiedCount)"></span> / <span x-text="$number(totalControls)"></span> controls satisfied
                             </p>
                             <p x-show="controlsSummary['not-satisfied']">
                                 <span class="text-danger font-medium"
@@ -52,7 +52,7 @@
                     <div class="mb-6">
                         <div class="flex justify-between text-xs text-text-muted mb-1">
                             <span>Progress</span>
-                            <span x-text="satisfiedCount + ' / ' + totalControls"></span>
+                            <span x-text="$number(satisfiedCount) + ' / ' + $number(totalControls)"></span>
                         </div>
                         <div class="w-full h-2.5 bg-surface-hover rounded-full overflow-hidden">
                             <div class="h-full rounded-full transition-all duration-500"
@@ -212,7 +212,7 @@
                                     Last Export Bundle
                                 </h2>
                                 <p class="text-sm text-text-muted mt-1">
-                                    <span x-text="lastExport.files?.length || 0"></span> files · format_version
+                                    <span x-text="$number(lastExport.files?.length || 0)"></span> files · format_version
                                     <code class="text-xs" x-text="lastExport.format_version || '—'"></code>
                                 </p>
                             </div>
@@ -246,7 +246,7 @@
                                           title="Excludes the integrity primitives themselves (metadata/manifest.json, metadata/manifest.sha256, metadata/INTEGRITY.md). The ZIP contains three more entries than shown here.">(?)</span>
                                 </span>
                                 <span class="font-mono"
-                                      x-text="(lastExport.files?.length || 0) + ' entries'"></span>
+                                      x-text="$number(lastExport.files?.length || 0) + ' entries'"></span>
                             </div>
                             <div class="divide-y divide-border max-h-64 overflow-y-auto">
                                 <template x-for="f in lastExport.files || []" :key="f.path">

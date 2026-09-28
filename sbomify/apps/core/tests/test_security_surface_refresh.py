@@ -16,7 +16,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from django.template.loader import render_to_string
 
 TEMPLATES = Path(__file__).resolve().parents[3]
 
@@ -29,10 +28,15 @@ NO_RELOAD = [
 
 #: Panels that host a triage control and so must refresh once the decision is
 #: recorded, and again when the background re-apply reports in.
+#:
+#: The assessment card's findings panel is not one of them. The artifact page
+#: refreshes as a whole region and marks that panel hx-preserve, because the
+#: server always renders it unopened: refetching it on triage would take back
+#: the filters the reader had set, which is the loss the region refresh exists
+#: to prevent.
 TRIAGE_PANELS = [
     "apps/core/templates/core/components/component_vulnerabilities_table.html.j2",
     "apps/sboms/templates/sboms/components/scan_vulnerabilities.html.j2",
-    "apps/plugins/templates/plugins/components/_assessment_run_findings.html.j2",
 ]
 
 
@@ -59,57 +63,10 @@ def test_a_refresh_keeps_the_reader_in_place(template: str) -> None:
     assert 'hx-swap="morph"' in _source(template)
 
 
-class TestTriageModal:
-    def test_saving_announces_the_decision_rather_than_reloading(self) -> None:
-        html = render_to_string(
-            "plugins/components/triage_modal.html.j2",
-            {"component_id": "comp1", "team_key": "ws1"},
-        )
-
-        assert "triage-saved" in html
-        assert "location.reload" not in html
-
-    def test_it_relays_the_re_apply_broadcast_to_the_panels(self) -> None:
-        """The panels cannot listen to the socket themselves: each is swapped
-        out by its own filters, which would drop the listener."""
-        html = render_to_string(
-            "plugins/components/triage_modal.html.j2",
-            {"component_id": "comp1", "team_key": "ws1"},
-        )
-
-        assert "vex_reapplied" in html
-        assert "vex-reapplied" in html
-
-
-class TestAssessmentCard:
-    def _render(self) -> str:
-        return render_to_string(
-            "plugins/components/assessment_results_card.html.j2",
-            {
-                "sbom_id": "sbom1",
-                "assessment_runs": {"status_summary": {"total_assessments": 0}, "latest_runs": []},
-            },
-        )
-
-    def test_a_finishing_assessment_refreshes_only_its_own_section(self) -> None:
-        html = self._render()
-
-        assert 'hx-select="#assessment-results"' in html
-        assert 'hx-trigger="assessment-complete from:body"' in html
-        assert "location.reload" not in html
-
-    def test_the_refresh_keeps_the_reader_in_place(self) -> None:
-        assert 'hx-swap="morph"' in self._render()
-
-    def test_it_does_not_lend_its_target_to_the_cards_inside_it(self) -> None:
-        """htmx inherits hx-target, hx-select and hx-swap down the tree.
-
-        Each run card fetches its findings from a descendant that sets neither
-        target nor select. Without hx-disinherit those requests went through
-        this element's hx-select, matched nothing in the findings response, and
-        emptied the whole assessments section the moment a reader opened a card.
-        """
-        assert 'hx-disinherit="*"' in self._render()
+# The triage modal and the assessment card are covered by the artifact page's
+# own region-refresh tests: the browser checks that an open, filtered panel and
+# a half-written justification survive a refresh, and a unit spec covers the
+# morph that preserves them.
 
 
 class TestScanProcessingState:
