@@ -1,13 +1,12 @@
 {% comment %}The compact profile menu groups account settings, appearance, help and sign out. Shared avatar, dropdown and segmented controls own the recipes and keyboard navigation.{% endcomment %}
 {% load teams %}
-<c-vars can_manage />
 <div x-data="{ open: false, close() { this.open = false; this.$refs.trigger.focus(); }, first() { this.open = true; this.$nextTick(() => setTimeout(() => { if (this.open) this.$refs.menu.querySelector('[role=menuitem]')?.focus({ preventScroll: true }); })); } }"
      class="relative shrink-0"
      @keydown.escape.stop.prevent="close()"
      @focusout="if (!$el.contains($event.relatedTarget)) open = false">
     <c-avatar button flat size="sm" initials="{{ request.user|user_initials }}" aria-label="Your account" aria-haspopup="menu" aria-controls="account-menu" x-ref="trigger" @click="open = !open" @keydown.arrow-down.prevent="first()" ::aria-expanded="open" />
-    <c-dropdowns.dropdown id="account-menu" x-ref="menu" class="right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-16 max-sm:mt-0 max-sm:w-auto" aria-label="User options" x-show="open" x-cloak x-transition.opacity.duration.100ms @click.outside="open = false">
-    <div class="flex items-center gap-2.5 px-2.5 pt-2 pb-3">
+    <c-dropdowns.dropdown id="account-menu" x-ref="menu" class="right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-16 max-sm:mt-0 max-sm:w-auto" aria-label="User options" x-show="open" x-cloak x-transition.opacity.duration.100ms @click.outside="open = false">
+    <div class="flex items-center gap-3 px-2.5 py-3">
         <c-avatar flat size="sm" initials="{{ request.user|user_initials }}" aria-hidden="true" />
         <div class="min-w-0">
             <p class="truncate text-sm leading-5 font-semibold text-text">
@@ -18,23 +17,23 @@
             {% endif %}
         </div>
     </div>
+    <c-dropdowns.divider />
+    <c-dropdowns.header>Preferences</c-dropdowns.header>
     {% if request.session.current_team and request.session.current_team.key %}
-        <c-dropdowns.item compact href="{% url 'teams:team_settings_tab' team_key=request.session.current_team.key tab='account' %}">My account settings</c-dropdowns.item>
-        {% if can_manage %}
-            <c-dropdowns.item compact href="{% url 'teams:team_settings_tab' team_key=request.session.current_team.key tab='tokens' %}">API tokens</c-dropdowns.item>
-        {% endif %}
+        <c-dropdowns.item compact icon="far fa-user" href="{% url 'teams:team_settings_tab' team_key=request.session.current_team.key tab='account' %}">My account settings</c-dropdowns.item>
     {% else %}
-        <c-dropdowns.item compact href="{% url 'core:settings' %}">My account settings</c-dropdowns.item>
+        <c-dropdowns.item compact icon="far fa-user" href="{% url 'core:settings' %}">My account settings</c-dropdowns.item>
     {% endif %}
     <c-chrome.theme-picker />
     <c-dropdowns.divider />
-    <c-dropdowns.item compact href="https://sbomify.com/guides/" target="_blank" rel="noopener noreferrer">
+    <c-dropdowns.header>Help</c-dropdowns.header>
+    <c-dropdowns.item compact icon="fas fa-book-open" href="https://sbomify.com/guides/" target="_blank" rel="noopener noreferrer">
     Documentation
     <i class="fas fa-arrow-up-right-from-square ml-auto text-[10px] text-text-muted"
        aria-hidden="true"></i>
     </c-dropdowns.item>
-    <c-dropdowns.item compact href="{% url 'core:support_contact' %}">Contact support</c-dropdowns.item>
+    <c-dropdowns.item compact icon="far fa-circle-question" href="{% url 'core:support_contact' %}">Contact support</c-dropdowns.item>
     <c-dropdowns.divider />
-    <c-dropdowns.item compact href="{% url 'core:logout' %}">Sign out</c-dropdowns.item>
+    <c-dropdowns.item compact icon="fas fa-arrow-right-from-bracket" href="{% url 'core:logout' %}">Sign out</c-dropdowns.item>
     </c-dropdowns.dropdown>
 </div>

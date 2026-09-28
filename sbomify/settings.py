@@ -328,7 +328,8 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
 ]
 
-GZIP_REQUEST_MAX_SIZE = 200 * 1024 * 1024  # 200 MB – safety limit for decompressed request bodies
+# A compressed body inflates no further than an uncompressed one may weigh.
+GZIP_REQUEST_MAX_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
 
 if REQUEST_TIMING_LOGGING_ENABLED:
     MIDDLEWARE.insert(
@@ -1015,7 +1016,6 @@ KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
 KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
-KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
 
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {

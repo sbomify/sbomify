@@ -4,7 +4,12 @@ The account menu's theme setting composes the shared segmented control. State is
 <div class="flex items-center gap-3{% if not standalone %} justify-between px-2.5 py-2{% endif %}"
      @theme-changed.window="theme = $event.detail.theme"
      x-data="{ theme: window.themeManager?.getTheme() || 'dark', options: [{ value: 'light', icon: 'fa-sun', label: 'Light' }, { value: 'dark', icon: 'fa-moon', label: 'Dark' }, { value: 'system', icon: 'fa-desktop', label: 'Auto' }], setTheme(value) { this.theme = value; window.themeManager?.setTheme(value); } }">
-    {% if not standalone %}<span class="text-[13px] leading-5 text-text">Theme</span>{% endif %}
+    {% if not standalone %}
+        <span class="flex items-center gap-3 text-[13px] leading-5 text-text">
+            <i class="fas fa-circle-half-stroke w-4 text-center text-text-muted"
+               aria-hidden="true"></i>Theme
+        </span>
+    {% endif %}
     <c-navigation.segmented aria-label="Theme" role="group">
     <template x-for="option in options" :key="option.value">
         <c-navigation.segment size="sm" role="
