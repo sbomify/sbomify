@@ -15,6 +15,7 @@ from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequ
 from sbomify.logging import getLogger
 
 from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, update_team_plugin_settings
+from .services.catalogue import get_catalogue_shape
 
 logger = getLogger(__name__)
 
@@ -154,7 +155,8 @@ class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the standalone plugins page."""
-        return render(request, "plugins/plugins_page.html.j2")
+        shape = get_catalogue_shape()
+        return render(request, "plugins/plugins_page.html.j2", {"catalogue_shape": shape.value})
 
 
 class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):

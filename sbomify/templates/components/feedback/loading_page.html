@@ -1,10 +1,44 @@
-{% comment %}A page body whose sections arrive together, below an already rendered page header. Reuses card and loading bodies; the outer status is the only announcement. It is a placeholder, not a navigation overlay.{% endcomment %}
-<c-vars message="Loading page..." class="" />
+{% comment %}
+A page body whose sections arrive together, below an already rendered page
+header. Reuses card and loading bodies; the outer status is the only
+announcement. It is a placeholder, not a navigation overlay.
+
+sections is the shape of what is coming: a list with one entry per card, each
+entry the number of rows that card will hold. A caller that knows its own
+catalogue passes it and the placeholder draws the cards that actually arrive.
+Left off, it falls back to two cards of two rows, which is the generic body.
+
+heading adds the section title and action the body carries above its cards, for
+a page whose list is introduced rather than starting at the top of the frame.
+
+rows is the fallback row count and sublines the number of quiet lines under each
+row's title, so a placeholder for rows carrying a description is not half the
+height of the rows that replace it.
+{% endcomment %}
+<c-vars message="Loading page..." sections rows="2" sublines="1" heading class="" />
 <c-feedback.loading message="{{ message }}" variant_class="flex min-w-0 flex-col gap-6" class="{{ class }}" :attrs="attrs">
-{% for section in "12" %}
-    <c-cards.card flush>
-    <c-feedback.loading />
-    <c-feedback.loading-list rows="2" />
-    </c-cards.card>
-{% endfor %}
+{% if heading %}
+    <div class="flex items-center justify-between gap-4">
+        <div class="flex min-w-0 flex-1 flex-col gap-2">
+            <c-feedback.skeleton type="title" width="12rem" />
+            <c-feedback.skeleton width="60%" height="0.75rem" />
+        </div>
+        <c-feedback.skeleton type="button" width="7rem" height="2.25rem" />
+    </div>
+{% endif %}
+{% if sections %}
+    {% for section_rows in sections %}
+        <c-cards.card flush>
+        <c-feedback.loading />
+        <c-feedback.loading-list rows="{{ section_rows }}" sublines="{{ sublines }}" />
+        </c-cards.card>
+    {% endfor %}
+{% else %}
+    {% for section in "12" %}
+        <c-cards.card flush>
+        <c-feedback.loading />
+        <c-feedback.loading-list rows="{{ rows }}" sublines="{{ sublines }}" />
+        </c-cards.card>
+    {% endfor %}
+{% endif %}
 </c-feedback.loading>

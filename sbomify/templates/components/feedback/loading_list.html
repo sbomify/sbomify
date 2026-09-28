@@ -1,12 +1,25 @@
-{% comment %}A short list waiting on content, including search, notifications and assignment panels. rows controls density, not data. The base owns announcements.{% endcomment %}
-<c-vars message="Loading items..." rows="3" class="" />
+{% comment %}
+A short list waiting on content, including search, notifications and assignment
+panels. rows controls density, not data. The base owns announcements.
+
+sublines is how many quiet lines sit under each row's title. One is a name over
+a detail, which is what a search result or a notification looks like. A list
+whose rows carry a description needs more, or the placeholder is a fraction of
+the height of the rows that replace it and the page moves when they land.
+
+Rows start at the top rather than centring once they are more than one line
+tall, so the leading mark stays level with the title on every row.
+{% endcomment %}
+<c-vars message="Loading items..." rows="3" sublines="1" class="" />
 <c-feedback.loading message="{{ message }}" variant_class="flex min-w-0 flex-col gap-5 px-4 py-4" class="{{ class }}" :attrs="attrs">
-{% for row in "123456"|make_list|slice:rows %}
-    <div class="flex min-w-0 items-center gap-3">
+{% for row in "12345678901234567890"|make_list|slice:rows %}
+    <div class="flex min-w-0 items-start gap-3">
         <c-feedback.skeleton type="avatar" width="2rem" height="2rem" />
         <div class="flex min-w-0 flex-1 flex-col gap-2">
             <c-feedback.skeleton width="70%" />
-            <c-feedback.skeleton width="45%" height="0.625rem" />
+            {% for subline in "1234"|make_list|slice:sublines %}
+                <c-feedback.skeleton width="45%" height="0.625rem" />
+            {% endfor %}
         </div>
     </div>
 {% endfor %}
