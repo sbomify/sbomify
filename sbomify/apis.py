@@ -168,8 +168,7 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
             },
             {
                 "name": "Licensing",
-                "description": "Validate license expressions, manage custom licenses, and access "
-                "comprehensive license information database.",
+                "description": "List licenses and validate license expressions.",
             },
             {
                 "name": "Internal",
