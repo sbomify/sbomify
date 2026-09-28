@@ -1,7 +1,9 @@
+from datetime import timedelta
 from importlib import import_module
 
 import pytest
 from django.apps import apps
+from django.utils import timezone
 
 from sbomify.apps.plugins.models import TeamPluginSettings
 from sbomify.apps.teams.models import Team
@@ -22,6 +24,9 @@ def test_removed_plugin_is_dropped_from_settings(sample_team) -> None:
         plugin_configs={"osv": {"a": 1}},
     )
 
+    long_ago = timezone.now() - timedelta(days=30)
+    TeamPluginSettings.objects.update(updated_at=long_ago)
+
     migration.drop_removed_plugin(apps, None)
 
     stale.refresh_from_db()
@@ -30,3 +35,5 @@ def test_removed_plugin_is_dropped_from_settings(sample_team) -> None:
     assert stale.plugin_configs == {"osv": {"a": 1}}
     assert clean.enabled_plugins == ["osv"]
     assert clean.plugin_configs == {"osv": {"a": 1}}
+    assert stale.updated_at > long_ago
+    assert clean.updated_at == long_ago
