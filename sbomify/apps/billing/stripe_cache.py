@@ -83,15 +83,18 @@ def invalidate_subscription_cache(subscription_id: str, team_key: str | None = N
 
 def get_subscription_cancel_at_period_end(subscription_id: str, team_key: str, fallback_value: bool = False) -> bool:
     """
-    Get cancel_at_period_end status from Stripe (with caching and error handling).
+    Report whether the subscription has a pending cancel (with caching and error handling).
+
+    A cancel is pending when cancel_at_period_end is set or when Stripe has a
+    cancel_at date, so a scheduled cancel_at counts the same as a period-end cancel.
 
     Args:
         subscription_id: Stripe subscription ID
         team_key: Team key for cache key generation
-        fallback_value: Value to return if Stripe fetch fails
+        fallback_value: Value to return if Stripe fetch fails or the subscription has ended
 
     Returns:
-        cancel_at_period_end boolean value, or fallback_value on error
+        True if a cancel is pending, or fallback_value on error or for an ended subscription
     """
     if not subscription_id:
         return fallback_value
