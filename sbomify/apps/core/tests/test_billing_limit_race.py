@@ -17,6 +17,7 @@ import os
 
 import pytest
 from django.db import transaction
+from django.db.models.signals import post_save
 from django.test import Client
 from django.urls import reverse
 
@@ -41,8 +42,14 @@ def _atomic_depth() -> int:
     return len(transaction.get_connection().savepoint_ids)
 
 
-def _spy_on_the_limit_check(monkeypatch):
-    """Record how deep each half of the check ran, then call the real one."""
+def _spy_on_the_limit_check(monkeypatch, model):
+    """Record how deep each half of the check ran, then call the real one.
+
+    Also records the savepoint the lock ran in, and the savepoint stack when a
+    ``model`` row is inserted, so a test can tell whether the insert happened in
+    the transaction that took the lock. A lock and an insert in two separate
+    transactions give two different savepoints.
+    """
     seen: dict[str, object] = {}
     real_precheck = apis._check_billing_limits
     real_locked = apis._enforce_limit_under_lock
@@ -53,11 +60,25 @@ def _spy_on_the_limit_check(monkeypatch):
 
     def locked(team_id, resource_type):
         seen["locked_depth"] = _atomic_depth()
+        seen["locked_savepoint"] = transaction.get_connection().savepoint_ids[-1]
         return real_locked(team_id, resource_type)
+
+    def inserted(sender, instance, created, **kwargs):
+        if created:
+            seen["insert_savepoints"] = list(transaction.get_connection().savepoint_ids)
 
     monkeypatch.setattr(apis, "_check_billing_limits", precheck)
     monkeypatch.setattr(apis, "_enforce_limit_under_lock", locked)
-    return seen
+    post_save.connect(inserted, sender=model, weak=False)
+    return seen, lambda: post_save.disconnect(inserted, sender=model)
+
+
+def _assert_inserted_under_the_lock(seen) -> None:
+    # The lock holds until its transaction commits, so the insert has to happen
+    # while the savepoint the lock ran in is still open.
+    assert seen["locked_savepoint"] in seen["insert_savepoints"], (
+        "the insert must run in the transaction that took the workspace lock"
+    )
 
 
 def _plan_with_room(team):
@@ -89,21 +110,25 @@ def test_the_product_limit_check_runs_locked_inside_the_create_transaction(
 ):
     team = sample_team_with_owner_member.team
     _plan_with_room(team)
-    seen = _spy_on_the_limit_check(monkeypatch)
+    seen, stop_spying = _spy_on_the_limit_check(monkeypatch, Product)
     client = Client()
     _as_owner(client, team, sample_team_with_owner_member.user)
 
-    response = client.post(
-        reverse("api-1:create_product"),
-        data={"name": "racy-product"},
-        content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
-    )
+    try:
+        response = client.post(
+            reverse("api-1:create_product"),
+            data={"name": "racy-product"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+    finally:
+        stop_spying()
 
     assert response.status_code == 201, response.content[:200]
     assert seen.get("locked_depth", -1) > seen.get("precheck_depth", -1), (
         "the deciding count must run inside the create transaction and the Stripe-capable pre-check outside it"
     )
+    _assert_inserted_under_the_lock(seen)
 
 
 @pytest.mark.django_db
@@ -114,21 +139,25 @@ def test_the_component_limit_check_runs_locked_inside_the_create_transaction(
 ):
     team = sample_team_with_owner_member.team
     _plan_with_room(team)
-    seen = _spy_on_the_limit_check(monkeypatch)
+    seen, stop_spying = _spy_on_the_limit_check(monkeypatch, Component)
     client = Client()
     _as_owner(client, team, sample_team_with_owner_member.user)
 
-    response = client.post(
-        reverse("api-1:create_component"),
-        data={"name": "racy-component"},  # component_type defaults to BOM
-        content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
-    )
+    try:
+        response = client.post(
+            reverse("api-1:create_component"),
+            data={"name": "racy-component"},  # component_type defaults to BOM
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+    finally:
+        stop_spying()
 
     assert response.status_code == 201, response.content[:200]
     assert seen.get("locked_depth", -1) > seen.get("precheck_depth", -1), (
         "the deciding count must run inside the create transaction and the Stripe-capable pre-check outside it"
     )
+    _assert_inserted_under_the_lock(seen)
 
 
 @pytest.mark.django_db
