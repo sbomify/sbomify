@@ -199,15 +199,18 @@ class PluginOrchestrator:
             # plugin instance hadn't been resolved yet. Fill it in now so
             # the run carries the same auditable provenance whether it
             # came through the eager or lazy creation path.
+            update_fields = []
             if not assessment_run.plugin_config_hash:
                 assessment_run.plugin_config_hash = config_hash
-                assessment_run.save(update_fields=["plugin_config_hash"])
+                update_fields.append("plugin_config_hash")
             # The eager row took its version from the registry. Record the code
             # that is actually producing the result, since the page compares it
             # against the current version to mark a result out of date.
             if assessment_run.plugin_version != metadata.version:
                 assessment_run.plugin_version = metadata.version
-                assessment_run.save(update_fields=["plugin_version"])
+                update_fields.append("plugin_version")
+            if update_fields:
+                assessment_run.save(update_fields=update_fields)
 
             logger.info(
                 f"[PLUGIN] Reusing existing run {assessment_run.id} for SBOM {sbom_id} "
