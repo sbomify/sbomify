@@ -82,3 +82,15 @@ def test_a_pending_request_is_not_archived(team_with_business_plan, guest_user):
     _ask_via_api(team_with_business_plan, guest_user)
 
     assert not access_request.past_decisions.exists()
+
+
+@pytest.mark.parametrize("status", [AccessRequest.Status.PENDING, AccessRequest.Status.APPROVED])
+def test_only_a_closed_request_can_be_reopened(team_with_business_plan, guest_user, status):
+    access_request = AccessRequest.objects.create(team=team_with_business_plan, user=guest_user, status=status)
+
+    with pytest.raises(ValueError):
+        access_request.reopen()
+
+    access_request.refresh_from_db()
+    assert access_request.status == status
+    assert not access_request.past_decisions.exists()

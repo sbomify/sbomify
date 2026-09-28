@@ -94,6 +94,8 @@ class AccessRequest(models.Model):
         are cleared, so who decided, when and why outlives the new request.
         Any live signature is superseded so the new request must sign again.
         """
+        if self.status not in (self.Status.REJECTED, self.Status.REVOKED):
+            raise ValueError(f"Only a rejected or revoked access request can be reopened, not {self.status}")
         AccessRequestDecision.objects.create(
             access_request=self,
             status=self.status,
