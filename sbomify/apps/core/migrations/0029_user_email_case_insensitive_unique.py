@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 CONSTRAINT = models.UniqueConstraint(
     Lower("email"),
-    condition=models.Q(("email", ""), _negated=True),
+    condition=~models.Q(email=""),
     name="core_users_email_ci_unique",
 )
 

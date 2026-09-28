@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
+from django.core.management import CommandError, call_command
 from django.db import IntegrityError, connection, transaction
 from django.test import Client, RequestFactory
 from django.urls import reverse
@@ -63,6 +64,14 @@ def test_saved_address_is_lower_case():
     assert user.email == "holder@example.com"
 
 
+def test_save_leaves_the_address_alone_when_it_is_not_written():
+    user = _user_stored_as("holder", "Holder@example.com")
+
+    user.save(update_fields=["email_verified"])
+
+    assert user.email == "Holder@example.com"
+
+
 def test_address_held_in_other_case_is_refused():
     User.objects.create_user(username="holder", email="holder@example.com")
     other = User.objects.create_user(username="other", email="other@example.com")
@@ -87,14 +96,29 @@ def test_sign_in_joins_the_account_stored_in_other_case():
     assert sociallogin.user.pk == holder.pk
 
 
-def test_sign_in_joins_no_account_when_two_hold_the_address(without_constraint):
-    _user_stored_as("first", "Holder@example.com")
-    _user_stored_as("second", "HOLDER@example.com")
+def test_sign_in_joins_no_account_when_two_hold_the_address(without_constraint, mocker):
+    first = _user_stored_as("first", "Holder@example.com")
+    second = _user_stored_as("second", "HOLDER@example.com")
     sociallogin = _SocialLogin("holder@example.com")
+    warning = mocker.patch("sbomify.apps.core.adapters.logger.warning")
 
     CustomSocialAccountAdapter().pre_social_login(RequestFactory().get("/"), sociallogin)
 
     assert sociallogin.user.pk is None
+    warning.assert_called_once_with(
+        "Social sign-in not linked: accounts %s share one email address", sorted([first.pk, second.pk])
+    )
+
+
+def test_keycloak_migration_refuses_an_address_two_accounts_hold(without_constraint):
+    _user_stored_as("first", "Holder@example.com")
+    _user_stored_as("second", "HOLDER@example.com")
+
+    with (
+        patch("sbomify.apps.core.management.commands.migrate_to_keycloak.KeycloakManager"),
+        pytest.raises(CommandError, match="share the email"),
+    ):
+        call_command("migrate_to_keycloak", "--user-email", "holder@example.com", "--dry-run")
 
 
 def test_trust_center_invite_answers_when_two_accounts_hold_the_address(

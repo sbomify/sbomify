@@ -66,7 +66,9 @@ class User(AbstractUser):
     def save(self, *args: Any, **kwargs: Any) -> None:
         # One account per address, compared without case. allauth lowercases
         # the address it looks up and then matches the stored value exactly.
-        if self.email:
+        # Only when the address is written, so the instance never differs from its row.
+        update_fields = kwargs.get("update_fields")
+        if self.email and (update_fields is None or "email" in update_fields):
             self.email = self.email.lower()
         super().save(*args, **kwargs)
 

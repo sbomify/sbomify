@@ -165,8 +165,11 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
                     deleted_at__isnull=True,
                 )
                 sociallogin.connect(request, existing_user)
-            except (User.DoesNotExist, User.MultipleObjectsReturned):
+            except User.DoesNotExist:
                 pass
+            except User.MultipleObjectsReturned:
+                ids = sorted(User.objects.filter(email__iexact=existing_user.email).values_list("id", flat=True))
+                logger.warning("Social sign-in not linked: accounts %s share one email address", ids)
 
         # Sync email_verified status from social provider on every login
         extra_data = sociallogin.account.extra_data or {}
