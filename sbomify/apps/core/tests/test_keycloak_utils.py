@@ -93,6 +93,8 @@ class TestKeycloakManagerConstruction:
         settings.KEYCLOAK_REALM = "sbomify"
         settings.KEYCLOAK_ADMIN_USERNAME = "admin"
         settings.KEYCLOAK_ADMIN_PASSWORD = "secret"
+        settings.KEYCLOAK_CLIENT_ID = "sbomify"
+        settings.KEYCLOAK_CLIENT_SECRET = "client-secret"
 
         manager = KeycloakManager()
 
@@ -116,6 +118,8 @@ class TestKeycloakEventPolling:
         settings.KEYCLOAK_REALM = "sbomify"
         settings.KEYCLOAK_ADMIN_USERNAME = "admin"
         settings.KEYCLOAK_ADMIN_PASSWORD = "secret"
+        settings.KEYCLOAK_CLIENT_ID = "sbomify"
+        settings.KEYCLOAK_CLIENT_SECRET = "client-secret"
 
         response = Response()
         response.status_code = 200

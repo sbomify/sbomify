@@ -48,7 +48,7 @@ class KeycloakManager:
             user_realm_name="master",
             verify=True,
         )
-        logger.info(f"Configured KeycloakAdmin for realm: {self.realm}")
+        logger.info("Configured KeycloakAdmin for realm: %s", self.realm)
 
         # Initialize OpenID client
         self.openid_client = self._get_openid_client()
