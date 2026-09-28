@@ -11,6 +11,7 @@ from dataclasses import replace as dataclass_replace
 from typing import TYPE_CHECKING, Any
 
 from django.db.models import OuterRef, Subquery
+from django.db.models.fields.json import KeyTransform
 from django.db.utils import NotSupportedError
 
 from .models import AssessmentRun, RegisteredPlugin
@@ -251,15 +252,53 @@ def _collect_details(details_by_plugin: dict[str, PassingAssessment], assessment
             details_by_plugin[assessment.plugin_name] = assessment
 
 
+def _get_passing_assessments_by_sbom(
+    sbom_ids: list[str], plugin_info: dict[str, tuple[str, str]]
+) -> dict[str, list[PassingAssessment]]:
+    """Passing assessments for several SBOMs, each list sorted by plugin name.
+
+    One query picks the latest run per SBOM and plugin, one more reads those
+    runs. Only ``result.summary`` and ``result.metadata`` leave the database:
+    scanner results carry the whole findings list, and a component with many
+    SBOM versions would otherwise pull every one of them into memory.
+    """
+    latest_ids = (
+        AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
+        .values("sbom_id", "plugin_name")
+        .annotate(
+            latest_id=Subquery(
+                AssessmentRun.objects.filter(sbom_id=OuterRef("sbom_id"), plugin_name=OuterRef("plugin_name"))
+                .order_by("-created_at")
+                .values("id")[:1]
+            )
+        )
+        .values_list("latest_id", flat=True)
+    )
+    runs = (
+        AssessmentRun.objects.filter(id__in=latest_ids)
+        .only("id", "sbom_id", "plugin_name", "category", "status", "completed_at")
+        .annotate(summary_slice=KeyTransform("summary", "result"), metadata_slice=KeyTransform("metadata", "result"))
+        .order_by("plugin_name")
+    )
+    passing_by_sbom: dict[str, list[PassingAssessment]] = {sbom_id: [] for sbom_id in sbom_ids}
+    for run in runs:
+        # The two helpers read nothing else from ``result``.
+        run.result = {
+            key: value
+            for key, value in (("summary", run.summary_slice), ("metadata", run.metadata_slice))
+            if value is not None
+        }
+        if _is_run_passing(run):
+            passing_by_sbom[str(run.sbom_id)].append(_passing_assessment_from_run(run, plugin_info))
+    return passing_by_sbom
+
+
 def get_sbom_passing_assessments(sbom_id: str) -> list[PassingAssessment]:
     """Get list of passing assessments for an SBOM.
 
     Only returns assessments that have completed successfully with no failures.
     """
-    plugin_info = _get_plugin_display_names()
-    latest_runs = _get_latest_assessment_runs_for_sbom(sbom_id)
-
-    return [_passing_assessment_from_run(run, plugin_info) for run in latest_runs if _is_run_passing(run)]
+    return _get_passing_assessments_by_sbom([sbom_id], _get_plugin_display_names())[sbom_id]
 
 
 def get_component_assessment_status(component: "Component") -> ComponentAssessmentStatus:
@@ -282,11 +321,14 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
             passing_assessments=[],
         )
 
+    plugin_info = _get_plugin_display_names()
+    passing_by_sbom = _get_passing_assessments_by_sbom([str(sbom_id) for sbom_id in sbom_ids], plugin_info)
+
     # Get passing assessments per SBOM
     sbom_passing: dict[str, set[str]] = {}  # sbom_id -> set of passing plugin names
     details_by_plugin: dict[str, PassingAssessment] = {}
     for sbom_id in sbom_ids:
-        passing = get_sbom_passing_assessments(str(sbom_id))
+        passing = passing_by_sbom[str(sbom_id)]
         sbom_passing[str(sbom_id)] = {p.plugin_name for p in passing}
         _collect_details(details_by_plugin, passing)
 
@@ -299,7 +341,6 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
     # Check if there are any assessments at all
     has_assessments = any(sbom_passing.values())
 
-    plugin_info = _get_plugin_display_names()
     passing_assessments = _aggregate_passing(common_passing, details_by_plugin, plugin_info)
 
     # all_pass is True if we have assessments and ALL of them pass
