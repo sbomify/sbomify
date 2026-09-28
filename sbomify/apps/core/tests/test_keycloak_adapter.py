@@ -4,6 +4,7 @@ import pytest
 from allauth.exceptions import ImmediateHttpResponse
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpRequest
 from django.test import RequestFactory
 from django.utils import timezone
@@ -166,7 +167,7 @@ class TestCustomSocialAccountAdapter:
         User.objects.create(username="deleted", email="deleted@example.com", is_active=False, deleted_at=timezone.now())
         mock_sociallogin.user.email = "deleted@example.com"
         mock_request.user = AnonymousUser()
-        mock_request.session = {}
+        SessionMiddleware(lambda r: None).process_request(mock_request)
 
         with pytest.raises(ImmediateHttpResponse) as refused:
             adapter.pre_social_login(mock_request, mock_sociallogin)
