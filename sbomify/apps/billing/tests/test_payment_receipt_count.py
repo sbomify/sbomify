@@ -63,8 +63,9 @@ def _receipts(notify) -> int:
 def notify():
     with (
         patch("sbomify.apps.billing.billing_processing.notify_billing_managers") as notify,
-        patch("sbomify.apps.billing.billing_processing.stripe_client"),
+        patch("sbomify.apps.billing.billing_processing.stripe_client") as client,
     ):
+        client.get_subscription.return_value = _subscription()
         yield notify
 
 
