@@ -13,7 +13,8 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.test import Client
+from django.middleware.csrf import get_token
+from django.test import Client, RequestFactory
 from django.urls import reverse
 
 from sbomify.apps.billing.stripe_client import BillingRetryableError, StripeError, StripeResourceMissingError
@@ -44,13 +45,16 @@ def _stripe(*, subscription: MagicMock | None = None, listed: list | None = None
 
 
 def _downgrade(team: Team, user, stripe: MagicMock):
-    client = Client()
+    client = Client(enforce_csrf_checks=True)
     client.force_login(user)
+    token = get_token(RequestFactory().get("/"))
+    client.cookies["csrftoken"] = token
     with patch("sbomify.apps.billing.apis.get_stripe_client", return_value=stripe):
         return client.post(
             reverse("api-1:change_plan"),
             json.dumps({"plan": "community", "team_key": team.key}),
             content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
         )
 
 
