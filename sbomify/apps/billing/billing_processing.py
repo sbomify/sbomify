@@ -747,7 +747,11 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                 logger.info("Ignoring the end of a subscription the workspace has replaced")
                 return
 
-            if _was_applied(billing_limits, webhook_id, created):
+            # A newer update replaces last_processed_webhook_id, so a deletion keeps its
+            # id under its own key as well, to catch a resend that arrives after it.
+            if billing_limits.get("last_deletion_webhook_id") == webhook_id or _was_applied(
+                billing_limits, webhook_id, created
+            ):
                 logger.info("Webhook already processed for deleted subscription, skipping")
                 return
 
@@ -767,6 +771,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                     billing_limits.pop("scheduled_downgrade_plan", None)
                     billing_limits["cancel_at_period_end"] = False
                     billing_limits["last_processed_webhook_id"] = webhook_id
+                    billing_limits["last_deletion_webhook_id"] = webhook_id
                     _record_event_created(billing_limits, created, webhook_id)
                     team.billing_plan_limits = billing_limits
                     team.save()
@@ -795,6 +800,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                                 "payment_failed_at": timezone.now().isoformat(),
                                 "last_updated": timezone.now().isoformat(),
                                 "last_processed_webhook_id": webhook_id,
+                                "last_deletion_webhook_id": webhook_id,
                             }
                         )
                         _record_event_created(existing_limits, created, webhook_id)
@@ -819,6 +825,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                                 "cancel_at_period_end": False,
                                 "last_updated": timezone.now().isoformat(),
                                 "last_processed_webhook_id": webhook_id,
+                                "last_deletion_webhook_id": webhook_id,
                             }
                         )
                         _record_event_created(existing_limits, created, webhook_id)
@@ -841,6 +848,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                 billing_limits["subscription_status"] = "canceled"
                 billing_limits["last_updated"] = timezone.now().isoformat()
                 billing_limits["last_processed_webhook_id"] = webhook_id
+                billing_limits["last_deletion_webhook_id"] = webhook_id
                 _record_event_created(billing_limits, created, webhook_id)
                 team.billing_plan_limits = billing_limits
                 team.save()
@@ -907,7 +915,7 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
         team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
         billing_limits = team.billing_plan_limits or {}
 
-        webhook_id = getattr(event, "id", None) if event else f"inv_fail_{invoice.id}_{invoice.created}"
+        webhook_id = getattr(event, "id", None) or f"inv_fail_{invoice.id}_{invoice.created}"
         last_processed_id = billing_limits.get("last_processed_webhook_id")
 
         if last_processed_id == webhook_id:
@@ -985,7 +993,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
         billing_limits = team.billing_plan_limits or {}
 
-        webhook_id = getattr(event, "id", None) if event else f"inv_succ_{invoice.id}_{invoice.created}"
+        webhook_id = getattr(event, "id", None) or f"inv_succ_{invoice.id}_{invoice.created}"
 
         if _payment_already_recorded(billing_limits, webhook_id):
             logger.info(f"Payment succeeded webhook already processed for invoice {invoice.id}, skipping")

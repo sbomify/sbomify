@@ -214,6 +214,21 @@ def test_a_resent_late_deletion_is_caught_after_a_newer_payment(workspace, notif
     notify.assert_not_called()
 
 
+def test_a_payment_does_not_let_an_unordered_event_apply_twice(workspace, notify):
+    # Without a creation time only last_processed_webhook_id can catch the resend.
+    failed = stripe.Event.construct_from({"id": "evt_failed", "object": "event"}, "sk_test_dummy")
+    paid = stripe.Event.construct_from({"id": "evt_paid", "object": "event"}, "sk_test_dummy")
+    billing_processing.handle_payment_failed(_invoice(), event=failed)
+    billing_processing.handle_payment_succeeded(_invoice(), event=paid)
+    notify.reset_mock()
+
+    billing_processing.handle_payment_failed(_invoice(), event=failed)
+
+    workspace.refresh_from_db()
+    assert workspace.billing_plan_limits["subscription_status"] == "active"
+    notify.assert_not_called()
+
+
 def test_a_late_payment_delivered_twice_sends_one_receipt(workspace, notify):
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 200))
     late_payment = _event("evt_paid", 100)
@@ -293,6 +308,29 @@ def test_a_resent_deletion_is_caught_after_a_same_second_update(workspace, notif
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
 
     notify.assert_not_called()
+
+
+def test_a_resent_deletion_is_caught_after_a_newer_update(workspace, notify):
+    deleted = _event("evt_deleted", 100)
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
+    billing_processing.handle_subscription_updated(_subscription("canceled"), event=_event("evt_updated", 101))
+    notify.reset_mock()
+
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=deleted)
+
+    notify.assert_not_called()
+
+
+def test_a_payment_failure_event_without_an_id_is_still_applied(workspace, notify):
+    invoice = _invoice()
+    invoice["created"] = 90
+    no_id = stripe.Event.construct_from({"object": "event", "created": 100}, "sk_test_dummy")
+
+    billing_processing.handle_payment_failed(invoice, event=no_id)
+
+    workspace.refresh_from_db()
+    assert workspace.billing_plan_limits["subscription_status"] == "past_due"
+    notify.assert_called_once()
 
 
 def test_the_order_is_checked_against_the_locked_row(workspace, mocker):
