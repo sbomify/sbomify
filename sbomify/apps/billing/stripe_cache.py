@@ -91,17 +91,17 @@ def get_subscription_cancel_at_period_end(subscription_id: str, team_key: str, f
     Args:
         subscription_id: Stripe subscription ID
         team_key: Team key for cache key generation
-        fallback_value: Value to return if Stripe fetch fails or the subscription has ended
+        fallback_value: Value to return if Stripe fetch fails or the subscription is canceled or incomplete_expired
 
     Returns:
-        True if a cancel is pending, or fallback_value on error or for an ended subscription
+        True if a cancel is pending, or fallback_value on error or for a canceled or incomplete_expired subscription
     """
     if not subscription_id:
         return fallback_value
 
     subscription = get_cached_subscription(subscription_id, team_key)
     if subscription:
-        # An ended subscription keeps no pending cancel to reverse, so what the
+        # A canceled or incomplete_expired subscription keeps no pending cancel to reverse, so what the
         # workspace stored stands until the deleted event settles it.
         if getattr(subscription, "status", None) in TERMINAL_SUBSCRIPTION_STATUSES:
             return fallback_value
