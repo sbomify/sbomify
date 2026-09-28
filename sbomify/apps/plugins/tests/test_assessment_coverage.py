@@ -247,3 +247,46 @@ class TestRunningANeverRunPlugin:
 
         assert response.status_code == 403
         send.assert_not_called()
+
+
+class TestRunningNeedsThePlan:
+    """A downgrade leaves a plugin in the enabled list; the endpoint still refuses it."""
+
+    @pytest.fixture
+    def on_plan(self, sample_sbom, settings):
+        from sbomify.apps.billing.models import BillingPlan
+
+        def _set(key: str):
+            settings.BILLING = True
+            BillingPlan.objects.get_or_create(
+                key=key, defaults={"name": key.title(), "max_products": 1, "max_components": 5, "max_users": 2}
+            )
+            team = sample_sbom.component.team
+            team.billing_plan = key
+            team.save(update_fields=["billing_plan"])
+            _enable(team, NTIA)
+
+        return _set
+
+    def test_a_plugin_outside_the_plan_is_refused(self, sample_sbom, sample_user, plugins, on_plan, mocker):
+        on_plan("community")
+        send = mocker.patch("sbomify.apps.plugins.apis.run_assessment_task.send")
+
+        response = _client_as(sample_sbom, sample_user, "owner").post(
+            f"/api/v1/plugins/assessments/{sample_sbom.id}/{NTIA}/rerun"
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == f"Your plan does not include '{NTIA}'"
+        send.assert_not_called()
+
+    def test_a_plugin_on_the_plan_still_runs(self, sample_sbom, sample_user, plugins, on_plan, mocker):
+        on_plan("business")
+        send = mocker.patch("sbomify.apps.plugins.apis.run_assessment_task.send")
+
+        response = _client_as(sample_sbom, sample_user, "owner").post(
+            f"/api/v1/plugins/assessments/{sample_sbom.id}/{NTIA}/rerun"
+        )
+
+        assert response.status_code == 202
+        send.assert_called_once()

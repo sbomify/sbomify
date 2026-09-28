@@ -874,6 +874,14 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
             "error_code": ErrorCode.BAD_REQUEST,
         }
 
+    # A downgrade leaves the plugin in the enabled list, so the plan is checked
+    # here too, by the same rule that decides what the settings page offers.
+    if not _check_team_has_plugin_access(sbom.component.team, plugin_name):
+        return 403, {
+            "detail": f"Your plan does not include '{plugin_name}'",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
     user = getattr(request, "user", None)
     run_assessment_task.send(
         sbom_id=sbom.id,
