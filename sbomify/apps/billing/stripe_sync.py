@@ -311,8 +311,8 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                 team = Team.objects.select_for_update().get(pk=team.pk)
                 billing_limits = team.billing_plan_limits or {}
                 # The changes above describe the subscription fetched from Stripe. A
-                # checkout that completed meanwhile stored a new one, which they must
-                # not be written over.
+                # checkout that completed meanwhile stored a new one, which must not be
+                # overwritten.
                 if billing_limits.get("stripe_subscription_id") != stripe_sub_id:
                     logger.info(
                         "Workspace %s changed subscription while Stripe was queried; leaving it alone", team.key
