@@ -432,7 +432,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             request, "teams/accept_invite.html.j2", {"invitation": invitation, "pending_invitations_count": 0}
         )
 
-    log.info("Accepting invitation %s", invitation.id)
+    log.info("Accepting invitation %s", invitation.pk)
 
     # Check if we already have a membership
     try:
