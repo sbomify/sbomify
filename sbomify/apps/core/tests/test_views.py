@@ -231,7 +231,7 @@ def test_delete_access_token_json_error_responses(sample_user: AbstractBaseUser,
 
 @pytest.mark.django_db
 def test_settings_post_redirects_with_workspace(sample_user: AbstractBaseUser):
-    """POST to legacy settings with a workspace redirects to team tokens."""
+    """POST to legacy settings with a workspace lands on the tokens tab of the settings page."""
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
@@ -245,8 +245,13 @@ def test_settings_post_redirects_with_workspace(sample_user: AbstractBaseUser):
     )
 
     assert response.status_code == 302
-    assert "/tokens" in response.url
+    assert response.url.endswith("/settings/tokens")
     assert AccessToken.objects.count() == initial_count
+
+    # The redirect is followed by a plain browser GET, so it has to land on a page.
+    page = client.get(response.url)
+    assert page.status_code == 200
+    assert b"<html" in page.content
 
 
 @pytest.mark.django_db
