@@ -1393,7 +1393,7 @@ class BSICompliancePlugin(AssessmentPlugin):
             )
         )
 
-        # Unique identifiers (skip file-type entries — they don't have package IDs)
+        # Unique identifiers (skip file-type entries and Yocto source downloads, which have no package IDs)
         identifier_warnings = []
         source_downloads = spdx2_yocto_source_downloads(data)
         for i, pkg in enumerate(packages):
