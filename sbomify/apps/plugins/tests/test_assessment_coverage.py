@@ -314,3 +314,27 @@ class TestRerunHiddenWhenRefused:
         html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
 
         assert f"/api/v1/plugins/assessments/{sample_sbom.id}/" in html
+
+
+@pytest.mark.parametrize(("failing", "label"), [(1, "Issue"), (2, "Issues"), (0, "Issues")])
+def test_the_issue_chip_agrees_with_its_count(failing: int, label: str):
+    import re
+
+    from django.utils.html import strip_tags
+
+    status = {
+        "overall_status": "has_failures" if failing else "all_pass",
+        "total_assessments": 2,
+        "passing_count": 2 - failing,
+        "failing_count": failing,
+        "pending_count": 0,
+        "in_progress_count": 0,
+        "skipped_count": 0,
+    }
+    html = render_to_string(
+        "plugins/components/assessment_results_card.html.j2",
+        {"assessment_runs": {"status_summary": status, "latest_runs": []}, "sbom_id": "abc"},
+    )
+
+    text = " ".join(strip_tags(html).split())
+    assert re.search(rf"\b{failing} {label}\b", text), text

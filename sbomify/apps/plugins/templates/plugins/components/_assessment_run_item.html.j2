@@ -32,29 +32,29 @@
                     {% if run.status == 'completed' %}
                         {% comment %}A skipped scanner counts its own stand-down notice as one info finding, so security_total is 1 and the card would otherwise claim a vulnerability the scanner never reported.{% endcomment %}
                         {% if skipped %}
-                            <c-badges.secondary title="This plugin did not scan, so it reported no verdict.">
+                            <c-badges.secondary class="whitespace-nowrap" title="This plugin did not scan, so it reported no verdict.">
                             <i class="fas fa-ban mr-1"></i>Skipped
                             </c-badges.secondary>
                         {% elif security_total %}
-                            <c-badges.secondary>
+                            <c-badges.secondary class="whitespace-nowrap">
                             <i class="fas fa-shield-alt mr-1"></i>{{ security_total|intcomma }} vulnerabilit{{ security_total|pluralize:"y,ies" }}
                             </c-badges.secondary>
                         {% else %}
-                            <c-badges.secondary>
+                            <c-badges.secondary class="whitespace-nowrap">
                             <i class="fas fa-check-circle mr-1"></i>No vulnerabilities
                             </c-badges.secondary>
                         {% endif %}
                     {% elif run.status == 'failed' %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         <i class="fas fa-times-circle mr-1"></i>Error
                         </c-badges.secondary>
                     {% elif run.status == 'running' %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
                         Running
                         </c-badges.secondary>
                     {% else %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         <i class="fas fa-clock mr-1"></i>Pending
                         </c-badges.secondary>
                     {% endif %}
@@ -162,34 +162,34 @@ The host around it is preserved through a page refresh. The server always
                 {% endif %}
                 {% if run.status == 'completed' %}
                     {% if skipped %}
-                        <c-badges.secondary title="This plugin did not run, so it reported no verdict.">
+                        <c-badges.secondary class="whitespace-nowrap" title="This plugin did not run, so it reported no verdict.">
                         <i class="fas fa-ban mr-1"></i>Skipped
                         </c-badges.secondary>
                     {% elif has_issues %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         <i class="fas fa-exclamation-triangle mr-1"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
                         </c-badges.secondary>
                     {% elif pass_count == 0 %}
                         {% comment %}All findings were warnings — no positive verdict was produced. Surface distinctly so operators don't misread as a pass.{% endcomment %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         <i class="fas fa-exclamation-circle mr-1"></i>Warnings Only
                         </c-badges.secondary>
                     {% else %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         <i class="fas fa-check-circle mr-1"></i>Passed
                         </c-badges.secondary>
                     {% endif %}
                 {% elif run.status == 'failed' %}
-                    <c-badges.secondary>
+                    <c-badges.secondary class="whitespace-nowrap">
                     <i class="fas fa-times-circle mr-1"></i>Error
                     </c-badges.secondary>
                 {% elif run.status == 'running' %}
-                    <c-badges.secondary>
+                    <c-badges.secondary class="whitespace-nowrap">
                     {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
                     Running
                     </c-badges.secondary>
                 {% else %}
-                    <c-badges.secondary>
+                    <c-badges.secondary class="whitespace-nowrap">
                     <i class="fas fa-clock mr-1"></i>Pending
                     </c-badges.secondary>
                 {% endif %}
