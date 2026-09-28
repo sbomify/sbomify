@@ -63,6 +63,18 @@ class TestStrictWhereConformanceIsClaimed:
         assert "schema" in message.lower()
         assert "totally_made_up" in message or "NotARealSpdxType" in message or "@graph/1" in message
 
+    def test_the_plural_external_identifier_spelling_is_rejected(self) -> None:
+        """The spec property is ``externalIdentifier``. The plural is not
+        normalised on the way in: a 3.0.1 document carrying it is refused and
+        the error names the element that carries it."""
+        with pytest.raises(ValueError) as excinfo:
+            validate_spdx_sbom(corpus.legacy_spelling_counterpart())
+
+        message = str(excinfo.value)
+        assert "schema" in message.lower()
+        assert "Unevaluated properties are not allowed" in message
+        assert "externalIdentifiers" in message
+
     def test_a_conformant_document_passes(self) -> None:
         payload, version = validate_spdx_sbom(corpus.minimal_conformant())
 
