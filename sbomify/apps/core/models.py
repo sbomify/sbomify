@@ -8,7 +8,8 @@ from typing import Any
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import F, QuerySet
+from django.db.models import F, Q, QuerySet
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -58,6 +59,16 @@ class User(AbstractUser):
             models.Index(fields=["email_verified"]),
             models.Index(fields=["deleted_at"]),
         ]
+        constraints = [
+            models.UniqueConstraint(Lower("email"), condition=~Q(email=""), name="core_users_email_ci_unique"),
+        ]
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # One account per address, compared without case. allauth lowercases
+        # the address it looks up and then matches the stored value exactly.
+        if self.email:
+            self.email = self.email.lower()
+        super().save(*args, **kwargs)
 
 
 # Proxy models for sbom entities - provides clean core app interface

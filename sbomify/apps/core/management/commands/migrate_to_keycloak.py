@@ -70,7 +70,7 @@ class Command(BaseCommand):
 
         # Get users to migrate
         if specific_email:
-            users = User.objects.filter(email=specific_email)
+            users = User.objects.filter(email__iexact=specific_email)
             if not users.exists():
                 raise CommandError(f"User with email {specific_email} not found")
         else:

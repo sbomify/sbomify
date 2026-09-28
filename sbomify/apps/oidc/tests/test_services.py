@@ -44,7 +44,7 @@ class TestProvision:
         binding, _ = _make_binding(component)
         bot = provision_bot_user_for_binding(binding)
         assert bot.username == f"oidc-bot-{binding.id}"
-        assert bot.email == f"oidc-bot-{binding.id}@sbomify.local"
+        assert bot.email == f"oidc-bot-{binding.id}@sbomify.local".lower()
         assert bot.is_active is True
         # Unusable password — no human can log in as this account
         assert not bot.has_usable_password()

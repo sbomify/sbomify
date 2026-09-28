@@ -760,7 +760,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     ).first()
                     if access_request and access_request.decided_by:
                         inviter_email = access_request.decided_by.email
-                except User.DoesNotExist:
+                except (User.DoesNotExist, User.MultipleObjectsReturned):
                     # Invited user not found, continue without inviter_email
                     pass
 
@@ -872,7 +872,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                                 ).first()
                                 if access_request and access_request.decided_by:
                                     inviter_email = access_request.decided_by.email
-                            except User.DoesNotExist:
+                            except (User.DoesNotExist, User.MultipleObjectsReturned):
                                 # Invited user not found, continue without inviter_email
                                 pass
 
@@ -942,7 +942,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
                     return redirect("documents:access_request_queue", team_key=team_key)
-            except UserModel.DoesNotExist:
+            except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
                 # User doesn't exist yet, will be created when they accept invitation
                 pass
 
@@ -984,7 +984,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 if not created and not access_request.decided_by:
                     access_request.decided_by = user
                     access_request.save(update_fields=["decided_by"])
-            except User.DoesNotExist:
+            except (User.DoesNotExist, User.MultipleObjectsReturned):
                 # User doesn't exist yet, will be handled when they accept invitation
                 pass
 
@@ -1302,7 +1302,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         ).first()
                         if ar and ar.decided_by:
                             inviter_email = ar.decided_by.email
-                    except UserModel.DoesNotExist:
+                    except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
                         pass
 
                 invitations_with_inviter.append(

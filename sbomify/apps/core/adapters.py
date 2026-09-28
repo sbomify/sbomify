@@ -152,7 +152,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
         existing_user = sociallogin.user
         if existing_user.id is None and existing_user.email:
             # Block soft-deleted users from re-authenticating via SSO
-            if User.objects.filter(email=existing_user.email, deleted_at__isnull=False).exists():
+            if User.objects.filter(email__iexact=existing_user.email, deleted_at__isnull=False).exists():
                 from allauth.exceptions import ImmediateHttpResponse
                 from django.shortcuts import render
 
@@ -160,12 +160,12 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
 
             try:
                 existing_user = User.objects.get(
-                    email=existing_user.email,
+                    email__iexact=existing_user.email,
                     is_active=True,
                     deleted_at__isnull=True,
                 )
                 sociallogin.connect(request, existing_user)
-            except User.DoesNotExist:
+            except (User.DoesNotExist, User.MultipleObjectsReturned):
                 pass
 
         # Sync email_verified status from social provider on every login
