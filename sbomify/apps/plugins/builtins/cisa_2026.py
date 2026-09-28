@@ -66,6 +66,7 @@ from sbomify.apps.plugins.builtins._spdx_shared import (
     spdx2_annotation_targets_document,
     spdx2_reference_type,
     spdx2_root_spdxid,
+    spdx2_yocto_source_downloads,
 )
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -1043,6 +1044,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
 
         tallies = {element: _Tally() for element in self.COMPONENT_ELEMENTS}
         assessed = 0
+        source_downloads = spdx2_yocto_source_downloads(data)
         for index, package in enumerate(packages):
             name = _text(package.get("name")) or f"package at index {index}"
             tallies["component_name"].note(name, stated=bool(_text(package.get("name"))))
@@ -1060,7 +1062,10 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 unknown=any(_is_unknown(v) for v in producer_values),
             )
             tallies["component_version"].record(name, package.get("versionInfo"))
-            tallies["component_identifiers"].note(name, stated=self._spdx2_has_identifier(package))
+            tallies["component_identifiers"].note(
+                name,
+                stated=package.get("SPDXID") in source_downloads or self._spdx2_has_identifier(package),
+            )
 
             checksums = package.get("checksums")
             checksums = [c for c in checksums if isinstance(c, dict)] if isinstance(checksums, list) else []

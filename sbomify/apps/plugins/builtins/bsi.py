@@ -68,7 +68,11 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     resolve_spdx3_agent,
     spdx3_refs,
 )
-from sbomify.apps.plugins.builtins._spdx_shared import spdx2_reference_type, spdx3_document_subjects
+from sbomify.apps.plugins.builtins._spdx_shared import (
+    spdx2_reference_type,
+    spdx2_yocto_source_downloads,
+    spdx3_document_subjects,
+)
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
@@ -1391,8 +1395,9 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # Unique identifiers (skip file-type entries — they don't have package IDs)
         identifier_warnings = []
+        source_downloads = spdx2_yocto_source_downloads(data)
         for i, pkg in enumerate(packages):
-            if _is_file_pkg(pkg):
+            if _is_file_pkg(pkg) or pkg.get("SPDXID") in source_downloads:
                 continue
             purl = pkg.get("purl")
             external_refs = pkg.get("externalRefs")

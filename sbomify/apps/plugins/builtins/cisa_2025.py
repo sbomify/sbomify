@@ -77,6 +77,7 @@ from sbomify.apps.plugins.builtins._spdx_shared import (
     spdx2_annotation_targets_document,
     spdx2_reference_type,
     spdx2_root_spdxid,
+    spdx2_yocto_source_downloads,
     spdx3_annotation_subject_matches,
     spdx3_document_subjects,
 )
@@ -352,6 +353,8 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
         def _is_file_pkg(p: dict[str, Any]) -> bool:
             return "-File-" in str(p.get("SPDXID") or "")
 
+        source_downloads = spdx2_yocto_source_downloads(data)
+
         # Check each package for required elements
         for i, package in enumerate(packages):
             package_name = package.get("name", f"Package {i + 1}")
@@ -381,7 +384,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
             has_identifier = (isinstance(purl, str) and bool(purl)) or any(
                 spdx2_reference_type(ref) in SPDX2_IDENTIFIER_TYPES for ref in external_refs
             )
-            if not has_identifier:
+            if not has_identifier and package.get("SPDXID") not in source_downloads:
                 identifier_failures.append(package_name)
 
             # 6. Component Hash (NEW - check checksums)
