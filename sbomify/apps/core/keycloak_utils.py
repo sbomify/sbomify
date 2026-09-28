@@ -39,17 +39,16 @@ class KeycloakManager:
             verify=True,
         )
 
-        # Initialize realm admin client by cloning master admin and switching realm
+        # Realm admin client: signs in to the master realm, operates on the target realm
         self.admin_client = KeycloakAdmin(
-            server_url=self.master_admin.server_url,  # type: ignore[attr-defined]
-            username=self.master_admin.username,  # type: ignore[attr-defined]
-            password=self.master_admin.password,  # type: ignore[attr-defined]
-            realm_name=self.realm,  # Set target realm directly
+            server_url=self.server_url,
+            username=self.admin_username,
+            password=self.admin_password,
+            realm_name=self.realm,
+            user_realm_name="master",
             verify=True,
-            token=self.master_admin.token,  # type: ignore[attr-defined]  # Reuse the authentication token
         )
-        realm_name = self.admin_client.realm_name  # type: ignore[attr-defined]
-        logger.info(f"Configured KeycloakAdmin for realm: {realm_name}")
+        logger.info(f"Configured KeycloakAdmin for realm: {self.realm}")
 
         # Initialize OpenID client
         self.openid_client = self._get_openid_client()

@@ -79,3 +79,26 @@ class TestKeycloakDeleteUser:
 
                 result = manager.delete_user("user-101")
                 assert result is False
+
+
+class TestKeycloakManagerConstruction:
+    def test_builds_against_the_installed_python_keycloak(self, settings):
+        """No mocks: a KeycloakAdmin attribute the pinned library lacks must fail here.
+
+        Constructing the clients makes no request; the token is fetched on first use.
+        """
+        from sbomify.apps.core.keycloak_utils import KeycloakManager
+
+        settings.KEYCLOAK_SERVER_URL = "https://keycloak.example.com/"
+        settings.KEYCLOAK_REALM = "sbomify"
+        settings.KEYCLOAK_ADMIN_USERNAME = "admin"
+        settings.KEYCLOAK_ADMIN_PASSWORD = "secret"
+
+        manager = KeycloakManager()
+
+        connection = manager.admin_client.connection
+        assert connection.server_url == "https://keycloak.example.com/"
+        assert connection.realm_name == "sbomify"
+        assert connection.user_realm_name == "master"
+        assert connection.username == "admin"
+        assert manager.master_admin.connection.realm_name == "master"
