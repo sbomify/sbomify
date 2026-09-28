@@ -9,7 +9,8 @@ const template = readFileSync(
     'utf8'
 )
 const input = template.match(/<c-forms\.input\b[^>]*\bid="slug"[^>]*>/)?.[0] ?? ''
-const attr = (name: string) => input.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1] ?? ''
+const attrs = new Map([...input.matchAll(/\s([\w:.-]+)="([^"]*)"/g)].map(([, name, value]) => [name, value]))
+const attr = (name: string) => attrs.get(name) ?? ''
 const pattern = attr('pattern')
 const compile = () => new RegExp(`^(?:${pattern})$`, 'v')
 
