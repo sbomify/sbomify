@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import patch
 
 import pytest
@@ -12,6 +13,7 @@ from django.urls import resolve
 from sbomify.apps.core.middleware import IdentityProviderUnavailableMiddleware
 
 LOGIN_URL = "/accounts/oidc/keycloak/login/"
+CALLBACK_URL = "/accounts/oidc/keycloak/login/callback/"
 
 
 def _provider_response(status_code: int) -> requests.Response:
@@ -37,6 +39,17 @@ class TestSignInWhenIdentityProviderIsDown:
     def test_provider_503_renders_sign_in_unavailable(self, client: Client) -> None:
         with patch("requests.Session.request", side_effect=_unavailable_response):
             response = client.get(LOGIN_URL)
+
+        assert response.status_code == 503
+        assert "Sign-in is unavailable. Try again in a minute." in response.content.decode()
+
+    def test_timeout_on_callback_renders_sign_in_unavailable(self, client: Client) -> None:
+        session = client.session
+        session["socialaccount_states"] = {"s1": ({"process": "login"}, time.time())}
+        session.save()
+
+        with patch("requests.Session.request", side_effect=requests.ReadTimeout("read timeout=5")):
+            response = client.get(CALLBACK_URL, {"state": "s1", "code": "c"})
 
         assert response.status_code == 503
         assert "Sign-in is unavailable. Try again in a minute." in response.content.decode()
