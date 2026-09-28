@@ -7,6 +7,7 @@ loading the full settings module (which would bypass ``sbomify.test_settings``).
 from __future__ import annotations
 
 import logging
+import re
 
 
 def is_benign_shielded_future_error(record: logging.LogRecord) -> bool:
@@ -66,3 +67,21 @@ def is_on_demand_tls_ask_denial(record: logging.LogRecord) -> bool:
     # registered, and that line stays.
     request = getattr(record, "request", None)
     return getattr(request, "resolver_match", None) is not None
+
+
+# Signed download URLs carry their credential in the ``token`` query parameter.
+_TOKEN_QUERY_VALUE = re.compile(r"([?&]token=)[^&\s\"]*")
+
+
+def redact_token_query(record: logging.LogRecord) -> bool:
+    """Replace the value of any ``token`` query parameter in the record's args.
+
+    The server's access log writes the full request path, query string
+    included, so a signed download URL would otherwise be stored with the
+    credential that grants the download.
+    """
+    if isinstance(record.args, tuple):
+        record.args = tuple(
+            _TOKEN_QUERY_VALUE.sub(r"\1[redacted]", arg) if isinstance(arg, str) else arg for arg in record.args
+        )
+    return True

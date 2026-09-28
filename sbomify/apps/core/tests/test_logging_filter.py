@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from sbomify.logging_filters import is_benign_shielded_future_error, is_on_demand_tls_ask_denial
+from sbomify.logging_filters import is_benign_shielded_future_error, is_on_demand_tls_ask_denial, redact_token_query
 
 
 def _make_record(message: str, *, name: str = "asyncio", level: int = logging.ERROR) -> logging.LogRecord:
@@ -131,3 +131,44 @@ def test_nothing_else_is_dropped(record: logging.LogRecord) -> None:
     the routine denial.
     """
     assert is_on_demand_tls_ask_denial(record) is False
+
+
+def _access_record(path: str) -> logging.LogRecord:
+    """A record shaped like the one uvicorn writes for each request."""
+    return logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=0,
+        msg='%s - "%s %s HTTP/%s" %d',
+        args=("203.0.113.7:5000", "GET", path, "1.1", 200),
+        exc_info=None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        (
+            "/api/v1/sboms/abc/download/signed?token=eyJzYm9tX2lkIjoiYWJjIn0:1abc:sig",
+            "/api/v1/sboms/abc/download/signed?token=[redacted]",
+        ),
+        (
+            "/api/v1/documents/abc/download/signed?format=json&token=secret-value&x=1",
+            "/api/v1/documents/abc/download/signed?format=json&token=[redacted]&x=1",
+        ),
+        ("/api/v1/products?page=2", "/api/v1/products?page=2"),
+        ("/api/v1/products?access_token=kept", "/api/v1/products?access_token=kept"),
+    ],
+    ids=["signed sbom download", "token among other params", "no token", "a different param"],
+)
+def test_access_log_token_query_value_is_redacted(path: str, expected: str) -> None:
+    record = _access_record(path)
+
+    assert redact_token_query(record) is True
+    assert record.getMessage() == f'203.0.113.7:5000 - "GET {expected} HTTP/1.1" 200'
+
+
+def test_access_logger_carries_the_redaction_filter() -> None:
+    """Settings attach the filter to the logger the server writes access lines to."""
+    assert redact_token_query in logging.getLogger("uvicorn.access").filters

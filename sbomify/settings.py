@@ -34,7 +34,11 @@ from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
-from sbomify.logging_filters import is_benign_shielded_future_error, is_on_demand_tls_ask_denial
+from sbomify.logging_filters import (
+    is_benign_shielded_future_error,
+    is_on_demand_tls_ask_denial,
+    redact_token_query,
+)
 from sbomify.sentry_config import (
     is_repeat_self_healing_notice,
     resolve_environment,
@@ -982,6 +986,11 @@ LOGGING = {
         # },
     },
 }
+
+# uvicorn (and gunicorn's UvicornWorker) install the access logger's handlers
+# before the app loads. Naming the logger in LOGGING would make dictConfig strip
+# those handlers, so the filter is attached to the logger directly instead.
+logging.getLogger("uvicorn.access").addFilter(redact_token_query)
 
 
 # Feature flags
