@@ -216,7 +216,7 @@ class Command(BaseCommand):
             team.billing_plan_limits = updated_limits
             team.save()
             if stripe_status in ENDED_SUBSCRIPTION_STATUSES:
-                downgrade_ended_subscription(team.pk)
+                downgrade_ended_subscription(team.pk, subscription_id)
 
             self.stdout.write(self.style.SUCCESS(f"    Updated {team.name}"))
             logger.info(f"Synced subscription status for team {team.key}: {reasons_str}")

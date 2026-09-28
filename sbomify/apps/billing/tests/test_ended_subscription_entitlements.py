@@ -133,6 +133,35 @@ def test_stripe_sync_of_an_ended_subscription_moves_to_community(paid_workspace)
     _assert_on_community(paid_workspace)
 
 
+def test_stripe_sync_leaves_a_workspace_whose_subscription_was_replaced(paid_workspace):
+    # The sync holds the row it read before asking Stripe; a checkout then stores a
+    # new, live subscription before the sync learns the old one ended.
+    limits = {
+        **paid_workspace.billing_plan_limits,
+        "stripe_subscription_id": "sub_new",
+        "subscription_status": "active",
+    }
+    Team.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
+    canceled = stripe.Subscription.construct_from(
+        {
+            "id": "sub_test123",
+            "customer": "cus_test123",
+            "status": "canceled",
+            "cancel_at_period_end": False,
+            "cancel_at": None,
+            "current_period_end": int(timezone.now().timestamp()),
+            "items": {"data": [{"price": {"id": "price_x", "recurring": {"interval": "month"}}}]},
+        },
+        "sk_test",
+    )
+    with patch.object(stripe_sync.stripe_client, "get_subscription", return_value=canceled):
+        stripe_sync.sync_subscription_from_stripe(paid_workspace, force_refresh=True)
+
+    paid_workspace.refresh_from_db()
+    assert paid_workspace.billing_plan == "business"
+    assert Component.objects.filter(team=paid_workspace, visibility=Component.Visibility.PRIVATE).exists()
+
+
 def test_reconciling_a_missing_subscription_moves_to_community(paid_workspace):
     assert stripe_sync.reconcile_missing_subscription(paid_workspace, "sub_test123")
 

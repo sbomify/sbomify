@@ -358,7 +358,7 @@ def check_stale_trials_task() -> None:
                 synced_count += 1
 
             if stripe_status in ENDED_SUBSCRIPTION_STATUSES:
-                downgrade_ended_subscription(team.pk)
+                downgrade_ended_subscription(team.pk, subscription_id)
 
         except StripeResourceMissingError:
             # The stored id refers to nothing at Stripe, and re-asking gets the

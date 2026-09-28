@@ -615,7 +615,7 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
         team.save()
 
     if subscription.status in ENDED_SUBSCRIPTION_STATUSES:
-        downgrade_ended_subscription(team.pk)
+        downgrade_ended_subscription(team.pk, subscription.id)
 
     if subscription.status == "trialing" and subscription.trial_end:
         try:
@@ -705,7 +705,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                     billing_limits["last_processed_webhook_id"] = webhook_id
                     team.billing_plan_limits = billing_limits
                     team.save()
-                    downgrade_ended_subscription(team.pk)
+                    downgrade_ended_subscription(team.pk, subscription.id)
                 else:
                     counts = get_team_asset_counts(str(team.id))
                     product_count = counts["products"]
@@ -745,7 +745,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
 
                         # Over the limits or not, nobody pays for the plan now. Existing
                         # resources stay; the Community limits stop new ones.
-                        downgrade_ended_subscription(team.pk)
+                        downgrade_ended_subscription(team.pk, subscription.id)
                         logger.warning(f"Downgraded over Community limits: {', '.join(exceeded_resources)}")
                     else:
                         existing_limits = (team.billing_plan_limits or {}).copy()
@@ -780,7 +780,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                 billing_limits["last_processed_webhook_id"] = webhook_id
                 team.billing_plan_limits = billing_limits
                 team.save()
-                downgrade_ended_subscription(team.pk)
+                downgrade_ended_subscription(team.pk, subscription.id)
 
         _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
 

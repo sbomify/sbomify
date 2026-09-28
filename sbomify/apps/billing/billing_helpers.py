@@ -172,13 +172,17 @@ def apply_community_downgrade(team: Team) -> None:
 ENDED_SUBSCRIPTION_STATUSES = TERMINAL_SUBSCRIPTION_STATUSES | {"unpaid", "paused"}
 
 
-def downgrade_ended_subscription(team_pk: int) -> bool:
+def downgrade_ended_subscription(team_pk: int, subscription_id: str | None = None) -> bool:
     """Move a workspace whose subscription ended onto Community.
 
     Every path that learns a subscription ended calls this, so none of them can
     leave the workspace on the paid plan it no longer pays for. Enterprise plans
     are set by hand rather than by Stripe, so they stay put. Returns whether the
     plan changed.
+
+    ``subscription_id`` is the subscription the caller saw end. When given, a
+    workspace that stores a different one is left alone: a checkout replaced it
+    while the caller was asking Stripe, and the new one may be live.
     """
     from django.db import transaction
 
@@ -188,6 +192,11 @@ def downgrade_ended_subscription(team_pk: int) -> bool:
 
     with transaction.atomic():
         team = Team.objects.select_for_update().get(pk=team_pk)
+        if (
+            subscription_id is not None
+            and (team.billing_plan_limits or {}).get("stripe_subscription_id") != subscription_id
+        ):
+            return False
         if team.billing_plan in (BillingPlan.KEY_COMMUNITY, BillingPlan.KEY_ENTERPRISE):
             return False
         limits = (team.billing_plan_limits or {}).copy()

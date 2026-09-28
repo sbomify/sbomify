@@ -110,6 +110,9 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
             billing_limits["last_updated"] = timezone.now().isoformat()
             locked.billing_plan_limits = billing_limits
             locked.save()
+            # Under the lock that checked the id: it is cleared now, so there is
+            # nothing left for the downgrade to compare against.
+            downgrade_ended_subscription(team.pk)
             reconciled = True
 
     # Only for the id actually settled, and only when both halves of the key
@@ -119,8 +122,6 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
     # else.
     if reconciled and stripe_sub_id and team.key:
         invalidate_subscription_cache(stripe_sub_id, team.key)
-    if reconciled:
-        downgrade_ended_subscription(team.pk)
     return reconciled
 
 
@@ -307,7 +308,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         # Checked on every sync, not only on a status change: this is also what
         # moves a workspace whose ended subscription left it on the paid plan.
         if real_sub_status in ENDED_SUBSCRIPTION_STATUSES:
-            downgrade_ended_subscription(team.pk)
+            downgrade_ended_subscription(team.pk, stripe_sub_id)
 
         # Update last_updated timestamp
         if needs_update:
