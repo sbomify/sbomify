@@ -21,6 +21,7 @@ from sbomify.logging import getLogger
 from .models import AssessmentRun, RegisteredPlugin
 from .sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from .sdk.enums import AssessmentCategory, RunReason, RunStatus, ScanMode
+from .sdk.results import PluginMetadata
 from .utils import compute_config_hash, compute_content_digest
 
 if TYPE_CHECKING:
@@ -66,6 +67,20 @@ def load_plugin_class(plugin_class_path: str) -> type[AssessmentPlugin]:
     module = importlib.import_module(module_path)
     plugin_class: type[AssessmentPlugin] = getattr(module, class_name)
     return plugin_class
+
+
+def plugin_applies_to(metadata: PluginMetadata, bom_type: str, has_crypto_assets: bool | None) -> bool:
+    """Whether the orchestrator would run a plugin against an artifact at all.
+
+    Crypto-gated plugins skip a document upload found to hold no crypto assets.
+    None (pre-field rows) still runs: unknown is not a reason to skip. An
+    artifact tagged cbom always runs, because a CBOM declaring zero crypto
+    assets is a generator misfire the plugin must surface as a warning.
+    """
+    supported = metadata.supported_bom_types
+    if supported is not None and bom_type not in supported:
+        return False
+    return not (metadata.requires_crypto_assets and has_crypto_assets is False and bom_type != "cbom")
 
 
 class PluginOrchestratorError(Exception):
@@ -152,26 +167,12 @@ class PluginOrchestrator:
         if sbom_instance_check is None:
             raise SBOMGoneError(f"SBOM '{sbom_id}' not found - it may have been deleted")
 
-        # Get plugin metadata and check bom_type compatibility
         metadata = plugin.get_metadata()
-        supported = metadata.supported_bom_types
-        if supported is not None and sbom_instance_check.bom_type not in supported:
+        if not plugin_applies_to(metadata, sbom_instance_check.bom_type, sbom_instance_check.has_crypto_assets):
             logger.info(
-                f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: "
-                f"bom_type '{sbom_instance_check.bom_type}' not in supported types {supported}"
+                f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: does not apply to "
+                f"bom_type '{sbom_instance_check.bom_type}' (has_crypto_assets={sbom_instance_check.has_crypto_assets})"
             )
-            return None
-        # Crypto-gated plugins skip dispatch when upload determined the document
-        # holds no crypto assets. None (pre-field rows) still runs — unknown is
-        # not a reason to skip. An artifact explicitly tagged cbom also always
-        # runs: a CBOM declaring zero crypto assets is a generator misfire the
-        # plugin must surface as a warning, not silently skip.
-        if (
-            metadata.requires_crypto_assets
-            and sbom_instance_check.has_crypto_assets is False
-            and sbom_instance_check.bom_type != "cbom"
-        ):
-            logger.info(f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: document has no crypto assets")
             return None
         config_hash = compute_config_hash(plugin.config)
 
@@ -201,6 +202,12 @@ class PluginOrchestrator:
             if not assessment_run.plugin_config_hash:
                 assessment_run.plugin_config_hash = config_hash
                 assessment_run.save(update_fields=["plugin_config_hash"])
+            # The eager row took its version from the registry. Record the code
+            # that is actually producing the result, since the page compares it
+            # against the current version to mark a result out of date.
+            if assessment_run.plugin_version != metadata.version:
+                assessment_run.plugin_version = metadata.version
+                assessment_run.save(update_fields=["plugin_version"])
 
             logger.info(
                 f"[PLUGIN] Reusing existing run {assessment_run.id} for SBOM {sbom_id} "

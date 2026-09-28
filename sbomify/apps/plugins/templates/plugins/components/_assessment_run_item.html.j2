@@ -58,6 +58,12 @@
                         <i class="fas fa-clock mr-1"></i>Pending
                         </c-badges.secondary>
                     {% endif %}
+                    {% comment %}Set when the plugin's version has moved on since this run, so the verdict may not be what the current checks would give. The Re-run control is in the body.{% endcomment %}
+                    {% if run.current_version %}
+                        <c-badges.secondary title="Produced by v{{ run.plugin_version }}. The plugin is now v{{ run.current_version }}.">
+                        <i class="fas fa-clock-rotate-left mr-1" aria-hidden="true"></i>Out of date
+                        </c-badges.secondary>
+                    {% endif %}
                     {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
                     {% if skipped %}
                         <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
@@ -74,6 +80,7 @@
                             <i class="fas fa-code-branch mr-1"></i>
                             v{{ run.plugin_version }}
                         </span>
+                        {% if run.current_version %}<span>Latest v{{ run.current_version }}</span>{% endif %}
                         <span>
                             <i class="fas fa-play-circle mr-1"></i>
                             {{ run.run_reason|format_run_reason }}
@@ -186,6 +193,12 @@ The host around it is preserved through a page refresh. The server always
                     <i class="fas fa-clock mr-1"></i>Pending
                     </c-badges.secondary>
                 {% endif %}
+                {% comment %}Set when the plugin's version has moved on since this run, so the verdict may not be what the current checks would give. The Re-run control is in the body.{% endcomment %}
+                {% if run.current_version %}
+                    <c-badges.secondary title="Produced by v{{ run.plugin_version }}. The plugin is now v{{ run.current_version }}.">
+                    <i class="fas fa-clock-rotate-left mr-1" aria-hidden="true"></i>Out of date
+                    </c-badges.secondary>
+                {% endif %}
                 {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
                 {% if skipped %}
                     <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
@@ -202,6 +215,7 @@ The host around it is preserved through a page refresh. The server always
                         <i class="fas fa-code-branch mr-1"></i>
                         v{{ run.plugin_version }}
                     </span>
+                    {% if run.current_version %}<span>Latest v{{ run.current_version }}</span>{% endif %}
                     <span>
                         <i class="fas fa-play-circle mr-1"></i>
                         {{ run.run_reason|format_run_reason }}

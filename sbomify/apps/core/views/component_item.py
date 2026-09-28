@@ -433,6 +433,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             # Get assessment runs for this SBOM
             try:
                 from sbomify.apps.plugins.apis import get_sbom_assessments
+                from sbomify.apps.plugins.services.coverage import get_assessment_coverage
 
                 # The card loops `latest_runs` alone, reads counts from each
                 # run's summary, and shows one title; the findings list behind
@@ -443,6 +444,12 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 assessment_response = get_sbom_assessments(request, item_id, findings_limit=1, include_history=False)
                 # Use mode='json' to ensure datetime objects are serialized as ISO strings
                 assessment_runs = assessment_response.model_dump(mode="json")
+                coverage = get_assessment_coverage(item_id, component.team, assessment_runs["latest_runs"])
+                if coverage.ok and coverage.value is not None:
+                    assessment_runs["plugins_enabled"] = coverage.value.plugins_enabled
+                    assessment_runs["unassessed_plugins"] = coverage.value.unassessed
+                    for run in assessment_runs["latest_runs"]:
+                        run["current_version"] = coverage.value.outdated.get(run["plugin_name"])
             except Exception:
                 # Degrade to no assessments section rather than failing the page,
                 # but leave a trace — a silent None here hides real data problems.
@@ -467,6 +474,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         # Same tier the rerun endpoint enforces, so the button is only offered
         # to a caller the API would actually accept.
         can_rerun = can(request, "component:manage", component)
+        can_manage_plugins = can(request, "workspace:administer", component.team)
 
         # The header takes the copy chip and breadcrumb trail as lists.
         if is_vex:
@@ -504,6 +512,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "is_sbom_backed": is_sbom_backed,
                 "can_triage": can_triage,
                 "can_rerun": can_rerun,
+                "can_manage_plugins": can_manage_plugins,
                 "team_key": component.team.key,
             },
         )

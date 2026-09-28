@@ -1,0 +1,12 @@
+{% comment %}A plugin the workspace runs that has no result for this artifact, usually because it was turned on after the upload. Same bordered surface as a run's card so it sits in the stack, but there is nothing to expand, so it has no trigger. Expects plugin ({plugin_name, plugin_display_name}), sbom_id and can_rerun.{% endcomment %}
+<c-cards.collapsible id="plugin-{{ plugin.plugin_name }}">
+<div class="flex items-center justify-between gap-3 px-6 py-5">
+    <div class="flex items-center gap-3 flex-wrap min-w-0">
+        <span class="font-semibold text-text">{{ plugin.plugin_display_name|default:plugin.plugin_name }}</span>
+        <c-badges.secondary title="This plugin has not run on this artifact.">
+        <i class="fas fa-circle-minus mr-1" aria-hidden="true"></i>Not assessed
+        </c-badges.secondary>
+    </div>
+    {% include 'plugins/components/_rerun_button.html.j2' with run=plugin label="Run" %}
+</div>
+</c-cards.collapsible>
