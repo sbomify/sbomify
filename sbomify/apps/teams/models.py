@@ -617,6 +617,10 @@ class Invitation(models.Model):
             return ROLE_OWNER
         return ROLE_ADMIN
 
+    def get_granted_role_display(self) -> str:
+        role = self.granted_role
+        return str(dict(settings.TEAMS_INVITABLE_ROLES).get(role, role))
+
     def clean(self) -> None:
         # Friendly Python-level guard, invoked by Django forms and any
         # caller that explicitly runs full_clean(). The DB

@@ -50,7 +50,7 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
     has_default = Member.objects.filter(user=user, is_default_team=True).exists()
 
     pending_invites = Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).select_related(
-        "team"
+        "team", "invited_by"
     )
 
     for invitation in pending_invites:

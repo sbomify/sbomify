@@ -6,7 +6,7 @@ from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
 
-from sbomify.apps.core.authz import ROLE_OWNER
+from sbomify.apps.core.authz import ROLE_BOT, ROLE_GUEST, ROLE_OWNER
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 
 if TYPE_CHECKING:
@@ -77,7 +77,7 @@ class InviteUserForm(forms.Form):
             role_field.choices = [
                 (role, label)
                 for role, label in settings.TEAMS_SUPPORTED_ROLES
-                if role not in ("guest", "bot", ROLE_OWNER)
+                if role not in (ROLE_GUEST, ROLE_BOT, ROLE_OWNER)
             ]
 
 
