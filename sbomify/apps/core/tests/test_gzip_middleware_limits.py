@@ -146,8 +146,9 @@ def test_a_compressed_body_inflates_no_further_than_an_uncompressed_body_may_wei
 
 def test_an_inflated_body_is_held_in_memory_once():
     inflated = 8 * 1024 * 1024
+    payload = bytes(inflated)
     request = _compressed_request(f"Bearer {create_personal_access_token(SimpleNamespace(pk=1))}")
-    request._body = gzip.compress(bytes(inflated))
+    request._body = gzip.compress(payload)
 
     tracemalloc.start()
     try:
@@ -157,5 +158,5 @@ def test_an_inflated_body_is_held_in_memory_once():
         tracemalloc.stop()
 
     assert response.status_code == 200
-    assert reached[0].read() == bytes(inflated)
-    assert peak < inflated * 1.5
+    assert reached[0].read() == payload
+    assert peak < inflated * 3 // 2
