@@ -9,6 +9,7 @@ import anchor from '@alpinejs/anchor';
 import { parseJsonScript } from './utils';
 import { formatNumber } from './number-format';
 import { registerWebSocketStore } from './components/websocket-store';
+import { registerOpenAssessmentsStore } from './components/open-assessments-store';
 import { registerTooltipDirective } from './alpine-tooltip';
 import { registerConfirmModal } from './components/confirm-modal';
 import { registerAllComponents } from './alpine-components';
@@ -49,6 +50,10 @@ registerTooltipDirective(Alpine);
 
 // Register global stores before Alpine starts
 registerWebSocketStore();
+
+// Which assessment cards are open, kept out of the DOM so a refresh that
+// morphs the artifact page cannot close them.
+registerOpenAssessmentsStore();
 
 // The base confirmation modal is available to every entry point.
 registerConfirmModal();
