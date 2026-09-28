@@ -256,22 +256,17 @@ def _get_passing_assessments_by_sbom(
 ) -> dict[str, list[PassingAssessment]]:
     """Passing assessments for several SBOMs, each list sorted by plugin name.
 
-    One query picks the latest run per SBOM and plugin, one more reads those
-    runs. Only ``result.summary`` and ``result.metadata`` leave the database:
+    One query reads the latest run per SBOM and plugin, picked with
+    ``DISTINCT ON`` in a single pass over the run history. Only
+    ``result.summary`` and ``result.metadata`` leave the database:
     scanner results carry the whole findings list, and a component with many
     SBOM versions would otherwise pull every one of them into memory.
     """
     latest_ids = (
         AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-        .values("sbom_id", "plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=OuterRef("sbom_id"), plugin_name=OuterRef("plugin_name"))
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
+        .order_by("sbom_id", "plugin_name", "-created_at", "-id")
+        .distinct("sbom_id", "plugin_name")
+        .values("id")
     )
     runs = (
         AssessmentRun.objects.filter(id__in=latest_ids)
