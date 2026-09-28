@@ -171,3 +171,45 @@ class TestAcceptingOwnerInvitations:
         _accept_pending_invitations(newcomer)
 
         assert Member.objects.get(team=team, user=newcomer).role == "admin"
+
+
+@pytest.mark.django_db
+class TestShowingOwnerInvitations:
+    def test_admin_invite_page_does_not_describe_the_owner_role(self, team, make_member):
+        admin = make_member("admin1", "admin")
+
+        body = (
+            _client_for(team, admin).get(reverse("teams:invite_user", kwargs={"team_key": team.key})).content.decode()
+        )
+
+        assert "has full control" not in body
+
+    def test_owner_invite_page_describes_the_owner_role(self, team, make_member):
+        owner = make_member("owner1", "owner")
+
+        body = (
+            _client_for(team, owner).get(reverse("teams:invite_user", kwargs={"team_key": team.key})).content.decode()
+        )
+
+        assert "has full control" in body
+
+    def test_members_tab_lists_an_invitation_by_the_role_it_grants(self, team, make_member):
+        owner = make_member("owner1", "owner")
+        Invitation.objects.create(team=team, email="legacy@example.com", role="owner")
+        Invitation.objects.create(team=team, email="real@example.com", role="owner", invited_by=owner)
+
+        response = _client_for(team, owner).get(
+            reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "members"})
+        )
+
+        invitations = {i["email"]: i["role"] for i in response.context["team"]["invitations"]}
+        assert invitations == {"legacy@example.com": "admin", "real@example.com": "owner"}
+
+    def test_invitee_sees_the_role_the_invitation_grants(self, team, make_member, django_user_model):
+        from sbomify.apps.teams.queries import get_pending_invitations_for_user
+
+        admin = make_member("admin1", "admin")
+        newcomer = django_user_model.objects.create_user(username="newcomer", email="newcomer@example.com")
+        Invitation.objects.create(team=team, email=newcomer.email, role="owner", invited_by=admin)
+
+        assert [i["role"] for i in get_pending_invitations_for_user(newcomer)] == ["admin"]

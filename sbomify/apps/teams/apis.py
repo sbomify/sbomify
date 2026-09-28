@@ -108,11 +108,11 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
             id=invitation.id,
             token=str(invitation.token),
             email=invitation.email,
-            role=invitation.role,
+            role=invitation.granted_role,
             created_at=invitation.created_at,
             expires_at=invitation.expires_at,
         )
-        for invitation in team.invitation_set.all()
+        for invitation in team.invitation_set.select_related("invited_by").all()
     ]
 
     return TeamSchema(

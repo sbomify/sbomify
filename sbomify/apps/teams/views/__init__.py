@@ -233,6 +233,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
         return error_response(request, HttpResponseNotFound("Team not found"))
 
     can_grant_owner = bool(can(request, "member:grant_owner", team))
+    context["can_grant_owner"] = can_grant_owner
 
     if request.method == "POST":
         invite_user_form = InviteUserForm(request.POST, can_grant_owner=can_grant_owner)
