@@ -10,8 +10,7 @@ from dataclasses import dataclass
 from dataclasses import replace as dataclass_replace
 from typing import TYPE_CHECKING, Any
 
-from django.db.models import OuterRef, Subquery
-from django.db.models.fields.json import KeyTransform
+from django.db.models import F, OuterRef, Subquery
 from django.db.utils import NotSupportedError
 
 from .models import AssessmentRun, RegisteredPlugin
@@ -277,7 +276,7 @@ def _get_passing_assessments_by_sbom(
     runs = (
         AssessmentRun.objects.filter(id__in=latest_ids)
         .only("id", "sbom_id", "plugin_name", "category", "status", "completed_at")
-        .annotate(summary_slice=KeyTransform("summary", "result"), metadata_slice=KeyTransform("metadata", "result"))
+        .annotate(summary_slice=F("result__summary"), metadata_slice=F("result__metadata"))
         .order_by("plugin_name")
     )
     passing_by_sbom: dict[str, list[PassingAssessment]] = {sbom_id: [] for sbom_id in sbom_ids}
