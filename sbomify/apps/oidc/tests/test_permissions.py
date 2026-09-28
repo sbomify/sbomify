@@ -945,3 +945,25 @@ class TestBotReleaseConfinement:
         )
         assert resp.status_code == 403
         assert "no component binding" in resp.json()["detail"]
+
+    @pytest.mark.parametrize(("in_product", "status"), [(False, 403), (True, 400)])
+    def test_product_confinement_runs_before_the_latest_release_guard(
+        self, in_product, status, oidc_sbomify_token, bound_component, other_component, team_with_business_plan
+    ):
+        """A latest release of a product without the bound component is refused as out of scope,
+        not as a latest release; only the bot's own product reaches the latest-release guard."""
+        from sbomify.apps.core.models import Product, Release
+        from sbomify.apps.sboms.models import SBOM
+
+        product = Product.objects.create(name="prod-latest", team=team_with_business_plan)
+        product.components.add(bound_component if in_product else other_component)
+        release = Release.get_or_create_latest_release(product)
+        sbom = SBOM.objects.create(name="b", component=bound_component, format="cyclonedx", format_version="1.6")
+
+        resp = Client().post(
+            f"/api/v1/releases/{release.id}/artifacts",
+            data=json.dumps({"sbom_id": sbom.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == status, resp.content
