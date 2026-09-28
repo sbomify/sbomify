@@ -158,17 +158,14 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
 
                 return ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))  # type: ignore[no-any-return]
 
+            holders = User.objects.filter(email__iexact=existing_user.email, is_active=True, deleted_at__isnull=True)
             try:
-                existing_user = User.objects.get(
-                    email__iexact=existing_user.email,
-                    is_active=True,
-                    deleted_at__isnull=True,
-                )
+                existing_user = holders.get()
                 sociallogin.connect(request, existing_user)
             except User.DoesNotExist:
                 pass
             except User.MultipleObjectsReturned:
-                ids = sorted(User.objects.filter(email__iexact=existing_user.email).values_list("id", flat=True))
+                ids = sorted(holders.values_list("id", flat=True))
                 logger.warning("Social sign-in refused: accounts %s share one email address", ids)
                 from allauth.core.exceptions import ImmediateHttpResponse
                 from django.shortcuts import render
