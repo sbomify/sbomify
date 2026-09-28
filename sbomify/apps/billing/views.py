@@ -417,7 +417,7 @@ class SelectPlanView(LoginRequiredMixin, View):
                 )
                 team.billing_plan_limits = existing_limits
                 team.save()
-            apply_community_downgrade(team)
+                apply_community_downgrade(team)
             messages.success(request, f"Successfully switched to {plan.name} plan")
             return redirect("core:dashboard")
         return None

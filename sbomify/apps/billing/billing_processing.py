@@ -332,7 +332,12 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 team.save()
 
             if should_run_side_effects:
-                apply_community_downgrade(team)
+                # Under the row lock again, and only if the plan is still Community:
+                # an update that restored the paid plan since the claim wins.
+                with transaction.atomic():
+                    locked = Team.objects.select_for_update().get(pk=team.pk)
+                    if locked.billing_plan == BillingPlan.KEY_COMMUNITY:
+                        apply_community_downgrade(locked)
                 notify_billing_managers(team, email_notifications.notify_trial_expired)
                 logger.info("Trial expired — downgraded team %s to community plan", team.key)
 

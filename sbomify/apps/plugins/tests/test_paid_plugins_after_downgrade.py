@@ -10,11 +10,13 @@ which also covers workspaces downgraded before this change.
 
 from __future__ import annotations
 
+import datetime
 from unittest.mock import patch
 
 import pytest
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
 
 from sbomify.apps.billing.billing_helpers import downgrade_ended_subscription
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
@@ -54,6 +56,18 @@ def test_downgrade_drops_plugins_the_community_plan_excludes(ensure_billing_plan
     downgrade_ended_subscription(team_with_business_plan.pk)
 
     assert TeamPluginSettings.objects.get(team=team_with_business_plan).enabled_plugins == ["osv"]
+
+
+def test_dropping_plugins_bumps_the_settings_timestamp(ensure_billing_plans, team_with_business_plan):
+    _enable(team_with_business_plan, "osv", DT)
+    TeamPluginSettings.objects.filter(team=team_with_business_plan).update(
+        updated_at=timezone.now() - datetime.timedelta(days=1)
+    )
+    before = TeamPluginSettings.objects.get(team=team_with_business_plan).updated_at
+
+    downgrade_ended_subscription(team_with_business_plan.pk)
+
+    assert TeamPluginSettings.objects.get(team=team_with_business_plan).updated_at > before
 
 
 def test_a_plugin_the_plan_excludes_is_not_queued(ensure_billing_plans, team_with_community_plan):

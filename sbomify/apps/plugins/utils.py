@@ -176,6 +176,8 @@ def drop_plugins_outside_plan(team: Any) -> list[str]:
     Written with a queryset update: saving the settings row fires the signal that
     re-assesses recent SBOMs, and dropping a plugin is no reason to re-run the rest.
     """
+    from django.utils import timezone
+
     from .models import TeamPluginSettings
 
     settings = TeamPluginSettings.objects.filter(team=team).only("id", "enabled_plugins").first()
@@ -185,5 +187,5 @@ def drop_plugins_outside_plan(team: Any) -> list[str]:
     kept = [name for name in settings.enabled_plugins if team_has_plugin_access(team, name)]
     dropped = [name for name in settings.enabled_plugins if name not in kept]
     if dropped:
-        TeamPluginSettings.objects.filter(pk=settings.pk).update(enabled_plugins=kept)
+        TeamPluginSettings.objects.filter(pk=settings.pk).update(enabled_plugins=kept, updated_at=timezone.now())
     return dropped
