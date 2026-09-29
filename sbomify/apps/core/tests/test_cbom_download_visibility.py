@@ -16,7 +16,9 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.teams.models import Member, Team
 
 PUBLIC_REF = "crypto/public"
 GATED_REF = "crypto/gated"
@@ -84,6 +86,20 @@ def mixed_release(mixed_components):
     return release
 
 
+@pytest.fixture(params=["approved guest", "other workspace owner"])
+def signed_in_outsider(request, mixed_components, guest_user):
+    """A signed-in caller without release read access: an approved guest, or the owner of another workspace."""
+    if request.param == "approved guest":
+        team = mixed_components.team
+        Member.objects.create(team=team, user=guest_user, role="guest")
+        AccessRequest.objects.create(team=team, user=guest_user, status=AccessRequest.Status.APPROVED)
+    else:
+        Member.objects.create(team=Team.objects.create(name="Elsewhere"), user=guest_user, role="owner")
+    client = Client()
+    client.force_login(guest_user)
+    return client
+
+
 def _release_url(release: Release) -> str:
     return reverse("api-1:download_release_cbom", kwargs={"release_id": release.id})
 
@@ -131,6 +147,22 @@ def test_member_product_cbom_holds_every_component(mixed_components, authenticat
 
     assert response.status_code == 200
     assert _refs(response) == {PUBLIC_REF, GATED_REF, PRIVATE_REF}
+
+
+@pytest.mark.django_db
+def test_signed_in_outsider_release_cbom_holds_public_components_only(mixed_release, signed_in_outsider):
+    response = signed_in_outsider.get(_release_url(mixed_release))
+
+    assert response.status_code == 200
+    assert _refs(response) == {PUBLIC_REF}
+
+
+@pytest.mark.django_db
+def test_signed_in_outsider_product_cbom_holds_public_components_only(mixed_components, signed_in_outsider):
+    response = signed_in_outsider.get(_product_url(mixed_components))
+
+    assert response.status_code == 200
+    assert _refs(response) == {PUBLIC_REF}
 
 
 @pytest.mark.django_db
