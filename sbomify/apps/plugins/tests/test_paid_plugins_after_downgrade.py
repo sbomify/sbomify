@@ -14,7 +14,8 @@ import datetime
 from unittest.mock import patch
 
 import pytest
-from django.test import Client
+from django.middleware.csrf import get_token
+from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
@@ -122,12 +123,15 @@ def test_rerun_refuses_a_plugin_the_plan_excludes(ensure_billing_plans, team_wit
     )
     _enable(team_with_community_plan, DT)
     sbom = _sbom(team_with_community_plan)
-    client = Client()
+    client = Client(enforce_csrf_checks=True)
     setup_authenticated_client_session(client, team_with_community_plan, sample_user)
+    token = get_token(RequestFactory().get("/"))
+    client.cookies["csrftoken"] = token
 
     with patch("sbomify.apps.plugins.apis.run_assessment_task") as task:
         response = client.post(
             reverse("api-1:rerun_assessment", kwargs={"sbom_id": sbom.id, "plugin_name": DT}),
+            HTTP_X_CSRFTOKEN=token,
         )
 
     assert response.status_code == 403
