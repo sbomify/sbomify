@@ -71,6 +71,27 @@ def sample_team_with_admin_member(
 
 
 @pytest.fixture
+def sample_team_with_operator_member(
+    sample_team: Team,
+    sample_user: User,  # noqa: F811
+) -> Generator[Member, Any, None]:
+    # First try to get existing membership
+    try:
+        membership = Member.objects.get(user=sample_user, team=sample_team)
+        membership.role = "operator"
+        membership.save()
+    except Member.DoesNotExist:
+        membership = Member(user=sample_user, team=sample_team, role="operator")
+        membership.save()
+    yield membership
+
+    try:
+        membership.delete()
+    except Member.DoesNotExist:
+        pass
+
+
+@pytest.fixture
 def sample_team_with_guest_member(
     sample_team: Team,
     sample_user: User,  # noqa: F811

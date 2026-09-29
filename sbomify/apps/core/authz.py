@@ -41,6 +41,7 @@ from django.http import HttpRequest
 ROLE_OWNER = "owner"
 ROLE_ADMIN = "admin"
 ROLE_MEMBER = "member"
+ROLE_OPERATOR = "operator"
 ROLE_GUEST = "guest"
 ROLE_BOT = "bot"
 
@@ -49,11 +50,11 @@ ROLE_BOT = "bot"
 # and template capability flags all derive from them, so widening a tier widens
 # every gate that uses it.
 #
-# Invariant: the human roles form a linear ladder, guest ⊂ member ⊂ admin ⊂ owner.
-# No role
-# may hold a capability a more-privileged role lacks. ``bot`` sits outside the
-# ladder — it is a synthetic OIDC publishing identity that can publish releases
-# without being able to read most internal data. ``test_role_ladder_is_upward_closed``
+# Invariant: the human roles form a linear ladder,
+# guest ⊂ operator ⊂ member ⊂ admin ⊂ owner. No role may hold a capability a
+# more-privileged role lacks. ``bot`` sits outside the ladder — it is a synthetic
+# OIDC publishing identity that can publish releases without being able to read
+# most internal data. ``test_role_ladder_is_upward_closed``
 # enforces the invariant; keeping it is what stops this degenerating into
 # per-role permission soup where "what can an admin do" needs a codebase search.
 OWNER_ONLY: tuple[str, ...] = (ROLE_OWNER,)
@@ -72,12 +73,32 @@ MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
 """Create/update products, components, releases, and artifact metadata — the
 day-to-day work. Deliberately excludes *making things public*: changing a
 product's or component's visibility is ``ADMINISTER``, because publishing to the
-trust center is an outward-facing decision, not routine maintenance."""
+trust center is an outward-facing decision, not routine maintenance.
+
+This is the line ``operator`` sits below: an operator reads the whole
+inventory and rules on its vulnerabilities, but does not shape the inventory
+itself. Adding a role here hands it product and component creation, so a
+read-mostly role must never be added to this tier."""
 
 DELETE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 """Deletion of a domain resource (product / component / release / SBOM /
 document). Kept as a tier distinct from ``MANAGE`` — deletion policy has moved
 twice already, and a named tier makes moving it again a one-line change."""
+
+TRIAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_OPERATOR, ROLE_BOT)
+"""Rule on a vulnerability finding: record an in-app triage decision (exploitable
+/ not affected / risk accepted) and, for the roles that can also upload, store
+the VEX that decision produces.
+
+The one capability ``operator`` holds beyond reading. Carved out of ``PUBLISH``
+because judging a finding and shipping an artifact are different jobs done by
+different people — the same split every vulnerability-management tool draws
+(Dependency-Track separates ``VULNERABILITY_ANALYSIS`` from ``BOM_UPLOAD``).
+
+Holding this tier is NOT by itself enough to upload a VEX *file*: those endpoints
+require ``artifact:publish`` as well, so an operator triages in the app and
+through the triage API while artifact upload stays with members, admins and CI
+bots."""
 
 PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_BOT)
 """Upload artifacts and cut/tag releases — the CI publish workflow, granted to
@@ -93,7 +114,7 @@ guests holding nothing, it was identical to this tier and has been removed."""
 # Renamed because the tier means "internal roles only, guests excluded", which
 # "READ_MEMBER" no longer conveys once guests are external — and would be
 # actively misleading next to a role literally named ``member`` (#468).
-READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
+READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_OPERATOR)
 """Read internal (non-public) workspace data. Internal roles only — a guest is
 an external trust-center visitor and must not be able to enumerate a workspace's
 private inventory. Guests reach restricted content solely through the
@@ -135,6 +156,14 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         "upload SBOMs and documents, and triage vulnerabilities. Cannot delete "
         "anything, change what is public, or reach workspace settings, billing "
         "or members.",
+    ),
+    (
+        ROLE_OPERATOR,
+        "Operator",
+        "Reads the workspace and rules on its vulnerabilities: sees every product, "
+        "component, release, SBOM and document, and triages findings as exploitable, "
+        "not affected or risk accepted. Cannot create or edit anything else, upload "
+        "artifacts, or reach workspace settings, billing or members.",
     ),
     (
         ROLE_GUEST,
@@ -208,9 +237,13 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "document:delete": DELETE,
     # artifact upload — owners, admins and OIDC/CI bot identities
     "artifact:publish": PUBLISH,
-    # VEX publishing rewrites the workspace's stored vulnerability posture (the
-    # re-annotated scan summaries feed every dashboard).
-    "artifact:publish_vex": PUBLISH,
+    # Ruling on a finding — the in-app triage decisions, and the VEX they are
+    # written into. Rewrites the workspace's stored vulnerability posture (the
+    # re-annotated scan summaries feed every dashboard), which is why it is a
+    # capability at all rather than part of reading. ``TRIAGE``, not ``PUBLISH``:
+    # this is the ``operator`` role's whole job. The VEX *file upload* endpoints
+    # pair it with ``artifact:publish``, so they stay closed to operators.
+    "artifact:publish_vex": TRIAGE,
     # internal reads — guests are external and hold none of these
     "workspace:read": READ_INTERNAL,
     "component:read_internal": READ_INTERNAL,
