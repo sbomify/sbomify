@@ -245,6 +245,8 @@ def test_delete_waits_for_an_upload_of_the_same_bytes(sample_component: Componen
     finish_upload.set()
     uploader.join(10)
     deleter.join(10)
+    assert not uploader.is_alive(), "the upload did not finish"
+    assert not deleter.is_alive(), "the delete did not finish after the upload released its lock"
 
     assert not errors
     assert list(SBOM.objects.filter(sbom_filename=key).values_list("name", flat=True)) == ["new"]
