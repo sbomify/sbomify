@@ -7,6 +7,7 @@ loading the full settings module (which would bypass ``sbomify.test_settings``).
 from __future__ import annotations
 
 import logging
+import re
 
 
 def is_benign_shielded_future_error(record: logging.LogRecord) -> bool:
@@ -66,3 +67,49 @@ def is_on_demand_tls_ask_denial(record: logging.LogRecord) -> bool:
     # registered, and that line stays.
     request = getattr(record, "request", None)
     return getattr(request, "resolver_match", None) is not None
+
+
+# Signed download URLs carry their credential in the ``token`` query parameter.
+_TOKEN_QUERY_VALUE = re.compile(r"([?&]token=)[^&\s\"]*")
+
+# Routes whose next path segment is the credential: invitation links, the
+# emailed unsubscribe link, and allauth's email confirmation and password reset
+# keys. ``%2F`` covers the same paths URL-encoded inside a ``next`` parameter,
+# where the key's own characters are percent-encoded too, so the segment ends
+# at the next separator, raw or encoded, rather than at the first ``%``.
+_SLASH = r"(?:/|%2F)"
+_SECRET_PATH_SEGMENT = re.compile(
+    rf"((?:accept_invite|onboarding{_SLASH}unsubscribe|accounts{_SLASH}confirm-email"
+    rf"|accounts{_SLASH}password{_SLASH}reset{_SLASH}key){_SLASH})"
+    rf"(?!done{_SLASH})(?:(?!%2F)[^/?&#\s\"])+",
+    re.IGNORECASE,
+)
+
+
+# allauth provider callbacks (``/accounts/<provider>/login/callback/`` and
+# ``/accounts/oidc/<id>/login/callback/``) carry the one-time authorization
+# ``code`` and the ``state`` in the query string.
+_OAUTH_CALLBACK_QUERY = re.compile(r"(/accounts/(?:[\w.-]+/){1,2}login/callback/?\?)([^\s\"#]*)")
+_OAUTH_CALLBACK_PARAM = re.compile(r"((?:^|&)(?:code|state)=)[^&]*")
+
+
+def _redact_oauth_callback(match: re.Match[str]) -> str:
+    return match.group(1) + _OAUTH_CALLBACK_PARAM.sub(r"\1[redacted]", match.group(2))
+
+
+def _redact(value: str) -> str:
+    value = _TOKEN_QUERY_VALUE.sub(r"\1[redacted]", value)
+    value = _OAUTH_CALLBACK_QUERY.sub(_redact_oauth_callback, value)
+    return _SECRET_PATH_SEGMENT.sub(r"\1[redacted]", value)
+
+
+def redact_access_log_secrets(record: logging.LogRecord) -> bool:
+    """Replace credentials carried in a URL with ``[redacted]`` in the record's args.
+
+    The server's access log writes the full request path, query string
+    included, so signed and emailed links would otherwise be stored with the
+    credential that grants them.
+    """
+    if isinstance(record.args, tuple):
+        record.args = tuple(_redact(arg) if isinstance(arg, str) else arg for arg in record.args)
+    return True

@@ -286,11 +286,10 @@ def get_annex_url(annex_reference: str) -> str:
     """
     if not annex_reference:
         return ""
-    url = f"{CRA_EURLEX_HTML}#anx_I"
-    for part, anchor in _CRA_ANNEX_ANCHORS.items():
-        if part in annex_reference:
-            url = f"{CRA_EURLEX_HTML}#{anchor}"
-            break
+    # Exact match per comma-separated segment: "Part I" is a substring of "Part II".
+    segments = (segment.strip() for segment in annex_reference.split(","))
+    anchor = next((_CRA_ANNEX_ANCHORS[s] for s in segments if s in _CRA_ANNEX_ANCHORS), "anx_I")
+    url = f"{CRA_EURLEX_HTML}#{anchor}"
     return url if url.startswith("https://") else ""
 
 

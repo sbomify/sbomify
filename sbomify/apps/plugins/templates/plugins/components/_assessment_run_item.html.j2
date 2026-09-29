@@ -14,11 +14,11 @@
                 {% comment %}A skipped run keeps the neutral base border: it produced no verdict, so it is neither a warning nor a clean scan.{% endcomment %}
                 {# The level must render as one bare word, so its branch stays on one line. #}
                 {# djlint:off #}
-                <c-cards.collapsible level="{% if skipped %}{% elif security_total %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ expanded: false }">
+                <c-cards.collapsible level="{% if skipped %}{% elif security_total %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ get expanded() { return $store.openAssessments.isOpen('{{ run.id }}') } }">
                 {# djlint:on #}
-                <c-cards.collapsible-trigger bare state="expanded" @click="expanded = !expanded" id="run-trigger-{{ run.id }}">
-                <div class="flex items-center gap-3 flex-grow min-w-0">
-                    <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                <c-cards.collapsible-trigger bare state="expanded" @click="$store.openAssessments.toggle('{{ run.id }}')" id="run-trigger-{{ run.id }}">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-2 flex-grow min-w-0">
+                    <span class="min-w-0 font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
                     {# release_names is populated by _run_to_schema from the M2M #}
                     {% if run.release_names %}
                         <span class="flex items-center gap-1 flex-wrap">
@@ -32,30 +32,36 @@
                     {% if run.status == 'completed' %}
                         {% comment %}A skipped scanner counts its own stand-down notice as one info finding, so security_total is 1 and the card would otherwise claim a vulnerability the scanner never reported.{% endcomment %}
                         {% if skipped %}
-                            <c-badges.secondary title="This plugin did not scan, so it reported no verdict.">
+                            <c-badges.secondary class="whitespace-nowrap" title="This plugin did not scan, so it reported no verdict.">
                             <i class="fas fa-ban mr-1"></i>Skipped
                             </c-badges.secondary>
                         {% elif security_total %}
-                            <c-badges.secondary>
+                            <c-badges.secondary class="whitespace-nowrap">
                             <i class="fas fa-shield-alt mr-1"></i>{{ security_total|intcomma }} vulnerabilit{{ security_total|pluralize:"y,ies" }}
                             </c-badges.secondary>
                         {% else %}
-                            <c-badges.secondary>
+                            <c-badges.secondary class="whitespace-nowrap">
                             <i class="fas fa-check-circle mr-1"></i>No vulnerabilities
                             </c-badges.secondary>
                         {% endif %}
                     {% elif run.status == 'failed' %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         <i class="fas fa-times-circle mr-1"></i>Error
                         </c-badges.secondary>
                     {% elif run.status == 'running' %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
                         Running
                         </c-badges.secondary>
                     {% else %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         <i class="fas fa-clock mr-1"></i>Pending
+                        </c-badges.secondary>
+                    {% endif %}
+                    {% comment %}Set when the plugin's version has moved on since this run, so the verdict may not be what the current checks would give. The Re-run control is in the body.{% endcomment %}
+                    {% if run.current_version %}
+                        <c-badges.secondary class="whitespace-nowrap" title="Produced by v{{ run.plugin_version }}. The plugin is now v{{ run.current_version }}.">
+                        <i class="fas fa-clock-rotate-left mr-1" aria-hidden="true"></i>Out of date
                         </c-badges.secondary>
                     {% endif %}
                     {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
@@ -74,6 +80,7 @@
                             <i class="fas fa-code-branch mr-1"></i>
                             v{{ run.plugin_version }}
                         </span>
+                        {% if run.current_version %}<span>Latest v{{ run.current_version }}</span>{% endif %}
                         <span>
                             <i class="fas fa-play-circle mr-1"></i>
                             {{ run.run_reason|format_run_reason }}
@@ -109,13 +116,22 @@
                     {% endif %}
                     {% comment %}Fetched when the card is opened, not when the page is built: see
                     _assessment_run_findings.html.j2. The trigger beside this carries the hx-get, so one
-                    click both expands the card and asks for the page.{% endcomment %}
-                    <div id="findings-{{ run.id }}"
-                         class="run-findings"
-                         hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
-                         hx-trigger="click once from:#run-trigger-{{ run.id }}"
-                         hx-swap="outerHTML">
-                        <c-feedback.loading-table nested message="Loading assessment results..." />
+                    click both expands the card and asks for the page.
+
+The host around it is preserved through a page refresh. The server always
+                    sends the unopened placeholder, and the once trigger has already fired, so a
+                    morph would leave a spinner nothing ever fetches. The mark sits on the host
+                    rather than on the panel because the panel replaces itself, and an element that
+                    is both preserved and self-replacing never loads at all: htmx restores the old
+                    one over its own response.{% endcomment %}
+                    <div id="findings-host-{{ run.id }}" hx-preserve>
+                        <div id="findings-{{ run.id }}"
+                             class="run-findings"
+                             hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
+                             hx-trigger="click once from:#run-trigger-{{ run.id }}"
+                             hx-swap="outerHTML">
+                            <c-feedback.loading-table nested message="Loading assessment results..." />
+                        </div>
                     </div>
                 {% else %}
                     {# Pending state #}
@@ -129,11 +145,11 @@
             {% comment %}A skipped run keeps the neutral base border: it produced no verdict, so it is neither a warning nor a pass.{% endcomment %}
             {# The level must render as one bare word, so its branch stays on one line. #}
             {# djlint:off #}
-            <c-cards.collapsible level="{% if skipped %}{% elif error_count %}danger{% elif fail_count %}warning{% elif run.status == 'completed' and pass_count == 0 %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ expanded: false }">
+            <c-cards.collapsible level="{% if skipped %}{% elif error_count %}danger{% elif fail_count %}warning{% elif run.status == 'completed' and pass_count == 0 %}warning{% elif run.status == 'completed' %}success{% endif %}" id="plugin-{{ run.plugin_name }}" x-data="{ get expanded() { return $store.openAssessments.isOpen('{{ run.id }}') } }">
             {# djlint:on #}
-            <c-cards.collapsible-trigger bare state="expanded" @click="expanded = !expanded" id="run-trigger-{{ run.id }}">
-            <div class="flex items-center gap-3 flex-grow min-w-0">
-                <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+            <c-cards.collapsible-trigger bare state="expanded" @click="$store.openAssessments.toggle('{{ run.id }}')" id="run-trigger-{{ run.id }}">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 flex-grow min-w-0">
+                <span class="min-w-0 font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
                 {# release_names is populated by _run_to_schema from the M2M #}
                 {% if run.release_names %}
                     <span class="flex items-center gap-1 flex-wrap">
@@ -146,35 +162,41 @@
                 {% endif %}
                 {% if run.status == 'completed' %}
                     {% if skipped %}
-                        <c-badges.secondary title="This plugin did not run, so it reported no verdict.">
+                        <c-badges.secondary class="whitespace-nowrap" title="This plugin did not run, so it reported no verdict.">
                         <i class="fas fa-ban mr-1"></i>Skipped
                         </c-badges.secondary>
                     {% elif has_issues %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         <i class="fas fa-exclamation-triangle mr-1"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
                         </c-badges.secondary>
                     {% elif pass_count == 0 %}
                         {% comment %}All findings were warnings — no positive verdict was produced. Surface distinctly so operators don't misread as a pass.{% endcomment %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         <i class="fas fa-exclamation-circle mr-1"></i>Warnings Only
                         </c-badges.secondary>
                     {% else %}
-                        <c-badges.secondary>
+                        <c-badges.secondary class="whitespace-nowrap">
                         <i class="fas fa-check-circle mr-1"></i>Passed
                         </c-badges.secondary>
                     {% endif %}
                 {% elif run.status == 'failed' %}
-                    <c-badges.secondary>
+                    <c-badges.secondary class="whitespace-nowrap">
                     <i class="fas fa-times-circle mr-1"></i>Error
                     </c-badges.secondary>
                 {% elif run.status == 'running' %}
-                    <c-badges.secondary>
+                    <c-badges.secondary class="whitespace-nowrap">
                     {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
                     Running
                     </c-badges.secondary>
                 {% else %}
-                    <c-badges.secondary>
+                    <c-badges.secondary class="whitespace-nowrap">
                     <i class="fas fa-clock mr-1"></i>Pending
+                    </c-badges.secondary>
+                {% endif %}
+                {% comment %}Set when the plugin's version has moved on since this run, so the verdict may not be what the current checks would give. The Re-run control is in the body.{% endcomment %}
+                {% if run.current_version %}
+                    <c-badges.secondary class="whitespace-nowrap" title="Produced by v{{ run.plugin_version }}. The plugin is now v{{ run.current_version }}.">
+                    <i class="fas fa-clock-rotate-left mr-1" aria-hidden="true"></i>Out of date
                     </c-badges.secondary>
                 {% endif %}
                 {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
@@ -193,6 +215,7 @@
                         <i class="fas fa-code-branch mr-1"></i>
                         v{{ run.plugin_version }}
                     </span>
+                    {% if run.current_version %}<span>Latest v{{ run.current_version }}</span>{% endif %}
                     <span>
                         <i class="fas fa-play-circle mr-1"></i>
                         {{ run.run_reason|format_run_reason }}
@@ -224,13 +247,16 @@
                 {% endif %}
                 {% comment %}Fetched when the card is opened, not when the page is built: see
                 _assessment_run_findings.html.j2. The trigger beside this carries the hx-get, so one
-                click both expands the card and asks for the page.{% endcomment %}
-                <div id="findings-{{ run.id }}"
-                     class="run-findings"
-                     hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
-                     hx-trigger="click once from:#run-trigger-{{ run.id }}"
-                     hx-swap="outerHTML">
-                    <c-feedback.loading-table nested message="Loading assessment results..." />
+                click both expands the card and asks for the page. The preserved host is there
+                for the same reason as the branch above.{% endcomment %}
+                <div id="findings-host-{{ run.id }}" hx-preserve>
+                    <div id="findings-{{ run.id }}"
+                         class="run-findings"
+                         hx-get="{% url 'plugins:assessment_run_findings' run.id %}"
+                         hx-trigger="click once from:#run-trigger-{{ run.id }}"
+                         hx-swap="outerHTML">
+                        <c-feedback.loading-table nested message="Loading assessment results..." />
+                    </div>
                 </div>
                 {% if run.result.metadata.standard_name %}
                     {# Standard Info (for compliance plugins) #}

@@ -196,8 +196,9 @@ def test_checkout_webhook_retries_when_the_cancel_fails(failing, stripe_client, 
     assert team_with_business_plan.billing_plan_limits["stripe_subscription_id"] == "sub_old"
 
 
-def test_event_for_a_replaced_subscription_leaves_the_workspace_alone(stripe_client, team_with_business_plan):
-    """It emails no one and reports nothing to analytics about the old subscription."""
+@pytest.mark.parametrize("handler", ["handle_subscription_updated", "handle_subscription_deleted"])
+def test_event_for_a_replaced_subscription_leaves_the_workspace_alone(handler, stripe_client, team_with_business_plan):
+    """It emails no one, reports nothing to analytics and does not report the workspace as gone."""
     _set_limits(team_with_business_plan, stripe_subscription_id="sub_new", subscription_status="active")
 
     with (
@@ -205,9 +206,7 @@ def test_event_for_a_replaced_subscription_leaves_the_workspace_alone(stripe_cli
         patch("sbomify.apps.core.posthog_service.capture") as capture,
         patch("sbomify.apps.core.posthog_service.group_identify") as group_identify,
     ):
-        billing_processing.handle_subscription_updated(
-            _subscription("sub_old", "canceled"), event=_event("evt_old_canceled")
-        )
+        getattr(billing_processing, handler)(_subscription("sub_old", "canceled"), event=_event("evt_old_canceled"))
 
     team_with_business_plan.refresh_from_db()
     assert team_with_business_plan.billing_plan_limits["stripe_subscription_id"] == "sub_new"

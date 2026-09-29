@@ -315,21 +315,7 @@ class AccessRequestView(View):
             if existing_request:
                 # If request is REVOKED or REJECTED, update it to PENDING
                 if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
-                    # Rejection/revocation superseded the signature already; if a
-                    # live one survives (edge case), supersede it here so the
-                    # fresh request must sign again. Never deleted — the rows
-                    # are the record of what was accepted.
-                    existing_request.nda_signatures.live().update(superseded_at=timezone.now())
-
-                    # Update existing request to PENDING status
-                    existing_request.status = AccessRequest.Status.PENDING
-                    existing_request.requested_at = timezone.now()
-                    existing_request.decided_at = None
-                    existing_request.decided_by = None
-                    existing_request.revoked_at = None
-                    existing_request.revoked_by = None
-                    existing_request.notes = ""
-                    existing_request.save()
+                    existing_request.reopen()
                     access_request = existing_request
                     request_state_changed = True
                 elif existing_request.status == AccessRequest.Status.PENDING:
@@ -561,20 +547,21 @@ class NDASigningView(View):
                                 has_default_team = Member.objects.filter(
                                     user=current_user, is_default_team=True
                                 ).exists()
+                                joined_role = invitation.granted_role
                                 Member.objects.create(
                                     team=team,
                                     user=current_user,
-                                    role=invitation.role,
+                                    role=joined_role,
                                     is_default_team=not has_default_team,
                                 )
                                 update_user_teams_session(request, current_user)
-                                switch_active_workspace(request, team, invitation.role)
+                                switch_active_workspace(request, team, joined_role)
 
                                 # NDA-gated invitations bypass both accept_invite and the
                                 # login auto-accept signal; without this capture the
                                 # collaboration funnel undercounts invited users who had
                                 # to sign an NDA before joining.
-                                invitation_role = invitation.role
+                                invitation_role = joined_role
                                 transaction.on_commit(
                                     lambda: capture_for_request(
                                         request,

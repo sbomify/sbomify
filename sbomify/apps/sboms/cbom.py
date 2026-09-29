@@ -22,6 +22,8 @@ import uuid
 from functools import cache
 from typing import Any
 
+from django.db.models import QuerySet
+
 from sbomify.apps.sboms.crypto_inventory import is_crypto_asset
 
 logger = logging.getLogger(__name__)
@@ -142,6 +144,21 @@ def _normalize_crypto_component(comp: dict[str, Any], spec_version: str) -> dict
     return out
 
 
+def release_cbom_artifacts(release: Any, *, include_non_public: bool) -> QuerySet[Any]:
+    """The release's CBOM artifacts that ``build_release_cbom`` reads for this audience.
+
+    The download cache keys on this same set, so whatever changes what a build reads,
+    a component's visibility included, changes the key too.
+    """
+    from sbomify.apps.core.models import Component, ReleaseArtifact
+    from sbomify.apps.sboms.models import SBOM
+
+    artifacts = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM)
+    if not include_non_public:
+        artifacts = artifacts.filter(sbom__component__visibility=Component.Visibility.PUBLIC)
+    return artifacts
+
+
 def build_release_cbom(
     release: Any, spec_version: str = "1.6", *, include_non_public: bool = True
 ) -> dict[str, Any] | None:
@@ -156,18 +173,13 @@ def build_release_cbom(
     """
     from django.utils import timezone
 
-    from sbomify.apps.core.models import Component, ReleaseArtifact
-    from sbomify.apps.sboms.models import SBOM
-
     components: list[dict[str, Any]] = []
     dependencies: list[dict[str, Any]] = []
     seen_refs: set[str] = set()
     dep_by_ref: dict[str, dict[str, Any]] = {}  # merge dependsOn for a shared source ref
     seen_components: set[Any] = set()
     found = False
-    artifacts = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM)
-    if not include_non_public:
-        artifacts = artifacts.filter(sbom__component__visibility=Component.Visibility.PUBLIC)
+    artifacts = release_cbom_artifacts(release, include_non_public=include_non_public)
     artifacts = artifacts.select_related("sbom").order_by("sbom__component_id", "-sbom__created_at")
     for artifact in artifacts:
         cbom_sbom = artifact.sbom

@@ -18,9 +18,11 @@
         <div role="group"
              class="grid grid-cols-2 xl:grid-cols-4 gap-3"
              aria-label="Key metrics">
-            <c-layout.stat-card :value="dashboard.metrics.open" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
-            <c-layout.stat-card :value="dashboard.metrics.past_sla" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
-            <c-layout.stat-card :value="dashboard.metrics.known_exploited" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
+            {# djlint:off #}
+            <c-layout.stat-card :value="dashboard.metrics.open" :unmeasured="dashboard.metrics.unmeasured_open" unmeasured_label="Not scanned yet" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
+            <c-layout.stat-card :value="dashboard.metrics.past_sla" :unmeasured="dashboard.metrics.unmeasured_past_sla" unmeasured_label="Not scanned yet" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
+            <c-layout.stat-card :value="dashboard.metrics.known_exploited" :unmeasured="dashboard.metrics.unmeasured_known_exploited" unmeasured_label="Not scanned yet" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
+            {# djlint:on #}
             <c-layout.stat-card :value="dashboard.metrics.stale" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
         </div>
         {% if can_manage %}
