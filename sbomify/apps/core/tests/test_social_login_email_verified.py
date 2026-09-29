@@ -228,6 +228,16 @@ class TestRecordingTheConfirmation:
         user.refresh_from_db()
         assert user.email_verified is still_confirmed
 
+    def test_saving_an_unconfirmed_account_skips_the_address_lookup(self, django_assert_num_queries) -> None:
+        user = User.objects.create_user(username="plain", email="old@example.com")
+
+        user.email = "new@example.com"
+        with django_assert_num_queries(1):
+            user.save()
+
+        user.refresh_from_db()
+        assert (user.email, user.email_verified) == ("new@example.com", False)
+
     @pytest.mark.parametrize("how", ["primary", "link"])
     def test_an_address_taken_on_the_email_page_starts_unconfirmed(self, how: str) -> None:
         user = _linked_account()
@@ -245,7 +255,10 @@ class TestRecordingTheConfirmation:
         cases = {
             "confirmed@example.com": ({"userinfo": {"email": "confirmed@example.com", "email_verified": True}}, True),
             "id-token@example.com": ({"id_token": {"email": "id-token@example.com", "email_verified": True}}, True),
-            "unconfirmed@example.com": ({"userinfo": {"email": "unconfirmed@example.com", "email_verified": False}}, False),
+            "unconfirmed@example.com": (
+                {"userinfo": {"email": "unconfirmed@example.com", "email_verified": False}},
+                False,
+            ),
             "moved@example.com": ({"userinfo": {"email": "elsewhere@example.com", "email_verified": True}}, False),
         }
         for email, (extra_data, _) in cases.items():

@@ -184,7 +184,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
 
             try:
                 existing_user = User.objects.get(
-                    email__iexact=existing_user.email,
+                    email__iexact=sociallogin.user.email,
                     is_active=True,
                     deleted_at__isnull=True,
                 )

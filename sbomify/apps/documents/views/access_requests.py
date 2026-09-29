@@ -960,7 +960,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # If user already exists, create/update AccessRequest with inviter set as decided_by.
             # Only an account that confirmed the address counts as its holder.
             try:
-                invited_user = User.objects.get(email__iexact=email, email_verified=True)
+                invited_user = UserModel.objects.get(email__iexact=email, email_verified=True)
                 access_request, created = AccessRequest.objects.get_or_create(
                     team=team,
                     user=invited_user,
@@ -973,7 +973,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 if not created and not access_request.decided_by:
                     access_request.decided_by = user
                     access_request.save(update_fields=["decided_by"])
-            except User.DoesNotExist:
+            except UserModel.DoesNotExist:
                 # User doesn't exist yet, will be handled when they accept invitation
                 pass
 

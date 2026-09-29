@@ -63,8 +63,9 @@ class User(AbstractUser):
         # email_verified is about the stored address. Whatever replaces it, the
         # Keycloak event poller or allauth's email pages, starts unconfirmed
         # until the next sign-in reads it from the identity provider again.
+        # A full save of an unconfirmed flag writes False whatever the stored address was.
         update_fields = kwargs.get("update_fields")
-        if self.pk and (update_fields is None or "email" in update_fields):
+        if self.pk and (self.email_verified if update_fields is None else "email" in update_fields):
             stored = type(self).objects.filter(pk=self.pk).values_list("email", flat=True).first()
             if stored is not None and stored.lower() != (self.email or "").lower():
                 self.email_verified = False
