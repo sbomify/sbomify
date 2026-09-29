@@ -7,7 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.access_tokens.utils import create_personal_access_token, hash_token
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.models import User
 from sbomify.apps.core.services.results import ServiceResult
@@ -49,7 +49,7 @@ def create_setup_credential(user: User, workspace_key: str, previous_id: int | N
     raw_value = create_personal_access_token(user)
     expires_at = timezone.now() + timedelta(days=7)
     credential = AccessToken.objects.create(
-        encoded_token=raw_value,
+        token_hash=hash_token(raw_value),
         user=user,
         team_id=membership.team_id,
         description=SETUP_DESCRIPTION,

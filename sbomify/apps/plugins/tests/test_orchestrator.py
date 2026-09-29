@@ -847,3 +847,32 @@ class TestSkippedPluginPendingCleanup:
 
         assert result["status"] == "skipped"
         assert not AssessmentRun.objects.filter(id=run_id).exists()
+
+
+@pytest.mark.django_db
+def test_a_reused_pending_row_records_the_version_that_ran(test_sbom, mock_sbom_data, mocker) -> None:
+    """The eager row copies the registry's version. The page compares the run's
+    version with the current one, so it must name the code that produced it."""
+    mocker.patch(
+        "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
+        return_value=(test_sbom, mock_sbom_data),
+    )
+    pending = AssessmentRun.objects.create(
+        sbom=test_sbom,
+        plugin_name="mock-plugin",
+        plugin_version="0.9.0",
+        category="compliance",
+        run_reason=RunReason.ON_UPLOAD.value,
+        status=RunStatus.PENDING.value,
+    )
+
+    run = PluginOrchestrator().run_assessment(
+        sbom_id=test_sbom.id,
+        plugin=MockPlugin(),
+        run_reason=RunReason.ON_UPLOAD,
+        existing_run_id=str(pending.id),
+    )
+
+    assert run is not None
+    run.refresh_from_db()
+    assert run.plugin_version == "1.0.0"

@@ -687,7 +687,9 @@ def test_accept_invitation_still_upgrades_to_owner(django_user_model, community_
     )
     team = Team.objects.create(name="Promotion Test Workspace", billing_plan=community_plan.key)
     membership = Member.objects.create(team=team, user=user, role="admin", is_default_team=True)
-    invitation = Invitation.objects.create(team=team, email=user.email, role="owner")
+    issuer = django_user_model.objects.create_user(username="promote-issuer", email="issuer@example.com")
+    Member.objects.create(team=team, user=issuer, role="owner")
+    invitation = Invitation.objects.create(team=team, email=user.email, role="owner", invited_by=issuer)
 
     client = Client()
     assert client.login(username="promote-to-owner", password="secret")
@@ -1170,7 +1172,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     mock_delete = mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object")
 
     # Set up mock to store the filename that was used
-    def upload_side_effect(filename, data):
+    def upload_side_effect(filename, data, content_type):
         mock_upload.filename = filename
 
     mock_upload.side_effect = upload_side_effect
@@ -1210,7 +1212,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
 
     # Test file upload
     with open("test_icon.png", "wb") as f:
-        f.write(b"fake png content")
+        f.write(b"\x89PNG\r\n\x1a\nfake png content")
 
     with open("test_icon.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
@@ -1228,7 +1230,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     # Test that uploaded file URL is correctly generated
     # The bug was that URLs were generated from old branding data before upload
     with open("test_logo.png", "wb") as f:
-        f.write(b"fake logo content")
+        f.write(b"\x89PNG\r\n\x1a\nfake logo content")
 
     with open("test_logo.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/logo", {"file": f}, format="multipart")
@@ -1268,7 +1270,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
     uploaded_files = []
     deleted_files = []
 
-    def upload_side_effect(filename, data):
+    def upload_side_effect(filename, data, content_type):
         uploaded_files.append(filename)
 
     def delete_side_effect(bucket, filename):
@@ -1284,7 +1286,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
     # Upload new icon
     with open("test_icon.png", "wb") as f:
-        f.write(b"fake icon content")
+        f.write(b"\x89PNG\r\n\x1a\nfake icon content")
 
     with open("test_icon.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
@@ -1323,7 +1325,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
     team.save()
 
     with open("test_logo.jpg", "wb") as f:
-        f.write(b"fake logo content")
+        f.write(b"\xff\xd8\xfffake logo content")
 
     with open("test_logo.jpg", "rb") as f:
         response = client.post(f"{base_uri}/upload/logo", {"file": f}, format="multipart")
@@ -1356,7 +1358,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
     team.save()
 
     with open("test_icon_new.png", "wb") as f:
-        f.write(b"new icon content")
+        f.write(b"\x89PNG\r\n\x1a\nnew icon content")
 
     with open("test_icon_new.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
@@ -1529,7 +1531,7 @@ def test_team_branding_api_preserves_company_nda_document_id(sample_team_with_ow
     mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object")
 
     with open("test_icon.png", "wb") as f:
-        f.write(b"fake png content")
+        f.write(b"\x89PNG\r\n\x1a\nfake png content")
 
     with open("test_icon.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
