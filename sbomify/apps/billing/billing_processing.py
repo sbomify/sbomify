@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime
 from enum import Enum
 from functools import wraps
+from types import SimpleNamespace
 from typing import Any, NoReturn
 
 from django.conf import settings
@@ -32,6 +33,7 @@ from .stripe_cache import get_subscription_cancel_at_period_end, invalidate_subs
 from .stripe_client import (
     LIVE_SUBSCRIPTION_STATUSES,
     TERMINAL_SUBSCRIPTION_STATUSES,
+    BillingEventTooEarlyError,
     BillingRetryableError,
     StripeError,
     StripeResourceMissingError,
@@ -812,6 +814,25 @@ def _invoice_subscription_id(invoice: Any) -> str | None:
     return subscription_id
 
 
+def _team_for_paid_invoice(invoice: Any, subscription_id: str) -> Team:
+    """The workspace holding the subscription a paid invoice bills.
+
+    A checkout's first invoice (``billing_reason`` ``subscription_create``) can arrive
+    before ``checkout.session.completed`` has stored the new subscription. When the
+    customer still leads to a workspace, raise ``BillingEventTooEarlyError`` so Stripe
+    redelivers the invoice once the checkout has landed, instead of reporting the
+    workspace as gone.
+    """
+    try:
+        return Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
+    except Team.DoesNotExist:
+        if getattr(invoice, "billing_reason", None) != "subscription_create":
+            raise
+
+    team, _ = _resolve_team_from_subscription(SimpleNamespace(id=subscription_id, customer=invoice.customer))
+    raise BillingEventTooEarlyError(f"Workspace {team.key} has not stored the subscription for this invoice yet")
+
+
 @handle_stripe_errors
 def handle_payment_failed(invoice: Any, event: Any = None) -> None:
     """Handle payment failure events.
@@ -893,7 +914,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         return
 
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
+        team = _team_for_paid_invoice(invoice, subscription_id)
         billing_limits = team.billing_plan_limits or {}
 
         webhook_id = getattr(event, "id", None) if event else f"inv_succ_{invoice.id}_{invoice.created}"

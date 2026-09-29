@@ -211,6 +211,55 @@ class TestBillingProcessing:
         assert self.team.billing_plan_limits["subscription_status"] == "active"
         mock_email.notify_payment_succeeded.assert_called_once()
 
+    @pytest.mark.parametrize("customer", ["cus_test123", "cus_first_checkout"])
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_first_invoice_before_its_checkout_is_stored_is_retried(self, mock_email, customer):
+        """A checkout's first invoice can arrive before the checkout webhook stores the subscription.
+
+        The workspace exists (it holds the customer, or the new customer's metadata names it), so
+        Stripe is asked to redeliver rather than told the workspace is gone. The redelivery,
+        once the subscription is stored, applies the payment and sends the receipt.
+        """
+        self.invoice.subscription = "sub_from_checkout"
+        self.invoice.customer = customer
+        self.invoice.billing_reason = "subscription_create"
+        self.stripe_client.get_customer.return_value = MagicMock(metadata={"team_key": self.team.key})
+
+        with pytest.raises(BillingRetryableError):
+            billing_processing.handle_payment_succeeded(self.invoice)
+        mock_email.notify_payment_succeeded.assert_not_called()
+
+        self.team.billing_plan_limits["stripe_subscription_id"] = "sub_from_checkout"
+        self.team.billing_plan_limits["subscription_status"] = "incomplete"
+        self.team.save()
+
+        billing_processing.handle_payment_succeeded(self.invoice)
+
+        self.team.refresh_from_db()
+        assert self.team.billing_plan_limits["subscription_status"] == "active"
+        mock_email.notify_payment_succeeded.assert_called_once()
+
+    def test_first_invoice_for_no_workspace_is_acknowledged(self):
+        from sbomify.apps.billing.stripe_client import WorkspaceGoneError
+
+        self.invoice.subscription = "sub_from_checkout"
+        self.invoice.customer = "cus_first_checkout"
+        self.invoice.billing_reason = "subscription_create"
+        self.stripe_client.get_customer.return_value = MagicMock(metadata={"team_key": "no_such_team"})
+
+        with pytest.raises(WorkspaceGoneError):
+            billing_processing.handle_payment_succeeded(self.invoice)
+
+    def test_renewal_invoice_for_an_unknown_subscription_is_acknowledged(self):
+        from sbomify.apps.billing.stripe_client import WorkspaceGoneError
+
+        self.invoice.subscription = "sub_replaced_long_ago"
+        self.invoice.billing_reason = "subscription_cycle"
+
+        with pytest.raises(WorkspaceGoneError):
+            billing_processing.handle_payment_succeeded(self.invoice)
+        self.stripe_client.get_customer.assert_not_called()
+
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_handle_payment_failed(self, mock_email):
         """Test handling failed payment."""
