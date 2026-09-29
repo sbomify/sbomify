@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.test import Client
 
+from sbomify.apps.access_tokens.utils import token_fingerprint
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
@@ -465,7 +466,9 @@ def test_expired_download_token_is_reported_as_expired():
         assert verify_download_token(token) is None
 
     log.warning.assert_called_once()
-    assert log.warning.call_args.args[0].startswith("Expired download token")
+    message = log.warning.call_args.args[0]
+    assert message == f"Expired download token (fingerprint {token_fingerprint(token)})"
+    assert token not in message
 
 
 def test_tampered_download_token_is_reported_as_invalid():
@@ -475,7 +478,9 @@ def test_tampered_download_token_is_reported_as_invalid():
         assert verify_download_token(token) is None
 
     log.warning.assert_called_once()
-    assert log.warning.call_args.args[0].startswith("Invalid signature in download token")
+    message = log.warning.call_args.args[0]
+    assert message == f"Invalid signature in download token (fingerprint {token_fingerprint(token)})"
+    assert token not in message
 
 
 @pytest.mark.django_db
