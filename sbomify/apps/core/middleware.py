@@ -9,13 +9,16 @@ import re
 import time
 from typing import TYPE_CHECKING, Any, Callable, Protocol
 
+import requests
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import DisallowedHost
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from django.utils.http import http_date
 
+from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.schemas import ErrorCode
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.teams.utils import normalize_host
 
@@ -486,6 +489,32 @@ class RealIPMiddleware(MiddlewareMixin):
             request.META["REMOTE_ADDR"] = client_ip
 
 
+_OIDC_URL_NAMES = frozenset({"openid_connect_login", "openid_connect_callback"})
+
+
+def _provider_unreachable(exception: Exception) -> bool:
+    """A network failure or a 5xx from the provider; bad URLs and 4xx are configuration errors and stay 500s."""
+    if isinstance(exception, requests.HTTPError):
+        return exception.response is not None and exception.response.status_code >= 500
+    return isinstance(exception, (requests.ConnectionError, requests.Timeout))
+
+
+class IdentityProviderUnavailableMiddleware(MiddlewareMixin):
+    """
+    Answer 503 instead of 500 when the identity provider cannot be reached during sign-in.
+
+    allauth fetches the OpenID discovery document on every login and callback without
+    catching network errors, so a provider outage surfaces as an unhandled exception.
+    """
+
+    def process_exception(self, request: HttpRequest, exception: Exception) -> HttpResponse | None:
+        match = request.resolver_match
+        if not _provider_unreachable(exception) or not match or match.url_name not in _OIDC_URL_NAMES:
+            return None
+        logger.warning("Identity provider unreachable during sign-in: %s", exception)
+        return error_response(request, HttpResponse("Sign-in is unavailable. Try again in a minute.", status=503))
+
+
 def _policy_has_report_uri(policy: str) -> bool:
     """True if any ``;``-separated directive in ``policy`` is a report-uri.
 
@@ -607,6 +636,28 @@ class HtmxMessagesMiddleware:
         return response
 
 
+def _carries_signed_token(request: HttpRequest) -> bool:
+    """Whether the request's bearer token passes ``decode_personal_access_token()``.
+
+    That checks the signature and the required claims, plus the expiry and
+    audience on an OIDC token. It reads no database row, so a revoked token still
+    passes here; the view's own auth refuses it after the middleware inflates the
+    body. A full check here would record every authentication twice.
+    """
+    from jwt.exceptions import DecodeError
+
+    from sbomify.apps.access_tokens.utils import decode_personal_access_token
+
+    scheme, _, token = request.META.get("HTTP_AUTHORIZATION", "").partition(" ")
+    if scheme.casefold() != "bearer" or not token.strip():
+        return False
+    try:
+        decode_personal_access_token(token.strip())
+    except DecodeError:
+        return False
+    return True
+
+
 class GzipRequestDecompressionMiddleware:
     """Decompress gzip-encoded request bodies.
 
@@ -615,8 +666,12 @@ class GzipRequestDecompressionMiddleware:
     decompresses the body so downstream code (CSRF, Django Ninja, views)
     sees normal uncompressed data.
 
-    A configurable size limit (``settings.GZIP_REQUEST_MAX_SIZE``, default
-    200 MB) guards against zip bombs.
+    A size limit (``settings.GZIP_REQUEST_MAX_SIZE``, the ceiling an uncompressed
+    body gets) guards against zip bombs.
+
+    This runs before any view checks who is asking, so only a caller holding a
+    token we signed gets a body inflated. Browsers never compress request bodies;
+    the upload clients that do all send a bearer token.
     """
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
@@ -634,6 +689,15 @@ class GzipRequestDecompressionMiddleware:
         if encodings != ["gzip"]:
             logger.warning("Rejected unsupported multiple Content-Encoding: %s", raw_encoding)
             return HttpResponseBadRequest("Unsupported multiple Content-Encoding values")
+
+        if not _carries_signed_token(request):
+            return JsonResponse(
+                {
+                    "detail": "A compressed request body needs a valid API token",
+                    "error_code": ErrorCode.UNAUTHORIZED.value,
+                },
+                status=401,
+            )
 
         max_size: int = getattr(settings, "GZIP_REQUEST_MAX_SIZE", 200 * 1024 * 1024)
 

@@ -180,7 +180,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
                 from allauth.exceptions import ImmediateHttpResponse
                 from django.shortcuts import render
 
-                return ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))  # type: ignore[no-any-return]
+                raise ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))
 
             try:
                 existing_user = User.objects.get(

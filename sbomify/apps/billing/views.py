@@ -41,7 +41,13 @@ from .billing_helpers import (
 )
 from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
-from .stripe_client import BillingRetryableError, StripeError, WorkspaceGoneError, get_stripe_client
+from .stripe_client import (
+    BillingEventTooEarlyError,
+    BillingRetryableError,
+    StripeError,
+    WorkspaceGoneError,
+    get_stripe_client,
+)
 from .stripe_pricing_service import StripePricingService
 from .stripe_sync import sync_subscription_from_stripe
 from .tasks import send_enterprise_inquiry_email
@@ -570,6 +576,12 @@ class BillingReturnView(LoginRequiredMixin, View):
                         )
                         return redirect("core:dashboard")
 
+                    # The checkout webhook cancels the subscription this one
+                    # replaces, but only if it lands before this return. Whichever
+                    # comes first has to, or both subscriptions keep billing.
+                    if existing_subscription_id:
+                        billing_processing.cancel_replaced_subscription(existing_subscription_id)
+
                     billing_period = "monthly"
                     items_data = getattr(subscription, "items", None)
                     if items_data and hasattr(items_data, "data") and items_data.data:
@@ -714,6 +726,9 @@ class StripeWebhookView(View):
 
             return HttpResponse(status=200)
 
+        except BillingEventTooEarlyError as e:
+            logger.warning("Webhook arrived before the event it depends on (Stripe will retry): %s", e)
+            return HttpResponse(status=503)
         except BillingRetryableError as e:
             # Transient/recoverable failure — do NOT acknowledge, let Stripe retry.
             # 503 (vs the 500 below) is deliberate: it flags an *anticipated* transient

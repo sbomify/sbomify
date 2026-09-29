@@ -52,7 +52,7 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
     has_default = Member.objects.filter(user=user, is_default_team=True).exists()
 
     pending_invites = Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).select_related(
-        "team"
+        "team", "invited_by"
     )
 
     for invitation in pending_invites:
@@ -74,7 +74,7 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
             membership = Member.objects.create(
                 user=user,
                 team=invitation.team,
-                role=invitation.role,
+                role=invitation.granted_role,
                 is_default_team=not has_default,
             )
             # Inside the lock with the membership. The count is members plus
@@ -85,7 +85,7 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
             #
             # Read what the deferred capture needs first: the row is gone after
             # this and the lambda reads these by closure.
-            captured_role = invitation.role
+            captured_role = membership.role
             captured_team_key = invitation.team.key
             captured_invitation_id = invitation.id
             captured_token = str(invitation.token)

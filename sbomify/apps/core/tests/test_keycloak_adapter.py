@@ -2,9 +2,13 @@ from typing import Protocol
 
 import pytest
 from allauth.account.models import EmailAddress
+from allauth.exceptions import ImmediateHttpResponse
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpRequest
 from django.test import RequestFactory
+from django.utils import timezone
 
 from sbomify.apps.core.adapters import CustomSocialAccountAdapter
 
@@ -164,6 +168,20 @@ class TestCustomSocialAccountAdapter:
         adapter.pre_social_login(mock_request, mock_sociallogin)
 
         # Verify user is not connected
+        assert not mock_sociallogin.is_existing
+        assert mock_sociallogin.user.id is None
+
+    def test_pre_social_login_refuses_soft_deleted_account(self, adapter, mock_request, mock_sociallogin):
+        """A sign-in whose email belongs to an account scheduled for deletion is refused."""
+        User.objects.create(username="deleted", email="deleted@example.com", is_active=False, deleted_at=timezone.now())
+        mock_sociallogin.user.email = "deleted@example.com"
+        mock_request.user = AnonymousUser()
+        SessionMiddleware(lambda r: None).process_request(mock_request)
+
+        with pytest.raises(ImmediateHttpResponse) as refused:
+            adapter.pre_social_login(mock_request, mock_sociallogin)
+
+        assert refused.value.response.status_code == 403
         assert not mock_sociallogin.is_existing
         assert mock_sociallogin.user.id is None
 

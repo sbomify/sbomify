@@ -23,8 +23,16 @@ from a second toolchain with its own losses to patch up.
 
 from __future__ import annotations
 
+import functools
 import json
+import re
+from pathlib import Path
 from typing import Any
+
+from jsonschema import Draft7Validator, ValidationError
+from jsonschema.exceptions import best_match
+from referencing import Registry
+from referencing.jsonschema import DRAFT7
 
 #: What the derived copy declares itself to be. Pinned rather than latest:
 #: Dependency Track is the other consumer and reads 1.6.
@@ -49,8 +57,132 @@ _SPDX3_IDENTIFIERS = {
 }
 
 
+#: Where the official CycloneDX JSON schemas are vendored.
+_CYCLONEDX_SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
+
+#: Rounds of pruning before giving up. Each round removes everything the
+#: schema flagged, so a real document settles in two or three.
+_MAX_PRUNE_ROUNDS = 10
+
+
 class ConversionFailed(RuntimeError):
     """The document is not one this can express as CycloneDX."""
+
+
+@functools.cache
+def _cyclonedx_validator(version: str) -> Draft7Validator:
+    """A validator for the vendored CycloneDX ``version`` JSON schema.
+
+    The bom schema points at two side files that are not vendored: the SPDX
+    licence id list and the JSF signature. Both are shared by every spec
+    version, so moving a document between versions cannot change whether it
+    meets them, and they are stood in for by their bare types.
+    """
+    schema = json.loads((_CYCLONEDX_SCHEMA_DIR / f"cdx_bom-{version}.schema.json").read_text())
+    registry: Registry[Any] = Registry().with_resources(
+        [
+            ("http://cyclonedx.org/schema/spdx.schema.json", DRAFT7.create_resource({"type": "string"})),
+            (
+                "http://cyclonedx.org/schema/jsf-0.82.schema.json",
+                DRAFT7.create_resource({"definitions": {"signature": {"type": "object"}}}),
+            ),
+        ]
+    )
+    return Draft7Validator(schema, registry=registry)
+
+
+def downgrade_cyclonedx(data: bytes, version: str) -> bytes:
+    """Return a copy of a CycloneDX JSON document that is valid at ``version``.
+
+    For a scanner that refuses a newer spec version. Whatever the older schema
+    does not define is dropped: properties it does not know, enum values it
+    does not list, and a list entry left without a member it requires, a hash
+    whose algorithm 1.6 does not name, say. The vendored schema is the only
+    source of what "does not define" means, so no field list is kept here.
+
+    Raises :class:`ConversionFailed` when the copy still does not validate,
+    since uploading it would only trade one refusal for another.
+    """
+    try:
+        document = json.loads(data.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ConversionFailed(f"not a JSON document: {exc}") from exc
+    if not isinstance(document, dict) or document.get("bomFormat") != "CycloneDX":
+        raise ConversionFailed("not a CycloneDX JSON document")
+
+    document["specVersion"] = version
+    document["$schema"] = f"http://cyclonedx.org/schema/bom-{version}.schema.json"
+    validator = _cyclonedx_validator(version)
+    for _ in range(_MAX_PRUNE_ROUNDS):
+        errors = list(validator.iter_errors(document))
+        if not errors:
+            return json.dumps(document).encode("utf-8")
+        cuts: set[tuple[str | int, ...]] = set()
+        for error in errors:
+            cuts.update(_cuts(error, top_level=True) or ())
+        if not cuts:
+            break
+        # Deepest and highest index first, so a cut never shifts the position
+        # of another still to be made in the same list.
+        for path in sorted(cuts, key=lambda p: [(isinstance(k, str), k) for k in p], reverse=True):
+            _delete(document, path)
+    raise ConversionFailed(f"not valid CycloneDX {version}: {best_match(errors).message[:300]}")
+
+
+def _cuts(error: ValidationError, *, top_level: bool) -> list[tuple[str | int, ...]] | None:
+    """The paths to delete so ``error`` goes away, or ``None`` if it cannot."""
+    path = tuple(error.absolute_path)
+    schema, instance = error.schema, error.instance
+    if (
+        error.validator == "additionalProperties"
+        and error.validator_value is False
+        and isinstance(schema, dict)
+        and isinstance(instance, dict)
+    ):
+        known = schema.get("properties", {})
+        patterns = schema.get("patternProperties", {})
+        return [
+            (*path, key)
+            for key in instance
+            if key not in known and not any(re.search(pattern, key) for pattern in patterns)
+        ] or None
+    if error.validator in ("enum", "const") and path:
+        return [path]
+    if error.validator == "required" and top_level:
+        # The entry lost a member it cannot do without, so the entry goes. Only
+        # an entry in a list: a required member of a lone object is structure.
+        indexes = [i for i, key in enumerate(path) if isinstance(key, int)]
+        return [path[: indexes[-1] + 1]] if indexes else None
+    if error.validator in ("anyOf", "oneOf") and error.context:
+        # Prune towards the alternative that needs the fewest cuts. Dropping
+        # an entry is left out here: in the wrong alternative it would throw
+        # away data the right one keeps.
+        branches: dict[Any, list[ValidationError]] = {}
+        for sub in error.context:
+            branches.setdefault(sub.relative_schema_path[0], []).append(sub)
+        best: list[tuple[str | int, ...]] | None = None
+        for subs in branches.values():
+            fixes = [_cuts(sub, top_level=False) for sub in subs]
+            if all(fixes):
+                flat = [cut for fix in fixes for cut in fix or ()]
+                if best is None or len(flat) < len(best):
+                    best = flat
+        return best
+    return None
+
+
+def _delete(document: Any, path: tuple[str | int, ...]) -> None:
+    """Remove the member at ``path``, if an earlier cut has not already."""
+    parent = document
+    for key in path[:-1]:
+        try:
+            parent = parent[key]
+        except (KeyError, IndexError, TypeError):
+            return
+    try:
+        del parent[path[-1]]
+    except (KeyError, IndexError, TypeError):
+        pass
 
 
 def to_cyclonedx(data: bytes) -> bytes:

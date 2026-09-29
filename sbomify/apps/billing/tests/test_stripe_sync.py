@@ -14,6 +14,7 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     sample_user,
     team_with_business_plan,
 )
+from sbomify.apps.teams.models import Team
 
 pytestmark = pytest.mark.django_db
 
@@ -381,7 +382,10 @@ class TestSyncIntegration:
         mock_sync.return_value = True
 
         # Mock checkout session
-        with mock_patch("sbomify.apps.billing.views.stripe_client") as mock_client:
+        with (
+            mock_patch("sbomify.apps.billing.views.stripe_client") as mock_client,
+            mock_patch("sbomify.apps.billing.billing_processing.stripe_client", mock_client),
+        ):
             mock_session = MagicMock()
             mock_session.payment_status = "paid"
             mock_session.subscription = "sub_test_123"
@@ -413,3 +417,35 @@ class TestSyncIntegration:
             assert response.status_code == 200
             # The view syncs after persisting the subscription.
             mock_sync.assert_called_once()
+
+
+class TestSyncAfterSubscriptionReplaced:
+    """A checkout can store a new subscription while the sync is still asking Stripe about the old one."""
+
+    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
+    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
+    def test_old_subscription_state_is_not_written_over_the_new_one(
+        self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
+    ):
+        stale_team = team_with_subscription
+        stale_team.billing_plan_limits["cancel_at_period_end"] = True
+        stale_team.billing_plan_limits["scheduled_downgrade_plan"] = "community"
+        stale_team.save()
+
+        new_limits = {
+            "stripe_subscription_id": "sub_new_456",
+            "stripe_customer_id": "cus_test_123",
+            "subscription_status": "active",
+            "cancel_at_period_end": False,
+            "next_billing_date": "2030-01-01T00:00:00+00:00",
+        }
+        Team.objects.filter(pk=stale_team.pk).update(billing_plan_limits=new_limits)
+
+        mock_stripe_subscription.status = "canceled"
+        mock_stripe_subscription.cancel_at_period_end = False
+        mock_cache.return_value = mock_stripe_subscription
+
+        assert sync_subscription_from_stripe(stale_team) is True
+
+        stale_team.refresh_from_db()
+        assert stale_team.billing_plan_limits == new_limits

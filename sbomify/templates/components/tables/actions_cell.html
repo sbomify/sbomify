@@ -9,10 +9,26 @@ as="th" renders the header twin, whose only content is the screen-reader name
 for a column with no visible heading; the body cell renders the slot. The two
 branches differ in the cell they nest and in nothing else, and both state their
 own gutters, so the default ones never stack against them.
+
+pinned holds the column against the right edge while the rest of the table
+scrolls under it. For a table wide enough to scroll, this column is often the
+only route to an action, and a thin scrollbar under the last row is not an
+affordance anyone reads. A pinned cell has to paint its own background, since
+the row's tint is transparent and the scrolling cells would otherwise show
+through it, so the resting and hover fills are stated here as opaque colours
+and the row marks itself group for the hover to reach. No z-index: a positioned
+cell already paints over the static cells beside it, and the header cell states
+its own, which a second one here would fight by stylesheet order.
 {% endcomment %}
-<c-vars compact as label="Actions" class />
+<c-vars compact as pinned label="Actions" class />
 {% if as == 'th' %}
-    <c-tables.header-cell end date :compact="compact" variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" class="{{ class }}" :attrs="attrs"><span class="sr-only">{{ label }}</span></c-tables.header-cell>
+    <c-tables.header-cell end date :compact="compact" variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2
+    {% if pinned %}sticky right-0 shadow-[inset_1px_0_0_0_var(--color-border)]{% endif %}
+    " class="{{ class }}" :attrs="attrs"><span class="sr-only">{{ label }}</span></c-tables.header-cell>
 {% else %}
-    <c-tables.cell end date :compact="compact" variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" class="{{ class }}" :attrs="attrs">{{ slot }}</c-tables.cell>
+    <c-tables.cell end date :compact="compact" variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2
+    {% if pinned %}
+        sticky right-0 bg-surface group-hover:bg-[color-mix(in_oklab,var(--color-primary)_4%,var(--color-surface))] shadow-[inset_1px_0_0_0_var(--color-border)]
+    {% endif %}
+    " class="{{ class }}" :attrs="attrs">{{ slot }}</c-tables.cell>
 {% endif %}

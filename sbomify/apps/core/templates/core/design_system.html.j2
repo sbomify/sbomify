@@ -75,6 +75,7 @@
          aria-label="Example overview metrics">
         <c-layout.stat-card :value="12" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
         <c-layout.stat-card :value="4" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
+        <c-layout.stat-card unmeasured unmeasured_label="Not scanned yet" label="Open vulnerabilities" icon="fas fa-crosshairs" accent="warning" />
         <c-layout.stat-card :value="0" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
         <c-layout.stat-card :value="2" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
     </div>
@@ -785,10 +786,13 @@ first-of-type rule that drops the leading hairline reads the section's position
     <div class="space-y-3" x-data="{ open: '' }">
         <c-cards.collapsible level="warning">
         <c-cards.collapsible-trigger bare state="open === 'bare'" @click="open = open === 'bare' ? '' : 'bare'">
-        <div class="flex items-center gap-3 flex-grow min-w-0">
-            <span class="font-semibold text-text">OSV Vulnerability Scanner</span>
-            <c-badges.secondary>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 flex-grow min-w-0">
+            <span class="min-w-0 font-semibold text-text">OSV Vulnerability Scanner</span>
+            <c-badges.secondary class="whitespace-nowrap">
             <i class="fas fa-shield-alt mr-1" aria-hidden="true"></i>7 Vulnerabilities
+            </c-badges.secondary>
+            <c-badges.secondary class="whitespace-nowrap">
+            <i class="fas fa-clock-rotate-left mr-1" aria-hidden="true"></i>Out of date
             </c-badges.secondary>
             <span class="text-text-muted text-sm hidden md:inline">7 findings</span>
         </div>
@@ -801,7 +805,8 @@ first-of-type rule that drops the leading hairline reads the section's position
     <p class="text-sm text-text-muted">
         <code class="tw-code-inline">bare</code> drops the trigger's title wrapper for a header that is a name
         plus its status chips: the row builds its own line, and the weight belongs to the name inside it rather
-        than to everything standing beside it.
+        than to everything standing beside it. The row wraps and its badges do not, so on a narrow screen
+        the badges drop below the name and the chevron keeps its gap.
     </p>
     <h2 id="accordion" class="text-xl font-semibold text-text">Accordion</h2>
     <p class="text-sm text-text-muted">
