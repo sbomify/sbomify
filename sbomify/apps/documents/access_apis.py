@@ -157,20 +157,7 @@ def create_access_request(
             if existing_request:
                 # If request is REVOKED or REJECTED, update it to PENDING
                 if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
-                    # Note: Old NDA signature remains linked to the old document version.
-                    # It will be replaced (not archived) when user signs the current NDA version
-                    # due to OneToOneField constraint. For full audit history, consider
-                    # changing the model to allow multiple signatures per access_request.
-
-                    # Update existing request to PENDING status
-                    existing_request.status = AccessRequest.Status.PENDING
-                    existing_request.requested_at = timezone.now()
-                    existing_request.decided_at = None
-                    existing_request.decided_by = None
-                    existing_request.revoked_at = None
-                    existing_request.revoked_by = None
-                    existing_request.notes = ""
-                    existing_request.save()
+                    existing_request.reopen()
                     access_request = existing_request
                     request_state_changed = True
                 elif existing_request.status == AccessRequest.Status.PENDING:
