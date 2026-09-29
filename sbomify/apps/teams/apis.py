@@ -1300,6 +1300,7 @@ class TeamDomainResponseSchema(BaseModel):
 )
 def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema) -> tuple[int, Any]:
     """Set or update workspace custom domain."""
+    from sbomify.apps.teams.tasks import check_custom_domain
     from sbomify.apps.teams.utils import invalidate_custom_domain_cache
     from sbomify.apps.teams.validators import validate_custom_domain
 
@@ -1347,7 +1348,7 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
             old_domain = locked_team.custom_domain
             locked_team.custom_domain = normalized_domain
             locked_team.custom_domain_validated = False  # Reset validation on change
-            # Start the backoff over, so the probe checks the new domain on its next run.
+            # Start the backoff over: the check queued below claims the domain by this empty last check time.
             locked_team.custom_domain_verification_failures = 0
             locked_team.custom_domain_last_checked_at = None
             locked_team.save(
@@ -1359,6 +1360,7 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
                 ]
             )
             is_first_time_set = not old_domain
+            transaction.on_commit(lambda: check_custom_domain.send(team.pk, normalized_domain))
 
         # Invalidate cache for both old and new domains
         invalidate_custom_domain_cache(old_domain)
