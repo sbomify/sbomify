@@ -68,7 +68,10 @@ _MATRIX = {
     # ...except the two OWNER_ONLY carve-outs. Deleting the workspace is the only
     # capability an admin lacks; "an admin may not remove an owner" is relational
     # and lives in the member-removal guards, not here.
+    "access_request:read": ("team", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
+    "access_request:decide": ("team", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
     "workspace:delete": ("team", {"owner": True, "member": False, "admin": False, "guest": False, "bot": False}),
+    "member:grant_owner": ("team", {"owner": True, "member": False, "admin": False, "guest": False, "bot": False}),
     # Guests hold NO capability — they are external trust-center visitors and
     # reach restricted content only through the ABAC component:access path.
     # Every guest column below being False is the point of this table.
@@ -251,7 +254,7 @@ def test_all_can_actions_used_in_code_are_registered():
     import pathlib
 
     apps_root = pathlib.Path(__file__).resolve().parents[2]  # sbomify/apps
-    registered = set(authz._ROLE_ACTIONS) | set(authz._ABAC_ACTIONS)
+    registered = set(authz.ALL_ACTIONS)
 
     # Parse the AST and pull the literal 2nd argument of real can(...) calls.
     # This avoids the regex pitfalls of matching quotes/docstrings: it sees only

@@ -1,6 +1,9 @@
 {% comment %}
 A rail destination with one anchor. match is a Django view-name fragment;
-the active row uses a neutral tint. No caller supplies a colour or recipe.
+the active row uses a neutral tint plus the same inset ring the search palette
+gives its selected option: the tint alone is what hover paints, so on its own it
+could not say which row is the current page. No caller supplies a colour or recipe.
+Rows meet the 44px touch target while the rail is a drawer.
 {% endcomment %}
 <c-vars active href icon label match class />
 <a href="{{ href }}"
@@ -8,7 +11,7 @@ the active row uses a neutral tint. No caller supplies a colour or recipe.
    aria-label="{{ label }}"
    @click="sidebarMobileOpen = false"
    {% if active or match and match in request.resolver_match.view_name %}aria-current="page"{% endif %}
-   class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-[0.875rem] no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 {% if active or match and match in request.resolver_match.view_name %}bg-surface-hover text-text{% else %}text-text-secondary hover:bg-surface-hover hover:text-text{% endif %}{% if class %} {{ class }}{% endif %}"
+   class="group flex items-center gap-3 px-3 py-2.5 max-lg:min-h-11 rounded-lg text-[0.875rem] no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 {% if active or match and match in request.resolver_match.view_name %}bg-surface-hover text-text shadow-[inset_0_0_0_1px_var(--color-border)]{% else %}text-text-secondary hover:bg-surface-hover hover:text-text{% endif %}{% if class %} {{ class }}{% endif %}"
    {{ attrs }}>
     <i class="{{ icon }} shrink-0 w-4 text-center text-text-muted"
        aria-hidden="true"></i>
