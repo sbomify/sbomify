@@ -1,13 +1,12 @@
 """The branding icon and logo keys belong to the upload paths, and a branding
 change only ever deletes an object the workspace uploaded itself."""
 
-import os
-
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 from django.urls import reverse
 
+from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.teams.models import Member
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
@@ -16,7 +15,7 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 @pytest.fixture
 def owner_client(sample_team_with_owner_member: Member) -> Client:
     client = Client()
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
     return client
 
 
