@@ -11,7 +11,7 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
-from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST, can
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -100,6 +100,9 @@ def create_access_request(
             team = Team.objects.get(key=team_key)
         except Team.DoesNotExist:
             return 404, {"detail": "Team not found"}
+
+        if not can(request, "access_request:submit", team):
+            return 403, {"detail": "Forbidden"}
 
         user = cast(User, request.user)
 
@@ -288,13 +291,9 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
             return 404, {"detail": "Access request not found"}
 
         # Only the requester, or an owner or admin of the workspace, reads the NDA
-        if access_request.user != request.user:
-            try:
-                member = Member.objects.get(team=team, user=cast(User, request.user))
-                if member.role not in ADMINISTER:
-                    return 403, {"detail": "Forbidden"}
-            except Member.DoesNotExist:
-                return 403, {"detail": "Forbidden"}
+        action = "access_request:submit" if access_request.user == request.user else "access_request:read"
+        if not can(request, action, team):
+            return 403, {"detail": "Forbidden"}
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
@@ -355,7 +354,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
             return 404, {"detail": "Access request not found"}
 
         # Only the requester signs, for themselves
-        if access_request.user != request.user:
+        if access_request.user != request.user or not can(request, "access_request:submit", team):
             return 403, {"detail": "Forbidden"}
 
         # Get company-wide NDA
@@ -451,9 +450,11 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
         return 403, {"detail": "Authentication required"}
 
     # Get teams where user is owner or admin
-    member_teams = Member.objects.filter(user=request.user, role__in=("owner", "admin")).values_list(
-        "team_id", flat=True
-    )
+    member_teams = [
+        member.team_id
+        for member in Member.objects.filter(user=request.user, role__in=ADMINISTER).select_related("team")
+        if can(request, "access_request:read", member.team)
+    ]
 
     if not member_teams:
         return 403, {"detail": "Access denied"}
@@ -534,12 +535,7 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking
@@ -618,12 +614,7 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking
@@ -691,12 +682,7 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking

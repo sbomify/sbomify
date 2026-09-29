@@ -185,6 +185,10 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # to an external repo — unlike a PAT, which is scoped, expiring and tied to
     # one person. Carved out of component:manage for the same reason.
     "component:manage_publishers": ADMINISTER,
+    # Trust-center access requests: seeing who asked, and approving, rejecting
+    # or revoking. Approval makes the requester a guest of the workspace.
+    "access_request:read": ADMINISTER,
+    "access_request:decide": ADMINISTER,
     # owner + admin management (the dominant capability)
     # Workspace configuration — contact profiles, suppliers. NOT "create a
     # thing in this workspace": that is product:create / component:create.
@@ -226,8 +230,14 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
 # a Component or expose ``.component``.
 _ABAC_ACTIONS: frozenset[str] = frozenset({"component:access"})
 
+# Actions a signed-in user takes for themselves in a workspace they need not
+# belong to: filing an access request, then reading and signing its NDA. No role
+# applies; only the token's scope and workspace binding can narrow them. The
+# resource is the Team being asked.
+_SELF_ACTIONS: frozenset[str] = frozenset({"access_request:submit"})
+
 # Every action ``can`` understands — the vocabulary a token scope draws from.
-ALL_ACTIONS: frozenset[str] = frozenset(_ROLE_ACTIONS) | _ABAC_ACTIONS
+ALL_ACTIONS: frozenset[str] = frozenset(_ROLE_ACTIONS) | _ABAC_ACTIONS | _SELF_ACTIONS
 # Resource prefixes (the part before ``:``) — the valid targets of a ``<res>:*`` bundle.
 _RESOURCES: frozenset[str] = frozenset(a.split(":", 1)[0] for a in ALL_ACTIONS)
 
@@ -334,6 +344,14 @@ def can(actor: Any, action: str, resource: Any) -> Decision:
         component = getattr(resource, "component", resource)
         result = check_component_access(request, component)
         return Decision(result.has_access, result.reason)
+
+    if action in _SELF_ACTIONS:
+        token_team = getattr(request, "token_team", None)
+        if not request.user.is_authenticated:
+            return Decision(False, "authentication required")
+        if token_team is not None and token_team.pk != resource.pk:
+            return Decision(False, "token is bound to another workspace")
+        return Decision(True)
 
     roles = _ROLE_ACTIONS[action]  # present: validated against ALL_ACTIONS above
     allowed = verify_item_access(request, resource, list(roles))
