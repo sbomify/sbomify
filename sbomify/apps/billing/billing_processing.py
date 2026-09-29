@@ -694,8 +694,11 @@ def _update_billing_from_subscription(
         team.billing_plan_limits = billing_limits
         team.save()
 
-    if subscription.status in ENDED_SUBSCRIPTION_STATUSES:
-        downgrade_ended_subscription(team.pk, subscription.id)
+        # Inside the block that recorded the event: if the downgrade fails, the
+        # event is not marked applied and Stripe's retry runs it again, and no
+        # newer event can be applied in between.
+        if subscription.status in ENDED_SUBSCRIPTION_STATUSES:
+            downgrade_ended_subscription(team.pk, subscription.id)
 
     if subscription.status == "trialing" and subscription.trial_end:
         try:

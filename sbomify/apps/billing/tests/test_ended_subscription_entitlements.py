@@ -19,6 +19,7 @@ from django.utils import timezone
 
 from sbomify.apps.billing import billing_processing, stripe_sync
 from sbomify.apps.billing.billing_helpers import downgrade_ended_subscription
+from sbomify.apps.billing.billing_processing import BillingRetryableError
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.teams.models import Team
@@ -101,6 +102,21 @@ def test_updated_event_with_an_ended_status_moves_to_community(paid_workspace, s
 
     _assert_on_community(paid_workspace)
     assert paid_workspace.billing_plan_limits["subscription_status"] == status
+
+
+def test_a_failed_downgrade_leaves_the_updated_event_to_be_retried(paid_workspace):
+    with (
+        patch.object(billing_processing, "downgrade_ended_subscription", side_effect=RuntimeError("boom")),
+        pytest.raises(BillingRetryableError),
+    ):
+        billing_processing.handle_subscription_updated(_subscription("canceled"), event=_event("evt_canceled"))
+
+    paid_workspace.refresh_from_db()
+    assert paid_workspace.billing_plan_limits.get("last_processed_webhook_id") != "evt_canceled"
+
+    billing_processing.handle_subscription_updated(_subscription("canceled"), event=_event("evt_canceled"))
+
+    _assert_on_community(paid_workspace)
 
 
 def test_payment_recovery_restores_the_paid_plan(paid_workspace):
