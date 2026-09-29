@@ -305,11 +305,6 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             needs_update = True
             updated_fields.append("billing_period")
 
-        # Checked on every sync, not only on a status change: this is also what
-        # moves a workspace whose ended subscription left it on the paid plan.
-        if real_sub_status in ENDED_SUBSCRIPTION_STATUSES:
-            downgrade_ended_subscription(team.pk, stripe_sub_id)
-
         # Update last_updated timestamp
         if needs_update:
             from django.db import transaction as db_transaction
@@ -391,10 +386,18 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                     billing_limits.pop("stripe_customer_id", None)
                 team.billing_plan_limits = billing_limits
                 team.save()
+                # After the write and under its lock. Run before it, the downgrade's
+                # cleared cancel fields would be written back over the Community plan.
+                if real_sub_status in ENDED_SUBSCRIPTION_STATUSES:
+                    downgrade_ended_subscription(team.pk, stripe_sub_id)
 
                 logger.info(f"Synced subscription data: {', '.join(updated_fields)}")
             return True
 
+        # Checked on every sync, not only on a change: this is also what moves a
+        # workspace whose ended subscription left it on the paid plan.
+        if real_sub_status in ENDED_SUBSCRIPTION_STATUSES:
+            downgrade_ended_subscription(team.pk, stripe_sub_id)
         return True  # No update needed, but sync was successful
 
     except StripeError as e:

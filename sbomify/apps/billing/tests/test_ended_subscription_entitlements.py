@@ -149,6 +149,27 @@ def test_stripe_sync_of_an_ended_subscription_moves_to_community(paid_workspace)
     _assert_on_community(paid_workspace)
 
 
+def test_stripe_sync_of_an_ended_scheduled_cancel_leaves_no_pending_downgrade(paid_workspace):
+    canceled = stripe.Subscription.construct_from(
+        {
+            "id": "sub_test123",
+            "customer": "cus_test123",
+            "status": "canceled",
+            "cancel_at_period_end": True,
+            "cancel_at": None,
+            "current_period_end": int(timezone.now().timestamp()),
+            "items": {"data": [{"price": {"id": "price_x", "recurring": {"interval": "month"}}}]},
+        },
+        "sk_test",
+    )
+    with patch.object(stripe_sync.stripe_client, "get_subscription", return_value=canceled):
+        assert stripe_sync.sync_subscription_from_stripe(paid_workspace, force_refresh=True)
+
+    _assert_on_community(paid_workspace)
+    assert paid_workspace.billing_plan_limits["cancel_at_period_end"] is False
+    assert "scheduled_downgrade_plan" not in paid_workspace.billing_plan_limits
+
+
 def test_stripe_sync_leaves_a_workspace_whose_subscription_was_replaced(paid_workspace):
     # The sync holds the row it read before asking Stripe; a checkout then stores a
     # new, live subscription before the sync learns the old one ended.
