@@ -487,7 +487,8 @@ def enqueue_assessment(
 
     This is the primary interface for triggering assessments. It serializes
     the arguments and sends the task to the Dramatiq queue. It refuses a plugin
-    the workspace's billing plan does not include, and returns whether it queued.
+    the workspace's billing plan does not include, and returns whether it accepted the
+    request. Inside a transaction, the send still waits for the commit.
 
     The task dispatch is wrapped in transaction.on_commit() to ensure that
     the SBOM and any related data are visible to the worker when the task
