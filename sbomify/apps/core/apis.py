@@ -3223,9 +3223,9 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
     # unset (full), so this is the only thing keeping it from creating releases on unrelated
     # products. Fail closed for OIDC requests (an orphan bot with no binding must be denied,
     # not treated as a no-op); a plain no-op only for non-OIDC (PAT/session) requests.
-    from sbomify.apps.oidc.permissions import bound_component_id_for_request, request_is_oidc_authed
+    from sbomify.apps.oidc.permissions import bound_component_id_for_request, is_authorised_for_product
 
-    if request_is_oidc_authed(request):
+    if not is_authorised_for_product(request, product):
         bound_component_id = bound_component_id_for_request(request)
         # Distinct wording per cause. These two share both a status and a call site with the
         # role denial above, so one shared message leaves a CI log no way to tell which check
@@ -3240,15 +3240,14 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 ),
                 "error_code": ErrorCode.FORBIDDEN,
             }
-        if not product.components.filter(id=bound_component_id).exists():
-            return 403, {
-                "detail": (
-                    f"Component {bound_component_id} is not part of product {product.id}, so this "
-                    "OIDC token cannot create releases for it. Add the component to the product, "
-                    "then retry."
-                ),
-                "error_code": ErrorCode.FORBIDDEN,
-            }
+        return 403, {
+            "detail": (
+                f"Component {bound_component_id} is not part of product {product.id}, so this "
+                "OIDC token cannot create releases for it. Add the component to the product, "
+                "then retry."
+            ),
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
@@ -4148,9 +4147,9 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
 
     # Confine an OIDC bot to releases of products that contain its bound component: the rule and
     # the per-cause wording create_release uses. Fail closed for an orphan bot with no binding.
-    from sbomify.apps.oidc.permissions import bound_component_id_for_request, request_is_oidc_authed
+    from sbomify.apps.oidc.permissions import bound_component_id_for_request, is_authorised_for_product
 
-    if request_is_oidc_authed(request):
+    if not is_authorised_for_product(request, release.product):
         bound_component_id = bound_component_id_for_request(request)
         if bound_component_id is None:
             return 403, {
@@ -4160,15 +4159,14 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 ),
                 "error_code": ErrorCode.FORBIDDEN,
             }
-        if not release.product.components.filter(id=bound_component_id).exists():
-            return 403, {
-                "detail": (
-                    f"Component {bound_component_id} is not part of product {release.product_id}, so this "
-                    "OIDC token cannot add artifacts to its releases. Add the component to the product, "
-                    "then retry."
-                ),
-                "error_code": ErrorCode.FORBIDDEN,
-            }
+        return 403, {
+            "detail": (
+                f"Component {bound_component_id} is not part of product {release.product_id}, so this "
+                "OIDC token cannot add artifacts to its releases. Add the component to the product, "
+                "then retry."
+            ),
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent adding artifacts to latest releases
     if release.is_latest:

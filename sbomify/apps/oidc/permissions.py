@@ -153,10 +153,10 @@ def is_authorised_for_product(request: Any, product: Any) -> bool:
     """Authorise OIDC tokens for products that contain the bound component only.
 
     The product-level counterpart of ``is_authorised_for_component``, for
-    release reads: the bot's ``release:read`` holds across its whole
-    workspace, and a release's contents span every component of its
-    product. Same contract: ``True`` for non-OIDC requests, ``False`` for
-    an orphan bot.
+    release reads, release creation and pinning artifacts into a release:
+    the bot's release capabilities hold across its whole workspace, and a
+    release spans every component of its product. Same contract: ``True``
+    for non-OIDC requests, ``False`` for an orphan bot.
     """
     if not request_is_oidc_authed(request):
         return True
