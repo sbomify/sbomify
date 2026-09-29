@@ -66,7 +66,7 @@ def test_scheduled_downgrade_checks_the_target_plan_limit(mocker):
     # Under the target plan's limit, the current plan decides.
     assert _check_billing_limits(str(team.id), "component") == (True, "", None)
 
-    # An unsupported resource type is refused as invalid before any downgrade check.
+    # An unsupported type passes the downgrade check, then is refused as invalid.
     can_create, _, code = _check_billing_limits(str(team.id), "release")
     assert can_create is False
     assert code == ErrorCode.INVALID_DATA
