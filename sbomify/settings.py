@@ -1033,6 +1033,15 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 
+# How long the OpenID Connect discovery document is reused before it is fetched
+# again, and how long the last good copy is kept as a fallback for when the
+# fetch fails (see core.adapters.load_openid_config). The document is derived
+# from the realm URL and changes essentially never; the cost of reusing it is
+# bounded by the shorter window, and the longer one only ever applies while the
+# provider is unreachable, which is exactly when a stale answer beats no answer.
+OIDC_DISCOVERY_CACHE_SECONDS = int(os.environ.get("OIDC_DISCOVERY_CACHE_SECONDS", "3600"))  # 1 hour
+OIDC_DISCOVERY_STALE_SECONDS = int(os.environ.get("OIDC_DISCOVERY_STALE_SECONDS", "604800"))  # 7 days
+
 LOGIN_REDIRECT_URL = "/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 LOGIN_URL = "/login"
