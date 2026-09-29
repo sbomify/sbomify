@@ -230,7 +230,7 @@ def update_team_branding_field(
     if field in ["icon", "logo"]:
         # A file key only ever comes from an upload; this endpoint can only clear it.
         if data.value is not None:
-            return 400, {"detail": f"Upload a file to set the {field}."}
+            return 400, {"detail": f"Upload a file to set the {field}. Send null to clear it."}
         if old_filename := update_data.get(field):
             try:
                 delete_from_s3(team, field, old_filename)
