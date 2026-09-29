@@ -12,7 +12,6 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.services.data_export import export_user_data
-from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.teams.models import Member, Team
@@ -27,8 +26,6 @@ def own_and_vendor_workspaces(sample_user, team_with_business_plan):
     SBOM.objects.create(name="own-sbom", component=own_component, format="cyclonedx", format_version="1.6")
 
     vendor = Team.objects.create(name="Vendor")
-    vendor.key = number_to_random_token(vendor.pk)
-    vendor.save(update_fields=["key"])
     Member.objects.create(team=vendor, user=sample_user, role="guest")
     private = Component.objects.create(name="vendor", team=vendor, visibility=Component.Visibility.PRIVATE)
     SBOM.objects.create(name="vendor-sbom", component=private, format="cyclonedx", format_version="1.6")
@@ -67,3 +64,20 @@ def test_export_endpoint_leaves_out_guest_workspace_artifacts(sample_user, own_a
 
     assert response.status_code == 200
     assert "vendor-sbom" not in {sbom["name"] for sbom in response.json()["sboms"]}
+
+
+@pytest.mark.parametrize("role", ["admin", "member"])
+def test_export_includes_artifacts_from_admin_and_member_workspaces(sample_user, role):
+    team = Team.objects.create(name=f"Works in as {role}")
+    Member.objects.create(team=team, user=sample_user, role=role)
+    component = Component.objects.create(name=f"{role}-component", team=team)
+    SBOM.objects.create(name=f"{role}-sbom", component=component, format="cyclonedx", format_version="1.6")
+    document_component = Component.objects.create(
+        name=f"{role}-docs", team=team, component_type=Component.ComponentType.DOCUMENT
+    )
+    Document.objects.create(name=f"{role}-doc", component=document_component, document_filename=f"{role}.pdf")
+
+    data = export_user_data(sample_user)
+
+    assert {sbom["name"] for sbom in data["sboms"]} == {f"{role}-sbom"}
+    assert {document["name"] for document in data["documents"]} == {f"{role}-doc"}

@@ -37,9 +37,11 @@
                 {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
             {% endwith %}
             <ul class="mt-4 space-y-2 text-sm text-text-muted">
-                <li>
-                    <strong class="text-text">Owner</strong> has full control including removing the workspace and inviting other users.
-                </li>
+                {% if can_grant_owner %}
+                    <li>
+                        <strong class="text-text">Owner</strong> has full control including removing the workspace and inviting other users.
+                    </li>
+                {% endif %}
                 <li>
                     <strong class="text-text">Admin</strong> can create products and components, upload/manage SBOMs.
                 </li>
