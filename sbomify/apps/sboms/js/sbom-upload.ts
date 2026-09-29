@@ -36,13 +36,13 @@ interface SbomUploadState {
 }
 
 export function registerSbomUpload(): void {
-    Alpine.data('sbomUpload', (componentId: string, hasSboms: boolean = false): SbomUploadState => ({
+    Alpine.data('sbomUpload', (componentId: string, hasSboms: boolean = false, initialBomType: UploadBomType = 'sbom'): SbomUploadState => ({
         expanded: !hasSboms,
         isDragOver: false,
         isUploading: false,
         isPreviewing: false,
         componentId: componentId,
-        bomType: 'sbom' as UploadBomType,
+        bomType: initialBomType,
         preview: null,
         pendingFile: null,
         abortController: null,
