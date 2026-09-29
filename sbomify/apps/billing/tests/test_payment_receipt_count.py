@@ -32,9 +32,18 @@ def _subscription(**fields: Any) -> stripe.Subscription:
     )
 
 
-def _invoice(created: int) -> SimpleNamespace:
-    return SimpleNamespace(
-        id="in_first", created=created, amount_paid=19900, currency="usd", subscription="sub_test123", parent=None
+def _invoice(created: int) -> stripe.Invoice:
+    return stripe.Invoice.construct_from(
+        {
+            "id": "in_first",
+            "object": "invoice",
+            "created": created,
+            "amount_paid": 19900,
+            "currency": "usd",
+            "subscription": "sub_test123",
+            "parent": None,
+        },
+        "sk_test_receipts",
     )
 
 
