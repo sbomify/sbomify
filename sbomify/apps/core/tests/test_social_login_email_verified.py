@@ -255,10 +255,7 @@ class TestRecordingTheConfirmation:
         cases = {
             "confirmed@example.com": ({"userinfo": {"email": "confirmed@example.com", "email_verified": True}}, True),
             "id-token@example.com": ({"id_token": {"email": "id-token@example.com", "email_verified": True}}, True),
-            "unconfirmed@example.com": (
-                {"userinfo": {"email": "unconfirmed@example.com", "email_verified": False}},
-                False,
-            ),
+            "unconfirmed@example.com": ({"userinfo": {"email": "unconfirmed@example.com", "email_verified": False}}, False),
             "moved@example.com": ({"userinfo": {"email": "elsewhere@example.com", "email_verified": True}}, False),
         }
         for email, (extra_data, _) in cases.items():
