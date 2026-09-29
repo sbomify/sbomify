@@ -55,7 +55,7 @@
                 </c-chips.metric-chip>
             {% endif %}
         </div>
-        <c-cards.card title="Scan results" :flush="scan_panel">
+        <c-cards.card id="scan-results-card" title="Scan results" :flush="scan_panel">
         {% if scan_panel %}
             {% include "sboms/components/scan_vulnerabilities.html.j2" %}
         {% elif error_message %}
@@ -103,24 +103,26 @@
                     Started: {{ scan_timestamp }}
                 </p>
                 <div class="flex items-center gap-4">
-                    <c-buttons.secondary @click="location.reload()">
-                    <i class="fas fa-sync-alt mr-2" aria-hidden="true"></i>Refresh page
+                    <c-buttons.secondary hx-get="{{ request.get_full_path }}" hx-select="#scan-results-card" hx-target="#scan-results-card" hx-swap="morph">
+                    <i class="fas fa-sync-alt mr-2" aria-hidden="true"></i>Check for results
                     </c-buttons.secondary>
-                    <span class="text-sm">This page will update automatically once processing is complete.</span>
+                    <span class="text-sm">These results update automatically once processing is complete.</span>
                 </div>
                 </c-slot>
                 </c-feedback.alert>
-                {# WebSocket-based refresh for scan completion #}
+                {% comment %}Refreshes the results region when the scan reports in, and
+                polls as a fallback for a closed socket. It used to reload the page, including
+                once on a 300 second timer whether or not anything had changed. The poll stops
+                on its own: a finished scan renders the results table here instead, and that
+                markup carries no trigger.{% endcomment %}
                 <div x-data
-                     @ws:message.window="if ($event.detail.type === 'scan_complete' && $event.detail.sbom_id === '{{ sbom.id }}') { location.reload(); }">
+                     hx-get="{{ request.get_full_path }}"
+                     hx-select="#scan-results-card"
+                     hx-target="#scan-results-card"
+                     hx-swap="morph"
+                     hx-trigger="scan-complete from:body, every 60s"
+                     @ws:message.window="if ($event.detail.type === 'scan_complete' && $event.detail.sbom_id === '{{ sbom.id }}') { document.body.dispatchEvent(new CustomEvent('scan-complete')); }">
                 </div>
-                <script>
-                        setTimeout(function() {
-                            var wsConnected = window.Alpine && window.Alpine.store('ws') && window.Alpine.store('ws').connected;
-                            if (!wsConnected) { location.reload(); }
-                        }, 60000);
-                        setTimeout(function() { location.reload(); }, 300000);
-                </script>
             {% else %}
                 <c-feedback.alert variant="warning" icon="fas fa-hourglass-half" title="No Scan Data Available">
                 <c-slot name="body">
