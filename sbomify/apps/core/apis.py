@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import tempfile
@@ -3222,9 +3223,9 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
     # unset (full), so this is the only thing keeping it from creating releases on unrelated
     # products. Fail closed for OIDC requests (an orphan bot with no binding must be denied,
     # not treated as a no-op); a plain no-op only for non-OIDC (PAT/session) requests.
-    from sbomify.apps.oidc.permissions import bound_component_id_for_request, request_is_oidc_authed
+    from sbomify.apps.oidc.permissions import bound_component_id_for_request, is_authorised_for_product
 
-    if request_is_oidc_authed(request):
+    if not is_authorised_for_product(request, product):
         bound_component_id = bound_component_id_for_request(request)
         # Distinct wording per cause. These two share both a status and a call site with the
         # role denial above, so one shared message leaves a CI log no way to tell which check
@@ -3239,15 +3240,14 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 ),
                 "error_code": ErrorCode.FORBIDDEN,
             }
-        if not product.components.filter(id=bound_component_id).exists():
-            return 403, {
-                "detail": (
-                    f"Component {bound_component_id} is not part of product {product.id}, so this "
-                    "OIDC token cannot create releases for it. Add the component to the product, "
-                    "then retry."
-                ),
-                "error_code": ErrorCode.FORBIDDEN,
-            }
+        return 403, {
+            "detail": (
+                f"Component {bound_component_id} is not part of product {product.id}, so this "
+                "OIDC token cannot create releases for it. Add the component to the product, "
+                "then retry."
+            ),
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
@@ -3770,17 +3770,9 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     from django.core.cache import cache
-    from django.db.models import Count, Max
 
-    from sbomify.apps.sboms.models import SBOM
     from sbomify.apps.vulnerability_scanning import vex as vex_module
 
-    # The merge fans out one S3 fetch per pinned VEX and the endpoint is open for
-    # public products, so cache the built document. The key carries the slot state
-    # (count + newest artifact), invalidating naturally when the release changes.
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.VEX).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
-    )
     # A member reading a public product's release gets the whole VEX, gated and
     # private components included. Everyone else gets the public view, matching
     # what the aggregate SBOM download hands the same caller: a statement names
@@ -3789,14 +3781,22 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     include_non_public = bool(
         getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
     )
-    # The flag is part of the key. Sharing one entry between the two audiences
-    # would serve whichever build landed first to both, which is the disclosure
-    # this is closing rather than a caching detail.
+    # The merge fans out one S3 fetch per VEX it reads and the endpoint is open for
+    # public products, so cache the built document. The key fingerprints the rows
+    # this audience's build reads, and the build merges that same list, so any change
+    # to what it reads, a component's visibility included, builds a fresh document.
+    rows = vex_module.release_vex_rows(release, include_non_public=include_non_public)
+    fingerprint = hashlib.sha256(",".join(sorted(row.id for row in rows)).encode()).hexdigest()
+    # The flag stays in the key although the rows already differ wherever the two
+    # audiences' documents do: should the build ever read the audience beyond its
+    # rows, one shared entry would hand a member's document to the public.
     scope = "all" if include_non_public else "public"
-    cache_key = f"release-vex:{release.id}:{scope}:{slot_state['n']}:{slot_state['newest']}"
+    cache_key = f"release-vex:{release.id}:{scope}:{fingerprint}"
     document = cache.get(cache_key)
     if document is None:
-        document = vex_module.build_release_vex(release, include_non_public=include_non_public) or {"__absent__": True}
+        document = vex_module.build_release_vex(release, include_non_public=include_non_public, rows=rows) or {
+            "__absent__": True
+        }
         cache.set(cache_key, document, 900)
     if document.get("__absent__"):
         return 404, {"detail": "No VEX available for this release", "error_code": ErrorCode.NOT_FOUND}
@@ -3817,24 +3817,22 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
 
 
 def _release_cbom_document(release: Release, version: str, *, include_non_public: bool) -> dict[str, Any] | None:
-    """The merged CBOM for a release, cached by slot state, or None when it has no CBOM.
+    """The merged CBOM for a release, cached on the CBOMs it merges, or None when it has no CBOM.
 
-    Same cache-by-slot-state approach as the VEX download: the merge fans out one
-    S3 fetch per pinned CBOM and the endpoints serving it are open for public products.
-    The audience is part of the key, so a member's full document never answers a
-    caller who gets the public view.
+    The merge fans out one S3 fetch per pinned CBOM and the endpoints serving it are
+    open for public products. The key fingerprints the CBOMs this audience's build
+    reads, so any change to that set, a component's visibility included, builds a
+    fresh document. The audience is part of the key, so a member's full document
+    never answers a caller who gets the public view.
     """
     from django.core.cache import cache
-    from django.db.models import Count, Max
 
-    from sbomify.apps.sboms.cbom import build_release_cbom
-    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.cbom import build_release_cbom, release_cbom_artifacts
 
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
-    )
+    cbom_ids = release_cbom_artifacts(release, include_non_public=include_non_public).values_list("sbom_id", flat=True)
+    fingerprint = hashlib.sha256(",".join(cbom_ids.order_by("sbom_id")).encode()).hexdigest()
     scope = "all" if include_non_public else "public"
-    cache_key = f"release-cbom:{release.id}:{scope}:{version}:{slot_state['n']}:{slot_state['newest']}"
+    cache_key = f"release-cbom:{release.id}:{scope}:{version}:{fingerprint}"
     document = cache.get(cache_key)
     if document is None:
         document = build_release_cbom(release, spec_version=version, include_non_public=include_non_public) or {
@@ -4149,9 +4147,9 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
 
     # Confine an OIDC bot to releases of products that contain its bound component: the rule and
     # the per-cause wording create_release uses. Fail closed for an orphan bot with no binding.
-    from sbomify.apps.oidc.permissions import bound_component_id_for_request, request_is_oidc_authed
+    from sbomify.apps.oidc.permissions import bound_component_id_for_request, is_authorised_for_product
 
-    if request_is_oidc_authed(request):
+    if not is_authorised_for_product(request, release.product):
         bound_component_id = bound_component_id_for_request(request)
         if bound_component_id is None:
             return 403, {
@@ -4161,15 +4159,14 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 ),
                 "error_code": ErrorCode.FORBIDDEN,
             }
-        if not release.product.components.filter(id=bound_component_id).exists():
-            return 403, {
-                "detail": (
-                    f"Component {bound_component_id} is not part of product {release.product_id}, so this "
-                    "OIDC token cannot add artifacts to its releases. Add the component to the product, "
-                    "then retry."
-                ),
-                "error_code": ErrorCode.FORBIDDEN,
-            }
+        return 403, {
+            "detail": (
+                f"Component {bound_component_id} is not part of product {release.product_id}, so this "
+                "OIDC token cannot add artifacts to its releases. Add the component to the product, "
+                "then retry."
+            ),
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent adding artifacts to latest releases
     if release.is_latest:

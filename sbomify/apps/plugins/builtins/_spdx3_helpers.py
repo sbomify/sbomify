@@ -18,9 +18,11 @@ Field mappings (SPDX 2.x → 3.0.1):
     relationships           → @graph elements with type "Relationship"
 
 Reading rules that keep old documents scoring:
-    - ``externalIdentifier`` is the spec property; ``externalIdentifiers`` is a
-      non-spec spelling this codebase both wrote into fixtures and accepted
-      from producers, so stored artifacts carry it. Both are read everywhere.
+    - ``externalIdentifier`` is the spec property. ``externalIdentifiers`` is
+      not valid SPDX: a 3.0.1 upload carrying it is rejected, and nothing
+      here should emit it. It is still read, only because artifacts are never
+      rewritten: 3.0.1 documents stored before schema validation, and the
+      lenient 3.0.0 and ``spdxVersion`` shapes, can carry it.
     - ``packageUrl`` is the vocabulary value; ``packageURL`` and ``purl`` are
       accepted variants for the same reason.
     - Anything in Agent position (createdBy, originatedBy, suppliedBy) may be
@@ -118,7 +120,8 @@ def resolve_spdx3_agent(ref: Any, agents: dict[str, dict[str, Any]]) -> dict[str
 
 
 def iter_spdx3_external_identifiers(entity: dict[str, Any]) -> Iterator[dict[str, Any]]:
-    """All ExternalIdentifier dicts on an element, spec and legacy spellings."""
+    """All ExternalIdentifier dicts on an element, including the invalid plural
+    spelling stored artifacts may carry (see the module docstring)."""
     for key in ("externalIdentifier", "externalIdentifiers"):
         value = entity.get(key)
         if isinstance(value, list):

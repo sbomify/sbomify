@@ -27,8 +27,8 @@ from .schemas import (
     SBOMAssessmentsResponse,
 )
 from .sdk.enums import RunReason, RunStatus
+from .services.access import plugin_plan_requirement, team_has_plugin_access
 from .tasks import run_assessment_task
-from .utils import plugin_plan_requirement, team_has_plugin_access
 
 logger = getLogger(__name__)
 
@@ -835,11 +835,11 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
             "error_code": ErrorCode.BAD_REQUEST,
         }
 
-    # Enabled is not enough: a workspace that left a paid plan can still hold the
-    # setting, and the plan decides what it may run.
+    # A downgrade leaves the plugin in the enabled list, so the plan is checked
+    # here too, by the same rule that decides what the settings page offers.
     if not team_has_plugin_access(sbom.component.team, plugin_name):
         return 403, {
-            "detail": f"Your plan does not include {registered.display_name or plugin_name}. Upgrade to run it.",
+            "detail": f"Your plan does not include {registered.display_name or plugin_name}.",
             "error_code": ErrorCode.FORBIDDEN,
         }
 

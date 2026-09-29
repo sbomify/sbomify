@@ -68,7 +68,7 @@ def get_pending_invitations_for_email(email: str) -> list[Invitation]:
     """Return non-expired pending invitations matching the given email."""
     return list(
         Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now())
-        .select_related("team")
+        .select_related("team", "invited_by")
         .order_by("-created_at")
     )
 
@@ -81,7 +81,7 @@ def get_pending_invitations_for_user(user: User) -> list[dict[str, object]]:
         {
             "id": inv.id,
             "team_name": inv.team.display_name,
-            "role": inv.role,
+            "role": inv.granted_role,
             "created_at": inv.created_at,
             "expires_at": inv.expires_at,
         }

@@ -42,7 +42,13 @@ from .billing_helpers import (
 )
 from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
-from .stripe_client import BillingRetryableError, StripeError, WorkspaceGoneError, get_stripe_client
+from .stripe_client import (
+    BillingEventTooEarlyError,
+    BillingRetryableError,
+    StripeError,
+    WorkspaceGoneError,
+    get_stripe_client,
+)
 from .stripe_pricing_service import StripePricingService
 from .stripe_sync import sync_subscription_from_stripe
 from .tasks import send_enterprise_inquiry_email
@@ -722,6 +728,9 @@ class StripeWebhookView(View):
 
             return HttpResponse(status=200)
 
+        except BillingEventTooEarlyError as e:
+            logger.warning("Webhook arrived before the event it depends on (Stripe will retry): %s", e)
+            return HttpResponse(status=503)
         except BillingRetryableError as e:
             # Transient/recoverable failure — do NOT acknowledge, let Stripe retry.
             # 503 (vs the 500 below) is deliberate: it flags an *anticipated* transient

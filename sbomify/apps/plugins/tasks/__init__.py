@@ -45,7 +45,7 @@ from sbomify.task_utils import format_task_error
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError, SBOMGoneError
 from ..sdk.base import RetryLaterError
 from ..sdk.enums import RunReason, ScanMode
-from ..utils import plugin_plan_requirement, team_has_plugin_access
+from ..services.access import plugin_plan_requirement, team_has_plugin_access
 
 logger = logging.getLogger(__name__)
 

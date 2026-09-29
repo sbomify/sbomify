@@ -29,9 +29,14 @@ log = logging.getLogger(__name__)
 audit_log = logging.getLogger("audit.token_auth")  # -> "sbomify.audit.token_auth"
 
 
-def _token_fingerprint(token: str) -> str:
+def hash_token(token: str) -> str:
+    """The form an access token is stored and looked up in. The token itself is never stored."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def token_fingerprint(token: str) -> str:
     """Non-reversible short fingerprint, for attributing failures without the raw token."""
-    return hashlib.sha256(token.encode()).hexdigest()[:12]
+    return hash_token(token)[:12]
 
 
 def _emit_token_auth_event(
@@ -52,7 +57,7 @@ def _emit_token_auth_event(
         "outcome": outcome,
         "reason": reason,
         "token_id": str(record.pk) if record is not None else None,
-        "token_fingerprint": _token_fingerprint(token),
+        "token_fingerprint": token_fingerprint(token),
         "user_id": user_id,
         # Keep None (JSON null) for a team-less token rather than the string "None".
         "team_id": str(record.team_id) if record is not None and record.team_id is not None else None,
@@ -200,7 +205,8 @@ def decode_personal_access_token(token: str) -> dict[str, Any]:
                 "verify_nbf": False,
             },
         )
-        token_type = unverified.get("token_type")
+        # A token minted before the claim existed has none, and is a PAT.
+        token_type = unverified.get("token_type", TOKEN_TYPE_PAT)
 
         decode_kwargs: dict[str, Any] = {
             "key": settings.SECRET_KEY,
@@ -212,7 +218,7 @@ def decode_personal_access_token(token: str) -> dict[str, Any]:
             # / InvalidAudienceError on tamper.
             decode_kwargs["audience"] = settings.JWT_AUDIENCE
             decode_kwargs["options"] = {"require": ["sub", "exp", "aud", "token_type"]}
-        else:
+        elif token_type == TOKEN_TYPE_PAT:
             # PAT (or legacy token with no token_type) — exp/aud absent
             # by design; revocation lives entirely in the DB row check.
             decode_kwargs["options"] = {
@@ -220,6 +226,9 @@ def decode_personal_access_token(token: str) -> dict[str, Any]:
                 "verify_aud": False,
                 "verify_exp": False,
             }
+        else:
+            # Nothing mints another type. Refuse it rather than check it as a PAT.
+            raise InvalidTokenError("Unknown token_type claim")
 
         # Normalise ``sub`` to a string first (legacy tokens may have
         # int subs). Re-encoding lets PyJWT validate the normalised
@@ -270,10 +279,13 @@ def get_user_and_token_record(
        against ``SECRET_KEY``) AND — for OIDC-issued tokens
        (``token_type="oidc"``) — JWT-level ``exp`` and ``aud`` claims.
        Long-lived PATs (no ``exp``/``aud``) only fail at the
-       signature step.
+       signature step. A ``token_type`` claim other than ``pat`` or
+       ``oidc`` fails here too.
     2. User liveness: the JWT's ``sub`` must resolve to a User row
        with ``is_active=True`` and ``deleted_at IS NULL``.
-    3. AccessToken DB row exists for ``(user, encoded_token)``.
+    3. AccessToken DB row exists for ``(user, hash_token(token), token_type)``,
+       where ``token_type`` is the JWT's signed claim, so the type the row
+       stores can never disagree with the token that authenticated.
     4. Row-level expiry: ``AccessToken.expires_at`` (if set) must be
        in the future. Defense-in-depth on top of the JWT-level
        ``exp`` check — if a future code path stripped JWT claims but
@@ -333,7 +345,12 @@ def get_user_and_token_record(
         emit("failure", reason="user_inactive_or_missing", user_id=user_id)
         return None, None
 
-    access_token_record = AccessToken.objects.filter(user=user, encoded_token=token).select_related("team").first()
+    token_type = payload.get("token_type", TOKEN_TYPE_PAT)
+    access_token_record = (
+        AccessToken.objects.filter(user=user, token_hash=hash_token(token), token_type=token_type)
+        .select_related("team")
+        .first()
+    )
     if access_token_record is None:
         log.warning(f"No DB record found for token belonging to user {user_id}")
         emit("failure", reason="no_token_record", user_id=user_id)
