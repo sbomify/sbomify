@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import tempfile
@@ -3817,24 +3818,22 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
 
 
 def _release_cbom_document(release: Release, version: str, *, include_non_public: bool) -> dict[str, Any] | None:
-    """The merged CBOM for a release, cached by slot state, or None when it has no CBOM.
+    """The merged CBOM for a release, cached on the CBOMs it merges, or None when it has no CBOM.
 
-    Same cache-by-slot-state approach as the VEX download: the merge fans out one
-    S3 fetch per pinned CBOM and the endpoints serving it are open for public products.
-    The audience is part of the key, so a member's full document never answers a
-    caller who gets the public view.
+    The merge fans out one S3 fetch per pinned CBOM and the endpoints serving it are
+    open for public products. The key fingerprints the CBOMs this audience's build
+    reads, so any change to that set, a component's visibility included, builds a
+    fresh document. The audience is part of the key, so a member's full document
+    never answers a caller who gets the public view.
     """
     from django.core.cache import cache
-    from django.db.models import Count, Max
 
-    from sbomify.apps.sboms.cbom import build_release_cbom
-    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.cbom import build_release_cbom, release_cbom_artifacts
 
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
-    )
+    cbom_ids = release_cbom_artifacts(release, include_non_public=include_non_public).values_list("sbom_id", flat=True)
+    fingerprint = hashlib.sha256(",".join(cbom_ids.order_by("sbom_id")).encode()).hexdigest()
     scope = "all" if include_non_public else "public"
-    cache_key = f"release-cbom:{release.id}:{scope}:{version}:{slot_state['n']}:{slot_state['newest']}"
+    cache_key = f"release-cbom:{release.id}:{scope}:{version}:{fingerprint}"
     document = cache.get(cache_key)
     if document is None:
         document = build_release_cbom(release, spec_version=version, include_non_public=include_non_public) or {

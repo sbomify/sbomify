@@ -2,8 +2,8 @@
 
 The product and release CBOM downloads answer anonymous callers when the product
 is public. Such a caller gets the crypto assets of PUBLIC components only, the
-same rule the release SBOM and VEX downloads apply, and a member's full document
-never reaches them through the cache.
+same rule the release SBOM and VEX downloads apply, and neither a member's full
+document nor a component's earlier visibility reaches them through the cache.
 """
 
 from __future__ import annotations
@@ -46,6 +46,11 @@ def _doc(ref: str) -> bytes:
 
 def _refs(response) -> set[str]:
     return {component["bom-ref"] for component in json.loads(response.content)["components"]}
+
+
+def _set_visibility(component: Component, visibility: str) -> None:
+    component.visibility = visibility
+    component.save()
 
 
 @pytest.fixture
@@ -142,3 +147,47 @@ def test_anonymous_release_cbom_is_absent_when_only_private_components_carry_one
     response = Client().get(_release_url(release))
 
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_anonymous_release_cbom_drops_a_component_made_private(mixed_release):
+    assert _refs(Client().get(_release_url(mixed_release))) == {PUBLIC_REF}
+    _set_visibility(Component.objects.get(name="pub"), Component.Visibility.PRIVATE)
+
+    response = Client().get(_release_url(mixed_release))
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_anonymous_product_cbom_drops_a_component_made_private(mixed_components):
+    assert _refs(Client().get(_product_url(mixed_components))) == {PUBLIC_REF}
+    _set_visibility(Component.objects.get(name="pub"), Component.Visibility.PRIVATE)
+
+    response = Client().get(_product_url(mixed_components))
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_anonymous_release_cbom_follows_a_visibility_swap(team_with_business_plan, mocker):
+    """One component leaves the public view as another joins it: same count, same newest CBOM."""
+    team = team_with_business_plan
+    product = Product.objects.create(name="Swap", team=team, is_public=True)
+    release = Release.objects.create(product=product, name="v1")
+    leaving = Component.objects.create(name="leaving", team=team, visibility=Component.Visibility.PUBLIC)
+    joining = Component.objects.create(name="joining", team=team, visibility=Component.Visibility.PRIVATE)
+    steady = Component.objects.create(name="steady", team=team, visibility=Component.Visibility.PUBLIC)
+    # steady's CBOM is created last, so it is the newest public one on both sides of the swap.
+    for component in (leaving, joining, steady):
+        ReleaseArtifact.objects.create(release=release, sbom=_cbom(component, component.name))
+    storage = mocker.patch("sbomify.apps.core.object_store.StorageClient")
+    storage.return_value.get_sbom_data.side_effect = _doc
+    cache.clear()
+    assert _refs(Client().get(_release_url(release))) == {"leaving", "steady"}
+
+    _set_visibility(leaving, Component.Visibility.PRIVATE)
+    _set_visibility(joining, Component.Visibility.PUBLIC)
+    response = Client().get(_release_url(release))
+
+    assert _refs(response) == {"joining", "steady"}
