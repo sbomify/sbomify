@@ -566,8 +566,10 @@ class BillingReturnView(LoginRequiredMixin, View):
                         messages.success(request, "Your subscription is already active.")
                         return redirect("core:dashboard")
 
-                    plan = BillingPlan.objects.filter(key=plan_key).first()
-                    if plan is None:
+                    plan: BillingPlan | None = None
+                    try:
+                        plan = BillingPlan.objects.get(key=plan_key)
+                    except BillingPlan.DoesNotExist:
                         logger.error("Plan %s not found for team %s", plan_key, team_key)
                         messages.error(
                             request,
