@@ -16,7 +16,7 @@ from django.views import View
 from django.views.decorators.cache import never_cache
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.access_tokens.utils import create_personal_access_token, hash_token
 from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.htmx import htmx_error_response
@@ -79,7 +79,7 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         access_token_str = create_personal_access_token(user)
         token = AccessToken(
-            encoded_token=access_token_str,
+            token_hash=hash_token(access_token_str),
             user=user,
             description=form.cleaned_data["description"],
             team_id=team_id,

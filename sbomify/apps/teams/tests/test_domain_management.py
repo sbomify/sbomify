@@ -105,6 +105,32 @@ def test_a_new_domain_does_not_inherit_the_old_domains_backoff(authenticated_api
 
 
 @pytest.mark.django_db
+def test_saving_a_domain_queues_its_first_check(
+    authenticated_api_client, sample_user, mocker, django_capture_on_commit_callbacks
+):
+    """The domain gets checked without waiting for the scheduled sweep."""
+    from sbomify.apps.teams.tasks import check_custom_domain
+
+    send = mocker.patch.object(check_custom_domain, "send")
+    client, access_token = authenticated_api_client
+    team = Team.objects.create(name="Check Team", billing_plan="business")
+    team.key = number_to_random_token(team.pk)
+    team.save()
+    Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = client.put(
+            f"/api/v1/workspaces/{team.key}/domain",
+            {"domain": "check.example.com"},
+            content_type="application/json",
+            **get_api_headers(access_token),
+        )
+
+    assert response.status_code == 200
+    send.assert_called_once_with(team.pk, "check.example.com")
+
+
+@pytest.mark.django_db
 def test_domain_uniqueness(authenticated_api_client, sample_user):
     """Test that domains must be globally unique."""
     client, access_token = authenticated_api_client

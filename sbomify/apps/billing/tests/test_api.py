@@ -3,9 +3,11 @@
 import json
 
 import pytest
+import stripe
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
 from django.urls import reverse
+from pytest_mock import MockerFixture
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
@@ -24,6 +26,16 @@ from sbomify.apps.sboms.models import SBOM, Component
 # Import SBOM-related fixtures from sboms app
 from sbomify.apps.sboms.tests.fixtures import sample_component, sample_sbom  # noqa: F401
 from sbomify.apps.teams.models import Member, Team
+
+
+@pytest.fixture
+def subscription_gone_at_stripe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stripe no longer has the workspace's stored subscription, so a downgrade applies at once."""
+
+    def retrieve(subscription_id: str, **kwargs) -> None:
+        raise stripe.error.InvalidRequestError("No such subscription", param="id", code="resource_missing")
+
+    monkeypatch.setattr(stripe.Subscription, "retrieve", retrieve)
 
 
 @pytest.mark.django_db
@@ -135,6 +147,68 @@ def test_get_usage_token_scope_gate(
 
 
 @pytest.mark.django_db
+def test_change_plan_token_scope_gate(
+    client: Client,
+    mocker: MockerFixture,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811
+):
+    """change_plan is gated by can("billing:manage", team), the only check that applies a token's scopes.
+
+    sample_user owns the workspace, so an owner/admin role check would let the
+    publish-only token through, and a downgrade to Community makes the
+    workspace's private components public.
+    """
+    team = team_with_business_plan
+    # No subscription on file, so the billing:manage token below can start a checkout.
+    team.billing_plan_limits = {"max_products": 10, "max_components": 100}
+    team.save()
+    component = Component.objects.create(name="Private", team=team, visibility=Component.Visibility.PRIVATE)
+    limits = team.billing_plan_limits
+    stripe = mocker.MagicMock()
+    stripe.create_checkout_session.return_value.url = "https://checkout.stripe.com/test"
+    # Stripe has no subscription either, so a downgrade past the gate would make the component public at once.
+    stripe.list_subscriptions.return_value.data = []
+    mocker.patch("sbomify.apps.billing.apis.get_stripe_client", return_value=stripe)
+
+    def tok(scopes: list[str] | None) -> str:
+        token_str = create_personal_access_token(sample_user)
+        AccessToken.objects.create(
+            user=sample_user,
+            encoded_token=token_str,
+            team=team,
+            scopes=scopes,
+            description="scope-gate test token",
+        )
+        return token_str
+
+    def change_plan(token: str, plan: str):
+        return client.post(
+            reverse("api-1:change_plan"),
+            json.dumps({"team_key": team.key, "plan": plan, "billing_period": "monthly"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+    publish = tok(SCOPE_PRESETS["publish"])
+    for plan in ("business", "community"):
+        response = change_plan(publish, plan)
+        assert response.status_code == 403, response.content
+
+    assert stripe.method_calls == []
+    team.refresh_from_db()
+    component.refresh_from_db()
+    assert team.billing_plan == "business"
+    assert team.billing_plan_limits == limits
+    assert component.visibility == Component.Visibility.PRIVATE
+
+    response = change_plan(tok(["billing:manage"]), "business")
+    assert response.status_code == 200, response.content
+    stripe.create_checkout_session.assert_called_once()
+
+
+@pytest.mark.django_db
 def test_change_plan_unauthorized_user(
     client: Client,
     guest_user: AbstractBaseUser,  # noqa: F811
@@ -171,6 +245,7 @@ def test_change_plan_to_community(
     sample_user: AbstractBaseUser,  # noqa: F811
     team_with_business_plan: Team,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811,
+    subscription_gone_at_stripe: None,
 ):
     """Test downgrading to community plan."""
     client.force_login(sample_user)
@@ -330,6 +405,7 @@ def test_change_plan_to_community_with_active_subscription(
     sample_user: AbstractBaseUser,  # noqa: F811
     team_with_business_plan: Team,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811,
+    subscription_gone_at_stripe: None,
 ):
     """Test downgrading to community plan with an active subscription."""
     client.force_login(sample_user)
@@ -357,6 +433,7 @@ def test_changing_to_community_makes_sboms_public(
     sample_component: Component,  # noqa: F811
     sample_sbom: SBOM,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811
+    subscription_gone_at_stripe: None,
 ):
     """Test that changing to community plan makes all team's SBOMs public."""
     # Create 3 private components with their SBOMs

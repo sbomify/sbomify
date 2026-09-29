@@ -664,3 +664,36 @@ def test_stripe_webhook_for_a_deleted_workspace_is_acknowledged(factory):
     assert warned.call_count == 1
     assert "Webhook for a workspace that no longer exists (acknowledged)" in warned.call_args.args[0]
     assert errored.call_count == 0, "a deleted workspace is expected, so nothing here should page anyone"
+
+
+@pytest.mark.django_db
+def test_stripe_webhook_that_arrives_too_early_is_retried_quietly(factory):
+    """A checkout's first invoice beating the checkout webhook is redelivered, and pages nobody."""
+    from sbomify.apps.billing import views as billing_views
+    from sbomify.apps.billing.stripe_client import BillingEventTooEarlyError
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "invoice.payment_succeeded"
+    mock_event.id = "evt_early12345"
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "invoice.payment_succeeded"}),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
+        with patch(
+            "sbomify.apps.billing.billing_processing.handle_payment_succeeded",
+            side_effect=BillingEventTooEarlyError("Workspace abc has not stored the subscription for this invoice yet"),
+        ):
+            with patch.object(billing_views.logger, "warning") as warned:
+                with patch.object(billing_views.logger, "error") as errored:
+                    response = StripeWebhookView.as_view()(request)
+
+    assert response.status_code == 503, "Stripe redelivers only a non-2xx answer"
+    assert warned.call_count == 1
+    assert errored.call_count == 0
