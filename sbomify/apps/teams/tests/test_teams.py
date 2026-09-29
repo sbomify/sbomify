@@ -687,7 +687,9 @@ def test_accept_invitation_still_upgrades_to_owner(django_user_model, community_
     )
     team = Team.objects.create(name="Promotion Test Workspace", billing_plan=community_plan.key)
     membership = Member.objects.create(team=team, user=user, role="admin", is_default_team=True)
-    invitation = Invitation.objects.create(team=team, email=user.email, role="owner")
+    issuer = django_user_model.objects.create_user(username="promote-issuer", email="issuer@example.com")
+    Member.objects.create(team=team, user=issuer, role="owner")
+    invitation = Invitation.objects.create(team=team, email=user.email, role="owner", invited_by=issuer)
 
     client = Client()
     assert client.login(username="promote-to-owner", password="secret")

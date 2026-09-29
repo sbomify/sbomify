@@ -71,6 +71,7 @@ _MATRIX = {
     "access_request:read": ("team", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
     "access_request:decide": ("team", {"owner": True, "member": False, "admin": True, "guest": False, "bot": False}),
     "workspace:delete": ("team", {"owner": True, "member": False, "admin": False, "guest": False, "bot": False}),
+    "member:grant_owner": ("team", {"owner": True, "member": False, "admin": False, "guest": False, "bot": False}),
     # Guests hold NO capability — they are external trust-center visitors and
     # reach restricted content only through the ABAC component:access path.
     # Every guest column below being False is the point of this table.
