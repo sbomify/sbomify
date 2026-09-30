@@ -176,15 +176,7 @@ class KeycloakManager:
                     return None
 
             # Prepare redirect URIs
-            redirect_uris = [f"{settings.APP_BASE_URL}/*"]
-
-            # Add WEBSITE_BASE_URL if it exists
-            if hasattr(settings, "WEBSITE_BASE_URL"):
-                redirect_uris.append(f"{settings.WEBSITE_BASE_URL}/*")
-            # If not available, check if defined in environment but not loaded in settings
-            elif hasattr(settings, "VITE_WEBSITE_BASE_URL"):
-                base_url = settings.VITE_WEBSITE_BASE_URL  # type: ignore[misc]
-                redirect_uris.append(f"{base_url}/*")
+            redirect_uris = [f"{settings.APP_BASE_URL}/*", f"{settings.WEBSITE_BASE_URL}/*"]
 
             # Client configuration
             client_representation = {
