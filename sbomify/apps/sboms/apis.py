@@ -155,6 +155,7 @@ def _store_external_vex(
         sha256_hash=sha256_hash,
         bom_type=SBOM.BomType.VEX.value,
     )
+    filename = ""
     try:
         with transaction.atomic():
             filename = upload_sbom_file(s3, file_content)
@@ -661,6 +662,7 @@ def sbom_upload_cyclonedx(
         sbom_dict["qualifiers"] = sbom_qualifiers
         sbom_dict["bom_type"] = bom_type
 
+        filename = ""
         try:
             with transaction.atomic():
                 filename = upload_sbom_file(s3, request.body)
@@ -903,6 +905,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
         sbom_dict["qualifiers"] = sbom_qualifiers
         sbom_dict["bom_type"] = bom_type
 
+        filename = ""
         try:
             with transaction.atomic():
                 filename = upload_sbom_file(s3, request.body)
@@ -1476,6 +1479,7 @@ def sbom_upload_file(
             sbom_dict["qualifiers"] = sbom_qualifiers
             sbom_dict["bom_type"] = bom_type
 
+            filename = ""
             try:
                 with transaction.atomic():
                     filename = upload_sbom_file(s3, file_content)
@@ -1594,6 +1598,7 @@ def sbom_upload_file(
             sbom_dict["qualifiers"] = sbom_qualifiers
             sbom_dict["bom_type"] = bom_type
 
+            filename = ""
             try:
                 with transaction.atomic():
                     filename = upload_sbom_file(s3, file_content)
