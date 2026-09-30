@@ -26,6 +26,11 @@ class AddTeamForm(_TeamFormBase):
         model = Team
         fields = ["name"]
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # form_modal renders Django's own widget, so the legacy input class goes on it here.
+        self.fields["name"].widget.attrs["class"] = "tw-form-input"
+
     def save(self, *args: Any, user: Any = None, **kwargs: Any) -> Team:
         is_new = self.instance._state.adding
         super().save(*args, **kwargs)

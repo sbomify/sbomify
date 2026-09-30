@@ -232,7 +232,6 @@ INSTALLED_APPS = [
     "django_htmx",
     "django_cotton",
     "ninja",
-    "widget_tweaks",
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
