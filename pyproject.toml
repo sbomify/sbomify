@@ -153,7 +153,7 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["sbomify", "core", "access_tokens", "sboms", "teams"]
+source = ["sbomify"]
 omit = [
     "*apps.py",
     "*migrations/*",
@@ -172,22 +172,6 @@ omit = [
 ]
 
 [tool.coverage.report]
-omit = [
-    "*apps.py",
-    "*migrations/*",
-    "*settings*",
-    "*/migrations/*",
-    "tests.py",
-    "fixtures.py",
-    "*urls.py",
-    "*wsgi/*",
-    "manage.py",
-    "conftest.py",
-    "asgi.py",
-    "wsgi.py",
-    "sboms/sbom_format_schemas/*",
-    "*/tests/*"
-]
 fail_under = 80
 
 [tool.bandit]
@@ -262,19 +246,17 @@ django_settings_module = "sbomify.settings"
 
 # Packages with inline types but no py.typed marker
 [[tool.mypy.overrides]]
-module = ["django_redis.*", "django_vite.*", "ruid.*", "defusedcsv", "defusedcsv.*", "fastjsonschema"]
+module = ["django_redis.*", "defusedcsv", "defusedcsv.*", "fastjsonschema"]
 follow_untyped_imports = true
 
 # Packages with no/minimal types and no stubs on PyPI
 [[tool.mypy.overrides]]
 module = [
     "allauth.*",
-    "whitenoise.*",
     "health_check.*",
     "license_expression.*",
     "dramatiq_crontab.*",
     "django_dramatiq.*",
-    "channels_redis.*",
     "widget_tweaks.*",
     "debug_toolbar.*",
 ]
