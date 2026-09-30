@@ -8,6 +8,7 @@ from typing import Any
 
 import dramatiq
 from django.contrib.auth import get_user_model
+from dramatiq_crontab import cron
 
 from sbomify.logging import getLogger
 from sbomify.task_utils import record_task_breadcrumb
@@ -146,12 +147,14 @@ def send_collaboration_email_task(user_id: int) -> None:
         raise
 
 
+@cron("0 9 * * *")  # type: ignore[untyped-decorator]  # Daily at 9:00 AM UTC
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=1, time_limit=300000)
 def process_onboarding_sequence_batch_task() -> None:
     """
     Process all onboarding sequence emails for eligible users.
 
-    Finds users eligible for each email type and queues individual tasks.
+    Finds users eligible for each email type and queues individual tasks. The
+    welcome email is not part of this: a signal queues it when the user is created.
     """
     from ..models import OnboardingEmail as OE
 
@@ -189,28 +192,6 @@ def process_onboarding_sequence_batch_task() -> None:
         logger.info("[TASK_process_onboarding_sequence] Completed: %d queued, %d failed", total_queued, failed_to_queue)
     except Exception as e:
         logger.error("[TASK_process_onboarding_sequence] Batch processing error: %s", e)
-        raise
-
-
-@dramatiq.actor(queue_name="onboarding_emails", max_retries=1, time_limit=600000)
-def process_all_onboarding_reminders_task() -> None:
-    """
-    Process all onboarding reminder emails (the 4-stage drip sequence).
-
-    Designed to be run on a schedule (e.g., daily via cron or periodic task).
-    Fans out to ``process_onboarding_sequence_batch_task``, which queues
-    quick-start / first-component / first-sbom / collaboration emails for
-    users at the right point in their drip clock. The welcome email is NOT
-    part of this fan-out — it is signal-driven via ``queue_welcome_email``
-    on user creation, not on a daily cron.
-    """
-    try:
-        logger.info("[TASK_process_all_onboarding_reminders] Starting onboarding email processing")
-        process_onboarding_sequence_batch_task.send_with_options(args=(), delay=0)
-        logger.info("[TASK_process_all_onboarding_reminders] Successfully queued sequence processing")
-
-    except Exception as e:
-        logger.error("[TASK_process_all_onboarding_reminders] Error: %s", e)
         raise
 
 
