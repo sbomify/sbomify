@@ -84,7 +84,6 @@ dev = [
     "datamodel-code-generator[http]~=0.44",
     "pytest-playwright>=0.7.1,<0.9",
     "djlint>=1.36.4,<2",
-    "django-cors-headers>=4.9.0",
     "django-stubs[compatible-mypy]>=5.2.0,<7",
     "types-boto3>=1.42.0,<2",
     "types-psycopg2>=2.9.21,<3",
