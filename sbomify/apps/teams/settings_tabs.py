@@ -44,7 +44,6 @@ class SettingsTab:
     roles: tuple[str, ...] = ADMINISTER
     # Billing sections are pointless when the deployment has billing switched off.
     requires_billing: bool = False
-    description: str = ""
 
     @property
     def template_path(self) -> str:
@@ -60,14 +59,12 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         label="General",
         icon="fa-sliders",
         template="general",
-        description="Workspace name, visibility and identifiers.",
     ),
     SettingsTab(
         key="members",
         label="Members",
         icon="fa-users",
         template="members",
-        description="Who can reach this workspace, and what they may do.",
     ),
     SettingsTab(
         key="tokens",
@@ -78,35 +75,30 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         # lists, creates and revokes the caller's own. A member needs one to
         # upload from CI, and a token can never exceed its holder's role.
         roles=MANAGE,
-        description="Personal access tokens for the API and CI.",
     ),
     SettingsTab(
         key="contact-profiles",
         label="Parties",
         icon="fa-address-book",
         template="contact_profiles",
-        description="The people and organisations named on your artifacts.",
     ),
     SettingsTab(
         key="trust-center",
         label="Trust Center",
         icon="fa-globe",
         template="trust_center",
-        description="What the public sees, and who may be let past the gate.",
     ),
     SettingsTab(
         key="controls",
         label="Controls",
         icon="fa-list-check",
         template="controls",
-        description="Compliance frameworks and workspace control statuses.",
     ),
     SettingsTab(
         key="branding",
         label="Branding",
         icon="fa-palette",
         template="branding",
-        description="How this workspace looks to everyone outside it.",
     ),
     # Plugins is deliberately absent: it has its own page in the sidebar, which
     # shows the summary bar as well as the same settings partial this tab
@@ -118,7 +110,6 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         icon="fa-credit-card",
         template="billing",
         requires_billing=True,
-        description="Your plan, usage and payment details.",
     ),
     SettingsTab(
         key="account",
@@ -130,7 +121,6 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         # before the tab list — so listing them here only invited someone to
         # widen the view later and hand guests a settings page by accident.
         roles=READ_INTERNAL,
-        description="Your own sign-in and personal settings.",
     ),
 )
 

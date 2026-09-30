@@ -42,6 +42,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "pagination", "label": "Pagination", "group": "Data"},
     {"id": "stats", "label": "Stat cards", "group": "Data"},
     {"id": "severity", "label": "Severity badges", "group": "Data"},
+    {"id": "role-badges", "label": "Role badges", "group": "Data"},
     {"id": "progress", "label": "Progress", "group": "Data"},
     {"id": "badges", "label": "Badges", "group": "Data"},
     {"id": "tags", "label": "Tags", "group": "Data"},
