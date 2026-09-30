@@ -1,6 +1,7 @@
 {% extends "core/dashboard_base.html.j2" %}
 {% block title %}CRA Compliance - {{ step_name }} - sbomify{% endblock %}
 {% block dashboard_content %}
+    <c-layout.frame class="w-full max-w-5xl mx-auto">
     <c-layout.page-header title="CRA compliance" subtitle="{{ assessment.product.name }} · {{ step_name }}">
     <c-buttons.ghost size="sm" href="{% url 'compliance:cra_product_list' %}">
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to assessments
@@ -21,4 +22,5 @@
     {# Each step template overrides this block with x-data wrapping both content and footer #}
     {% block step_wrapper %}
     {% endblock step_wrapper %}
+    </c-layout.frame>
 {% endblock dashboard_content %}

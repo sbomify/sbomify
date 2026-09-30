@@ -8,10 +8,14 @@ from sbomify.apps.tea.mappers import TEA_API_VERSION
 
 from . import views
 from .views.component_metadata import ComponentMetadataFormView
+from .views.component_vulnerabilities import ComponentTriageModalView
 from .views.repository_setup import RepositorySetupInstructionsView, RepositorySetupTokenView
 
 app_name = "core"
 urlpatterns = [
+    path(
+        "component/<str:component_id>/triage/modal/", ComponentTriageModalView.as_view(), name="component_triage_modal"
+    ),
     path("", views.home, name="home"),
     path("dashboard", views.DashboardView.as_view(), name="dashboard"),
     path("dashboard/trends/", views.DashboardView.as_view(show_trends=True), name="dashboard_trends"),

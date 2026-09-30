@@ -1,0 +1,12 @@
+{% comment %}
+One read-only fact inside a dl. Labels align in a narrow column on desktop;
+values wrap naturally and stack beneath their labels on small screens.
+{% endcomment %}
+<c-vars label />
+<div class="grid grid-cols-1 gap-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4"
+     {{ attrs }}>
+    <dt class="text-sm text-text-muted">{{ label }}</dt>
+    <dd class="m-0 min-w-0 break-words text-sm text-text">
+        {{ slot }}
+    </dd>
+</div>

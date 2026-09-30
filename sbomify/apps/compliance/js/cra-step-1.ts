@@ -1,3 +1,4 @@
+import { focusRequiredField, type RequiredField } from './cra-validation';
 import { registerAlpineComponent } from '../../core/js/alpine-components';
 import { EU_COUNTRIES, EU_COUNTRY_NAMES } from './eu-countries';
 import { getAssessmentId, saveStepAndNavigate } from './cra-shared';
@@ -39,7 +40,7 @@ const PROCEDURE_INFO: Record<string, { label: string; note: string }> = {
   },
 };
 
-function craStep1() {
+export function craStep1() {
   return {
     assessmentId: '',
     product: {} as ProductInfo,
@@ -171,31 +172,30 @@ function craStep1() {
       });
     },
 
-    get canContinue(): boolean {
-      // CRA Annex V item 2 requires the manufacturer's legal name on
-      // the generated DoC. When the team profile still carries a
-      // placeholder (or none) we refuse to advance past Step 1 — this
-      // is the wizard-side prevention that pairs with the render-time
-      // safety net in document_generation_service._build_common_context.
-      // Issue #908.
-      if (this.manufacturerIsPlaceholder) return false;
-      if (!this.category || this.euMarkets.length === 0 || !this.supportPeriodEnd) return false;
-      // Refuse to submit without a procedure. The ``init`` and category
-      // watcher default to the first allowed option, so an empty value
-      // only appears if the options map is missing for the chosen
-      // category — the backend would 400 and the user would have no
-      // clear signal why.
-      if (!this.conformityAssessmentProcedure) return false;
-      // If support period < 5 years, justification is required (CRA Art 13(8))
-      if (this.supportPeriodShort && !this.supportPeriodShortJustification.trim()) return false;
-      // Class I + Module A requires harmonised standard (CRA Art 32(2))
-      if (
-        this.category === 'class_i' &&
-        this.conformityAssessmentProcedure === 'module_a' &&
-        !this.harmonisedStandardApplied
-      ) return false;
-      return true;
+    get missingFields(): RequiredField[] {
+      const fields: RequiredField[] = [];
+      if (this.manufacturerIsPlaceholder) fields.push({ target: 'manufacturer-settings', message: 'Configure a manufacturer in workspace Parties.' });
+      if (!this.category) fields.push({ target: 'product-category', message: 'Choose a product category.' });
+      if (!this.euMarkets.length) fields.push({ target: 'eu-markets', message: 'Select at least one EU market.' });
+      if (!this.supportPeriodEnd) fields.push({ target: 'support-period-end', message: 'Set the support end date.' });
+      if (!this.conformityAssessmentProcedure) fields.push({ target: 'conformity-procedure', message: 'Choose a conformity assessment procedure.' });
+      if (this.supportPeriodShort && !this.supportPeriodShortJustification.trim()) fields.push({ target: 'support-short-justification', message: 'Explain the support period below five years.' });
+      if (this.category === 'class_i' && this.conformityAssessmentProcedure === 'module_a' && !this.harmonisedStandardApplied) fields.push({ target: 'harmonised-standard', message: 'Confirm the harmonised standard, or choose another procedure.' });
+      if (this.euEstablished === 'no') {
+        if (!this.authorizedRepName.trim()) fields.push({ target: 'ar-name', message: 'Enter the representative’s name.' });
+        if (!this.authorizedRepAddress.trim()) fields.push({ target: 'ar-address', message: 'Enter the representative’s address.' });
+        if (!this.authorizedRepEmail.trim()) fields.push({ target: 'ar-email', message: 'Enter the representative’s email.' });
+        if (!this.authorizedRepMandateDate) fields.push({ target: 'ar-mandate-date', message: 'Set the representative’s mandate date.' });
+      }
+      return fields;
     },
+
+    get canContinue(): boolean {
+      return this.missingFields.length === 0;
+    },
+
+    focusRequiredField,
+
 
     /** Whether the selected support period is less than 5 years from reference date.
      *
@@ -247,7 +247,11 @@ function craStep1() {
     },
 
     async save(): Promise<void> {
-      if (!this.canContinue || this.isSaving) return;
+      if (this.isSaving) return;
+      if (!this.canContinue) {
+        this.focusRequiredField(this.missingFields[0].target);
+        return;
+      }
       await saveStepAndNavigate(this.assessmentId, 1, {
         product_category: this.category,
         is_open_source_steward: this.isOpenSourceSteward,
