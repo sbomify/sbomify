@@ -28,7 +28,7 @@ from sbomify.apps.teams.models import Invitation, Team
 pytestmark = pytest.mark.django_db
 User = get_user_model()
 CONSTRAINT_NAME = "core_users_email_ci_unique"
-migration = importlib.import_module("sbomify.apps.core.migrations.0029_user_email_case_insensitive_unique")
+migration = importlib.import_module("sbomify.apps.core.migrations.0030_user_email_case_insensitive_unique")
 
 
 def _user_stored_as(username: str, email: str):

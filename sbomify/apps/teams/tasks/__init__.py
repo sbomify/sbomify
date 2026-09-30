@@ -2,7 +2,7 @@ import ipaddress
 import json
 import logging
 import socket
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import cast
 
 import certifi
@@ -114,6 +114,47 @@ def probe_custom_domain(team_id: int, domain: str) -> None:
         logger.info(f"Successfully validated domain {domain}")
 
 
+def _backoff(failures: int) -> timedelta:
+    """Wait after a counted attempt: base * 2^failures, capped at MAX_RETRIES (~3.5 days), never stopping."""
+    return timedelta(minutes=BASE_DELAY_MINUTES * (2 ** min(failures, MAX_RETRIES)))
+
+
+def _check(team_id: int, domain: str, last_checked_at: datetime | None) -> None:
+    """Count one attempt on a pending domain, queue its probe and queue its next check.
+
+    Counted only while the row still holds this domain, pending, with the last check
+    time the caller read. That time is the claim: a check whose time no longer matches
+    was overtaken by a save, the sweep or another check, so each domain keeps a single
+    line of checks and needs no scheduler to get the next one. Counted and rescheduled
+    before the probe runs, so a probe that times out still backs off and still gets a next check.
+    """
+    now = timezone.now()
+    # Use F() expression for atomic increment to prevent race conditions
+    counted = Team.objects.filter(
+        pk=team_id,
+        custom_domain=domain,
+        custom_domain_validated=False,
+        custom_domain_last_checked_at=last_checked_at,
+    ).update(
+        custom_domain_verification_failures=F("custom_domain_verification_failures") + 1,
+        custom_domain_last_checked_at=now,
+    )
+    if not counted:
+        return
+    failures = Team.objects.filter(pk=team_id).values_list("custom_domain_verification_failures", flat=True).first()
+    check_custom_domain.send_with_options(
+        args=(team_id, domain, now.isoformat()),
+        delay=int(_backoff(failures or 0).total_seconds() * 1000),
+    )
+    probe_custom_domain.send(team_id, domain)
+
+
+@dramatiq.actor(queue_name="domain_verification", max_retries=0, time_limit=60000)
+def check_custom_domain(team_id: int, domain: str, last_checked_at: str | None = None) -> None:
+    """Check a pending domain now. Queued when a workspace saves it, then by each check for the next."""
+    _check(team_id, domain, datetime.fromisoformat(last_checked_at) if last_checked_at else None)
+
+
 @dramatiq.actor(time_limit=900000)  # 15 minutes
 def verify_custom_domains() -> None:
     """
@@ -134,18 +175,7 @@ def verify_custom_domains() -> None:
     for team in teams:
         # Check if it's time to retry based on failure count
         if team.custom_domain_last_checked_at:
-            # Calculate backoff: base * 2^failures
-            # failures=0 -> 5 min
-            # failures=1 -> 10 min
-            # failures=2 -> 20 min
-            # ...
-            # failures=10+ -> ~3.5 days (plateaus at MAX_RETRIES)
-            # Note: We never stop trying, the backoff just caps at ~3.5 days
-            failures = min(team.custom_domain_verification_failures, MAX_RETRIES)
-            backoff_minutes = BASE_DELAY_MINUTES * (2**failures)
-            next_check_time = team.custom_domain_last_checked_at + timedelta(minutes=backoff_minutes)
-
-            if now < next_check_time:
+            if now < team.custom_domain_last_checked_at + _backoff(team.custom_domain_verification_failures):
                 continue
 
         logger.info(f"Probing custom domain {team.custom_domain} for team {team.key}")
@@ -156,18 +186,7 @@ def verify_custom_domains() -> None:
         )
 
         try:
-            # Counted before the probe runs, so a probe that times out still backs off.
-            # Only if the domain is still the one read above and still pending.
-            # Use F() expression for atomic increment to prevent race conditions
-            counted = Team.objects.filter(
-                pk=team.pk, custom_domain=team.custom_domain, custom_domain_validated=False
-            ).update(
-                custom_domain_verification_failures=F("custom_domain_verification_failures") + 1,
-                custom_domain_last_checked_at=now,
-            )
-            if counted:
-                probe_custom_domain.send(team.pk, cast(str, team.custom_domain))
-
+            _check(team.pk, cast(str, team.custom_domain), team.custom_domain_last_checked_at)
         except Exception as e:
             logger.error(f"Error verifying domain {team.custom_domain}: {e}")
 

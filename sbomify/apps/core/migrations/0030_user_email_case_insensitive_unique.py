@@ -21,7 +21,7 @@ def lowercase_emails_and_add_constraint(apps, schema_editor):
     Accounts whose addresses differ only in case are left exactly as they are:
     choosing which one keeps the address is a decision for a person. While any
     exist the constraint is not created, and the migration logs their ids.
-    Resolve them, then run ``migrate core 0028`` and ``migrate core`` again.
+    Resolve them, then run ``migrate core 0029`` and ``migrate core`` again.
     """
     User = apps.get_model("core", "User")
     duplicated = list(
@@ -56,7 +56,7 @@ def drop_constraint(apps, schema_editor):
 class Migration(migrations.Migration):
     dependencies = [
         ("auth", "0012_alter_user_first_name_max_length"),
-        ("core", "0028_user_newsletter_opt_in"),
+        ("core", "0029_user_email_verified_from_last_login"),
     ]
 
     operations = [
