@@ -23,7 +23,9 @@ The host around them is preserved through a page refresh. The server always send
     </div>
     {% comment %}Where the result came from, in one quiet line under the checks it explains.{% endcomment %}
     <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-xs text-text-muted">
-        <span>v{{ run.plugin_version }}{% if run.current_version %} (latest v{{ run.current_version }}){% endif %}</span>
+        <span>v{{ run.plugin_version }}
+            {% if run.current_version %}(latest v{{ run.current_version }}){% endif %}
+        </span>
         <span>{{ run.run_reason|format_run_reason }}</span>
         {% if run.completed_at %}<span>{{ run.completed_at|date:"j M Y, H:i" }}</span>{% endif %}
         {% for name in run.release_names %}
@@ -36,7 +38,8 @@ The host around them is preserved through a page refresh. The server always send
                 <a href="{{ standard.standard_url }}"
                    target="_blank"
                    rel="noopener noreferrer"
-                   class="text-primary hover:underline">{{ standard.standard_name|default:"Read the standard" }} <i class="fas fa-external-link-alt ml-1 text-[0.625rem]" aria-hidden="true"></i></a>
+                   class="text-primary hover:underline">{{ standard.standard_name|default:"Read the standard" }} <i class="fas fa-external-link-alt ml-1 text-[0.625rem]"
+    aria-hidden="true"></i></a>
             {% endif %}
         {% endwith %}
         {% include 'plugins/components/_rerun_button.html.j2' %}

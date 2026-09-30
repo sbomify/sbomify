@@ -29,7 +29,11 @@
                 <span class="flex min-w-0 flex-col gap-0.5">
                     <span class="font-semibold text-text">{{ requirement.label }}</span>
                     <span class="text-xs text-text-muted">
-                        {% if requirement.status == 'warning' %}Needs review in{% else %}Not met in{% endif %}
+                        {% if requirement.status == 'warning' %}
+                            Needs review in
+                        {% else %}
+                            Not met in
+                        {% endif %}
                         <span class="max-sm:hidden">{{ requirement.standards_not_met|intcomma }} standard{{ requirement.standards_not_met|pluralize }}</span>
                         <span class="sm:hidden">{{ requirement.held_back|join:", " }}</span>
                     </span>
@@ -54,7 +58,9 @@
                         {% for note in requirement.notes %}
                             <c-assessments.check status="{{ note.status }}" title="{{ note.standard }}">
                             <span class="text-text">{{ note.title }}</span>
-                            {% if note.description %}<div class="mt-1">{{ note.description|advisory_prose|format_finding_description }}</div>{% endif %}
+                            {% if note.description %}
+                                <div class="mt-1">{{ note.description|advisory_prose|format_finding_description }}</div>
+                            {% endif %}
                             </c-assessments.check>
                         {% endfor %}
                     </ul>

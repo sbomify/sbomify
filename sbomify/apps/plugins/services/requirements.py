@@ -86,7 +86,7 @@ SHORT_NAMES: dict[str, str] = {
 }
 
 #: Worst first. A requirement takes the worst outcome any standard gave it.
-_RANK = {"error": 0, "fail": 0, "warning": 1, "info": 2, "pass": 3}
+_RANK = {"error": 0, "fail": 0, "warning": 1, "info": 2, "pass": 3}  # nosec B105 - check outcomes, not credentials
 _NOT_MET = ("fail", "error", "warning")
 
 _SQL = """

@@ -42,7 +42,7 @@ PARAM_PREFIX = "run_"
 #: in a page full of other cards; this one owns its accordion, so it shows more.
 PAGE_SIZE = 25
 
-_CHECK_ORDER = {"error": 0, "fail": 0, "warning": 1, "info": 2, "pass": 4}
+_CHECK_ORDER = {"error": 0, "fail": 0, "warning": 1, "info": 2, "pass": 4}  # nosec B105 - check outcomes, not credentials
 
 
 @dataclass(frozen=True)

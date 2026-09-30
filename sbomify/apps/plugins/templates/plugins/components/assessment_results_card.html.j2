@@ -9,7 +9,10 @@
     and refreshing one region is what leaves a page showing two numbers.
 {% endcomment %}
 <c-layout.frame id="assessment-results">
+{# The subtitle is one attribute value, so the formatter must not break it across lines. #}
+{# djlint:off #}
 <c-layout.section-header level="2" title="Assessments" subtitle="{% with matrix=assessment_runs.requirements %}{% if matrix.columns %}{% if matrix.to_fix %}{{ matrix.to_fix|intcomma }} requirement{{ matrix.to_fix|pluralize }} to fix · {% endif %}Meets {{ matrix.standards_met|intcomma }} of {{ matrix.columns|length|intcomma }} standard{{ matrix.columns|length|pluralize }}{% endif %}{% endwith %}">
+{# djlint:on #}
 <c-slot name="actions">
 {% with status=assessment_runs.status_summary %}
     {% if status.overall_status == 'all_pass' %}
