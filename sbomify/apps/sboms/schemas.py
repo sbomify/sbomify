@@ -22,18 +22,14 @@ from .sbom_format_schemas import spdx_2_3 as spdx23
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
 
 __all__ = [
-    "BaseLicenseSchema",
     "ComponentAuthorSchema",
     "ComponentMetaData",
-    "ComponentMetaDataUpdate",
     "ComponentSupplierContactSchema",
     "CryptoAssetSchema",
     "CryptoInventorySchema",
     "CustomLicenseSchema",
     "CycloneDXSupportedVersion",
     "LicenseSchema",
-    "PublicStatusSchema",
-    "SBOMFormat",
     "SBOMResponseSchema",
     "SBOMUploadRequest",
     "SPDX3Package",
@@ -56,10 +52,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-
-class PublicStatusSchema(Schema):
-    is_public: bool
 
 
 class SBOMUploadRequest(Schema):
@@ -146,23 +138,6 @@ class CryptoInventorySchema(Schema):
     assets: list[CryptoAssetSchema]
 
 
-class DashboardSBOMUploadInfo(Schema):
-    component_name: str
-    sbom_name: str
-    sbom_version: str | None = None
-    created_at: datetime
-    bom_type: str
-
-
-class DashboardStatsResponse(Schema):
-    total_products: int
-    total_components: int
-    latest_uploads: list[DashboardSBOMUploadInfo]
-
-
-# Import core schemas to avoid duplication
-
-
 class CycloneDXSupportedVersion(str, Enum):
     """
     Supported CycloneDX specification versions.
@@ -243,11 +218,7 @@ def validate_cyclonedx_sbom(
     return payload, spec_version
 
 
-class BaseLicenseSchema(BaseModel):
-    pass
-
-
-class CustomLicenseSchema(BaseLicenseSchema):
+class CustomLicenseSchema(BaseModel):
     name: str
     url: str | None = None
     text: str | None = None
@@ -267,6 +238,13 @@ class CustomLicenseSchema(BaseLicenseSchema):
         if self.text:
             result.text = CycloneDx.Attachment(content=self.text)
         return result
+
+
+def _blank_empty_emails(v: Any) -> Any:
+    """Clean contact information by converting empty email strings to None."""
+    if isinstance(v, list):
+        return [{**c, "email": None} if isinstance(c, dict) and c.get("email") == "" else c for c in v]
+    return v
 
 
 class ComponentSupplierContactSchema(BaseModel):
@@ -352,20 +330,7 @@ class SupplierSchema(BaseModel):
     @field_validator("contacts", mode="before")
     @classmethod
     def clean_supplier_contacts(cls, v: Any) -> Any:
-        """Clean supplier contact information by converting empty strings to None."""
-        if isinstance(v, list):
-            cleaned_contacts = []
-            for contact in v:
-                if isinstance(contact, dict):
-                    # Convert empty strings to None for email validation
-                    cleaned_contact = contact.copy()
-                    if cleaned_contact.get("email") == "":
-                        cleaned_contact["email"] = None
-                    cleaned_contacts.append(cleaned_contact)
-                else:
-                    cleaned_contacts.append(contact)
-            return cleaned_contacts
-        return v
+        return _blank_empty_emails(v)
 
 
 class ComponentMetaData(BaseModel):
@@ -390,20 +355,7 @@ class ComponentMetaData(BaseModel):
     @field_validator("authors", mode="before")
     @classmethod
     def clean_authors_contacts(cls, v: Any) -> Any:
-        """Clean author contact information by converting empty strings to None."""
-        if isinstance(v, list):
-            cleaned_authors = []
-            for author in v:
-                if isinstance(author, dict):
-                    # Convert empty strings to None for email validation
-                    cleaned_author = author.copy()
-                    if cleaned_author.get("email") == "":
-                        cleaned_author["email"] = None
-                    cleaned_authors.append(cleaned_author)
-                else:
-                    cleaned_authors.append(author)
-            return cleaned_authors
-        return v
+        return _blank_empty_emails(v)
 
     def to_cyclonedx(
         self, spec_version: CycloneDXSupportedVersion
@@ -534,41 +486,6 @@ class ComponentMetaData(BaseModel):
         return result
 
 
-class ComponentMetaDataUpdate(BaseModel):
-    """Schema for updating component metadata (excludes read-only fields like id and name)."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    contact_profile_id: str | None = None
-    supplier: SupplierSchema = Field(default_factory=SupplierSchema)
-    authors: list[ComponentAuthorSchema] = Field(default_factory=list)
-    licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
-    lifecycle_phase: str | None = None
-
-    # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
-    release_date: date | None = None
-    end_of_support: date | None = None
-    end_of_life: date | None = None
-
-    @field_validator("authors", mode="before")
-    @classmethod
-    def clean_authors_contacts(cls, v: Any) -> Any:
-        """Clean author contact information by converting empty strings to None."""
-        if isinstance(v, list):
-            cleaned_authors = []
-            for author in v:
-                if isinstance(author, dict):
-                    # Convert empty strings to None for email validation
-                    cleaned_author = author.copy()
-                    if cleaned_author.get("email") == "":
-                        cleaned_author["email"] = None
-                    cleaned_authors.append(cleaned_author)
-                else:
-                    cleaned_authors.append(author)
-            return cleaned_authors
-        return v
-
-
 class ComponentMetaDataPatch(BaseModel):
     """Schema for partially updating component metadata using PATCH (all fields optional)."""
 
@@ -588,29 +505,7 @@ class ComponentMetaDataPatch(BaseModel):
     @field_validator("authors", mode="before")
     @classmethod
     def clean_authors_contacts(cls, v: Any) -> Any:
-        """Clean author contact information by converting empty strings to None."""
-        if isinstance(v, list):
-            cleaned_authors = []
-            for author in v:
-                if isinstance(author, dict):
-                    # Convert empty strings to None for email validation
-                    cleaned_author = author.copy()
-                    if cleaned_author.get("email") == "":
-                        cleaned_author["email"] = None
-                    cleaned_authors.append(cleaned_author)
-                else:
-                    cleaned_authors.append(author)
-            return cleaned_authors
-        return v
-
-
-class ComponentMetadataRequest(BaseModel):
-    version: str
-
-
-class SBOMFormat(str, Enum):
-    spdx = "spdx"
-    cyclonedx = "cyclonedx"
+        return _blank_empty_emails(v)
 
 
 class SPDXSupportedVersion(str, Enum):
