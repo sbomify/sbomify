@@ -19,7 +19,6 @@ jobs:
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
-      DJANGO_TEST: 'true'
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
