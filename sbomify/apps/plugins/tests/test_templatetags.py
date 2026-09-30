@@ -23,6 +23,12 @@ class TestFormatRunReason:
     def test_config_change(self) -> None:
         assert format_run_reason("config_change") == "Config Change"
 
+    def test_every_run_reason_has_a_label(self) -> None:
+        from sbomify.apps.plugins.sdk.enums import RunReason
+
+        for reason in RunReason:
+            assert format_run_reason(reason.value) != reason.value
+
     def test_unknown_returns_original(self) -> None:
         assert format_run_reason("unknown_reason") == "unknown_reason"
 
