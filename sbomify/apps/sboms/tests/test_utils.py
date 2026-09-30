@@ -10,7 +10,6 @@ from sbomify.apps.core.utils import number_to_random_token, verify_item_access
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_5 as cdx15
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
-from sbomify.apps.sboms.utils import ProductSBOMBuilder
 from sbomify.apps.teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
 from sbomify.apps.teams.models import Member, Team
 
@@ -108,46 +107,17 @@ def mock_s3_client(mocker):
     return mock_client
 
 
-@pytest.mark.parametrize(
-    "spec_version,input_version,expected_component_type,expected_ref_type",
-    [
-        ("1.6", "1.6", cdx16.Component, cdx16.ExternalReference),
-        ("1.5", "1.5", cdx16.Component, cdx16.ExternalReference),  # Now returns 1.6 components
-    ],
-)
-def test_get_component_metadata_creates_correct_external_reference_type(
-    spec_version: str, input_version: str, expected_component_type, expected_ref_type, tmp_path
-):
-    """Test that get_component_metadata creates CycloneDX 1.6 components with proper external references."""
-    builder = ProductSBOMBuilder()
-
-    sbom_data = {
-        "bomFormat": "CycloneDX",
-        "specVersion": spec_version,
-        "metadata": {"component": {"name": "test-component", "type": "library", "version": "1.0.0"}},
-    }
-
-    component = builder.get_component_metadata("test.json", sbom_data, "", "test-sbom-id")
-
-    # Verify the component is of the correct type (always CycloneDX 1.6 now)
-    assert isinstance(component, expected_component_type)
-    assert component.name == "test-component"
-    assert component.type == "library"
-    # Handle different version types between CycloneDX versions
-    if hasattr(component.version, "root"):
-        assert component.version.root == "1.0.0"  # CycloneDX 1.6 uses Version RootModel
-    else:
-        assert component.version == "1.0.0"  # CycloneDX 1.5 uses plain string
-
-    # Verify the ExternalReference is of the correct type (always CycloneDX 1.6 now)
-    assert component.externalReferences is not None
-    assert len(component.externalReferences) == 1
-
-    external_ref = component.externalReferences[0]
-    assert isinstance(external_ref, expected_ref_type)
-    # The URL should now use the API endpoint format with the test settings APP_BASE_URL
+@pytest.mark.django_db
+def test_create_external_reference_links_the_member_download():
+    """An aggregate member's reference: a CycloneDX 1.6 ExternalReference to the download endpoint."""
     from django.conf import settings
 
+    from sbomify.apps.sboms.utils import create_external_reference
+
+    external_ref = create_external_reference("test.json", "test-sbom-id")
+
+    assert isinstance(external_ref, cdx16.ExternalReference)
+    # The URL should now use the API endpoint format with the test settings APP_BASE_URL
     expected_url = f"{settings.APP_BASE_URL}/api/v1/sboms/test-sbom-id/download"
     assert external_ref.url == expected_url
 
@@ -161,61 +131,6 @@ def test_get_component_metadata_creates_correct_external_reference_type(
     # Calculate expected hash of the filename
     expected_hash = hashlib.sha256("test.json".encode("utf-8")).hexdigest()
     assert external_ref.hashes[0].content.root == expected_hash
-
-
-def test_get_component_metadata_unsupported_version():
-    """Test get_component_metadata with unsupported CycloneDX version (now resilient)."""
-    builder = ProductSBOMBuilder()
-
-    sbom_data = {
-        "bomFormat": "CycloneDX",
-        "specVersion": "2.0",  # Unsupported version, but method is now resilient
-        "metadata": {"component": {"name": "test-component", "type": "library"}},
-    }
-
-    component = builder.get_component_metadata("test.json", sbom_data, "", "test-sbom-id")
-
-    # The method should now be resilient and extract what it can
-    assert component is not None
-    assert component.name == "test-component"
-    assert component.type == "library"
-    assert component.version is None  # No version provided
-
-    # Should have external reference to original SBOM
-    assert component.externalReferences is not None
-    assert len(component.externalReferences) == 1
-    from django.conf import settings
-
-    expected_url = f"{settings.APP_BASE_URL}/api/v1/sboms/test-sbom-id/download"
-    assert component.externalReferences[0].url == expected_url
-
-
-def test_get_component_metadata_invalid_bom_format():
-    """Test get_component_metadata with invalid BOM format."""
-    builder = ProductSBOMBuilder()
-
-    sbom_data = {
-        "bomFormat": "SPDX",  # Wrong format
-        "specVersion": "1.6",
-        "metadata": {"component": {"name": "test-component", "type": "library"}},
-    }
-
-    component = builder.get_component_metadata("test.json", sbom_data, "", "test-sbom-id")
-    assert component is None
-
-
-def test_get_component_metadata_missing_component():
-    """Test get_component_metadata with missing component metadata."""
-    builder = ProductSBOMBuilder()
-
-    sbom_data = {
-        "bomFormat": "CycloneDX",
-        "specVersion": "1.6",
-        "metadata": {},  # Missing component
-    }
-
-    component = builder.get_component_metadata("test.json", sbom_data, "", "test-sbom-id")
-    assert component is None
 
 
 def test_external_reference_type_enums_exist():

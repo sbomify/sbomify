@@ -37,7 +37,7 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Protocol
+from typing import Any, Optional
 from uuid import uuid4
 
 from django.conf import settings
@@ -126,14 +126,6 @@ def _spdx3_component_info(sbom_data: dict[str, Any]) -> tuple[str, str | None, s
     if pkg is None:
         pkg = packages[0]
     return pkg.get("name", "Unknown"), pkg.get("software_packageVersion"), None
-
-
-class SBOMBuilderProtocol(Protocol):
-    """Protocol defining the interface for SBOM builders."""
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Build the SBOM and return the result."""
-        ...
 
 
 class BaseSBOMBuilder(ABC):
@@ -292,26 +284,6 @@ class BaseSBOMBuilder(ABC):
         ]
         fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
         return members, fetched
-
-    def select_best_sbom(self, sboms: list[Any]) -> Any:
-        """
-        Select the best SBOM from a list based on format preference.
-
-        Uses format-aware selection to prefer SBOMs in the same format as the
-        output being generated. Falls back to other formats if the preferred
-        format isn't available.
-
-        Args:
-            sboms: List of SBOM instances to choose from
-
-        Returns:
-            The best matching SBOM, or None if no suitable SBOM found
-        """
-        from sbomify.apps.sboms.utils import select_sbom_by_format
-
-        # Determine preferred format based on output format
-        preferred = "cyclonedx" if self.format == SBOMFormat.CYCLONEDX else "spdx"
-        return select_sbom_by_format(sboms, preferred_format=preferred, fallback=True)
 
 
 # =============================================================================
@@ -1147,7 +1119,7 @@ def get_sbom_builder(
     Factory function to get the appropriate SBOM builder.
 
     Args:
-        entity_type: Type of entity ("release"; "product" goes through ProductSBOMBuilder in utils.py)
+        entity_type: Type of entity (only "release" is supported)
         output_format: Output format (SBOMFormat.CYCLONEDX or SBOMFormat.SPDX)
         version: Format version (e.g., SBOMVersion.CDX_1_6, SBOMVersion.SPDX_2_3)
                  If None, defaults to latest version for the format
