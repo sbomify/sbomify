@@ -42,7 +42,7 @@ from sbomify.apps.sboms.utils import (
 )
 from sbomify.apps.teams.models import ContactProfile
 
-from .models import SBOM, Component, Product
+from .models import SBOM, Component
 from .schemas import (
     ComponentMetaData,
     CryptoInventorySchema,
@@ -155,7 +155,7 @@ def _store_external_vex(
         with transaction.atomic():
             sbom.save()
     except IntegrityError:
-        _cleanup_orphaned_s3_object(filename)
+        log_orphaned_object(filename)
         raise
 
     # The row is committed; a broadcast hiccup must not fail the upload.
@@ -165,15 +165,6 @@ def _store_external_vex(
         log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
     schedule_vex_reapply(component.id)
     return 201, {"id": sbom.id}
-
-
-def _cleanup_orphaned_s3_object(filename: str) -> None:
-    """Log a potential orphaned S3 object for manual cleanup.
-
-    Shares one policy and one log format with the document upload path; the
-    reasoning for logging rather than deleting lives with the helper.
-    """
-    log_orphaned_object(filename)
 
 
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
@@ -186,9 +177,6 @@ def _broadcast_sbom_uploaded(component: Component, sbom: SBOM) -> None:
         message_type="sbom_uploaded",
         data={"sbom_id": str(sbom.id), "component_id": str(component.id), "name": sbom.name},
     )
-
-
-item_type_map = {"component": Component, "product": Product}
 
 
 def _build_component_metadata_from_native_fields(component: Component) -> ComponentMetaData:
@@ -493,22 +481,6 @@ def _extract_spdx3_primary_package(
 # Removed duplicate public_status endpoints - use core API PATCH endpoints with is_public field instead
 
 
-def _public_api_item_access_checks(
-    request: HttpRequest, item_type: str, item_id: str
-) -> Component | Product | tuple[int, dict[str, str]]:
-    if item_type not in item_type_map:
-        return 400, {"detail": "Invalid item type"}
-
-    model_class = item_type_map[item_type]
-
-    rec: Component | Product = get_object_or_404(model_class, pk=item_id)  # type: ignore[assignment]
-
-    if not can(request, f"{item_type}:manage", rec):  # item_type is validated to product|component above
-        return 403, {"detail": "Forbidden"}
-
-    return rec
-
-
 @router.post(
     "/artifact/cyclonedx/{component_id}",
     response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
@@ -662,7 +634,7 @@ def sbom_upload_cyclonedx(
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError as e:
-            _cleanup_orphaned_s3_object(filename)
+            log_orphaned_object(filename)
             if _is_duplicate_integrity_error(e):
                 return 409, {
                     "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
@@ -904,7 +876,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError as e:
-            _cleanup_orphaned_s3_object(filename)
+            log_orphaned_object(filename)
             if _is_duplicate_integrity_error(e):
                 return 409, {
                     "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
@@ -975,11 +947,9 @@ def get_cyclonedx_component_metadata(
     component and returned as response.
     """
 
-    result = _public_api_item_access_checks(request, "component", component_id)
-    if isinstance(result, tuple):
-        return result
-
-    component = result
+    component = get_object_or_404(Component, pk=component_id)
+    if not can(request, "component:manage", component):
+        return 403, {"detail": "Forbidden"}
 
     # Prefetch related fields for efficient metadata building
     component = (
@@ -1477,7 +1447,7 @@ def sbom_upload_file(
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError as e:
-                _cleanup_orphaned_s3_object(filename)
+                log_orphaned_object(filename)
                 if _is_duplicate_integrity_error(e):
                     return 409, {
                         "detail": (
@@ -1595,7 +1565,7 @@ def sbom_upload_file(
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError as e:
-                _cleanup_orphaned_s3_object(filename)
+                log_orphaned_object(filename)
                 if _is_duplicate_integrity_error(e):
                     return 409, {
                         "detail": (

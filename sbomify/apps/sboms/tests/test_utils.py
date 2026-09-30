@@ -480,21 +480,6 @@ def test_private_product_sbom_generation(tmp_path):
 
 
 @pytest.mark.django_db
-def test_invalid_sbom_id_validation():
-    """Test that invalid SBOM IDs are handled gracefully."""
-
-    from sbomify.apps.sboms.utils import validate_api_endpoint
-
-    # Test with non-existent SBOM ID
-    result = validate_api_endpoint("non-existent-sbom-id")
-    assert result is False
-
-    # Test with invalid UUID format
-    result = validate_api_endpoint("invalid-uuid")
-    assert result is False
-
-
-@pytest.mark.django_db
 def test_cyclonedx_schema_mapping_error():
     """Test that schema mapping errors are properly handled in CycloneDX Type3 enum."""
     from sbomify.apps.sboms.utils import _get_cyclonedx_type_for_product_link

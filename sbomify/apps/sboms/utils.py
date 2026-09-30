@@ -471,17 +471,6 @@ def get_signer() -> signing.TimestampSigner:
     return _signer
 
 
-def _get_cyclonedx_model() -> Any:
-    """Get the CycloneDX model, importing it lazily to avoid import errors."""
-    try:
-        from .sbom_format_schemas import cyclonedx_1_6 as cdx16
-
-        return cdx16
-    except ImportError:
-        log.warning("CycloneDX library not available. Some SBOM features may be limited.")
-        return None
-
-
 @contextmanager
 def temporary_sbom_files() -> Any:
     """Context manager for handling temporary SBOM files with automatic cleanup."""
@@ -497,43 +486,6 @@ def temporary_sbom_files() -> Any:
                     log.debug(f"Cleaned up temporary file: {temp_file}")
             except Exception as e:
                 log.warning(f"Failed to cleanup temporary file {temp_file}: {e}")
-
-
-def validate_api_endpoint(sbom_id: str) -> bool:
-    """
-    Validate that the API endpoint for SBOM download exists and is accessible.
-
-    Args:
-        sbom_id: The SBOM ID to validate
-
-    Returns:
-        bool: True if the endpoint should be accessible, False otherwise
-    """
-    try:
-        # Check if the SBOM exists and has proper access controls
-        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
-
-        # Verify the SBOM has a valid file
-        if not sbom.sbom_filename:
-            return False
-
-        # Check if the component is public (for public API access)
-        from sbomify.apps.sboms.models import Component
-
-        if sbom.component.visibility != Component.Visibility.PUBLIC:
-            log.warning(f"API endpoint reference created for private SBOM {sbom_id}")
-
-        return True
-    except SBOM.DoesNotExist:
-        log.error(f"API endpoint reference created for non-existent SBOM {sbom_id}")
-        return False
-    except Exception as e:
-        # Handle database access issues gracefully (e.g., in tests)
-        if "Database access not allowed" in str(e):
-            log.debug(f"Database access not allowed for API endpoint validation of SBOM {sbom_id}")
-            return True
-        log.warning(f"Failed to validate API endpoint for SBOM {sbom_id}: {e}")
-        return True  # Default to allowing the reference
 
 
 def select_sbom_by_format(
@@ -603,10 +555,6 @@ def select_sbom_by_format(
 
 def create_component_type_mapping() -> dict[str, Any]:
     """Create mapping for component type strings to CycloneDX enums."""
-    cdx16 = _get_cyclonedx_model()
-    if cdx16 is None:
-        return {}
-
     return {
         "application": cdx16.Type.application,
         "framework": cdx16.Type.framework,
@@ -634,28 +582,13 @@ def extract_component_info(component_dict: dict[str, Any]) -> tuple[str, str, An
 
 def create_version_object(version: Any) -> Any:
     """Create a CycloneDX version object from various input types."""
-    cdx16 = _get_cyclonedx_model()
-    if cdx16 is None or not version:
+    if not version:
         return None
-
-    if isinstance(version, str):
-        return cdx16.Version(version)
-    elif isinstance(version, dict):
-        return cdx16.Version(str(version))
-    else:
-        return cdx16.Version(str(version))
+    return cdx16.Version(str(version))
 
 
 def create_external_reference(sbom_filename: str, sbom_id: str, user: Any = None) -> Any:
-    """Create an external reference for the SBOM with proper validation and signed URLs for private components."""
-    cdx16 = _get_cyclonedx_model()
-    if cdx16 is None:
-        return None
-
-    # Validate the API endpoint exists
-    if not validate_api_endpoint(sbom_id):
-        log.warning(f"Creating external reference for potentially invalid SBOM endpoint: {sbom_id}")
-
+    """Create an external reference for the SBOM, with a signed URL for a private component."""
     # Get the SBOM instance to check if it's private and generate appropriate URL
     try:
         from sbomify.apps.sboms.models import SBOM
@@ -916,10 +849,6 @@ def spdx3_inbound_member_dependency_uris(
 
 def create_product_external_references(product: Product, user: Any = None) -> list[Any]:
     """Create external references from product links and documents."""
-    cdx16 = _get_cyclonedx_model()
-    if cdx16 is None:
-        return []
-
     external_refs = []
 
     # Add product links as external references
@@ -1012,10 +941,6 @@ def create_product_spdx_external_references(product: Product, user: Any = None) 
 
 def _get_cyclonedx_type_for_product_link(link_type: str) -> Any:
     """Map product link types to CycloneDX external reference types."""
-    cdx16 = _get_cyclonedx_model()
-    if cdx16 is None:
-        return None
-
     mapping = {
         "website": cdx16.Type3.website,
         "support": cdx16.Type3.support,
@@ -1042,10 +967,6 @@ def _get_cyclonedx_type_for_document_type(document_type: str) -> Any:
     does nothing to the SBOM we actually emit. The two agreed by luck, and a
     test now pins that every document type still resolves to a real Type3.
     """
-    cdx16 = _get_cyclonedx_model()
-    if cdx16 is None:
-        return None
-
     from sbomify.apps.documents.models import Document
 
     ref_type = Document(document_type=document_type).cyclonedx_external_ref_type
