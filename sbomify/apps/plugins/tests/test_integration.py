@@ -7,7 +7,7 @@ import pytest
 from django.db import transaction
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.plugins.builtins.checksum import ChecksumPlugin
+from sbomify.apps.plugins.builtins.ntia import NTIAMinimumElementsPlugin
 from sbomify.apps.plugins.models import (
     AssessmentRun,
     RegisteredPlugin,
@@ -83,44 +83,49 @@ def sample_sbom_bytes():
     ).encode("utf-8")
 
 
+NTIA_NAME = "ntia-minimum-elements-2021"
+
+
 @pytest.fixture
-def registered_checksum_plugin(db):
-    """Register the checksum plugin."""
-    plugin = RegisteredPlugin.objects.create(
-        name="checksum",
-        display_name="Checksum Plugin",
-        description="Computes SHA256 checksum of SBOM content",
-        category=AssessmentCategory.COMPLIANCE.value,
-        version="1.0.0",
-        plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
-        is_enabled=True,
+def registered_ntia_plugin(db):
+    """Register the NTIA plugin. post_migrate may already have registered it."""
+    plugin, _ = RegisteredPlugin.objects.update_or_create(
+        name=NTIA_NAME,
+        defaults={
+            "display_name": "NTIA Minimum Elements (2021)",
+            "description": "NTIA compliance checking",
+            "category": AssessmentCategory.COMPLIANCE.value,
+            "version": NTIAMinimumElementsPlugin.VERSION,
+            "plugin_class_path": "sbomify.apps.plugins.builtins.ntia.NTIAMinimumElementsPlugin",
+            "is_enabled": True,
+        },
     )
     yield plugin
     plugin.delete()
 
 
 @pytest.fixture
-def team_with_checksum_enabled(test_team: Team, registered_checksum_plugin):
-    """Create team settings with checksum plugin enabled."""
+def team_with_ntia_enabled(test_team: Team, registered_ntia_plugin):
+    """Create team settings with the NTIA plugin enabled."""
     settings = TeamPluginSettings.objects.create(
         team=test_team,
-        enabled_plugins=["checksum"],
+        enabled_plugins=[NTIA_NAME],
     )
     yield settings
     settings.delete()
 
 
 @pytest.mark.django_db
-class TestChecksumPluginEndToEnd:
-    """End-to-end integration tests for the checksum plugin."""
+class TestPluginEndToEnd:
+    """End-to-end integration tests for a registered builtin plugin."""
 
-    def test_full_assessment_flow(self, test_sbom, sample_sbom_bytes, registered_checksum_plugin, mocker) -> None:
+    def test_full_assessment_flow(self, test_sbom, sample_sbom_bytes, registered_ntia_plugin, mocker) -> None:
         """Test the complete flow from SBOM to stored assessment result.
 
         This test verifies:
         1. Plugin can be loaded by name
         2. Orchestrator fetches SBOM and creates temp file
-        3. Plugin receives correct data and computes checksum
+        3. Plugin receives the SBOM and assesses it
         4. AssessmentRun record is created with correct data
         5. Result is properly serialized and stored
         """
@@ -134,39 +139,27 @@ class TestChecksumPluginEndToEnd:
         orchestrator = PluginOrchestrator()
         run = orchestrator.run_assessment_by_name(
             sbom_id=test_sbom.id,
-            plugin_name="checksum",
+            plugin_name=NTIA_NAME,
             run_reason=RunReason.ON_UPLOAD,
         )
 
         # Verify the run completed successfully
         assert run.status == RunStatus.COMPLETED.value
-        assert run.plugin_name == "checksum"
-        assert run.plugin_version == "1.1.0"
+        assert run.plugin_name == NTIA_NAME
+        assert run.plugin_version == NTIAMinimumElementsPlugin.VERSION
         assert run.category == "compliance"
         assert run.run_reason == RunReason.ON_UPLOAD.value
 
         # Verify the result is stored correctly
         assert run.result is not None
         assert run.result["schema_version"] == "1.0"
-        assert run.result["plugin_name"] == "checksum"
-        assert run.result["summary"]["total_findings"] == 1
-        # Without a stored hash, the plugin produces a warning (not a pass)
-        assert run.result["summary"]["warning_count"] == 1
-
-        # Verify the finding contains the checksum
+        assert run.result["plugin_name"] == NTIA_NAME
         findings = run.result["findings"]
-        assert len(findings) == 1
-        # Without a stored hash, the plugin produces a warning finding
-        assert findings[0]["id"] == "checksum:no-stored-hash"
-        assert "SHA256:" in findings[0]["description"]
-
-        # Verify checksum is correct
-        expected_checksum = hashlib.sha256(sample_sbom_bytes).hexdigest()
-        assert expected_checksum in findings[0]["description"]
-        assert findings[0]["metadata"]["computed_hash"] == expected_checksum
+        assert run.result["summary"]["total_findings"] == len(findings) == 7
+        assert all(finding["id"].startswith("ntia-2021:") for finding in findings)
 
         # Verify input content digest matches
-        assert run.input_content_digest == expected_checksum
+        assert run.input_content_digest == hashlib.sha256(sample_sbom_bytes).hexdigest()
 
         # Verify timestamps
         assert run.started_at is not None
@@ -174,7 +167,7 @@ class TestChecksumPluginEndToEnd:
         assert run.completed_at > run.started_at
 
     def test_assessment_run_persisted_to_database(
-        self, test_sbom, sample_sbom_bytes, registered_checksum_plugin, mocker
+        self, test_sbom, sample_sbom_bytes, registered_ntia_plugin, mocker
     ) -> None:
         """Test that assessment run is correctly persisted to database."""
         mocker.patch(
@@ -185,7 +178,7 @@ class TestChecksumPluginEndToEnd:
         orchestrator = PluginOrchestrator()
         run = orchestrator.run_assessment_by_name(
             sbom_id=test_sbom.id,
-            plugin_name="checksum",
+            plugin_name=NTIA_NAME,
             run_reason=RunReason.MANUAL,
         )
 
@@ -193,32 +186,32 @@ class TestChecksumPluginEndToEnd:
         db_run = AssessmentRun.objects.get(id=run.id)
 
         assert db_run.sbom_id == test_sbom.id
-        assert db_run.plugin_name == "checksum"
+        assert db_run.plugin_name == NTIA_NAME
         assert db_run.status == RunStatus.COMPLETED.value
         assert db_run.result is not None
 
     def test_team_plugin_settings_integration(
-        self, test_team, test_sbom, sample_sbom_bytes, team_with_checksum_enabled, mocker
+        self, test_team, test_sbom, sample_sbom_bytes, team_with_ntia_enabled, mocker
     ) -> None:
         """Test that team settings correctly control which plugins run."""
-        # Verify checksum is enabled for the team
+        # Verify NTIA is enabled for the team
         settings = TeamPluginSettings.objects.get(team=test_team)
-        assert settings.is_plugin_enabled("checksum") is True
+        assert settings.is_plugin_enabled(NTIA_NAME) is True
         assert settings.is_plugin_enabled("nonexistent") is False
 
-    def test_registered_plugin_loads_checksum_class(self, registered_checksum_plugin) -> None:
-        """Test that the registered plugin class path correctly loads ChecksumPlugin."""
+    def test_registered_plugin_loads_its_class(self, registered_ntia_plugin) -> None:
+        """Test that the registered plugin class path correctly loads the plugin class."""
         orchestrator = PluginOrchestrator()
-        plugin = orchestrator.get_plugin_instance("checksum")
+        plugin = orchestrator.get_plugin_instance(NTIA_NAME)
 
-        assert isinstance(plugin, ChecksumPlugin)
+        assert isinstance(plugin, NTIAMinimumElementsPlugin)
 
         metadata = plugin.get_metadata()
-        assert metadata.name == "checksum"
+        assert metadata.name == NTIA_NAME
         assert metadata.category == AssessmentCategory.COMPLIANCE
 
     def test_assessment_result_schema_compliance(
-        self, test_sbom, sample_sbom_bytes, registered_checksum_plugin, mocker
+        self, test_sbom, sample_sbom_bytes, registered_ntia_plugin, mocker
     ) -> None:
         """Test that assessment result follows the expected schema."""
         mocker.patch(
@@ -229,7 +222,7 @@ class TestChecksumPluginEndToEnd:
         orchestrator = PluginOrchestrator()
         run = orchestrator.run_assessment_by_name(
             sbom_id=test_sbom.id,
-            plugin_name="checksum",
+            plugin_name=NTIA_NAME,
             run_reason=RunReason.ON_UPLOAD,
         )
 

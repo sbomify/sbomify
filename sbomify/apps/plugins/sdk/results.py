@@ -18,7 +18,7 @@ class PluginMetadata:
     denormalize into AssessmentRun for efficient querying.
 
     Attributes:
-        name: Plugin identifier (e.g., "ntia-minimum-elements", "osv", "checksum").
+        name: Plugin identifier (e.g., "ntia-minimum-elements", "osv").
         version: Semantic version of the plugin (e.g., "1.0.0"). Bump it
             whenever scoring changes: a stored run whose version differs from
             the registered one is shown as out of date.

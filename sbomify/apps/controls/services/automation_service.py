@@ -25,7 +25,6 @@ PLUGIN_CONTROL_MAP: dict[str, list[str]] = {
     "ntia-minimum-elements-2021": ["CC2.1", "CC2.2", "CC2.3"],
     "osv": ["CC6.8", "CC7.1", "CC7.2", "CC7.3"],
     "dependency-track": ["CC6.8", "CC7.1", "CC7.2"],
-    "checksum": ["CC6.6", "CC6.7"],
     # ``sbom-verification`` is the unified attestation plugin (formerly the
     # separate ``github-attestation`` plugin). It satisfies CC8.1 (Change
     # Management) by cryptographically verifying the SBOM artifact via any

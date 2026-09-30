@@ -506,7 +506,7 @@ def enqueue_assessment(
         >>> from sbomify.apps.plugins.sdk import RunReason
         >>> enqueue_assessment(
         ...     sbom_id="abc123",
-        ...     plugin_name="checksum",
+        ...     plugin_name="osv",
         ...     run_reason=RunReason.ON_UPLOAD,
         ... )
     """

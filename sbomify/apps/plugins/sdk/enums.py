@@ -49,7 +49,7 @@ class RunStatus(str, Enum):
 class ScanMode(str, Enum):
     """Declares whether a plugin completes in a single pass or polls externally.
 
-    One-shot plugins (e.g., NTIA, checksum, OSV) run ``assess()`` once and
+    One-shot plugins (e.g., NTIA, OSV) run ``assess()`` once and
     return a final ``AssessmentResult`` immediately.
 
     Continuous plugins (e.g., Dependency Track, SBOM Verification's GitHub

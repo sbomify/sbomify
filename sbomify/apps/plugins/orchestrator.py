@@ -114,7 +114,7 @@ class PluginOrchestrator:
         >>> orchestrator = PluginOrchestrator()
         >>> run = orchestrator.run_assessment(
         ...     sbom_id="abc123",
-        ...     plugin=ChecksumPlugin(),
+        ...     plugin=NTIAMinimumElementsPlugin(),
         ...     run_reason=RunReason.ON_UPLOAD,
         ... )
         >>> print(run.status)

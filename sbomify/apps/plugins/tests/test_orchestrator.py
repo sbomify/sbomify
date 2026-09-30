@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.plugins.builtins.checksum import ChecksumPlugin
+from sbomify.apps.plugins.builtins.ntia import NTIAMinimumElementsPlugin
 from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.orchestrator import (
     PluginOrchestrator,
@@ -133,17 +133,22 @@ def mock_sbom_data():
     ).encode("utf-8")
 
 
+NTIA_CLASS_PATH = "sbomify.apps.plugins.builtins.ntia.NTIAMinimumElementsPlugin"
+
+
 @pytest.fixture
-def registered_checksum_plugin(db):
-    """Register the checksum plugin for testing."""
-    plugin = RegisteredPlugin.objects.create(
-        name="checksum",
-        display_name="Checksum Plugin",
-        description="Computes SBOM checksum",
-        category=AssessmentCategory.COMPLIANCE.value,
-        version="1.0.0",
-        plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
-        is_enabled=True,
+def registered_ntia_plugin(db):
+    """Register the NTIA plugin for testing. post_migrate may already have registered it."""
+    plugin, _ = RegisteredPlugin.objects.update_or_create(
+        name="ntia-minimum-elements-2021",
+        defaults={
+            "display_name": "NTIA Minimum Elements (2021)",
+            "description": "NTIA compliance checking",
+            "category": AssessmentCategory.COMPLIANCE.value,
+            "version": NTIAMinimumElementsPlugin.VERSION,
+            "plugin_class_path": NTIA_CLASS_PATH,
+            "is_enabled": True,
+        },
     )
     yield plugin
     plugin.delete()
@@ -238,15 +243,15 @@ class TestPluginOrchestrator:
         assert run.status == RunStatus.FAILED.value
         assert "Plugin intentionally failed" in run.error_message
 
-    def test_get_plugin_instance_success(self, registered_checksum_plugin, db) -> None:
+    def test_get_plugin_instance_success(self, registered_ntia_plugin, db) -> None:
         """Test loading a plugin by name."""
         orchestrator = PluginOrchestrator()
 
-        plugin = orchestrator.get_plugin_instance("checksum")
+        plugin = orchestrator.get_plugin_instance("ntia-minimum-elements-2021")
 
-        assert isinstance(plugin, ChecksumPlugin)
+        assert isinstance(plugin, NTIAMinimumElementsPlugin)
         metadata = plugin.get_metadata()
-        assert metadata.name == "checksum"
+        assert metadata.name == "ntia-minimum-elements-2021"
 
     def test_get_plugin_instance_not_registered(self, db) -> None:
         """Test error when plugin is not registered."""
@@ -264,7 +269,7 @@ class TestPluginOrchestrator:
             display_name="Disabled Plugin",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
+            plugin_class_path=NTIA_CLASS_PATH,
             is_enabled=False,
         )
 
@@ -275,7 +280,7 @@ class TestPluginOrchestrator:
 
         assert "disabled" in str(exc_info.value)
 
-    def test_run_assessment_by_name(self, test_sbom, mock_sbom_data, registered_checksum_plugin, mocker) -> None:
+    def test_run_assessment_by_name(self, test_sbom, mock_sbom_data, registered_ntia_plugin, mocker) -> None:
         """Test running assessment by plugin name."""
         mocker.patch(
             "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
@@ -286,14 +291,13 @@ class TestPluginOrchestrator:
 
         run = orchestrator.run_assessment_by_name(
             sbom_id=test_sbom.id,
-            plugin_name="checksum",
+            plugin_name="ntia-minimum-elements-2021",
             run_reason=RunReason.MANUAL,
         )
 
         assert run.status == RunStatus.COMPLETED.value
-        assert run.plugin_name == "checksum"
-        # Without a stored hash, the plugin produces a warning finding
-        assert "checksum:no-stored-hash" in str(run.result)
+        assert run.plugin_name == "ntia-minimum-elements-2021"
+        assert "ntia-2021:timestamp" in str(run.result)
 
     def test_assessment_run_records_created(self, test_sbom, mock_sbom_data, mocker) -> None:
         """Test that AssessmentRun records are created in the database."""
@@ -328,11 +332,11 @@ class TestDependencyChecking:
 
         assert result is None
 
-    def test_check_dependencies_no_dependencies_defined(self, registered_checksum_plugin, db) -> None:
+    def test_check_dependencies_no_dependencies_defined(self, registered_ntia_plugin, db) -> None:
         """Test dependency check when plugin has no dependencies."""
         orchestrator = PluginOrchestrator()
 
-        result = orchestrator._check_dependencies("test-sbom", "checksum")
+        result = orchestrator._check_dependencies("test-sbom", "ntia-minimum-elements-2021")
 
         assert result is None
 
@@ -344,7 +348,7 @@ class TestDependencyChecking:
             display_name="Test Dependent Plugin",
             category="compliance",
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
+            plugin_class_path=NTIA_CLASS_PATH,
             is_enabled=True,
             dependencies={
                 "requires_one_of": [
@@ -824,14 +828,14 @@ class TestSkippedPluginPendingCleanup:
     when the orchestrator then skips (unsupported bom_type), the task must
     remove that orphan instead of leaving it Pending forever."""
 
-    def test_skip_deletes_eager_pending_row(self, test_sbom, registered_checksum_plugin) -> None:
+    def test_skip_deletes_eager_pending_row(self, test_sbom, registered_ntia_plugin) -> None:
         from sbomify.apps.plugins.tasks import _create_pending_assessment_run, run_assessment_task
 
         test_sbom.bom_type = "cbom"
         test_sbom.save(update_fields=["bom_type"])
         run_id = _create_pending_assessment_run(
             sbom_id=str(test_sbom.id),
-            plugin_name="checksum",  # pins supported_bom_types=["sbom"]
+            plugin_name="ntia-minimum-elements-2021",  # pins supported_bom_types=["sbom"]
             run_reason=RunReason.ON_UPLOAD,
             triggered_by_user=None,
             triggered_by_token=None,
@@ -840,7 +844,7 @@ class TestSkippedPluginPendingCleanup:
 
         result = run_assessment_task(
             sbom_id=str(test_sbom.id),
-            plugin_name="checksum",
+            plugin_name="ntia-minimum-elements-2021",
             run_reason=RunReason.ON_UPLOAD.value,
             _existing_run_id=run_id,
         )
