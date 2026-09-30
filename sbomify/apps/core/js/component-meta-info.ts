@@ -1,8 +1,7 @@
 import Alpine from './alpine-init';
 import { isEmpty } from './utils';
 import type { ComponentMetaInfo } from './types';
-import { showError, showSuccess } from './alerts';
-import { ComponentEvents, addComponentEventListener } from './events';
+import { showError } from './alerts';
 
 interface WrapperProps {
     componentId: string;
@@ -16,7 +15,6 @@ export function registerComponentMetaInfo() {
         teamKey: props.teamKey,
         allowEdit: props.allowEdit,
         isEditing: false,
-        cleanupEventListeners: [] as Array<() => void>,
 
         // Display Component State (lifted up or shared via events, but here managed locally for display reactivity)
         metadata: {
@@ -44,20 +42,6 @@ export function registerComponentMetaInfo() {
 
         init() {
             this.fetchMetadata();
-
-            this.cleanupEventListeners.push(
-                addComponentEventListener(ComponentEvents.METADATA_UPDATED, (e) => {
-                    const detail = e.detail as { componentId: string };
-                    if (detail.componentId === this.componentId) {
-                        this.refreshDisplay();
-                    }
-                })
-            );
-        },
-
-        destroy() {
-            this.cleanupEventListeners.forEach(cleanup => cleanup());
-            this.cleanupEventListeners = [];
         },
 
         async fetchMetadata() {
@@ -97,10 +81,10 @@ export function registerComponentMetaInfo() {
             }
         },
 
+        // The editor confirms a save itself, so the reload after it stays quiet.
         refreshDisplay() {
             this.isEditing = false;
             this.fetchMetadata();
-            showSuccess('Metadata updated successfully');
         },
 
         // Display Component Helpers

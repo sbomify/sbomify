@@ -12,6 +12,8 @@ mock.module('./alerts', () => ({
     showConfirmation: mock(),
 }))
 
+mock.module('./csrf', () => ({ getCsrfToken: () => 'csrf-value' }))
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Component = Record<string, any>
 const factories: Record<string, (props: Record<string, unknown>) => Component> = {}
@@ -30,13 +32,15 @@ registerComponentMetaInfo()
 registerComponentMetaInfoEditor()
 
 const globals = globalThis as unknown as Record<string, unknown>
-const realGlobals = { fetch: globals.fetch, document: globals.document, window: globals.window }
+const realGlobals = { fetch: globals.fetch, window: globals.window }
 
-function respond(response: Response | Error): void {
-    globals.fetch = mock(async () => {
+function respond(response: Response | Error): ReturnType<typeof mock> {
+    const fetcher = mock(async () => {
         if (response instanceof Error) throw response
-        return response
+        return response.clone()
     })
+    globals.fetch = fetcher
+    return fetcher
 }
 
 function wrapper(): Component {
@@ -49,15 +53,24 @@ function editor(): Component {
     return component
 }
 
-describe('component metadata alerts', () => {
+/** Every toast shown so far, in the order the tests expect to read them. */
+function toasts(): [string, string][] {
+    return [
+        ...showSuccess.mock.calls.map(([message]): [string, string] => ['success', message]),
+        ...showError.mock.calls.map(([message]): [string, string] => ['error', message]),
+    ]
+}
+
+const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+
+describe('component metadata toasts', () => {
     let consoleError: ReturnType<typeof spyOn>
 
     beforeEach(() => {
         showError.mockClear()
         showSuccess.mockClear()
         consoleError = spyOn(console, 'error').mockImplementation(() => {})
-        globals.document = { querySelector: () => ({ getAttribute: () => 'csrf' }) }
-        globals.window = { dispatchEvent: () => true }
+        globals.window = new EventTarget()
     })
 
     afterEach(() => {
@@ -68,41 +81,47 @@ describe('component metadata alerts', () => {
         }
     })
 
-    test('a failed metadata load shows an error', async () => {
+    test('a failed metadata load shows one error', async () => {
         respond(new Response('', { status: 500 }))
         await wrapper().fetchMetadata()
-        expect(showError).toHaveBeenCalledWith('Failed to load component metadata')
+        expect(toasts()).toEqual([['error', 'Failed to load component metadata']])
     })
 
-    test('a network failure while loading shows an error', async () => {
+    test('a network failure while loading shows one error', async () => {
         respond(new Error('offline'))
         await wrapper().fetchMetadata()
-        expect(showError).toHaveBeenCalledWith('Network error loading metadata')
+        expect(toasts()).toEqual([['error', 'Network error loading metadata']])
     })
 
-    test('refreshing after an update confirms it', async () => {
-        respond(Response.json({}))
-        wrapper().refreshDisplay()
-        expect(showSuccess).toHaveBeenCalledWith('Metadata updated successfully')
-    })
-
-    test('the editor reports a failed load', async () => {
+    test('the editor shows one error when its load fails', async () => {
         respond(new Error('offline'))
         await editor().loadMetadata()
-        expect(showError).toHaveBeenCalledWith('Failed to load component metadata')
+        expect(toasts()).toEqual([['error', 'Failed to load component metadata']])
     })
 
-    test('the editor reports the server reason when saving fails', async () => {
+    test('a refused save shows one error with the server reason', async () => {
         respond(Response.json({ detail: 'Supplier name is too long' }, { status: 400 }))
         await editor().updateMetaData()
-        expect(showError).toHaveBeenCalledWith('Supplier name is too long')
-        expect(showSuccess).not.toHaveBeenCalled()
+        expect(toasts()).toEqual([['error', 'Supplier name is too long']])
     })
 
-    test('the editor confirms a successful save', async () => {
-        respond(Response.json({}))
-        await editor().updateMetaData()
-        expect(showSuccess).toHaveBeenCalledWith('Metadata saved successfully')
-        expect(showError).not.toHaveBeenCalled()
+    test('a successful save shows one toast and reloads the display once', async () => {
+        const fetcher = respond(Response.json({}))
+        const display = wrapper()
+        display.init()
+        await settle()
+        const form = editor()
+        // The template's @metadata-saved listener on the wrapper.
+        form.$dispatch = (event: string) => {
+            if (event === 'metadata-saved') display.refreshDisplay()
+        }
+        fetcher.mockClear()
+
+        await form.updateMetaData()
+        await settle()
+
+        expect(toasts()).toEqual([['success', 'Metadata saved successfully']])
+        expect(fetcher).toHaveBeenCalledTimes(2)
+        expect(display.isEditing).toBe(false)
     })
 })

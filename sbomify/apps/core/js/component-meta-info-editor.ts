@@ -5,8 +5,7 @@ import type { ContactProfile, ComponentMetaInfo } from './types';
 import {
     ComponentEvents,
     dispatchComponentEvent,
-    type MetadataLoadedEvent,
-    type MetadataUpdatedEvent
+    type MetadataLoadedEvent
 } from './events';
 
 interface LifecyclePhase {
@@ -327,10 +326,6 @@ export function registerComponentMetaInfoEditor() {
                 this.hasUnsavedChanges = false;
                 this.originalMetadata = JSON.stringify(this.metadata);
                 this.$dispatch('metadata-saved');
-
-                dispatchComponentEvent<MetadataUpdatedEvent>(ComponentEvents.METADATA_UPDATED, {
-                    componentId: this.componentId
-                });
                 showSuccess('Metadata saved successfully');
             } catch (error) {
                 showError(error instanceof Error ? error.message : 'Failed to save metadata');
