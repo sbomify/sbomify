@@ -57,9 +57,6 @@ from sbomify.apps.teams.utils import (
 
 logger = logging.getLogger(__name__)
 
-# The teams app imports it from this module under this name.
-_invalidate_access_requests_cache = invalidate_access_requests_cache
-
 
 def user_has_signed_current_nda(user: User, team: Team) -> bool:
     """Check if user has signed the current company-wide NDA version.
@@ -341,7 +338,7 @@ class AccessRequestView(View):
             access_request, request_state_changed = request_access(team, user)
 
         # Invalidate cache after transaction commits to avoid long-running transaction
-        transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+        transaction.on_commit(lambda: invalidate_access_requests_cache(team))
 
         # AccessRequest is workspace-scoped (no component_id field). Issue #817 listed
         # `component_id` as a property but the access-request flow is per-workspace.
@@ -579,7 +576,7 @@ class NDASigningView(View):
                                     )
 
                                 # Invalidate cache after transaction commits
-                                transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+                                transaction.on_commit(lambda: invalidate_access_requests_cache(team))
 
                                 messages.success(
                                     request,
@@ -621,7 +618,7 @@ class NDASigningView(View):
                             access_request.save()
 
                             # Invalidate cache after transaction commits
-                            transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+                            transaction.on_commit(lambda: invalidate_access_requests_cache(team))
 
                         messages.success(request, "NDA signed successfully.")
 
@@ -634,7 +631,7 @@ class NDASigningView(View):
 
             # Now that NDA is signed, send notification to admins (request is now complete)
             # Invalidate cache after transaction commits
-            transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+            transaction.on_commit(lambda: invalidate_access_requests_cache(team))
             transaction.on_commit(lambda: notify_admins_of_access_request(access_request, team, requires_nda=True))
 
             messages.success(
@@ -883,7 +880,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return _back(team_key, active_tab)
 
         # Invalidate cache after transaction commits
-        transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+        transaction.on_commit(lambda: invalidate_access_requests_cache(team))
 
         # Handle post-transaction actions based on action type
         if action == "approve":
