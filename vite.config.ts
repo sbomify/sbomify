@@ -3,7 +3,6 @@ import { resolve } from 'path'
 import fs from 'fs'
 import { defineConfig } from 'vite'
 import { config } from 'dotenv'
-import { VitePWA } from 'vite-plugin-pwa'
 import tailwindcss from '@tailwindcss/vite'
 
 const envFilePath = path.join(__dirname, '.env')
@@ -15,6 +14,8 @@ if(fs.existsSync(envFilePath)) {
 // https://vitejs.dev/config/
 export default defineConfig({
   base: '/dist/',  // Keep leading slash for Vite, Django will prepend STATIC_URL automatically
+  // Copied verbatim into outDir, so templates keep linking static/dist/manifest.webmanifest.
+  publicDir: resolve('./sbomify/assets/public'),
   css: {
     devSourcemap: true,
   },
@@ -34,52 +35,6 @@ export default defineConfig({
   },
   plugins: [
     tailwindcss(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      manifest: {
-        name: 'sbomify',
-        short_name: 'sbomify',
-        description: 'Software Bill of Materials management platform',
-        theme_color: '#25293f',
-        background_color: '#ffffff',
-        display: 'standalone',
-        scope: '/',
-        start_url: '/',
-        icons: [
-          {
-            src: '../img/favicons/favicon-16x16.png',
-            sizes: '16x16',
-            type: 'image/png'
-          },
-          {
-            src: '../img/favicons/favicon-32x32.png',
-            sizes: '32x32',
-            type: 'image/png'
-          },
-          {
-            src: '../img/favicons/apple-touch-icon.png',
-            sizes: '180x180',
-            type: 'image/png'
-          },
-          {
-            src: '../img/favicons/android-chrome-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: '../img/favicons/android-chrome-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: '../img/favicons/favicon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml'
-          }
-        ]
-      },
-      includeAssets: ['manifest.webmanifest']
-    })
   ],
   build: {
     target: 'esnext',
