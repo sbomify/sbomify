@@ -40,8 +40,6 @@ import { catalogImport } from '../../controls/js/catalog-import';
 import { registerSbomUpload } from '../../sboms/js/sbom-upload';
 import { registerSbomsTable } from '../../sboms/js/sboms-table';
 import { registerLicensesEditor } from '../../sboms/js/licenses-editor';
-import { registerContactsEditor } from '../../sboms/js/contacts-editor';
-import { registerSupplierEditor } from '../../sboms/js/supplier-editor';
 
 // ============================================
 // COMPONENT IMPORTS - Other Modules
@@ -141,8 +139,6 @@ export function registerAllComponents(): void {
     registerSbomUpload();
     registerSbomsTable();
     registerLicensesEditor();
-    registerContactsEditor();
-    registerSupplierEditor();
 
     // Other modules
     registerDocumentUpload();
