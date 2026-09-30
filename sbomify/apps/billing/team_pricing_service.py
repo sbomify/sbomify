@@ -349,46 +349,21 @@ class TeamPricingService:
             except BillingPlan.DoesNotExist:
                 billing_plan_obj = None
 
-        if billing_plan_obj:
-            # Build limits dict - prefer billing_plan_limits, fallback to model
-            limits_dict: dict[str, Any] = {}
-            for limit_key in PLAN_LIMITS:
-                if limit_key in billing_plan_limits:
-                    limits_dict[limit_key] = billing_plan_limits[limit_key]
-                else:
-                    # Direct attribute access instead of hasattr/getattr
-                    limit_value = getattr(billing_plan_obj, limit_key, None)
-                    if limit_value is not None:
-                        limits_dict[limit_key] = limit_value
-
-            # Build plan_limits list
-            for limit_key, limit_value in limits_dict.items():
-                if limit_key not in PLAN_LIMITS:
-                    continue
-
-                if limit_value is None or limit_value == -1:
-                    limit_display = "Unlimited"
-                else:
-                    limit_display = str(limit_value)
-
-                plan_limits.append(
-                    {
-                        "icon": PLAN_LIMITS[limit_key]["icon"],
-                        "label": PLAN_LIMITS[limit_key]["label"],
-                        "value": limit_display,
-                    }
-                )
-        else:
-            # Fallback: use billing_plan_limits if BillingPlan doesn't exist
-            for limit_key, limit_value in billing_plan_limits.items():
-                if limit_key not in PLAN_LIMITS:
-                    continue
-                plan_limits.append(
-                    {
-                        "icon": PLAN_LIMITS[limit_key]["icon"],
-                        "label": PLAN_LIMITS[limit_key]["label"],
-                        "value": "Unlimited" if limit_value == -1 or limit_value is None else str(limit_value),
-                    }
-                )
+        # The workspace's own limits win over the plan's. A limit neither sets
+        # is left out.
+        for limit_key, meta in PLAN_LIMITS.items():
+            if limit_key in billing_plan_limits:
+                limit_value = billing_plan_limits[limit_key]
+            elif billing_plan_obj is not None and getattr(billing_plan_obj, limit_key, None) is not None:
+                limit_value = getattr(billing_plan_obj, limit_key)
+            else:
+                continue
+            plan_limits.append(
+                {
+                    "icon": meta["icon"],
+                    "label": meta["label"],
+                    "value": "Unlimited" if limit_value is None or limit_value == -1 else str(limit_value),
+                }
+            )
 
         return plan_limits
