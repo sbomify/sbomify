@@ -143,15 +143,6 @@ class ProductLookupResult:
     instance: Product
 
 
-# Creation schemas
-class CreateItemRequest(BaseModel):
-    name: str
-
-
-class CreateItemResponse(BaseModel):
-    id: str
-
-
 router = Router(tags=["Products"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 PRIVATE_ITEMS_UPGRADE_MESSAGE = (
