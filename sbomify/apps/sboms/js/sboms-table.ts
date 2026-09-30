@@ -199,20 +199,6 @@ export function registerSbomsTable() {
           this.sortDirection = 'asc'
         }
         this.currentPage = 1
-      },
-
-      goToPage(page: number): void {
-        if (page >= 1 && page <= this.totalPages) {
-          this.currentPage = page
-        }
-      },
-
-      isVisible(index: number): boolean {
-        // For sorted/filtered data, we use paginatedData directly
-        // This is kept for backward compatibility
-        const start = (this.currentPage - 1) * this.pageSize
-        const end = start + this.pageSize
-        return index >= start && index < end
       }
     }
   })

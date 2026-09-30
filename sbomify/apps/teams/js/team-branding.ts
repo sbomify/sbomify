@@ -251,18 +251,6 @@ export function registerTeamBranding() {
                 this.updateColor('brand_color', defaultColors.brand_color);
                 this.updateColor('accent_color', defaultColors.accent_color);
             },
-
-            displayColor(field: 'brand_color' | 'accent_color') {
-                const value = this.localBrandingInfo[field];
-                const hasInitial = !!this.initialBrandingInfo[field];
-                const isFallbackDefault = !hasInitial && value === defaultColors[field];
-
-                if (!value || isFallbackDefault) {
-                    return 'Not set';
-                }
-
-                return value;
-            },
         };
     });
 }

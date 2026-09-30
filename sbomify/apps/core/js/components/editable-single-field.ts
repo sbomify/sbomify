@@ -127,14 +127,6 @@ export function registerEditableSingleField() {
                 this.fieldValue = this.originalValue;
                 this.errorMessage = 'Error updating field. ' + (error as Error).message;
             }
-        },
-
-        handleKeyup(event: KeyboardEvent) {
-            if (event.key === 'Escape') {
-                this.cancelEdit();
-            } else if (event.key === 'Enter' && !this.isTextarea) {
-                this.updateField();
-            }
         }
     }));
 }

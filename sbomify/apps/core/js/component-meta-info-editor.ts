@@ -96,11 +96,6 @@ export function registerComponentMetaInfoEditor() {
             return profiles;
         },
 
-        getProfileDisplayText(profile: ContactProfile | null): string {
-            if (!profile) return '';
-            return profile.name || '';
-        },
-
         getProfileOptionText(profile: ContactProfile): string {
             const isUnavailable = !this.contactProfiles.some(p => p.id === profile.id);
             return isUnavailable ? `${profile.name} (unavailable)` : profile.name;
@@ -303,21 +298,6 @@ export function registerComponentMetaInfoEditor() {
             }
         },
 
-        isValidUrl(url: string): boolean {
-            try {
-                new URL(url);
-                return true;
-            } catch {
-                return false;
-            }
-        },
-
-        isValidEmail(email: string): boolean {
-            if (!email) return true;
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            return emailRegex.test(email);
-        },
-
         handleCancel() {
             if (this.hasUnsavedChanges) {
                 // Show confirmation modal directly
@@ -334,12 +314,6 @@ export function registerComponentMetaInfoEditor() {
 
         confirmDiscard() {
             this.showUnsavedChangesModal = false;
-            window.dispatchEvent(new CustomEvent('close-metadata-editor'));
-        },
-
-        discardChanges() {
-            // Use window event for reliable cross-scope communication
-            // This ensures the event reaches the wrapper even from nested x-data scopes
             window.dispatchEvent(new CustomEvent('close-metadata-editor'));
         },
 

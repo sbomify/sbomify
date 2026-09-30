@@ -108,7 +108,6 @@ export function registerReleaseArtifacts() {
             componentFilter: '',
             currentPage: 1,
             pageSize: 25,
-            pageSizeOptions: [10, 25, 50, 100],
 
             // Main table sorting
             sortColumn: 'name' as 'type' | 'name' | 'component' | 'format' | 'version' | 'created_at',
@@ -237,46 +236,6 @@ export function registerReleaseArtifacts() {
                 const start = (this.currentPage - 1) * this.pageSize;
                 const end = start + this.pageSize;
                 return this.filteredArtifacts.slice(start, end);
-            },
-
-            get totalItems(): number {
-                return this.filteredArtifacts.length;
-            },
-
-            get startItem(): number {
-                return this.filteredArtifacts.length > 0 ? (this.currentPage - 1) * this.pageSize + 1 : 0;
-            },
-
-            get endItem(): number {
-                return Math.min(this.currentPage * this.pageSize, this.filteredArtifacts.length);
-            },
-
-            get visiblePages(): (number | string)[] {
-                const pages: (number | string)[] = [];
-                const total = this.totalPages;
-                const current = this.currentPage;
-                if (total <= 7) {
-                    for (let i = 1; i <= total; i++) pages.push(i);
-                } else {
-                    pages.push(1);
-                    if (current > 3) pages.push('...');
-                    for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
-                        pages.push(i);
-                    }
-                    if (current < total - 2) pages.push('...');
-                    pages.push(total);
-                }
-                return pages;
-            },
-
-            goToPage(page: number) {
-                if (page >= 1 && page <= this.totalPages) {
-                    this.currentPage = page;
-                }
-            },
-
-            handlePageSizeChange() {
-                this.currentPage = 1;
             },
 
             // Computed-like getters for available artifacts modal
@@ -557,18 +516,6 @@ export function registerReleaseArtifacts() {
             truncateText(text: string, maxLength: number): string {
                 if (!text || text.length <= maxLength) return text || '';
                 return text.substring(0, maxLength - 3) + '...';
-            },
-
-            formatFileSize(bytes?: number): string {
-                if (!bytes) return '-';
-                const units = ['B', 'KB', 'MB', 'GB'];
-                let size = bytes;
-                let unitIndex = 0;
-                while (size >= 1024 && unitIndex < units.length - 1) {
-                    size /= 1024;
-                    unitIndex++;
-                }
-                return `${size.toFixed(1)} ${units[unitIndex]}`;
             },
 
             // Filter handlers

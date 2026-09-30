@@ -135,17 +135,6 @@ describe('Team Branding', () => {
         })
     })
 
-    describe('Color Display', () => {
-        test('should display color correctly', () => {
-            const displayColor = (color: string): string => {
-                return color || '#ffffff'
-            }
-
-            expect(displayColor('#007bff')).toBe('#007bff')
-            expect(displayColor('')).toBe('#ffffff')
-        })
-    })
-
     describe('Custom Domain Config', () => {
         test('should accept valid custom domain config', () => {
             interface CustomDomainConfig {
