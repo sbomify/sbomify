@@ -23,7 +23,6 @@ from urllib.parse import urlparse, urlunparse
 import dj_database_url
 import redis
 import sentry_sdk
-from django.contrib import messages
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import find_dotenv, load_dotenv
 from redis.asyncio.retry import Retry as AsyncRedisRetry
@@ -371,15 +370,6 @@ COTTON_ENABLE_CONTEXT_ISOLATION = True
 
 WSGI_APPLICATION = "sbomify.wsgi.application"
 ASGI_APPLICATION = "sbomify.asgi.application"
-
-
-MESSAGE_TAGS = {
-    messages.constants.DEBUG: "alert-info",
-    messages.constants.INFO: "alert-info",
-    messages.constants.SUCCESS: "alert-success",
-    messages.constants.WARNING: "alert-warning",
-    messages.constants.ERROR: "alert-danger",
-}
 
 
 # Static files (CSS, JavaScript, Images)
