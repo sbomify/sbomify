@@ -1,5 +1,5 @@
 {% extends "./dashboard_base.html.j2" %}
-{% load design_system brand_tags %}
+{% load brand_tags %}
 {% block title %}Design System - sbomify{% endblock %}
 {% comment %}
     The living inventory of the shared component library. Every demo below calls the
@@ -84,10 +84,10 @@
         Zero values stay neutral. The component owns its spacing and type at every width.
     </p>
     <c-overview.quick-actions>
-    <c-layout.action-tile flush accent="info" href="{% url 'core:product_new' %}" title="Add product" description="Organise components and artifacts" icon="fas fa-cube" />
-    <c-layout.action-tile flush accent="info" title="Add release" description="Bring a version's artifacts together" icon="fas fa-tag" href="{% url 'core:release_new' %}" />
-    <c-layout.action-tile flush accent="info" href="{% url 'core:component_new' %}" title="Add component" description="Store SBOMs and documents" icon="fas fa-puzzle-piece" />
-    <c-layout.action-tile flush accent="info" href="{% url 'core:security_advisory_new' %}" title="Add advisory" description="Create a draft security advisory" icon="fas fa-shield-halved" />
+    <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:product_new' %}" title="Add product" description="Organise components and artifacts" icon="fas fa-cube" />
+    <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" title="Add release" description="Bring a version's artifacts together" icon="fas fa-tag" href="{% url 'core:release_new' %}" />
+    <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:component_new' %}" title="Add component" description="Store SBOMs and documents" icon="fas fa-puzzle-piece" />
+    <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:security_advisory_new' %}" title="Add advisory" description="Create a draft security advisory" icon="fas fa-shield-halved" />
     </c-overview.quick-actions>
     <c-cards.card flush>
     <c-cards.header compact title="Exposure by product" hint="Example data" />
@@ -119,8 +119,8 @@
     </c-layout.frame>
     <c-layout.frame>
     <c-layout.page-header title="Product inventory" subtitle="Linked tabs, compact server-sorted cells, severity breakdowns and shared filters." />
-    <c-navigation.tabs links aria-label="Example inventory views">
-    <c-navigation.tab href="{% url 'core:products_dashboard' %}" badge="1" active>Products</c-navigation.tab>
+    <c-navigation.tabs links aria-label="Example inventory views" x-data="{ selectedInventory: 'products' }">
+    <c-navigation.tab href="{% url 'core:products_dashboard' %}" active_binding="selectedInventory === 'products'" badge="1" active>Products</c-navigation.tab>
     <c-navigation.tab href="{% url 'core:products_dashboard' %}?view=releases" badge="2">Releases</c-navigation.tab>
     <c-navigation.tab href="{% url 'core:products_dashboard' %}?view=components" badge="3">Components</c-navigation.tab>
     </c-navigation.tabs>
@@ -402,6 +402,13 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-forms.field label="Title" for="ds-form-section-title">
         <c-forms.input name="ds-form-section-title" placeholder="e.g. Improper authentication in SAML assertion handling" />
         </c-forms.field>
+        </c-layout.form-section>
+        <c-layout.form-section stacked title="Stacked form section" description="A single-column section with a quiet divider.">
+        <c-slot name="actions"><c-buttons.secondary size="sm">Edit details</c-buttons.secondary></c-slot>
+        <dl class="mb-4">
+            <c-layout.description-row label="Legal name">Example manufacturer</c-layout.description-row>
+        </dl>
+        <c-forms.field label="Intended use" for="gallery-stacked-use"><c-forms.textarea id="gallery-stacked-use" rows="2" placeholder="Describe how the product is used" /></c-forms.field>
         </c-layout.form-section>
         <c-layout.form-section step="2" accent="neutral" title="What else is known" description="Optional. You can add these later.">
         <c-forms.field label="CVE or reference" for="ds-form-section-cve">
@@ -814,7 +821,10 @@ first-of-type rule that drops the leading hairline reads the section's position
         </c-cards.collapsible-body>
         </c-cards.collapsible>
         <c-cards.collapsible level="warning">
+        <c-cards.collapsible-header>
         <c-cards.collapsible-trigger state="open === 'warning'" @click="open = open === 'warning' ? '' : 'warning'">Findings to review</c-cards.collapsible-trigger>
+        <c-slot name="actions"><c-buttons.ghost size="sm" href="#tables">View full report<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost></c-slot>
+        </c-cards.collapsible-header>
         <c-cards.collapsible-body state="open === 'warning'">
         <p class="text-sm text-text-muted m-0">Levels are a prop, not a file each: they are one scale a page picks from.</p>
         </c-cards.collapsible-body>

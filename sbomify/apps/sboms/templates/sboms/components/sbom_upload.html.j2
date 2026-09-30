@@ -5,7 +5,7 @@
      @open-upload.window="uploadOpen = true"
      @close-upload.window="uploadOpen = false"
      @keydown.escape.window="if (uploadOpen) uploadOpen = false">
-    <c-modal id="upload-sbom" show="uploadOpen" title="Upload Artifact" icon="fas fa-upload" x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0)">
+    <c-modal id="upload-sbom" show="uploadOpen" title="{{ upload_title|default:'Upload Artifact' }}" icon="fas fa-upload" x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0, '{{ upload_bom_type|default:'sbom'|escapejs }}')">
     <!-- Info Notice -->
     <div class="flex items-start gap-3 p-4 bg-info/10 rounded-lg mb-4">
         <i class="fas fa-info-circle text-info mt-0.5"></i>
