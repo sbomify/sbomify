@@ -1016,49 +1016,11 @@ SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 logger = logging.getLogger(__name__)
 
-
-def _sentry_traces_sampler(sampling_context: dict[str, Any]) -> float:
-    """Sample traces for Sentry with fallback to default on invalid values."""
-    try:
-        base_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
-    except (ValueError, TypeError):
-        logger.warning("Invalid SENTRY_TRACES_SAMPLE_RATE, using default 0.1")
-        base_rate = 0.1
-
-    if base_rate <= 0:
-        return 0.0
-
-    try:
-        api_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_API", base_rate))
-    except (ValueError, TypeError):
-        api_rate = base_rate
-
-    try:
-        htmx_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_HTMX", base_rate))
-    except (ValueError, TypeError):
-        htmx_rate = base_rate
-
-    try:
-        job_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_JOBS", base_rate))
-    except (ValueError, TypeError):
-        job_rate = base_rate
-
-    wsgi_environ = sampling_context.get("wsgi_environ")
-    if wsgi_environ:
-        path = wsgi_environ.get("PATH_INFO", "")
-        if wsgi_environ.get("HTTP_HX_REQUEST"):
-            return htmx_rate
-        if path.startswith("/api/"):
-            return api_rate
-        return base_rate
-
-    transaction_context = sampling_context.get("transaction_context") or {}
-    op = transaction_context.get("op", "")
-    if op.startswith("dramatiq") or op in ("queue.process", "task"):
-        return job_rate
-
-    return base_rate
-
+try:
+    _SENTRY_TRACES_SAMPLE_RATE = max(float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")), 0.0)
+except ValueError:
+    logger.warning("Invalid SENTRY_TRACES_SAMPLE_RATE, using default 0.1")
+    _SENTRY_TRACES_SAMPLE_RATE = 0.1
 
 _SENTRY_DSN = os.environ.get("SENTRY_DSN")
 
@@ -1081,7 +1043,9 @@ sentry_sdk.init(
         LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
     ],
     before_send=throttle_self_healing_notices,
-    traces_sampler=_sentry_traces_sampler,
+    # A sampler, not traces_sample_rate: that would let the sampled flag of an
+    # incoming sentry-trace header, or of the request that queued a task, decide.
+    traces_sampler=lambda _context: _SENTRY_TRACES_SAMPLE_RATE,
     profiles_sample_rate=float(os.environ.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
     # CancelledError is expected under ASGI when clients disconnect mid-request.
     # On Python 3.14+ it's a BaseException that propagates through middleware.
