@@ -11,7 +11,6 @@
     "build": "bun run copy-deps && tsc -b && vite build",
     "lint": "eslint \"sbomify/apps/core/js/**/*.{js,ts}\" \"sbomify/apps/sboms/js/**/*.{js,ts}\" \"sbomify/apps/teams/js/**/*.{js,ts}\" \"sbomify/apps/billing/js/**/*.{js,ts}\" \"sbomify/apps/documents/js/**/*.{js,ts}\" \"sbomify/apps/vulnerability_scanning/js/**/*.{js,ts}\" \"sbomify/apps/plugins/js/**/*.{js,ts}\" \"*.{js,ts}\"",
     "lint-fix": "eslint \"sbomify/apps/core/js/**/*.{js,ts}\" \"sbomify/apps/sboms/js/**/*.{js,ts}\" \"sbomify/apps/teams/js/**/*.{js,ts}\" \"sbomify/apps/billing/js/**/*.{js,ts}\" \"sbomify/apps/documents/js/**/*.{js,ts}\" \"sbomify/apps/vulnerability_scanning/js/**/*.{js,ts}\" \"sbomify/apps/plugins/js/**/*.{js,ts}\" \"*.{js,ts}\" --fix",
-    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,css,scss,html}\" --ignore-path .gitignore",
     "type-check": "tsc --noEmit --skipLibCheck -p tsconfig.app.json",
     "test": "bun test"
   },
@@ -50,10 +49,7 @@
     "@typescript-eslint/eslint-plugin": "^8.70.1",
     "@typescript-eslint/parser": "^8.70.1",
     "eslint": "^10.11.0",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.6",
     "globals": "^17.12.0",
-    "markdownlint-cli": "0.49.1",
-    "prettier": "^3.9.8"
+    "markdownlint-cli": "0.49.1"
   }
 }
