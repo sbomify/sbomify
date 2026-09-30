@@ -274,7 +274,7 @@ def team_context(request: Any) -> Any:
         # request — degrading page loads and causing ASGI CancelledError on
         # client disconnect. The DB is kept current by Stripe webhooks
         # (customer.subscription.updated / invoice.*) plus a daily safety-net
-        # task (billing.cron.daily_subscription_sync).
+        # task (billing.tasks.sync_active_subscriptions_task).
         member = Member.objects.filter(team=team, user=request.user).first()
         role = member.role if member else None
 
