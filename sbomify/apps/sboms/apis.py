@@ -24,11 +24,9 @@ from sbomify.apps.core.purl import extract_purl_qualifiers
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.access_control import check_component_access_for_user
 from sbomify.apps.core.utils import (
-    ExtractSpec,
     broadcast_to_workspace,
     dict_update,
     get_by_uuid_or_pk,
-    obj_extract,
 )
 from sbomify.apps.oidc.permissions import is_authorised_for_component
 from sbomify.apps.sboms.utils import (
@@ -489,12 +487,8 @@ def _store_spdx(
     # are accepted, and fall back to the sbomify Component name to keep
     # the stored SBOM identifier non-empty. SPDX 2.x already failed
     # earlier if name was missing, so this fallback only fires for 3.x.
-    sbom_dict = obj_extract(
-        obj_in=payload,
-        fields=[
-            ExtractSpec("name", required=False, default=""),
-        ],
-    )
+    spdx_name = getattr(payload, "name", None)
+    sbom_dict: dict[str, Any] = {"name": "" if spdx_name is None else spdx_name}
     # Treat non-string and whitespace-only names as missing so the
     # stored SBOM identifier cannot be persisted as an effectively
     # empty string. Whitespace-only passes the plain `not ...` check.
@@ -549,14 +543,16 @@ def _store_cyclonedx(
         spec_version = sbom_data.get("specVersion", "unknown")
         return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
 
-    sbom_dict = obj_extract(
-        obj_in=payload,
-        fields=[
-            ExtractSpec("metadata.component.name", required=False, default="", rename_to="name"),
-            ExtractSpec("metadata.component.version", required=False, rename_to="version"),
-            ExtractSpec("specVersion", required=True, rename_to="format_version"),
-        ],
-    )
+    metadata_component = getattr(getattr(payload, "metadata", None), "component", None)
+    component_name = getattr(metadata_component, "name", None)
+    sbom_dict: dict[str, Any] = {"name": "" if component_name is None else component_name}
+    component_version = getattr(metadata_component, "version", None)
+    if component_version is not None:
+        sbom_dict["version"] = component_version
+    format_version = getattr(payload, "specVersion", None)
+    if format_version is None:
+        raise ValueError("Field 'specVersion' is required.")
+    sbom_dict["format_version"] = format_version
 
     # metadata.component is optional in CycloneDX; fall back to the sbomify Component name
     if not sbom_dict.get("name"):

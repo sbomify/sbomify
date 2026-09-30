@@ -9,7 +9,6 @@ import ipaddress
 import logging
 import string
 import uuid
-from dataclasses import dataclass
 from functools import lru_cache
 from secrets import choice, token_urlsafe
 from typing import Any
@@ -301,61 +300,6 @@ def set_values_if_not_empty(object_in: Any, **kwargs: Any) -> Any:
     for attribute_name, attribute_value in kwargs.items():
         if attribute_value:
             setattr(object_in, attribute_name, attribute_value)
-
-
-@dataclass
-class ExtractSpec:
-    field: str
-    required: bool = True
-    default: Any | None = None
-    error_message: str | None = None
-    rename_to: str | None = None
-
-
-def obj_extract(obj_in: Any, fields: list[ExtractSpec]) -> dict[str, Any]:
-    """
-    Extract fields from an object.
-
-    :param obj_in: The object to extract fields from.
-    :param fields: A list of ExtractSpec objects.
-    :return: A dictionary of extracted fields.
-    """
-    result = {}
-
-    for field in fields:
-        # if field.field contains a dot, it means we need to extract a nested field
-
-        field_parts = field.field.split(".")
-        value = obj_in
-
-        for part in field_parts:
-            value = getattr(value, part, None)
-
-            if value is None:
-                if field.required:
-                    if field.error_message:
-                        raise ValueError(field.error_message)
-                    else:
-                        raise ValueError(f"Field '{field.field}' is required.")
-
-                elif field.default is not None:
-                    if field.rename_to:
-                        result[field.rename_to] = field.default
-                    else:
-                        result[field.field] = field.default
-
-                    break
-
-                else:
-                    break
-
-        if value is not None:
-            if field.rename_to:
-                result[field.rename_to] = value
-            else:
-                result[field.field] = value
-
-    return result
 
 
 def generate_id() -> str:
