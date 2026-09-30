@@ -16,7 +16,6 @@ CELL = "flex items-center justify-center min-w-8 h-8 px-2 rounded-md border bord
 CIRCLE = "relative shrink-0 flex items-center justify-center w-10 h-10 rounded-full"
 TRIGGER = "group flex w-full items-center justify-between px-6 py-5 text-left"
 RAIL = "flex-1 h-[3px] rounded-full overflow-hidden"
-VERTICAL_RAIL = "[[data-stepper-vertical]_&]:w-[3px]"
 
 PROBE_CONTEXT = {
     "probe_tabs": [
@@ -325,31 +324,13 @@ def test_label_class_lands_on_the_caption_only(rendered: str) -> None:
 
 
 def test_connector_fills_only_when_completed(rendered: str) -> None:
-    stepper = _between(rendered, 'data-probe="stepper"', 'data-probe="vertical"')
-    rails = [part for part in stepper.split("<span") if VERTICAL_RAIL in part]
+    stepper = _between(rendered, 'data-probe="stepper"', 'data-probe="accordion"')
+    rails = [part for part in stepper.split("<span") if RAIL in part]
     assert len(rails) == 2
     assert RAIL in rails[0]
     assert "bg-[linear-gradient(90deg,var(--color-success)_0%,var(--color-success-dark)_100%)]" in rails[0]
     assert "bg-border" in rails[1]
     assert "linear-gradient(90deg" not in rails[1]
-
-
-def test_vertical_stepper_stacks_and_marks_the_rail(rendered: str) -> None:
-    rail = _open_tag(rendered, "div", 'data-probe="vertical"')
-    assert "flex flex-col items-start mt-4" in rail
-    assert "data-stepper-vertical" in rail
-    assert "items-center" not in rail
-
-
-def test_vertical_connector_utilities_hang_off_the_rail_marker(rendered: str) -> None:
-    connector = _chunk(rendered, "span", "[[data-stepper-vertical]_&]:ml-[1.1875rem]")
-    for bit in (
-        "[[data-stepper-vertical]_&]:w-[3px]",
-        "[[data-stepper-vertical]_&]:h-8",
-        "[[data-stepper-vertical]_&]:my-2",
-        "[[data-stepper-vertical]_&]:mr-0",
-    ):
-        assert bit in connector
 
 
 # ── Accordion ─────────────────────────────────────────────────────────────

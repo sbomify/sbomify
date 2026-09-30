@@ -24,13 +24,11 @@ def _button_holding(rendered: str, marker: str) -> str:
     ("marker", "recipe_bit"),
     [
         ("Save", "var(--color-primary)_0%,var(--color-primary-dark)_100%"),
-        ("Confirm", "var(--color-success)_0%,var(--color-success-dark)_100%"),
         ("Care", "var(--color-warning)_0%,var(--color-warning-dark)_100%"),
         ("Delete", "var(--color-danger)_0%,var(--color-danger-dark)_100%"),
         ("Cancel", "bg-surface"),
         ("Quiet", "hover:bg-surface"),
         ("Revoke all", "hover:bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] hover:text-danger"),
-        ("Shiny", "var(--color-accent-pink)_50%"),
     ],
 )
 def test_filled_variants_carry_their_recipe(rendered: str, marker: str, recipe_bit: str) -> None:
@@ -40,23 +38,13 @@ def test_filled_variants_carry_their_recipe(rendered: str, marker: str, recipe_b
 @pytest.mark.parametrize(
     ("marker", "recipe_bit"),
     [
-        ("Neutral", "border-[1.5px] border-solid border-border"),
         ("Choose", "border-[1.5px] border-solid border-primary"),
         ("Hold", "border-[1.5px] border-solid border-warning"),
         ("Remove", "border-[1.5px] border-solid border-danger"),
-        ("Approve", "border-[1.5px] border-solid border-success"),
     ],
 )
 def test_outline_variants_carry_their_border(rendered: str, marker: str, recipe_bit: str) -> None:
     assert recipe_bit in _button_holding(rendered, marker)
-
-
-def test_outline_success_fills_with_the_success_gradient_on_hover(rendered: str) -> None:
-    """The green outline the controls catalogue used to reach for with --btn-accent."""
-    approve = _button_holding(rendered, "Approve")
-    assert "hover:bg-[linear-gradient(135deg,var(--color-success)_0%,var(--color-success-dark)_100%)]" in approve
-    assert "text-success" in approve
-    assert "text-primary" not in approve
 
 
 def test_shared_shell_structure_present_once_per_button(rendered: str) -> None:

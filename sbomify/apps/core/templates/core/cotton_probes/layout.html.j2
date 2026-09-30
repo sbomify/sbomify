@@ -26,9 +26,6 @@ assert on the output; it is not routed anywhere.
 <c-buttons.primary size="sm">Add entity</c-buttons.primary>
 </c-slot>
 </c-layout.section-header>
-<c-layout.section-body class="space-y-3">
-<p class="m-0">Indented to the title's left edge.</p>
-</c-layout.section-body>
 <c-layout.form-section step="1" title="What it is" description="A title is all a draft needs." data-probe="form-section-step">
 <p class="m-0">Step fields</p>
 </c-layout.form-section>
@@ -38,20 +35,15 @@ assert on the output; it is not routed anywhere.
 <c-layout.form-section title="No mark" data-probe="form-section-bare">
 <p class="m-0">Bare step fields</p>
 </c-layout.form-section>
-<c-layout.stat-card data-probe="stat-plain" value="1,234" label="Total products">
-<c-layout.stat.change-up><i class="fas fa-arrow-up" aria-hidden="true"></i> 12%</c-layout.stat.change-up>
-</c-layout.stat-card>
-<c-layout.stat-card accent="danger" icon="fas fa-shield-halved" value="17" label="Vulnerabilities">
-<c-layout.stat.change-down><i class="fas fa-arrow-down" aria-hidden="true"></i> 5</c-layout.stat.change-down>
-</c-layout.stat-card>
+<c-layout.stat-card data-probe="stat-plain" value="1,234" label="Total products" />
+<c-layout.stat-card accent="danger" icon="fas fa-shield-halved" value="17" label="Vulnerabilities" />
 <c-layout.stat-card accent="warning" icon="fas fa-clock" class="lg:col-span-2" @click="drill()" value="4" label="Stale scans" />
 <c-layout.stat-card compact accent="success" value="41" label="Ready" />
 <c-layout.stat-card compact value="51" label="Total" />
 <c-layout.stat-card :value="0" label="Numeric zero" accent="danger" />
 <c-layout.stat-card unmeasured unmeasured_label="Not scanned yet" label="Unmeasured metric" accent="danger" icon="fas fa-crosshairs" />
 <c-layout.stat-card value="0" label="Formatted zero" accent="warning" />
-<c-layout.stat-card x_value="count" label="Bound count" accent="danger" data-probe="stat-bound"><c-layout.stat.change>Updated</c-layout.stat.change></c-layout.stat-card>
-<c-layout.stat.change data-probe="bare-change">unchanged</c-layout.stat.change>
+<c-layout.stat-card x_value="count" label="Bound count" accent="danger" data-probe="stat-bound"><span>Updated</span></c-layout.stat-card>
 <c-layout.choice-group name="probe-severity" label="Severity" :options="probe_choices" selected="medium" hint="Pick the band it reports under." required data-probe="choice-options"></c-layout.choice-group>
 <c-layout.choice-group name="probe-visibility" class="max-w-md">
 <c-layout.choice name="probe-visibility" value="public" accent="info" icon="fas fa-globe" checked>Public</c-layout.choice>

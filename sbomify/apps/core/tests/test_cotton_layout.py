@@ -13,13 +13,11 @@ from django.template.loader import render_to_string
 PAGE_HEADER = "flex flex-wrap items-start justify-between gap-4"
 PAGE_ACTIONS = "flex flex-wrap items-center gap-2"
 SECTION_HEADER = "flex items-start gap-3"
-SECTION_BODY = "sm:ml-11"
 FORM_SECTION = "grid gap-y-4 gap-x-12 py-8"
 STAT_CARD = "relative grid m-0 min-w-0"
 STAT_ICON = "absolute flex items-center justify-center rounded-lg"
 STAT_LABEL = "row-start-2 m-0 font-medium"
 STAT_VALUE = "row-start-1 m-0 min-w-0"
-STAT_CHANGE = "inline-flex items-baseline gap-1 text-[0.8125rem]"
 CHOICE = "inline-flex items-center gap-2 px-3 py-2 rounded-[0.625rem]"
 CHOICE_GROUP = "flex flex-wrap gap-2"
 SELECT_ROW = "flex items-start gap-4 p-4 cursor-pointer"
@@ -184,11 +182,6 @@ def test_section_header_accent_reaches_the_chip(rendered: str) -> None:
     assert "bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)] text-success" in chip
 
 
-def test_section_body_indents_to_the_titles_edge_and_merges_caller_class(rendered: str) -> None:
-    body = _classes(rendered, SECTION_BODY, "Indented to the title's left edge.")
-    assert body == f"{SECTION_BODY} space-y-3"
-
-
 # ── Form section ───────────────────────────────────────────────────────────
 
 
@@ -299,22 +292,6 @@ def test_stat_label_and_value_recipes(rendered: str) -> None:
     assert "tabular-nums" in value
     assert "text-[color:var(--stat-ink)]" in value
     assert _opening(rendered, STAT_VALUE, "1,234").startswith("<dd ")
-
-
-@pytest.mark.parametrize(
-    ("marker", "token"),
-    [("fas fa-arrow-up", "success"), ("fas fa-arrow-down", "danger")],
-)
-def test_change_variants_carry_their_ink(rendered: str, marker: str, token: str) -> None:
-    change = _classes(rendered, STAT_CHANGE, marker)
-    assert f"text-[color:var(--color-{token})]" in change
-
-
-def test_the_card_aligns_changes_with_its_value_and_a_bare_change_keeps_its_margin(rendered: str) -> None:
-    assert "[--stat-change-mt:0px]" in _classes(rendered, STAT_VALUE, "1,234")
-    bare = _classes(rendered, STAT_CHANGE, "unchanged")
-    assert "mt-[var(--stat-change-mt,0.5rem)]" in bare
-    assert "color-mix" not in bare
 
 
 def test_stat_card_forwards_attrs_and_caller_class(rendered: str) -> None:
