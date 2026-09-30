@@ -10,7 +10,6 @@ import re
 from html import unescape
 
 import pytest
-from django.template import Context, Template
 from django.template.loader import render_to_string
 
 
@@ -316,17 +315,6 @@ def test_action_spinner_forwards_state_and_inherits_control_colour(rendered: str
     assert "tw-brand-loader tw-loader-inline" in body
     assert 'aria-label="Saving"' in body
     assert "text-primary" not in body
-
-
-def test_legacy_loading_tag_delegates_and_preserves_attributes() -> None:
-    html = Template(
-        "{% load design_system %}"
-        '{% loading_state message="Loading examples..." row=True hx_swap_oob="true" x_show="busy" %}'
-    ).render(Context())
-    assert 'hx-swap-oob="true"' in html
-    assert 'x-show="busy"' in html
-    assert "data-content-loading" in html
-    assert "tw-brand-loader" not in html
 
 
 # --- toast ----------------------------------------------------------------

@@ -1,0 +1,6 @@
+<div id="inventory-panel"
+     data-inventory-kind="{{ inventory.kind }}"
+     x-show="!showSkeleton"
+     :inert="loading">
+    <c-inventory.table :inventory="inventory" results_only />
+</div>

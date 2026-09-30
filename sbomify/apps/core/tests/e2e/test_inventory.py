@@ -1,6 +1,7 @@
 """The inventory keeps filters, pagination and disclosures working across HTMX swaps."""
 
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -85,7 +86,9 @@ def test_inventory_navigation_and_filters(
     expect(components).to_be_visible()
     product = dashboard["products"][0]
     page.get_by_label("Filter by product").select_option(product.id)
-    release_tab = page.get_by_role("navigation", name="Product inventory").get_by_role("link", name=re.compile("^Releases"))
+    release_tab = page.get_by_role("navigation", name="Product inventory").get_by_role(
+        "link", name=re.compile("^Releases")
+    )
     expect(release_tab).to_have_attribute("href", re.compile(f"product={product.id}"))
     page.get_by_label("Filter by product").select_option("unassigned")
     expect(components).to_contain_text("Unassigned")
@@ -137,3 +140,131 @@ def test_inventory_result_swaps_keep_sort_refresh_and_history(
     expect(search).to_have_value("Test")
     expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
     expect(page.locator("#sidebar")).to_have_count(1)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1280, 375])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_inventory_tabs_respond_before_the_response_arrives(
+    authenticated_page: Page, dashboard: dict[str, Any], width: int, theme: str, tmp_path: Path
+) -> None:
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.set_viewport_size({"width": width, "height": 1000})
+    page.goto("/products/")
+    navigation = page.get_by_role("navigation", name="Product inventory")
+    nav_element = navigation.element_handle()
+    pending = []
+
+    def hold_panel(route):
+        if route.request.headers.get("hx-target") == "inventory-panel":
+            pending.append(route)
+        else:
+            route.continue_()
+
+    page.route("**/products/**", hold_panel)
+    releases = navigation.get_by_role("link", name=re.compile("^Releases"))
+    releases.click()
+    expect(releases).to_have_attribute("aria-current", "page")
+    expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_visible()
+    expect(page.get_by_role("table", name="Products", exact=True)).to_be_hidden()
+    expect(page.get_by_role("link", name="Create release", exact=True)).to_be_visible()
+    assert pending
+    page.screenshot(path=str(tmp_path / f"inventory-loading-{theme}-{width}.png"))
+    assert nav_element and nav_element.evaluate("el => el.isConnected")
+    assert page.locator("body").evaluate("el => el.scrollWidth <= innerWidth")
+    # WebSocket refreshes must not cancel the user's in-flight choice.
+    page.evaluate("document.body.dispatchEvent(new Event('refresh-inventory'))")
+    expect(releases).to_have_attribute("aria-current", "page")
+    expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_visible()
+    pending.pop().continue_()
+    expect(page.get_by_role("table", name="Releases", exact=True)).to_be_visible()
+    expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_hidden()
+    expect(page).to_have_url(re.compile("view=releases"))
+    assert nav_element.evaluate("el => el.isConnected")
+    page.unroute("**/products/**", hold_panel)
+    page.go_back()
+    expect(page.get_by_role("table", name="Products", exact=True)).to_be_visible()
+    expect(navigation.get_by_role("link", name=re.compile("^Products"))).to_have_attribute("aria-current", "page")
+    expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_hidden()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("failure", ["server", "network", "empty"])
+def test_inventory_tab_failure_restores_previous_view_and_allows_retry(
+    authenticated_page: Page, dashboard: dict[str, Any], failure: str
+) -> None:
+    page = authenticated_page
+    page.goto("/products/")
+
+    def fail_panel(route):
+        if route.request.headers.get("hx-target") != "inventory-panel":
+            route.continue_()
+        elif failure == "empty":
+            route.fulfill(status=204)
+        elif failure == "server":
+            route.fulfill(status=503, body="Temporarily unavailable")
+        else:
+            route.abort()
+
+    page.route("**/products/**", fail_panel)
+    navigation = page.get_by_role("navigation", name="Product inventory")
+    navigation.get_by_role("link", name=re.compile("^Components")).click()
+    expect(page.get_by_role("alert").filter(has_text="Unable to load this tab")).to_be_visible()
+    expect(page.get_by_role("table", name="Products", exact=True)).to_be_visible()
+    expect(navigation.get_by_role("link", name=re.compile("^Products"))).to_have_attribute("aria-current", "page")
+    expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_hidden()
+    page.unroute("**/products/**", fail_panel)
+    navigation.get_by_role("link", name=re.compile("^Components")).click()
+    expect(page.get_by_role("table", name="Components", exact=True)).to_be_visible()
+    expect(page.get_by_role("alert").filter(has_text="Unable to load this tab")).to_be_hidden()
+
+
+@pytest.mark.django_db
+def test_inventory_rapid_tab_changes_keep_the_last_selection(
+    authenticated_page: Page, dashboard: dict[str, Any]
+) -> None:
+    page = authenticated_page
+    page.goto("/products/")
+    pending = []
+
+    def hold_panel(route):
+        if route.request.headers.get("hx-target") == "inventory-panel":
+            pending.append(route)
+        else:
+            route.continue_()
+
+    page.route("**/products/**", hold_panel)
+    navigation = page.get_by_role("navigation", name="Product inventory")
+    navigation.get_by_role("link", name=re.compile("^Releases")).click()
+    expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_visible()
+    navigation.get_by_role("link", name=re.compile("^Components")).click()
+    components = navigation.get_by_role("link", name=re.compile("^Components"))
+    expect(components).to_have_attribute("aria-current", "page")
+    assert len(pending) == 2
+    pending[0].fulfill(status=200, content_type="text/html", body='<div id="inventory-panel">Outdated releases</div>')
+    expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_visible()
+    expect(components).to_have_attribute("aria-current", "page")
+    pending[1].continue_()
+    expect(page.get_by_role("table", name="Components", exact=True)).to_be_visible()
+    expect(page).to_have_url(re.compile("view=components"))
+    expect(page.get_by_text("Outdated releases", exact=True)).to_have_count(0)
+    expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_hidden()
+
+
+@pytest.mark.django_db
+def test_inventory_tab_modified_click_keeps_native_new_tab_navigation(
+    authenticated_page: Page, dashboard: dict[str, Any]
+) -> None:
+    page = authenticated_page
+    page.goto("/products/")
+    navigation = page.get_by_role("navigation", name="Product inventory")
+    with page.context.expect_page() as opened:
+        navigation.get_by_role("link", name=re.compile("^Releases")).click(modifiers=["ControlOrMeta"])
+    popup = opened.value
+    try:
+        expect(popup.get_by_role("table", name="Releases", exact=True)).to_be_visible()
+        expect(page.get_by_role("table", name="Products", exact=True)).to_be_visible()
+        expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_hidden()
+    finally:
+        popup.close()
