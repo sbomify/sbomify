@@ -10,15 +10,6 @@
  */
 
 /**
- * Barcode rendering colors
- * Note: Must remain pure black/white for barcode scanner compatibility
- */
-export const barcodeColors = {
-  background: '#FFFFFF',
-  foreground: '#000000',
-} as const;
-
-/**
  * Default brand colors for team customization fallbacks
  * Must stay synchronized with sbomify/apps/teams/branding.py
  */

@@ -19,10 +19,6 @@ mock.module('../alerts', () => ({
     showError: mockShowError
 }))
 
-mock.module('./pagination-controls', () => ({
-    createPaginationData: mock()
-}))
-
 const mockAlpineData = mock<(name: string, callback: () => unknown) => void>()
 
 mock.module('alpinejs', () => ({
