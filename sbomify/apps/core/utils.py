@@ -11,7 +11,7 @@ import string
 import uuid
 from dataclasses import dataclass
 from functools import lru_cache
-from secrets import token_urlsafe
+from secrets import choice, token_urlsafe
 from typing import Any
 
 from asgiref.sync import async_to_sync
@@ -359,46 +359,8 @@ def obj_extract(obj_in: Any, fields: list[ExtractSpec]) -> dict[str, Any]:
 
 
 def generate_id() -> str:
-    """Generate a globally unique ID that is 12 characters long.
-
-    The ID will:
-    - Contain only alphanumeric characters (0-9, a-z, A-Z)
-    - Always start with a letter
-    - Be 12 characters long
-    - Have sufficient entropy to avoid collisions (72 bits)
-
-    Returns:
-        str: A unique alphanumeric ID, 12 characters long.
-    """
-    # Characters for base62 encoding (0-9, a-z, A-Z)
-    CHARS = string.ascii_letters + string.digits  # Letters first to bias towards letters
-
-    while True:
-        # Generate 9 random bytes (72 bits) of entropy
-        # This gives us ~4.7e21 possible values - more than enough for uniqueness
-        random_int = int.from_bytes(uuid.uuid4().bytes[:9], "big")
-
-        # Convert to base62
-        base62 = ""
-        temp_int = random_int
-        while temp_int:
-            temp_int, remainder = divmod(temp_int, 62)
-            base62 = CHARS[remainder] + base62
-
-        # Pad with 'a' if needed to reach exactly 12 chars
-        base62 = base62.rjust(12, "a")
-
-        # If longer than 12 chars, try again with new random value
-        if len(base62) > 12:
-            continue
-
-        # Ensure first character is a letter by replacing it if it's not
-        if not base62[0].isalpha():
-            # Use last 6 bits of the random_int to select a letter (0-51)
-            letter_idx = random_int % 52
-            base62 = string.ascii_letters[letter_idx] + base62[1:]
-
-        return base62
+    """Generate a 12-character alphanumeric ID that always starts with a letter (about 71 bits)."""
+    return choice(string.ascii_letters) + "".join(choice(string.ascii_letters + string.digits) for _ in range(11))
 
 
 def get_team_id_from_session(request: Any) -> str | None:
