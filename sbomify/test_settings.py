@@ -15,7 +15,6 @@ dramatiq.set_broker(stub_broker)
 # Mock Stripe settings for testing - set these before any other imports
 import os
 
-os.environ["STRIPE_API_KEY"] = "sk_test_dummy_key_for_ci"
 os.environ["STRIPE_SECRET_KEY"] = "sk_test_dummy_key_for_ci"
 os.environ["STRIPE_WEBHOOK_SECRET"] = "whsec_test_webhook_secret_key"
 

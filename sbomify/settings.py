@@ -1194,8 +1194,7 @@ else:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
-STRIPE_SECRET_KEY = STRIPE_API_KEY
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # Pin the version our requests are made against, so a library upgrade cannot
 # quietly move it. Event payloads follow the account's own version, which is a
