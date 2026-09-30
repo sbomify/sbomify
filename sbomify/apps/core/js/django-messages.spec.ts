@@ -1,22 +1,32 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { initDjangoMessages, processDjangoMessages } from './django-messages';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 interface Toast {
   title: string;
   message: string;
   type: string;
-  duration: number;
 }
 
 const toasts: Toast[] = [];
 const listeners = new Map<string, (event: Event) => void>();
-const original = { window: globalThis.window, document: globalThis.document };
+const original = { document: globalThis.document };
+
+// Bun shares module mocks across spec files, so this spec mocks the whole alerts
+// module itself instead of relying on whichever mock another spec installed.
+mock.module('./alerts', () => ({
+  showToast: (toast: Toast) => {
+    toasts.push(toast);
+  },
+  showConfirmation: mock(),
+  showSuccess: mock(),
+  showError: mock(),
+  showWarning: mock(),
+  showInfo: mock(),
+}));
+
+const { initDjangoMessages, processDjangoMessages } = await import('./django-messages');
 
 /** A page holding the hidden container messages.html.j2 renders, one span per level. */
 function stubPage(levels: string[]): void {
-  globalThis.window = {
-    dispatchEvent: (event: CustomEvent<Toast>) => toasts.push(event.detail) > 0,
-  } as unknown as Window & typeof globalThis;
   const container = {
     dataset: {},
     remove: () => {},
@@ -35,7 +45,6 @@ describe('django-messages', () => {
   });
 
   afterEach(() => {
-    globalThis.window = original.window;
     globalThis.document = original.document;
   });
 
@@ -49,7 +58,7 @@ describe('django-messages', () => {
   ])('a rendered %p message shows a %s toast', (level, type, title) => {
     stubPage([level]);
     processDjangoMessages();
-    expect(toasts).toEqual([{ title, message: `${level} message`, type, duration: 3000 }]);
+    expect(toasts).toEqual([{ title, message: `${level} message`, type }]);
   });
 
   test('the HTMX messages event takes the same types the server sends', () => {
