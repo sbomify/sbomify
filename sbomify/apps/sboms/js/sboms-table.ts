@@ -25,7 +25,7 @@ interface PluginResult {
   name: string
   display_name: string
   status: 'pass' | 'fail' | 'pending' | 'error'
-  category?: 'attestation' | 'security' | 'license' | 'compliance'
+  category?: 'attestation' | 'security' | 'compliance'
   findings_count: number
   fail_count: number
 }
