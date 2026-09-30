@@ -95,7 +95,6 @@ class TeamAdminForm(_TeamFormBase):
         return cleaned_data
 
 
-@admin.register(Team)
 class TeamAdmin(_TeamAdminBase):
     """Admin configuration for Team model."""
 
@@ -296,7 +295,6 @@ class TeamAdmin(_TeamAdminBase):
         return super().get_queryset(request).prefetch_related("members")
 
 
-@admin.register(Member)
 class MemberAdmin(_MemberAdminBase):
     """Admin configuration for Member model."""
 
@@ -329,7 +327,6 @@ class MemberAdmin(_MemberAdminBase):
         return super().get_queryset(request).select_related("user", "team")
 
 
-@admin.register(Invitation)
 class InvitationAdmin(_InvitationAdminBase):
     """Admin configuration for Invitation model."""
 
