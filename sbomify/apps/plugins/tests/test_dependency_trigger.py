@@ -464,54 +464,6 @@ class TestDependencyCompletionTrigger:
         mock_enqueue.assert_called_once()
         assert mock_enqueue.call_args.kwargs["config"] == {"strict_mode": True}
 
-    @patch("sbomify.apps.plugins.signals.run_on_commit", new=lambda f: f())
-    def test_plugin_name_dependency_also_triggers(
-        self,
-        test_sbom,
-        attestation_plugin,
-        test_team,
-    ):
-        """A dependent that targets a specific plugin by name (not category) also fires."""
-        named_dep = RegisteredPlugin.objects.create(
-            name="test-named-dep",
-            display_name="Test Named Dep",
-            description="Depends specifically on test-attestation",
-            category="compliance",
-            version="1.0.0",
-            plugin_class_path="tests.fake.NamedDep",
-            is_enabled=True,
-            is_builtin=False,
-            dependencies={"requires_one_of": [{"type": "plugin", "value": "test-attestation"}]},
-        )
-        TeamPluginSettings.objects.update_or_create(
-            team=test_team,
-            defaults={
-                "enabled_plugins": [attestation_plugin.name, named_dep.name],
-                "plugin_configs": {},
-            },
-        )
-
-        old_time = timezone.now() - timedelta(minutes=5)
-        _make_run(
-            test_sbom,
-            plugin_name=named_dep.name,
-            category=named_dep.category,
-            status=RunStatus.COMPLETED.value,
-            completed_at=old_time,
-        )
-
-        with patch("sbomify.apps.plugins.signals.enqueue_assessment") as mock_enqueue:
-            _make_run(
-                test_sbom,
-                plugin_name=attestation_plugin.name,
-                category=attestation_plugin.category,
-                status=RunStatus.COMPLETED.value,
-                completed_at=timezone.now(),
-            )
-
-        mock_enqueue.assert_called_once()
-        assert mock_enqueue.call_args.kwargs["plugin_name"] == named_dep.name
-
 
 class TestQuerySetUpdateBypassesPostSave:
     """``finalize_retry_exhausted`` writes COMPLETED via ``QuerySet.update()``,

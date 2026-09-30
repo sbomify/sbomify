@@ -188,11 +188,6 @@ class AssessmentPlugin(ABC):
                         "satisfied": bool,
                         "passing_plugins": ["plugin-name", ...],
                         "failed_plugins": ["plugin-name", ...]
-                    },
-                    "requires_all": {
-                        "satisfied": bool,
-                        "passing_plugins": ["plugin-name", ...],
-                        "failed_plugins": ["plugin-name", ...]
                     }
                 }
                 Plugins can use this to report dependency status in their findings
