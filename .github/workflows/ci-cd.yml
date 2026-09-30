@@ -153,7 +153,6 @@ jobs:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
       STRIPE_SECRET_KEY: 'sk_test_dummy_key_for_ci'
-      STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
       STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
       STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'
       DJANGO_TEST: 'true'
@@ -236,7 +235,6 @@ jobs:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
       STRIPE_SECRET_KEY: 'sk_test_dummy_key_for_ci'
-      STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
       STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
       STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'
       DJANGO_TEST: 'true'

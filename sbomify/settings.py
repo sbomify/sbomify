@@ -56,23 +56,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Define IN_DOCKER early
 IN_DOCKER = bool(int(os.environ["AM_I_IN_DOCKER_CONTAINER"])) if "AM_I_IN_DOCKER_CONTAINER" in os.environ else False
 
-API_VERSION = "v1"
-
-# This is used for the SBOM analysis results cache
-OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS = int(os.environ.get("OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS", 7 * 24 * 3600))
-
-# OSV Scanner subprocess timeout in seconds (default: 5 minutes, less than Dramatiq's 6-minute time limit)
-OSV_SCANNER_TIMEOUT_SECONDS = int(os.environ.get("OSV_SCANNER_TIMEOUT_SECONDS", 300))
-
-# Vulnerability scanning cache TTL in seconds (default: 1 hour)
-VULNERABILITY_SCAN_CACHE_TTL = int(os.environ.get("VULNERABILITY_SCAN_CACHE_TTL", 3600))
-
 # TEA API response cache TTL in seconds (default: 1 hour). Set to 0 to disable.
 TEA_CACHE_TTL: int = int(os.environ.get("TEA_CACHE_TTL", "3600"))
-
-# Dependency Track processing delay in seconds (default: 5 seconds)
-# Time to wait after SBOM upload before retrieving results to allow DT to process
-DT_PROCESSING_DELAY_SECONDS = int(os.environ.get("DT_PROCESSING_DELAY_SECONDS", 5))
 
 # Payment failure grace period in days before account is restricted
 PAYMENT_GRACE_PERIOD_DAYS = int(os.environ.get("PAYMENT_GRACE_PERIOD_DAYS", 3))
@@ -88,9 +73,6 @@ SIGNED_URL_SALT = os.environ.get("SIGNED_URL_SALT", "django-insecure-signed-url-
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False") == "True"
-
-# Local development mode (separate from DEBUG for security)
-LOCAL_DEV = os.environ.get("LOCAL_DEV", "False").lower() == "true"
 
 
 def _env_bool(value: str | None, default: bool) -> bool:
@@ -1247,13 +1229,11 @@ AWS_MEDIA_STORAGE_BUCKET_URL = os.environ.get("AWS_MEDIA_STORAGE_BUCKET_URL", ""
 AWS_SBOMS_ACCESS_KEY_ID = os.environ.get("AWS_SBOMS_ACCESS_KEY_ID", "")
 AWS_SBOMS_SECRET_ACCESS_KEY = os.environ.get("AWS_SBOMS_SECRET_ACCESS_KEY", "")
 AWS_SBOMS_STORAGE_BUCKET_NAME = os.environ.get("AWS_SBOMS_STORAGE_BUCKET_NAME", "")
-AWS_SBOMS_STORAGE_BUCKET_URL = os.environ.get("AWS_SBOMS_STORAGE_BUCKET_URL", "")
 
 # Documents S3 settings - fallback to SBOMS bucket if not configured
 AWS_DOCUMENTS_ACCESS_KEY_ID = os.environ.get("AWS_DOCUMENTS_ACCESS_KEY_ID", AWS_SBOMS_ACCESS_KEY_ID)
 AWS_DOCUMENTS_SECRET_ACCESS_KEY = os.environ.get("AWS_DOCUMENTS_SECRET_ACCESS_KEY", AWS_SBOMS_SECRET_ACCESS_KEY)
 AWS_DOCUMENTS_STORAGE_BUCKET_NAME = os.environ.get("AWS_DOCUMENTS_STORAGE_BUCKET_NAME", AWS_SBOMS_STORAGE_BUCKET_NAME)
-AWS_DOCUMENTS_STORAGE_BUCKET_URL = os.environ.get("AWS_DOCUMENTS_STORAGE_BUCKET_URL", AWS_SBOMS_STORAGE_BUCKET_URL)
 
 # A stale token (a form rendered before the login redirect chain rotated the
 # CSRF secret) should send the user back to retry, not dead-end on the stock
@@ -1297,8 +1277,6 @@ else:
 
 STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_SECRET_KEY = STRIPE_API_KEY
-STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
-STRIPE_BILLING_URL = os.environ.get("STRIPE_BILLING_URL", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # Pin the version our requests are made against, so a library upgrade cannot
 # quietly move it. Event payloads follow the account's own version, which is a
@@ -1330,9 +1308,6 @@ NOTIFICATION_PROVIDERS = [
     "sbomify.apps.teams.notifications.get_notifications",
     "sbomify.apps.vulnerability_scanning.notifications.get_notifications",
 ]
-
-# Optionally override refresh interval
-NOTIFICATION_REFRESH_INTERVAL = 60 * 1000  # 1 minute
 
 # Billing settings
 BILLING = os.getenv("BILLING", "True").lower() == "true"

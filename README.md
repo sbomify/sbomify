@@ -355,13 +355,11 @@ For production deployments, you can configure separate S3 buckets for documents:
 export AWS_DOCUMENTS_ACCESS_KEY_ID="your-documents-access-key"
 export AWS_DOCUMENTS_SECRET_ACCESS_KEY="your-documents-secret-key"
 export AWS_DOCUMENTS_STORAGE_BUCKET_NAME="your-documents-bucket"
-export AWS_DOCUMENTS_STORAGE_BUCKET_URL="https://your-documents-bucket.s3.region.amazonaws.com"
 
 # If not configured, documents will automatically use the SBOMs bucket
 export AWS_SBOMS_ACCESS_KEY_ID="your-sboms-access-key"
 export AWS_SBOMS_SECRET_ACCESS_KEY="your-sboms-secret-key"
 export AWS_SBOMS_STORAGE_BUCKET_NAME="your-sboms-bucket"
-export AWS_SBOMS_STORAGE_BUCKET_URL="https://your-sboms-bucket.s3.region.amazonaws.com"
 ```
 
 Benefits of separate buckets:

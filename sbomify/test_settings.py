@@ -17,8 +17,6 @@ import os
 
 os.environ["STRIPE_API_KEY"] = "sk_test_dummy_key_for_ci"
 os.environ["STRIPE_SECRET_KEY"] = "sk_test_dummy_key_for_ci"
-os.environ["STRIPE_PUBLISHABLE_KEY"] = "pk_test_dummy_key_for_ci"
-os.environ["STRIPE_BILLING_URL"] = "https://billing.stripe.com/test"
 os.environ["STRIPE_WEBHOOK_SECRET"] = "whsec_test_webhook_secret_key"
 
 # Mock trial period settings
@@ -125,11 +123,9 @@ AWS_MEDIA_STORAGE_BUCKET_URL = "http://test-s3.localhost/test-media-bucket"
 AWS_SBOMS_ACCESS_KEY_ID = "test-key"  # nosec B105
 AWS_SBOMS_SECRET_ACCESS_KEY = "test-secret"  # nosec B105
 AWS_SBOMS_STORAGE_BUCKET_NAME = "test-sboms-bucket"
-AWS_SBOMS_STORAGE_BUCKET_URL = "http://test-s3.localhost/test-sboms-bucket"
 AWS_DOCUMENTS_ACCESS_KEY_ID = "test-key"  # nosec B105
 AWS_DOCUMENTS_SECRET_ACCESS_KEY = "test-secret"  # nosec B105
 AWS_DOCUMENTS_STORAGE_BUCKET_NAME = "test-documents-bucket"
-AWS_DOCUMENTS_STORAGE_BUCKET_URL = "http://test-s3.localhost/test-documents-bucket"
 
 APP_BASE_URL = "http://localhost:8001"
 TRUST_CENTER_DOMAIN = ""  # Opt-in per test via @override_settings(TRUST_CENTER_DOMAIN="trustcenters.test")

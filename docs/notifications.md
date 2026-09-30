@@ -24,9 +24,6 @@ NOTIFICATION_PROVIDERS = [
     "billing.notifications.check_subscription_status",
     "teams.notifications.check_billing_plan",
 ]
-
-# Frontend refresh interval (milliseconds)
-NOTIFICATION_REFRESH_INTERVAL = 5 * 60 * 1000  # 5 minutes
 ```
 
 ### Notification Schema
