@@ -12,8 +12,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from django.conf import settings
-from django.db.models import Model
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponseRedirect
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
@@ -39,67 +38,6 @@ def normalize_base_url(url: str) -> str:
 def get_base_url() -> str:
     """Return a normalized APP_BASE_URL with a guaranteed scheme."""
     return normalize_base_url(getattr(settings, "APP_BASE_URL", ""))
-
-
-def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
-    """
-    Get the base URL for public pages.
-
-    Priority:
-    1. Custom domain (BYOD) - highest
-    2. Trust center subdomain - middle
-    3. APP_BASE_URL fallback - lowest
-
-    Args:
-        request: The current HTTP request
-        team: The team/workspace (optional, will try to detect from request)
-
-    Returns:
-        Base URL (e.g., "https://trust.example.com" or "https://acme.trustcenters.io")
-    """
-    # Try to get team from request if not provided
-    if team is None and hasattr(request, "custom_domain_team"):
-        team = request.custom_domain_team
-
-    # Priority 1: Custom domain (BYOD)
-    if team and team.custom_domain and team.custom_domain_validated:
-        protocol = "https" if request.is_secure() else "http"
-        return f"{protocol}://{team.custom_domain}"
-
-    # Priority 2: Trust center subdomain
-    trust_center_url = _build_trust_center_base_url(team, secure=request.is_secure())
-    if trust_center_url:
-        return trust_center_url
-
-    # Priority 3: Main app URL
-    return get_base_url()
-
-
-def _build_trust_center_base_url(team: Team | None, secure: bool = True) -> str:
-    """Build the trust center subdomain base URL for a team, or empty string."""
-    if not team:
-        return ""
-    slug = getattr(team, "slug", None)
-    if not slug:
-        return ""
-    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
-    if not trust_center_domain:
-        return ""
-    protocol = "https" if secure else "http"
-    return f"{protocol}://{slug}.{trust_center_domain}"
-
-
-def build_trust_center_url(team: Team, path: str = "/", secure: bool = True) -> str:
-    """Build a full URL using the team's trust center subdomain.
-
-    Returns empty string if TRUST_CENTER_DOMAIN is not configured or team has no slug.
-    """
-    base = _build_trust_center_base_url(team, secure=secure)
-    if not base:
-        return ""
-    if not path.startswith("/"):
-        path = f"/{path}"
-    return f"{base}{path}"
 
 
 def should_redirect_to_custom_domain(request: HttpRequest, team: Team) -> bool:
@@ -284,7 +222,7 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
     On main app domain, paths use IDs and include /public/ prefix.
 
     Args:
-        resource_type: Type of resource (product, component, document, workspace, release)
+        resource_type: Type of resource (product, component, workspace, release)
         resource_id: ID of the resource (used for main app domain)
         is_custom_domain: Whether the URL is for a custom domain
         **kwargs: Additional parameters:
@@ -331,11 +269,6 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
             else:
                 path = f"/public/component/{resource_id}/"
         return path
-
-    elif resource_type == "document":
-        if is_custom_domain:
-            return f"/document/{slug}/"
-        return f"/public/document/{resource_id}/"
 
     elif resource_type == "release":
         product_id = kwargs.get("product_id")
@@ -490,38 +423,6 @@ def get_workspace_public_url(request: HttpRequest, team: "Team | None") -> str:
         return reverse("core:workspace_public_current")
 
 
-def is_public_url_path(path: str) -> bool:
-    """
-    Check if a URL path is for a public resource.
-
-    Args:
-        path: The URL path
-
-    Returns:
-        Boolean indicating if this is a public URL
-    """
-    public_prefixes = [
-        "/public/workspace/",
-        "/public/product/",
-        "/public/component/",
-        "/public/document/",
-    ]
-
-    return any(path.startswith(prefix) for prefix in public_prefixes)
-
-
-def get_custom_domain_context(request: HttpRequest) -> tuple[bool, "Team | None"]:
-    """
-    Extract custom domain context from a request.
-
-    Returns:
-        Tuple of (is_custom_domain, team)
-    """
-    is_custom_domain = getattr(request, "is_custom_domain", False)
-    team = getattr(request, "custom_domain_team", None) if is_custom_domain else None
-    return is_custom_domain, team
-
-
 def get_public_custom_domain_workspace(request: HttpRequest) -> "Team | None":
     """
     The workspace a public custom-domain request may read from, if any.
@@ -543,52 +444,6 @@ def get_public_custom_domain_workspace(request: HttpRequest) -> "Team | None":
         return None
 
     return team
-
-
-def verify_custom_domain_ownership(
-    request: HttpRequest,
-    model_class: type[Model],
-    resource_id: str,
-    team_field: str = "team",
-) -> HttpResponse | None:
-    """
-    Verify that a resource belongs to the custom domain's workspace.
-
-    This function checks if we're on a custom domain and, if so, verifies
-    that the requested resource belongs to that domain's workspace.
-
-    Args:
-        request: The HTTP request
-        model_class: The Django model class to query
-        resource_id: The ID of the resource to verify
-        team_field: The field name that references the Team (default: "team")
-
-    Returns:
-        None if verification passes (or not on custom domain)
-        HttpResponseNotFound if verification fails
-
-    Example:
-        error = verify_custom_domain_ownership(request, Product, product_id)
-        if error:
-            return error_response(request, error)
-    """
-    is_custom_domain = getattr(request, "is_custom_domain", False)
-    if not is_custom_domain:
-        return None
-
-    custom_domain_team = getattr(request, "custom_domain_team", None)
-    if not custom_domain_team:
-        return None
-
-    try:
-        resource = model_class.objects.only("id", team_field).get(pk=resource_id)  # type: ignore[attr-defined]
-        resource_team = getattr(resource, team_field, None)
-        if resource_team != custom_domain_team:
-            return HttpResponseNotFound("Not found")
-    except model_class.DoesNotExist:  # type: ignore[attr-defined]
-        return HttpResponseNotFound("Not found")
-
-    return None
 
 
 def add_custom_domain_to_context(
@@ -801,58 +656,4 @@ def resolve_release_identifier(
         try:
             return Release.objects.get(pk=identifier, product=product)
         except Release.DoesNotExist:
-            return None
-
-
-def resolve_document_identifier(
-    request: HttpRequest,
-    identifier: str,
-) -> "Model | None":
-    """
-    Resolve a document by identifier (slug on custom domains, ID otherwise).
-
-    On custom domains, the identifier is treated as a slug and looked up
-    within the custom domain's team's components. On the main app domain,
-    the identifier is treated as a document ID.
-
-    Args:
-        request: The HTTP request
-        identifier: The document identifier (slug or ID)
-
-    Returns:
-        Document instance or None if not found
-    """
-    from sbomify.apps.documents.models import Document
-
-    is_custom_domain = getattr(request, "is_custom_domain", False)
-    custom_domain_team = get_public_custom_domain_workspace(request)
-
-    if is_custom_domain:
-        if custom_domain_team is None:
-            return None
-
-        # On custom domain: find by slug within the team's public components
-        slug = slugify(identifier, allow_unicode=True)
-
-        # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for document in Document.objects.filter(  # type: ignore[misc]
-            component__team=custom_domain_team,
-            component__visibility=Component.Visibility.PUBLIC,
-            public_access_allowed=True,
-        ):
-            if slugify(document.name, allow_unicode=True) == slug:
-                return document
-
-        # Fallback: try by ID within the team
-        try:
-            return Document.objects.get(pk=identifier, component__team=custom_domain_team)
-        except Document.DoesNotExist:
-            pass
-
-        return None
-    else:
-        # On main app: find by ID only
-        try:
-            return Document.objects.get(pk=identifier)
-        except Document.DoesNotExist:
             return None

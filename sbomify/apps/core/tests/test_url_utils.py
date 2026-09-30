@@ -6,7 +6,6 @@ with custom domain support.
 """
 
 import pytest
-from django.conf import settings
 from django.test import RequestFactory, override_settings
 from pytest_mock import MockerFixture
 
@@ -14,8 +13,6 @@ from sbomify.apps.core.url_utils import (
     build_custom_domain_url,
     custom_domain_redirect,
     get_public_path,
-    get_public_url_base,
-    is_public_url_path,
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.teams.models import Team
@@ -104,16 +101,6 @@ class TestGetPublicPath:
         """Test component path on main domain."""
         path = get_public_path("component", "comp123", is_custom_domain=False)
         assert path == "/public/component/comp123/"
-
-    def test_document_path_custom_domain(self):
-        """Test document path on custom domain."""
-        path = get_public_path("document", "doc123", is_custom_domain=True)
-        assert path == "/document/doc123/"
-
-    def test_document_path_main_domain(self):
-        """Test document path on main domain."""
-        path = get_public_path("document", "doc123", is_custom_domain=False)
-        assert path == "/public/document/doc123/"
 
     def test_release_path_custom_domain(self):
         """Test release path on custom domain."""
@@ -320,97 +307,3 @@ class TestShouldRedirectToCustomDomain:
 
         should_redirect = should_redirect_to_custom_domain(request, None)
         assert should_redirect is False
-
-
-@pytest.mark.django_db
-class TestGetPublicUrlBase:
-    """Test the get_public_url_base utility function."""
-
-    def test_custom_domain_url_base(self, request_factory, custom_domain_team):
-        """Test URL base for custom domain."""
-        request = request_factory.get("/", secure=True)
-        request.custom_domain_team = custom_domain_team
-
-        base_url = get_public_url_base(request, custom_domain_team)
-        assert base_url == "https://trust.example.com"
-
-    def test_custom_domain_url_base_http(self, request_factory, custom_domain_team):
-        """Test URL base for custom domain with HTTP."""
-        request = request_factory.get("/", secure=False)
-        request.custom_domain_team = custom_domain_team
-
-        base_url = get_public_url_base(request, custom_domain_team)
-        assert base_url == "http://trust.example.com"
-
-    def test_main_app_url_base(self, request_factory, team_without_custom_domain):
-        """Test URL base for team without custom domain."""
-        request = request_factory.get("/")
-
-        base_url = get_public_url_base(request, team_without_custom_domain)
-        assert base_url == settings.APP_BASE_URL
-
-    def test_url_base_from_request_attribute(self, request_factory, custom_domain_team):
-        """Test URL base detection from request.custom_domain_team."""
-        request = request_factory.get("/", secure=True)
-        request.custom_domain_team = custom_domain_team
-
-        # Don't pass team parameter, should detect from request
-        base_url = get_public_url_base(request, None)
-        assert base_url == "https://trust.example.com"
-
-    def test_trust_center_subdomain_url_base(self, request_factory, trust_center_team):
-        """Test URL base for trust center subdomain (no BYOD custom domain)."""
-        from django.test import override_settings
-
-        request = request_factory.get("/", secure=True)
-
-        with override_settings(TRUST_CENTER_DOMAIN="trustcenters.io"):
-            base_url = get_public_url_base(request, trust_center_team)
-            assert base_url == "https://trustco.trustcenters.io"
-
-    def test_trust_center_subdomain_falls_back_to_app_base_url(self, request_factory, trust_center_team):
-        """Test URL base falls back to APP_BASE_URL when TRUST_CENTER_DOMAIN is empty."""
-        from django.test import override_settings
-
-        request = request_factory.get("/")
-
-        with override_settings(TRUST_CENTER_DOMAIN=""):
-            base_url = get_public_url_base(request, trust_center_team)
-            assert base_url == settings.APP_BASE_URL
-
-
-@pytest.mark.django_db
-class TestIsPublicUrlPath:
-    """Test the is_public_url_path utility function."""
-
-    def test_public_workspace_path(self):
-        """Test that /public/workspace/ is recognized."""
-        assert is_public_url_path("/public/workspace/abc123/") is True
-
-    def test_public_product_path(self):
-        """Test that /public/product/ is recognized."""
-        assert is_public_url_path("/public/product/123/") is True
-
-    def test_public_component_path(self):
-        """Test that /public/component/ is recognized."""
-        assert is_public_url_path("/public/component/789/") is True
-
-    def test_public_document_path(self):
-        """Test that /public/document/ is recognized."""
-        assert is_public_url_path("/public/document/doc1/") is True
-
-    def test_private_product_path(self):
-        """Test that /product/ (without public) is not recognized."""
-        assert is_public_url_path("/product/123/") is False
-
-    def test_dashboard_path(self):
-        """Test that /dashboard is not recognized."""
-        assert is_public_url_path("/dashboard") is False
-
-    def test_api_path(self):
-        """Test that /api/ is not recognized."""
-        assert is_public_url_path("/api/v1/products/") is False
-
-    def test_root_path(self):
-        """Test that / is not recognized."""
-        assert is_public_url_path("/") is False
