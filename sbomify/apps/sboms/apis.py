@@ -17,7 +17,7 @@ from pydantic import ValidationError
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth
 from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
-from sbomify.apps.core.apis import get_component_metadata, patch_component_metadata
+from sbomify.apps.core.apis import build_component_metadata, get_component_metadata, patch_component_metadata
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
 from sbomify.apps.core.purl import extract_purl_qualifiers
@@ -26,7 +26,6 @@ from sbomify.apps.core.services.access_control import check_component_access_for
 from sbomify.apps.core.utils import (
     ExtractSpec,
     broadcast_to_workspace,
-    build_entity_info_dict,
     dict_update,
     get_by_uuid_or_pk,
     obj_extract,
@@ -40,7 +39,6 @@ from sbomify.apps.sboms.utils import (
     _states_vulnerabilities,
     verify_download_token,
 )
-from sbomify.apps.teams.models import ContactProfile
 
 from .models import SBOM, Component
 from .schemas import (
@@ -53,7 +51,6 @@ from .schemas import (
     SPDX3Schema,
     SPDXPackage,
     SPDXSchema,
-    SupplierSchema,
     cdx13,
     cdx14,
     cdx15,
@@ -176,80 +173,6 @@ def _broadcast_sbom_uploaded(component: Component, sbom: SBOM) -> None:
         workspace_key=component.team.key or "",
         message_type="sbom_uploaded",
         data={"sbom_id": str(sbom.id), "component_id": str(component.id), "name": sbom.name},
-    )
-
-
-def _build_component_metadata_from_native_fields(component: Component) -> ComponentMetaData:
-    """Build ComponentMetaData from component's native fields and contact profile.
-
-    This mirrors the logic in core.apis.get_component_metadata() to build metadata
-    from the component's native fields (supplier, authors, licenses, etc.) and
-    contact profile entities (manufacturer, supplier).
-    """
-    # Build supplier and manufacturer from contact profile
-    supplier: dict[str, Any] = {"contacts": []}
-    manufacturer: dict[str, Any] = {"contacts": []}
-
-    if component.contact_profile:
-        profile = component.contact_profile
-        # Ensure profile is prefetched with entities and contacts
-        if not hasattr(profile, "_prefetched_objects_cache"):
-            profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
-
-        # Find supplier and manufacturer entities
-        supplier_entity = None
-        manufacturer_entity = None
-        for entity in profile.entities.all():
-            if entity.is_supplier and supplier_entity is None:
-                supplier_entity = entity
-            if entity.is_manufacturer and manufacturer_entity is None:
-                manufacturer_entity = entity
-
-        # Build supplier and manufacturer using shared utility
-        supplier = build_entity_info_dict(supplier_entity)
-        manufacturer = build_entity_info_dict(manufacturer_entity)
-    else:
-        # Fall back to component's native fields if no contact profile
-        if component.supplier_name:
-            supplier["name"] = component.supplier_name
-        if component.supplier_url:
-            supplier["url"] = component.supplier_url
-        if component.supplier_address:
-            supplier["address"] = component.supplier_address
-        for contact in component.supplier_contacts.all():
-            contact_dict = {"name": contact.name}
-            if contact.email is not None:
-                contact_dict["email"] = contact.email
-            if contact.phone is not None:
-                contact_dict["phone"] = contact.phone
-            supplier["contacts"].append(contact_dict)
-
-    # Build authors from native fields
-    authors = []
-    for author in component.authors.all():
-        author_dict = {"name": author.name}
-        if author.email is not None:
-            author_dict["email"] = author.email
-        if author.phone is not None:
-            author_dict["phone"] = author.phone
-        authors.append(author_dict)
-
-    # Get licenses from native fields
-    licenses = []
-    for license_obj in component.licenses.all():
-        licenses.append(license_obj.to_dict())
-
-    return ComponentMetaData(
-        id=component.id,
-        name=component.name,
-        supplier=SupplierSchema.model_validate(supplier),
-        manufacturer=SupplierSchema.model_validate(manufacturer),
-        authors=authors,  # type: ignore[arg-type]
-        licenses=licenses,  # type: ignore[arg-type]
-        lifecycle_phase=component.lifecycle_phase,
-        contact_profile_id=component.contact_profile_id,
-        contact_profile=None,  # Not needed for CycloneDX generation
-        uses_custom_contact=component.contact_profile is None,
     )
 
 
@@ -965,8 +888,7 @@ def get_cyclonedx_component_metadata(
         .get(pk=component.id)
     )
 
-    # Build ComponentMetaData from native fields and contact profile
-    component_metadata = _build_component_metadata_from_native_fields(component)
+    component_metadata = build_component_metadata(component)
 
     component_cdx_metadata: cdx13.Metadata | cdx14.Metadata | cdx15.Metadata | cdx16.Metadata | cdx17.Metadata = (
         component_metadata.to_cyclonedx(spec_version)

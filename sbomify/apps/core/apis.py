@@ -6,7 +6,7 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -87,6 +87,9 @@ from .schemas import (
     SBOMReleaseTaggingResponseSchema,
     SBOMReleaseTaggingSchema,
 )
+
+if TYPE_CHECKING:
+    from sbomify.apps.sboms.models import Component as BaseComponent
 
 log = getLogger(__name__)
 
@@ -2177,6 +2180,15 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
     if not access_result.has_access:
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+    return build_component_metadata(component)
+
+
+def build_component_metadata(component: BaseComponent) -> ComponentMetaData:
+    """Component metadata from its native fields and contact profile.
+
+    Callers prefetch supplier_contacts, authors, licenses and
+    contact_profile__entities__contacts.
+    """
     # Build supplier and manufacturer information from contact profile or component fields
     supplier: dict[str, Any] = {"contacts": []}
     manufacturer: dict[str, Any] = {"contacts": []}
@@ -2263,8 +2275,7 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         "end_of_life": component.end_of_life,
     }
 
-    comp_meta = ComponentMetaData.model_validate(response_data)
-    return comp_meta
+    return ComponentMetaData.model_validate(response_data)
 
 
 @router.patch(
