@@ -199,21 +199,6 @@ def token_to_number(token: str) -> int:
         raise ValueError("Invalid token format")
 
 
-def get_current_team_id(request: HttpRequest) -> int | None:
-    """
-    Get the team ID for the current team from the request.
-
-    Request contains team keys which can be translated into team IDs.
-
-    If no current team is found in the request session, return None.
-    """
-    team_key = request.session.get("current_team", {}).get("key")
-    if team_key is None:
-        return None
-
-    return token_to_number(team_key)
-
-
 @lru_cache(maxsize=1)
 def _trusted_proxy_networks(
     cidrs: tuple[str, ...],
