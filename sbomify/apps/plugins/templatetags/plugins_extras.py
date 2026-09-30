@@ -59,9 +59,7 @@ def format_run_reason(reason: str) -> str:
         reason: The run reason code. Expected values:
             - "on_upload": Triggered by SBOM upload
             - "manual": Manually triggered by user
-            - "scheduled": Triggered by scheduled job
             - "config_change": Triggered by configuration change
-            - "migration": Triggered during data migration
 
     Returns:
         Human-readable display string for the reason.
@@ -69,9 +67,7 @@ def format_run_reason(reason: str) -> str:
     reasons = {
         "on_upload": "Upload",
         "manual": "Manual",
-        "scheduled": "Scheduled",
         "config_change": "Config Change",
-        "migration": "Migration",
     }
     return reasons.get(reason, reason)
 

@@ -129,7 +129,7 @@ class TestRegisteredPlugin:
         plugin = RegisteredPlugin.objects.create(
             name="disabled-plugin",
             display_name="Disabled Plugin",
-            category=AssessmentCategory.LICENSE.value,
+            category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
             plugin_class_path="test.path.Plugin",
             is_enabled=False,

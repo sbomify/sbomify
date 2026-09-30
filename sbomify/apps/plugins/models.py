@@ -27,7 +27,7 @@ class RegisteredPlugin(models.Model):
         display_name: Human-readable name for UI display.
         description: Description of what the plugin does.
         category: Assessment category for classification (security, compliance,
-            attestation, license). Under the scan-once-per-SBOM model, all
+            attestation). Under the scan-once-per-SBOM model, all
             plugins run on SBOM upload; release associations update the
             existing run's M2M without triggering a rescan.
         version: Current version of the plugin.

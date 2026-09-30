@@ -20,14 +20,8 @@ class TestFormatRunReason:
     def test_manual(self) -> None:
         assert format_run_reason("manual") == "Manual"
 
-    def test_scheduled(self) -> None:
-        assert format_run_reason("scheduled") == "Scheduled"
-
     def test_config_change(self) -> None:
         assert format_run_reason("config_change") == "Config Change"
-
-    def test_migration(self) -> None:
-        assert format_run_reason("migration") == "Migration"
 
     def test_unknown_returns_original(self) -> None:
         assert format_run_reason("unknown_reason") == "unknown_reason"
