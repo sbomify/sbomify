@@ -381,9 +381,6 @@ MESSAGE_TAGS = {
     messages.constants.ERROR: "alert-danger",
 }
 
-# Filter out login success messages
-MESSAGE_LEVEL = messages.constants.INFO  # Only show messages of INFO level and above
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
@@ -400,14 +397,8 @@ if not DEBUG:
         },
     }
 
-STATICFILES_FINDERS = [
-    "django.contrib.staticfiles.finders.FileSystemFinder",
-    "django.contrib.staticfiles.finders.AppDirectoriesFinder",
-]
-
 # WhiteNoise configuration for better static file serving
 WHITENOISE_USE_FINDERS = True
-WHITENOISE_AUTOREFRESH = DEBUG
 WHITENOISE_MAX_AGE = 31536000 if not DEBUG else 0  # 1 year cache for production
 
 # Django Vite - now outputs to static/dist/ to avoid conflicts
@@ -441,23 +432,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Database
-
-
-# Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-# DATABASES = {
-#     "default": {
-#         "ENGINE": os.environ["SQL_ENGINE"],
-#         "NAME": os.environ["SQL_DATABASE"],
-#         "USER": os.environ["SQL_USER"],
-#         "PASSWORD": os.environ["SQL_PASSWORD"],
-#         "HOST": os.environ["SQL_HOST"],
-#         "PORT": os.environ["SQL_PORT"],
-#     }
-# }
-
-# DB_URL = os.environ.get("DATABASE_URL", "")
 if "DATABASE_URL" in os.environ:
     db_config_dict = dj_database_url.parse(os.environ["DATABASE_URL"])
 else:
@@ -928,17 +904,7 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
-        "core": {
-            "handlers": ["console"],
-            "level": "DEBUG",
-            "propagate": False,
-        },
         "allauth": {
-            "handlers": ["console"],
-            "level": "DEBUG",
-            "propagate": False,
-        },
-        "allauth.socialaccount": {
             "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,
@@ -948,11 +914,6 @@ LOGGING = {
             "level": "WARNING",
             "propagate": False,
         },
-        # "teams": {
-        #     "handlers": ["console"],
-        #     "level": os.getenv("LOG_LEVEL", "INFO"),
-        #     "propagate": False,
-        # },
     },
 }
 
@@ -1031,13 +992,7 @@ if _trust_center_raw:
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
-
 TIME_ZONE = "UTC"
-
-USE_I18N = True
-
-USE_TZ = True
 
 
 # Email settings
