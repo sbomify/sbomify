@@ -10,12 +10,10 @@ dependencies = [
     "python-dotenv>=1.2.2,<2",
     "urllib3>=2.7.0,<3",
     "psycopg2-binary>=2.9.9,<3",
-    "django-extensions~=4.1",
     "django-widget-tweaks>=1.5.0,<2",
     "django-ratelimit>=4.1,<5",
     "pyjwt>=2.13.0,<3",
     "pydantic>=2.11.9,<3",
-    "django-anymail[sendgrid]~=15.0",
     "whitenoise>=6.11.0,<7",
     "sentry-sdk>=2.38.0,<3",
     "django-ninja>=1.4.3,<2",
@@ -84,7 +82,6 @@ dev = [
     "django-debug-toolbar>=6.0.0,<8",
     "pre-commit>=4.3.0,<5",
     "datamodel-code-generator[http]~=0.44",
-    "pytest-json-report>=1.5.0,<2",
     "pytest-playwright>=0.7.1,<0.9",
     "djlint>=1.36.4,<2",
     "django-cors-headers>=4.9.0",
@@ -92,7 +89,6 @@ dev = [
     "types-boto3>=1.42.0,<2",
     "types-psycopg2>=2.9.21,<3",
     "types-PyYAML>=6.0.12,<7",
-    "types-gunicorn>=25.1.0,<27",
     "types-channels>=4.3.0,<5",
     "types-requests>=2.32.0,<3",
     "types-defusedxml>=0.7.0.20260504",
@@ -136,7 +132,6 @@ env = [
     "DJANGO_TEST_PASSWORD=test",
     "DJANGO_TEST_EMAIL=test@example.com",
     "DEFAULT_FROM_EMAIL=test@example.com",
-    "SENDGRID_API_KEY=invalid-key",
     "DJANGO_ALLOW_ASYNC_UNSAFE=1",  # Required for Playwright e2e tests - allows sync Django ORM operations in async context
     # Bind Django live test server on all interfaces so the Chromium container can access it via host.docker.internal
     "DJANGO_LIVE_TEST_SERVER_ADDRESS=0.0.0.0:0",
@@ -275,7 +270,6 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = [
     "allauth.*",
-    "anymail.*",
     "whitenoise.*",
     "health_check.*",
     "license_expression.*",
