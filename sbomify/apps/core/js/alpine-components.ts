@@ -15,13 +15,10 @@ import { scrollableTabs } from './components/scrollable-tabs';
 import { repositorySetup } from './components/repository-setup';
 import { registerCopyableValue } from './components/copyable-value';
 import { registerVisibilitySelector } from './components/visibility-selector';
-import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerDeleteModal } from './components/delete-modal';
-import { registerCopyToken } from './components/copy-token';
 import { registerSiteNotifications } from './components/site-notifications';
 import { registerEditableSingleField } from './components/editable-single-field';
-import { registerProductIdentifiers } from './components/product-identifiers';
 import { registerReleaseEditor } from './components/release-editor';
 import { registerReleaseArtifacts } from './components/release-artifacts';
 import { registerProductIdentifiersBarcodes } from './components/product-identifiers-barcodes';
@@ -32,7 +29,6 @@ import { registerSettingsNavigation } from '../../teams/js/settings-navigation';
 import { registerTeamBranding, registerCustomDomain } from '../../teams/js/team-branding';
 import { registerFileDragAndDrop } from './components/file-drag-and-drop';
 import { registerAccountDangerZone } from './components/account-danger-zone';
-import { registerDatePicker } from './components/date-picker';
 import { advisoryProductPicker } from './components/advisory-product-picker';
 import { actionsMenu } from './components/actions-menu';
 import { publicSharing } from './components/public-sharing';
@@ -133,59 +129,12 @@ export function dangerZone() {
     };
 }
 
-/**
- * Modal State Component
- */
-export function modalState() {
-    return {
-        isOpen: false,
-        open(): void { this.isOpen = true; },
-        close(): void { this.isOpen = false; },
-        toggle(): void { this.isOpen = !this.isOpen; }
-    };
-}
-
-/**
- * Collapsible Section Component
- */
-export function collapsible(defaultExpanded = false) {
-    return {
-        isExpanded: defaultExpanded,
-        toggle(): void { this.isExpanded = !this.isExpanded; },
-        expand(): void { this.isExpanded = true; },
-        collapse(): void { this.isExpanded = false; }
-    };
-}
-
-/**
- * Form State Component
- */
-export function formState() {
-    return {
-        editing: false,
-        submitting: false,
-        error: null as string | null,
-
-        startEdit(): void { this.editing = true; },
-        cancelEdit(): void { this.editing = false; this.error = null; },
-        submit(): void { this.submitting = true; this.error = null; },
-        submitComplete(success: boolean, errorMessage?: string): void {
-            this.submitting = false;
-            if (success) {
-                this.editing = false;
-            } else {
-                this.error = errorMessage || 'An error occurred';
-            }
-        }
-    };
-}
-
 // ============================================
 // REGISTRATION FUNCTIONS
 // ============================================
 
 /**
- * Register common inline components (dangerZone, modalState, etc.)
+ * Register common inline components (dangerZone, navbarSearch, etc.)
  */
 export function registerCommonComponents(): void {
     registerAlpineComponent('navbarSearch', navbarSearch);
@@ -193,9 +142,6 @@ export function registerCommonComponents(): void {
     registerAlpineComponent('inventoryTabs', inventoryTabs);
     registerAlpineComponent('vulnerabilityTrends', vulnerabilityTrends);
     registerAlpineComponent('dangerZone', dangerZone);
-    registerAlpineComponent('modalState', modalState);
-    registerAlpineComponent('collapsible', collapsible);
-    registerAlpineComponent('formState', formState);
     registerAlpineComponent('advisoryProductPicker', advisoryProductPicker);
     registerAlpineComponent('actionsMenu', actionsMenu);
     registerAlpineComponent('publicSharing', publicSharing);
@@ -216,14 +162,11 @@ export function registerAllComponents(): void {
     // Core components
     registerCopyableValue();
     registerVisibilitySelector();
-    registerWorkspaceSwitcher();
     registerAccessTokensList();
     registerDeleteModal();
     // confirmModal is registered in alpine-init.ts (base template dependency)
-    registerCopyToken();
     registerSiteNotifications();
     registerEditableSingleField();
-    registerProductIdentifiers();
     registerReleaseEditor();
     registerReleaseArtifacts();
     registerProductIdentifiersBarcodes();
@@ -235,7 +178,6 @@ export function registerAllComponents(): void {
     registerTeamBranding();
     registerCustomDomain();
     registerFileDragAndDrop();
-    registerDatePicker();
 
     // SBOM module components
     registerSbomUpload();
@@ -265,8 +207,5 @@ export default {
     registerCommonComponents,
     registerAllComponents,
     // Common components
-    dangerZone,
-    modalState,
-    collapsible,
-    formState
+    dangerZone
 };
