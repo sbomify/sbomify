@@ -273,16 +273,11 @@ variables control the development servers:
 
 ```bash
 # Vite development settings
-DJANGO_VITE_DEV_MODE=True
-DJANGO_VITE_DEV_SERVER_PORT=5170
-DJANGO_VITE_DEV_SERVER_HOST=http://localhost
+USE_VITE_DEV_SERVER=True
+VITE_DEV_SERVER_PORT=5170
 
 # Static and development server settings
-STATIC_URL=/static/
-DEV_JS_SERVER=http://127.0.0.1:5170
 WEBSITE_BASE_URL=http://127.0.0.1:8000
-VITE_API_BASE_URL=http://127.0.0.1:8000
-VITE_WEBSITE_BASE_URL=http://127.0.0.1:8000
 ```
 
 These settings can be configured using environment variables.
