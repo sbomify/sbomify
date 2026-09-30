@@ -8,8 +8,10 @@ scope) and SPDX 3.0.1 rootElement semantics stay consistent.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import datetime
 from typing import Any
 
+from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -243,3 +245,32 @@ def spdx3_annotation_subject_matches(
     if subject == "":
         return bool(root_element_ids)
     return subject in document_ids or subject in root_element_ids
+
+
+def detect_format(sbom_data: dict[str, Any]) -> str:
+    """Detect SBOM format from the data.
+
+    Returns:
+        Format string: "spdx", "spdx3", "cyclonedx", or "unknown".
+    """
+    if is_spdx3(sbom_data):
+        return "spdx3"
+    elif "spdxVersion" in sbom_data:
+        return "spdx"
+    elif isinstance(sbom_data.get("bomFormat"), str) and sbom_data["bomFormat"].lower() == "cyclonedx":
+        return "cyclonedx"
+    elif "specVersion" in sbom_data and "components" in sbom_data:
+        # CycloneDX without explicit bomFormat
+        return "cyclonedx"
+    return "unknown"
+
+
+def is_valid_timestamp(timestamp: str | None) -> bool:
+    """Validate that a timestamp is in valid ISO-8601 format."""
+    if not timestamp:
+        return False
+    try:
+        datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        return True
+    except (ValueError, TypeError):
+        return False

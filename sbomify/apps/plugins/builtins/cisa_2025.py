@@ -69,10 +69,11 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     get_spdx3_package_fields,
     get_spdx3_package_license,
     has_spdx3_supplier,
-    is_spdx3,
 )
 from sbomify.apps.plugins.builtins._spdx_shared import (
     SPDX2_IDENTIFIER_TYPES,
+    detect_format,
+    is_valid_timestamp,
     iter_spdx3_elements,
     spdx2_annotation_targets_document,
     spdx2_reference_type,
@@ -256,7 +257,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
             return self._create_error_result(f"Failed to read SBOM: {e}")
 
         # Detect format and validate
-        sbom_format = self._detect_format(sbom_data)
+        sbom_format = detect_format(sbom_data)
         if sbom_format == "spdx3":
             findings = self._validate_spdx3(sbom_data)
         elif sbom_format == "spdx":
@@ -296,26 +297,6 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
                 "sbom_format": sbom_format,
             },
         )
-
-    def _detect_format(self, sbom_data: dict[str, Any]) -> str:
-        """Detect SBOM format from the data.
-
-        Args:
-            sbom_data: Parsed SBOM dictionary.
-
-        Returns:
-            Format string: "spdx", "spdx3", "cyclonedx", or "unknown".
-        """
-        if is_spdx3(sbom_data):
-            return "spdx3"
-        elif "spdxVersion" in sbom_data:
-            return "spdx"
-        elif isinstance(sbom_data.get("bomFormat"), str) and sbom_data["bomFormat"].lower() == "cyclonedx":
-            return "cyclonedx"
-        elif "specVersion" in sbom_data and "components" in sbom_data:
-            # CycloneDX without explicit bomFormat
-            return "cyclonedx"
-        return "unknown"
 
     def _validate_spdx(self, data: dict[str, Any]) -> list[Finding]:
         """Validate SPDX format SBOM against CISA 2025 minimum elements.
@@ -508,7 +489,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
 
         # 10. Timestamp (document-level)
         timestamp = creation_info.get("created")
-        timestamp_valid = self._validate_timestamp(timestamp)
+        timestamp_valid = is_valid_timestamp(timestamp)
         findings.append(
             self._create_finding(
                 "timestamp",
@@ -759,7 +740,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
         )
 
         # 10. Timestamp
-        timestamp_valid = self._validate_timestamp(ci_fields["timestamp"])
+        timestamp_valid = is_valid_timestamp(ci_fields["timestamp"])
         findings.append(
             self._create_finding(
                 "timestamp",
@@ -1040,7 +1021,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
 
         # 10. Timestamp (document-level)
         timestamp = metadata.get("timestamp")
-        timestamp_valid = self._validate_timestamp(timestamp)
+        timestamp_valid = is_valid_timestamp(timestamp)
         findings.append(
             self._create_finding(
                 "timestamp",
@@ -1155,23 +1136,6 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
                     return True
 
         return False
-
-    def _validate_timestamp(self, timestamp: str | None) -> bool:
-        """Validate that a timestamp is in valid ISO-8601 format.
-
-        Args:
-            timestamp: Timestamp string to validate.
-
-        Returns:
-            True if valid ISO-8601 format, False otherwise.
-        """
-        if not timestamp:
-            return False
-        try:
-            datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            return True
-        except (ValueError, TypeError):
-            return False
 
     def _create_finding(
         self,

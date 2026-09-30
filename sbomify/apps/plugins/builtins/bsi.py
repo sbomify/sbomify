@@ -69,6 +69,7 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     spdx3_refs,
 )
 from sbomify.apps.plugins.builtins._spdx_shared import (
+    is_valid_timestamp,
     spdx2_reference_type,
     spdx2_yocto_source_downloads,
     spdx3_document_subjects,
@@ -562,7 +563,7 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # 2. Timestamp
         timestamp = metadata.get("timestamp")
-        timestamp_valid = self._validate_timestamp(timestamp)
+        timestamp_valid = is_valid_timestamp(timestamp)
         timestamp_details = None
         if not timestamp_valid:
             timestamp_details = "Missing timestamp" if not timestamp else "Invalid ISO-8601 format"
@@ -973,7 +974,7 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # 2. Timestamp
         timestamp = creation_info.get("created") if creation_info else None
-        timestamp_valid = self._validate_timestamp(timestamp)
+        timestamp_valid = is_valid_timestamp(timestamp)
         timestamp_details = None
         if not timestamp_valid:
             timestamp_details = "Missing timestamp" if not timestamp else "Invalid ISO-8601 format"
@@ -1301,7 +1302,7 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # Timestamp
         timestamp = creation_info.get("created")
-        timestamp_valid = self._validate_timestamp(timestamp)
+        timestamp_valid = is_valid_timestamp(timestamp)
         findings.append(
             self._create_finding(
                 "timestamp",
@@ -1911,16 +1912,6 @@ class BSICompliancePlugin(AssessmentPlugin):
                     has_completeness = True
 
         return has_deps, has_completeness
-
-    def _validate_timestamp(self, timestamp: str | None) -> bool:
-        """Validate that a timestamp is in valid ISO-8601 format."""
-        if not timestamp:
-            return False
-        try:
-            datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            return True
-        except (ValueError, TypeError):
-            return False
 
     def _format_failure_details(self, failures: list[str], max_shown: int = 5) -> str:
         """Format a list of failures into a details string.

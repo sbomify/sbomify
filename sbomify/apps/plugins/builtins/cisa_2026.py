@@ -58,11 +58,11 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
     extract_spdx3_licenses,
     get_spdx3_package_license,
-    is_spdx3,
     iter_spdx3_external_identifiers,
     spdx3_refs,
 )
 from sbomify.apps.plugins.builtins._spdx_shared import (
+    detect_format,
     spdx2_annotation_targets_document,
     spdx2_reference_type,
     spdx2_root_spdxid,
@@ -426,7 +426,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         if not isinstance(data, dict):
             return self._error_result("The document is valid JSON but not an object")
 
-        sbom_format = self._detect_format(data)
+        sbom_format = detect_format(data)
         if sbom_format == "spdx3":
             findings = self._validate_spdx3(data, context)
         elif sbom_format == "spdx":
@@ -467,18 +467,6 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 "sbom_format": sbom_format,
             },
         )
-
-    def _detect_format(self, data: dict[str, Any]) -> str:
-        """Which of the two sanctioned formats this document is written in."""
-        if is_spdx3(data):
-            return "spdx3"
-        if "spdxVersion" in data:
-            return "spdx"
-        if isinstance(data.get("bomFormat"), str) and data["bomFormat"].lower() == "cyclonedx":
-            return "cyclonedx"
-        if "specVersion" in data and "components" in data:
-            return "cyclonedx"
-        return "unknown"
 
     # ------------------------------------------------------------------
     # Shared outcome shaping
