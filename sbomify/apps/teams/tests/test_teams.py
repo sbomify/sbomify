@@ -1291,7 +1291,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
     # Test 1: Successful upload with old file cleanup for ICON
     team = sample_team_with_owner_member.team
-    team.branding_info = {"icon": "old_icon_file.png", "logo": "", "brand_color": "", "accent_color": ""}
+    team.branding_info = {"icon": f"team_{team_key}_icon_old.png", "logo": "", "brand_color": "", "accent_color": ""}
     team.save()
 
     # Upload new icon
@@ -1312,7 +1312,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
         # Verify old file was deleted
         assert len(deleted_files) == 1
-        assert deleted_files[0] == "old_icon_file.png"
+        assert deleted_files[0] == f"team_{team_key}_icon_old.png"
 
         # Verify database was updated
         team.refresh_from_db()
@@ -1326,7 +1326,12 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
     deleted_files.clear()
 
     # Set up existing logo
-    team.branding_info = {"icon": new_filename, "logo": "old_logo_file.jpg", "brand_color": "", "accent_color": ""}
+    team.branding_info = {
+        "icon": new_filename,
+        "logo": f"team_{team_key}_logo_old.jpg",
+        "brand_color": "",
+        "accent_color": "",
+    }
     team.save()
 
     with open("test_logo.jpg", "wb") as f:
@@ -1345,7 +1350,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
         # Verify old file was deleted
         assert len(deleted_files) == 1
-        assert deleted_files[0] == "old_logo_file.jpg"
+        assert deleted_files[0] == f"team_{team_key}_logo_old.jpg"
 
         # Verify database was updated
         team.refresh_from_db()

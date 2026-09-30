@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import uuid
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, cast
 
 from defusedxml.ElementTree import DefusedXMLParser, ParseError
@@ -226,15 +227,15 @@ def update_team_branding_field(
     current_branding = BrandingInfo(**branding_data)
     update_data = current_branding.model_dump()
 
-    s3_client = StorageClient("MEDIA")
-
-    # Handle file deletions
-    if field in ["icon", "logo"] and data.value is None and update_data.get(field):
-        old_filename = update_data[field]
-        try:
-            s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, old_filename)
-        except Exception as e:
-            logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
+    if field in ["icon", "logo"]:
+        # A file key only ever comes from an upload; this endpoint can only clear it.
+        if data.value is not None:
+            return 400, {"detail": f"Upload a file to set the {field}. Send null to clear it."}
+        if old_filename := update_data.get(field):
+            try:
+                delete_from_s3(team, field, old_filename)
+            except Exception as e:
+                logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
         update_data[field] = ""
     else:
         update_data[field] = data.value
@@ -384,17 +385,29 @@ def upload_to_s3(
     s3_client.upload_media(filename, data, content_type)
 
 
-def delete_from_s3(
-    filename: str,
-) -> None:
+def _is_own_branding_key(team: Team, field: str, filename: str) -> bool:
+    """True when the key is one this workspace's uploads generate, current or legacy."""
+    if "/" in filename:
+        return False
+    if filename.startswith(f"team_{team.key}_{field}_"):
+        return True
+    suffix = Path(filename).suffix
+    return bool(suffix) and filename == f"{team.key}_{field}{suffix}"
+
+
+def delete_from_s3(team: Team, field: str, filename: str) -> None:
+    """Delete a replaced or cleared branding file, only if this workspace uploaded it."""
+    if not _is_own_branding_key(team, field, filename):
+        logger.warning(f"Not deleting {field} key {filename!r}: not an upload of workspace {team.key}")
+        return
     s3_client = StorageClient("MEDIA")
     s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
 
 
-def _delete_branding_files(filenames: Sequence[str]) -> None:
-    for filename in filenames:
+def _delete_branding_files(team: Team, files: Sequence[tuple[str, str]]) -> None:
+    for field, filename in files:
         try:
-            delete_from_s3(filename)
+            delete_from_s3(team, field, filename)
         except Exception as e:
             logger.warning(f"Failed to delete branding file {filename}: {e}")
 
@@ -456,8 +469,8 @@ def update_team_branding(
     branding_info = BrandingInfo(**branding_data).model_dump()
 
     # Old files go only once the new keys are committed. A failed upload or save removes this request's uploads.
-    uploaded: list[str] = []
-    replaced: list[str] = []
+    uploaded: list[tuple[str, str]] = []
+    replaced: list[tuple[str, str]] = []
     for field in ["icon", "logo"]:
         old_filename = branding_info.get(field)
 
@@ -472,14 +485,14 @@ def update_team_branding(
                 upload_to_s3(branding_info[field], file.read(), content_type)
             except Exception:
                 logger.exception(f"Failed to upload {field} file {branding_info[field]}")
-                _delete_branding_files([*uploaded, branding_info[field]])
+                _delete_branding_files(team, [*uploaded, (field, branding_info[field])])
                 raise
-            uploaded.append(branding_info[field])
+            uploaded.append((field, branding_info[field]))
         else:
             continue
 
         if old_filename:
-            replaced.append(old_filename)
+            replaced.append((field, old_filename))
 
     branding_info["brand_color"] = payload.brand_color or branding_info.get("brand_color")
     branding_info["accent_color"] = payload.accent_color or branding_info.get("accent_color")
@@ -492,9 +505,9 @@ def update_team_branding(
     try:
         team.save(update_fields=["branding_info"])
     except Exception:
-        _delete_branding_files(uploaded)
+        _delete_branding_files(team, uploaded)
         raise
-    transaction.on_commit(lambda: _delete_branding_files(replaced))
+    transaction.on_commit(lambda: _delete_branding_files(team, replaced))
 
     updated_branding_data = _normalize_branding_payload(team.branding_info)
     updated_branding = BrandingInfo(**updated_branding_data)
@@ -560,7 +573,7 @@ def upload_branding_file(
         # Only delete old file after successful database commit
         if old_filename:
             try:
-                s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, old_filename)
+                delete_from_s3(team, file_type, old_filename)
             except Exception as e:
                 logger.warning(f"Failed to delete old {file_type} file {old_filename}: {e}")
 

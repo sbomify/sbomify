@@ -41,7 +41,7 @@ def s3(mocker):
 @pytest.fixture
 def owner(client, sample_team_with_owner_member):
     team = sample_team_with_owner_member.team
-    team.branding_info = {"icon": "old_icon.png", "logo": "old_logo.png"}
+    team.branding_info = {"icon": f"team_{team.key}_icon_old.png", "logo": f"team_{team.key}_logo_old.png"}
     team.save()
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
     return client, team
@@ -58,7 +58,10 @@ def assert_nothing_stored(s3, team):
     s3.Bucket.return_value.put_object.assert_not_called()
     s3.Object.return_value.delete.assert_not_called()
     team.refresh_from_db()
-    assert (team.branding_info["icon"], team.branding_info["logo"]) == ("old_icon.png", "old_logo.png")
+    assert (team.branding_info["icon"], team.branding_info["logo"]) == (
+        f"team_{team.key}_icon_old.png",
+        f"team_{team.key}_logo_old.png",
+    )
 
 
 @pytest.mark.django_db
@@ -95,7 +98,7 @@ class TestBrandingUploadEndpoint:
         assert stored.endswith(".jpg")
         s3.Bucket.return_value.put_object.assert_called_once_with(Key=stored, Body=JPEG, ContentType="image/jpeg")
         team.refresh_from_db()
-        assert (team.branding_info["icon"], team.branding_info["logo"]) == (stored, "old_logo.png")
+        assert (team.branding_info["icon"], team.branding_info["logo"]) == (stored, f"team_{team.key}_logo_old.png")
 
     def test_a_raster_past_the_svg_cap_is_stored_whole(self, owner, s3):
         client, team = owner
@@ -318,8 +321,8 @@ class TestBrandingSettingsForm:
             call(Key=team.branding_info["logo"], Body=JPEG, ContentType="image/jpeg"),
         ]
         assert s3.Object.call_args_list == [
-            call(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, "old_icon.png"),
-            call(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, "old_logo.png"),
+            call(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, f"team_{team.key}_icon_old.png"),
+            call(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, f"team_{team.key}_logo_old.png"),
         ]
 
     def test_a_failed_upload_removes_this_save_s_uploads_and_keeps_the_old_files(self, owner, s3):
@@ -343,7 +346,10 @@ class TestBrandingSettingsForm:
             call(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, new_logo),
         ]
         team.refresh_from_db()
-        assert (team.branding_info["icon"], team.branding_info["logo"]) == ("old_icon.png", "old_logo.png")
+        assert (team.branding_info["icon"], team.branding_info["logo"]) == (
+            f"team_{team.key}_icon_old.png",
+            f"team_{team.key}_logo_old.png",
+        )
 
     def test_a_failed_save_removes_the_new_file_and_keeps_the_old_one(self, owner, s3, mocker):
         client, team = owner
@@ -390,7 +396,7 @@ class TestBrandingSettingsForm:
 
         assert json.loads(response["HX-Trigger"])["messages"][0]["type"] == "success"
         s3.Bucket.return_value.put_object.assert_not_called()
-        s3.Object.assert_called_once_with(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, "old_logo.png")
+        s3.Object.assert_called_once_with(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, f"team_{team.key}_logo_old.png")
         team.refresh_from_db()
         assert team.branding_info["logo"] == ""
 
