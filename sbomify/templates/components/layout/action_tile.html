@@ -3,9 +3,10 @@ An action with an icon, title and optional description. href chooses navigation;
 otherwise it is a button. flush joins actions inside a shared strip, dropping
 the individual frame. The same content and state render in both layouts.
 Disabled buttons use the native attribute; disabled links omit href and expose
-aria-disabled. A trailing slot replaces the arrow with supporting content.
+aria-disabled. trailing_icon changes the default arrow; a trailing slot replaces
+it with supporting content.
 {% endcomment %}
-<c-vars href accent icon title description disabled flush class />
+<c-vars href accent icon title description disabled flush trailing_icon class />
 {% if accent == 'success' %}
     {% firstof "[--tile-accent:var(--color-success)] [--chip-accent:var(--color-success)]" as tile_accent %}
 {% elif accent == 'info' %}
@@ -36,7 +37,7 @@ aria-disabled. A trailing slot replaces the arrow with supporting content.
         {% if trailing %}
             {{ trailing }}
         {% elif not disabled %}
-            <i class="fas text-text-muted transition-colors {% if flush %}fa-arrow-right text-xs group-hover:text-text{% else %}fa-chevron-right group-hover:text-[color:var(--tile-accent)]{% endif %}"
+            <i class="fas text-text-muted transition-colors {% if trailing_icon %}{{ trailing_icon }}{% elif flush %}fa-arrow-right{% else %}fa-chevron-right{% endif %} {% if flush %}text-xs group-hover:text-text{% else %}group-hover:text-[color:var(--tile-accent)]{% endif %}"
                aria-hidden="true"></i>
         {% endif %}
         {# djlint:off #}

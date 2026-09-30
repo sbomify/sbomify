@@ -39,6 +39,7 @@ class InventoryView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             return HttpResponse(result.error, status=result.status_code or 400)
         template = {
             "inventory-content": "core/products_inventory.html.j2",
+            "inventory-panel": "core/products_inventory_panel.html.j2",
             "inventory-content-results": "core/products_inventory_results.html.j2",
         }.get(request.headers.get("HX-Target", ""), "core/products_dashboard.html.j2")
         return render(request, template, result.value)

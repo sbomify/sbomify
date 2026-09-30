@@ -15,6 +15,7 @@ Reference:
 
 import json
 import re
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -33,11 +34,16 @@ from sbomify.apps.plugins.sdk.results import (
 from sbomify.apps.sboms.conversion import (
     CYCLONEDX_1_6,
     ConversionFailed,
+    downgrade_cyclonedx,
     to_cyclonedx,
 )
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
+
+#: Older spec versions to offer a Dependency Track that refuses the document's
+#: own, newest first. 1.5 covers servers from before 1.6 support.
+_FALLBACK_SPEC_VERSIONS = ("1.6", "1.5")
 
 
 def _is_unsupported_spec_version(error: Exception) -> bool:
@@ -54,6 +60,22 @@ def _is_unsupported_spec_version(error: Exception) -> bool:
     """
     message = str(error).lower()
     return "specversion" in message and ("unrecognized" in message or "unsupported" in message)
+
+
+def _cyclonedx_spec_version(sbom_bytes: bytes) -> str | None:
+    """The ``specVersion`` a CycloneDX JSON document declares, if it is one."""
+    try:
+        content = json.loads(sbom_bytes.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    if not isinstance(content, dict) or content.get("bomFormat") != "CycloneDX":
+        return None
+    declared = content.get("specVersion")
+    return declared if isinstance(declared, str) and re.fullmatch(r"\d+\.\d+", declared) else None
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
 
 
 def _first_float(*candidates: Any) -> float | None:
@@ -232,34 +254,29 @@ class DependencyTrackPlugin(AssessmentPlugin):
                     return self._create_unconvertible_result(str(exc))
                 logger.info(f"[DT] Uploading SBOM {sbom_id} as a derived CycloneDX copy")
 
-            try:
-                version_row = self._upload_new_sbom_version(
+            def upload(data: bytes) -> Any:
+                return self._upload_new_sbom_version(
                     sbom=sbom,
-                    sbom_bytes=sbom_bytes,
+                    sbom_bytes=data,
                     dt_server=dt_server,
                     project_name=project_name,
                     current_release_names=current_release_names,
                 )
+
+            try:
+                version_row = upload(sbom_bytes)
             except Exception as e:
-                # A spec version this DT does not know is a capability gap, not
-                # a fault: "Unrecognized specVersion 1.7" means CycloneDX moved
-                # ahead of the server, and every scan of that artifact would log
-                # an error and store a high-severity marker until DT catches up.
-                # The same reasoning the format gate already applies — DT simply
-                # cannot process it — so it skips rather than errors.
-                if _is_unsupported_spec_version(e):
-                    logger.info(f"[DT] SBOM {sbom_id} uses a spec version this Dependency Track does not accept: {e}")
-                    return self.create_skipped_result(
-                        finding_id="dependency-track:unsupported-spec-version",
-                        title="Spec Version Not Supported",
-                        description=(
-                            "This Dependency Track server does not accept this CycloneDX spec "
-                            f"version, so vulnerability scanning was skipped. Server response: {e}"
-                        ),
-                        unsupported_input=True,
-                    )
-                logger.error(f"[DT] Failed to upload SBOM {sbom_id} to DT: {e}")
-                return self._create_error_result(f"DT upload failed: {e}")
+                if not _is_unsupported_spec_version(e):
+                    logger.error(f"[DT] Failed to upload SBOM {sbom_id} to DT: {e}")
+                    return self._create_error_result(f"DT upload failed: {e}")
+                # CycloneDX moved ahead of this server. A copy at an older spec
+                # version usually carries everything a scan matches on, so that
+                # is offered before giving up (ADR-004: the stored artifact is
+                # untouched, the copy is thrown away).
+                outcome = self._upload_older_spec_copy(sbom_id, sbom_bytes, e, upload)
+                if isinstance(outcome, AssessmentResult):
+                    return outcome
+                version_row = outcome
 
             # Ensure the component-level mapping exists for this (component, dt_server)
             # so future operations (sync_release_tags, UI lookups) have a stable
@@ -300,12 +317,65 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 project_name=project_name,
                 current_release_names=current_release_names,
                 converted_from=source_label,
+                declared_spec=None if needs_conversion else _cyclonedx_spec_version(sbom_bytes),
             )
         except RetryLaterError:
             raise
         except Exception as e:
             logger.error(f"[DT] Failed to poll results for SBOM {sbom_id}: {e}")
             return self._create_error_result(f"Failed to poll DT results: {e}")
+
+    def _upload_older_spec_copy(
+        self, sbom_id: str, sbom_bytes: bytes, refusal: Exception, upload: Callable[[bytes], Any]
+    ) -> Any:
+        """Upload the document converted down to each older spec version in turn.
+
+        Returns the version row of the first copy Dependency Track accepts, or
+        the result to record when none can be made or all are refused.
+        """
+        declared = _cyclonedx_spec_version(sbom_bytes)
+        for target in _FALLBACK_SPEC_VERSIONS:
+            if declared is None or _version_key(target) >= _version_key(declared):
+                continue
+            try:
+                copy = downgrade_cyclonedx(sbom_bytes, target)
+            except ConversionFailed as exc:
+                logger.warning(f"[DT] SBOM {sbom_id} could not be converted to CycloneDX {target}: {exc}")
+                return self._create_unsupported_spec_result(
+                    f"This Dependency Track server does not accept CycloneDX {declared}, and the SBOM "
+                    f"could not be converted to {target}. Vulnerability scanning was skipped.",
+                    extra_metadata={"conversion_error": str(exc)[:500]},
+                )
+            try:
+                version_row = upload(copy)
+            except Exception as e:
+                if not _is_unsupported_spec_version(e):
+                    logger.error(f"[DT] Failed to upload SBOM {sbom_id} to DT as CycloneDX {target}: {e}")
+                    return self._create_error_result(f"DT upload failed: {e}")
+                refusal = e
+                continue
+            logger.info(f"[DT] Uploaded SBOM {sbom_id} as a copy converted to CycloneDX {target}")
+            return version_row
+
+        # A spec version this DT does not know, even after conversion, is a
+        # capability gap, not a fault. It skips rather than errors, as the
+        # format gate does, so every scan does not store a high-severity marker.
+        logger.info(f"[DT] SBOM {sbom_id} uses a spec version this Dependency Track does not accept: {refusal}")
+        return self._create_unsupported_spec_result(
+            "This Dependency Track server does not accept this CycloneDX spec "
+            f"version, so vulnerability scanning was skipped. Server response: {refusal}"
+        )
+
+    def _create_unsupported_spec_result(
+        self, description: str, extra_metadata: dict[str, Any] | None = None
+    ) -> AssessmentResult:
+        return self.create_skipped_result(
+            finding_id="dependency-track:unsupported-spec-version",
+            title="Spec Version Not Supported",
+            description=description,
+            unsupported_input=True,
+            extra_metadata=extra_metadata,
+        )
 
     def _resolve_release_context(self, sbom_id: str, team_id: Any) -> list[str]:
         """Return the canonical list of release names currently linked to an SBOM.
@@ -594,6 +664,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         project_name: str,
         current_release_names: list[str],
         converted_from: str | None = None,
+        declared_spec: str | None = None,
     ) -> AssessmentResult:
         """Poll DT for vulnerability results using the stored per-SBOM version UUID.
 
@@ -608,6 +679,8 @@ class DependencyTrackPlugin(AssessmentPlugin):
             sbom_id: SBOM primary key for logging.
             project_name: Canonical DT project name (for result metadata).
             current_release_names: Current release tag set (for result metadata).
+            converted_from: Label of the SPDX source the uploaded copy was made from.
+            declared_spec: The stored CycloneDX document's spec version.
 
         Returns:
             AssessmentResult with findings for this SBOM's DT project version.
@@ -649,6 +722,17 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         findings = self._convert_dt_findings(vulnerabilities)
 
+        converted_to = CYCLONEDX_1_6
+        conversion_note: dict[str, str] = {}
+        if converted_from is None and declared_spec:
+            imported = self._imported_spec_version(client, version_uuid, declared_spec)
+            if imported and imported != declared_spec:
+                converted_from, converted_to = f"CycloneDX-{declared_spec}", f"CycloneDX-{imported}"
+                conversion_note = {
+                    "note": f"Scanned a copy converted to CycloneDX {imported}. "
+                    f"This Dependency Track server does not accept CycloneDX {declared_spec}."
+                }
+
         by_severity: dict[str, int] = {
             "critical": 0,
             "high": 0,
@@ -688,9 +772,29 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "metrics": metrics,
                 # Says the scan read a derived copy, so a surprising result is
                 # traceable to the conversion rather than to the scanner.
-                **({"converted_from": converted_from, "converted_to": CYCLONEDX_1_6} if converted_from else {}),
+                **({"converted_from": converted_from, "converted_to": converted_to} if converted_from else {}),
+                **conversion_note,
             },
         )
+
+    @staticmethod
+    def _imported_spec_version(client: Any, version_uuid: str, declared_spec: str) -> str | None:
+        """The CycloneDX version Dependency Track recorded importing, when it may differ.
+
+        Read back from DT rather than stored at upload: the upload and this poll
+        are separate runs, and DT keeps the fact on the project anyway. Only
+        asked when a converted copy is possible at all, and a failure only
+        costs the note.
+        """
+        if _version_key(declared_spec) <= _version_key(_FALLBACK_SPEC_VERSIONS[-1]):
+            return None
+        try:
+            imported = client.get_project(version_uuid).get("lastBomImportFormat")
+        except Exception:
+            logger.debug("[DT] Could not read the import format of project %s", version_uuid, exc_info=True)
+            return None
+        match = re.fullmatch(r"CycloneDX (\d+\.\d+)", imported) if isinstance(imported, str) else None
+        return match.group(1) if match else None
 
     # DT analysis states that represent an actual audit decision. IN_TRIAGE
     # (and vulnerabilities with no analysis at all) mean "not judged yet" —
