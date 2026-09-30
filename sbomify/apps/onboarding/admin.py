@@ -10,6 +10,8 @@ from django.contrib import admin
 from django.http import HttpRequest
 from django.utils.html import format_html
 
+from sbomify.apps.core.admin import admin_site
+
 from .models import OnboardingEmail, OnboardingStatus
 
 if TYPE_CHECKING:
@@ -22,7 +24,7 @@ else:
     _OnboardingEmailAdmin = admin.ModelAdmin
 
 
-@admin.register(OnboardingStatus)
+@admin.register(OnboardingStatus, site=admin_site)
 class OnboardingStatusAdmin(_OnboardingStatusAdmin):
     """Admin interface for OnboardingStatus."""
 
@@ -104,7 +106,7 @@ class OnboardingStatusAdmin(_OnboardingStatusAdmin):
         return format_html('<div style="color: {};">{} ({}%)</div>', color, " → ".join(steps), progress)
 
 
-@admin.register(OnboardingEmail)
+@admin.register(OnboardingEmail, site=admin_site)
 class OnboardingEmailAdmin(_OnboardingEmailAdmin):
     """Admin interface for OnboardingEmail."""
 
