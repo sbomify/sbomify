@@ -6,7 +6,7 @@ import pytest
 from django.core import mail
 from django.urls import reverse
 
-from sbomify.apps.onboarding.models import OnboardingStatus
+from sbomify.apps.onboarding.models import OnboardingEmail, OnboardingStatus
 from sbomify.apps.onboarding.services import OnboardingEmailService
 from sbomify.apps.onboarding.utils import get_unsubscribe_url, make_unsubscribe_token, read_unsubscribe_token
 
@@ -109,7 +109,7 @@ class TestSuppression:
         status.unsubscribe_from_drip()
 
         mail.outbox = []
-        sent = OnboardingEmailService.send_quick_start_email(user)
+        sent = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
 
         assert sent is False
         assert mail.outbox == []
