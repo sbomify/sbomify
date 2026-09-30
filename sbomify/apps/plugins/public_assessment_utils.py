@@ -68,7 +68,6 @@ class ProductAssessmentStatus:
     all_pass: bool  # True if all components pass all assessments
     has_assessments: bool
     passing_assessments: list[PassingAssessment]  # Assessments that pass for ALL components
-    component_statuses: list[ComponentAssessmentStatus]
 
 
 def _get_plugin_display_names() -> dict[str, tuple[str, str]]:
@@ -318,81 +317,15 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
     )
 
 
-def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus:
-    """Get aggregated assessment status for a product.
-
-    A product passes an assessment if ALL its public components pass that assessment.
-    Visibility includes both PUBLIC and GATED so this matches the listing surface
-    used by ``workspace_public`` and ``product_details_public``.
-    """
-    from sbomify.apps.core.models import Component
-
-    public_visibilities = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
-    components = Component.objects.filter(
-        products=product,
-        visibility__in=public_visibilities,
-    ).distinct()
-
-    if not components.exists():
-        return ProductAssessmentStatus(
-            product_id=str(product.id),
-            product_name=product.name,
-            all_pass=False,
-            has_assessments=False,
-            passing_assessments=[],
-            component_statuses=[],
-        )
-
-    component_statuses = []
-    component_passing: list[set[str]] = []
-    details_by_plugin: dict[str, PassingAssessment] = {}
-
-    for component in components:
-        status = get_component_assessment_status(component)
-        component_statuses.append(status)
-        if status.has_assessments:
-            component_passing.append({p.plugin_name for p in status.passing_assessments})
-            _collect_details(details_by_plugin, status.passing_assessments)
-
-    if not component_passing:
-        common_passing: set[str] = set()
-    else:
-        common_passing = set.intersection(*component_passing) if component_passing else set()
-
-    has_assessments = any(cs.has_assessments for cs in component_statuses)
-
-    plugin_info = _get_plugin_display_names()
-    passing_assessments = _aggregate_passing(common_passing, details_by_plugin, plugin_info)
-
-    all_pass = len(common_passing) > 0 if has_assessments else False
-
-    return ProductAssessmentStatus(
-        product_id=str(product.id),
-        product_name=product.name,
-        all_pass=all_pass,
-        has_assessments=has_assessments,
-        passing_assessments=passing_assessments,
-        component_statuses=component_statuses,
-    )
-
-
-def get_latest_sbom_for_component(component: "Component") -> Any:
-    """Get the most recent SBOM for a component.
-
-    Returns None if the component has no SBOMs.
-    """
-    from sbomify.apps.sboms.models import SBOM
-
-    return SBOM.objects.filter(component=component).order_by("-created_at").first()
-
-
 def get_component_latest_sbom_assessment_status(component: "Component") -> ComponentAssessmentStatus:
     """Get assessment status based on ONLY the latest SBOM for a component.
 
     Unlike get_component_assessment_status which checks ALL SBOMs,
     this only looks at the most recent SBOM.
     """
-    latest_sbom = get_latest_sbom_for_component(component)
+    from sbomify.apps.sboms.models import SBOM
+
+    latest_sbom = SBOM.objects.filter(component=component).order_by("-created_at").first()
 
     if not latest_sbom:
         return ComponentAssessmentStatus(
@@ -426,8 +359,6 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
     A product passes an assessment if the latest SBOM of every public component
     in the product passes that assessment. Visibility includes both PUBLIC and
     GATED so this matches the listing surface (workspace_public + product_details).
-
-    This differs from get_product_assessment_status which checks ALL SBOMs.
     """
     from sbomify.apps.core.models import Component
 
@@ -448,7 +379,6 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
             all_pass=False,
             has_assessments=False,
             passing_assessments=[],
-            component_statuses=[],
         )
 
     # Get latest SBOM assessment status for each component
@@ -483,7 +413,6 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
         all_pass=all_pass,
         has_assessments=has_any_assessments,
         passing_assessments=passing_assessments,
-        component_statuses=[],
     )
 
 
