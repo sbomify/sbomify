@@ -746,8 +746,8 @@ class OSVPlugin(AssessmentPlugin):
         """A scan that recognised nothing, reported as skipped rather than clean.
 
         Skipped is the shape that already means "the plugin never scanned
-        anything" — ``public_assessment_utils._is_run_skipped`` reads it and
-        withholds the public pass, which is the whole point here.
+        anything" — ``result_scanned_nothing`` reads it and withholds the
+        public pass, which is the whole point here.
 
         Carries the conversion provenance when there was one. This is the path
         a Yocto document takes, so without it the one outcome most likely to

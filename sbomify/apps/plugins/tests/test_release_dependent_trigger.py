@@ -539,7 +539,8 @@ class TestSkippedRunsNotCountedAsPassing:
 
     def test_is_run_passing_returns_false_for_skipped_run(self, sample_team_with_owner_member):
         """_is_run_passing in public_assessment_utils must treat skipped runs as non-passing."""
-        from sbomify.apps.plugins.public_assessment_utils import _is_run_passing, _is_run_skipped
+        from sbomify.apps.plugins.public_assessment_utils import _is_run_passing
+        from sbomify.apps.vulnerability_scanning.utils import result_scanned_nothing
 
         sbom = self._make_sbom_with_runs(
             sample_team_with_owner_member,
@@ -564,7 +565,7 @@ class TestSkippedRunsNotCountedAsPassing:
         from sbomify.apps.plugins.models import AssessmentRun
 
         run = AssessmentRun.objects.get(sbom=sbom)
-        assert _is_run_skipped(run) is True
+        assert result_scanned_nothing(run.result) is True
         assert _is_run_passing(run) is False, "skipped run must NOT be considered passing"
 
     def test_status_summary_counts_skipped_separately(self, sample_team_with_owner_member):

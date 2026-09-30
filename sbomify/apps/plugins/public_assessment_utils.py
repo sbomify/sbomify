@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 from django.db.models import F
 
+from sbomify.apps.vulnerability_scanning.utils import result_scanned_nothing
+
 from .models import AssessmentRun, RegisteredPlugin
 from .sdk.enums import AssessmentCategory, RunStatus
 
@@ -96,24 +98,6 @@ def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
     )
 
 
-def _is_run_skipped(run: AssessmentRun) -> bool:
-    """Check if an assessment run was skipped by the plugin (not actually scanned).
-
-    Release-per-pair plugins like Dependency Track return a skipped result
-    (``result.metadata.skipped = True``) when their preconditions aren't
-    met — for example, a cron-triggered DT scan on an SBOM with no release
-    association. Skipped runs complete without error and without findings,
-    but they shouldn't be counted as "passing" because the plugin never
-    actually scanned anything.
-    """
-    if not run.result or not isinstance(run.result, dict):
-        return False
-    metadata = run.result.get("metadata")
-    if not isinstance(metadata, dict):
-        return False
-    return bool(metadata.get("skipped"))
-
-
 def _is_run_passing(run: AssessmentRun) -> bool:
     """Check if an assessment run is passing (completed and actually scanned clean).
 
@@ -133,7 +117,7 @@ def _is_run_passing(run: AssessmentRun) -> bool:
     """
     if run.status != RunStatus.COMPLETED.value:
         return False
-    if _is_run_skipped(run):
+    if result_scanned_nothing(run.result):
         return False
 
     result = run.result or {}

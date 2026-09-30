@@ -682,7 +682,8 @@ class PluginOrchestrator:
             "failed_plugins": list(set(failed)),
         }
 
-    def _is_passing(self, run: AssessmentRun) -> bool:
+    @staticmethod
+    def _is_passing(run: AssessmentRun) -> bool:
         """Check if an assessment run is passing.
 
         For security plugins: passing means no vulnerabilities found
