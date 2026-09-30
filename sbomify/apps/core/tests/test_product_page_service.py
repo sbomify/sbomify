@@ -45,7 +45,7 @@ def test_product_metrics_remain_unfiltered_and_releases_use_their_own_artifacts(
     result = context(member, product, search="Clean")
     assert [row["id"] for row in result["inventory"]["rows"]] == [clean.id]
     # Open is a real count, so it is reported even though one component is
-    # unassessed. Past your patch SLA is a zero standing beside that unassessed
+    # unassessed. Past patch SLA is a zero standing beside that unassessed
     # component, which is a zero the page cannot stand behind.
     assert result["metrics"] == {
         "components": 4,

@@ -31,7 +31,7 @@ def test_component_foregrounds_match_the_palette(authenticated_page: Page, theme
 
     for label, token in [
         ("Components with stale SBOMs", "warning"),
-        ("Past your patch SLA", "danger"),
+        ("Past patch SLA", "danger"),
         ("NTIA compliant", "success"),
     ]:
         card = page.locator("dl").filter(has_text=label)
