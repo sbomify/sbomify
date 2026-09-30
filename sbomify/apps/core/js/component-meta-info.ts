@@ -1,7 +1,8 @@
 import Alpine from './alpine-init';
 import { isEmpty } from './utils';
 import type { ComponentMetaInfo } from './types';
-import { ComponentEvents, addComponentEventListener, dispatchComponentEvent, type ShowAlertEvent } from './events';
+import { showError, showSuccess } from './alerts';
+import { ComponentEvents, addComponentEventListener } from './events';
 
 interface WrapperProps {
     componentId: string;
@@ -88,27 +89,18 @@ export function registerComponentMetaInfo() {
                     }
                 } else {
                     console.error(`Failed to fetch metadata: ${response.status} ${response.statusText}`);
-                    dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
-                        type: 'error',
-                        message: 'Failed to load component metadata'
-                    });
+                    showError('Failed to load component metadata');
                 }
             } catch (error) {
                 console.error('Failed to fetch metadata', error);
-                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
-                    type: 'error',
-                    message: 'Network error loading metadata'
-                });
+                showError('Network error loading metadata');
             }
         },
 
         refreshDisplay() {
             this.isEditing = false;
             this.fetchMetadata();
-            dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
-                type: 'success',
-                message: 'Metadata updated successfully'
-            });
+            showSuccess('Metadata updated successfully');
         },
 
         // Display Component Helpers

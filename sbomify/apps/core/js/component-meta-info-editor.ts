@@ -1,13 +1,12 @@
 import Alpine from './alpine-init';
 import { getCsrfToken } from './csrf';
+import { showError, showSuccess } from './alerts';
 import type { ContactProfile, ComponentMetaInfo } from './types';
 import {
     ComponentEvents,
     dispatchComponentEvent,
     type MetadataLoadedEvent,
-    type ContactsUpdatedEvent,
-    type MetadataUpdatedEvent,
-    type ShowAlertEvent
+    type MetadataUpdatedEvent
 } from './events';
 
 interface LifecyclePhase {
@@ -161,10 +160,7 @@ export function registerComponentMetaInfoEditor() {
                     this.isInitializing = false;
                 }
             } catch {
-                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
-                    type: 'error',
-                    message: 'Failed to load component metadata'
-                });
+                showError('Failed to load component metadata');
                 this.isInitializing = false;
             }
         },
@@ -224,11 +220,6 @@ export function registerComponentMetaInfoEditor() {
                         // Update originalMetadata during initial load so synced state is baseline
                         this.originalMetadata = JSON.stringify(this.metadata);
                     }
-                    this.$nextTick(() => {
-                        dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
-                            contacts: []
-                        });
-                    });
                 }
                 return;
             }
@@ -252,13 +243,6 @@ export function registerComponentMetaInfoEditor() {
                     // Update originalMetadata during initial load so synced state is baseline
                     this.originalMetadata = JSON.stringify(this.metadata);
                 }
-
-                // Use $nextTick to ensure component is ready to receive events
-                this.$nextTick(() => {
-                    dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
-                        contacts: this.metadata.authors
-                    });
-                });
             }
         },
 
@@ -274,11 +258,6 @@ export function registerComponentMetaInfoEditor() {
                     this.metadata.supplier.name = null;
                 }
                 this.metadata.authors = [];
-                this.$nextTick(() => {
-                    dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
-                        contacts: []
-                    });
-                });
             } else {
                 const profile = this.contactProfiles.find(p => p.id === nextId);
                 this.metadata.contact_profile = profile || null;
@@ -289,11 +268,6 @@ export function registerComponentMetaInfoEditor() {
                     // Authors are simple objects (name, email, phone) suitable for JSON cloning.
                     const authors = profile.authors ? JSON.parse(JSON.stringify(profile.authors)) : [];
                     this.metadata.authors = authors;
-                    this.$nextTick(() => {
-                        dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
-                            contacts: authors
-                        });
-                    });
                 }
             }
         },
@@ -357,15 +331,9 @@ export function registerComponentMetaInfoEditor() {
                 dispatchComponentEvent<MetadataUpdatedEvent>(ComponentEvents.METADATA_UPDATED, {
                     componentId: this.componentId
                 });
-                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
-                    type: 'success',
-                    message: 'Metadata saved successfully'
-                });
+                showSuccess('Metadata saved successfully');
             } catch (error) {
-                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
-                    type: 'error',
-                    message: error instanceof Error ? error.message : 'Failed to save metadata'
-                });
+                showError(error instanceof Error ? error.message : 'Failed to save metadata');
             } finally {
                 this.isSaving = false;
             }

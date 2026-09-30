@@ -8,10 +8,6 @@ import type { ContactInfo, ComponentMetaInfo } from './types';
 export const ComponentEvents = {
     METADATA_LOADED: 'component:metadata:loaded',
     METADATA_UPDATED: 'component:metadata:updated',
-    METADATA_SAVED: 'component:metadata:saved',
-    AUTHORS_UPDATED: 'component:authors:updated',
-    CONTACTS_UPDATED: 'component:contacts:updated',
-    SHOW_ALERT: 'component:show:alert',
 } as const;
 
 export interface MetadataLoadedEvent {
@@ -21,21 +17,8 @@ export interface MetadataLoadedEvent {
     authors: ContactInfo[];
 }
 
-export interface AuthorsUpdatedEvent {
-    authors: ContactInfo[];
-}
-
-export interface ContactsUpdatedEvent {
-    contacts: ContactInfo[];
-}
-
 export interface MetadataUpdatedEvent {
     componentId: string;
-}
-
-export interface ShowAlertEvent {
-    type: 'success' | 'error' | 'warning' | 'info';
-    message: string;
 }
 
 /**
