@@ -15,6 +15,7 @@ import dramatiq
 from django.db import connection, transaction
 from django.db.utils import DatabaseError, OperationalError
 from django.utils import timezone
+from django.utils.module_loading import import_string
 from dramatiq_crontab import cron
 from tenacity import (
     before_sleep_log,
@@ -201,11 +202,10 @@ def run_assessment_task(
         with transaction.atomic():
             orchestrator = PluginOrchestrator()
             try:
-                assessment_run = orchestrator.run_assessment_by_name(
+                assessment_run = orchestrator.run_assessment(
                     sbom_id=sbom_id,
-                    plugin_name=plugin_name,
+                    plugin=orchestrator.get_plugin_instance(plugin_name, config),
                     run_reason=reason,
-                    config=config,
                     triggered_by_user=triggered_by_user,
                     existing_run_id=_existing_run_id,
                 )
@@ -825,13 +825,7 @@ def _load_plugin_by_name(plugin_name: str) -> Any:
     """
     from ..models import RegisteredPlugin
 
-    plugin_record = RegisteredPlugin.objects.get(name=plugin_name)
-    module_path, class_name = plugin_record.plugin_class_path.rsplit(".", 1)
-    import importlib
-
-    module = importlib.import_module(module_path)
-    plugin_class = getattr(module, class_name)
-    return plugin_class()
+    return import_string(RegisteredPlugin.objects.get(name=plugin_name).plugin_class_path)()
 
 
 def enqueue_assessments_for_sbom(

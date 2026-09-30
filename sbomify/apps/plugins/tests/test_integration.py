@@ -137,9 +137,9 @@ class TestPluginEndToEnd:
 
         # Run assessment via orchestrator
         orchestrator = PluginOrchestrator()
-        run = orchestrator.run_assessment_by_name(
+        run = orchestrator.run_assessment(
             sbom_id=test_sbom.id,
-            plugin_name=NTIA_NAME,
+            plugin=orchestrator.get_plugin_instance(NTIA_NAME),
             run_reason=RunReason.ON_UPLOAD,
         )
 
@@ -176,9 +176,9 @@ class TestPluginEndToEnd:
         )
 
         orchestrator = PluginOrchestrator()
-        run = orchestrator.run_assessment_by_name(
+        run = orchestrator.run_assessment(
             sbom_id=test_sbom.id,
-            plugin_name=NTIA_NAME,
+            plugin=orchestrator.get_plugin_instance(NTIA_NAME),
             run_reason=RunReason.MANUAL,
         )
 
@@ -220,9 +220,9 @@ class TestPluginEndToEnd:
         )
 
         orchestrator = PluginOrchestrator()
-        run = orchestrator.run_assessment_by_name(
+        run = orchestrator.run_assessment(
             sbom_id=test_sbom.id,
-            plugin_name=NTIA_NAME,
+            plugin=orchestrator.get_plugin_instance(NTIA_NAME),
             run_reason=RunReason.ON_UPLOAD,
         )
 

@@ -7,12 +7,12 @@ executing plugins, and storing results.
 
 from __future__ import annotations
 
-import importlib
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from django.utils import timezone
+from django.utils.module_loading import import_string
 
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
@@ -36,19 +36,6 @@ class DependencyCheckResult(TypedDict):
     satisfied: bool
     passing_plugins: list[str]
     failed_plugins: list[str]
-
-
-def load_plugin_class(plugin_class_path: str) -> type[AssessmentPlugin]:
-    """Resolve a dotted plugin class path to its class.
-
-    The one import path both the orchestrator and the settings API use, so
-    the two can never disagree about how a registry row resolves. Raises
-    ImportError/AttributeError on a broken path; callers pick their policy.
-    """
-    module_path, class_name = plugin_class_path.rsplit(".", 1)
-    module = importlib.import_module(module_path)
-    plugin_class: type[AssessmentPlugin] = getattr(module, class_name)
-    return plugin_class
 
 
 def plugin_applies_to(metadata: PluginMetadata, bom_type: str, has_crypto_assets: bool | None) -> bool:
@@ -780,44 +767,9 @@ class PluginOrchestrator:
 
         # Import and instantiate the plugin class
         try:
-            instance: AssessmentPlugin = load_plugin_class(registered.plugin_class_path)(config=merged_config)
+            instance: AssessmentPlugin = import_string(registered.plugin_class_path)(config=merged_config)
             return instance
         except (ImportError, AttributeError) as e:
             raise PluginOrchestratorError(
                 f"Failed to load plugin '{plugin_name}' from '{registered.plugin_class_path}': {e}"
             )
-
-    def run_assessment_by_name(
-        self,
-        sbom_id: str,
-        plugin_name: str,
-        run_reason: RunReason,
-        config: dict[str, Any] | None = None,
-        triggered_by_user: User | None = None,
-        existing_run_id: str | None = None,
-    ) -> AssessmentRun | None:
-        """Run an assessment by plugin name.
-
-        Convenience method that loads the plugin by name and runs the assessment.
-
-        Args:
-            sbom_id: The SBOM's primary key.
-            plugin_name: The plugin identifier to run.
-            run_reason: Why this assessment is being triggered.
-            config: Optional configuration overrides for the plugin.
-            triggered_by_user: Optional user who triggered a manual run.
-            existing_run_id: Optional ID of an existing AssessmentRun to reuse
-                (for retries after RetryLaterError).
-
-        Returns:
-            The AssessmentRun record with results, or None if skipped
-            due to unsupported bom_type.
-        """
-        plugin = self.get_plugin_instance(plugin_name, config)
-        return self.run_assessment(
-            sbom_id=sbom_id,
-            plugin=plugin,
-            run_reason=run_reason,
-            triggered_by_user=triggered_by_user,
-            existing_run_id=existing_run_id,
-        )

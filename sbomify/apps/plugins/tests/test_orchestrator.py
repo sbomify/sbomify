@@ -280,25 +280,6 @@ class TestPluginOrchestrator:
 
         assert "disabled" in str(exc_info.value)
 
-    def test_run_assessment_by_name(self, test_sbom, mock_sbom_data, registered_ntia_plugin, mocker) -> None:
-        """Test running assessment by plugin name."""
-        mocker.patch(
-            "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
-            return_value=(test_sbom, mock_sbom_data),
-        )
-
-        orchestrator = PluginOrchestrator()
-
-        run = orchestrator.run_assessment_by_name(
-            sbom_id=test_sbom.id,
-            plugin_name="ntia-minimum-elements-2021",
-            run_reason=RunReason.MANUAL,
-        )
-
-        assert run.status == RunStatus.COMPLETED.value
-        assert run.plugin_name == "ntia-minimum-elements-2021"
-        assert "ntia-2021:timestamp" in str(run.result)
-
     def test_assessment_run_records_created(self, test_sbom, mock_sbom_data, mocker) -> None:
         """Test that AssessmentRun records are created in the database."""
         mocker.patch(

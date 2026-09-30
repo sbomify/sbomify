@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from django.http import HttpRequest
+from django.utils.module_loading import import_string
 from ninja import Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
@@ -544,8 +545,8 @@ _supported_bom_types_cache: dict[str, tuple[str, ...]] = {}
 def _plugin_supported_bom_types(plugin_class_path: str) -> tuple[str, ...]:
     """BOM types a plugin declares in its metadata, for the artifact-type badges.
 
-    Resolves through the orchestrator's loader so the badge and dispatch can
-    never disagree. Falls back to ("sbom",) when the class cannot be loaded so
+    Resolves the class path with import_string, as the orchestrator does, so
+    the badge and dispatch can never disagree. Falls back to ("sbom",) when the class cannot be loaded so
     a stale registry row never breaks the settings page — but only successful
     resolutions are cached, so a transient import failure does not pin the
     fallback for the process lifetime.
@@ -553,10 +554,8 @@ def _plugin_supported_bom_types(plugin_class_path: str) -> tuple[str, ...]:
     cached = _supported_bom_types_cache.get(plugin_class_path)
     if cached is not None:
         return cached
-    from .orchestrator import load_plugin_class
-
     try:
-        supported = load_plugin_class(plugin_class_path)().get_metadata().supported_bom_types
+        supported = import_string(plugin_class_path)().get_metadata().supported_bom_types
         result = tuple(supported) if supported else ("sbom",)
     except Exception:
         return ("sbom",)

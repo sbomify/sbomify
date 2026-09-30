@@ -12,13 +12,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from django.utils.module_loading import import_string
+
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
 from ..models import RegisteredPlugin, TeamPluginSettings
-from ..orchestrator import load_plugin_class, plugin_applies_to
+from ..orchestrator import plugin_applies_to
 from .access import team_has_plugin_access
 
 logger = getLogger(__name__)
@@ -73,7 +75,7 @@ def get_assessment_coverage(
                 outdated[plugin.name] = plugin.version
             continue
         try:
-            metadata = load_plugin_class(plugin.plugin_class_path)().get_metadata()
+            metadata = import_string(plugin.plugin_class_path)().get_metadata()
         except Exception:
             logger.exception("Could not load plugin %s to check whether it applies", plugin.name)
             continue
