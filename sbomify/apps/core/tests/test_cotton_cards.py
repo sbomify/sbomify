@@ -304,7 +304,7 @@ def test_collapsible_shell_takes_attrs(rendered: str) -> None:
 def test_collapsible_trigger_is_a_real_button_with_state(rendered: str) -> None:
     trigger = _button_holding(rendered, "Product links")
     assert 'type="button"' in trigger
-    assert "flex w-full items-center justify-between px-6 py-5 text-left" in trigger
+    assert "flex w-full items-center justify-between gap-3 px-6 py-5 text-left" in trigger
     assert "hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)]" in trigger
     assert "focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in trigger
     # Django escapes the quotes in the expression; the browser hands Alpine the
@@ -315,7 +315,7 @@ def test_collapsible_trigger_is_a_real_button_with_state(rendered: str) -> None:
 
 def test_collapsible_trigger_turns_the_chevron_over(rendered: str) -> None:
     trigger = _button_holding(rendered, "Clean run")
-    assert '<i class="fas fa-chevron-down text-text-muted transition-transform duration-300"' in trigger
+    assert '<i class="fas fa-chevron-down shrink-0 text-text-muted transition-transform duration-300"' in trigger
     assert ":class=\"expanded ? 'rotate-180' : ''\"" in trigger
     assert '<span class="flex items-center gap-3 font-semibold text-text">Clean run</span>' in trigger
 
@@ -325,7 +325,7 @@ def test_bare_trigger_puts_the_row_straight_into_the_button(rendered: str) -> No
     assert '<span class="flex items-center gap-3 font-semibold text-text">' not in trigger
     assert '<div class="flex items-center gap-3 flex-grow min-w-0">' in trigger
     # The chevron and the state binding are the trigger's own either way.
-    assert '<i class="fas fa-chevron-down text-text-muted transition-transform duration-300"' in trigger
+    assert '<i class="fas fa-chevron-down shrink-0 text-text-muted transition-transform duration-300"' in trigger
     assert ':aria-expanded="expanded"' in trigger
 
 

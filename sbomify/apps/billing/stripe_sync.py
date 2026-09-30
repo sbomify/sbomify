@@ -18,7 +18,7 @@ from sbomify.logging import getLogger
 
 from .billing_helpers import parse_cancel_at
 from .stripe_cache import get_cached_subscription, invalidate_subscription_cache, set_cached_subscription
-from .stripe_client import StripeError, StripeResourceMissingError, get_stripe_client
+from .stripe_client import TERMINAL_SUBSCRIPTION_STATUSES, StripeError, StripeResourceMissingError, get_stripe_client
 
 logger = getLogger(__name__)
 
@@ -199,6 +199,10 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         if parse_cancel_at(cancel_at) is not None:
             real_cancel_at_period_end = True
             logger.debug("cancel_at is set, treating as scheduled cancellation")
+        # Stripe keeps both fields after the subscription ends, as a record of how it
+        # ended. Nothing is left to schedule or reverse then, so what is stored stands.
+        if real_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
+            real_cancel_at_period_end = current_cancel_at_period_end
 
         logger.debug("Checking cancel status")
 
@@ -310,6 +314,14 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                 # Use select_for_update to prevent race conditions
                 team = Team.objects.select_for_update().get(pk=team.pk)
                 billing_limits = team.billing_plan_limits or {}
+                # The changes above describe the subscription fetched from Stripe. A
+                # checkout that completed meanwhile stored a new one, which must not be
+                # overwritten.
+                if billing_limits.get("stripe_subscription_id") != stripe_sub_id:
+                    logger.info(
+                        "Workspace %s changed subscription while Stripe was queried; leaving it alone", team.key
+                    )
+                    return True
                 # Preserve existing customer_id and subscription_id to satisfy valid_billing_relationship constraint
                 existing_customer_id = billing_limits.get("stripe_customer_id")
                 existing_subscription_id = billing_limits.get("stripe_subscription_id")

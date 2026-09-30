@@ -1,9 +1,14 @@
 from typing import Protocol
 
 import pytest
+from allauth.account.models import EmailAddress
+from allauth.exceptions import ImmediateHttpResponse
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpRequest
 from django.test import RequestFactory
+from django.utils import timezone
 
 from sbomify.apps.core.adapters import CustomSocialAccountAdapter
 
@@ -46,6 +51,7 @@ def mock_sociallogin():
         account = type("Account", (), {"provider": "keycloak", "extra_data": {}, "uid": "mock-uid"})()
         user = User()
         is_existing = False
+        email_addresses: list[EmailAddress] = []
 
         def connect(self, request, user):
             """Mock connect method to handle connecting to existing users."""
@@ -55,7 +61,9 @@ def mock_sociallogin():
     return DummySocialLogin()
 
 
-def create_mock_sociallogin(user, provider: str, extra_data: dict, uid: str = "test-uid") -> MockSocialLoginProtocol:
+def create_mock_sociallogin(
+    user, provider: str, extra_data: dict, uid: str = "test-uid", email_verified: bool = False
+) -> MockSocialLoginProtocol:
     """Create a mock social login object for testing.
 
     Args:
@@ -63,6 +71,7 @@ def create_mock_sociallogin(user, provider: str, extra_data: dict, uid: str = "t
         provider: The social provider name (e.g., 'keycloak', 'github', 'google')
         extra_data: The extra_data dict from the social provider
         uid: The unique identifier from the provider
+        email_verified: Whether the provider confirmed the user's address
 
     Returns:
         MockSocialLoginProtocol: A mock social login object suitable for testing adapter methods
@@ -74,6 +83,7 @@ def create_mock_sociallogin(user, provider: str, extra_data: dict, uid: str = "t
 
         def __init__(self, user):
             self.user = user
+            self.email_addresses = [EmailAddress(email=user.email, verified=email_verified, primary=True)]
 
         def connect(self, request, user):
             self.user = user
@@ -94,6 +104,8 @@ class TestCustomSocialAccountAdapter:
             "family_name": "Doe",
             "preferred_username": "johndoe",
         }
+
+        mock_sociallogin.email_addresses = [EmailAddress(email="test@example.com", verified=True, primary=True)]
 
         # Populate user
         user = adapter.populate_user(mock_request, mock_sociallogin, data)
@@ -132,12 +144,13 @@ class TestCustomSocialAccountAdapter:
         assert user.username == "test.example.com_1"
 
     def test_pre_social_login_existing_user(self, adapter, mock_request, mock_sociallogin):
-        """Test connecting to existing user with same email."""
+        """Test connecting to existing user with same, confirmed email."""
         # Create existing user
-        existing_user = User.objects.create(username="existing", email="test@example.com")
+        existing_user = User.objects.create_user(username="existing", email="test@example.com")
 
         # Set up social login with same email
         mock_sociallogin.user.email = "test@example.com"
+        mock_sociallogin.email_addresses = [EmailAddress(email="test@example.com", verified=True, primary=True)]
 
         # Process pre-social login
         adapter.pre_social_login(mock_request, mock_sociallogin)
@@ -158,6 +171,20 @@ class TestCustomSocialAccountAdapter:
         assert not mock_sociallogin.is_existing
         assert mock_sociallogin.user.id is None
 
+    def test_pre_social_login_refuses_soft_deleted_account(self, adapter, mock_request, mock_sociallogin):
+        """A sign-in whose email belongs to an account scheduled for deletion is refused."""
+        User.objects.create(username="deleted", email="deleted@example.com", is_active=False, deleted_at=timezone.now())
+        mock_sociallogin.user.email = "deleted@example.com"
+        mock_request.user = AnonymousUser()
+        SessionMiddleware(lambda r: None).process_request(mock_request)
+
+        with pytest.raises(ImmediateHttpResponse) as refused:
+            adapter.pre_social_login(mock_request, mock_sociallogin)
+
+        assert refused.value.response.status_code == 403
+        assert not mock_sociallogin.is_existing
+        assert mock_sociallogin.user.id is None
+
     def test_is_auto_signup_allowed(self, adapter, mock_request, mock_sociallogin):
         """Test that auto signup is always allowed."""
         assert adapter.is_auto_signup_allowed(mock_request, mock_sociallogin) is True
@@ -171,6 +198,7 @@ class TestCustomSocialAccountAdapter:
             "family_name": "Doe",
             "preferred_username": "johndoe",
         }
+        mock_sociallogin.email_addresses = [EmailAddress(email="test@example.com", verified=True, primary=True)]
         user = adapter.populate_user(mock_request, mock_sociallogin, data)
         assert user.first_name == "John"
         assert user.last_name == "Doe"
@@ -188,6 +216,7 @@ class TestCustomSocialAccountAdapter:
             "last_name": "Smith",
             "preferred_username": "janesmith",
         }
+        mock_sociallogin.email_addresses = [EmailAddress(email="test2@example.com", verified=True, primary=True)]
         user = adapter.populate_user(mock_request, mock_sociallogin, data)
         assert user.first_name == "Jane"
         assert user.last_name == "Smith"
@@ -206,6 +235,7 @@ class TestCustomSocialAccountAdapter:
             provider="keycloak",
             extra_data={"email_verified": True},
             uid="sync-test-uid",
+            email_verified=True,
         )
 
         adapter.pre_social_login(mock_request, mock_sociallogin)
@@ -221,6 +251,7 @@ class TestCustomSocialAccountAdapter:
             provider="keycloak",
             extra_data={"email_verified": True},
             uid="no-sync-uid",
+            email_verified=True,
         )
 
         adapter.pre_social_login(mock_request, mock_sociallogin)
@@ -238,6 +269,7 @@ class TestCustomSocialAccountAdapter:
             provider="keycloak",
             extra_data={"email_verified": False},
             uid="sync-false-uid",
+            email_verified=False,
         )
 
         adapter.pre_social_login(mock_request, mock_sociallogin)

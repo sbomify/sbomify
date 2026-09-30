@@ -9,13 +9,15 @@ import gzip
 import io
 import json
 import socket
+from datetime import timedelta
 
 import pytest
 import urllib3
 from django.test import Client
+from django.utils import timezone
 
 from sbomify.apps.teams.models import Team
-from sbomify.apps.teams.tasks import PROBE_MAX_BYTES, probe_custom_domain, verify_custom_domains
+from sbomify.apps.teams.tasks import PROBE_MAX_BYTES, check_custom_domain, probe_custom_domain, verify_custom_domains
 from sbomify.apps.teams.utils import custom_domain_challenge
 
 DOMAIN = "trust.example.com"
@@ -92,6 +94,7 @@ def test_a_request_on_the_domain_brings_the_next_probe_forward(client, claimed):
 
 def test_each_due_domain_is_counted_and_probed_in_its_own_message(claimed, mocker):
     send = mocker.patch.object(probe_custom_domain, "send")
+    mocker.patch.object(check_custom_domain, "send_with_options")
 
     verify_custom_domains()
 
@@ -118,6 +121,76 @@ def test_the_task_leaves_a_domain_that_changed_after_it_was_read(claimed, mocker
     claimed.refresh_from_db()
     assert claimed.custom_domain_verification_failures == 0
     assert claimed.custom_domain_last_checked_at is None
+
+
+def test_a_check_counts_probes_and_queues_the_next_check_by_the_backoff(claimed, mocker):
+    probe = mocker.patch.object(probe_custom_domain, "send")
+    later = mocker.patch.object(check_custom_domain, "send_with_options")
+
+    check_custom_domain(claimed.pk, DOMAIN)
+
+    probe.assert_called_once_with(claimed.pk, DOMAIN)
+    claimed.refresh_from_db()
+    assert claimed.custom_domain_verification_failures == 1
+    later.assert_called_once_with(
+        args=(claimed.pk, DOMAIN, claimed.custom_domain_last_checked_at.isoformat()),
+        delay=10 * 60 * 1000,
+    )
+
+
+def test_checks_continue_without_the_sweep_until_the_domain_verifies(claimed, fetch, mocker):
+    """With no scheduler running, each check queues the next one until the probe verifies the domain."""
+    queued: list[tuple[tuple, int]] = []
+    mocker.patch.object(
+        check_custom_domain, "send_with_options", side_effect=lambda args, delay: queued.append((args, delay))
+    )
+    mocker.patch.object(probe_custom_domain, "send", side_effect=probe_custom_domain)
+    fetch.side_effect = lambda *args, **kwargs: _response(404, b"")
+
+    check_custom_domain(claimed.pk, DOMAIN)
+    check_custom_domain(*queued[-1][0])
+    fetch.side_effect = _routed_here
+    check_custom_domain(*queued[-1][0])
+
+    claimed.refresh_from_db()
+    assert claimed.custom_domain_validated is True
+    assert [delay // 60000 for _, delay in queued] == [10, 20, 40]
+    # The check queued before the successful probe finds the domain verified and ends the line.
+    check_custom_domain(*queued[-1][0])
+    assert len(queued) == 3
+
+
+def test_a_check_overtaken_by_a_newer_one_does_nothing(claimed, mocker):
+    probe = mocker.patch.object(probe_custom_domain, "send")
+    later = mocker.patch.object(check_custom_domain, "send_with_options")
+    Team.objects.filter(pk=claimed.pk).update(
+        custom_domain_verification_failures=3, custom_domain_last_checked_at=timezone.now()
+    )
+
+    check_custom_domain(claimed.pk, DOMAIN, (timezone.now() - timedelta(hours=1)).isoformat())
+    check_custom_domain(claimed.pk, DOMAIN)
+
+    probe.assert_not_called()
+    later.assert_not_called()
+    claimed.refresh_from_db()
+    assert claimed.custom_domain_verification_failures == 3
+
+
+def test_the_sweep_takes_over_the_line_of_checks(claimed, mocker):
+    """A sweep that counts a domain leaves the check already queued for it with nothing to do."""
+    probe = mocker.patch.object(probe_custom_domain, "send")
+    mocker.patch.object(check_custom_domain, "send_with_options")
+    last_checked_at = timezone.now() - timedelta(days=1)
+    Team.objects.filter(pk=claimed.pk).update(
+        custom_domain_verification_failures=1, custom_domain_last_checked_at=last_checked_at
+    )
+
+    verify_custom_domains()
+    check_custom_domain(claimed.pk, DOMAIN, last_checked_at.isoformat())
+
+    probe.assert_called_once_with(claimed.pk, DOMAIN)
+    claimed.refresh_from_db()
+    assert claimed.custom_domain_verification_failures == 2
 
 
 @pytest.mark.parametrize("routed", [_routed_here, _routed_here_compressed])

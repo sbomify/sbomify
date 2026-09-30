@@ -87,6 +87,7 @@ from sbomify.apps.plugins.builtins._spdx_shared import (
     spdx2_annotation_targets_document,
     spdx2_reference_type,
     spdx2_root_spdxid,
+    spdx2_yocto_source_downloads,
     spdx3_annotation_subject_matches,
     spdx3_document_subjects,
 )
@@ -326,6 +327,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
         unique_id_failures: list[str] = []
         support_status_failures: list[str] = []
         end_of_support_failures: list[str] = []
+        source_downloads = spdx2_yocto_source_downloads(data)
 
         # Narrow doc-level CLE fallback, mirroring the CycloneDX path.
         # Only the SPDX root subject (DESCRIBES target) inherits document-level
@@ -371,7 +373,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             has_unique_id = (isinstance(purl, str) and bool(purl)) or any(
                 spdx2_reference_type(ref) in SPDX2_IDENTIFIER_TYPES for ref in external_refs
             )
-            if not has_unique_id:
+            if not has_unique_id and spdx_id not in source_downloads:
                 unique_id_failures.append(package_name)
 
             # === FDA CLE Elements ===

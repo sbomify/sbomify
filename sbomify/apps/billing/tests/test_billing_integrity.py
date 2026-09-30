@@ -18,10 +18,9 @@ User = get_user_model()
 pytestmark = pytest.mark.django_db
 
 
-def test_community_downgrade_uses_stored_customer_id():
-    """Downgrade must use the stored Stripe customer id (web checkout creates a random cus_),
-    not f'c_{team.key}', so the active subscription is actually canceled instead of the plan
-    being downgraded locally while billing continues."""
+def test_community_downgrade_uses_stored_subscription_id():
+    """Downgrade must cancel the stored subscription, whatever the customer id looks like
+    (web checkout creates a random cus_), instead of downgrading locally while billing continues."""
     BillingPlan.objects.create(key="business", name="Business")
     team = Team.objects.create(
         name="T",
@@ -34,13 +33,12 @@ def test_community_downgrade_uses_stored_customer_id():
         },
     )
     stripe = MagicMock()
-    stripe.get_customer.return_value = MagicMock(id="cus_random123")
-    stripe.list_subscriptions.return_value = MagicMock(data=[MagicMock(id="sub_abc")])
+    stripe.get_subscription.return_value = MagicMock(id="sub_abc", status="active")
 
     status, _body = _handle_community_downgrade(team, stripe)
 
     assert status == 200
-    stripe.get_customer.assert_called_once_with("cus_random123")  # not c_wsdowngrade
+    stripe.get_subscription.assert_called_once_with("sub_abc")
     stripe.modify_subscription.assert_called_once_with("sub_abc", cancel_at_period_end=True)
 
 
