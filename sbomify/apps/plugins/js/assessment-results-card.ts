@@ -78,13 +78,6 @@ function handleAnchorLink(): void {
     const element = document.getElementById(`plugin-${pluginName}`)
 
     if (element) {
-      // Find the collapse element within this accordion item
-      const collapseEl = element.querySelector('.accordion-collapse')
-      if (collapseEl) {
-        // Bootstrap Collapse removed - using simple class manipulation
-        collapseEl.classList.add('show')
-      }
-
       // Scroll to the element
       setTimeout(() => {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -96,10 +89,4 @@ function handleAnchorLink(): void {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
-}
-
-// For backwards compatibility, keep the Alpine registration but make it a no-op
-export function registerAssessmentResultsCard(): void {
-  // No longer needed - using server-side rendering
-  // Keep function for backwards compatibility with main.ts imports
 }
