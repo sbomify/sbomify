@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 
 import pytest
+from django.test import Client
 
 from sbomify.apps.controls.models import ControlCatalog, ControlStatus
 from sbomify.apps.controls.services.catalog_service import activate_builtin_catalog
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+from sbomify.apps.teams.models import Member
 
 
 @pytest.mark.django_db
@@ -367,3 +369,80 @@ class TestPublicSummary:
         response = client.get("/api/v1/controls/public/invalid_key/")
 
         assert response.status_code == 404
+
+
+READ_ENDPOINTS = [
+    ("get", "/api/v1/controls/catalogs/", None),
+    ("get", "/api/v1/controls/catalogs/missing/", None),
+    ("get", "/api/v1/controls/catalogs/missing/export/csv", None),
+    ("get", "/api/v1/controls/catalogs/missing/export/summary-csv", None),
+    ("get", "/api/v1/controls/catalogs/missing/controls/", None),
+    ("get", "/api/v1/controls/controls/missing/mappings/", None),
+    ("get", "/api/v1/controls/controls/missing/evidence/", None),
+    ("get", "/api/v1/controls/automation/mappings/", None),
+]
+MAPPING = {"source_control_id": "a", "target_control_id": "b", "relation_type": "related"}
+ADMIN_ENDPOINTS = [
+    ("post", "/api/v1/controls/catalogs/activate/", {"catalog_name": "soc2-type2"}),
+    ("post", "/api/v1/controls/catalogs/import-oscal/", {}),
+    ("patch", "/api/v1/controls/catalogs/missing/", {"is_active": False}),
+    ("delete", "/api/v1/controls/catalogs/missing/", None),
+    ("put", "/api/v1/controls/controls/missing/status/", {"status": "compliant"}),
+    ("post", "/api/v1/controls/status/bulk/", {"items": [{"control_id": "missing", "status": "compliant"}]}),
+    ("post", "/api/v1/controls/mappings/", MAPPING),
+    ("post", "/api/v1/controls/mappings/bulk/", {"items": [MAPPING]}),
+    ("post", "/api/v1/controls/controls/missing/evidence/", {"evidence_type": "url", "title": "Policy"}),
+    ("delete", "/api/v1/controls/evidence/missing/", None),
+    ("post", "/api/v1/controls/automation/sync/", None),
+]
+
+
+def _call(client, method, path, payload, **headers):
+    if payload is None:
+        return getattr(client, method)(path, **headers)
+    return getattr(client, method)(path, json.dumps(payload), content_type="application/json", **headers)
+
+
+@pytest.mark.django_db
+class TestEndpointChecks:
+    """Reads need workspace:read and writes an owner or admin, endpoint by endpoint."""
+
+    @pytest.mark.parametrize(("method", "path", "payload"), ADMIN_ENDPOINTS)
+    def test_a_member_cannot_write(self, sample_team_with_owner_member, method, path, payload):
+        Member.objects.filter(pk=sample_team_with_owner_member.pk).update(role="member")
+        client = Client()
+        client.force_login(sample_team_with_owner_member.user)
+
+        response = _call(client, method, path, payload)
+
+        assert (response.status_code, response.json()["detail"]) == (
+            403,
+            "Only workspace owners and admins can perform this action",
+        )
+
+    @pytest.mark.parametrize(("method", "path", "payload"), READ_ENDPOINTS)
+    def test_a_member_can_read(self, sample_team_with_owner_member, method, path, payload):
+        Member.objects.filter(pk=sample_team_with_owner_member.pk).update(role="member")
+        client = Client()
+        client.force_login(sample_team_with_owner_member.user)
+
+        assert _call(client, method, path, payload).status_code in (200, 404)
+
+    @pytest.mark.parametrize(("method", "path", "payload"), READ_ENDPOINTS)
+    def test_a_token_without_read_scope_cannot_read(self, sample_team_with_owner_member, method, path, payload):
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+        user = sample_team_with_owner_member.user
+        token = create_personal_access_token(user)
+        AccessToken.objects.create(
+            user=user,
+            encoded_token=token,
+            description="t",
+            team=sample_team_with_owner_member.team,
+            scopes=["artifact:publish"],
+        )
+
+        response = _call(Client(), method, path, payload, HTTP_AUTHORIZATION=f"Bearer {token}")
+
+        assert (response.status_code, response.json()["detail"]) == (403, "Forbidden")

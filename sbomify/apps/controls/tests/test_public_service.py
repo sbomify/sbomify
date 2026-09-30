@@ -4,8 +4,8 @@ import pytest
 
 from sbomify.apps.controls.models import ControlStatus
 from sbomify.apps.controls.services.public_service import (
-    get_public_controls,
-    get_public_product_controls,
+    get_public_controls_list,
+    get_public_product_controls_list,
 )
 from sbomify.apps.controls.services.status_service import upsert_status
 from sbomify.apps.core.models import Product
@@ -15,7 +15,7 @@ from sbomify.apps.core.models import Product
 class TestGetPublicControls:
     def test_returns_failure_when_no_active_catalog(self, sample_team_with_owner_member) -> None:
         team = sample_team_with_owner_member.team
-        result = get_public_controls(team)
+        result = get_public_controls_list(team)
         assert not result.ok
         assert "No active catalog" in result.error
 
@@ -23,9 +23,9 @@ class TestGetPublicControls:
         team = sample_catalog.team
         upsert_status(sample_controls[0], None, ControlStatus.Status.COMPLIANT, sample_user)
 
-        result = get_public_controls(team)
+        result = get_public_controls_list(team)
         assert result.ok
-        data = result.value
+        data = result.value[0]
         assert data["catalog"]["name"] == "SOC 2 Type II"
         assert data["catalog"]["version"] == "2024"
         assert data["total"] == 3
@@ -38,7 +38,7 @@ class TestGetPublicProductControls:
     def test_returns_failure_when_no_active_catalog(self, sample_team_with_owner_member) -> None:
         team = sample_team_with_owner_member.team
         product = Product.objects.create(team=team, name="Test Product")
-        result = get_public_product_controls(product)
+        result = get_public_product_controls_list(product)
         assert not result.ok
         assert "No active catalog" in result.error
 
@@ -51,9 +51,9 @@ class TestGetPublicProductControls:
         upsert_status(sample_controls[0], None, ControlStatus.Status.COMPLIANT, sample_user)
         upsert_status(sample_controls[1], None, ControlStatus.Status.PARTIAL, sample_user)
 
-        result = get_public_product_controls(product)
+        result = get_public_product_controls_list(product)
         assert result.ok
-        data = result.value
+        data = result.value[0]
         assert data["product"]["name"] == "Test Product"
         # Should inherit global statuses: 1 compliant + 0.5 partial = 1.5 out of 3
         assert data["addressed"] == 1.5
@@ -69,8 +69,8 @@ class TestGetPublicProductControls:
         # Set product-specific override: CC6.1 = not_implemented
         upsert_status(sample_controls[0], product, ControlStatus.Status.NOT_IMPLEMENTED, sample_user)
 
-        result = get_public_product_controls(product)
+        result = get_public_product_controls_list(product)
         assert result.ok
-        data = result.value
+        data = result.value[0]
         # Product override means CC6.1 is not_implemented, so addressed = 0
         assert data["addressed"] == 0.0
