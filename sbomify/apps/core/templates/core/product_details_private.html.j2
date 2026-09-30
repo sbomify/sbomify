@@ -1,9 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load django_vite %}
 {% block title %}sbomify Product: {{ product.name }}{% endblock %}
 {% block content %}
     {% include "core/product_content.html.j2" %}
-{% endblock %}
-{% block scripts %}
-    {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
 {% endblock %}

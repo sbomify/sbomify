@@ -310,7 +310,6 @@
 {% endblock %}
 {% block scripts %}
     {% if is_sbom_backed %}
-        {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
         {% vite_asset 'sbomify/apps/plugins/js/main.ts' %}
     {% elif item_type == 'documents' %}
         {% vite_asset 'sbomify/apps/documents/js/main.ts' %}

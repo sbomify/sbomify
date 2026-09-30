@@ -53,8 +53,3 @@
     </section>
     </c-layout.frame>
 {% endblock %}
-{% block scripts %}
-    {{ block.super }}
-    {% load django_vite %}
-    {% vite_asset 'sbomify/apps/billing/js/main.ts' %}
-{% endblock %}
