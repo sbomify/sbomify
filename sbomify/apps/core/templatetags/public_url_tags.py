@@ -196,7 +196,7 @@ def trust_center_absolute_url(context: Any, team: Any = None) -> Any:
 
     Usage in templates:
         {% trust_center_absolute_url team as public_url %}
-        <button data-public-url="{{ public_url }}">Copy URL</button>
+        <c-copy-field value="{{ public_url }}" label="public URL" />
 
     Args:
         team: Team object or dict with custom_domain, custom_domain_validated, and key
