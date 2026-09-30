@@ -232,17 +232,6 @@ def get_or_create_assessment(
     return ServiceResult.success(assessment)
 
 
-def get_assessment_by_id(assessment_id: str) -> ServiceResult[CRAAssessment]:
-    """Fetch a CRA assessment by ID with related data."""
-    try:
-        assessment = CRAAssessment.objects.select_related("team", "product", "oscal_assessment_result__catalog").get(
-            pk=assessment_id
-        )
-        return ServiceResult.success(assessment)
-    except CRAAssessment.DoesNotExist:
-        return ServiceResult.failure("Assessment not found", status_code=404)
-
-
 def get_step_context(
     assessment: CRAAssessment,
     step: int,
@@ -678,7 +667,6 @@ _AR_GATED_FIELDS = frozenset(
         "authorized_rep_mandate_reference",
     }
 )
-_STEP_1_JSON_FIELDS = ("target_eu_markets",)
 
 # ---- Step 3b/3c fields ----
 _STEP_3_VH_FIELDS = ("vdp_url", "acknowledgment_timeline_days", "csirt_contact_email", "security_contact_url")
@@ -1374,13 +1362,6 @@ def _mark_step_complete(assessment: CRAAssessment, step: int) -> None:
         assessment.status = CRAAssessment.WizardStatus.IN_PROGRESS
     next_step = min(step + 1, 5)
     assessment.current_step = max(assessment.current_step, next_step)
-
-
-def get_compliance_summary(
-    assessment: CRAAssessment,
-) -> ServiceResult[dict[str, Any]]:
-    """Get the full compliance summary for Step 5 dashboard."""
-    return ServiceResult.success(_compute_compliance_summary(assessment))
 
 
 def get_assessment_list_for_team(team_id: int | str) -> ServiceResult[list[dict[str, Any]]]:
