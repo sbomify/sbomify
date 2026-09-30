@@ -1358,7 +1358,6 @@ def get_release_sbom_package(
 
     # Cache miss (or private release): build the aggregate.
     builder = get_sbom_builder(
-        entity_type="release",
         output_format=format_lower,
         version=version,
         entity=release,

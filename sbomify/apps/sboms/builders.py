@@ -9,7 +9,6 @@ Usage:
 
     # Get a CycloneDX 1.6 builder for releases
     builder = get_sbom_builder(
-        entity_type="release",
         output_format=SBOMFormat.CYCLONEDX,
         version=SBOMVersion.CDX_1_6,
         entity=release,
@@ -19,7 +18,6 @@ Usage:
 
     # Get an SPDX 2.3 builder for releases
     builder = get_sbom_builder(
-        entity_type="release",
         output_format=SBOMFormat.SPDX,
         version=SBOMVersion.SPDX_2_3,
         entity=release,
@@ -136,6 +134,10 @@ class BaseSBOMBuilder(ABC):
     in different formats (CycloneDX, SPDX) and versions.
     """
 
+    # What a concrete builder produces, set as class attributes.
+    format: SBOMFormat
+    version: str
+
     def __init__(self, entity: Any = None, user: Any = None, include_non_public: bool = False):
         """
         Initialize the builder.
@@ -155,18 +157,6 @@ class BaseSBOMBuilder(ABC):
         # Set when a member SBOM fetch fails (non-fatal — the member is skipped).
         # Callers use this to avoid caching an incomplete aggregate (#998).
         self.had_member_fetch_error: bool = False
-
-    @property
-    @abstractmethod
-    def format(self) -> SBOMFormat:
-        """Return the SBOM format this builder produces."""
-        ...
-
-    @property
-    @abstractmethod
-    def version(self) -> str:
-        """Return the format version this builder produces."""
-        ...
 
     @abstractmethod
     def build(self) -> Any:
@@ -291,78 +281,11 @@ class BaseSBOMBuilder(ABC):
 # =============================================================================
 
 
-class BaseCycloneDXBuilder(BaseSBOMBuilder):
-    """Base class for CycloneDX format builders."""
+class ReleaseCycloneDXBuilder(BaseSBOMBuilder):
+    """CycloneDX builder for releases; each subclass pins the spec version and its schema module."""
 
-    @property
-    def format(self) -> SBOMFormat:
-        return SBOMFormat.CYCLONEDX
-
-    @property
-    @abstractmethod
-    def cdx_module(self) -> Any:
-        """Return the CycloneDX schema module for this version."""
-        ...
-
-    @property
-    @abstractmethod
-    def spec_version(self) -> str:
-        """Return the CycloneDX spec version string."""
-        ...
-
-    @property
-    @abstractmethod
-    def schema_url(self) -> str:
-        """Return the JSON schema URL for this version."""
-        ...
-
-
-class CycloneDX16Mixin:
-    """Mixin providing CycloneDX 1.6 specific configuration."""
-
-    @property
-    def cdx_module(self) -> Any:
-        return cdx16
-
-    @property
-    def spec_version(self) -> str:
-        return "1.6"
-
-    @property
-    def version(self) -> str:
-        return "1.6"
-
-    @property
-    def schema_url(self) -> str:
-        return "http://cyclonedx.org/schema/bom-1.6.schema.json"
-
-
-class CycloneDX17Mixin:
-    """Mixin providing CycloneDX 1.7 specific configuration."""
-
-    @property
-    def cdx_module(self) -> Any:
-        return cdx17
-
-    @property
-    def spec_version(self) -> str:
-        return "1.7"
-
-    @property
-    def version(self) -> str:
-        return "1.7"
-
-    @property
-    def schema_url(self) -> str:
-        return "http://cyclonedx.org/schema/bom-1.7.schema.json"
-
-
-class ReleaseCycloneDXBuilder(BaseCycloneDXBuilder):
-    """
-    Base CycloneDX builder for releases.
-
-    Subclasses should mix in a version mixin (CycloneDX16Mixin or CycloneDX17Mixin).
-    """
+    format = SBOMFormat.CYCLONEDX
+    cdx_module: Any
 
     def build(self) -> Any:
         """Build the release SBOM in CycloneDX format."""
@@ -378,8 +301,8 @@ class ReleaseCycloneDXBuilder(BaseCycloneDXBuilder):
         release = self.entity
 
         # Create base SBOM structure
-        sbom = cdx.CyclonedxSoftwareBillOfMaterialsStandard(bomFormat="CycloneDX", specVersion=self.spec_version)
-        sbom.field_schema = self.schema_url
+        sbom = cdx.CyclonedxSoftwareBillOfMaterialsStandard(bomFormat="CycloneDX", specVersion=self.version)
+        sbom.field_schema = f"http://cyclonedx.org/schema/bom-{self.version}.schema.json"
         sbom.serialNumber = f"urn:uuid:{uuid4()}"
         sbom.version = 1
 
@@ -473,16 +396,18 @@ class ReleaseCycloneDXBuilder(BaseCycloneDXBuilder):
         return sbom
 
 
-class ReleaseCycloneDX16Builder(CycloneDX16Mixin, ReleaseCycloneDXBuilder):
+class ReleaseCycloneDX16Builder(ReleaseCycloneDXBuilder):
     """CycloneDX 1.6 builder for releases."""
 
-    pass
+    cdx_module = cdx16
+    version = "1.6"
 
 
-class ReleaseCycloneDX17Builder(CycloneDX17Mixin, ReleaseCycloneDXBuilder):
+class ReleaseCycloneDX17Builder(ReleaseCycloneDXBuilder):
     """CycloneDX 1.7 builder for releases."""
 
-    pass
+    cdx_module = cdx17
+    version = "1.7"
 
 
 # =============================================================================
@@ -493,39 +418,65 @@ class ReleaseCycloneDX17Builder(CycloneDX17Mixin, ReleaseCycloneDXBuilder):
 class BaseSPDXBuilder(BaseSBOMBuilder):
     """Base class for SPDX format builders."""
 
-    @property
-    def format(self) -> SBOMFormat:
-        return SBOMFormat.SPDX
+    format = SBOMFormat.SPDX
 
-    @property
-    @abstractmethod
-    def spdx_version_string(self) -> str:
-        """Return the SPDX version string (e.g., 'SPDX-2.3')."""
-        ...
+    def _extract_component_info_from_sbom(
+        self, sbom_data: dict[str, Any], filename: str
+    ) -> tuple[str, str | None, str | None] | None:
+        """
+        Extract component info from CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM.
+
+        Returns:
+            Tuple of (name, version, supplier) or None if extraction fails
+        """
+        from sbomify.apps.sboms.utils import extract_component_info
+
+        # Try CycloneDX format first
+        if sbom_data.get("bomFormat") == "CycloneDX":
+            component_dict = sbom_data.get("metadata", {}).get("component")
+            if component_dict:
+                name, _, version = extract_component_info(component_dict)
+                supplier = None
+                # Try to get supplier from metadata
+                metadata = sbom_data.get("metadata", {})
+                if metadata.get("supplier"):
+                    supplier_info = metadata["supplier"]
+                    if isinstance(supplier_info, dict):
+                        supplier = f"Organization: {supplier_info.get('name', 'Unknown')}"
+                return name, str(version) if version else None, supplier
+
+        # Try SPDX 3.0 format (spec-compliant @graph or legacy elements)
+        elif _is_spdx3(sbom_data):
+            info = _spdx3_component_info(sbom_data)
+            if info:
+                return info
+
+        # Try SPDX 2.x format
+        elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
+            packages = sbom_data.get("packages", [])
+            if packages:
+                # Use first package or the one referenced by documentDescribes
+                pkg = packages[0]
+                doc_describes = sbom_data.get("documentDescribes", [])
+                if doc_describes:
+                    for p in packages:
+                        if p.get("SPDXID") == doc_describes[0]:
+                            pkg = p
+                            break
+
+                name = pkg.get("name", "Unknown")
+                version = pkg.get("versionInfo")
+                supplier = pkg.get("supplier")
+                return name, version, supplier
+
+        log.warning(f"Could not extract component info from {filename}")
+        return None
 
 
-class SPDX23Mixin:
-    """Mixin providing SPDX 2.3 specific configuration."""
+class ReleaseSPDX23Builder(BaseSPDXBuilder):
+    """SPDX 2.3 builder for releases."""
 
-    @property
-    def spdx_module(self) -> Any:
-        return spdx23
-
-    @property
-    def version(self) -> str:
-        return "2.3"
-
-    @property
-    def spdx_version_string(self) -> str:
-        return "SPDX-2.3"
-
-
-class ReleaseSPDXBuilder(BaseSPDXBuilder):
-    """
-    Base SPDX builder for releases.
-
-    Subclasses should mix in a version mixin (SPDX23Mixin).
-    """
+    version = "2.3"
 
     def build(self) -> spdx23.SPDXDocument:
         """
@@ -544,7 +495,7 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
 
         # Build base SPDX document structure
         sbom: dict[str, Any] = {
-            "spdxVersion": self.spdx_version_string,
+            "spdxVersion": f"SPDX-{self.version}",
             "dataLicense": "CC0-1.0",
             "SPDXID": "SPDXRef-DOCUMENT",
             "name": f"{release.product.name} - {release.name}",
@@ -714,107 +665,20 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
         # Convert dict to Pydantic model for consistent serialization
         return spdx23.SPDXDocument.model_validate(sbom)
 
-    def _extract_component_info_from_sbom(
-        self, sbom_data: dict[str, Any], filename: str
-    ) -> tuple[str, str | None, str | None] | None:
-        """
-        Extract component info from CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM.
-
-        Returns:
-            Tuple of (name, version, supplier) or None if extraction fails
-        """
-        from sbomify.apps.sboms.utils import extract_component_info
-
-        # Try CycloneDX format first
-        if sbom_data.get("bomFormat") == "CycloneDX":
-            component_dict = sbom_data.get("metadata", {}).get("component")
-            if component_dict:
-                name, _, version = extract_component_info(component_dict)
-                supplier = None
-                # Try to get supplier from metadata
-                metadata = sbom_data.get("metadata", {})
-                if metadata.get("supplier"):
-                    supplier_info = metadata["supplier"]
-                    if isinstance(supplier_info, dict):
-                        supplier = f"Organization: {supplier_info.get('name', 'Unknown')}"
-                return name, str(version) if version else None, supplier
-
-        # Try SPDX 3.0 format (spec-compliant @graph or legacy elements)
-        elif _is_spdx3(sbom_data):
-            info = _spdx3_component_info(sbom_data)
-            if info:
-                return info
-
-        # Try SPDX 2.x format
-        elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
-            packages = sbom_data.get("packages", [])
-            if packages:
-                # Use first package or the one referenced by documentDescribes
-                pkg = packages[0]
-                doc_describes = sbom_data.get("documentDescribes", [])
-                if doc_describes:
-                    for p in packages:
-                        if p.get("SPDXID") == doc_describes[0]:
-                            pkg = p
-                            break
-
-                name = pkg.get("name", "Unknown")
-                version = pkg.get("versionInfo")
-                supplier = pkg.get("supplier")
-                return name, version, supplier
-
-        log.warning(f"Could not extract component info from {filename}")
-        return None
-
-
-class ReleaseSPDX23Builder(SPDX23Mixin, ReleaseSPDXBuilder):
-    """SPDX 2.3 builder for releases."""
-
-    pass
-
 
 # =============================================================================
 # SPDX 3.0 Builders
 # =============================================================================
 
 
-class SPDX30Mixin:
-    """Mixin providing SPDX 3.0 specific configuration."""
-
-    @property
-    def version(self) -> str:
-        return "3.0"
-
-    @property
-    def spdx_spec_version(self) -> str:
-        return "3.0.1"
-
-    @property
-    def spdx_version_string(self) -> str:
-        return f"SPDX-{self.spdx_spec_version}"
-
-    @property
-    def spdx_context(self) -> str:
-        return f"https://spdx.org/rdf/{self.spdx_spec_version}/spdx-context.jsonld"
-
-
-class ReleaseSPDX3Builder(BaseSPDXBuilder):
-    """Base SPDX 3.0 builder for releases.
+class ReleaseSPDX30Builder(BaseSPDXBuilder):
+    """SPDX 3.0 builder for releases.
 
     Produces spec-compliant SPDX 3.0 output with @context/@graph structure.
     """
 
-    @property
-    @abstractmethod
-    def spdx_spec_version(self) -> str:
-        """Return the SPDX spec version string (e.g., '3.0.1')."""
-        ...
-
-    @property
-    @abstractmethod
-    def spdx_context(self) -> str:
-        """Return the SPDX 3.0 JSON-LD context URL."""
-        ...
+    version = "3.0"
+    spdx_spec_version = "3.0.1"
 
     def build(self) -> dict[str, Any]:
         """Build the release SBOM in SPDX 3.0 format.
@@ -1033,62 +897,11 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
 
         # Build root document with JSON-LD structure
         sbom = {
-            "@context": self.spdx_context,
+            "@context": f"https://spdx.org/rdf/{self.spdx_spec_version}/spdx-context.jsonld",
             "@graph": graph,
         }
 
         return sbom
-
-    def _extract_component_info_from_sbom(
-        self, sbom_data: dict[str, Any], filename: str
-    ) -> tuple[str, str | None, str | None] | None:
-        """Extract component info from either CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM."""
-        from sbomify.apps.sboms.utils import extract_component_info
-
-        # CycloneDX format
-        if sbom_data.get("bomFormat") == "CycloneDX":
-            component_dict = sbom_data.get("metadata", {}).get("component")
-            if component_dict:
-                name, _, version = extract_component_info(component_dict)
-                supplier = None
-                metadata = sbom_data.get("metadata", {})
-                if metadata.get("supplier"):
-                    supplier_info = metadata["supplier"]
-                    if isinstance(supplier_info, dict):
-                        supplier = f"Organization: {supplier_info.get('name', 'Unknown')}"
-                return name, str(version) if version else None, supplier
-
-        # SPDX 3.0 format (spec-compliant @graph or legacy elements)
-        elif _is_spdx3(sbom_data):
-            info = _spdx3_component_info(sbom_data)
-            if info:
-                return info
-
-        # SPDX 2.x format
-        elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
-            packages = sbom_data.get("packages", [])
-            if packages:
-                pkg = packages[0]
-                doc_describes = sbom_data.get("documentDescribes", [])
-                if doc_describes:
-                    for p in packages:
-                        if p.get("SPDXID") == doc_describes[0]:
-                            pkg = p
-                            break
-
-                name = pkg.get("name", "Unknown")
-                version = pkg.get("versionInfo")
-                supplier = pkg.get("supplier")
-                return name, version, supplier
-
-        log.warning(f"Could not extract component info from {filename}")
-        return None
-
-
-class ReleaseSPDX30Builder(SPDX30Mixin, ReleaseSPDX3Builder):
-    """SPDX 3.0 builder for releases."""
-
-    pass
 
 
 # =============================================================================
@@ -1108,7 +921,6 @@ def default_version_for_format(output_format: SBOMFormat | str) -> SBOMVersion:
 
 
 def get_sbom_builder(
-    entity_type: str,
     output_format: SBOMFormat | str,
     version: SBOMVersion | str | None = None,
     entity: Any = None,
@@ -1116,21 +928,20 @@ def get_sbom_builder(
     include_non_public: bool = False,
 ) -> BaseSBOMBuilder:
     """
-    Factory function to get the appropriate SBOM builder.
+    Factory function to get the appropriate release SBOM builder.
 
     Args:
-        entity_type: Type of entity (only "release" is supported)
         output_format: Output format (SBOMFormat.CYCLONEDX or SBOMFormat.SPDX)
         version: Format version (e.g., SBOMVersion.CDX_1_6, SBOMVersion.SPDX_2_3)
                  If None, defaults to latest version for the format
-        entity: The entity to build SBOM for
+        entity: The release to build the SBOM for
         user: User for signed URL generation
 
     Returns:
         Appropriate builder instance
 
     Raises:
-        ValueError: If unsupported format/version/entity_type combination
+        ValueError: If unsupported format/version combination
     """
     # Normalize format
     if isinstance(output_format, str):
@@ -1142,21 +953,19 @@ def get_sbom_builder(
     elif isinstance(version, str):
         version = SBOMVersion(version)
 
-    builders: dict[tuple[str, SBOMFormat, SBOMVersion], type[BaseSBOMBuilder]] = {
-        ("release", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_6): ReleaseCycloneDX16Builder,
-        ("release", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_7): ReleaseCycloneDX17Builder,
-        ("release", SBOMFormat.SPDX, SBOMVersion.SPDX_2_3): ReleaseSPDX23Builder,
-        ("release", SBOMFormat.SPDX, SBOMVersion.SPDX_3_0): ReleaseSPDX30Builder,
+    builders: dict[tuple[SBOMFormat, SBOMVersion], type[BaseSBOMBuilder]] = {
+        (SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_6): ReleaseCycloneDX16Builder,
+        (SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_7): ReleaseCycloneDX17Builder,
+        (SBOMFormat.SPDX, SBOMVersion.SPDX_2_3): ReleaseSPDX23Builder,
+        (SBOMFormat.SPDX, SBOMVersion.SPDX_3_0): ReleaseSPDX30Builder,
     }
 
-    key = (entity_type.lower(), output_format, version)
-    builder_class = builders.get(key)
+    builder_class = builders.get((output_format, version))
 
     if builder_class is None:
-        supported = [f"{e}/{f.value}/{v.value}" for e, f, v in builders.keys()]
+        supported = [f"{f.value}/{v.value}" for f, v in builders.keys()]
         raise ValueError(
-            f"Unsupported combination: entity_type={entity_type}, format={output_format.value}, "
-            f"version={version.value}. Supported: {supported}"
+            f"Unsupported combination: format={output_format.value}, version={version.value}. Supported: {supported}"
         )
 
     return builder_class(entity=entity, user=user, include_non_public=include_non_public)
