@@ -6,7 +6,11 @@ const mockShowError = mock<(message: string) => void>()
 
 mock.module('../alerts', () => ({
     showSuccess: mockShowSuccess,
-    showError: mockShowError
+    showError: mockShowError,
+    showWarning: mock(),
+    showInfo: mock(),
+    showToast: mock(),
+    showConfirmation: mock()
 }))
 
 interface DeleteModalConfig {

@@ -1,35 +1,3 @@
-import axios, { AxiosHeaders, AxiosInstance } from "axios";
-import { getCsrfToken } from './csrf';
-
-// No baseURL on purpose: the app is server-driven and same-origin (ADR-001),
-// so every call resolves against the page's own origin. A build-time absolute
-// base (the old VITE_API_BASE_URL) baked the builder's host into the bundle,
-// which sent every API call in the e2e environment to the chromium
-// container's own loopback and made pages "fail to load" locally only.
-const $axios = axios.create({
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add CSRF token to requests dynamically via interceptor
-$axios.interceptors.request.use((config) => {
-  try {
-    const token = getCsrfToken();
-    if (!config.headers) {
-      config.headers = new AxiosHeaders();
-    }
-    config.headers.set('X-CSRFToken', token);
-  } catch {
-    // CSRF token not available, let the request proceed without it
-    // Server will return 403 if CSRF is required
-  }
-  return config;
-});
-
-export default $axios as AxiosInstance;
-
 export function isEmpty(obj: unknown | string | number | object | null | undefined): boolean {
   if (typeof obj !== 'object' || obj === null) {
     return obj === undefined || obj === null || obj === '';

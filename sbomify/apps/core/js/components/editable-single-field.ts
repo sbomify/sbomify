@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import $axios from '../utils';
+import { getCsrfToken } from '../csrf';
 
 interface EditableSingleFieldParams {
     itemType: string;
@@ -117,9 +117,13 @@ export function registerEditableSingleField() {
             }
 
             try {
-                const response = await $axios.patch(apiUrl, data);
-                if (response.status < 200 || response.status >= 300) {
-                    throw new Error('Network response was not ok. ' + response.statusText);
+                const response = await fetch(apiUrl, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                    body: JSON.stringify(data),
+                });
+                if (!response.ok) {
+                    throw new Error(`Request failed with status code ${response.status}`);
                 }
                 this.isEditing = false;
                 window.location.reload();

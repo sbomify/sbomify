@@ -14,7 +14,11 @@ const mockShowError = mock<(message: string) => void>()
 
 mock.module('../../core/js/alerts', () => ({
     showSuccess: mockShowSuccess,
-    showError: mockShowError
+    showError: mockShowError,
+    showWarning: mock(),
+    showInfo: mock(),
+    showToast: mock(),
+    showConfirmation: mock()
 }))
 
 describe('Team Branding', () => {

@@ -1,22 +1,15 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test'
 
-const mockAxios = {
-    get: mock<(url: string) => Promise<{ data: { results: unknown[]; count: number } }>>(),
-    post: mock<(url: string, data: unknown) => Promise<{ data: unknown }>>(),
-    put: mock<(url: string, data: unknown) => Promise<{ data: unknown }>>(),
-    delete: mock<(url: string) => Promise<void>>()
-}
-
-mock.module('../utils', () => ({
-    default: mockAxios
-}))
-
 const mockShowSuccess = mock<(message: string) => void>()
 const mockShowError = mock<(message: string) => void>()
 
 mock.module('../alerts', () => ({
     showSuccess: mockShowSuccess,
-    showError: mockShowError
+    showError: mockShowError,
+    showWarning: mock(),
+    showInfo: mock(),
+    showToast: mock(),
+    showConfirmation: mock()
 }))
 
 const mockAlpineData = mock<(name: string, callback: () => unknown) => void>()
@@ -50,10 +43,6 @@ interface ReleaseForm {
 
 describe('Product Releases', () => {
     beforeEach(() => {
-        mockAxios.get.mockClear()
-        mockAxios.post.mockClear()
-        mockAxios.put.mockClear()
-        mockAxios.delete.mockClear()
         mockShowSuccess.mockClear()
         mockShowError.mockClear()
         mockAlpineData.mockClear()

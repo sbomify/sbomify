@@ -1,171 +1,85 @@
-import { describe, it, expect, mock, beforeEach } from 'bun:test'
+import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test'
 
-interface MockAxiosResponse<T = unknown> {
-  data: T
-  status: number
-  statusText: string
-  headers: Record<string, string>
-  config: Record<string, unknown>
-}
+mock.module('../csrf', () => ({ getCsrfToken: () => 'csrf-value' }))
 
-// Mock the $axios utils module using Bun's mock
-const mockAxios = {
-  patch: mock<(url: string, data: unknown) => Promise<MockAxiosResponse<unknown>>>()
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Field = Record<string, any>
+let editableSingleField: (params: Record<string, string>) => Field
 
-mock.module('../utils', () => ({
-  default: mockAxios
+mock.module('alpinejs', () => ({
+  default: {
+    data: (_name: string, factory: typeof editableSingleField) => {
+      editableSingleField = factory
+    }
+  }
 }))
 
-// Test the business logic of EditableSingleField component
-describe('EditableSingleField Business Logic', () => {
+const { registerEditableSingleField } = await import('./editable-single-field')
+registerEditableSingleField()
+
+const globals = globalThis as unknown as Record<string, unknown>
+const realGlobals = { fetch: globals.fetch, window: globals.window }
+
+describe('EditableSingleField', () => {
   const mockComponentId = 'test-component-123'
   const mockTeamId = 'team-456'
   const mockProductId = 'product-012'
-
-  const createMockResponse = <T>(data: T, status = 200): MockAxiosResponse<T> => ({
-    data,
-    status,
-    statusText: status >= 400 ? 'Error' : 'OK',
-    headers: {},
-    config: {}
-  })
+  let reload: ReturnType<typeof mock>
 
   beforeEach(() => {
-    // Clear all mocks
-    mockAxios.patch.mockClear()
+    reload = mock()
+    globals.window = { location: { reload } }
   })
 
-  describe('Component Rename Functionality', () => {
-    it('should make correct API call to rename component', async () => {
-      const newName = 'New Component Name'
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: newName }
+  afterEach(() => {
+    for (const [name, value] of Object.entries(realGlobals)) {
+      if (value === undefined) delete globals[name]
+      else globals[name] = value
+    }
+  })
 
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
+  describe('Saving', () => {
+    it('sends the trimmed value as a PATCH with the CSRF token, then reloads', async () => {
+      const fetcher = mock(async () => new Response(null, { status: 204 }))
+      globals.fetch = fetcher
+      const field = editableSingleField({ itemType: 'component', itemId: mockComponentId, itemValue: 'Old name' })
+      field.fieldValue = '  New name  '
 
-      await mockAxios.patch(apiUrl, data)
+      await field.updateField()
 
-      expect(mockAxios.patch).toHaveBeenCalledWith(apiUrl, data)
-      expect(mockAxios.patch).toHaveBeenCalledTimes(1)
+      const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit]
+      expect(url).toBe(`/api/v1/components/${mockComponentId}`)
+      expect(init.method).toBe('PATCH')
+      expect(init.headers).toEqual({ 'Content-Type': 'application/json', 'X-CSRFToken': 'csrf-value' })
+      expect(init.body).toBe(JSON.stringify({ name: 'New name' }))
+      expect(field.isEditing).toBe(false)
+      expect(reload).toHaveBeenCalledTimes(1)
     })
 
-    it('should make correct API call to rename team', async () => {
-      const newName = 'New Team Name'
-      const apiUrl = `/api/v1/workspaces/${mockTeamId}`
-      const data = { name: newName }
+    it('keeps the old value and reports the status when the server refuses', async () => {
+      globals.fetch = mock(async () => Response.json({ detail: 'Invalid name provided' }, { status: 400 }))
+      const field = editableSingleField({ itemType: 'product', itemId: mockProductId, itemValue: 'Old name' })
+      field.fieldValue = 'New name'
 
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
+      await field.updateField()
 
-      await mockAxios.patch(apiUrl, data)
-
-      expect(mockAxios.patch).toHaveBeenCalledWith(apiUrl, data)
-      expect(mockAxios.patch).toHaveBeenCalledTimes(1)
+      expect(field.fieldValue).toBe('Old name')
+      expect(field.errorMessage).toBe('Error updating field. Request failed with status code 400')
+      expect(reload).not.toHaveBeenCalled()
     })
 
-    it('should make correct API call to rename product', async () => {
-      const newName = 'New Product Name'
-      const apiUrl = `/api/v1/products/${mockProductId}`
-      const data = { name: newName }
+    it('keeps the old value when the request never reaches the server', async () => {
+      globals.fetch = mock(async () => {
+        throw new Error('Network Error')
+      })
+      const field = editableSingleField({ itemType: 'workspace', itemId: mockTeamId, itemValue: 'Old name' })
+      field.fieldValue = 'New name'
 
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
+      await field.updateField()
 
-      await mockAxios.patch(apiUrl, data)
-
-      expect(mockAxios.patch).toHaveBeenCalledWith(apiUrl, data)
-      expect(mockAxios.patch).toHaveBeenCalledTimes(1)
-    })
-
-    it('should handle successful rename response', async () => {
-      const newName = 'Renamed Component'
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: newName }
-
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
-
-      const response = await mockAxios.patch(apiUrl, data)
-
-      expect(response.status).toBe(204)
-      expect(response.status).toBeGreaterThanOrEqual(200)
-      expect(response.status).toBeLessThan(300)
-    })
-
-    it('should handle API errors gracefully', async () => {
-      const newName = 'Invalid Name'
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: newName }
-
-      const errorResponse = {
-        response: {
-          status: 400,
-          statusText: 'Bad Request',
-          data: { detail: 'Invalid name provided' }
-        }
-      }
-
-      mockAxios.patch.mockRejectedValueOnce(errorResponse)
-
-      let errorCaught = false
-      try {
-        await mockAxios.patch(apiUrl, data)
-      } catch (error) {
-        errorCaught = true
-        expect(error).toEqual(errorResponse)
-      }
-
-      expect(errorCaught).toBe(true)
-    })
-
-    it('should handle 404 errors when item not found', async () => {
-      const newName = 'New Name'
-      const apiUrl = `/api/v1/components/non-existent-id`
-      const data = { name: newName }
-
-      const notFoundError = {
-        response: {
-          status: 404,
-          statusText: 'Not Found',
-          data: { detail: 'Component not found' }
-        }
-      }
-
-      mockAxios.patch.mockRejectedValueOnce(notFoundError)
-
-      let errorCaught = false
-      try {
-        await mockAxios.patch(apiUrl, data)
-      } catch (error) {
-        errorCaught = true
-        expect(error).toEqual(notFoundError)
-      }
-
-      expect(errorCaught).toBe(true)
-    })
-
-    it('should handle 403 errors when user lacks permissions', async () => {
-      const newName = 'New Name'
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: newName }
-
-      const forbiddenError = {
-        response: {
-          status: 403,
-          statusText: 'Forbidden',
-          data: { detail: 'Insufficient permissions' }
-        }
-      }
-
-      mockAxios.patch.mockRejectedValueOnce(forbiddenError)
-
-      let errorCaught = false
-      try {
-        await mockAxios.patch(apiUrl, data)
-      } catch (error) {
-        errorCaught = true
-        expect(error).toEqual(forbiddenError)
-      }
-
-      expect(errorCaught).toBe(true)
+      expect(field.fieldValue).toBe('Old name')
+      expect(field.errorMessage).toBe('Error updating field. Network Error')
+      expect(reload).not.toHaveBeenCalled()
     })
   })
 
@@ -199,153 +113,6 @@ describe('EditableSingleField Business Logic', () => {
     it('should include api/v1 prefix in URL', () => {
       const apiUrl = `/api/v1/components/${mockComponentId}`
       expect(apiUrl).toMatch(/^\/api\/v1\//)
-    })
-  })
-
-  describe('Request Payload Validation', () => {
-    it('should send correct payload structure', async () => {
-      const newName = 'Test Component'
-      const expectedPayload = { name: newName }
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
-
-      await mockAxios.patch(apiUrl, expectedPayload)
-
-      const [url, payload] = mockAxios.patch.mock.calls[0]
-      expect(url).toBe(apiUrl)
-      expect(payload).toEqual(expectedPayload)
-      expect(payload).toHaveProperty('name', newName)
-    })
-
-    it('should handle empty name gracefully', async () => {
-      const emptyName = ''
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: emptyName }
-
-      const validationError = {
-        response: {
-          status: 400,
-          statusText: 'Bad Request',
-          data: { detail: 'Name cannot be empty' }
-        }
-      }
-
-      mockAxios.patch.mockRejectedValueOnce(validationError)
-
-      let errorCaught = false
-      try {
-        await mockAxios.patch(apiUrl, data)
-      } catch (error) {
-        errorCaught = true
-        expect(error).toEqual(validationError)
-      }
-
-      expect(errorCaught).toBe(true)
-    })
-
-    it('should handle special characters in name', async () => {
-      const specialName = 'Component-with_special.chars@123'
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: specialName }
-
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
-
-      await mockAxios.patch(apiUrl, data)
-
-      const [, payload] = mockAxios.patch.mock.calls[0]
-      expect(payload).toHaveProperty('name', specialName)
-    })
-  })
-
-  describe('Network Error Handling', () => {
-    it('should handle network connectivity errors', async () => {
-      const networkError = new Error('Network Error')
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: 'New Name' }
-
-      mockAxios.patch.mockRejectedValueOnce(networkError)
-
-      let errorCaught = false
-      try {
-        await mockAxios.patch(apiUrl, data)
-      } catch (error) {
-        errorCaught = true
-        expect(error).toEqual(networkError)
-      }
-
-      expect(errorCaught).toBe(true)
-    })
-
-    it('should handle timeout errors', async () => {
-      const timeoutError = new Error('Request timeout')
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: 'New Name' }
-
-      mockAxios.patch.mockRejectedValueOnce(timeoutError)
-
-      let errorCaught = false
-      try {
-        await mockAxios.patch(apiUrl, data)
-      } catch (error) {
-        errorCaught = true
-        expect(error).toEqual(timeoutError)
-      }
-
-      expect(errorCaught).toBe(true)
-    })
-  })
-
-  describe('Status Code Validation', () => {
-    it('should accept 200 status codes', async () => {
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: 'New Name' }
-
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 200))
-
-      const response = await mockAxios.patch(apiUrl, data)
-
-      expect(response.status).toBe(200)
-      expect(response.status).toBeGreaterThanOrEqual(200)
-      expect(response.status).toBeLessThan(300)
-    })
-
-    it('should accept 204 status codes', async () => {
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: 'New Name' }
-
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
-
-      const response = await mockAxios.patch(apiUrl, data)
-
-      expect(response.status).toBe(204)
-      expect(response.status).toBeGreaterThanOrEqual(200)
-      expect(response.status).toBeLessThan(300)
-    })
-
-    it('should reject 400+ status codes', async () => {
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: 'New Name' }
-
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 400))
-
-      const response = await mockAxios.patch(apiUrl, data)
-
-      expect(response.status).toBe(400)
-      expect(response.status).toBeGreaterThanOrEqual(400)
-      expect(response.status).toBeLessThan(500)
-    })
-
-    it('should reject 500+ status codes', async () => {
-      const apiUrl = `/api/v1/components/${mockComponentId}`
-      const data = { name: 'New Name' }
-
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 500))
-
-      const response = await mockAxios.patch(apiUrl, data)
-
-      expect(response.status).toBe(500)
-      expect(response.status).toBeGreaterThanOrEqual(500)
     })
   })
 })
