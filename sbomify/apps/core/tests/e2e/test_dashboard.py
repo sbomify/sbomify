@@ -48,7 +48,7 @@ def overview_dashboard(dashboard: dict[str, Any]) -> dict[str, Any]:
                 {
                     "id": "CVE-2026-10001",
                     "severity": "critical",
-                    "component": {"name": "libexample", "version": "1.2.3"},
+                    "component": {"name": "libexample", "version": "1.2.3", "purl": "pkg:pypi/libexample@1.2.3"},
                 },
                 {
                     "id": "CVE-2026-10002",
@@ -115,6 +115,57 @@ def test_overview_priority_table_and_mobile_drawer(
     page.get_by_role("link", name="Add release", exact=False).click()
     expect(page.get_by_role("heading", name="New release", exact=True)).to_be_visible()
     expect(page.get_by_role("combobox", name="Product *", exact=True)).to_contain_text("Test Product 0")
+
+
+@pytest.mark.django_db
+def test_priority_link_opens_selected_vulnerability(
+    authenticated_page: Page, overview_dashboard: dict[str, Any]
+) -> None:
+    page = authenticated_page
+    page.goto("/dashboard")
+    priority = page.get_by_role("table", name="Priority vulnerabilities")
+    row = priority.get_by_role("row").filter(has_text="CVE-2026-10001")
+    row.get_by_role("link", name="CVE-2026-10001", exact=True).click()
+
+    panel = page.locator("#component-vulnerabilities")
+    expect(panel).to_be_in_viewport()
+    expect(panel.get_by_role("searchbox", name="Search vulnerabilities")).to_have_value("CVE-2026-10001")
+    table = panel.get_by_role("table", name="Vulnerabilities", exact=True)
+    expect(table).to_contain_text("CVE-2026-10001")
+    expect(table).not_to_contain_text("CVE-2026-10002")
+    expect(table.locator("tbody tr")).to_have_count(1)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1280, 390])
+def test_priority_menu_opens_component_and_triages_finding(
+    authenticated_page: Page, overview_dashboard: dict[str, Any], width: int
+) -> None:
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto("/dashboard")
+    page.get_by_role("button", name="Actions for CVE-2026-10001", exact=True).click()
+    component_id = overview_dashboard["sboms"][0].component_id
+    expect(page.get_by_role("menuitem", name="Go to component", exact=True)).to_have_attribute(
+        "href", f"/component/{component_id}/"
+    )
+    page.get_by_role("menuitem", name="Triage", exact=True).click()
+    modal = page.locator("#triage-modal")
+    expect(modal).to_be_visible()
+    expect(modal).to_contain_text("CVE-2026-10001")
+    expect(modal.locator("#triage-scope")).to_have_value("package")
+    modal.locator("#triage-state").select_option("in_triage")
+    page.route("**/triage", lambda route: route.fulfill(json={"ok": True}))
+    with page.expect_request(lambda request: request.method == "POST" and request.url.endswith("/triage")) as sent:
+        modal.get_by_role("button", name="Save decision", exact=True).click()
+    assert sent.value.url.endswith(f"/components/{component_id}/triage")
+    payload = sent.value.post_data_json
+    assert payload is not None
+    decision = payload["decisions"][0]
+    assert decision["vuln_id"] == "CVE-2026-10001"
+    assert decision["state"] == "in_triage"
+    assert decision["purl"] == "pkg:pypi/libexample@1.2.3"
+    expect(modal).to_be_hidden()
 
 
 @pytest.mark.django_db

@@ -7,6 +7,7 @@
         The panel is a full-bleed table, so it takes the clipped wrapper the
         card's body would have given it and none of the padding.
     {% endcomment %}
+    <c-cards.collapsible-header>
     <c-cards.collapsible-trigger state="open" @click="open = !open">
     <span class="text-lg">
         CBOM issues
@@ -15,6 +16,12 @@
         {% endif %}
     </span>
     </c-cards.collapsible-trigger>
+    <c-slot name="actions">
+    {% if latest_cbom_id %}
+        <c-buttons.ghost size="sm" href="{% url 'core:component_item' component_id=component.id item_type=latest_cbom_item_type|default:'cbom' item_id=latest_cbom_id %}">View CBOM details<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
+    {% endif %}
+    </c-slot>
+    </c-cards.collapsible-header>
     <div class="overflow-hidden" x-show="open" x-collapse>
         <c-tables.shell nested>
         {# Search + severity filter toolbar #}
@@ -69,18 +76,12 @@
             </tr>
         </tbody>
         </c-tables.table>
-        {# Footer: row count + CBOM detail link on the left, pagination on the right #}
+        {# Footer: row count on the left, pagination on the right #}
         <c-tables.footer>
         <div class="flex flex-wrap items-center gap-4">
             <c-tables.info>
             Showing <span x-text="$number(startIdx)"></span> to <span x-text="$number(endIdx)"></span> of <span x-text="$number(total)"></span>
             </c-tables.info>
-            {% if latest_cbom_id %}
-                <a href="{% url 'core:component_item' component_id=component.id item_type=latest_cbom_item_type|default:'cbom' item_id=latest_cbom_id %}"
-                   class="text-sm text-primary hover:underline no-underline inline-flex items-center gap-1">
-                    View CBOM details<i class="fas fa-arrow-right text-xs"></i>
-                </a>
-            {% endif %}
         </div>
         <div x-show="totalPages > 1">
             <c-tables.pager />
