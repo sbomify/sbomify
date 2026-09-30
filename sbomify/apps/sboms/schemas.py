@@ -35,7 +35,6 @@ __all__ = [
     "PublicStatusSchema",
     "SBOMFormat",
     "SBOMResponseSchema",
-    "SpdxLicenseSchema",
     "SBOMUploadRequest",
     "SPDX3Package",
     "SPDX3Schema",
@@ -246,10 +245,6 @@ def validate_cyclonedx_sbom(
 
 class BaseLicenseSchema(BaseModel):
     pass
-
-
-class SpdxLicenseSchema(BaseLicenseSchema):
-    id: str
 
 
 class CustomLicenseSchema(BaseLicenseSchema):
