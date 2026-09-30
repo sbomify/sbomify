@@ -29,16 +29,10 @@ interface ReleaseEditorParams {
     canDelete?: boolean;
 }
 
-function getDefaultDateTime(): string {
-    const now = new Date();
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-}
-
+// A datetime-local value in local time; a missing or invalid value means now.
 function formatDateTimeForInput(value?: string): string {
-    if (!value) return getDefaultDateTime();
-    const date = new Date(value);
-    if (isNaN(date.getTime())) return getDefaultDateTime();
+    let date = value ? new Date(value) : new Date();
+    if (isNaN(date.getTime())) date = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
@@ -75,7 +69,7 @@ export function registerReleaseEditor() {
             this.showModal = false;
             // Dispatch event to close any open datetime pickers
             window.dispatchEvent(new CustomEvent('close-all-pickers'));
-            const now = getDefaultDateTime();
+            const now = formatDateTimeForInput();
             this.form = {
                 id: null,
                 name: '',

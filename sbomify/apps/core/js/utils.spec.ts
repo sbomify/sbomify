@@ -4,7 +4,6 @@ import {
     formatDateTime,
     formatRelativeDate,
     formatCompactRelativeDate,
-    formatLastChecked,
 } from './utils'
 
 describe('Utils', () => {
@@ -315,26 +314,24 @@ describe('Utils', () => {
         })
     })
 
-    describe('formatLastChecked', () => {
+    describe('formatDateTime as the domain "last checked" time', () => {
+        const lastChecked = (value?: string | null) => formatDateTime(value, { use24Hour: false, fallback: 'Never' })
+
         test('should return "Never" for null/undefined/empty', () => {
-            expect(formatLastChecked(null)).toBe('Never')
-            expect(formatLastChecked(undefined)).toBe('Never')
-            expect(formatLastChecked('')).toBe('Never')
+            expect(lastChecked(null)).toBe('Never')
+            expect(lastChecked(undefined)).toBe('Never')
+            expect(lastChecked('')).toBe('Never')
         })
 
         test('should return formatted datetime for valid input', () => {
-            const result = formatLastChecked('2024-06-15T14:30:00Z')
+            const result = lastChecked('2024-06-15T14:30:00Z')
             expect(result).toContain('2024')
             expect(result).not.toBe('Never')
         })
 
         test('should use 12-hour format', () => {
-            const result = formatLastChecked('2024-06-15T14:30:00Z')
+            const result = lastChecked('2024-06-15T14:30:00Z')
             expect(result).not.toMatch(/\b14:/)
-        })
-
-        test('should use custom fallback when provided', () => {
-            expect(formatLastChecked(null, { fallback: 'Unknown' })).toBe('Unknown')
         })
     })
 })

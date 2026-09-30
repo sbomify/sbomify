@@ -126,20 +126,3 @@ export function formatCompactRelativeDate(
   if (diffDays < 7) return `${diffDays}d ago`;
   return d.toLocaleDateString(undefined, SHORT_DATE_OPTS);
 }
-
-/**
- * For "last checked" displays: returns "Never" for missing values.
- */
-export function formatLastChecked(
-  value?: string | Date | null,
-  opts?: { fallback?: string },
-): string {
-  const d = parseDate(value);
-  if (!d) return opts?.fallback ?? 'Never';
-  return d.toLocaleString(undefined, {
-    ...SHORT_DATE_OPTS,
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
