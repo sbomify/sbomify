@@ -1314,7 +1314,7 @@ class TeamDomainResponseSchema(BaseModel):
 def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema) -> tuple[int, Any]:
     """Set or update workspace custom domain."""
     from sbomify.apps.teams.tasks import check_custom_domain
-    from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+    from sbomify.apps.teams.utils import invalidate_custom_domain_cache, plan_has_custom_domain_access
     from sbomify.apps.teams.validators import validate_custom_domain
 
     try:
@@ -1331,17 +1331,7 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     # Feature gating: Check billing plan
-    from sbomify.apps.billing.models import BillingPlan
-
-    plan_key = team.billing_plan or "free"
-    try:
-        plan = BillingPlan.objects.get(key=plan_key)
-        has_access = plan.has_custom_domain_access
-    except BillingPlan.DoesNotExist:
-        # Fallback for unknown plans
-        has_access = plan_key in ["business", "enterprise"]
-
-    if not has_access:
+    if not plan_has_custom_domain_access(team.billing_plan):
         return 403, {"detail": "Custom domains are available on Business and Enterprise plans only"}
 
     # Validate domain format using comprehensive FQDN validation

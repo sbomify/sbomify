@@ -167,23 +167,7 @@ def get_app_hostname() -> str:
 
 def plan_has_custom_domain_access(billing_plan: str | None) -> bool:
     """Check if the billing plan allows custom domain feature."""
-    if not billing_plan:
-        return False
-
-    plan_key = str(billing_plan).strip().lower()
-    if not plan_key:
-        return False
-
-    # Business and Enterprise plans have access
-    if plan_key in ("business", "enterprise"):
-        return True
-
-    # Check if it's a BillingPlan in the database with custom domain access
-    try:
-        plan = BillingPlan.objects.get(key=plan_key)
-        return getattr(plan, "has_custom_domain_access", False)
-    except BillingPlan.DoesNotExist:
-        return False
+    return (billing_plan or "").strip().lower() in ("business", "enterprise")
 
 
 def compute_user_teams_checksum(user_teams: dict[str, Any] | None) -> str:
