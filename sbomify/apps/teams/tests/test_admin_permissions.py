@@ -130,6 +130,8 @@ def test_an_expired_invitation_does_not_unlock_admin_self_removal(client, admin_
 
 def test_a_live_invitation_still_unlocks_admin_self_removal(client, admin_user, team):
     """The exception itself must keep working — an admin leaving can still go."""
+    admin_user.email_verified = True
+    admin_user.save(update_fields=["email_verified"])
     Invitation.objects.create(
         team=Team.objects.create(name="Somewhere Else"),
         email=admin_user.email,

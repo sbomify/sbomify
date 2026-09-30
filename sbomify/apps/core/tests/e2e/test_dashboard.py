@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -216,6 +217,7 @@ def test_repository_terminal_snapshot(
 @pytest.mark.django_db
 def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, settings: SettingsWrapper) -> None:
     from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import hash_token
 
     settings.APP_BASE_URL = "http://localhost:8000"
     page = authenticated_page
@@ -226,16 +228,19 @@ def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, se
     copy_prompt = page.get_by_role("button", name="Copy prompt", exact=True)
     expect(copy_prompt).to_be_disabled()
     assert not AccessToken.objects.exists()
-    page.get_by_role("button", name="Create setup token", exact=True).click()
+    with page.expect_response(lambda response: "/setup-token/" in response.url) as created:
+        page.get_by_role("button", name="Create setup token", exact=True).click()
     expect(copy_prompt).to_be_enabled()
     original = AccessToken.objects.get()
+    original_token = created.value.json()["token"]
+    assert hash_token(original_token) == original.token_hash
     page.get_by_role("button", name="Public", exact=True).click()
     copy_prompt.click()
     page.wait_for_function("window.setupCopiedText?.includes('Create everything as public.')")
     copied = page.evaluate("window.setupCopiedText")
     assert copied == page.locator("#repository-setup-prompt").text_content()
     assert "YOUR_SETUP_TOKEN" not in copied
-    assert original.encoded_token in copied
+    assert original_token in copied
     page.locator("#panel-setup-agent").get_by_role("button", name="Copy code", exact=True).click()
     assert page.evaluate("window.setupCopiedText") == copied
     agent_tab = page.get_by_role("tab", name="Coding agent", exact=True)
@@ -245,13 +250,16 @@ def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, se
     page.get_by_role("button", name="uv", exact=True).click()
     page.get_by_role("button", name="Copy command", exact=True).click()
     page.wait_for_function("window.setupCopiedText?.includes('uvx sbomify-action wizard')")
-    assert original.encoded_token in page.evaluate("window.setupCopiedText")
-    page.get_by_role("button", name="Reset token", exact=True).click()
+    assert original_token in page.evaluate("window.setupCopiedText")
+    with page.expect_response(lambda response: "/setup-token/" in response.url) as reset:
+        page.get_by_role("button", name="Reset token", exact=True).click()
     expect(page.get_by_role("button", name="Reset token", exact=True)).to_be_enabled()
     assert not AccessToken.objects.filter(pk=original.pk).exists()
     replacement = AccessToken.objects.get()
     assert replacement.pk != original.pk
-    expect(page.locator("#repository-setup-command")).to_contain_text(replacement.encoded_token)
+    replacement_token = reset.value.json()["token"]
+    assert hash_token(replacement_token) == replacement.token_hash
+    expect(page.locator("#repository-setup-command")).to_contain_text(replacement_token)
     page.get_by_role("tab", name="Terminal", exact=True).press("ArrowLeft")
     expect(agent_tab).to_have_attribute("aria-selected", "true")
     expect(page.locator("#repository-setup-prompt")).to_contain_text("Create everything as public.")
@@ -344,3 +352,76 @@ def test_dashboard_view_switch_and_trend_filters(
     navigation.get_by_role("link", name="Summary").click()
     expect(navigation.locator('[aria-current="page"]')).to_have_text("Summary")
     expect(page.get_by_role("group", name="Key metrics")).to_be_visible()
+
+
+@pytest.mark.django_db
+def test_trends_load_failure_is_visible_and_recoverable(authenticated_page: Page, dashboard: dict[str, Any]) -> None:
+    """A failed fragment used to leave the skeleton up for good, so a broken
+    page and a slow one were the same picture. It now says so and offers a way
+    back, and the retry loads the chart the first request did not."""
+    page = authenticated_page
+    failures = {"count": 0}
+
+    def fail_once(route: Any) -> None:
+        failures["count"] += 1
+        if failures["count"] == 1:
+            route.fulfill(status=500, body="boom")
+        else:
+            route.continue_()
+
+    page.route("**/vulnerability-trends/**", fail_once)
+    page.goto("/dashboard/trends/")
+
+    alert = page.get_by_role("alert").filter(has_text="Could not load vulnerability trends")
+    expect(alert).to_be_visible()
+    expect(page.locator("#main-content [data-content-loading]")).to_be_hidden()
+
+    alert.get_by_role("button", name="Try again", exact=True).click()
+    expect(page.locator(".vulnerability-chart-canvas")).to_be_visible()
+    expect(page.get_by_role("alert").filter(has_text="Could not load vulnerability trends")).to_have_count(0)
+
+
+@pytest.mark.django_db
+def test_the_trends_fragment_url_lands_on_the_trends_page(authenticated_page: Page, dashboard: dict[str, Any]) -> None:
+    """Both URLs used to render Trends, with different release defaults and a
+    different set of controls, so the same workspace reported two totals."""
+    page = authenticated_page
+    page.goto("/dashboard/trends/")
+    expect(page.locator(".vulnerability-chart-canvas")).to_be_visible()
+    metrics = page.get_by_role("group", name="Vulnerability metrics")
+    expected = metrics.inner_text()
+    controls = page.locator("#vuln-trends-body select").count()
+
+    page.goto("/vulnerability-trends/")
+
+    expect(page.locator(".vulnerability-chart-canvas")).to_be_visible()
+    assert page.url.endswith("/dashboard/trends/")
+    assert metrics.inner_text() == expected
+    assert page.locator("#vuln-trends-body select").count() == controls
+    expect(page.locator("#sidebar a[aria-current='page']")).to_have_text("Overview")
+
+
+@pytest.mark.django_db
+def test_trend_filters_and_chart_view_survive_a_reload(authenticated_page: Page, dashboard: dict[str, Any]) -> None:
+    """They survived a filter swap but not the address bar, so a bookmark, a
+    refresh or a shared link opened on the defaults."""
+    page = authenticated_page
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto("/dashboard/trends/")
+    chart = page.locator(".vulnerability-chart-canvas")
+    expect(chart).to_be_visible()
+
+    page.get_by_role("button", name="Severity", exact=True).click()
+    page.get_by_role("combobox", name="Time range").select_option("7")
+    expect(page).to_have_url(re.compile(r"[?&]days=7\b"))
+    expect(page).to_have_url(re.compile(r"[?&]chart=severity\b"))
+    shared = page.url
+
+    page.reload()
+    expect(chart).to_be_visible()
+    page.wait_for_function(
+        "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
+    )
+    expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
+    expect(page.get_by_role("button", name="Severity", exact=True)).to_have_attribute("aria-pressed", "true")
+    assert page.url == shared

@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime
 from enum import Enum
 from functools import wraps
+from types import SimpleNamespace
 from typing import Any, NoReturn
 
 from django.conf import settings
@@ -30,8 +31,12 @@ from .config import get_unlimited_plan_limits, is_billing_enabled
 from .models import BillingPlan
 from .stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from .stripe_client import (
+    LIVE_SUBSCRIPTION_STATUSES,
+    TERMINAL_SUBSCRIPTION_STATUSES,
+    BillingEventTooEarlyError,
     BillingRetryableError,
     StripeError,
+    StripeResourceMissingError,
     WorkspaceGoneError,
     get_stripe_client,
     handle_stripe_errors,
@@ -40,6 +45,25 @@ from .stripe_client import (
 logger = getLogger(__name__)
 
 stripe_client = get_stripe_client()
+
+
+def cancel_replaced_subscription(subscription_id: str) -> None:
+    """Cancel the subscription a completed checkout replaced, unless it has already ended.
+
+    Called by the checkout webhook and by the browser's return from checkout,
+    whichever lands first, so the workspace never pays through two subscriptions.
+    Call it with the workspace row locked, and store the new subscription before
+    the lock is released: Stripe reports the cancel at once, and the handlers for
+    that event read the locked row.
+    """
+    try:
+        subscription = stripe_client.get_subscription(subscription_id)
+    except StripeResourceMissingError:
+        return
+    if subscription.status in TERMINAL_SUBSCRIPTION_STATUSES:
+        return
+    stripe_client.cancel_subscription(subscription_id)
+    logger.info("Cancelled the subscription a checkout replaced")
 
 
 def _best_effort(description: str, fn: Any, *args: Any, **kwargs: Any) -> None:
@@ -88,6 +112,61 @@ def _raise_classified_webhook_error(exc: Exception) -> NoReturn:
     # so logging again would double the stack trace. Keep the message generic; the
     # original exception (with any Stripe identifiers) stays in the chained traceback.
     raise BillingRetryableError(f"Unexpected error processing webhook event ({type(exc).__name__})") from exc
+
+
+def _event_created(event: Any) -> int | None:
+    """When Stripe created ``event``, or None when that is unknown."""
+    created = getattr(event, "created", None)
+    return created if type(created) is int else None
+
+
+def _is_older_than_applied(billing_limits: dict[str, Any], created: int | None) -> bool:
+    """Whether an event created at ``created`` is older than the newest event already applied.
+
+    Stripe delivers events out of order and retries a failed delivery for days, so an
+    older event describes a state that has since changed. ``created`` has one-second
+    resolution: events from the same second cannot be ordered and apply as they arrive.
+    """
+    latest = billing_limits.get("latest_event_created")
+    return created is not None and latest is not None and created < latest
+
+
+def _record_event_created(billing_limits: dict[str, Any], created: int | None, event_id: str | None) -> None:
+    """Remember ``created`` as the newest event applied, unless a newer one already is.
+
+    The ids of the events applied in that second are kept with it, for ``_was_applied``.
+    """
+    if created is None or _is_older_than_applied(billing_limits, created):
+        return
+    if created != billing_limits.get("latest_event_created"):
+        billing_limits["latest_event_created"] = created
+        billing_limits["latest_event_ids"] = []
+    billing_limits["latest_event_ids"] = [*billing_limits.get("latest_event_ids", []), event_id]
+
+
+def _was_applied(billing_limits: dict[str, Any], webhook_id: str | None, created: int | None) -> bool:
+    """Whether the event was applied already.
+
+    ``last_processed_webhook_id`` holds one id, and a sibling from the same second
+    replaces it without being newer, so the ids from the newest second count too.
+    """
+    return billing_limits.get("last_processed_webhook_id") == webhook_id or (
+        created is not None
+        and created == billing_limits.get("latest_event_created")
+        and webhook_id in billing_limits.get("latest_event_ids", [])
+    )
+
+
+def _payment_already_recorded(billing_limits: dict[str, Any], webhook_id: str | None) -> bool:
+    """Whether the payment event ``webhook_id`` was recorded already.
+
+    Rows written before payments had a key of their own hold the id in
+    ``last_processed_webhook_id``.
+    """
+    return webhook_id is not None and webhook_id in (
+        billing_limits.get("last_processed_webhook_id"),
+        billing_limits.get("last_payment_webhook_id"),
+    )
 
 
 class BillingResourceType(str, Enum):
@@ -283,7 +362,8 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             team.billing_plan_limits = billing_limits
             team.save()
 
-        if days_remaining <= settings.TRIAL_ENDING_NOTIFICATION_DAYS:
+        # An ended trial gets the expiry notice below instead.
+        if not trial_has_ended and days_remaining <= settings.TRIAL_ENDING_NOTIFICATION_DAYS:
             notify_billing_managers(team, email_notifications.notify_trial_ending, days_remaining)
             logger.info("Trial ending notification sent")
 
@@ -357,7 +437,7 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
     try:
         team, billing_limits = _resolve_team_from_subscription(subscription)
 
-        valid_statuses = ["trialing", "active", "past_due", "canceled", "incomplete", "incomplete_expired"]
+        valid_statuses = LIVE_SUBSCRIPTION_STATUSES | TERMINAL_SUBSCRIPTION_STATUSES
         if subscription.status not in valid_statuses:
             raise StripeError(f"Invalid subscription status: {subscription.status}")
 
@@ -368,10 +448,11 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
             logger.info("Webhook already processed, skipping")
             return
 
-        _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
-
-        previous_status = billing_limits.get("subscription_status")
-        billing_limits = _update_billing_from_subscription(team, subscription, webhook_id)
+        applied, previous_status = _update_billing_from_subscription(
+            team, subscription, webhook_id, _event_created(event)
+        )
+        if not applied:
+            return
 
         _best_effort(
             "subscription updated notifications",
@@ -444,9 +525,11 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
         customer = None
         customer_unreadable = True
 
-    if customer is not None and customer.metadata and "team_key" in customer.metadata:
+    # A deleted customer comes back as a stub without metadata.
+    metadata = getattr(customer, "metadata", None)
+    if metadata and "team_key" in metadata:
         try:
-            team = Team.objects.get(key=customer.metadata["team_key"])
+            team = Team.objects.get(key=metadata["team_key"])
         except Team.DoesNotExist:
             pass
         else:
@@ -464,24 +547,58 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
     raise Team.DoesNotExist("No workspace holds the subscription in this webhook event")
 
 
-def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id: str) -> dict[str, Any]:
+def _update_billing_from_subscription(
+    team: Team, subscription: Any, webhook_id: str, created: int | None
+) -> tuple[bool, str | None]:
     """Update team billing limits from subscription data within a transaction.
 
     Returns:
-        The updated billing_limits dict.
+        Whether the event was applied, and the status it replaced, read under the
+        lock. The event is not applied when it was already processed, is about a
+        subscription the workspace has replaced, or is older than the newest event
+        already applied.
     """
     with transaction.atomic():
         team = Team.objects.select_for_update().get(pk=team.pk)
         billing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
 
-        if billing_limits.get("last_processed_webhook_id") == webhook_id:
+        if _was_applied(billing_limits, webhook_id, created):
             logger.info("Webhook already processed (checked after lock)")
-            return billing_limits
+            return False, None
 
+        # While the stored subscription is live, an event for another one is
+        # about the subscription a checkout replaced, and writing it back would
+        # point the workspace at it. Read from the locked row: a checkout holds
+        # this lock from cancelling the old subscription to storing the new one.
+        stored_subscription_id = billing_limits.get("stripe_subscription_id")
+        if (
+            stored_subscription_id
+            and stored_subscription_id != subscription.id
+            and billing_limits.get("subscription_status") in LIVE_SUBSCRIPTION_STATUSES
+        ):
+            logger.info("Ignoring an event for a subscription the workspace has replaced")
+            return False, None
+
+        if _is_older_than_applied(billing_limits, created):
+            logger.info("Ignoring a subscription event older than the last one applied")
+            return False, None
+
+        _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
+
+        previous_status = billing_limits.get("subscription_status")
         billing_limits["subscription_status"] = subscription.status
         billing_limits["stripe_subscription_id"] = subscription.id
         billing_limits["last_updated"] = timezone.now().isoformat()
         billing_limits["last_processed_webhook_id"] = webhook_id
+        _record_event_created(billing_limits, created, webhook_id)
+
+        # The invoice event that starts or ends a payment failure can arrive after
+        # this update and be ignored as older, so the grace period follows the
+        # status here too, as it does in the Stripe sync.
+        if subscription.status == "past_due" and not billing_limits.get("payment_failed_at"):
+            billing_limits["payment_failed_at"] = timezone.now().isoformat()
+        elif subscription.status in ("active", "trialing"):
+            billing_limits.pop("payment_failed_at", None)
 
         from .stripe_sync import get_period_end_from_subscription
 
@@ -583,21 +700,22 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
             # acknowledged with 200.
             raise BillingRetryableError(f"Trial-period processing failed: {e!s}") from e
 
-    return billing_limits
+    return True, previous_status
 
 
 def _send_subscription_notifications(team: Team, status: str, previous_status: Any) -> None:
-    """Send appropriate notifications based on subscription status *transitions*."""
+    """Send appropriate notifications based on subscription status *transitions*.
+
+    A move to active sends nothing: the payment behind it sends its own receipt
+    from ``handle_payment_succeeded``, and Stripe delivers the two events in
+    either order.
+    """
     if status == previous_status:
         return
 
     if status == "past_due":
         notify_billing_managers(team, email_notifications.notify_payment_past_due)
         logger.warning("Payment past due notification sent")
-
-    elif status == "active":
-        notify_billing_managers(team, email_notifications.notify_payment_succeeded)
-        logger.info("Payment restored notification sent")
 
     elif status == "canceled":
         notify_billing_managers(team, email_notifications.notify_subscription_cancelled)
@@ -617,58 +735,69 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
         event: Optional Stripe event object for idempotency checking
     """
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
-
-        billing_limits = team.billing_plan_limits or {}
+        team, _ = _resolve_team_from_subscription(subscription)
 
         webhook_id = generate_webhook_id(event, subscription, prefix="del")
-        last_processed_id = billing_limits.get("last_processed_webhook_id")
+        # Never ignored as older: Stripe does not revive a deleted subscription, so
+        # the deletion holds whatever newer event was applied first.
+        created = _event_created(event)
 
-        if last_processed_id == webhook_id:
-            logger.info("Webhook already processed for deleted subscription, skipping")
-            return
+        with transaction.atomic():
+            # Decided from the locked row. A checkout cancels the subscription it
+            # replaces while holding this lock, and Stripe can send this event before
+            # that checkout commits, so the row found above can predate the switch.
+            team = Team.objects.select_for_update().get(pk=team.pk)
+            billing_limits = team.billing_plan_limits or {}
 
-        _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
+            if billing_limits.get("stripe_subscription_id") != subscription.id:
+                logger.info("Ignoring the end of a subscription the workspace has replaced")
+                return
 
-        cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
-        scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
+            # A newer update replaces last_processed_webhook_id, so a deletion keeps its
+            # id under its own key as well, to catch a resend that arrives after it.
+            if billing_limits.get("last_deletion_webhook_id") == webhook_id or _was_applied(
+                billing_limits, webhook_id, created
+            ):
+                logger.info("Webhook already processed for deleted subscription, skipping")
+                return
 
-        if cancel_at_period_end and scheduled_downgrade_plan:
-            logger.info("Processing scheduled downgrade")
+            cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
+            scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
 
-            try:
-                target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
-            except BillingPlan.DoesNotExist:
-                logger.error("Target plan not found for scheduled downgrade")
-                with transaction.atomic():
-                    team = Team.objects.select_for_update().get(pk=team.pk)
+            if cancel_at_period_end and scheduled_downgrade_plan:
+                logger.info("Processing scheduled downgrade")
+
+                try:
+                    target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
+                except BillingPlan.DoesNotExist:
+                    logger.error("Target plan not found for scheduled downgrade")
                     billing_limits = (team.billing_plan_limits or {}).copy()
                     billing_limits["subscription_status"] = "canceled"
                     billing_limits["last_updated"] = timezone.now().isoformat()
                     billing_limits.pop("scheduled_downgrade_plan", None)
                     billing_limits["cancel_at_period_end"] = False
                     billing_limits["last_processed_webhook_id"] = webhook_id
+                    billing_limits["last_deletion_webhook_id"] = webhook_id
+                    _record_event_created(billing_limits, created, webhook_id)
                     team.billing_plan_limits = billing_limits
                     team.save()
-            else:
-                counts = get_team_asset_counts(str(team.id))
-                product_count = counts["products"]
-                component_count = counts["components"]
+                else:
+                    counts = get_team_asset_counts(str(team.id))
+                    product_count = counts["products"]
+                    component_count = counts["components"]
 
-                usage_exceeds_limits = False
-                exceeded_resources: list[str] = []
+                    usage_exceeds_limits = False
+                    exceeded_resources: list[str] = []
 
-                if target_plan.max_products is not None and product_count > target_plan.max_products:
-                    usage_exceeds_limits = True
-                    exceeded_resources.append(f"{product_count} products (limit: {target_plan.max_products})")
+                    if target_plan.max_products is not None and product_count > target_plan.max_products:
+                        usage_exceeds_limits = True
+                        exceeded_resources.append(f"{product_count} products (limit: {target_plan.max_products})")
 
-                if target_plan.max_components is not None and component_count > target_plan.max_components:
-                    usage_exceeds_limits = True
-                    exceeded_resources.append(f"{component_count} components (limit: {target_plan.max_components})")
+                    if target_plan.max_components is not None and component_count > target_plan.max_components:
+                        usage_exceeds_limits = True
+                        exceeded_resources.append(f"{component_count} components (limit: {target_plan.max_components})")
 
-                if usage_exceeds_limits:
-                    with transaction.atomic():
-                        team = Team.objects.select_for_update().get(pk=team.pk)
+                    if usage_exceeds_limits:
                         existing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
                         existing_limits.update(
                             {
@@ -677,8 +806,10 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                                 "payment_failed_at": timezone.now().isoformat(),
                                 "last_updated": timezone.now().isoformat(),
                                 "last_processed_webhook_id": webhook_id,
+                                "last_deletion_webhook_id": webhook_id,
                             }
                         )
+                        _record_event_created(existing_limits, created, webhook_id)
                         if "stripe_customer_id" not in existing_limits:
                             if hasattr(subscription, "customer"):
                                 existing_limits["stripe_customer_id"] = subscription.customer
@@ -689,10 +820,8 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                         team.billing_plan_limits = existing_limits
                         team.save()
 
-                    logger.warning(f"Downgrade blocked due to exceeded limits: {', '.join(exceeded_resources)}")
-                else:
-                    with transaction.atomic():
-                        team = Team.objects.select_for_update().get(pk=team.pk)
+                        logger.warning(f"Downgrade blocked due to exceeded limits: {', '.join(exceeded_resources)}")
+                    else:
                         existing_limits = (team.billing_plan_limits or {}).copy()
                         existing_limits.update(
                             {
@@ -702,8 +831,10 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                                 "cancel_at_period_end": False,
                                 "last_updated": timezone.now().isoformat(),
                                 "last_processed_webhook_id": webhook_id,
+                                "last_deletion_webhook_id": webhook_id,
                             }
                         )
+                        _record_event_created(existing_limits, created, webhook_id)
                         if "stripe_customer_id" not in existing_limits:
                             if hasattr(subscription, "customer"):
                                 existing_limits["stripe_customer_id"] = subscription.customer
@@ -714,19 +845,21 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                         team.billing_plan_limits = existing_limits
                         team.save()
 
-                    if target_plan.key == BillingPlan.KEY_COMMUNITY:
-                        handle_community_downgrade_visibility(team)
+                        if target_plan.key == BillingPlan.KEY_COMMUNITY:
+                            handle_community_downgrade_visibility(team)
 
-                    logger.info(f"Completed downgrade to {target_plan.key}")
-        else:
-            with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
+                        logger.info(f"Completed downgrade to {target_plan.key}")
+            else:
                 billing_limits = (team.billing_plan_limits or {}).copy()
                 billing_limits["subscription_status"] = "canceled"
                 billing_limits["last_updated"] = timezone.now().isoformat()
                 billing_limits["last_processed_webhook_id"] = webhook_id
+                billing_limits["last_deletion_webhook_id"] = webhook_id
+                _record_event_created(billing_limits, created, webhook_id)
                 team.billing_plan_limits = billing_limits
                 team.save()
+
+        _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
 
         _best_effort(
             "subscription ended notification",
@@ -759,6 +892,37 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
         _raise_classified_webhook_error(e)
 
 
+def _invoice_subscription_id(invoice: Any) -> str | None:
+    """The subscription an invoice bills, from either payload shape.
+
+    API version 2025-03-31 moved it from ``invoice.subscription`` to
+    ``invoice.parent.subscription_details.subscription``. Webhook payloads follow
+    the endpoint's version rather than the pinned one, so both shapes arrive.
+    """
+    details = getattr(getattr(invoice, "parent", None), "subscription_details", None)
+    subscription_id: str | None = getattr(invoice, "subscription", None) or getattr(details, "subscription", None)
+    return subscription_id
+
+
+def _team_for_paid_invoice(invoice: Any, subscription_id: str) -> Team:
+    """The workspace holding the subscription a paid invoice bills.
+
+    A checkout's first invoice (``billing_reason`` ``subscription_create``) can arrive
+    before ``checkout.session.completed`` has stored the new subscription. When the
+    customer still leads to a workspace, raise ``BillingEventTooEarlyError`` so Stripe
+    redelivers the invoice once the checkout has landed, instead of reporting the
+    workspace as gone.
+    """
+    try:
+        return Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
+    except Team.DoesNotExist:
+        if getattr(invoice, "billing_reason", None) != "subscription_create":
+            raise
+
+    team, _ = _resolve_team_from_subscription(SimpleNamespace(id=subscription_id, customer=invoice.customer))
+    raise BillingEventTooEarlyError(f"Workspace {team.key} has not stored the subscription for this invoice yet")
+
+
 @handle_stripe_errors
 def handle_payment_failed(invoice: Any, event: Any = None) -> None:
     """Handle payment failure events.
@@ -767,15 +931,16 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
         invoice: Stripe invoice object
         event: Optional Stripe event object for idempotency checking
     """
-    if not hasattr(invoice, "subscription") or not invoice.subscription:
+    subscription_id = _invoice_subscription_id(invoice)
+    if not subscription_id:
         logger.error("No subscription found in invoice")
         return
 
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=invoice.subscription)
+        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
         billing_limits = team.billing_plan_limits or {}
 
-        webhook_id = getattr(event, "id", None) if event else f"inv_fail_{invoice.id}_{invoice.created}"
+        webhook_id = getattr(event, "id", None) or f"inv_fail_{invoice.id}_{invoice.created}"
         last_processed_id = billing_limits.get("last_processed_webhook_id")
 
         if last_processed_id == webhook_id:
@@ -785,6 +950,16 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
+            created = _event_created(event)
+            if _was_applied(billing_limits, webhook_id, created):
+                logger.info("Payment failed webhook already processed (checked after lock)")
+                return
+            if billing_limits.get("subscription_status") == "canceled":
+                logger.info("Ignoring a payment failure for a canceled subscription")
+                return
+            if _is_older_than_applied(billing_limits, created):
+                logger.info("Ignoring a payment failure older than the last event applied")
+                return
             billing_limits["subscription_status"] = "past_due"
             billing_limits["last_updated"] = timezone.now().isoformat()
             # Keep the FIRST failure time so the grace period counts down. Stripe retries the
@@ -794,10 +969,11 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
             if not billing_limits.get("payment_failed_at"):
                 billing_limits["payment_failed_at"] = timezone.now().isoformat()
             billing_limits["last_processed_webhook_id"] = webhook_id
+            _record_event_created(billing_limits, created, webhook_id)
             team.billing_plan_limits = billing_limits
             team.save()
 
-        _best_effort("invoice cache invalidation", invalidate_subscription_cache, invoice.subscription, team.key)
+        _best_effort("invoice cache invalidation", invalidate_subscription_cache, subscription_id, team.key)
 
         _best_effort(
             "payment failed notification",
@@ -833,28 +1009,30 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         invoice: Stripe invoice object
         event: Optional Stripe event object for idempotency checking
     """
-    if not hasattr(invoice, "subscription") or not invoice.subscription:
+    subscription_id = _invoice_subscription_id(invoice)
+    if not subscription_id:
         logger.error("No subscription found in invoice")
         return
 
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=invoice.subscription)
+        team = _team_for_paid_invoice(invoice, subscription_id)
         billing_limits = team.billing_plan_limits or {}
 
-        webhook_id = getattr(event, "id", None) if event else f"inv_succ_{invoice.id}_{invoice.created}"
-        last_processed_id = billing_limits.get("last_processed_webhook_id")
+        webhook_id = getattr(event, "id", None) or f"inv_succ_{invoice.id}_{invoice.created}"
 
-        if last_processed_id == webhook_id:
+        if _payment_already_recorded(billing_limits, webhook_id):
             logger.info(f"Payment succeeded webhook already processed for invoice {invoice.id}, skipping")
             return
 
         next_billing_date = None
-        if invoice.subscription:
+        if subscription_id:
+            from .stripe_sync import current_period_end
+
             try:
-                subscription = stripe_client.get_subscription(invoice.subscription)
-                if hasattr(subscription, "current_period_end") and subscription.current_period_end:
+                subscription = stripe_client.get_subscription(subscription_id)
+                if period_end := current_period_end(subscription):
                     next_billing_date = datetime.datetime.fromtimestamp(
-                        subscription.current_period_end, tz=datetime.timezone.utc
+                        period_end, tz=datetime.timezone.utc
                     ).isoformat()
             except Exception as e:
                 logger.warning(f"Failed to fetch subscription for next billing date: {e}")
@@ -862,16 +1040,32 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
-            billing_limits["subscription_status"] = "active"
+            if _payment_already_recorded(billing_limits, webhook_id):
+                logger.info("Payment succeeded webhook already processed (checked after lock)")
+                return
+            created = _event_created(event)
+            # A payment that went through stays true however late its event arrives, so it
+            # is recorded, acknowledged and counted either way. Only an event no newer one
+            # has replaced moves the status, and never off canceled: Stripe does not revive
+            # a deleted subscription.
+            if billing_limits.get("subscription_status") == "canceled":
+                logger.info("Recording a payment for a canceled subscription, status unchanged")
+            elif _is_older_than_applied(billing_limits, created):
+                logger.info("Recording a payment older than the last event applied, status unchanged")
+            else:
+                billing_limits["subscription_status"] = "active"
+                # Payment recovered — clear the failure marker so the grace window resets for any
+                # future failure episode. The "keep first failure time" guard on the failed-payment
+                # webhook would otherwise reuse this stale timestamp and treat the next failure as
+                # already past grace.
+                billing_limits.pop("payment_failed_at", None)
+                _record_event_created(billing_limits, created, webhook_id)
             billing_limits["last_updated"] = timezone.now().isoformat()
-            # Payment recovered — clear the failure marker so the grace window resets for any
-            # future failure episode. The "keep first failure time" guard on the failed-payment
-            # webhook would otherwise reuse this stale timestamp and treat the next failure as
-            # already past grace.
-            billing_limits.pop("payment_failed_at", None)
             billing_limits["last_payment_amount"] = invoice.amount_paid / 100.0 if invoice.amount_paid else 0.0
             billing_limits["last_payment_currency"] = invoice.currency
-            billing_limits["last_processed_webhook_id"] = webhook_id
+            # Its own key, so recording a payment never displaces the id the other handlers
+            # use to catch a resend of the last event they applied.
+            billing_limits["last_payment_webhook_id"] = webhook_id
 
             if next_billing_date:
                 billing_limits["next_billing_date"] = next_billing_date
@@ -879,7 +1073,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
             team.billing_plan_limits = billing_limits
             team.save()
 
-        _best_effort("invoice cache invalidation", invalidate_subscription_cache, invoice.subscription, team.key)
+        _best_effort("invoice cache invalidation", invalidate_subscription_cache, subscription_id, team.key)
 
         _best_effort(
             "payment succeeded notification",
@@ -969,38 +1163,6 @@ def handle_checkout_completed(session: Any) -> None:
 
         subscription = stripe_client.get_subscription(session.subscription)
 
-        existing_subscription_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
-
-        if existing_subscription_id and existing_subscription_id != session.subscription:
-            logger.info("Cancelling old subscription to prevent double billing")
-            try:
-                stripe_client.cancel_subscription(existing_subscription_id)
-                logger.info("Successfully cancelled old subscription")
-            except StripeError as e:
-                # A failed cancel (often a transient Stripe outage) must NOT be
-                # acknowledged: returning 200 strands both subscriptions active
-                # (double billing) with no retry. Raise retryable so Stripe
-                # re-delivers; a persistent failure exhausts retries and alerts.
-                logger.critical(
-                    "CRITICAL: Failed to cancel old subscription: %s. "
-                    "Both subscriptions would be active — deferring via retry.",
-                    e,
-                )
-                raise BillingRetryableError(
-                    "Cannot complete checkout yet: failed to cancel existing subscription; "
-                    "retrying to avoid leaving both subscriptions active."
-                ) from e
-            except Exception as e:
-                logger.critical(
-                    "CRITICAL: Unexpected error cancelling old subscription: %s. "
-                    "Both subscriptions would be active — deferring via retry.",
-                    e,
-                )
-                raise BillingRetryableError(
-                    "Cannot complete checkout yet: unexpected error cancelling existing subscription; "
-                    "retrying to avoid leaving both subscriptions active."
-                ) from e
-
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
 
@@ -1010,6 +1172,39 @@ def handle_checkout_completed(session: Any) -> None:
             if (team.billing_plan_limits or {}).get("last_processed_checkout_session") == session.id:
                 logger.info("Checkout session %s already processed (checked after lock), skipping", session.id)
                 return
+
+            # Cancelled under the lock, as the checkout return does: Stripe reports the
+            # cancel at once, and that event must find the new subscription stored.
+            existing_subscription_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
+
+            if existing_subscription_id and existing_subscription_id != session.subscription:
+                logger.info("Cancelling old subscription to prevent double billing")
+                try:
+                    cancel_replaced_subscription(existing_subscription_id)
+                except StripeError as e:
+                    # A failed cancel (often a transient Stripe outage) must NOT be
+                    # acknowledged: returning 200 strands both subscriptions active
+                    # (double billing) with no retry. Raise retryable so Stripe
+                    # re-delivers; a persistent failure exhausts retries and alerts.
+                    logger.critical(
+                        "CRITICAL: Failed to cancel old subscription: %s. "
+                        "Both subscriptions would be active — deferring via retry.",
+                        e,
+                    )
+                    raise BillingRetryableError(
+                        "Cannot complete checkout yet: failed to cancel existing subscription; "
+                        "retrying to avoid leaving both subscriptions active."
+                    ) from e
+                except Exception as e:
+                    logger.critical(
+                        "CRITICAL: Unexpected error cancelling old subscription: %s. "
+                        "Both subscriptions would be active — deferring via retry.",
+                        e,
+                    )
+                    raise BillingRetryableError(
+                        "Cannot complete checkout yet: unexpected error cancelling existing subscription; "
+                        "retrying to avoid leaving both subscriptions active."
+                    ) from e
 
             team.billing_plan = plan.key
             team.has_selected_billing_plan = True
@@ -1025,10 +1220,10 @@ def handle_checkout_completed(session: Any) -> None:
                 "last_processed_checkout_session": session.id,
             }
 
-            if hasattr(subscription, "current_period_end") and subscription.current_period_end:
-                next_billing_date = datetime.datetime.fromtimestamp(
-                    subscription.current_period_end, tz=datetime.timezone.utc
-                ).isoformat()
+            from .stripe_sync import current_period_end
+
+            if period_end := current_period_end(subscription):
+                next_billing_date = datetime.datetime.fromtimestamp(period_end, tz=datetime.timezone.utc).isoformat()
                 billing_limits["next_billing_date"] = next_billing_date
 
             if subscription.status == "trialing":

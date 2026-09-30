@@ -1,3 +1,4 @@
+{% load humanize %}
 {% comment %}
 A proportional severity bar used by the shared exposure disclosure at both sizes. The accessible description includes the count independently
 of colour; unknown severities belong in the other band.
@@ -5,7 +6,7 @@ of colour; unknown severities belong in the other band.
 <c-vars counts compact />
 <span class="inline-flex items-center gap-3"
       role="img"
-      aria-label="{{ counts.total }} open occurrences: {{ counts.critical }} critical, {{ counts.high }} high, {{ counts.other }} other"
+      aria-label="{{ counts.total|intcomma }} open occurrences: {{ counts.critical|intcomma }} critical, {{ counts.high|intcomma }} high, {{ counts.other|intcomma }} other"
       {{ attrs }}>
     <span class="flex gap-0.5 {% if compact %}w-24 h-2{% else %}w-40 h-2.5{% endif %} max-w-full overflow-hidden rounded-full bg-surface-hover"
           aria-hidden="true">
@@ -22,5 +23,5 @@ of colour; unknown severities belong in the other band.
                   style="flex-grow: {{ counts.other }}"></span>
         {% endif %}
     </span>
-    <span class="text-sm font-semibold tabular-nums text-text">{{ counts.total }}</span>
+    <span class="text-sm font-semibold tabular-nums text-text">{{ counts.total|intcomma }}</span>
 </span>

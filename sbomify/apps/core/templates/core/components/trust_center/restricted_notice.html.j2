@@ -1,3 +1,4 @@
+{% load humanize %}
 {% comment %}
 "There is more here than you can see."
 
@@ -9,7 +10,7 @@ prompt from what the reader already is, rather than guessing.
 Expects `hidden_count`, `viewer_is_authenticated`, `viewer_has_gated_grant`.
 {% endcomment %}
 {% if hidden_count %}
-    <c-branded.notice title="{{ hidden_count }} advisor{{ hidden_count|pluralize:'y,ies' }} {{ hidden_count|pluralize:'is,are' }} restricted">
+    <c-branded.notice title="{{ hidden_count|intcomma }} advisor{{ hidden_count|pluralize:'y,ies' }} {{ hidden_count|pluralize:'is,are' }} restricted">
     {% if not viewer_is_authenticated %}
         These are shared with customers who have access to the affected products. Sign in to see the ones covered by your access.
     {% elif not viewer_has_gated_grant %}

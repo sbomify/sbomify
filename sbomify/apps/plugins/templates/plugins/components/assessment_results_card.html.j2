@@ -1,8 +1,14 @@
+{% load humanize %}
 {% load static plugins_extras %}
 <link rel="stylesheet"
       href="{% static 'css/components/assessment-results-card.css' %}">
-{# WebSocket listener for real-time assessment updates #}
-<c-layout.frame id="assessment-results" x-data @ws:message.window=" if ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ sbom_id }}') { location.reload(); } ">
+{% comment %}
+    The assessments card. It carries no refresh of its own: the artifact page
+    refreshes its whole content region, because the counts here have to agree
+    with the vulnerability summary above and the suppressed list beside them,
+    and refreshing one region is what leaves a page showing two numbers.
+{% endcomment %}
+<c-layout.frame id="assessment-results">
 <c-layout.section-header level="2" title="Assessments">
 <c-slot name="actions">
 {% with status=assessment_runs.status_summary %}
@@ -19,6 +25,12 @@
         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
         Processing
         </c-badges.secondary>
+    {% elif not status.total_assessments %}
+        {% if assessment_runs.unassessed_plugins %}
+            <c-badges.secondary class="gap-1">
+            <i class="fas fa-circle-minus" aria-hidden="true"></i>Not assessed
+            </c-badges.secondary>
+        {% endif %}
     {% elif status.skipped_count %}
         {# Every run skipped and none is pending, so "Pending" would never clear. #}
         <c-badges.secondary class="gap-1">
@@ -36,19 +48,19 @@
     {% if status.total_assessments > 0 %}
         <div class="flex flex-wrap gap-2">
             <c-chips.metric-chip>
-            <c-chips.metric.value>{{ status.total_assessments }}</c-chips.metric.value>
+            <c-chips.metric.value>{{ status.total_assessments|intcomma }}</c-chips.metric.value>
             <c-chips.metric.label>assessment{{ status.total_assessments|pluralize }}</c-chips.metric.label>
             </c-chips.metric-chip>
             <c-chips.metric-chip accent="success">
-            <c-chips.metric.value>{{ status.passing_count }}</c-chips.metric.value>
+            <c-chips.metric.value>{{ status.passing_count|intcomma }}</c-chips.metric.value>
             <c-chips.metric.label>Passed</c-chips.metric.label>
             </c-chips.metric-chip>
             <c-chips.metric-chip accent="warning">
-            <c-chips.metric.value>{{ status.failing_count }}</c-chips.metric.value>
-            <c-chips.metric.label>Issues</c-chips.metric.label>
+            <c-chips.metric.value>{{ status.failing_count|intcomma }}</c-chips.metric.value>
+            <c-chips.metric.label>Issue{{ status.failing_count|pluralize }}</c-chips.metric.label>
             </c-chips.metric-chip>
             <c-chips.metric-chip accent="info">
-            <c-chips.metric.value>{{ status.pending_count|add:status.in_progress_count }}</c-chips.metric.value>
+            <c-chips.metric.value>{{ status.pending_count|add:status.in_progress_count|intcomma }}</c-chips.metric.value>
             <c-chips.metric.label>Pending</c-chips.metric.label>
             </c-chips.metric-chip>
         </div>
@@ -68,12 +80,33 @@
         <div class="flex flex-col gap-3">
             {% for run in assessment_runs.latest_runs %}
                 {% include 'plugins/components/_assessment_run_item.html.j2' with run=run loop_index=forloop.counter %}
-            {% empty %}
-                <c-feedback.empty-state compact title="No assessments found" />
+            {% endfor %}
+            {% for plugin in assessment_runs.unassessed_plugins %}
+                {% include 'plugins/components/_unassessed_plugin_item.html.j2' %}
             {% endfor %}
         </div>
+    {% elif assessment_runs.unassessed_plugins %}
+        <div class="flex flex-col gap-3">
+            {% for plugin in assessment_runs.unassessed_plugins %}
+                {% include 'plugins/components/_unassessed_plugin_item.html.j2' %}
+            {% endfor %}
+        </div>
+    {% elif assessment_runs.plugins_enabled %}
+        <c-feedback.empty-state compact icon="fas fa-circle-minus" icon_variant="neutral" title="No assessments apply" message="None of this workspace's plugins check this type of artifact." />
+    {% elif assessment_runs.plan_excludes_plugins %}
+        <c-feedback.empty-state compact icon="fas fa-circle-minus" icon_variant="neutral" title="Not included in your plan" message="Your plan does not include the plugins this workspace has turned on.">
+        {% if can_manage_plugins %}
+            <c-buttons.secondary size="sm" href="{% url 'teams:switch_team' team_key %}?next={% url 'plugins:plugins_page' %}">Manage plugins</c-buttons.secondary>
+        {% endif %}
+        </c-feedback.empty-state>
     {% else %}
-        <c-feedback.empty-state compact icon="fas fa-hourglass-half" title="No assessments yet" message="Results will appear here when processing completes." />
+        {% comment %}Nothing is scheduled, so nothing is processing. Saying results are on their way here once kept a workspace waiting on a run that never existed.{% endcomment %}
+        <c-feedback.empty-state compact icon="fas fa-circle-minus" icon_variant="neutral" title="No assessments turned on" message="This workspace has no plugins turned on, so artifacts are not checked.">
+        {% if can_manage_plugins %}
+            {% comment %}The plugins page configures the session's workspace, so switch to the artifact's first.{% endcomment %}
+            <c-buttons.secondary size="sm" href="{% url 'teams:switch_team' team_key %}?next={% url 'plugins:plugins_page' %}">Turn on plugins</c-buttons.secondary>
+        {% endif %}
+        </c-feedback.empty-state>
     {% endif %}
 {% endwith %}
 </c-layout.frame>

@@ -1,3 +1,4 @@
+{% load humanize %}
 {% comment %}
 Shared server-side finding filters. The host owns the replacement region;
 prefix keeps each report's query parameters separate and id keeps controls unique.
@@ -32,7 +33,7 @@ page, and replacing an in-flight request prevents an older search winning a race
         {% endfor %}
         </c-forms.select>
         {% if panel.kev_total or panel.query.kev_only %}
-            <c-forms.checkbox id="{{ id }}-kev" name="{{ prefix }}kev" :checked="panel.query.kev_only">Known exploited ({{ panel.kev_total }})</c-forms.checkbox>
+            <c-forms.checkbox id="{{ id }}-kev" name="{{ prefix }}kev" :checked="panel.query.kev_only">Known exploited ({{ panel.kev_total|intcomma }})</c-forms.checkbox>
         {% endif %}
         {% if panel.suppressed_total or not panel.query.show_suppressed %}
             <c-forms.checkbox id="{{ id }}-suppressed" name="{{ prefix }}suppressed" :checked="panel.query.show_suppressed">Show suppressed</c-forms.checkbox>

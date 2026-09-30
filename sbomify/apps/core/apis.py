@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import tempfile
@@ -601,18 +602,15 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
             except BillingPlan.DoesNotExist:
                 log.warning("Target plan not found for scheduled downgrade, skipping check")
             else:
-                # Get current usage
                 if resource_type == "product":
-                    current_count = get_team_asset_count(team_id, "product")
                     max_allowed = target_plan.max_products
                 elif resource_type == "component":
-                    current_count = get_team_asset_count(team_id, "component")
                     max_allowed = target_plan.max_components
                 else:
                     max_allowed = None
 
                 # Check if creating this resource would exceed target plan limits
-                if max_allowed is not None and (current_count + 1) > max_allowed:
+                if max_allowed is not None and (get_team_asset_count(team_id, resource_type) + 1) > max_allowed:
                     error_message = (
                         f"You cannot create this {resource_type} because your scheduled downgrade to "
                         f"{target_plan.name} would exceed the plan limit of {max_allowed} {resource_type}s. "
@@ -1240,10 +1238,10 @@ def update_product_identifier(
             "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductIdentifier
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductIdentifier
 
+    try:
         identifier = ProductIdentifier.objects.get(pk=identifier_id, product=product)
     except ProductIdentifier.DoesNotExist:
         return 404, {"detail": "Product identifier not found"}
@@ -1306,10 +1304,10 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
             "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductIdentifier
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductIdentifier
 
+    try:
         identifier = ProductIdentifier.objects.get(pk=identifier_id, product=product)
     except ProductIdentifier.DoesNotExist:
         return 404, {"detail": "Product identifier not found"}
@@ -1529,10 +1527,10 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
             "error_code": ErrorCode.FORBIDDEN,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductLink
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductLink
 
+    try:
         link = ProductLink.objects.get(pk=link_id, product=product)
     except ProductLink.DoesNotExist:
         return 404, {"detail": "Product link not found"}
@@ -1586,10 +1584,10 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> 
             "error_code": ErrorCode.FORBIDDEN,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductLink
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductLink
 
+    try:
         link = ProductLink.objects.get(pk=link_id, product=product)
     except ProductLink.DoesNotExist:
         return 404, {"detail": "Product link not found"}
@@ -2839,7 +2837,10 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     release = Release.get_or_create_latest_release(product)
-    document = _release_cbom_document(release, version)
+    include_non_public = bool(
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, product)
+    )
+    document = _release_cbom_document(release, version, include_non_public=include_non_public)
     if document is None:
         return 404, {"detail": "No CBOM available for this product", "error_code": ErrorCode.NOT_FOUND}
 
@@ -3219,9 +3220,9 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
     # unset (full), so this is the only thing keeping it from creating releases on unrelated
     # products. Fail closed for OIDC requests (an orphan bot with no binding must be denied,
     # not treated as a no-op); a plain no-op only for non-OIDC (PAT/session) requests.
-    from sbomify.apps.oidc.permissions import bound_component_id_for_request, request_is_oidc_authed
+    from sbomify.apps.oidc.permissions import bound_component_id_for_request, is_authorised_for_product
 
-    if request_is_oidc_authed(request):
+    if not is_authorised_for_product(request, product):
         bound_component_id = bound_component_id_for_request(request)
         # Distinct wording per cause. These two share both a status and a call site with the
         # role denial above, so one shared message leaves a CI log no way to tell which check
@@ -3236,15 +3237,14 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 ),
                 "error_code": ErrorCode.FORBIDDEN,
             }
-        if not product.components.filter(id=bound_component_id).exists():
-            return 403, {
-                "detail": (
-                    f"Component {bound_component_id} is not part of product {product.id}, so this "
-                    "OIDC token cannot create releases for it. Add the component to the product, "
-                    "then retry."
-                ),
-                "error_code": ErrorCode.FORBIDDEN,
-            }
+        return 403, {
+            "detail": (
+                f"Component {bound_component_id} is not part of product {product.id}, so this "
+                "OIDC token cannot create releases for it. Add the component to the product, "
+                "then retry."
+            ),
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
@@ -3603,6 +3603,19 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
 # =============================================================================
 
 
+def _can_read_release(request: HttpRequest, product: Product) -> bool:
+    """``release:read`` on ``product``, with an OIDC bot confined to the products it publishes to.
+
+    The bot holds ``release:read`` across its workspace so the publish workflow can list releases
+    and see whether one exists. The endpoints that serve what a release contains ask this instead,
+    which also requires the product to hold the bot's bound component, the rule ``create_release``
+    applies to the bot's writes.
+    """
+    from sbomify.apps.oidc.permissions import is_authorised_for_product
+
+    return can(request, "release:read", product).allowed and is_authorised_for_product(request, product)
+
+
 def _download_filename(product_name: str, release_name: str, extension: str) -> str:
     """Build a safe download filename from user-controlled product/release names.
 
@@ -3652,7 +3665,7 @@ def download_release(
 
         # Non-public product: internal members only. Guests hold no read tier;
         # public products already returned above.
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all SBOM artifacts in the release
@@ -3675,9 +3688,7 @@ def download_release(
     # aggregate, gated and private members included; everyone else gets the
     # public view. The authorized build bypasses the public aggregate cache.
     include_non_public = bool(
-        getattr(request, "user", None)
-        and request.user.is_authenticated
-        and can(request, "release:read", release.product)
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
     )
 
     try:
@@ -3752,39 +3763,37 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     from django.core.cache import cache
-    from django.db.models import Count, Max
 
-    from sbomify.apps.sboms.models import SBOM
     from sbomify.apps.vulnerability_scanning import vex as vex_module
 
-    # The merge fans out one S3 fetch per pinned VEX and the endpoint is open for
-    # public products, so cache the built document. The key carries the slot state
-    # (count + newest artifact), invalidating naturally when the release changes.
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.VEX).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
-    )
     # A member reading a public product's release gets the whole VEX, gated and
     # private components included. Everyone else gets the public view, matching
     # what the aggregate SBOM download hands the same caller: a statement names
     # a package and a version, so publishing one for a withheld component would
     # disclose through the side door what the inventory refuses at the front.
     include_non_public = bool(
-        getattr(request, "user", None)
-        and request.user.is_authenticated
-        and can(request, "release:read", release.product)
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
     )
-    # The flag is part of the key. Sharing one entry between the two audiences
-    # would serve whichever build landed first to both, which is the disclosure
-    # this is closing rather than a caching detail.
+    # The merge fans out one S3 fetch per VEX it reads and the endpoint is open for
+    # public products, so cache the built document. The key fingerprints the rows
+    # this audience's build reads, and the build merges that same list, so any change
+    # to what it reads, a component's visibility included, builds a fresh document.
+    rows = vex_module.release_vex_rows(release, include_non_public=include_non_public)
+    fingerprint = hashlib.sha256(",".join(sorted(row.id for row in rows)).encode()).hexdigest()
+    # The flag stays in the key although the rows already differ wherever the two
+    # audiences' documents do: should the build ever read the audience beyond its
+    # rows, one shared entry would hand a member's document to the public.
     scope = "all" if include_non_public else "public"
-    cache_key = f"release-vex:{release.id}:{scope}:{slot_state['n']}:{slot_state['newest']}"
+    cache_key = f"release-vex:{release.id}:{scope}:{fingerprint}"
     document = cache.get(cache_key)
     if document is None:
-        document = vex_module.build_release_vex(release, include_non_public=include_non_public) or {"__absent__": True}
+        document = vex_module.build_release_vex(release, include_non_public=include_non_public, rows=rows) or {
+            "__absent__": True
+        }
         cache.set(cache_key, document, 900)
     if document.get("__absent__"):
         return 404, {"detail": "No VEX available for this release", "error_code": ErrorCode.NOT_FOUND}
@@ -3804,25 +3813,28 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     return response
 
 
-def _release_cbom_document(release: Release, version: str) -> dict[str, Any] | None:
-    """The merged CBOM for a release, cached by slot state, or None when it has no CBOM.
+def _release_cbom_document(release: Release, version: str, *, include_non_public: bool) -> dict[str, Any] | None:
+    """The merged CBOM for a release, cached on the CBOMs it merges, or None when it has no CBOM.
 
-    Same cache-by-slot-state approach as the VEX download: the merge fans out one
-    S3 fetch per pinned CBOM and the endpoints serving it are open for public products.
+    The merge fans out one S3 fetch per pinned CBOM and the endpoints serving it are
+    open for public products. The key fingerprints the CBOMs this audience's build
+    reads, so any change to that set, a component's visibility included, builds a
+    fresh document. The audience is part of the key, so a member's full document
+    never answers a caller who gets the public view.
     """
     from django.core.cache import cache
-    from django.db.models import Count, Max
 
-    from sbomify.apps.sboms.cbom import build_release_cbom
-    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.cbom import build_release_cbom, release_cbom_artifacts
 
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
-    )
-    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
+    cbom_ids = release_cbom_artifacts(release, include_non_public=include_non_public).values_list("sbom_id", flat=True)
+    fingerprint = hashlib.sha256(",".join(cbom_ids.order_by("sbom_id")).encode()).hexdigest()
+    scope = "all" if include_non_public else "public"
+    cache_key = f"release-cbom:{release.id}:{scope}:{version}:{fingerprint}"
     document = cache.get(cache_key)
     if document is None:
-        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
+        document = build_release_cbom(release, spec_version=version, include_non_public=include_non_public) or {
+            "__absent__": True
+        }
         cache.set(cache_key, document, 900)
     return None if document.get("__absent__") else document
 
@@ -3854,10 +3866,13 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    document = _release_cbom_document(release, version)
+    include_non_public = bool(
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
+    )
+    document = _release_cbom_document(release, version, include_non_public=include_non_public)
     if document is None:
         return 404, {"detail": "No CBOM available for this release", "error_code": ErrorCode.NOT_FOUND}
 
@@ -3908,17 +3923,29 @@ def list_release_artifacts(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    # The same rule as _build_release_response: to anyone who cannot manage the
+    # release, a private component's artifact is not listed.
+    can_manage = bool(
+        getattr(request, "user", None)
+        and request.user.is_authenticated
+        and can(request, "release:manage", release.product)
+    )
 
     if mode == "existing":
         # Return artifacts that are already in this release
+        existing_artifacts_queryset = ReleaseArtifact.objects.filter(release=release)
+        if not can_manage:
+            listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+            existing_artifacts_queryset = existing_artifacts_queryset.filter(
+                Q(sbom__component__visibility__in=listable) | Q(document__component__visibility__in=listable)
+            )
         existing_artifacts_queryset = (
             # component is read for every row below, so it belongs in the join:
             # page_size=-1 turns a missing one into a query per artifact.
-            ReleaseArtifact.objects.filter(release=release)
-            .select_related("sbom__component", "document__component")
-            .order_by("-created_at")
+            existing_artifacts_queryset.select_related("sbom__component", "document__component").order_by("-created_at")
         )
 
         # Extract pagination parameters properly
@@ -3970,8 +3997,12 @@ def list_release_artifacts(
         return {"items": artifacts, "pagination": pagination_meta}
 
     else:  # mode == "available" (default)
+        # The release editor's picker lists every artifact the product's
+        # components hold, so it answers only someone who can edit the release.
+        if not can_manage:
+            return 403, {"detail": "You don't have permission to edit this release", "error_code": ErrorCode.FORBIDDEN}
+
         # Return artifacts that can be added to this release (existing logic)
-        from sbomify.apps.core.models import Component
         from sbomify.apps.documents.models import Document
         from sbomify.apps.sboms.models import SBOM
 
@@ -4108,6 +4139,29 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
     if not can(request, "release:tag", release.product):
         return 403, {
             "detail": "You do not have permission to add artifacts to this release",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    # Confine an OIDC bot to releases of products that contain its bound component: the rule and
+    # the per-cause wording create_release uses. Fail closed for an orphan bot with no binding.
+    from sbomify.apps.oidc.permissions import bound_component_id_for_request, is_authorised_for_product
+
+    if not is_authorised_for_product(request, release.product):
+        bound_component_id = bound_component_id_for_request(request)
+        if bound_component_id is None:
+            return 403, {
+                "detail": (
+                    "This OIDC token has no component binding, so it cannot add artifacts to releases. "
+                    "Re-create the trusted-publishing binding for the component."
+                ),
+                "error_code": ErrorCode.FORBIDDEN,
+            }
+        return 403, {
+            "detail": (
+                f"Component {bound_component_id} is not part of product {release.product_id}, so this "
+                "OIDC token cannot add artifacts to its releases. Add the component to the product, "
+                "then retry."
+            ),
             "error_code": ErrorCode.FORBIDDEN,
         }
 
@@ -4274,9 +4328,9 @@ def list_document_releases(
     page_size: int = Query(15),  # type: ignore[type-arg]
 ) -> Any:
     """List all releases that contain this document."""
-    try:
-        from sbomify.apps.documents.models import Document
+    from sbomify.apps.documents.models import Document
 
+    try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4336,9 +4390,9 @@ def list_document_releases(
 )
 def add_document_to_releases(request: HttpRequest, document_id: str, payload: DocumentReleaseTaggingSchema) -> Any:
     """Add a document to multiple releases."""
-    try:
-        from sbomify.apps.documents.models import Document
+    from sbomify.apps.documents.models import Document
 
+    try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4422,9 +4476,9 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 )
 def remove_document_from_release(request: HttpRequest, document_id: str, release_id: str) -> Any:
     """Remove a document from a specific release."""
-    try:
-        from sbomify.apps.documents.models import Document
+    from sbomify.apps.documents.models import Document
 
+    try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4464,9 +4518,9 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
 @decorate_view(optional_token_auth)
 def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
     """List all releases that contain this SBOM."""
-    try:
-        from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM
 
+    try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4527,9 +4581,9 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
 )
 def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleaseTaggingSchema) -> Any:
     """Add an SBOM to multiple releases."""
-    try:
-        from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM
 
+    try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4611,9 +4665,9 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
 )
 def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str) -> Any:
     """Remove an SBOM from a specific release."""
-    try:
-        from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM
 
+    try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}

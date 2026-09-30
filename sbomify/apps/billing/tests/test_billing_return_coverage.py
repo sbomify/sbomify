@@ -102,6 +102,7 @@ class TestBillingReturnIdempotency:
         messages = list(get_messages(response.wsgi_request))
         assert any("already active" in str(m) for m in messages)
 
+    @patch("sbomify.apps.billing.views.stripe_client.cancel_subscription")
     @patch("sbomify.apps.billing.views.sync_subscription_from_stripe")
     @patch("sbomify.apps.billing.views.stripe_client.get_customer")
     @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
@@ -112,6 +113,7 @@ class TestBillingReturnIdempotency:
         mock_get_subscription,
         mock_get_customer,
         mock_sync,
+        mock_cancel_subscription,
         sample_user: AbstractBaseUser,  # noqa: F811
         team_with_business_plan: Team,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
@@ -171,6 +173,7 @@ class TestBillingReturnIdempotency:
             team_with_business_plan.billing_plan_limits["stripe_subscription_id"]
             == "sub_new"
         )
+        mock_cancel_subscription.assert_called_once_with("sub_old")
 
 
 class TestBillingReturnEdgeCases:
@@ -293,6 +296,7 @@ class TestBillingReturnEdgeCases:
         messages = list(get_messages(response.wsgi_request))
         assert any("configuration error" in str(m).lower() for m in messages)
 
+    @patch("sbomify.apps.billing.views.stripe_client.cancel_subscription")
     @patch("sbomify.apps.billing.views.sync_subscription_from_stripe")
     @patch("sbomify.apps.billing.views.stripe_client.get_customer")
     @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
@@ -303,6 +307,7 @@ class TestBillingReturnEdgeCases:
         mock_get_subscription,
         mock_get_customer,
         mock_sync,
+        mock_cancel_subscription,
         sample_user: AbstractBaseUser,  # noqa: F811
         team_with_business_plan: Team,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
