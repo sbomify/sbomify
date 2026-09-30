@@ -176,24 +176,35 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
         existing_user = sociallogin.user
         if existing_user.id is None and existing_user.email:
             # Block soft-deleted users from re-authenticating via SSO
-            if User.objects.filter(email=existing_user.email, deleted_at__isnull=False).exists():
+            if User.objects.filter(email__iexact=existing_user.email, deleted_at__isnull=False).exists():
                 from allauth.exceptions import ImmediateHttpResponse
                 from django.shortcuts import render
 
                 raise ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))
 
+            holders = User.objects.filter(email__iexact=existing_user.email, is_active=True, deleted_at__isnull=True)
             try:
-                existing_user = User.objects.get(
-                    email__iexact=sociallogin.user.email,
-                    is_active=True,
-                    deleted_at__isnull=True,
-                )
+                existing_user = holders.get()
                 # Only an address the provider confirmed may claim an existing account, and only an
                 # account that owns that address too.
                 if _provider_confirmed_email(sociallogin) and _account_owns_its_email(existing_user):
                     sociallogin.connect(request, existing_user)
-            except (User.DoesNotExist, User.MultipleObjectsReturned):
+            except User.DoesNotExist:
                 pass
+            except User.MultipleObjectsReturned:
+                ids = sorted(holders.values_list("id", flat=True))
+                logger.warning("Social sign-in refused: accounts %s share one email address", ids)
+                from allauth.core.exceptions import ImmediateHttpResponse
+                from django.shortcuts import render
+
+                raise ImmediateHttpResponse(
+                    render(
+                        request,
+                        "socialaccount/authentication_error.html.j2",
+                        {"error_message": "More than one account uses this email address. Contact support to sign in."},
+                        status=409,
+                    )
+                )
 
         # Sync email_verified status from social provider on every login
         extra_data = sociallogin.account.extra_data or {}
