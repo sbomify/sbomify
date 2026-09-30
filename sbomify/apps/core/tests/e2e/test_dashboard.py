@@ -104,7 +104,11 @@ def test_overview_priority_table_and_mobile_drawer(
     page.keyboard.press("Escape")
     expect(panel).to_be_hidden()
     expect(trigger).to_be_focused()
-    expect(priority.locator("th").filter(has_text="Patch SLA")).to_be_visible()
+    if width < 640:
+        # Stacked: the column survives as a labelled value in each row.
+        expect(priority.locator('td[data-label="Patch SLA"]').first).to_be_visible()
+    else:
+        expect(priority.locator("th").filter(has_text="Patch SLA")).to_be_visible()
     assert page.locator("html").evaluate("el => el.scrollWidth <= window.innerWidth")
     if width < 1024:
         expect(page.locator("#sidebar")).to_be_hidden()

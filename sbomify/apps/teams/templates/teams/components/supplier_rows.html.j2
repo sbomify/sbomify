@@ -18,8 +18,10 @@
             <c-tables.cell>
             {% if supplier.contact_email %}
                 {% if supplier.contact_name %}<span class="text-text block">{{ supplier.contact_name }}</span>{% endif %}
+                {# Addresses and URLs have nowhere to wrap, so they end in an ellipsis rather than break mid-word. #}
                 <a href="mailto:{{ supplier.contact_email }}"
-                   class="text-primary hover:underline text-sm">{{ supplier.contact_email }}</a>
+                   title="{{ supplier.contact_email }}"
+                   class="block truncate text-primary hover:underline text-sm">{{ supplier.contact_email }}</a>
             {% else %}
                 {% comment %}A vendor is often tracked before anyone has found a contact, so this is a normal state rather than an error.{% endcomment %}
                 <span class="text-text-muted text-sm">No contact yet</span>
@@ -30,7 +32,8 @@
                 <a href="{{ supplier.website }}"
                    target="_blank"
                    rel="noopener noreferrer"
-                   class="text-primary hover:underline text-sm">{{ supplier.website }}</a>
+                   title="{{ supplier.website }}"
+                   class="block truncate text-primary hover:underline text-sm">{{ supplier.website }}</a>
             {% else %}
                 <span class="text-text-muted">—</span>
             {% endif %}

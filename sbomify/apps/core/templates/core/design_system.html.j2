@@ -50,6 +50,7 @@
     <c-forms.input size="sm" id="ds-settings-target" type="number" :value="0" state="error" />
     </c-forms.field>
     <c-forms.field horizontal label="Theme"><c-chrome.theme-picker standalone /></c-forms.field>
+    <c-forms.field horizontal label="Email" hint="A value set elsewhere reads as text, not as a read-only input."><c-forms.static>member@example.com</c-forms.static></c-forms.field>
     <c-forms.field horizontal label="Member"><c-overview.record title="Example member" detail="member@example.com" /></c-forms.field>
     </c-cards.card>
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-5"
@@ -93,9 +94,7 @@
     <c-cards.header compact title="Exposure by product" hint="Example data" />
     <c-overview.table aria-label="Example product exposure">
     <c-tables.head>
-    <tr>
-        <c-tables.header-cell>Product</c-tables.header-cell><c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
-    </tr>
+    <c-tables.header-cell>Product</c-tables.header-cell><c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
     </c-tables.head>
     <tbody>
         <c-tables.row>
@@ -1620,15 +1619,15 @@ first-of-type rule that drops the leading hairline reads the section's position
     <h2 id="stepper" class="text-xl font-semibold text-text">Stepper</h2>
     <c-cards.card>
     <c-navigation.stepper>
-    <c-navigation.stepper-step state="completed" label="Scope" label_class="hidden sm:inline"><i class="fas fa-check" aria-hidden="true"></i></c-navigation.stepper-step>
+    <c-navigation.stepper-step state="completed" label="Scope" label_class="sr-only sm:not-sr-only"><i class="fas fa-check" aria-hidden="true"></i></c-navigation.stepper-step>
     <c-navigation.stepper-connector completed />
-    <c-navigation.stepper-step state="active" label="Assessment" label_class="hidden sm:inline">2</c-navigation.stepper-step>
+    <c-navigation.stepper-step state="active" label="Assessment" label_class="sr-only sm:not-sr-only">2</c-navigation.stepper-step>
     <c-navigation.stepper-connector />
-    <c-navigation.stepper-step label="Declaration" label_class="hidden sm:inline">3</c-navigation.stepper-step>
+    <c-navigation.stepper-step label="Declaration" label_class="sr-only sm:not-sr-only">3</c-navigation.stepper-step>
     <c-navigation.stepper-connector />
-    <c-navigation.stepper-step label="Review" label_class="hidden sm:inline">4</c-navigation.stepper-step>
+    <c-navigation.stepper-step label="Review" label_class="sr-only sm:not-sr-only">4</c-navigation.stepper-step>
     <c-navigation.stepper-connector />
-    <c-navigation.stepper-step label="Export" label_class="hidden sm:inline">5</c-navigation.stepper-step>
+    <c-navigation.stepper-step label="Export" label_class="sr-only sm:not-sr-only">5</c-navigation.stepper-step>
     </c-navigation.stepper>
     <c-navigation.stepper class="mt-6" role="list" aria-label="Compact setup progress">
     <c-navigation.stepper-step compact state="completed" label="Why" role="listitem" />
@@ -1646,7 +1645,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     </div>
     <p class="text-sm text-text-muted mt-4 mb-0">
         A long rail hides its captions on a narrow screen and keeps the circles:
-        <c-code-inline>label_class="hidden sm:inline"</c-code-inline> on each step, as the CRA wizard does.
+        <c-code-inline>label_class="sr-only sm:not-sr-only"</c-code-inline> on each step, as the CRA wizard does.
     </p>
     </c-cards.card>
     {# ── Misc ──────────────────────────────────────────────────────────────── #}

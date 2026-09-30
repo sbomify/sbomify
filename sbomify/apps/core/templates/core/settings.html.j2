@@ -55,8 +55,8 @@
             It names itself through the heading in its body, so aria-labelledby is
         written here rather than derived from a header band it does not have. {% endcomment %}
         <c-modal show="showDeleteModal" size="sm" role="alertdialog" aria-labelledby="deleteTokenModalLabel">
-        <div class="text-center">
-            <c-buttons.icon label="Close" class="absolute top-4 right-4" @click="showDeleteModal = false">
+        <div class="relative text-center">
+            <c-buttons.icon label="Close" class="absolute -top-2 -right-2" @click="showDeleteModal = false">
             <i class="fas fa-times" aria-hidden="true"></i>
             </c-buttons.icon>
             <c-chips.icon-chip size="xl" circle accent="danger" class="mx-auto mb-4">
