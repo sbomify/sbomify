@@ -82,23 +82,6 @@ class TestPluginMetadata:
         assert metadata.version == "1.0.0"
         assert metadata.category == AssessmentCategory.COMPLIANCE
 
-    def test_to_dict(self) -> None:
-        """Test converting PluginMetadata to dictionary."""
-        metadata = PluginMetadata(
-            name="test-plugin",
-            version="1.0.0",
-            category=AssessmentCategory.SECURITY,
-        )
-
-        result = metadata.to_dict()
-
-        assert result == {
-            "name": "test-plugin",
-            "version": "1.0.0",
-            "category": "security",
-            "scan_mode": "one_shot",
-        }
-
 
 class TestFinding:
     """Tests for Finding dataclass."""

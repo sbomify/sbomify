@@ -174,7 +174,6 @@ class AssessmentRunAdmin(_AssessmentRunAdminBase):
         "input_content_digest",
         "result",
         "result_schema_version",
-        "raw_output_key",
         "created_at",
         "duration_display",
     ]
@@ -215,7 +214,7 @@ class AssessmentRunAdmin(_AssessmentRunAdminBase):
         (
             "Results",
             {
-                "fields": ["result", "result_schema_version", "raw_output_key"],
+                "fields": ["result", "result_schema_version"],
                 "classes": ["collapse"],
             },
         ),

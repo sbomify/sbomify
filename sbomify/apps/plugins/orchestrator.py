@@ -7,6 +7,7 @@ executing plugins, and storing results.
 
 from __future__ import annotations
 
+import hashlib
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -22,7 +23,7 @@ from .models import AssessmentRun, RegisteredPlugin
 from .sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from .sdk.enums import AssessmentCategory, RunReason, RunStatus, ScanMode
 from .sdk.results import PluginMetadata
-from .utils import compute_config_hash, compute_content_digest
+from .utils import compute_config_hash
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import User
@@ -212,8 +213,7 @@ class PluginOrchestrator:
             sbom_instance, sbom_bytes = get_sbom_data_bytes(sbom_id)
 
             # Compute content digest for auditability
-            content_digest = compute_content_digest(sbom_bytes)
-            assessment_run.input_content_digest = content_digest
+            assessment_run.input_content_digest = hashlib.sha256(sbom_bytes).hexdigest()
             assessment_run.save(update_fields=["input_content_digest"])
 
             # Build SBOMContext with pre-computed metadata from database

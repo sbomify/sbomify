@@ -161,7 +161,7 @@ def _result_with_kev(
 
 def _run_to_schema(
     run: AssessmentRun,
-    display_names: dict[str, str] | None = None,
+    display_names: dict[str, str],
     kev_ids: frozenset[str] | None = None,
     euvd_ids: frozenset[str] | None = None,
     findings_limit: int | None = None,
@@ -170,22 +170,10 @@ def _run_to_schema(
 
     Args:
         run: The AssessmentRun to serialize.
-        display_names: Optional prefetched map of plugin_name → display_name.
-            Callers that serialize multiple runs should prefetch this once
+        display_names: Prefetched map of plugin_name → display_name, built once
             via ``_get_plugin_display_names_map`` to avoid N+1 queries.
-            When None, falls back to a per-call DB lookup for backward
-            compatibility with single-run callers.
     """
-    if display_names is not None:
-        display_name = display_names.get(run.plugin_name)
-    else:
-        # Fallback: legacy single-run callers
-        display_name = None
-        try:
-            plugin = RegisteredPlugin.objects.only("display_name").get(name=run.plugin_name)
-            display_name = plugin.display_name
-        except RegisteredPlugin.DoesNotExist:
-            pass
+    display_name = display_names.get(run.plugin_name)
 
     # Populate release_ids from the M2M. Callers that want to avoid an N+1
     # per-run lookup should prefetch ``releases`` on the queryset before

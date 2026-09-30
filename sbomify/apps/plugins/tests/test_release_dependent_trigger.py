@@ -19,27 +19,6 @@ from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason
 from sbomify.apps.plugins.sdk.results import PluginMetadata
 
 
-class TestPluginMetadataToDict:
-    def test_to_dict_omits_requires_release(self):
-        """Serialized metadata must not contain the removed requires_release key."""
-        meta = PluginMetadata(
-            name="example",
-            version="1.0.0",
-            category=AssessmentCategory.COMPLIANCE,
-        )
-        result = meta.to_dict()
-        assert "requires_release" not in result
-
-    def test_to_dict_includes_category(self):
-        meta = PluginMetadata(
-            name="example",
-            version="1.0.0",
-            category=AssessmentCategory.SECURITY,
-        )
-        result = meta.to_dict()
-        assert result["category"] == "security"
-
-
 class TestRunReasonEnum:
     def test_on_release_association_exists(self):
         assert RunReason.ON_RELEASE_ASSOCIATION.value == "on_release_association"

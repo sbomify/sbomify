@@ -41,22 +41,6 @@ class PluginMetadata:
     supported_bom_types: list[str] | None = None
     requires_crypto_assets: bool = False
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert metadata to dictionary for serialization.
-
-        Returns:
-            Dictionary representation with category as string value.
-        """
-        result: dict[str, Any] = {
-            "name": self.name,
-            "version": self.version,
-            "category": self.category.value,
-            "scan_mode": self.scan_mode.value,
-        }
-        if self.supported_bom_types is not None:
-            result["supported_bom_types"] = self.supported_bom_types
-        return result
-
 
 @dataclass
 class Finding:
@@ -86,7 +70,6 @@ class Finding:
         analysis_response: VEX response actions (e.g., ["update", "workaround_available"]).
         analysis_detail: Free-text explanation of the analysis.
         remediation: Suggested fix or recommendation.
-        evidence_key: S3 key for large evidence payloads.
         metadata: Plugin-specific additional data.
     """
 
@@ -131,7 +114,6 @@ class Finding:
 
     # Common optional fields
     remediation: str | None = None
-    evidence_key: str | None = None
     metadata: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
