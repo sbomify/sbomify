@@ -719,8 +719,6 @@ class TestSkippedPluginPendingCleanup:
             sbom_id=str(test_sbom.id),
             plugin_name="ntia-minimum-elements-2021",  # pins supported_bom_types=["sbom"]
             run_reason=RunReason.ON_UPLOAD,
-            triggered_by_user=None,
-            triggered_by_token=None,
         )
         assert run_id is not None
 
@@ -762,3 +760,22 @@ def test_a_reused_pending_row_records_the_version_that_ran(test_sbom, mock_sbom_
     assert run is not None
     run.refresh_from_db()
     assert run.plugin_version == "1.0.0"
+
+
+@pytest.mark.django_db
+def test_a_message_queued_before_the_trigger_kwargs_were_dropped_still_runs(test_sbom, registered_ntia_plugin) -> None:
+    """Messages already on the queue carry release_id and triggered_by_token_id; the task must accept them."""
+    from sbomify.apps.plugins.tasks import run_assessment_task
+
+    test_sbom.bom_type = "cbom"
+    test_sbom.save(update_fields=["bom_type"])
+
+    result = run_assessment_task(
+        sbom_id=str(test_sbom.id),
+        plugin_name="ntia-minimum-elements-2021",
+        run_reason=RunReason.ON_UPLOAD.value,
+        release_id="release-1",
+        triggered_by_token_id="token-1",
+    )
+
+    assert result["status"] == "skipped"

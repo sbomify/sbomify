@@ -1,6 +1,6 @@
 """Tests for the plugin trigger infrastructure (scan-once-per-SBOM model).
 
-Covers the ``only_categories`` filter on ``enqueue_assessments_for_sbom``, the
+Covers which plugins ``enqueue_assessments_for_sbom`` queues, the
 ``ReleaseArtifact`` post_save signal handler (attach task), cross-team guards,
 skipped-run semantics, and the assessment badge/API layer.
 
@@ -150,15 +150,15 @@ class TestDependencyTrackSkippedFinding:
 
 @pytest.mark.django_db
 class TestEnqueueAssessmentsForSbomFiltering:
-    """The only_categories parameter splits the plugin set by category."""
+    """Which enabled plugins enqueue_assessments_for_sbom queues."""
 
     def _enable_plugins(self, team, plugin_names):
         from sbomify.apps.plugins.models import TeamPluginSettings
 
         TeamPluginSettings.objects.create(team=team, enabled_plugins=list(plugin_names))
 
-    def test_only_categories_compliance_excludes_security(self, sample_team_with_owner_member, monkeypatch):
-        """Passing only_categories={'compliance','attestation','license'} (upload path) excludes security plugins."""
+    def test_enqueues_every_enabled_plugin(self, sample_team_with_owner_member, monkeypatch):
+        """All enabled plugins are enqueued regardless of category."""
         from sbomify.apps.core.models import Component
         from sbomify.apps.plugins.apps import PluginsConfig
         from sbomify.apps.plugins.sdk.enums import RunReason
@@ -184,74 +184,6 @@ class TestEnqueueAssessmentsForSbomFiltering:
             sbom_id=sbom.id,
             team_id=str(team.id),
             run_reason=RunReason.ON_UPLOAD,
-            only_categories={"compliance", "attestation", "license"},
-        )
-
-        assert "dependency-track" not in enqueued
-        assert "ntia-minimum-elements-2021" in enqueued
-        assert "dependency-track" not in captured
-
-    def test_only_categories_security_includes_only_security(self, sample_team_with_owner_member, monkeypatch):
-        """Passing only_categories={'security'} (release-association path) includes only security plugins."""
-        from sbomify.apps.core.models import Component
-        from sbomify.apps.plugins.apps import PluginsConfig
-        from sbomify.apps.plugins.sdk.enums import RunReason
-        from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
-        from sbomify.apps.sboms.models import SBOM
-
-        team = sample_team_with_owner_member.team
-        component = Component.objects.create(name="c", team=team)
-        sbom = SBOM.objects.create(name="s", component=component)
-
-        config = PluginsConfig.create("sbomify.apps.plugins")
-        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
-
-        self._enable_plugins(team, ["ntia-minimum-elements-2021", "dependency-track"])
-
-        captured = []
-        monkeypatch.setattr(
-            "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
-        )
-
-        enqueued = enqueue_assessments_for_sbom(
-            sbom_id=sbom.id,
-            team_id=str(team.id),
-            run_reason=RunReason.ON_RELEASE_ASSOCIATION,
-            only_categories={"security"},
-        )
-
-        assert enqueued == ["dependency-track"]
-        assert captured == ["dependency-track"]
-
-    def test_only_categories_none_runs_everything(self, sample_team_with_owner_member, monkeypatch):
-        """Passing only_categories=None (or omitting it) enqueues all enabled plugins regardless of category."""
-        from sbomify.apps.core.models import Component
-        from sbomify.apps.plugins.apps import PluginsConfig
-        from sbomify.apps.plugins.sdk.enums import RunReason
-        from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
-        from sbomify.apps.sboms.models import SBOM
-
-        team = sample_team_with_owner_member.team
-        component = Component.objects.create(name="c", team=team)
-        sbom = SBOM.objects.create(name="s", component=component)
-
-        config = PluginsConfig.create("sbomify.apps.plugins")
-        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
-
-        self._enable_plugins(team, ["ntia-minimum-elements-2021", "dependency-track"])
-
-        captured = []
-        monkeypatch.setattr(
-            "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
-        )
-
-        enqueued = enqueue_assessments_for_sbom(
-            sbom_id=sbom.id,
-            team_id=str(team.id),
-            run_reason=RunReason.ON_UPLOAD,
-            # only_categories defaults to None — runs everything
         )
 
         assert "ntia-minimum-elements-2021" in enqueued
@@ -309,7 +241,6 @@ class TestEnqueueAssessmentsForSbomFiltering:
             sbom_id=sbom.id,
             team_id=str(team.id),
             run_reason=RunReason.ON_UPLOAD,
-            only_categories={"compliance", "attestation", "license"},
         )
 
         # NTIA should be enqueued; the missing plugin should be silently skipped

@@ -25,7 +25,6 @@ from .sdk.results import PluginMetadata
 from .utils import compute_config_hash, compute_content_digest
 
 if TYPE_CHECKING:
-    from sbomify.apps.access_tokens.models import AccessToken
     from sbomify.apps.core.models import User
 
 logger = getLogger(__name__)
@@ -110,9 +109,7 @@ class PluginOrchestrator:
         plugin: AssessmentPlugin,
         run_reason: RunReason,
         triggered_by_user: User | None = None,
-        triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
-        release_id: str | None = None,
     ) -> AssessmentRun | None:
         """Execute a plugin assessment with full lifecycle management.
 
@@ -129,13 +126,8 @@ class PluginOrchestrator:
             plugin: An initialized AssessmentPlugin instance.
             run_reason: Why this assessment is being triggered.
             triggered_by_user: Optional user who triggered a manual run.
-            triggered_by_token: Optional API token used to trigger the run.
             existing_run_id: Optional ID of an existing AssessmentRun to reuse
                 (for retries after RetryLaterError).
-            release_id: Optional ID of the triggering Release. Passed to
-                plugins as an informational hint via ``SBOMContext.release_id``
-                (not persisted on AssessmentRun — releases are tracked via
-                the ``releases`` M2M populated at run completion).
 
         Returns:
             The AssessmentRun record with results, or None if the SBOM's
@@ -203,9 +195,7 @@ class PluginOrchestrator:
             # Create the AssessmentRun record in PENDING state. Under the
             # scan-once-per-SBOM model, releases are attached via the M2M
             # at run completion (see _sync_run_releases), not at creation
-            # time. The ``release_id`` argument threaded through callers
-            # is kept only as an informational hint for plugins via
-            # ``SBOMContext.release_id`` and is not written to a FK here.
+            # time.
             assessment_run = AssessmentRun.objects.create(
                 sbom_id=sbom_id,
                 plugin_name=metadata.name,
@@ -215,7 +205,6 @@ class PluginOrchestrator:
                 run_reason=run_reason.value,
                 status=RunStatus.PENDING.value,
                 triggered_by_user=triggered_by_user,
-                triggered_by_token=triggered_by_token,
             )
             logger.info(
                 f"[PLUGIN] Created run {assessment_run.id} for SBOM {sbom_id} "
@@ -244,14 +233,7 @@ class PluginOrchestrator:
             # This allows plugins to skip redundant computations (e.g., sha256_hash)
             sbom_context = SBOMContext(
                 sha256_hash=sbom_instance.sha256_hash,
-                sbom_format=sbom_instance.format,
-                format_version=sbom_instance.format_version,
-                sbom_name=sbom_instance.name,
-                sbom_version=sbom_instance.version,
-                component_id=sbom_instance.component_id,
-                team_id=sbom_instance.component.team_id if sbom_instance.component else None,
                 bom_type=sbom_instance.bom_type,
-                release_id=release_id,
                 signature_blob_key=sbom_instance.signature_blob_key,
                 signature_type=sbom_instance.signature_type,
                 provenance_blob_key=sbom_instance.provenance_blob_key,
@@ -812,9 +794,7 @@ class PluginOrchestrator:
         run_reason: RunReason,
         config: dict[str, Any] | None = None,
         triggered_by_user: User | None = None,
-        triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
-        release_id: str | None = None,
     ) -> AssessmentRun | None:
         """Run an assessment by plugin name.
 
@@ -826,11 +806,8 @@ class PluginOrchestrator:
             run_reason: Why this assessment is being triggered.
             config: Optional configuration overrides for the plugin.
             triggered_by_user: Optional user who triggered a manual run.
-            triggered_by_token: Optional API token used to trigger the run.
             existing_run_id: Optional ID of an existing AssessmentRun to reuse
                 (for retries after RetryLaterError).
-            release_id: Optional ID of the Release this assessment targets.
-                See :py:meth:`run_assessment` for details.
 
         Returns:
             The AssessmentRun record with results, or None if skipped
@@ -842,7 +819,5 @@ class PluginOrchestrator:
             plugin=plugin,
             run_reason=run_reason,
             triggered_by_user=triggered_by_user,
-            triggered_by_token=triggered_by_token,
             existing_run_id=existing_run_id,
-            release_id=release_id,
         )

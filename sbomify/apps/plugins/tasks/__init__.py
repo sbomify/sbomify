@@ -24,7 +24,6 @@ from tenacity import (
     wait_exponential,
 )
 
-from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
 from sbomify.task_utils import format_task_error
@@ -140,10 +139,9 @@ def run_assessment_task(
     run_reason: str,
     config: dict[str, Any] | None = None,
     triggered_by_user_id: int | None = None,
-    triggered_by_token_id: str | None = None,
-    release_id: str | None = None,
     _retry_later_count: int = 0,
     _existing_run_id: str | None = None,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     """Run an assessment asynchronously.
 
@@ -160,12 +158,10 @@ def run_assessment_task(
         run_reason: Why this assessment is being triggered (RunReason value).
         config: Optional configuration overrides for the plugin.
         triggered_by_user_id: Optional ID of user who triggered a manual run.
-        triggered_by_token_id: Optional ID of API token used to trigger the run.
-        release_id: Optional ID of the triggering Release. Passed as an
-            informational hint via SBOMContext.release_id (not persisted on
-            AssessmentRun — releases use the M2M populated at completion).
         _retry_later_count: Internal counter for RetryLaterError retries.
         _existing_run_id: Internal ID of existing AssessmentRun to reuse (for retries).
+        **kwargs: Ignored. Messages queued by the previous release still carry
+            ``release_id`` and ``triggered_by_token_id``.
 
     Returns:
         Dictionary with assessment run details:
@@ -192,21 +188,14 @@ def run_assessment_task(
         # Convert string run_reason back to enum
         reason = RunReason(run_reason)
 
-        # Look up user and token if provided
+        # Look up user if provided
         triggered_by_user = None
-        triggered_by_token = None
 
         if triggered_by_user_id:
             try:
                 triggered_by_user = User.objects.get(id=triggered_by_user_id)
             except User.DoesNotExist:
                 logger.warning(f"[TASK_run_assessment] User {triggered_by_user_id} not found")
-
-        if triggered_by_token_id:
-            try:
-                triggered_by_token = AccessToken.objects.get(id=triggered_by_token_id)
-            except AccessToken.DoesNotExist:
-                logger.warning(f"[TASK_run_assessment] Token {triggered_by_token_id} not found")
 
         # Run the assessment within a transaction for atomicity
         with transaction.atomic():
@@ -218,9 +207,7 @@ def run_assessment_task(
                     run_reason=reason,
                     config=config,
                     triggered_by_user=triggered_by_user,
-                    triggered_by_token=triggered_by_token,
                     existing_run_id=_existing_run_id,
-                    release_id=release_id,
                 )
             except RetryLaterError as e:
                 # Capture retry info inside atomic block so transaction commits
@@ -252,8 +239,6 @@ def run_assessment_task(
                     "run_reason": run_reason,
                     "config": config,
                     "triggered_by_user_id": triggered_by_user_id,
-                    "triggered_by_token_id": triggered_by_token_id,
-                    "release_id": release_id,
                     "_retry_later_count": _retry_later_count + 1,
                 }
                 if run_id is not None:
@@ -413,8 +398,6 @@ def _create_pending_assessment_run(
     sbom_id: str,
     plugin_name: str,
     run_reason: RunReason,
-    triggered_by_user: User | None,
-    triggered_by_token: AccessToken | None,
 ) -> str | None:
     """Eagerly create an ``AssessmentRun`` in PENDING state.
 
@@ -451,8 +434,6 @@ def _create_pending_assessment_run(
             category=registered.category,
             run_reason=run_reason.value,
             status=RunStatus.PENDING.value,
-            triggered_by_user=triggered_by_user,
-            triggered_by_token=triggered_by_token,
         )
     except Exception as exc:
         logger.warning(f"[PLUGIN] Failed to eagerly create pending run for {plugin_name} on SBOM {sbom_id}: {exc}")
@@ -466,10 +447,7 @@ def enqueue_assessment(
     plugin_name: str,
     run_reason: RunReason,
     config: dict[str, Any] | None = None,
-    triggered_by_user: User | None = None,
-    triggered_by_token: AccessToken | None = None,
     delay_ms: int | None = None,
-    release_id: str | None = None,
 ) -> None:
     """Enqueue an assessment to be run asynchronously.
 
@@ -492,14 +470,9 @@ def enqueue_assessment(
         plugin_name: The plugin identifier to run.
         run_reason: Why this assessment is being triggered.
         config: Optional configuration overrides for the plugin.
-        triggered_by_user: Optional user who triggered a manual run.
-        triggered_by_token: Optional API token used to trigger the run.
         delay_ms: Optional delay in milliseconds before the task runs.
             Useful for plugins that depend on external systems (e.g., attestation
             plugins that need to wait for GitHub to process attestations).
-        release_id: Optional ID of the triggering Release. Passed as an
-            informational hint via SBOMContext.release_id (not persisted on
-            AssessmentRun — releases use the M2M populated at completion).
 
     Example:
         >>> from sbomify.apps.plugins.tasks import enqueue_assessment
@@ -515,10 +488,7 @@ def enqueue_assessment(
     task_plugin_name = plugin_name
     task_run_reason = run_reason.value
     task_config = config
-    task_user_id = triggered_by_user.id if triggered_by_user else None
-    task_token_id = str(triggered_by_token.id) if triggered_by_token else None
     task_delay_ms = delay_ms
-    task_release_id = release_id
 
     # Materialise the pending row eagerly when the task is delayed so the
     # UI reflects the plugin as queued during the delay window.
@@ -528,8 +498,6 @@ def enqueue_assessment(
             sbom_id=sbom_id,
             plugin_name=plugin_name,
             run_reason=run_reason,
-            triggered_by_user=triggered_by_user,
-            triggered_by_token=triggered_by_token,
         )
 
     def _send_task() -> None:
@@ -541,9 +509,6 @@ def enqueue_assessment(
                 "plugin_name": task_plugin_name,
                 "run_reason": task_run_reason,
                 "config": task_config,
-                "triggered_by_user_id": task_user_id,
-                "triggered_by_token_id": task_token_id,
-                "release_id": task_release_id,
                 "_retry_later_count": 0,
                 "_existing_run_id": task_existing_run_id,
             },
@@ -873,31 +838,18 @@ def enqueue_assessments_for_sbom(
     sbom_id: str,
     team_id: str,
     run_reason: RunReason,
-    *,
-    release_id: str | None = None,
-    only_categories: set[str] | None = None,
-    triggered_by_user: User | None = None,
-    triggered_by_token: AccessToken | None = None,
 ) -> list[str]:
     """Enqueue all enabled assessments for an SBOM.
 
-    Looks up the team's plugin settings and enqueues tasks for each enabled plugin,
-    optionally filtered by category. Tasks are deferred via on_commit so the SBOM
-    is visible to workers. Attestation plugins are delayed by ATTESTATION_DELAY_MS
-    to give external systems (e.g., GitHub) time to process them.
+    Looks up the team's plugin settings and enqueues tasks for each enabled plugin.
+    Tasks are deferred via on_commit so the SBOM is visible to workers. Attestation
+    plugins are delayed by ATTESTATION_DELAY_MS to give external systems
+    (e.g., GitHub) time to process them.
 
     Args:
         sbom_id: The SBOM's primary key.
         team_id: The team's primary key.
         run_reason: Why assessments are being triggered.
-        release_id: Optional ID of the triggering Release. Passed as an
-            informational hint via SBOMContext.release_id. None means "not
-            release-scoped" (upload, cron, manual).
-        only_categories: Optional set of AssessmentCategory values (as strings)
-            to restrict enqueueing. None means run all enabled plugins.
-            See sbomify/sbomify#873 and #881.
-        triggered_by_user: Optional user who triggered the assessments.
-        triggered_by_token: Optional API token used to trigger the assessments.
 
     Returns:
         List of plugin names that were enqueued.
@@ -932,10 +884,6 @@ def enqueue_assessments_for_sbom(
         plugin_info = available_plugins[plugin_name]
         plugin_category = plugin_info["category"]
 
-        # Filter by category when only_categories is specified
-        if only_categories is not None and plugin_category not in only_categories:
-            continue
-
         # Get plugin-specific config if any
         plugin_config = settings.get_plugin_config(plugin_name)
 
@@ -947,10 +895,7 @@ def enqueue_assessments_for_sbom(
             plugin_name=plugin_name,
             run_reason=run_reason,
             config=plugin_config or None,
-            triggered_by_user=triggered_by_user,
-            triggered_by_token=triggered_by_token,
             delay_ms=delay_ms,
-            release_id=release_id,
         )
         enqueued.append(plugin_name)
 

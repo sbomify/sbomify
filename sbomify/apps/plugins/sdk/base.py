@@ -5,7 +5,7 @@ Plugins are responsible for analyzing SBOMs and returning normalized results.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -59,40 +59,17 @@ class SBOMContext:
     Attributes:
         sha256_hash: Pre-computed SHA256 hash of the SBOM content (from database).
             Plugins can use this instead of recalculating from the file.
-        sbom_format: The SBOM format (e.g., 'cyclonedx', 'spdx').
-        format_version: The format version (e.g., '1.6', 'SPDX-2.3').
-        sbom_name: The name of the SBOM as stored in the database.
-        sbom_version: The version of the SBOM as stored in the database.
-        component_id: The ID of the component this SBOM belongs to.
-        team_id: The ID of the team that owns the component.
         bom_type: The BOM type discriminator (e.g., 'sbom', 'vex', 'cbom'). See ADR-006.
-        release_id: The primary key of the Release whose association triggered
-            this assessment (from the ReleaseArtifact post_save signal).
-            Under the scan-once-per-SBOM model, a single scan covers ALL
-            releases linked to the SBOM — this field is an informational
-            hint only, NOT a scoping key. Continuous plugins (scan_mode=
-            CONTINUOUS) should use ``sync_release_tags()`` to reconcile
-            release state after completion rather than acting on this field.
-            None means the trigger was not release-scoped (upload, cron,
-            manual).
         signature_blob_key: S3 key for the stored cryptographic signature (if attached).
         signature_type: Signature format (e.g., 'cosign-bundle', 'pgp-detached').
         provenance_blob_key: S3 key for the stored in-toto DSSE provenance envelope (if attached).
     """
 
     sha256_hash: str | None = None
-    sbom_format: str | None = None
-    format_version: str | None = None
-    sbom_name: str | None = None
-    sbom_version: str | None = None
-    component_id: str | None = None
-    team_id: int | None = None
     bom_type: str | None = None
-    release_id: str | None = None
     signature_blob_key: str | None = None
     signature_type: str | None = None
     provenance_blob_key: str | None = None
-    extra: dict[str, Any] = field(default_factory=dict)
 
 
 class AssessmentPlugin(ABC):

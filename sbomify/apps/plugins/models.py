@@ -222,7 +222,6 @@ class AssessmentRun(models.Model):
         completed_at: When the assessment completed.
         error_message: Error details if the assessment failed.
         triggered_by_user: User who triggered a manual run.
-        triggered_by_token: API token used to trigger the run.
         input_content_digest: SHA256 of SBOM content for auditability.
         result: JSON containing the AssessmentResult.
         result_schema_version: Version of the result schema.
@@ -316,14 +315,6 @@ class AssessmentRun(models.Model):
         blank=True,
         related_name="triggered_assessment_runs",
         help_text="User who triggered a manual run (null for automated runs)",
-    )
-    triggered_by_token = models.ForeignKey(
-        "access_tokens.AccessToken",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="triggered_assessment_runs",
-        help_text="API token used to trigger the run (null for UI or automated runs)",
     )
 
     # Input reference

@@ -171,7 +171,6 @@ class AssessmentRunAdmin(_AssessmentRunAdminBase):
         "completed_at",
         "error_message",
         "triggered_by_user",
-        "triggered_by_token",
         "input_content_digest",
         "result",
         "result_schema_version",
@@ -179,7 +178,7 @@ class AssessmentRunAdmin(_AssessmentRunAdminBase):
         "created_at",
         "duration_display",
     ]
-    raw_id_fields = ["sbom", "triggered_by_user", "triggered_by_token"]
+    raw_id_fields = ["sbom", "triggered_by_user"]
     ordering = ["-created_at"]
     date_hierarchy = "created_at"
 
@@ -208,7 +207,6 @@ class AssessmentRunAdmin(_AssessmentRunAdminBase):
             {
                 "fields": [
                     "triggered_by_user",
-                    "triggered_by_token",
                     "input_content_digest",
                     "plugin_config_hash",
                 ],
