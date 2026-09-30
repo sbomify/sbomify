@@ -79,3 +79,21 @@ class TestSyncPlanPrices:
         assert fresh_plan.stripe_price_annual_id == "price_ent_yr"
         assert fresh_plan.monthly_price == Decimal("50.00")
         assert fresh_plan.annual_price == Decimal("500.00")
+
+
+@patch("sbomify.apps.billing.admin.sync_plan_prices_from_stripe")
+def test_admin_action_runs_the_price_sync_for_each_selected_plan_except_community(mock_sync):
+    from sbomify.apps.billing.admin import sync_prices_from_stripe
+
+    mock_sync.return_value = {"synced": 1, "failed": 0, "skipped": 0, "errors": ["Failed to fetch annual price"]}
+    BillingPlan.objects.create(key="community", name="Community")
+    BillingPlan.objects.create(key="business", name="Business")
+    modeladmin = MagicMock()
+
+    sync_prices_from_stripe(modeladmin, MagicMock(), BillingPlan.objects.all())
+
+    mock_sync.assert_called_once_with("business")
+    assert [c.args[1] for c in modeladmin.message_user.call_args_list] == [
+        "Failed to fetch annual price",
+        "Successfully synced prices for 1 plan(s).",
+    ]
