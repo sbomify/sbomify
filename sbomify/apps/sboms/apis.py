@@ -481,6 +481,221 @@ def _extract_spdx3_primary_package(
 # Removed duplicate public_status endpoints - use core API PATCH endpoints with is_public field instead
 
 
+def _save_sbom(sbom_dict: dict[str, Any], content: bytes) -> tuple[int, dict[str, Any]]:
+    """Store a validated JSON BOM: duplicate check, S3 upload, atomic save, broadcast.
+
+    Shared by the API and file uploads of both formats. ``sbom_dict`` holds
+    the SBOM row's fields apart from ``sbom_filename``.
+    """
+    component = sbom_dict["component"]
+    bom_type = sbom_dict["bom_type"]
+    sbom_version = sbom_dict.get("version", "")
+    sbom_format = sbom_dict["format"]
+    duplicate = (
+        409,
+        {
+            "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
+            "already exists for this component",
+            "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+        },
+    )
+
+    # VEX is re-issued continuously against the same release with no meaningful version, so it is
+    # exempt from the duplicate guard (multiple rows coexist, the latest is by created_at). SBOM
+    # and CBOM keep the guard so a re-uploaded static artifact stays a 409.
+    if (
+        bom_type != SBOM.BomType.VEX
+        and SBOM.objects.filter(
+            component=component,
+            version=sbom_version,
+            format=sbom_format,
+            qualifiers=sbom_dict["qualifiers"],
+            bom_type=bom_type,
+        ).exists()
+    ):
+        return duplicate
+
+    s3 = StorageClient("SBOMS")
+    filename = s3.upload_sbom(content)
+
+    try:
+        with transaction.atomic():
+            sbom = SBOM(sbom_filename=filename, **sbom_dict)
+            sbom.save()
+    except IntegrityError as e:
+        log_orphaned_object(filename)
+        if _is_duplicate_integrity_error(e):
+            return duplicate
+        raise
+
+    # The row is committed; a broadcast hiccup must not fail the upload.
+    try:
+        _broadcast_sbom_uploaded(component, sbom)
+    except Exception:
+        log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
+
+    # A new VEX changes which findings are suppressed; re-apply it to the component's existing
+    # security scans so the dashboard reflects it without a re-scan. Run it in the background,
+    # after this upload commits, so the request stays fast (the app serves on ASGI/uvicorn,
+    # where a synchronous re-apply would block a worker) and the task can see the new VEX row.
+    if bom_type == SBOM.BomType.VEX.value:
+        schedule_vex_reapply(component.id)
+
+    return 201, {"id": sbom.id}
+
+
+def _store_spdx(
+    component: Component, sbom_data: dict[str, Any], content: bytes, sha256_hash: str, source: str
+) -> tuple[int, dict[str, Any]]:
+    """Validate an SPDX JSON document and store it as an SBOM; shared by the API and file uploads."""
+    # Validate and get the appropriate SPDX version
+    try:
+        payload, spdx_version = validate_spdx_sbom(sbom_data)
+    except ValueError as e:
+        # Unsupported version or invalid format
+        return 400, {"detail": str(e)}
+    except ValidationError as e:
+        # Invalid format for the detected version
+        spdx_version_str = sbom_data.get("spdxVersion", "unknown")
+        return 400, {"detail": f"Invalid SPDX format for {spdx_version_str}: {str(e)}"}
+
+    # SpdxDocument.name is required in SPDX 2.x (enforced by the version-
+    # specific Pydantic model above) but OPTIONAL in SPDX 3.0.1 per the
+    # Core.SpdxDocument model — `name` has min-cardinality 0. Extract
+    # with required=False so SPDX 3 documents without a SpdxDocument.name
+    # are accepted, and fall back to the sbomify Component name to keep
+    # the stored SBOM identifier non-empty. SPDX 2.x already failed
+    # earlier if name was missing, so this fallback only fires for 3.x.
+    sbom_dict = obj_extract(
+        obj_in=payload,
+        fields=[
+            ExtractSpec("name", required=False, default=""),
+        ],
+    )
+    # Treat non-string and whitespace-only names as missing so the
+    # stored SBOM identifier cannot be persisted as an effectively
+    # empty string. Whitespace-only passes the plain `not ...` check.
+    sbom_name = sbom_dict.get("name")
+    if not isinstance(sbom_name, str) or not sbom_name.strip():
+        sbom_dict["name"] = component.name
+
+    sbom_dict["format"] = "spdx"
+    sbom_dict["component"] = component
+    sbom_dict["source"] = source
+    # SPDX has no CycloneDX crypto-asset lineage; stamp crypto-free so the
+    # crypto-gated plugins skip these artifacts instead of treating the
+    # unstamped NULL as "maybe crypto".
+    sbom_dict["has_crypto_assets"] = False
+    sbom_dict["format_version"] = spdx_version  # Already extracted from validation
+    sbom_dict["sha256_hash"] = sha256_hash
+
+    # Extract primary package using format-aware helper
+    primary_package, error = _extract_spdx_primary_package(payload)
+    if primary_package is None:
+        return 400, {"detail": error}
+
+    sbom_dict["version"] = primary_package.version
+    # Extract PURL qualifiers from primary package
+    sbom_dict["qualifiers"] = extract_purl_qualifiers(primary_package.purl)
+    sbom_dict["bom_type"] = SBOM.BomType.SBOM.value
+    return _save_sbom(sbom_dict, content)
+
+
+def _store_cyclonedx(
+    request: HttpRequest,
+    component: Component,
+    sbom_data: dict[str, Any],
+    content: bytes,
+    sha256_hash: str,
+    bom_type: str,
+    source: str,
+) -> tuple[int, dict[str, Any]]:
+    """Validate a CycloneDX JSON document and store it; shared by the API and file uploads.
+
+    ``source`` also picks the wording of the type-mismatch errors: the UI takes
+    the type from a dropdown, the API from the ``bom_type`` parameter.
+    """
+    # Validate and get the appropriate schema version
+    try:
+        payload, spec_version = validate_cyclonedx_sbom(sbom_data)
+    except ValueError as e:
+        # Unsupported version
+        return 400, {"detail": str(e)}
+    except ValidationError as e:
+        # Invalid format for the detected version
+        spec_version = sbom_data.get("specVersion", "unknown")
+        return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
+
+    sbom_dict = obj_extract(
+        obj_in=payload,
+        fields=[
+            ExtractSpec("metadata.component.name", required=False, default="", rename_to="name"),
+            ExtractSpec("metadata.component.version", required=False, rename_to="version"),
+            ExtractSpec("specVersion", required=True, rename_to="format_version"),
+        ],
+    )
+
+    # metadata.component is optional in CycloneDX; fall back to the sbomify Component name
+    if not sbom_dict.get("name"):
+        sbom_dict["name"] = component.name
+
+    # Version if present is a Version class and needs to be converted to string.
+    if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
+        sbom_dict["version"] = sbom_dict["version"].model_dump(exclude_none=True)
+
+    from_dropdown = source == "manual_upload"
+
+    # The UI takes the type from a dropdown, so the mismatch runs both ways
+    # there: picking VEX for an inventory stores a document that states
+    # nothing about any vulnerability as the component's VEX.
+    if from_dropdown and bom_type == SBOM.BomType.VEX.value and not _states_vulnerabilities(sbom_data):
+        return 400, {
+            "detail": (
+                "This document makes no vulnerability statement, so it is not a VEX. "
+                "Choose SBOM as the artifact type rather than VEX."
+            ),
+            "error_code": ErrorCode.VALIDATION_ERROR,
+        }
+
+    # A VEX is not an inventory. It validates as CycloneDX because the spec
+    # makes both components and vulnerabilities optional, so nothing before
+    # this point can tell the two apart, and one stored as bom_type=sbom is
+    # scanned and then scored against NTIA, BSI and FDA as though its empty
+    # component list were the truth. Say so instead of accepting it.
+    if bom_type == SBOM.BomType.SBOM.value and _is_vex(sbom_data):
+        remedy = (
+            "Choose VEX as the artifact type rather than SBOM."
+            if from_dropdown
+            else "Upload it as a VEX rather than as an SBOM."
+        )
+        return 400, {
+            "detail": (
+                f"This looks like a VEX document: it carries vulnerability statements and no components. {remedy}"
+            ),
+            "error_code": ErrorCode.VALIDATION_ERROR,
+        }
+
+    # Auto-detect CBOM content: an action-published CBOM arrives with the
+    # default bom_type; tag it cbom so the cbom-gated PQC plugin runs. Only
+    # when the caller left the type as the default — an explicit bom_type
+    # (e.g. the delegated /artifact/vex/ path passing "vex") is honored so
+    # a crypto-heavy VEX is never re-tagged cbom.
+    if bom_type == SBOM.BomType.SBOM.value and "bom_type" not in request.GET and _is_cbom(sbom_data):
+        bom_type = "cbom"
+    sbom_dict["has_crypto_assets"] = _contains_crypto_assets(sbom_data)
+
+    # Extract PURL qualifiers from metadata.component.purl
+    cdx_purl = _extract_cdx_purl(payload)
+    sbom_dict["qualifiers"] = extract_purl_qualifiers(cdx_purl) if cdx_purl else {}
+
+    sbom_dict["format"] = "cyclonedx"
+    sbom_dict["component"] = component
+    sbom_dict["source"] = source
+    sbom_dict["sha256_hash"] = sha256_hash
+    sbom_dict["bom_type"] = bom_type
+    return _save_sbom(sbom_dict, content)
+
+
 @router.post(
     "/artifact/cyclonedx/{component_id}",
     response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
@@ -538,125 +753,8 @@ def sbom_upload_cyclonedx(
         except json.JSONDecodeError:
             return 400, {"detail": "Invalid JSON"}
 
-        # Validate and get the appropriate schema version
-        try:
-            payload, spec_version = validate_cyclonedx_sbom(sbom_data)
-        except ValueError as e:
-            # Unsupported version
-            return 400, {"detail": str(e)}
-        except ValidationError as e:
-            # Invalid format for the detected version
-            spec_version = sbom_data.get("specVersion", "unknown")
-            return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
-
-        # Compute SHA256 hash of the SBOM content
         sha256_hash = hashlib.sha256(request.body).hexdigest()
-
-        sbom_dict = obj_extract(
-            obj_in=payload,
-            fields=[
-                ExtractSpec("metadata.component.name", required=False, default="", rename_to="name"),
-                ExtractSpec("metadata.component.version", required=False, rename_to="version"),
-                ExtractSpec("specVersion", required=True, rename_to="format_version"),
-            ],
-        )
-
-        # metadata.component is optional in CycloneDX; fall back to the sbomify Component name
-        if not sbom_dict.get("name"):
-            sbom_dict["name"] = component.name
-
-        # Version if present is a Version class and needs to be converted to string.
-        if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
-            sbom_dict["version"] = sbom_dict["version"].model_dump(exclude_none=True)
-
-        sbom_version = sbom_dict.get("version", "")
-        sbom_format = "cyclonedx"
-
-        # A VEX is not an inventory. It validates as CycloneDX because the spec
-        # makes both components and vulnerabilities optional, so nothing before
-        # this point can tell the two apart, and one stored as bom_type=sbom is
-        # scanned and then scored against NTIA, BSI and FDA as though its empty
-        # component list were the truth. Say so instead of accepting it.
-        if bom_type == SBOM.BomType.SBOM.value and _is_vex(sbom_data):
-            return 400, {
-                "detail": (
-                    "This looks like a VEX document: it carries vulnerability statements and no "
-                    "components. Upload it as a VEX rather than as an SBOM."
-                ),
-                "error_code": ErrorCode.VALIDATION_ERROR,
-            }
-
-        # Auto-detect CBOM content: an action-published CBOM arrives with the
-        # default bom_type; tag it cbom so the cbom-gated PQC plugin runs. Only
-        # when the caller left the type as the default — an explicit bom_type
-        # (e.g. the delegated /artifact/vex/ path passing "vex") is honored so
-        # a crypto-heavy VEX is never re-tagged cbom.
-        if bom_type == SBOM.BomType.SBOM.value and "bom_type" not in request.GET and _is_cbom(sbom_data):
-            bom_type = "cbom"
-        sbom_dict["has_crypto_assets"] = _contains_crypto_assets(sbom_data)
-
-        # Extract PURL qualifiers from metadata.component.purl
-        cdx_purl = _extract_cdx_purl(payload)
-        sbom_qualifiers = extract_purl_qualifiers(cdx_purl) if cdx_purl else {}
-
-        # VEX is re-issued continuously against the same release with no meaningful version, so it is
-        # exempt from the duplicate guard (multiple rows coexist, the latest is by created_at). SBOM
-        # and CBOM keep the guard so a re-uploaded static artifact stays a 409.
-        if (
-            bom_type != SBOM.BomType.VEX
-            and SBOM.objects.filter(
-                component=component,
-                version=sbom_version,
-                format=sbom_format,
-                qualifiers=sbom_qualifiers,
-                bom_type=bom_type,
-            ).exists()
-        ):
-            return 409, {
-                "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
-                "already exists for this component",
-                "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-            }
-
-        s3 = StorageClient("SBOMS")
-        filename = s3.upload_sbom(request.body)
-
-        sbom_dict["format"] = sbom_format
-        sbom_dict["sbom_filename"] = filename
-        sbom_dict["component"] = component
-        sbom_dict["source"] = "api"
-        sbom_dict["sha256_hash"] = sha256_hash
-        sbom_dict["qualifiers"] = sbom_qualifiers
-        sbom_dict["bom_type"] = bom_type
-
-        try:
-            with transaction.atomic():
-                sbom = SBOM(**sbom_dict)
-                sbom.save()
-        except IntegrityError as e:
-            log_orphaned_object(filename)
-            if _is_duplicate_integrity_error(e):
-                return 409, {
-                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
-                    "already exists for this component",
-                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-                }
-            raise
-
-        # Broadcast to workspace for real-time UI updates (non-critical)
-        try:
-            _broadcast_sbom_uploaded(component, sbom)
-        except Exception:
-            log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
-
-        # A new VEX changes which findings are suppressed; re-apply it to the component's existing
-        # security scans so the dashboard reflects it without a re-scan. Run it in the background,
-        # after this upload commits, so the request stays fast (the app serves on ASGI/uvicorn,
-        # where a synchronous re-apply would block a worker) and the task can see the new VEX row.
-        if bom_type == SBOM.BomType.VEX.value:
-            schedule_vex_reapply(component.id)
-
-        return 201, {"id": sbom.id}
+        return _store_cyclonedx(request, component, sbom_data, request.body, sha256_hash, bom_type, "api")
 
     except Exception:
         log.exception("Error processing CycloneDX BOM upload")
@@ -799,99 +897,8 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
         except json.JSONDecodeError:
             return 400, {"detail": "Invalid JSON"}
 
-        # Validate and get the appropriate SPDX version
-        try:
-            payload, spdx_version = validate_spdx_sbom(sbom_data)
-        except ValueError as e:
-            # Unsupported version or invalid format
-            return 400, {"detail": str(e)}
-        except ValidationError as e:
-            # Invalid format for the detected version
-            spdx_version_str = sbom_data.get("spdxVersion", "unknown")
-            return 400, {"detail": f"Invalid SPDX format for {spdx_version_str}: {str(e)}"}
-
-        # Compute SHA256 hash of the SBOM content
         sha256_hash = hashlib.sha256(request.body).hexdigest()
-
-        # SpdxDocument.name is required in SPDX 2.x (enforced by the version-
-        # specific Pydantic model above) but OPTIONAL in SPDX 3.0.1 per the
-        # Core.SpdxDocument model — `name` has min-cardinality 0. Extract
-        # with required=False so SPDX 3 documents without a SpdxDocument.name
-        # are accepted, and fall back to the sbomify Component name to keep
-        # the stored SBOM identifier non-empty. SPDX 2.x already failed
-        # earlier if name was missing, so this fallback only fires for 3.x.
-        sbom_dict = obj_extract(
-            obj_in=payload,
-            fields=[
-                ExtractSpec("name", required=False, default=""),
-            ],
-        )
-        # Treat non-string and whitespace-only names as missing so the
-        # stored SBOM identifier cannot be persisted as an effectively
-        # empty string. Whitespace-only passes the plain `not ...` check.
-        sbom_name = sbom_dict.get("name")
-        if not isinstance(sbom_name, str) or not sbom_name.strip():
-            sbom_dict["name"] = component.name
-
-        sbom_format = "spdx"
-        sbom_dict["format"] = sbom_format
-        sbom_dict["component"] = component
-        sbom_dict["source"] = "api"
-        # SPDX has no CycloneDX crypto-asset lineage; stamp crypto-free so the
-        # crypto-gated plugins skip these artifacts instead of treating the
-        # unstamped NULL as "maybe crypto".
-        sbom_dict["has_crypto_assets"] = False
-        sbom_dict["format_version"] = spdx_version  # Already extracted from validation
-        sbom_dict["sha256_hash"] = sha256_hash
-
-        # Extract primary package using format-aware helper
-        primary_package, error = _extract_spdx_primary_package(payload)
-        if primary_package is None:
-            return 400, {"detail": error}
-        sbom_version = primary_package.version
-
-        # Extract PURL qualifiers from primary package
-        sbom_qualifiers = extract_purl_qualifiers(primary_package.purl)
-
-        # Check for duplicate (same component + version + format + qualifiers + bom_type)
-        if SBOM.objects.filter(
-            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers, bom_type=bom_type
-        ).exists():
-            return 409, {
-                "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
-                "already exists for this component",
-                "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-            }
-
-        s3 = StorageClient("SBOMS")
-        filename = s3.upload_sbom(request.body)
-
-        sbom_dict["version"] = sbom_version
-        sbom_dict["sbom_filename"] = filename
-        sbom_dict["qualifiers"] = sbom_qualifiers
-        sbom_dict["bom_type"] = bom_type
-
-        try:
-            with transaction.atomic():
-                sbom = SBOM(**sbom_dict)
-                sbom.save()
-        except IntegrityError as e:
-            log_orphaned_object(filename)
-            if _is_duplicate_integrity_error(e):
-                return 409, {
-                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
-                    "already exists for this component",
-                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-                }
-            raise
-
-        # Broadcast to workspace for real-time UI updates (non-critical)
-        try:
-            _broadcast_sbom_uploaded(component, sbom)
-        except Exception:
-            log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
-
-        return 201, {"id": sbom.id}
+        return _store_spdx(component, sbom_data, request.body, sha256_hash, "api")
 
     except Exception:
         # Logged for the same reason the CycloneDX and VEX handlers beside this
@@ -1372,219 +1379,11 @@ def sbom_upload_file(
                     "detail": f"bom_type '{bom_type}' is not supported for SPDX uploads. Only 'sbom' is supported.",
                     "error_code": ErrorCode.VALIDATION_ERROR,
                 }
-            try:
-                payload, spdx_version = validate_spdx_sbom(sbom_data)
-            except ValueError as e:
-                # Unsupported version
-                return 400, {"detail": str(e)}
-            except ValidationError as e:
-                # Invalid format
-                spdx_version_str = sbom_data.get("spdxVersion", "unknown")
-                return 400, {"detail": f"Invalid SPDX format for {spdx_version_str}: {str(e)}"}
-
-            # SpdxDocument.name is required in SPDX 2.x but OPTIONAL in
-            # SPDX 3.0.1 per Core.SpdxDocument (min-cardinality 0). Accept
-            # missing name on the SPDX 3 path and fall back to the sbomify
-            # Component name so the stored SBOM identifier stays non-empty.
-            # SPDX 2.x rejects missing name earlier via the Pydantic model.
-            sbom_dict = obj_extract(
-                obj_in=payload,
-                fields=[
-                    ExtractSpec("name", required=False, default=""),
-                ],
-            )
-            # Treat non-string and whitespace-only names as missing so the
-            # stored SBOM identifier cannot be persisted as an effectively
-            # empty string.
-            sbom_name = sbom_dict.get("name")
-            if not isinstance(sbom_name, str) or not sbom_name.strip():
-                sbom_dict["name"] = component.name
-
-            sbom_format = "spdx"
-            sbom_dict["format"] = sbom_format
-            sbom_dict["component"] = component
-            sbom_dict["source"] = "manual_upload"
-            # SPDX has no CycloneDX crypto-asset lineage; stamp crypto-free so
-            # the crypto-gated plugins skip instead of treating NULL as
-            # "maybe crypto".
-            sbom_dict["has_crypto_assets"] = False
-            sbom_dict["format_version"] = spdx_version  # Already extracted from validation
-            sbom_dict["sha256_hash"] = sha256_hash
-
-            # Extract primary package using format-aware helper
-            primary_package, error = _extract_spdx_primary_package(payload)
-            if primary_package is None:
-                return 400, {"detail": error}
-            sbom_version = primary_package.version
-
-            # Extract PURL qualifiers from primary package
-            sbom_qualifiers = extract_purl_qualifiers(primary_package.purl)
-
-            # Check for duplicate (same component + version + format + qualifiers + bom_type)
-            if SBOM.objects.filter(
-                component=component,
-                version=sbom_version,
-                format=sbom_format,
-                qualifiers=sbom_qualifiers,
-                bom_type=bom_type,
-            ).exists():
-                return 409, {
-                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
-                    "already exists for this component",
-                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-                }
-
-            s3 = StorageClient("SBOMS")
-            filename = s3.upload_sbom(file_content)
-
-            sbom_dict["version"] = sbom_version
-            sbom_dict["sbom_filename"] = filename
-            sbom_dict["qualifiers"] = sbom_qualifiers
-            sbom_dict["bom_type"] = bom_type
-
-            try:
-                with transaction.atomic():
-                    sbom = SBOM(**sbom_dict)
-                    sbom.save()
-            except IntegrityError as e:
-                log_orphaned_object(filename)
-                if _is_duplicate_integrity_error(e):
-                    return 409, {
-                        "detail": (
-                            f"{bom_type.upper()} artifact with version '{sbom_version}'"
-                            f" and format '{sbom_format}' already exists for this component"
-                        ),
-                        "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-                    }
-                raise
-
-            # Broadcast to workspace for real-time UI updates
-            _broadcast_sbom_uploaded(component, sbom)
-
-            return 201, {"id": sbom.id}
+            return _store_spdx(component, sbom_data, file_content, sha256_hash, "manual_upload")
 
         elif "specVersion" in sbom_data:
             # CycloneDX format
-            try:
-                cdx_payload, spec_version = validate_cyclonedx_sbom(sbom_data)
-            except ValueError as e:
-                # Unsupported version
-                return 400, {"detail": str(e)}
-            except ValidationError as e:
-                # Invalid format
-                spec_version = sbom_data.get("specVersion", "unknown")
-                return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
-
-            sbom_dict = obj_extract(
-                obj_in=cdx_payload,
-                fields=[
-                    ExtractSpec("metadata.component.name", required=False, default="", rename_to="name"),
-                    ExtractSpec("metadata.component.version", required=False, rename_to="version"),
-                    ExtractSpec("specVersion", required=True, rename_to="format_version"),
-                ],
-            )
-
-            # metadata.component is optional in CycloneDX; fall back to the sbomify Component name
-            if not sbom_dict.get("name"):
-                sbom_dict["name"] = component.name
-
-            # Version if present is a Version class and needs to be converted to string.
-            if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
-                sbom_dict["version"] = sbom_dict["version"].model_dump(exclude_none=True)
-
-            sbom_version = sbom_dict.get("version", "")
-            sbom_format = "cyclonedx"
-
-            # The type comes from a dropdown here, so the mismatch runs both
-            # ways: picking VEX for an inventory stores a document that states
-            # nothing about any vulnerability as the component's VEX.
-            if bom_type == SBOM.BomType.VEX.value and not _states_vulnerabilities(sbom_data):
-                return 400, {
-                    "detail": (
-                        "This document makes no vulnerability statement, so it is not a VEX. "
-                        "Choose SBOM as the artifact type rather than VEX."
-                    ),
-                    "error_code": ErrorCode.VALIDATION_ERROR,
-                }
-
-            # A VEX is not an inventory; see the same guard on the CycloneDX
-            # API endpoint. Stored as bom_type=sbom it is scanned and scored
-            # against the SBOM compliance plugins as though it were one.
-            if bom_type == SBOM.BomType.SBOM.value and _is_vex(sbom_data):
-                return 400, {
-                    "detail": (
-                        "This looks like a VEX document: it carries vulnerability statements and no "
-                        "components. Choose VEX as the artifact type rather than SBOM."
-                    ),
-                    "error_code": ErrorCode.VALIDATION_ERROR,
-                }
-
-            # Auto-detect CBOM content: tag a crypto BOM uploaded with the
-            # default bom_type as cbom so the cbom-gated PQC plugin runs. Only when
-            # the caller omitted bom_type — an explicit ?bom_type=sbom is honored.
-            if "bom_type" not in request.GET and _is_cbom(sbom_data):
-                bom_type = "cbom"
-            sbom_dict["has_crypto_assets"] = _contains_crypto_assets(sbom_data)
-
-            # Extract PURL qualifiers from metadata.component.purl
-            cdx_purl = _extract_cdx_purl(cdx_payload)
-            sbom_qualifiers = extract_purl_qualifiers(cdx_purl) if cdx_purl else {}
-
-            # Check for duplicate (same component + version + format + qualifiers + bom_type).
-            # VEX is exempt (re-issued continuously with no meaningful version; rows coexist
-            # and the latest wins by created_at), mirroring the API endpoint.
-            if (
-                bom_type != SBOM.BomType.VEX
-                and SBOM.objects.filter(
-                    component=component,
-                    version=sbom_version,
-                    format=sbom_format,
-                    qualifiers=sbom_qualifiers,
-                    bom_type=bom_type,
-                ).exists()
-            ):
-                return 409, {
-                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
-                    "already exists for this component",
-                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-                }
-
-            s3 = StorageClient("SBOMS")
-            filename = s3.upload_sbom(file_content)
-
-            sbom_dict["format"] = sbom_format
-            sbom_dict["sbom_filename"] = filename
-            sbom_dict["component"] = component
-            sbom_dict["source"] = "manual_upload"
-            sbom_dict["sha256_hash"] = sha256_hash
-            sbom_dict["qualifiers"] = sbom_qualifiers
-            sbom_dict["bom_type"] = bom_type
-
-            try:
-                with transaction.atomic():
-                    sbom = SBOM(**sbom_dict)
-                    sbom.save()
-            except IntegrityError as e:
-                log_orphaned_object(filename)
-                if _is_duplicate_integrity_error(e):
-                    return 409, {
-                        "detail": (
-                            f"{bom_type.upper()} artifact with version '{sbom_version}'"
-                            f" and format '{sbom_format}' already exists for this component"
-                        ),
-                        "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-                    }
-                raise
-
-            # Broadcast to workspace for real-time UI updates
-            _broadcast_sbom_uploaded(component, sbom)
-
-            # A new VEX changes which findings are suppressed; re-apply it to the
-            # component's stored scans, mirroring the API artifact endpoint.
-            if bom_type == SBOM.BomType.VEX.value:
-                schedule_vex_reapply(component.id)
-
-            return 201, {"id": sbom.id}
+            return _store_cyclonedx(request, component, sbom_data, file_content, sha256_hash, bom_type, "manual_upload")
 
         else:
             return 400, {"detail": "Unrecognized SBOM format. Must be SPDX or CycloneDX."}
