@@ -18,7 +18,9 @@ from sbomify.apps.teams.models import Invitation, Member, Team
 
 @pytest.fixture
 def invitee() -> Any:
-    user = get_user_model().objects.create_user(username="invitee", email="invitee@example.com", password="pw")
+    user = get_user_model().objects.create_user(
+        username="invitee", email="invitee@example.com", password="pw", email_verified=True
+    )
     # A workspace of their own, so signing in leaves the invitation pending.
     home = Team.objects.create(name="Invitee Home")
     Member.objects.create(team=home, user=user, role="owner", is_default_team=True)
