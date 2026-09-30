@@ -74,61 +74,16 @@ def get_sbom_data(sbom_id: str) -> tuple[SBOM, dict[str, Any]]:
     Raises:
         SBOMDataError: If any step fails with descriptive error message
     """
-    # 1) Fetch SBOM from database
+    sbom_instance, sbom_bytes = get_sbom_data_bytes(sbom_id)
+    # get_sbom_data_bytes has already checked the bytes decode as UTF-8.
+    sbom_text = sbom_bytes.decode("utf-8")
     try:
-        sbom_instance = SBOM.objects.select_related("component").get(id=sbom_id)
-    except SBOM.DoesNotExist:
-        raise SBOMDataError(f"SBOM with ID {sbom_id} not found")
-    except (DatabaseError, OperationalError) as db_err:
-        # Handle database connection errors gracefully
-        error_msg = str(db_err).lower()
-        connection_indicators = [
-            "server closed the connection unexpectedly",
-            "connection terminated",
-            "connection reset by peer",
-            "could not connect to server",
-            "connection refused",
-            "connection timed out",
-            "network is unreachable",
-        ]
-
-        is_connection_error = any(indicator in error_msg for indicator in connection_indicators)
-
-        if is_connection_error:
-            log.warning(f"Database connection error fetching SBOM {sbom_id}: {db_err}")
-            raise SBOMDataError(f"Failed to fetch SBOM data for {sbom_id}: database connection temporarily unavailable")
-        else:
-            log.error(f"Database error fetching SBOM {sbom_id}: {db_err}")
-            raise SBOMDataError(f"Failed to fetch SBOM data for {sbom_id}: database error")
-
-    if not sbom_instance.sbom_filename:
-        raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")
-
-    # 2) Download SBOM data from S3
-    from sbomify.apps.core.object_store import StorageClient
-
-    s3_client = StorageClient(bucket_type="SBOMS")
-    sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
-
-    if not sbom_bytes:
-        raise SBOMDataError(f"Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)")
-
-    # 3) Decode and parse JSON
-    try:
-        sbom_text = sbom_bytes.decode("utf-8")
-    except UnicodeDecodeError as e:
-        raise SBOMDataError(f"SBOM {sbom_instance.sbom_filename} has encoding issues: {e}")
-
-    try:
-        sbom_data = json.loads(sbom_text)
+        return sbom_instance, json.loads(sbom_text)
     except json.JSONDecodeError as e:
         raise SBOMDataError(
             f"SBOM {sbom_instance.sbom_filename} content is not valid JSON. Error: {e}. "
             f"First 200 chars: {sbom_text[:200]}"
         )
-
-    log.debug(f"SBOM {sbom_instance.sbom_filename} successfully fetched and parsed as JSON")
-    return sbom_instance, sbom_data
 
 
 # SBOMs are immutable (ADR-004) so caching a definitive answer (the SBOM
