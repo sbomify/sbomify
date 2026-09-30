@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
 from django.core.mail import EmailMultiAlternatives
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import redirect, render
@@ -20,13 +20,12 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 
-from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.url_utils import get_base_url
-from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.services.access_emails import (
@@ -34,6 +33,17 @@ from sbomify.apps.documents.services.access_emails import (
     notify_access_rejected,
     notify_access_revoked,
     notify_admins_of_access_request,
+)
+from sbomify.apps.documents.services.access_requests import (
+    ANY_MEMBER_ROLES,
+    approve_request,
+    dismiss_access_request_notification_if_no_pending,
+    invalidate_access_requests_cache,
+    pending_access_requests,
+    record_nda_signature,
+    reject_request,
+    request_access,
+    revoke_request,
 )
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Invitation, Member, Team
@@ -45,11 +55,10 @@ from sbomify.apps.teams.utils import (
     user_seat,
 )
 
-# Anyone already in the workspace, internal or external — they do not need to
-# ask for access they already have.
-ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
-
 logger = logging.getLogger(__name__)
+
+# The teams app imports it from this module under this name.
+_invalidate_access_requests_cache = invalidate_access_requests_cache
 
 
 def user_has_signed_current_nda(user: User, team: Team) -> bool:
@@ -70,42 +79,6 @@ def user_has_signed_current_nda(user: User, team: Team) -> bool:
 
     result: bool = _user_has_signed_current_nda(user, team)
     return result
-
-
-def _invalidate_access_requests_cache(team: Team) -> None:
-    """Invalidate cache for pending access requests count for all owners/admins of the team."""
-    admin_members = Member.objects.filter(team=team, role__in=ADMINISTER).values_list("user_id", flat=True)
-
-    for user_id in admin_members:
-        cache_key = f"pending_access_requests:{team.key}:{user_id}"
-        cache.delete(cache_key)
-
-
-def _get_pending_access_requests(team: Team) -> QuerySet[AccessRequest]:
-    """Get pending access requests for a team, filtering by NDA signature if required.
-
-    Args:
-        team: Team instance to get requests for
-
-    Returns:
-        QuerySet of pending AccessRequest objects with optimized prefetching
-    """
-    company_nda = team.get_company_nda_document()
-    requires_nda = company_nda is not None
-
-    base_queryset = (
-        AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING)
-        .select_related("user", "decided_by")
-        .prefetch_related("nda_signatures__nda_document")
-        .order_by("-requested_at")
-    )
-
-    if requires_nda:
-        # Only show requests that have NDA signature (request is complete)
-        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
-        return base_queryset.filter(id__in=signed_request_ids)
-
-    return base_queryset
 
 
 def _get_approved_access_requests(team: Team) -> QuerySet[AccessRequest]:
@@ -167,21 +140,6 @@ def _annotate_nda_signature_status(requests: list[AccessRequest], company_nda: D
             req.has_current_nda_signature = True  # type: ignore[attr-defined]
 
 
-def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team) -> None:
-    """Dismiss the access request notification if there are no more pending requests."""
-    # Check if there are any pending requests left
-    pending_requests = _get_pending_access_requests(team)
-    pending_count = pending_requests.count()
-
-    # If no pending requests, dismiss the notification
-    if pending_count == 0:
-        notification_id = f"access_request_pending_{team.key}"
-        dismissed_ids = set(request.session.get("dismissed_notifications", []))
-        dismissed_ids.add(notification_id)
-        request.session["dismissed_notifications"] = list(dismissed_ids)
-        request.session.save()
-
-
 def _back(team_key: str, active_tab: str) -> HttpResponse:
     """Where a queue action lands without htmx: the trust-center tab, told to refresh, or the queue."""
     if active_tab == "trust-center":
@@ -196,7 +154,7 @@ def _back(team_key: str, active_tab: str) -> HttpResponse:
 def _queue_response(request: HttpRequest, team: Team, hx_trigger: str | None = None) -> HttpResponse:
     """The queue section: pending, approved and rejected requests, and pending invitations."""
     company_nda = team.get_company_nda_document()
-    pending_requests = list(_get_pending_access_requests(team))
+    pending_requests = list(pending_access_requests(team))
     approved_requests = list(_get_approved_access_requests(team))
     rejected_requests = list(_get_rejected_access_requests(team))
 
@@ -378,50 +336,9 @@ class AccessRequestView(View):
             messages.info(request, "Your access request is already pending approval.")
             return redirect("core:workspace_public", workspace_key=team_key)
 
-        # Check for existing request (REVOKED or REJECTED) - if exists, update it to PENDING instead of creating new one
-        request_state_changed = False
+        # A revoked or rejected request is reopened rather than duplicated
         with transaction.atomic():
-            # Use select_for_update to prevent race conditions
-            existing_request = AccessRequest.objects.select_for_update().filter(team=team, user=user).first()
-
-            # Create or update access request
-            access_request = None
-            if existing_request:
-                # If request is REVOKED or REJECTED, update it to PENDING
-                if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
-                    existing_request.reopen()
-                    access_request = existing_request
-                    request_state_changed = True
-                elif existing_request.status == AccessRequest.Status.PENDING:
-                    # Request already exists and is pending
-                    access_request = existing_request
-                else:
-                    # Request is APPROVED - user already has access
-                    access_request = existing_request
-            else:
-                # Create new access request using get_or_create to handle race conditions
-                try:
-                    access_request, created = AccessRequest.objects.get_or_create(
-                        team=team,
-                        user=user,
-                        defaults={"status": AccessRequest.Status.PENDING},
-                    )
-                    request_state_changed = created
-                    if not created:
-                        # Another request was created concurrently, refresh from DB
-                        access_request.refresh_from_db()
-                except IntegrityError:
-                    # Race condition: another request was created between check and create
-                    # Fetch the existing request
-                    try:
-                        access_request = AccessRequest.objects.get(team=team, user=user)
-                    except AccessRequest.DoesNotExist:
-                        # Extremely rare: row was deleted between IntegrityError and get()
-                        # Retry get_or_create one more time
-                        access_request, retry_created = AccessRequest.objects.get_or_create(
-                            team=team, user=user, defaults={"status": AccessRequest.Status.PENDING}
-                        )
-                        request_state_changed = retry_created
+            access_request, request_state_changed = request_access(team, user)
 
         # Invalidate cache after transaction commits to avoid long-running transaction
         transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
@@ -579,22 +496,9 @@ class NDASigningView(View):
 
             # Wrap NDA signing and related operations in a transaction
             with transaction.atomic():
-                # A signature for an earlier NDA version stays untouched: each
-                # row is the record of one acceptance, and signing the current
-                # version adds to that history rather than rewriting it.
-
-                # Create NDA signature
-                NDASignature.objects.create(
-                    access_request=access_request,
-                    nda_document=company_nda,
-                    nda_content_hash=nda_content_hash,
-                    signed_name=signed_name,
-                    ip_address=get_client_ip(request),
-                    user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
+                _, access_request = record_nda_signature(
+                    request, access_request, company_nda, nda_content_hash, signed_name
                 )
-
-                # Reload access request with NDA signature relationship
-                access_request = AccessRequest.objects.prefetch_related("nda_signatures").get(pk=access_request.id)
 
                 # Inside the atomic block so transaction.on_commit deferral applies.
                 transaction.on_commit(lambda: capture_for_request(request, "nda:signed", team_key=team_key))
@@ -939,17 +843,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not pending")
                     return _back(team_key, active_tab)
 
-                access_request.status = AccessRequest.Status.APPROVED
-                access_request.decided_by = user
-                access_request.decided_at = timezone.now()
-                access_request.save()
-
-                # Automatically create guest member
-                Member.objects.get_or_create(
-                    team=team,
-                    user=access_request.user,
-                    defaults={"role": "guest"},
-                )  # noqa: F841 - created variable not needed
+                approve_request(access_request, user)
 
             elif action == "reject":
                 # Check status inside transaction after locking
@@ -957,14 +851,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not pending")
                     return _back(team_key, active_tab)
 
-                # Supersede the live signature so a re-request must sign again;
-                # the row itself is the record of what was accepted and survives.
-                access_request.nda_signatures.live().update(superseded_at=timezone.now())
-
-                access_request.status = AccessRequest.Status.REJECTED
-                access_request.decided_by = user
-                access_request.decided_at = timezone.now()
-                access_request.save()
+                reject_request(access_request, user)
 
             elif action == "revoke":
                 # Check status inside transaction after locking
@@ -972,21 +859,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not approved")
                     return _back(team_key, active_tab)
 
-                # Supersede the live signature so a re-request must sign again;
-                # the row itself is the record of what was accepted and survives.
-                access_request.nda_signatures.live().update(superseded_at=timezone.now())
-
-                access_request.status = AccessRequest.Status.REVOKED
-                access_request.revoked_by = user
-                access_request.revoked_at = timezone.now()
-                access_request.save()
-
-                # Remove guest membership
-                try:
-                    Member.objects.get(team=team, user=access_request.user, role="guest").delete()
-                except Member.DoesNotExist:
-                    # Guest member doesn't exist, nothing to remove
-                    pass
+                revoke_request(access_request, user)
 
             elif action == "clear_rejection":
                 # Check status inside transaction after locking
@@ -1051,7 +924,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.success(request, f"Access revoked for {access_request.user.email}.")
 
         # Dismiss notification if no more pending requests
-        _dismiss_access_request_notification_if_no_pending(request, team)
+        dismiss_access_request_notification_if_no_pending(request, team)
 
         # For HTMX requests, return the updated access request queue content
         if request.headers.get("HX-Request") == "true":

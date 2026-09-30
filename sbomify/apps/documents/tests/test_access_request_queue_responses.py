@@ -64,9 +64,7 @@ def test_an_htmx_cancellation_returns_the_queue_without_the_invitation(queue, te
     invitation = Invitation.objects.create(team=team_with_business_plan, email="invitee@example.com", role="guest")
     cache.set(f"invitation_inviter:{invitation.token}", sample_user.id)
 
-    response = client.post(
-        url, {"action": "cancel_invitation", "invitation_id": invitation.id}, HTTP_HX_REQUEST="true"
-    )
+    response = client.post(url, {"action": "cancel_invitation", "invitation_id": invitation.id}, HTTP_HX_REQUEST="true")
 
     assert response.status_code == 200
     assert response["HX-Trigger"] == "refreshAccessRequests"
