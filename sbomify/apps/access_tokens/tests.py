@@ -21,7 +21,6 @@ from .utils import (
     create_personal_access_token,
     decode_personal_access_token,
     get_user_and_token_record,
-    get_user_from_personal_access_token,
 )
 
 
@@ -36,9 +35,6 @@ def test_access_token_encode_decode(sample_user):  # noqa: F811
     assert decoded_token["sub"] == str(sample_user.id)
     assert decoded_token["iss"] == "sbomify"
     assert "salt" in decoded_token
-
-    user = get_user_from_personal_access_token(token_str)
-    assert user == sample_user
 
 
 @pytest.mark.django_db
@@ -124,9 +120,6 @@ def test_token_with_minimal_payload(sample_user):  # noqa: F811
     assert isinstance(decoded_token, dict)
     assert decoded_token["sub"] == str(sample_user.id)
 
-    user = get_user_from_personal_access_token(minimal_token)
-    assert user == sample_user
-
 
 @pytest.mark.django_db
 def test_token_with_integer_subject(sample_user):  # noqa: F811
@@ -141,9 +134,6 @@ def test_token_with_integer_subject(sample_user):  # noqa: F811
     assert isinstance(decoded_token, dict)
     assert decoded_token["sub"] == str(sample_user.id)  # Should be converted to string
 
-    user = get_user_from_personal_access_token(token)
-    assert user == sample_user
-
 
 @pytest.mark.django_db
 def test_invalid_token_handling(sample_user):  # noqa: F811
@@ -152,23 +142,10 @@ def test_invalid_token_handling(sample_user):  # noqa: F811
     with pytest.raises(jwt.exceptions.DecodeError):
         decode_personal_access_token(invalid_token)
 
-    assert get_user_from_personal_access_token(invalid_token) is None
-
     # Test with malformed token
     malformed_token = "not.a.token"
     with pytest.raises(jwt.exceptions.DecodeError):
         decode_personal_access_token(malformed_token)
-
-    assert get_user_from_personal_access_token(malformed_token) is None
-
-    # Test with non-existent user
-    payload = {
-        "iss": settings.JWT_ISSUER,
-        "sub": "99999",  # Non-existent user ID
-        "salt": "test",
-    }
-    token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-    assert get_user_from_personal_access_token(token) is None
 
 
 # ============================================================================
