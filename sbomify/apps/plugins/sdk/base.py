@@ -222,6 +222,7 @@ class AssessmentPlugin(ABC):
         fail_count: int = 0,
         warning_count: int = 0,
         error_count: int = 0,
+        total_findings: int = 0,
     ) -> AssessmentResult:
         """Construct an AssessmentResult carrying a single status marker.
 
@@ -245,6 +246,8 @@ class AssessmentPlugin(ABC):
             fail_count: Summary fail count.
             warning_count: Summary warning count.
             error_count: Summary error count.
+            total_findings: Summary total. Zero by default so a skip marker is
+                not counted; an error result counts its one finding.
 
         Returns:
             AssessmentResult with exactly one finding.
@@ -260,7 +263,7 @@ class AssessmentPlugin(ABC):
         # why nothing was scanned, but it is not a vulnerability: the summary
         # must not count it, or a skipped run reads as "1 finding".
         summary = AssessmentSummary(
-            total_findings=0,
+            total_findings=total_findings,
             pass_count=pass_count,
             fail_count=fail_count,
             warning_count=warning_count,

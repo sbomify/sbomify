@@ -48,9 +48,9 @@ from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBO
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, ScanMode
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
-    AssessmentSummary,
     Finding,
     PluginMetadata,
+    summarize,
 )
 from sbomify.apps.plugins.utils import get_http_session
 
@@ -958,24 +958,12 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         ]
         findings.append(self._attestation_summary(findings))
 
-        pass_count = sum(1 for f in findings if f.status == "pass")
-        fail_count = sum(1 for f in findings if f.status == "fail")
-        warning_count = sum(1 for f in findings if f.status == "warning")
-
-        summary = AssessmentSummary(
-            total_findings=len(findings),
-            pass_count=pass_count,
-            fail_count=fail_count,
-            warning_count=warning_count,
-            error_count=0,
-        )
-
         return AssessmentResult(
             plugin_name="sbom-verification",
             plugin_version=self.VERSION,
             category=AssessmentCategory.ATTESTATION.value,
             assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=summary,
+            summary=summarize(findings),
             findings=findings,
             metadata={
                 "sbom_id": sbom_id,

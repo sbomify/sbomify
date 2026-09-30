@@ -22,17 +22,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sbomify.apps.plugins.builtins._crypto_assessment import summarize
 from sbomify.apps.plugins.sdk import (
     AssessmentCategory,
     AssessmentPlugin,
     AssessmentResult,
-    AssessmentSummary,
     Finding,
     PluginMetadata,
     ScanMode,
 )
 from sbomify.apps.plugins.sdk.base import SBOMContext
+from sbomify.apps.plugins.sdk.results import summarize
 from sbomify.apps.sboms.crypto_inventory import certificate_expiry_summary, derive_crypto_inventory
 from sbomify.apps.sboms.pqc import PqcResult, PqcStatus, assess_inventory
 
@@ -188,20 +187,13 @@ class PqcReadinessPlugin(AssessmentPlugin):
         )
 
     def _error_result(self, message: str) -> AssessmentResult:
-        return AssessmentResult(
-            plugin_name=_PLUGIN_NAME,
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.COMPLIANCE.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=AssessmentSummary(total_findings=1, error_count=1),
-            findings=[
-                Finding(
-                    id=f"{_PLUGIN_NAME}:error",
-                    title="PQC assessment error",
-                    description=message,
-                    status="error",
-                    severity="high",
-                )
-            ],
+        return self.build_single_finding_result(
+            finding_id=f"{_PLUGIN_NAME}:error",
+            title="PQC assessment error",
+            description=message,
+            status="error",
+            severity="high",
             metadata={"error": True},
+            error_count=1,
+            total_findings=1,
         )

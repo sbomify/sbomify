@@ -86,9 +86,9 @@ from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
-    AssessmentSummary,
     Finding,
     PluginMetadata,
+    summarize,
 )
 from sbomify.logging import getLogger
 
@@ -268,19 +268,12 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
             logger.warning(f"[CISA-2025] Unknown SBOM format for {sbom_id}")
             return self._create_error_result("Unable to detect SBOM format (expected SPDX or CycloneDX)")
 
-        # Calculate summary
-        pass_count = sum(1 for f in findings if f.status == "pass")
-        fail_count = sum(1 for f in findings if f.status == "fail")
+        summary = summarize(findings)
 
-        summary = AssessmentSummary(
-            total_findings=len(findings),
-            pass_count=pass_count,
-            fail_count=fail_count,
-            warning_count=0,
-            error_count=0,
+        logger.info(
+            f"[CISA-2025] Completed compliance check for SBOM {sbom_id}: "
+            f"{summary.pass_count} pass, {summary.fail_count} fail"
         )
-
-        logger.info(f"[CISA-2025] Completed compliance check for SBOM {sbom_id}: {pass_count} pass, {fail_count} fail")
 
         return AssessmentResult(
             plugin_name="cisa-minimum-elements-2025",
@@ -1182,29 +1175,12 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
         Returns:
             AssessmentResult with error finding.
         """
-        finding = Finding(
-            id="cisa-2025:error",
+        return self.build_single_finding_result(
+            finding_id="cisa-2025:error",
             title="Assessment Error",
             description=error_message,
             status="error",
             severity="high",
-        )
-
-        summary = AssessmentSummary(
-            total_findings=1,
-            pass_count=0,
-            fail_count=0,
-            warning_count=0,
-            error_count=1,
-        )
-
-        return AssessmentResult(
-            plugin_name="cisa-minimum-elements-2025",
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.COMPLIANCE.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=summary,
-            findings=[finding],
             metadata={
                 "standard_name": self.STANDARD_NAME,
                 "standard_version": self.STANDARD_VERSION,
@@ -1212,4 +1188,6 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
                 "standard_status": "public_comment_draft",
                 "error": True,
             },
+            error_count=1,
+            total_findings=1,
         )

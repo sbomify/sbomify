@@ -182,6 +182,18 @@ class AssessmentSummary:
         return {k: v for k, v in result.items() if v is not None}
 
 
+def summarize(findings: list[Finding]) -> AssessmentSummary:
+    """Count findings by status."""
+    return AssessmentSummary(
+        total_findings=len(findings),
+        pass_count=sum(1 for f in findings if f.status == "pass"),
+        fail_count=sum(1 for f in findings if f.status == "fail"),
+        warning_count=sum(1 for f in findings if f.status == "warning"),
+        error_count=sum(1 for f in findings if f.status == "error"),
+        info_count=sum(1 for f in findings if f.status == "info"),
+    )
+
+
 @dataclass
 class AssessmentResult:
     """Normalized result from any assessment plugin.

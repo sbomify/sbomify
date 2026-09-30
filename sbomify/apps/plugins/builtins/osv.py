@@ -824,28 +824,13 @@ class OSVPlugin(AssessmentPlugin):
         Returns:
             AssessmentResult with error finding.
         """
-        finding = Finding(
-            id="osv:error",
+        return self.build_single_finding_result(
+            finding_id="osv:error",
             title="Scan Error",
             description=error_message,
             status="error",
             severity="high",
-        )
-
-        summary = AssessmentSummary(
-            total_findings=1,
-            pass_count=0,
-            fail_count=0,
-            warning_count=0,
-            error_count=1,
-        )
-
-        return AssessmentResult(
-            plugin_name="osv",
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.SECURITY.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=summary,
-            findings=[finding],
             metadata={"error": True},
+            error_count=1,
+            total_findings=1,
         )
