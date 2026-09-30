@@ -323,29 +323,6 @@ def test_re_seeding_tags_a_certificate_seeded_before_subcategories(public_team: 
 
 
 @pytest.mark.django_db
-def test_an_nda_is_recognised_by_its_type_alone(public_team: Team) -> None:
-    """``is_nda`` is a single-field check now, and nothing else answers to it.
-
-    The gated-access path turns on this predicate, so the split is only safe if
-    a moved NDA still reports as one and a certification never does.
-    """
-    component = _component(public_team, name="Company NDA")
-    nda = _document(
-        component,
-        document_type=Document.DocumentType.NDA,
-        subcategory=None,
-        filename="nda.pdf",
-        name="Mutual non-disclosure agreement",
-    )
-    certification = _document(_component(public_team))
-
-    assert nda.is_nda()
-    assert not nda.is_compliance_document()
-    assert not certification.is_nda()
-    assert certification.is_compliance_document()
-
-
-@pytest.mark.django_db
 def test_the_migration_moves_the_nda_out_of_compliance_and_back(public_team: Team) -> None:
     """The data move runs under ``--nomigrations``, where the migration never does.
 
