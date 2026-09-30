@@ -1,15 +1,6 @@
-import path from 'path'
 import { resolve } from 'path'
-import fs from 'fs'
 import { defineConfig } from 'vite'
-import { config } from 'dotenv'
 import tailwindcss from '@tailwindcss/vite'
-
-const envFilePath = path.join(__dirname, '.env')
-
-if(fs.existsSync(envFilePath)) {
-  config({ path: path.join(__dirname, '.env') })
-}
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -19,19 +10,11 @@ export default defineConfig({
   css: {
     devSourcemap: true,
   },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, '.'),
-    }
-  },
   optimizeDeps: {
     include: ['license-expressions'],
     esbuildOptions: {
       target: 'esnext'
     }
-  },
-  ssr: {
-    noExternal: ['license-expressions']
   },
   plugins: [
     tailwindcss(),
