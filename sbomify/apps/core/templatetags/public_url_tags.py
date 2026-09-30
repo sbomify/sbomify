@@ -13,7 +13,7 @@ from typing import Any
 from django import template
 from django.urls import NoReverseMatch, reverse
 
-from sbomify.apps.core.url_utils import get_component_public_slug, get_public_path
+from sbomify.apps.core.url_utils import get_public_path
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +41,10 @@ def public_url(context: Any, url_name: Any, *args: Any, **kwargs: Any) -> Any:
     # Map URL names to resource types for custom domain URL generation
     url_name_to_resource = {
         "core:workspace_public": "workspace",
-        "core_custom_domain:workspace_public": "workspace",
         "core:product_details_public": "product",
-        "core_custom_domain:product_details_public": "product",
         "core:component_details_public": "component",
-        "core_custom_domain:component_details_public": "component",
         "core:product_releases_public": "product_releases",
-        "core_custom_domain:product_releases_public": "product_releases",
         "core:release_details_public": "release",
-        "core_custom_domain:release_details_public": "release",
         "core:workspace_advisories_public": "advisories",
         "core:workspace_advisories_public_current": "advisories",
         "core:advisory_details_public": "advisory",
@@ -99,13 +94,6 @@ def public_url(context: Any, url_name: Any, *args: Any, **kwargs: Any) -> Any:
                     product_slug=product_slug or product_id,
                     release_slug=release_slug or release_id,
                 )
-        elif resource_type == "document":
-            document_id = kwargs.get("document_id")
-            document_slug = kwargs.get("document_slug") or slug
-            if document_id or document_slug:
-                return get_public_path(
-                    "document", document_id or "", is_custom_domain=True, slug=document_slug or document_id
-                )
         elif resource_type == "advisories":
             return get_public_path("advisories", "", is_custom_domain=True)
         elif resource_type == "advisory":
@@ -121,43 +109,6 @@ def public_url(context: Any, url_name: Any, *args: Any, **kwargs: Any) -> Any:
     except NoReverseMatch:
         logger.warning("Failed to reverse URL '%s' with args=%s kwargs=%s", url_name, args, reverse_kwargs)
         return ""
-
-
-@register.simple_tag(takes_context=True)
-def is_on_custom_domain(context: Any) -> Any:
-    """
-    Check if the current request is on a custom domain.
-
-    Usage in templates:
-        {% is_on_custom_domain as on_custom_domain %}
-        {% if on_custom_domain %}
-            ... custom domain specific content ...
-        {% endif %}
-    """
-    request = context.get("request")
-    return getattr(request, "is_custom_domain", False) if request else False
-
-
-@register.simple_tag(takes_context=True)
-def get_custom_domain(context: Any) -> Any:
-    """
-    Get the custom domain for the current request.
-
-    Returns the custom domain hostname or None if not on a custom domain.
-
-    Usage in templates:
-        {% get_custom_domain as domain %}
-        {% if domain %}
-            Current domain: {{ domain }}
-        {% endif %}
-    """
-    request = context.get("request")
-    if request and getattr(request, "is_custom_domain", False):
-        if hasattr(request, "custom_domain_team"):
-            team = request.custom_domain_team
-            if team:
-                return getattr(team, "custom_domain", None)
-    return None
 
 
 @register.simple_tag(takes_context=True)
@@ -284,69 +235,5 @@ def trust_center_absolute_url(context: Any, team: Any = None) -> Any:
     if team_key:
         base_url = getattr(settings, "APP_BASE_URL", "")
         return f"{base_url}/public/workspace/{team_key}"
-
-    return ""
-
-
-@register.simple_tag(takes_context=True)
-def resource_public_absolute_url(context: Any, resource_type: Any, resource: Any, team: Any = None) -> Any:
-    """
-    Generate the full absolute URL for a public resource (product, component).
-
-    This is used for "Copy Public URL" functionality on resource detail pages.
-    Considers custom domains when available.
-
-    If the team has a validated custom domain, returns https://{custom_domain}/{type}/{slug}/
-    Otherwise, returns {APP_BASE_URL}/public/workspace/{key}/{type}/{id}
-
-    Usage in templates:
-        {% resource_public_absolute_url 'product' product team as public_url %}
-        {% resource_public_absolute_url 'component' component as public_url %}
-
-    Args:
-        resource_type: One of 'product', 'component'
-        resource: The resource object with id, slug, and team attributes
-        team: Optional team object (will be fetched from resource if not provided)
-    """
-    from django.conf import settings
-
-    if not resource:
-        return ""
-
-    # Get team from resource if not provided
-    if not team:
-        team = getattr(resource, "team", None)
-
-    if not team:
-        return ""
-
-    # Get resource identifiers
-    resource_id = getattr(resource, "id", None)
-    resource_slug = getattr(resource, "slug", None)
-    if resource_type == "component" and context.get("request") is not None:
-        resource_slug = get_component_public_slug(resource, context["request"])
-
-    if not resource_id:
-        return ""
-
-    # Get team properties
-    custom_domain = getattr(team, "custom_domain", None)
-    custom_domain_validated = getattr(team, "custom_domain_validated", False)
-    team_key = getattr(team, "key", None)
-    team_slug = getattr(team, "slug", None)
-
-    # Priority 1: Custom domain (BYOD) with slug-based URL
-    if custom_domain and custom_domain_validated and resource_slug:
-        return f"https://{custom_domain}/{resource_type}/{resource_slug}/"
-
-    # Priority 2: Trust center subdomain with slug-based URL
-    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
-    if trust_center_domain and team_slug and resource_slug:
-        return f"https://{team_slug}.{trust_center_domain}/{resource_type}/{resource_slug}/"
-
-    # Priority 3: Standard URL with ID
-    if team_key:
-        base_url = getattr(settings, "APP_BASE_URL", "")
-        return f"{base_url}/public/workspace/{team_key}/{resource_type}/{resource_id}"
 
     return ""
