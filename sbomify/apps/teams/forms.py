@@ -135,48 +135,6 @@ class SupportPeriodForm(forms.Form):
     default_support_period_years = forms.IntegerField(required=False, min_value=5, max_value=100)
 
 
-class OnboardingProductForm(forms.Form):
-    """Form for creating a product during onboarding."""
-
-    name = forms.CharField(
-        label="Product Name",
-        max_length=255,
-        required=True,
-        widget=forms.TextInput(
-            attrs={
-                "class": "form-control form-control-lg",
-                "placeholder": "Enter product name",
-                "autofocus": True,
-            }
-        ),
-        help_text=(
-            "A product is your top-level offering, which can be physical hardware, software, or a combination of both. "
-            "For example, a smart device, an application suite, or an IoT platform."
-        ),
-    )
-
-
-class OnboardingComponentForm(forms.Form):
-    """Form for creating a component during onboarding."""
-
-    name = forms.CharField(
-        label="Component Name",
-        max_length=255,
-        required=True,
-        widget=forms.TextInput(
-            attrs={
-                "class": "form-control form-control-lg",
-                "placeholder": "Enter component name",
-                "autofocus": True,
-            }
-        ),
-        help_text=(
-            "Components are the individual building blocks that make up your product. These can be libraries, "
-            "microservices, firmware modules, or any other distinct piece of software."
-        ),
-    )
-
-
 class OnboardingCompanyForm(PatchSLAForm):
     """Organisation and security settings saved together at the end of setup."""
 

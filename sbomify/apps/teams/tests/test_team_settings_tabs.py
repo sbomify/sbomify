@@ -13,7 +13,7 @@ from sbomify.apps.teams.fixtures import (  # noqa: F401
     sample_team_with_owner_member,
 )
 from sbomify.apps.teams.models import Invitation, Member
-from sbomify.apps.teams.utils import ALLOWED_TABS, redirect_to_team_settings
+from sbomify.apps.teams.utils import FRAGMENT_ONLY_TABS, redirect_to_team_settings
 
 User = get_user_model()
 
@@ -182,14 +182,14 @@ class TestRedirectToTeamSettingsHelper:
     def test_valid_tab_is_included(self, sample_team_with_owner_member: Member):  # noqa: F811
         """A valid tab is named in the redirect, as a page where one exists.
 
-        Sections with a page of their own redirect straight to it. The two names
-        still in ALLOWED_TABS that have no page (controls, integrations) keep the
-        old fragment form, so links to them are not broken by the move.
+        Sections with a page of their own redirect straight to it. A name that
+        has no page (integrations) keeps the old fragment form, so links to it
+        are not broken by the move.
         """
         from sbomify.apps.teams.settings_tabs import TABS_BY_KEY
 
         team_key = sample_team_with_owner_member.team.key
-        for tab in ALLOWED_TABS:
+        for tab in (*TABS_BY_KEY, *FRAGMENT_ONLY_TABS):
             response = redirect_to_team_settings(team_key, tab)
             expected = f"/settings/{tab}" if tab in TABS_BY_KEY else f"#{tab}"
             assert response.url.endswith(expected), f"{tab} -> {response.url}"
