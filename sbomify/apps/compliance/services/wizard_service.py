@@ -22,6 +22,7 @@ from sbomify.apps.compliance.models import (
     CRAGeneratedDocument,
     OSCALFinding,
 )
+from sbomify.apps.compliance.services.document_generation_service import _COUNTRY_LANGUAGE_MAP
 from sbomify.apps.compliance.services.oscal_service import (
     create_assessment_result,
     ensure_cra_catalog,
@@ -90,42 +91,13 @@ _MAX_WAIVER_JUSTIFICATION_CHARS = 2_000
 # the row and stall JSON serialisation.
 _MAX_STEP_1_TEXT_CHARS = 4_000
 
-# EU member states (ISO 3166-1 alpha-2). Mirrors
+# EU member states (ISO 3166-1 alpha-2), the keys of the document generator's
+# country-language map. Mirrors
 # ``sbomify/apps/compliance/js/eu-countries.ts`` — a market code that
 # isn't in this set is rejected at save time (CRA Art 24: DoC enumerates
 # the member states the product is placed on the market in, so an
 # invalid code would land in a regulated artefact).
-_EU_COUNTRIES: frozenset[str] = frozenset(
-    {
-        "AT",
-        "BE",
-        "BG",
-        "HR",
-        "CY",
-        "CZ",
-        "DK",
-        "EE",
-        "FI",
-        "FR",
-        "DE",
-        "GR",
-        "HU",
-        "IE",
-        "IT",
-        "LV",
-        "LT",
-        "LU",
-        "MT",
-        "NL",
-        "PL",
-        "PT",
-        "RO",
-        "SK",
-        "SI",
-        "ES",
-        "SE",
-    }
-)
+_EU_COUNTRIES: frozenset[str] = frozenset(_COUNTRY_LANGUAGE_MAP)
 
 
 def _auto_fill_from_contacts(assessment: CRAAssessment) -> None:
