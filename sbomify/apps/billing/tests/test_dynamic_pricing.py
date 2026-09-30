@@ -164,7 +164,6 @@ class TestBillingPlanValidation(TestCase):
 
     @override_settings(
         STRIPE_SECRET_KEY="sk_live_test_key",
-        DJANGO_TEST=False,
         TESTING=False,
         DATABASES={"default": {"NAME": "production_db", "ENGINE": "django.db.backends.postgresql"}},
     )
@@ -210,7 +209,6 @@ class TestBillingPlanValidation(TestCase):
 
     @override_settings(
         STRIPE_SECRET_KEY="sk_live_test_key",
-        DJANGO_TEST=False,
         TESTING=False,
     )
     @patch("sbomify.apps.billing.stripe_client.StripeClient")
