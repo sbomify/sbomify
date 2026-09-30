@@ -42,6 +42,8 @@ PARAM_PREFIX = "run_"
 #: in a page full of other cards; this one owns its accordion, so it shows more.
 PAGE_SIZE = 25
 
+_CHECK_ORDER = {"error": 0, "fail": 0, "warning": 1, "info": 2, "pass": 4}
+
 
 @dataclass(frozen=True)
 class RunFindingsPage:
@@ -265,6 +267,10 @@ def build_run_findings_page(request: Any, run_id: str, params: Any = None) -> Se
         # so the mark is stamped here as well as on the page. Its two inputs,
         # the advisory id and its aliases, are in the projection too.
         findings = stamp_exploited(findings, kev_ids, euvd_ids)
+    else:
+        # Checks come in the plugin's own order; the reader wants what failed
+        # first. Stable, so checks of one outcome keep the plugin's order.
+        findings = sorted(findings, key=lambda finding: _CHECK_ORDER.get(finding.get("status") or "", 3))
 
     query = parse_finding_query(params if params is not None else {}, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE)
     panel = browse_finding_rows([_filterable(finding) for finding in findings], query)

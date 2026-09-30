@@ -9,7 +9,7 @@
     and refreshing one region is what leaves a page showing two numbers.
 {% endcomment %}
 <c-layout.frame id="assessment-results">
-<c-layout.section-header level="2" title="Assessments">
+<c-layout.section-header level="2" title="Assessments" subtitle="{% with matrix=assessment_runs.requirements %}{% if matrix.columns %}{% if matrix.to_fix %}{{ matrix.to_fix|intcomma }} requirement{{ matrix.to_fix|pluralize }} to fix · {% endif %}Meets {{ matrix.standards_met|intcomma }} of {{ matrix.columns|length|intcomma }} standard{{ matrix.columns|length|pluralize }}{% endif %}{% endwith %}">
 <c-slot name="actions">
 {% with status=assessment_runs.status_summary %}
     {% if status.overall_status == 'all_pass' %}
@@ -44,53 +44,67 @@
 {% endwith %}
 </c-slot>
 </c-layout.section-header>
-{% with status=assessment_runs.status_summary %}
-    {% if status.total_assessments > 0 %}
-        <div class="flex flex-wrap gap-2">
-            <c-chips.metric-chip>
-            <c-chips.metric.value>{{ status.total_assessments|intcomma }}</c-chips.metric.value>
-            <c-chips.metric.label>assessment{{ status.total_assessments|pluralize }}</c-chips.metric.label>
-            </c-chips.metric-chip>
-            <c-chips.metric-chip accent="success">
-            <c-chips.metric.value>{{ status.passing_count|intcomma }}</c-chips.metric.value>
-            <c-chips.metric.label>Passed</c-chips.metric.label>
-            </c-chips.metric-chip>
-            <c-chips.metric-chip accent="warning">
-            <c-chips.metric.value>{{ status.failing_count|intcomma }}</c-chips.metric.value>
-            <c-chips.metric.label>Issue{{ status.failing_count|pluralize }}</c-chips.metric.label>
-            </c-chips.metric-chip>
-            <c-chips.metric-chip accent="info">
-            <c-chips.metric.value>{{ status.pending_count|add:status.in_progress_count|intcomma }}</c-chips.metric.value>
-            <c-chips.metric.label>Pending</c-chips.metric.label>
-            </c-chips.metric-chip>
-        </div>
-        <!-- Consulting CTA for compliance failures -->
+{% with status=assessment_runs.status_summary tiles=assessment_runs|assessment_scorecards %}
+    {% if status.total_assessments > 0 or assessment_runs.unassessed_plugins %}
+        {% comment %}One frame for the lot. The matrix aggregates every standard's checks by the requirement they test; scans keep their own rows because a vulnerability is not a requirement; each standard's own score and re-run sit in the sources list, folded away because the matrix already carries its score in the column head. The sources open by themselves when a #plugin- link points into them.{% endcomment %}
+        {% with matrix=assessment_runs.requirements %}
+            <c-cards.card flush x-data="{ showMet: false, showSources: !!document.getElementById(location.hash.slice(1))?.closest('#assessment-sources') }">
+            {% if matrix.columns %}
+                {% include 'plugins/components/_requirements_matrix.html.j2' %}
+            {% endif %}
+            {% if matrix.has_scans %}
+                <ul class="m-0 divide-y divide-[color-mix(in_oklab,var(--color-border)_70%,transparent)] p-0{% if matrix.columns %} border-t border-solid border-border{% endif %}">
+                    {% for tile in tiles %}
+                        {% if tile.run.category == 'security' %}
+                            {% include 'plugins/components/_assessment_run_item.html.j2' with run=tile.run tile=tile %}
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            <ul id="assessment-sources"
+                class="m-0 divide-y divide-[color-mix(in_oklab,var(--color-border)_70%,transparent)] border-t border-solid border-border p-0"
+                x-show="showSources"
+                x-cloak>
+                {% for tile in tiles %}
+                    {% if tile.plugin %}
+                        {% include 'plugins/components/_unassessed_plugin_item.html.j2' with plugin=tile.plugin %}
+                    {% elif tile.run.category != 'security' %}
+                        {% with run=tile.run %}
+                            <c-assessments.row anchor="plugin-{{ run.plugin_name }}" name="{{ run.plugin_display_name|default:run.plugin_name }}" tone="{{ tile.tone }}" label="{{ tile.label }}" caption="{{ tile.caption }}" :segments="tile.segments" bar_label="{{ tile.bar_label }}" :stale="run.current_version">
+                            <c-slot name="action">
+                            {% include 'plugins/components/_rerun_button.html.j2' %}
+                            </c-slot>
+                            </c-assessments.row>
+                        {% endwith %}
+                    {% endif %}
+                {% endfor %}
+            </ul>
+            {% comment %}Only when there is something to toggle: a card of scans alone has no met requirements and no standards to list.{% endcomment %}
+            {% if matrix.met or matrix.sources or assessment_runs.unassessed_plugins %}
+                <c-slot name="footer">
+                <div class="flex flex-wrap items-center gap-2">
+                    {% if matrix.met %}
+                        <c-buttons.ghost size="sm" ::aria-expanded="showMet" @click="showMet = !showMet">
+                        <span x-text="showMet ? 'Hide met requirements' : 'Show {{ matrix.met|intcomma }} met requirement{{ matrix.met|pluralize }}'">Show {{ matrix.met|intcomma }} met requirement{{ matrix.met|pluralize }}</span>
+                        </c-buttons.ghost>
+                    {% endif %}
+                    {% if matrix.sources or assessment_runs.unassessed_plugins %}
+                        <c-buttons.ghost size="sm" aria-controls="assessment-sources" ::aria-expanded="showSources" @click="showSources = !showSources">
+                        <span x-text="showSources ? 'Hide standards' : 'Standards and re-runs'">Standards and re-runs</span>
+                        </c-buttons.ghost>
+                    {% endif %}
+                </div>
+                </c-slot>
+            {% endif %}
+            </c-cards.card>
+        {% endwith %}
         {% if assessment_runs|has_compliance_failures %}
-            <c-feedback.alert icon="fas fa-hands-helping">
-            <c-slot name="body">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <span>Need help resolving these compliance issues? Our experts can help.</span>
-                <c-buttons.secondary size="sm" href="{% url 'core:support_contact' %}">
-                <i class="fas fa-envelope" aria-hidden="true"></i>Contact support
-                </c-buttons.secondary>
-            </div>
-            </c-slot>
-            </c-feedback.alert>
+            <p class="m-0 text-sm text-text-muted">
+                Need help fixing these issues?
+                <a href="{% url 'core:support_contact' %}"
+                   class="text-primary hover:underline">Contact support</a>
+            </p>
         {% endif %}
-        <div class="flex flex-col gap-3">
-            {% for run in assessment_runs.latest_runs %}
-                {% include 'plugins/components/_assessment_run_item.html.j2' with run=run loop_index=forloop.counter %}
-            {% endfor %}
-            {% for plugin in assessment_runs.unassessed_plugins %}
-                {% include 'plugins/components/_unassessed_plugin_item.html.j2' %}
-            {% endfor %}
-        </div>
-    {% elif assessment_runs.unassessed_plugins %}
-        <div class="flex flex-col gap-3">
-            {% for plugin in assessment_runs.unassessed_plugins %}
-                {% include 'plugins/components/_unassessed_plugin_item.html.j2' %}
-            {% endfor %}
-        </div>
     {% elif assessment_runs.plugins_enabled %}
         <c-feedback.empty-state compact icon="fas fa-circle-minus" icon_variant="neutral" title="No assessments apply" message="None of this workspace's plugins check this type of artifact." />
     {% elif assessment_runs.plan_excludes_plugins %}
