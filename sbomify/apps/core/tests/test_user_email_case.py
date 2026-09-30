@@ -11,6 +11,7 @@ import importlib
 from unittest.mock import patch
 
 import pytest
+from allauth.account.models import EmailAddress
 from allauth.core.exceptions import ImmediateHttpResponse
 from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
@@ -54,6 +55,7 @@ class _SocialLogin:
     def __init__(self, email: str):
         self.account = type("Account", (), {"provider": "keycloak", "extra_data": {}, "uid": "uid"})()
         self.user = User(email=email)
+        self.email_addresses = [EmailAddress(email=email, verified=True)]
 
     def connect(self, request, user):
         self.user = user
@@ -91,6 +93,7 @@ def test_accounts_without_an_address_do_not_collide():
 
 def test_sign_in_joins_the_account_stored_in_other_case():
     holder = _user_stored_as("holder", "Holder@example.com")
+    User.objects.filter(pk=holder.pk).update(email_verified=True)
     sociallogin = _SocialLogin("holder@example.com")
 
     CustomSocialAccountAdapter().pre_social_login(RequestFactory().get("/"), sociallogin)
@@ -148,7 +151,7 @@ def test_trust_center_invite_answers_when_two_accounts_hold_the_address(
 
 
 def test_account_deletion_removes_invitations_sent_in_other_case():
-    user = User.objects.create_user(username="holder", email="holder@example.com")
+    user = User.objects.create_user(username="holder", email="holder@example.com", email_verified=True)
     Invitation.objects.create(team=Team.objects.create(name="Other"), email="Holder@Example.com", role="admin")
 
     with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):

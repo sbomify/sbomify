@@ -26,6 +26,7 @@ from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core import mail
+from django.db import connection
 from django.http import HttpRequest, HttpResponse
 from django.test import Client, RequestFactory
 from django.urls import reverse
@@ -132,6 +133,10 @@ class TestLinkingAnIdentity:
         assert list(User.objects.all()) == [holder]
 
     def test_a_confirmed_email_held_by_two_accounts_links_neither(self) -> None:
+        # Only rows written before addresses became unique without case can share one.
+        constraint = next(c for c in User._meta.constraints if c.name == "core_users_email_ci_unique")
+        with connection.schema_editor() as editor:
+            editor.remove_constraint(User, constraint)
         for username in ("holder", "other-holder"):
             User.objects.create_user(username=username, email="holder@example.com")
 
