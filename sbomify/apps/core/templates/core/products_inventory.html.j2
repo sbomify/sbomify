@@ -1,17 +1,31 @@
 {# Result swaps leave this frame mounted, so background refreshes must use the current URL. #}
-<c-layout.frame id="inventory-content" hx-get="{{ inventory.refresh_url }}" hx-trigger="refresh-products from:body, refresh-components from:body, refresh-releases from:body, refresh-inventory from:body" @ws:message.window.debounce.500ms="if (['product_created', 'product_updated', 'product_deleted', 'component_created', 'component_updated', 'component_deleted', 'release_created', 'release_updated', 'release_deleted', 'sbom_uploaded', 'sbom_deleted', 'document_uploaded', 'document_deleted', 'assessment_complete'].includes($event.detail.type)) $dispatch('refresh-inventory')" hx-on::config-request="if (event.detail.elt === this) event.detail.path = window.location.pathname + window.location.search" hx-sync="#inventory-content:replace" hx-target="this" hx-swap="outerHTML show:none">
+<c-layout.frame id="inventory-content" x-data="inventoryTabs" @htmx:confirm="confirm($event)" @htmx:before-request="begin($event)" @htmx:after-request="finish($event)" @htmx:after-swap="swapped($event)" hx-get="{{ inventory.refresh_url }}" hx-trigger="refresh-products from:body, refresh-components from:body, refresh-releases from:body, refresh-inventory from:body" @ws:message.window.debounce.500ms="if (['product_created', 'product_updated', 'product_deleted', 'component_created', 'component_updated', 'component_deleted', 'release_created', 'release_updated', 'release_deleted', 'sbom_uploaded', 'sbom_deleted', 'document_uploaded', 'document_deleted', 'assessment_complete'].includes($event.detail.type)) $dispatch('refresh-inventory')" hx-on::config-request="if (event.detail.elt === this) event.detail.path = window.location.pathname + window.location.search" hx-sync="#inventory-content:replace" hx-target="this" hx-swap="outerHTML show:none">
 <c-layout.page-header title="Products" subtitle="Everything this workspace ships, and the evidence behind it.">
 {% if can_manage %}
-    {% if inventory.kind == 'products' %}
-        <c-buttons.primary size="sm" href="{% url 'core:product_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create product</c-buttons.primary>
-    {% elif inventory.kind == 'components' %}
-        <c-buttons.primary size="sm" href="{% url 'core:component_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create component</c-buttons.primary>
-    {% else %}
-        <c-buttons.primary size="sm" href="{% url 'core:release_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create release</c-buttons.primary>
-    {% endif %}
+    <c-buttons.primary size="sm" href="{% url 'core:product_new' %}" x-show="selectedKind === 'products'"
+    {% if inventory.kind != 'products' %}x-cloak{% endif %}
+    ><i class="fas fa-plus" aria-hidden="true"></i>Create product</c-buttons.primary>
+    <c-buttons.primary size="sm" href="{% url 'core:component_new' %}" x-show="selectedKind === 'components'"
+    {% if inventory.kind != 'components' %}x-cloak{% endif %}
+    ><i class="fas fa-plus" aria-hidden="true"></i>Create component</c-buttons.primary>
+    <c-buttons.primary size="sm" href="{% url 'core:release_new' %}" x-show="selectedKind === 'releases'"
+    {% if inventory.kind != 'releases' %}x-cloak{% endif %}
+    ><i class="fas fa-plus" aria-hidden="true"></i>Create release</c-buttons.primary>
 {% endif %}
 </c-layout.page-header>
-<c-navigation.tabs links :tabs="inventory.tabs" active="{{ inventory.kind }}" aria-label="Product inventory" hx-boost="true" hx-target="#inventory-content" />
-<c-inventory.table :inventory="inventory" results_only />
+<c-navigation.tabs links aria-label="Product inventory" hx-boost="true" hx-target="#inventory-panel" hx-push-url="true">
+{% for tab in inventory.tabs %}
+    {% if tab.id == inventory.kind %}
+        <c-navigation.tab href="{{ tab.href }}" data-inventory-tab="{{ tab.id }}" active_binding="selectedKind === '{{ tab.id }}'" icon="{{ tab.icon }}" badge="{{ tab.badge }}" active>{{ tab.label }}</c-navigation.tab>
+    {% else %}
+        <c-navigation.tab href="{{ tab.href }}" data-inventory-tab="{{ tab.id }}" active_binding="selectedKind === '{{ tab.id }}'" icon="{{ tab.icon }}" badge="{{ tab.badge }}">{{ tab.label }}</c-navigation.tab>
+    {% endif %}
+{% endfor %}
+</c-navigation.tabs>
+<div class="flex flex-col gap-4" :aria-busy="loading">
+    <c-feedback.loading-table x-show="showSkeleton" x-cloak message="Loading inventory..." />
+    <c-feedback.alert variant="danger" x-show="failed" x-cloak>Unable to load this tab. Your previous view is still available. Select the tab to try again.</c-feedback.alert>
+    {% include 'core/products_inventory_panel.html.j2' %}
+</div>
 </c-layout.frame>
 {% if inventory_navigation_oob %}<c-chrome.inventory-nav kind="{{ inventory.kind }}" oob />{% endif %}

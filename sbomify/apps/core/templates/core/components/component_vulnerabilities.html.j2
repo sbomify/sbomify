@@ -12,6 +12,7 @@ filter or a page changes, so searching never closes the panel.
         The panel is a full-bleed table, so it takes the clipped wrapper the
         card's body would have given it and none of the padding.
     {% endcomment %}
+    <c-cards.collapsible-header>
     <c-cards.collapsible-trigger state="open" @click="open = !open">
     <span class="text-lg">
         Vulnerabilities
@@ -20,6 +21,12 @@ filter or a page changes, so searching never closes the panel.
         {% endif %}
     </span>
     </c-cards.collapsible-trigger>
+    <c-slot name="actions">
+    {% if latest_vuln_sbom_id %}
+        <c-buttons.ghost href="{% url 'sboms:sbom_vulnerabilities' latest_vuln_sbom_id %}" size="sm">View full scan report<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
+    {% endif %}
+    </c-slot>
+    </c-cards.collapsible-header>
     <div class="overflow-hidden" x-show="open" x-collapse>
         {% include "core/components/component_vulnerabilities_table.html.j2" %}
     </div>

@@ -26,7 +26,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY, READ_INTERNAL, ROLE_GUEST, ROLE_OWNER
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST, ROLE_OWNER, can
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -39,8 +39,7 @@ from sbomify.apps.teams.models import (
     Team,
 )
 from sbomify.apps.teams.permissions import check_member_removal
-from sbomify.apps.teams.queries import count_team_members
-from sbomify.apps.teams.services.member_notifications import notify_owners_of_owner_invitation
+from sbomify.apps.teams.queries import count_team_members, invitation_email
 from sbomify.apps.teams.utils import (
     redirect_to_team_settings,
     switch_active_workspace,
@@ -233,8 +232,11 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
     except Team.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Team not found"))
 
+    can_grant_owner = bool(can(request, "member:grant_owner", team))
+    context["can_grant_owner"] = can_grant_owner
+
     if request.method == "POST":
-        invite_user_form = InviteUserForm(request.POST)
+        invite_user_form = InviteUserForm(request.POST, can_grant_owner=can_grant_owner)
 
         # Advisory, so the limit shows as a form error rather than as a refusal
         # after the user has filled the form in. The authoritative check is taken
@@ -281,6 +283,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                     team_id=team_id,
                     email=invite_user_form.cleaned_data["email"],
                     role=invite_user_form.cleaned_data["role"],
+                    invited_by=cast(User, request.user),
                 )
                 invitation.save()
 
@@ -316,19 +319,6 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             email_domain = invited_email.rsplit("@", 1)[-1].lower() if "@" in invited_email else ""
             captured_role = invite_user_form.cleaned_data["role"]
             captured_team_key = team.key
-
-            # Admins may invite at any level, including owner. That makes the
-            # "admins cannot remove an owner" rule bypassable in principle — an
-            # admin could mint an owner they control. The boundary is about
-            # preventing accidents, not defending against a malicious admin, so
-            # rather than forbidding it we make it visible: tell the existing
-            # owners whenever an owner-level invitation is created.
-            actor_role = (
-                Member.objects.filter(user=cast(User, request.user), team=team).values_list("role", flat=True).first()
-                or ""
-            )
-            if captured_role in OWNER_ONLY and actor_role not in OWNER_ONLY:
-                notify_owners_of_owner_invitation(team, cast(User, request.user), invited_email)
             transaction.on_commit(
                 lambda: capture_for_request(
                     request,
@@ -348,7 +338,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
         # If form has errors, fall through to render the form with errors
         context["invite_user_form"] = invite_user_form
     else:
-        invite_user_form = InviteUserForm()
+        invite_user_form = InviteUserForm(can_grant_owner=can_grant_owner)
         context["invite_user_form"] = invite_user_form
 
     return render(request, "teams/invite.html.j2", context)
@@ -420,7 +410,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     # and is dropped either way, so a stale one cannot reach a later step.
     request.session.pop("pending_invitation_token", None)
 
-    if (request.user.email or "").lower() != invitation.email.lower():
+    if invitation_email(request.user).lower() != invitation.email.lower():
         # Avoid revealing whether an invitation exists for another email
         return error_response(request, HttpResponseNotFound("Unknown invitation"))
 
@@ -432,7 +422,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             request, "teams/accept_invite.html.j2", {"invitation": invitation, "pending_invitations_count": 0}
         )
 
-    log.info("Accepting invitation %s", invite_token)
+    log.info("Accepting invitation %s", invitation.pk)
 
     # Check if we already have a membership
     try:
@@ -440,6 +430,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         if existing_membership:
             # Update role if invitation role is different
             old_role = existing_membership.role
+            new_role = invitation.granted_role
 
             # An invitation must never DEMOTE an existing owner. Accepting one
             # re-writes the membership's role, which would otherwise route
@@ -449,7 +440,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             # last owner would also leave the workspace ownerless — nobody could
             # then delete it (OWNER_ONLY) and the primary-owner lookup in
             # teams.apis would return None.
-            if old_role == ROLE_OWNER and invitation.role != ROLE_OWNER:
+            if old_role == ROLE_OWNER and new_role != ROLE_OWNER:
                 invitation.delete()
                 messages.add_message(
                     request,
@@ -459,14 +450,14 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
                 )
                 return redirect("core:dashboard")
 
-            role_changed = old_role != invitation.role
+            role_changed = old_role != new_role
             if role_changed:
-                existing_membership.role = invitation.role
+                existing_membership.role = new_role
                 existing_membership.save(update_fields=["role"])
                 update_user_teams_session(request, request.user)
 
                 # If user was upgraded from guest to admin/owner, remove their access requests
-                if old_role == ROLE_GUEST and invitation.role in READ_INTERNAL:
+                if old_role == ROLE_GUEST and new_role in READ_INTERNAL:
                     from sbomify.apps.documents.access_models import AccessRequest
                     from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
 
@@ -475,19 +466,19 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
                     # Invalidate cache so the queue updates immediately
                     _invalidate_access_requests_cache(invitation.team)
 
-            switch_active_workspace(request, invitation.team, invitation.role)
+            switch_active_workspace(request, invitation.team, new_role)
 
             if role_changed:
                 messages.add_message(
                     request,
                     messages.SUCCESS,
-                    f"Your role in {invitation.team.name} has been updated to {invitation.role}",
+                    f"Your role in {invitation.team.name} has been updated to {new_role}",
                 )
             else:
                 messages.add_message(
                     request,
                     messages.INFO,
-                    f"You have already joined {invitation.team.name} as {invitation.role}",
+                    f"You have already joined {invitation.team.name} as {new_role}",
                 )
             invitation.delete()
             return redirect("core:dashboard")
@@ -553,7 +544,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         membership = Member(
             team_id=invitation.team_id,
             user_id=request.user.id,
-            role=invitation.role,
+            role=invitation.granted_role,
             is_default_team=not has_default_team,
         )
         membership.save()
@@ -567,7 +558,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         # Everything below reads these rather than the invitation, because the
         # row is gone once the block closes.
         joined_team = invitation.team
-        joined_role = invitation.role
+        joined_role = membership.role
         invitation.delete()
 
     # Create/approve AccessRequest for trust center invitations (only when NO NDA is required)

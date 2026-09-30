@@ -32,3 +32,28 @@ def test_result_request_returns_only_results(
     assert b"<form" not in response.content
     assert b'aria-label="Product inventory"' not in response.content
     assert "HX-Target" in response["Vary"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", ["products", "components", "releases"])
+def test_tab_request_returns_panel_without_replacing_navigation(
+    client: Client, sample_team_with_owner_member: Member, mocker: MockerFixture, kind: str
+) -> None:
+    member = sample_team_with_owner_member
+    setup_authenticated_client_session(client, member.team, member.user)
+    mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
+    # Each tab is its own URL; a legacy ?view= link redirects instead (see
+    # test_legacy_inventory_links_redirect_with_filters).
+    response = client.get(
+        reverse(f"core:{kind}_dashboard"),
+        HTTP_HX_REQUEST="true",
+        HTTP_HX_TARGET="inventory-panel",
+    )
+    assert response.status_code == 200
+    assert f'data-inventory-kind="{kind}"'.encode() in response.content
+    assert b'id="inventory-panel"' in response.content
+    assert b'id="inventory-content-filters"' in response.content
+    assert b'id="inventory-content-results"' in response.content
+    assert b'aria-label="Product inventory"' not in response.content
+    assert b"<html" not in response.content
+    assert "HX-Target" in response["Vary"]

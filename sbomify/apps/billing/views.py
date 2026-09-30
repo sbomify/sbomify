@@ -41,7 +41,14 @@ from .billing_helpers import (
 )
 from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
-from .stripe_client import BillingRetryableError, StripeError, WorkspaceGoneError, get_stripe_client
+from .stripe_client import (
+    TERMINAL_SUBSCRIPTION_STATUSES,
+    BillingEventTooEarlyError,
+    BillingRetryableError,
+    StripeError,
+    WorkspaceGoneError,
+    get_stripe_client,
+)
 from .stripe_pricing_service import StripePricingService
 from .stripe_sync import sync_subscription_from_stripe
 from .tasks import send_enterprise_inquiry_email
@@ -207,7 +214,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
         sub_status = billing_limits.get("subscription_status")
         cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
 
-        if sub_status == "canceled" or not sub_id:
+        if sub_status in TERMINAL_SUBSCRIPTION_STATUSES or not sub_id:
             messages.info(request, "Your subscription has ended. Please select a new plan to continue.")
             return redirect("billing:select_plan", team_key=team.key)
 
@@ -353,7 +360,7 @@ class SelectPlanView(LoginRequiredMixin, View):
         if plan.key == BillingPlan.KEY_COMMUNITY and cancel_at_period_end:
             return self._handle_scheduled_downgrade(team, team_key, scheduled_downgrade_plan, request)
 
-        if not stripe_sub_id or current_sub_status == "canceled":
+        if not stripe_sub_id or current_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
             result = self._handle_subscription_cancel(team, team_key, plan, request)
             if result is not None:
                 return result
@@ -560,6 +567,7 @@ class BillingReturnView(LoginRequiredMixin, View):
                         messages.success(request, "Your subscription is already active.")
                         return redirect("core:dashboard")
 
+                    plan: BillingPlan | None = None
                     try:
                         plan = BillingPlan.objects.get(key=plan_key)
                     except BillingPlan.DoesNotExist:
@@ -720,6 +728,9 @@ class StripeWebhookView(View):
 
             return HttpResponse(status=200)
 
+        except BillingEventTooEarlyError as e:
+            logger.warning("Webhook arrived before the event it depends on (Stripe will retry): %s", e)
+            return HttpResponse(status=503)
         except BillingRetryableError as e:
             # Transient/recoverable failure — do NOT acknowledge, let Stripe retry.
             # 503 (vs the 500 below) is deliberate: it flags an *anticipated* transient
