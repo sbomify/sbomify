@@ -198,6 +198,8 @@ def run_assessment_task(
     # Track retry info if RetryLaterError occurs (set inside atomic block)
     # This allows the transaction to commit before scheduling the retry
     retry_later_info: dict[str, Any] | None = None
+    # Stays None only when the orchestrator skips: the retry branch below always returns.
+    assessment_run = None
 
     try:
         # Convert string run_reason back to enum

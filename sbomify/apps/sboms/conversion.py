@@ -113,6 +113,7 @@ def downgrade_cyclonedx(data: bytes, version: str) -> bytes:
     document["specVersion"] = version
     document["$schema"] = f"http://cyclonedx.org/schema/bom-{version}.schema.json"
     validator = _cyclonedx_validator(version)
+    errors: list[ValidationError] = []
     for _ in range(_MAX_PRUNE_ROUNDS):
         errors = list(validator.iter_errors(document))
         if not errors:
