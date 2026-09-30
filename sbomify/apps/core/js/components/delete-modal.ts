@@ -45,11 +45,6 @@ declare global {
 }
 
 export function registerDeleteModal() {
-    // Fallback for showSuccess and showError is NOT needed here because we import them.
-    // But we might want to ensure they are on window if the template relies on them being on window from elsewhere.
-    // But the template doesn't call window.showSuccess directly unless via our code or existing pattern.
-    // main.ts sets them on window via alerts-global.ts so we are good.
-
     if (!window.getDeleteModalData) {
         window.getDeleteModalData = function (config: DeleteModalConfig) {
             return {

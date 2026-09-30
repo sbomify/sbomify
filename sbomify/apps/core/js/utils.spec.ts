@@ -177,31 +177,6 @@ describe('Utils', () => {
         })
     })
 
-    describe('getErrorMessage', () => {
-        test('should extract message from Error object', () => {
-            const getErrorMessage = (error: Error | unknown): string => {
-                if (error instanceof Error) {
-                    return error.message
-                }
-                return String(error)
-            }
-
-            expect(getErrorMessage(new Error('Test error'))).toBe('Test error')
-        })
-
-        test('should convert non-Error to string', () => {
-            const getErrorMessage = (error: Error | unknown): string => {
-                if (error instanceof Error) {
-                    return error.message
-                }
-                return String(error)
-            }
-
-            expect(getErrorMessage('string error')).toBe('string error')
-            expect(getErrorMessage(123)).toBe('123')
-        })
-    })
-
     describe('formatDate', () => {
         test('should format a valid date string', () => {
             const result = formatDate('2024-01-15')
@@ -363,71 +338,6 @@ describe('Utils', () => {
         })
     })
 
-    describe('EventEmitter', () => {
-        test('should register event listeners', () => {
-            const events: Record<string, Array<() => void>> = {}
-
-            const on = (event: string, callback: () => void) => {
-                if (!events[event]) {
-                    events[event] = []
-                }
-                events[event].push(callback)
-            }
-
-            on('test', () => { })
-            expect(events['test']).toHaveLength(1)
-
-            on('test', () => { })
-            expect(events['test']).toHaveLength(2)
-        })
-
-        test('should remove event listeners', () => {
-            const events: Record<string, Array<() => void>> = {}
-            const callback = () => { }
-
-            const on = (event: string, cb: () => void) => {
-                if (!events[event]) events[event] = []
-                events[event].push(cb)
-            }
-
-            const off = (event: string, cb: () => void) => {
-                if (!events[event]) return
-                const index = events[event].indexOf(cb)
-                if (index > -1) {
-                    events[event].splice(index, 1)
-                }
-            }
-
-            on('test', callback)
-            expect(events['test']).toHaveLength(1)
-
-            off('test', callback)
-            expect(events['test']).toHaveLength(0)
-        })
-
-        test('should emit events to listeners', () => {
-            let callCount = 0
-            const events: Record<string, Array<(...args: unknown[]) => void>> = {}
-
-            const on = (event: string, cb: () => void) => {
-                if (!events[event]) events[event] = []
-                events[event].push(cb)
-            }
-
-            const emit = (event: string) => {
-                if (!events[event]) return
-                events[event].forEach(cb => cb())
-            }
-
-            on('test', () => { callCount++ })
-            emit('test')
-            expect(callCount).toBe(1)
-
-            emit('test')
-            expect(callCount).toBe(2)
-        })
-    })
-
     describe('CSRF interceptor logic', () => {
         test('should set X-CSRFToken header when token is available', () => {
             const getCsrfToken = () => 'test-csrf-token'
@@ -486,24 +396,6 @@ describe('Utils', () => {
             }
 
             expect(headersInitialized).toBe(true)
-        })
-    })
-
-    describe('EVENTS constants', () => {
-        test('should have all required event names', () => {
-            const EVENTS = {
-                REFRESH_PRODUCTS: 'refresh_products',
-                REFRESH_COMPONENTS: 'refresh_components',
-                ITEM_CREATED: 'item_created',
-                ITEM_UPDATED: 'item_updated',
-                ITEM_DELETED: 'item_deleted'
-            }
-
-            expect(EVENTS.REFRESH_PRODUCTS).toBe('refresh_products')
-            expect(EVENTS.REFRESH_COMPONENTS).toBe('refresh_components')
-            expect(EVENTS.ITEM_CREATED).toBe('item_created')
-            expect(EVENTS.ITEM_UPDATED).toBe('item_updated')
-            expect(EVENTS.ITEM_DELETED).toBe('item_deleted')
         })
     })
 })

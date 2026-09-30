@@ -60,13 +60,6 @@ export function parseJsonScript<T = unknown>(elementId: string): T | null {
   }
 }
 
-export function getErrorMessage(error: Error | unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
-
 /**
  * Parse a date value, returning null for anything invalid.
  */
@@ -182,53 +175,3 @@ export function formatLastChecked(
     hour12: true,
   });
 }
-
-/**
- * Simple event emitter for cross-component communication
- * Replaces global window function dependencies
- */
-type EventCallback = (...args: unknown[]) => void;
-
-class EventEmitter {
-  private events: Record<string, EventCallback[]> = {};
-
-  on(event: string, callback: EventCallback): void {
-    if (!this.events[event]) {
-      this.events[event] = [];
-    }
-    this.events[event].push(callback);
-  }
-
-  off(event: string, callback: EventCallback): void {
-    if (!this.events[event]) return;
-
-    const index = this.events[event].indexOf(callback);
-    if (index > -1) {
-      this.events[event].splice(index, 1);
-    }
-  }
-
-  emit(event: string, ...args: unknown[]): void {
-    if (!this.events[event]) return;
-
-    this.events[event].forEach(callback => {
-      try {
-        callback(...args);
-      } catch (error) {
-        console.error(`Error in event listener for ${event}:`, error);
-      }
-    });
-  }
-}
-
-// Global event emitter instance
-export const eventBus = new EventEmitter();
-
-// Event constants
-export const EVENTS = {
-  REFRESH_PRODUCTS: 'refresh_products',
-  REFRESH_COMPONENTS: 'refresh_components',
-  ITEM_CREATED: 'item_created',
-  ITEM_UPDATED: 'item_updated',
-  ITEM_DELETED: 'item_deleted',
-} as const;

@@ -61,21 +61,6 @@ export function showConfirmation({
   });
 }
 
-/**
- * Show a simple alert (uses toast for now)
- */
-export function showAlert({
-  title,
-  message,
-  type,
-}: {
-  title: string;
-  message: string;
-  type: 'success' | 'error' | 'warning' | 'info';
-}): void {
-  showToast({ title, message, type, duration: 5000 });
-}
-
 // Shorthand functions
 export function showSuccess(message: string): void {
   showToast({ title: 'Success', message, type: 'success' });
@@ -91,9 +76,4 @@ export function showWarning(message: string): void {
 
 export function showInfo(message: string): void {
   showToast({ title: 'Info', message, type: 'info' });
-}
-
-// Export for global access (used by Django messages)
-if (typeof window !== 'undefined') {
-  (window as Window & { showToast?: typeof showToast }).showToast = showToast;
 }
