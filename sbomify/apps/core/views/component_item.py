@@ -9,7 +9,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
 
-from sbomify.apps.core.apis import _build_item_response, get_component
+from sbomify.apps.core.apis import _build_component_response, get_component
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
@@ -223,7 +223,7 @@ class ComponentItemPublicView(View):
             "brand": brand,
             "item": item,
             "item_type": item_type,
-            "component": _build_item_response(request, component, "component"),
+            "component": _build_component_response(request, component),
             "passing_assessments": passing_assessments,
             "workspace_public_url": workspace_public_url,
         }
