@@ -18,7 +18,6 @@ from django.utils import timezone
 
 from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.billing.stripe_client import get_stripe_client
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import number_to_random_token
@@ -124,7 +123,6 @@ def normalize_host(host: str) -> str:
 
 
 logger = getLogger(__name__)
-stripe_client = get_stripe_client()
 
 
 def get_app_hostname() -> str:
@@ -489,73 +487,6 @@ def create_user_team_and_subscription(user: User) -> Team | None:
     _setup_community_plan(team)
 
     return team
-
-
-def setup_trial_subscription(user: User, team: Team) -> bool:
-    """
-    Set up a trial subscription for a team.
-
-    Args:
-        user: The team owner
-        team: The team to set up subscription for
-
-    Returns:
-        True if successful, False otherwise
-    """
-    from sbomify.apps.billing.config import is_billing_enabled
-
-    if not is_billing_enabled():
-        return False
-
-    try:
-        business_plan = BillingPlan.objects.get(key="business")
-        if not business_plan.stripe_price_monthly_id:
-            logger.error("Business plan has no stripe_price_monthly_id configured")
-            _setup_community_plan(team)
-            return False
-        customer = stripe_client.create_customer(
-            email=user.email, name=team.name, metadata={"team_key": team.key or ""}
-        )
-        subscription = stripe_client.create_subscription(
-            customer_id=customer.id,
-            price_id=business_plan.stripe_price_monthly_id,
-            trial_days=settings.TRIAL_PERIOD_DAYS,
-            metadata={"team_key": team.key or "", "plan_key": "business"},
-        )
-        try:
-            with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
-                team.billing_plan = "business"
-                team.billing_plan_limits = {
-                    "max_products": business_plan.max_products,
-                    "max_components": business_plan.max_components,
-                    "stripe_customer_id": customer.id,
-                    "stripe_subscription_id": subscription.id,
-                    "subscription_status": "trialing",
-                    "is_trial": True,
-                    "trial_end": subscription.trial_end,
-                    "last_updated": timezone.now().isoformat(),
-                }
-                team.save()
-        except Exception:
-            # DB transaction failed — clean up orphaned Stripe resources
-            logger.warning(
-                "DB update failed after Stripe resources created; cleaning up subscription %s",
-                subscription.id,
-            )
-            try:
-                stripe_client.cancel_subscription(subscription.id)
-            except Exception:
-                logger.error("Failed to clean up orphaned Stripe subscription %s", subscription.id)
-            raise
-
-        logger.info("Created trial subscription for team %s (%s)", team.key, team.name)
-        return True
-
-    except Exception as e:
-        logger.error("Failed to create trial subscription for team %s: %s", team.key, e)
-        _setup_community_plan(team)
-        return False
 
 
 def _setup_community_plan(team: Team) -> None:

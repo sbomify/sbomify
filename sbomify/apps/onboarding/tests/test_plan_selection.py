@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.stripe_client import StripeClient
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Member, Team
 
@@ -291,8 +292,9 @@ class TestLegacyPlanUrl:
 
 
 class TestDefaultPlanOnSignup:
-    @patch("sbomify.apps.teams.utils.stripe_client")
-    def test_new_user_gets_community_not_trial(self, mock_stripe, community_plan):
+    @patch.object(StripeClient, "create_subscription")
+    @patch.object(StripeClient, "create_customer")
+    def test_new_user_gets_community_not_trial(self, mock_create_customer, mock_create_subscription, community_plan):
         """New users should default to community, not auto-Business trial."""
         from sbomify.apps.teams.utils import create_user_team_and_subscription
 
@@ -301,8 +303,8 @@ class TestDefaultPlanOnSignup:
 
         assert team.billing_plan == "community"
         assert team.billing_plan_limits.get("is_trial") is None
-        mock_stripe.create_customer.assert_not_called()
-        mock_stripe.create_subscription.assert_not_called()
+        mock_create_customer.assert_not_called()
+        mock_create_subscription.assert_not_called()
 
 
 # ── Trial Expiration Downgrade Tests ──────────────────────────────────

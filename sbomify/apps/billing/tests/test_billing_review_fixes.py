@@ -2,7 +2,7 @@
 
 Covers: checkout session lock, fail-closed rate limiter, enterprise contact rate limiting,
 plan_key in API checkout metadata, Turnstile remoteip, get_community_plan_limits helper,
-price_id validation in trial setup, and session_id masking in billing return.
+and session_id masking in billing return.
 """
 
 from unittest.mock import MagicMock, patch
@@ -341,76 +341,6 @@ class TestGetCommunityPlanLimits:
         limits = get_community_plan_limits()
         assert limits["max_products"] is None
         assert limits["max_components"] is None
-
-
-# ============================================================================
-# Task #50: price_id Validation in Trial Setup Tests
-# ============================================================================
-
-
-@pytest.mark.django_db
-class TestPriceIdValidationInTrialSetup:
-    """Test that setup_trial_subscription validates stripe_price_monthly_id."""
-
-    def test_falls_back_to_community_when_no_price_id(self, sample_user, community_plan):
-        """When business plan has no stripe_price_monthly_id, falls back to community."""
-        from sbomify.apps.teams.utils import setup_trial_subscription
-
-        BillingPlan.objects.get_or_create(
-            key="business",
-            defaults={
-                "name": "Business",
-                "description": "For growing teams",
-                "max_products": 10,
-                "max_components": 100,
-                "stripe_product_id": "prod_test",
-                "stripe_price_monthly_id": "",  # Empty = no price configured
-                "stripe_price_annual_id": "price_annual",
-            },
-        )
-        BillingPlan.objects.filter(key="business").update(stripe_price_monthly_id="")
-
-        from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Member, Team
-
-        team = Team.objects.create(name="Trial Test Team")
-        team.key = number_to_random_token(team.pk)
-        team.save()
-        Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
-
-        result = setup_trial_subscription(sample_user, team)
-        assert result is False
-
-        team.refresh_from_db()
-        assert team.billing_plan == "community"
-
-    def test_proceeds_when_price_id_present(self, sample_user, business_plan, community_plan):
-        """When business plan has stripe_price_monthly_id, proceeds with trial setup."""
-        from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Member, Team
-        from sbomify.apps.teams.utils import setup_trial_subscription
-
-        team = Team.objects.create(name="Trial Test Team 2")
-        team.key = number_to_random_token(team.pk)
-        team.save()
-        Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
-
-        mock_customer = MagicMock()
-        mock_customer.id = "cus_trial_test"
-        mock_sub = MagicMock()
-        mock_sub.id = "sub_trial_test"
-        mock_sub.trial_end = 1700000000
-
-        with patch("sbomify.apps.teams.utils.stripe_client") as mock_stripe:
-            mock_stripe.create_customer.return_value = mock_customer
-            mock_stripe.create_subscription.return_value = mock_sub
-
-            result = setup_trial_subscription(sample_user, team)
-
-        assert result is True
-        team.refresh_from_db()
-        assert team.billing_plan == "business"
-        assert team.billing_plan_limits["stripe_subscription_id"] == "sub_trial_test"
 
 
 # ============================================================================
