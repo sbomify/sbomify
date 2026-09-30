@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from typing import Any
 
-from django.db.models import OuterRef, Subquery
 from django.http import HttpRequest
 from ninja import Router
 from ninja.decorators import decorate_view
@@ -423,27 +422,18 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
             skipped_count=0,
             plugins=[],
         )
-    # Fetch only the latest run per plugin_name via Subquery/OuterRef —
+    # Fetch only the latest run per plugin_name via DISTINCT ON —
     # bounded to ``enabled plugins per SBOM`` rather than the full run
     # history. Under the scan-once-per-SBOM model there's one run per
     # plugin per SBOM so this lookup is a simple group-by-plugin.
-    latest_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .values("plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(
-                    sbom_id=sbom_id,
-                    plugin_name=OuterRef("plugin_name"),
-                )
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
+    latest_runs = list(
+        AssessmentRun.objects.filter(
+            id__in=AssessmentRun.objects.filter(sbom_id=sbom_id)
+            .order_by("plugin_name", "-created_at")
+            .distinct("plugin_name")
+            .values("id")
         )
-        .values_list("latest_id", flat=True)
     )
-    latest_ids = [pk for pk in latest_ids if pk is not None]
-    latest_runs = list(AssessmentRun.objects.filter(id__in=latest_ids))
     status_summary = _compute_status_summary(latest_runs)
 
     # Prefetch display names once — avoids N+1 in the per-plugin loop below.

@@ -10,8 +10,7 @@ from dataclasses import dataclass
 from dataclasses import replace as dataclass_replace
 from typing import TYPE_CHECKING, Any
 
-from django.db.models import F, OuterRef, Subquery
-from django.db.utils import NotSupportedError
+from django.db.models import F
 
 from .models import AssessmentRun, RegisteredPlugin
 from .sdk.enums import AssessmentCategory, RunStatus
@@ -84,30 +83,15 @@ def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
     breakdown lives on ``AssessmentRun.releases`` M2M and is surfaced in the
     UI as badges on the single plugin card.
 
-    Uses Subquery/OuterRef to fetch only the newest row per plugin_name
-    (no DISTINCT ON — portable to SQLite). Prefetches ``releases`` so the
-    card template can render the release badges without N+1 lookups.
+    Uses DISTINCT ON to fetch only the newest row per plugin_name.
+    Prefetches ``releases`` so the card template can render the release
+    badges without N+1 lookups.
     """
-    latest_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .values("plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(
-                    sbom_id=sbom_id,
-                    plugin_name=OuterRef("plugin_name"),
-                )
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
-    )
-    latest_ids = [pk for pk in latest_ids if pk is not None]
-    if not latest_ids:
-        return []
     return sorted(
-        AssessmentRun.objects.filter(id__in=latest_ids).prefetch_related("releases"),
+        AssessmentRun.objects.filter(sbom_id=sbom_id)
+        .order_by("plugin_name", "-created_at")
+        .distinct("plugin_name")
+        .prefetch_related("releases"),
         key=lambda r: r.plugin_name,
     )
 
@@ -263,35 +247,17 @@ def _get_passing_assessments_by_sbom(
     SBOM versions would otherwise pull every one of them into memory.
     """
 
-    def read_runs(latest_ids: Any) -> list[Any]:
-        return list(
-            AssessmentRun.objects.filter(id__in=latest_ids)
-            .only("id", "sbom_id", "plugin_name", "category", "status", "completed_at")
-            .annotate(summary_slice=F("result__summary"), metadata_slice=F("result__metadata"))
-            .order_by("plugin_name")
-        )
-
-    try:
-        runs = read_runs(
-            AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
+    runs = list(
+        AssessmentRun.objects.filter(
+            id__in=AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
             .order_by("sbom_id", "plugin_name", "-created_at", "-id")
             .distinct("sbom_id", "plugin_name")
             .values("id")
         )
-    except NotSupportedError:
-        # Fallback for databases that don't support DISTINCT ON (e.g., SQLite in tests)
-        runs = read_runs(
-            AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-            .values("sbom_id", "plugin_name")
-            .annotate(
-                latest_id=Subquery(
-                    AssessmentRun.objects.filter(sbom_id=OuterRef("sbom_id"), plugin_name=OuterRef("plugin_name"))
-                    .order_by("-created_at", "-id")
-                    .values("id")[:1]
-                )
-            )
-            .values_list("latest_id", flat=True)
-        )
+        .only("id", "sbom_id", "plugin_name", "category", "status", "completed_at")
+        .annotate(summary_slice=F("result__summary"), metadata_slice=F("result__metadata"))
+        .order_by("plugin_name")
+    )
     passing_by_sbom: dict[str, list[PassingAssessment]] = {sbom_id: [] for sbom_id in sbom_ids}
     for run in runs:
         # The two helpers read nothing else from ``result``.
@@ -581,23 +547,11 @@ def get_products_latest_sbom_assessments_batch(
 
     # Step 2: Get latest SBOM for each component (single query with window function simulation)
     component_ids = list(component_to_products.keys())
-    latest_sboms = (
+    latest_sbom_list = list(
         SBOM.objects.filter(component_id__in=component_ids)
         .order_by("component_id", "-created_at")
         .distinct("component_id")
     )
-
-    # Fallback for databases that don't support DISTINCT ON (e.g., SQLite in tests)
-    try:
-        latest_sbom_list = list(latest_sboms)
-    except NotSupportedError:
-        # Manual deduplication for SQLite which doesn't support DISTINCT ON
-        seen_components: set[str] = set()
-        latest_sbom_list = []
-        for sbom in SBOM.objects.filter(component_id__in=component_ids).order_by("component_id", "-created_at"):
-            if str(sbom.component_id) not in seen_components:
-                seen_components.add(str(sbom.component_id))
-                latest_sbom_list.append(sbom)
 
     sbom_to_component = {str(sbom.id): str(sbom.component_id) for sbom in latest_sbom_list}
     sbom_ids = list(sbom_to_component.keys())
@@ -608,15 +562,9 @@ def get_products_latest_sbom_assessments_batch(
     # Step 3: Get all assessment runs for these SBOMs (batch query)
     latest_run_ids = (
         AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-        .values("sbom_id", "plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=OuterRef("sbom_id"), plugin_name=OuterRef("plugin_name"))
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
+        .order_by("sbom_id", "plugin_name", "-created_at")
+        .distinct("sbom_id", "plugin_name")
+        .values("id")
     )
 
     all_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids).select_related())
@@ -692,23 +640,11 @@ def get_components_latest_sbom_assessments_batch(
     component_ids = [str(c.id) for c in components]
 
     # Step 1: Get latest SBOM for each component (single query)
-    latest_sboms = (
+    latest_sbom_list = list(
         SBOM.objects.filter(component_id__in=component_ids)
         .order_by("component_id", "-created_at")
         .distinct("component_id")
     )
-
-    # Fallback for databases that don't support DISTINCT ON (e.g., SQLite in tests)
-    try:
-        latest_sbom_list = list(latest_sboms)
-    except NotSupportedError:
-        # Manual deduplication for SQLite which doesn't support DISTINCT ON
-        seen_components: set[str] = set()
-        latest_sbom_list = []
-        for sbom in SBOM.objects.filter(component_id__in=component_ids).order_by("component_id", "-created_at"):
-            if str(sbom.component_id) not in seen_components:
-                seen_components.add(str(sbom.component_id))
-                latest_sbom_list.append(sbom)
 
     if not latest_sbom_list:
         return {cid: [] for cid in component_ids}
@@ -717,19 +653,11 @@ def get_components_latest_sbom_assessments_batch(
     sbom_ids = list(sbom_to_component.keys())
 
     # Step 2: Get all assessment runs for these SBOMs (batch query)
-    from django.db.models import OuterRef, Subquery
-
     latest_run_ids = (
         AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-        .values("sbom_id", "plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=OuterRef("sbom_id"), plugin_name=OuterRef("plugin_name"))
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
+        .order_by("sbom_id", "plugin_name", "-created_at")
+        .distinct("sbom_id", "plugin_name")
+        .values("id")
     )
 
     all_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids).select_related())
