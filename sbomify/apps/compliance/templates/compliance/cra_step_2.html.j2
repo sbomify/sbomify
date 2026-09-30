@@ -235,7 +235,7 @@
             {# Team link #}
             <div class="text-center">
                 {% if current_team and current_team.key %}
-                    <a href="{% url 'teams:team_settings' team_key=current_team.key %}#members"
+                    <a href="{% url 'teams:team_settings_tab' team_key=team.key tab='members' %}"
                        target="_blank"
                        rel="noopener noreferrer"
                        class="text-primary hover:underline text-sm">
