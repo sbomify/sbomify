@@ -62,37 +62,15 @@ import { registerCraStep4 } from '../../compliance/js/cra-step-4';
 import { registerCraStep5 } from '../../compliance/js/cra-step-5';
 import { registerCiCdToken } from '../../sboms/js/ci-cd-token';
 
-// Track registered components to prevent double-registration
-const registeredComponents = new Set<string>();
-
 /**
- * Safely register an Alpine.data component.
- * Prevents duplicate registration.
+ * Register an Alpine.data component.
  */
 export function registerAlpineComponent(
     name: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     component: (...args: any[]) => object
 ): void {
-    if (registeredComponents.has(name)) {
-        return;
-    }
     Alpine.data(name, component);
-    registeredComponents.add(name);
-}
-
-/**
- * Check if a component is already registered
- */
-export function isComponentRegistered(name: string): boolean {
-    return registeredComponents.has(name);
-}
-
-/**
- * Get list of all registered component names
- */
-export function getRegisteredComponents(): string[] {
-    return Array.from(registeredComponents);
 }
 
 // ============================================
@@ -106,72 +84,7 @@ export function getRegisteredComponents(): string[] {
 export function dangerZone() {
     return {
         showDeleteModal: false,
-        isExpanded: false,
-        confirmText: '',
-
-        get canConfirm(): boolean {
-            return this.confirmText.toLowerCase() === 'delete';
-        },
-
-        toggle(): void {
-            this.isExpanded = !this.isExpanded;
-        },
-
-        openDelete(): void {
-            this.showDeleteModal = true;
-        },
-
-        closeDelete(): void {
-            this.showDeleteModal = false;
-            this.confirmText = '';
-        }
-    };
-}
-
-/**
- * Modal State Component
- */
-export function modalState() {
-    return {
-        isOpen: false,
-        open(): void { this.isOpen = true; },
-        close(): void { this.isOpen = false; },
-        toggle(): void { this.isOpen = !this.isOpen; }
-    };
-}
-
-/**
- * Collapsible Section Component
- */
-export function collapsible(defaultExpanded = false) {
-    return {
-        isExpanded: defaultExpanded,
-        toggle(): void { this.isExpanded = !this.isExpanded; },
-        expand(): void { this.isExpanded = true; },
-        collapse(): void { this.isExpanded = false; }
-    };
-}
-
-/**
- * Form State Component
- */
-export function formState() {
-    return {
-        editing: false,
-        submitting: false,
-        error: null as string | null,
-
-        startEdit(): void { this.editing = true; },
-        cancelEdit(): void { this.editing = false; this.error = null; },
-        submit(): void { this.submitting = true; this.error = null; },
-        submitComplete(success: boolean, errorMessage?: string): void {
-            this.submitting = false;
-            if (success) {
-                this.editing = false;
-            } else {
-                this.error = errorMessage || 'An error occurred';
-            }
-        }
+        isExpanded: false
     };
 }
 
@@ -180,16 +93,13 @@ export function formState() {
 // ============================================
 
 /**
- * Register common inline components (dangerZone, modalState, etc.)
+ * Register common inline components (dangerZone, navbarSearch, etc.)
  */
 export function registerCommonComponents(): void {
     registerAlpineComponent('navbarSearch', navbarSearch);
     registerAlpineComponent('scrollableTabs', scrollableTabs);
     registerAlpineComponent('vulnerabilityTrends', vulnerabilityTrends);
     registerAlpineComponent('dangerZone', dangerZone);
-    registerAlpineComponent('modalState', modalState);
-    registerAlpineComponent('collapsible', collapsible);
-    registerAlpineComponent('formState', formState);
     registerAlpineComponent('advisoryProductPicker', advisoryProductPicker);
     registerAlpineComponent('actionsMenu', actionsMenu);
     registerAlpineComponent('publicSharing', publicSharing);
@@ -247,16 +157,3 @@ export function registerAllComponents(): void {
     registerCraStep5();
     registerCraDocSignature();
 }
-
-export default {
-    registerAlpineComponent,
-    isComponentRegistered,
-    getRegisteredComponents,
-    registerCommonComponents,
-    registerAllComponents,
-    // Common components
-    dangerZone,
-    modalState,
-    collapsible,
-    formState
-};
