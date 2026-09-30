@@ -7,13 +7,11 @@ import pytest
 import stripe
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.http import HttpResponseForbidden
 from django.test import override_settings
 from django.utils import timezone
 
 from sbomify.apps.billing import billing_processing
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.sboms.models import Product
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
 
@@ -584,104 +582,9 @@ def test_handle_payment_succeeded(team_with_business_plan, mock_stripe_subscript
 
 
 
-@override_settings(BILLING=False)
-def test_billing_disabled_bypass():
-    """Test that billing checks are bypassed when billing is disabled."""
-    # Create a test team with no billing plan
-    team = Team.objects.create(name="Test Team", key="test-team", billing_plan=None, billing_plan_limits={})
-
-    # Create a test user and member
-    user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
-    Member.objects.create(team=team, user=user, role="owner")
-
-    # Create a test request
-    request = MagicMock()
-    request.method = "POST"
-    request.session = {"current_team": {"key": "test-team"}}
-
-    # Create a test view function
-    @billing_processing.check_billing_limits("product")
-    def test_view(request):
-        return "success"
-
-    # Test that the view is called without any billing checks
-    result = test_view(request)
-    assert result == "success"
-
-
-@override_settings(BILLING=False)
-def test_billing_disabled_unlimited_limits():
-    """Test that billing disabled returns unlimited limits."""
-    # Create a team
-    team = Team.objects.create(name="Test Team", key="test-team", billing_plan=None, billing_plan_limits={})
-
-    # Get current limits (should be unlimited when billing is disabled)
-    limits = billing_processing.get_current_limits(team)
-
-    # With billing disabled, all limits should be None (unlimited)
-    assert limits.get("max_products") is None
-    assert limits.get("max_components") is None
-
-
 @override_settings(BILLING=True)
-def test_billing_enabled_checks():
-    """Test that billing checks are enforced when billing is enabled."""
-    # Create a billing plan with realistic limits (matching original test)
-    business_plan = BillingPlan.objects.create(
-        key="business",
-        name="Business",
-        max_products=5,
-        max_components=50,
-        stripe_price_monthly_id="price_business_monthly",
-        stripe_price_annual_id="price_business_annual",
-    )
-
-    # Create a team with the billing plan
-    team = Team.objects.create(
-        name="Test Team",
-        key="test-team",
-        billing_plan="business",
-        billing_plan_limits={
-            "max_products": business_plan.max_products,
-            "max_components": business_plan.max_components,
-            "subscription_status": "active",
-        },
-    )
-
-    # Create a test user and member
-    user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
-    Member.objects.create(team=team, user=user, role="owner")
-
-    # Create a test request
-    request = MagicMock()
-    request.method = "POST"
-    request.session = {"current_team": {"key": "test-team"}}
-
-    # Create a test view function decorated with billing limits
-    @billing_processing.check_billing_limits("product")
-    def test_view(request):
-        return "success"
-
-    # Test 1: View should work when under the limit
-    for i in range(4):  # Create 4 products (under limit of 5)
-        Product.objects.create(team=team, name=f"Product {i}")
-
-    result = test_view(request)
-    assert result == "success"
-
-    # Test 2: Create products exceeding the limit (original test logic)
-    for i in range(4, 7):  # Create 3 more products (total 7, exceeds limit of 5)
-        Product.objects.create(team=team, name=f"Product {i}")
-
-    # Test that the view is blocked by billing checks
-    result = test_view(request)
-    assert isinstance(result, HttpResponseForbidden)
-    assert result.content.decode() == "You have reached the maximum 5 products allowed by your plan"
-
-
-@override_settings(BILLING=True)
-def test_payment_failure_grace_period():
-    """Test grace period logic for payment failures."""
+def test_handle_payment_failed_stamps_the_failure_time():
+    """handle_payment_failed sets past_due and records when the payment failed."""
     # Create test plan
     BillingPlan.objects.create(key="business", name="Business", max_products=10)
     
@@ -697,33 +600,6 @@ def test_payment_failure_grace_period():
     user = User.objects.create_user(username="grace_user", email="grace@example.com")
     Member.objects.create(team=team, user=user, role="owner")
     
-    # Setup request
-    request = MagicMock()
-    request.method = "POST"
-    request.session = {"current_team": {"key": "test-team-grace"}}
-    request.headers = {}
-    request.META = {}
-
-    @billing_processing.check_billing_limits("product")
-    def test_view(request):
-        return "success"
-
-    # 1. Test: Within Grace Period (1 day ago failure)
-    team.billing_plan_limits["payment_failed_at"] = (timezone.now() - datetime.timedelta(days=1)).isoformat()
-    team.save()
-    
-    result = test_view(request)
-    assert result == "success"
-
-    # 2. Test: Grace Period Expired (4 days ago failure)
-    team.billing_plan_limits["payment_failed_at"] = (timezone.now() - datetime.timedelta(days=4)).isoformat()
-    team.save()
-    
-    result = test_view(request)
-    assert isinstance(result, HttpResponseForbidden)
-    assert "Grace period expired" in result.content.decode()
-
-    # 3. Test: Test handle_payment_failed sets the timestamp
     # Reset team
     team.billing_plan_limits = {"subscription_status": "active"}
     team.save()

@@ -5,17 +5,14 @@ Module for handling Stripe billing webhook events and related processing
 from __future__ import annotations
 
 import datetime
-from enum import Enum
-from functools import wraps
 from types import SimpleNamespace
 from typing import Any, NoReturn
 
 from django.conf import settings
 from django.db import models, transaction
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
-from sbomify.apps.core.queries import get_team_asset_count, get_team_asset_counts
+from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
@@ -27,9 +24,8 @@ from .billing_helpers import (
     notify_billing_managers,
     parse_cancel_at,
 )
-from .config import get_unlimited_plan_limits, is_billing_enabled
 from .models import BillingPlan
-from .stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
+from .stripe_cache import invalidate_subscription_cache
 from .stripe_client import (
     LIVE_SUBSCRIPTION_STATUSES,
     TERMINAL_SUBSCRIPTION_STATUSES,
@@ -167,171 +163,6 @@ def _payment_already_recorded(billing_limits: dict[str, Any], webhook_id: str | 
         billing_limits.get("last_processed_webhook_id"),
         billing_limits.get("last_payment_webhook_id"),
     )
-
-
-class BillingResourceType(str, Enum):
-    """Resource types that are subject to billing limits."""
-
-    PRODUCT = "product"
-    COMPONENT = "component"
-
-
-# Set of valid billing resource type values for quick validation
-BILLING_RESOURCE_TYPES = {rt.value for rt in BillingResourceType}
-
-# Mapping from resource type to BillingPlan field name for limits
-RESOURCE_TYPE_TO_LIMIT_FIELD = {
-    BillingResourceType.PRODUCT.value: "max_products",
-    BillingResourceType.COMPONENT.value: "max_components",
-}
-
-
-def get_resource_limit(plan: BillingPlan, resource_type: str) -> int | None:
-    """Get the limit for a resource type from a billing plan."""
-    field_name = RESOURCE_TYPE_TO_LIMIT_FIELD.get(resource_type)
-    if field_name:
-        return getattr(plan, field_name, None)
-    return None
-
-
-def _billing_error_response(request: HttpRequest, message: str, status: int = 403) -> HttpResponse:
-    """Return a JSON or HTML error response based on request type."""
-    is_ajax = (
-        request.headers.get("Accept") == "application/json"
-        or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
-    )
-    if is_ajax:
-        return JsonResponse({"error": message, "limit_reached": True}, status=status)
-    return HttpResponseForbidden(message)
-
-
-def check_billing_limits(resource_type: str) -> Any:
-    """
-    Decorator to check if a team has reached their billing plan limits.
-
-    Args:
-        resource_type: Type of resource being created. Must be one of: 'product' or 'component'
-    """
-
-    def decorator(view_func: Any) -> Any:
-        @wraps(view_func)
-        def _wrapped_view(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
-            if request.method != "POST":
-                return view_func(request, *args, **kwargs)
-
-            if not is_billing_enabled():
-                return view_func(request, *args, **kwargs)
-
-            team_key = request.session.get("current_team", {}).get("key")
-            if not team_key:
-                return HttpResponseForbidden("No team selected")
-
-            try:
-                team = Team.objects.get(key=team_key)
-            except Team.DoesNotExist:
-                return HttpResponseForbidden("Workspace not found")
-
-            if not team.billing_plan:
-                return HttpResponseForbidden("No active billing plan")
-
-            with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
-                billing_limits = team.billing_plan_limits or {}
-                subscription_status = billing_limits.get("subscription_status")
-
-                cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
-                scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
-                stripe_subscription_id = billing_limits.get("stripe_subscription_id")
-
-                if cancel_at_period_end and scheduled_downgrade_plan:
-                    sub_id = str(stripe_subscription_id) if stripe_subscription_id else ""
-                    real_cancel_at_period_end = get_subscription_cancel_at_period_end(
-                        sub_id, team.key or "", fallback_value=bool(cancel_at_period_end)
-                    )
-
-                    if not real_cancel_at_period_end:
-                        billing_limits = billing_limits.copy()
-                        billing_limits.pop("scheduled_downgrade_plan", None)
-                        if stripe_subscription_id:
-                            invalidate_subscription_cache(str(stripe_subscription_id), team.key)
-                        team.billing_plan_limits = billing_limits
-                        team.save()
-                        logger.info("User reactivated subscription, cleared scheduled downgrade")
-                    else:
-                        try:
-                            target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
-                        except BillingPlan.DoesNotExist:
-                            logger.warning("Target plan not found for scheduled downgrade, skipping check")
-                        else:
-                            max_allowed = get_resource_limit(target_plan, resource_type)
-
-                            if max_allowed is not None:
-                                current_count = get_team_asset_count(str(team.id), resource_type)
-                                if (current_count + 1) > max_allowed:
-                                    error_message = (
-                                        f"You cannot create this {resource_type} because your scheduled downgrade to "
-                                        f"{target_plan.name} would exceed the plan limit of "
-                                        f"{max_allowed} {resource_type}s. "
-                                        "Please reduce your usage or continue with your current plan."
-                                    )
-                                    return _billing_error_response(request, error_message)
-
-                if subscription_status == "past_due":
-                    failed_at_str = billing_limits.get("payment_failed_at")
-
-                    if not failed_at_str:
-                        # A past_due subscription with no recorded failure time would otherwise
-                        # skip the grace check entirely and escape enforcement. Stamp it now so
-                        # the grace window starts (persisted — team is select_for_update'd here).
-                        failed_at_str = timezone.now().isoformat()
-                        billing_limits = billing_limits.copy()
-                        billing_limits["payment_failed_at"] = failed_at_str
-                        team.billing_plan_limits = billing_limits
-                        team.save(update_fields=["billing_plan_limits"])
-
-                    try:
-                        failed_at = datetime.datetime.fromisoformat(failed_at_str.replace("Z", "+00:00"))
-                        delta = timezone.now() - failed_at
-                        grace_days = getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3)
-                        grace_period_seconds = grace_days * 24 * 60 * 60
-
-                        if delta.total_seconds() > grace_period_seconds:
-                            msg = (
-                                "Payment failed. Grace period expired. "
-                                "Please update payment method to create resources."
-                            )
-                            logger.warning("Blocking resource access: Grace period expired")
-                            return _billing_error_response(request, msg)
-
-                    except (ValueError, TypeError):
-                        logger.error("Invalid payment_failed_at format")
-                        msg = "Payment failed. Unable to verify grace period. Please contact support."
-                        return _billing_error_response(request, msg)
-
-            try:
-                plan = BillingPlan.objects.get(key=team.billing_plan)
-            except BillingPlan.DoesNotExist:
-                return HttpResponseForbidden("Invalid billing plan")
-
-            if resource_type not in BILLING_RESOURCE_TYPES:
-                return HttpResponseForbidden("Invalid resource type")
-
-            max_allowed = get_resource_limit(plan, resource_type)
-
-            current_count = get_team_asset_count(str(team.id), resource_type)
-
-            if plan.key == "enterprise" or max_allowed is None:
-                return view_func(request, *args, **kwargs)
-
-            if current_count >= max_allowed:
-                error_message = f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan"
-                return _billing_error_response(request, error_message)
-
-            return view_func(request, *args, **kwargs)
-
-        return _wrapped_view
-
-    return decorator
 
 
 @handle_stripe_errors
@@ -1102,36 +933,6 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
 
     except Exception as e:
         _raise_classified_webhook_error(e)
-
-
-def get_current_limits(team: Team) -> dict[str, Any]:
-    """
-    Get current billing limits for a team.
-
-    Args:
-        team: Team object
-
-    Returns:
-        Dictionary with current limits (max_products, max_components)
-    """
-    if not is_billing_enabled():
-        return get_unlimited_plan_limits()
-
-    if not team.billing_plan:
-        return get_unlimited_plan_limits()
-
-    try:
-        plan = BillingPlan.objects.get(key=team.billing_plan)
-        return {
-            "max_products": plan.max_products,
-            "max_components": plan.max_components,
-            "max_users": plan.max_users,
-            "subscription_status": team.billing_plan_limits.get("subscription_status", "active")
-            if team.billing_plan_limits
-            else "active",
-        }
-    except BillingPlan.DoesNotExist:
-        return get_unlimited_plan_limits()
 
 
 @handle_stripe_errors
