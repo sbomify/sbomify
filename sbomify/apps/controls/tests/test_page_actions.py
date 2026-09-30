@@ -79,3 +79,51 @@ def test_bulk_response_stays_on_changed_catalog(
     assert b"Other control" not in response.content
     assert ControlStatus.objects.get(control=control).status == "partial"
     assert not ControlStatus.objects.filter(control__catalog=other).exists()
+
+
+@pytest.mark.parametrize("scope", ["workspace", "product"])
+def test_a_status_update_lands_back_on_the_page_it_came_from(
+    client: Client, sample_user: User, team_with_business_plan: Team, scope: str
+) -> None:
+    from sbomify.apps.teams.utils import redirect_to_team_settings
+
+    workspace = team_with_business_plan
+    setup_authenticated_client_session(client, workspace, sample_user)
+    catalog = ControlCatalog.objects.create(team=workspace, name="Audit", version="1")
+    control = Control.objects.create(catalog=catalog, control_id="A-1", title="Access review", group="Access")
+    product = Product.objects.create(team=workspace, name="Controls product")
+    if scope == "workspace":
+        url = reverse("controls:status_update", args=[workspace.key])
+        back = redirect_to_team_settings(workspace.key, "controls").url
+    else:
+        url = reverse("controls:product_status_update", args=[workspace.key, product.pk])
+        back = reverse("core:product_details", args=[product.pk])
+
+    for data in (
+        {"control_id": control.pk, "status": "compliant"},
+        {"control_id": control.pk},
+        {"control_id": "missing", "status": "compliant"},
+        {"control_id": control.pk, "status": "not-a-status"},
+    ):
+        response = client.post(url, data)
+        assert (response.status_code, response.url) == (302, back)
+
+    status = ControlStatus.objects.get(control=control)
+    assert (status.product_id, status.status) == (product.pk if scope == "product" else None, "compliant")
+
+
+def test_a_product_status_update_for_an_unknown_product_changes_nothing(
+    client: Client, sample_user: User, team_with_business_plan: Team
+) -> None:
+    workspace = team_with_business_plan
+    setup_authenticated_client_session(client, workspace, sample_user)
+    catalog = ControlCatalog.objects.create(team=workspace, name="Audit", version="1")
+    control = Control.objects.create(catalog=catalog, control_id="A-1", title="Access review", group="Access")
+
+    response = client.post(
+        reverse("controls:product_status_update", args=[workspace.key, "missing"]),
+        {"control_id": control.pk, "status": "compliant"},
+    )
+
+    assert (response.status_code, response.url) == (302, reverse("core:product_details", args=["missing"]))
+    assert not ControlStatus.objects.exists()

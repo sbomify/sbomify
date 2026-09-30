@@ -6,7 +6,6 @@ from .views import (
     BulkCategoryUpdateView,
     ControlsCatalogView,
     ControlsStatusView,
-    ProductControlsStatusView,
     ProductControlsView,
 )
 
@@ -31,7 +30,7 @@ urlpatterns = [
     ),
     path(
         "<team_key>/product/<product_id>/status",
-        ProductControlsStatusView.as_view(),
+        ControlsStatusView.as_view(),
         name="product_status_update",
     ),
 ]
