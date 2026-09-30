@@ -237,11 +237,11 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         cryptographically valid but does NOT check signer identity.
         A proper identity policy should be configured per-deployment.
         """
-        try:
-            from sigstore.models import Bundle
-            from sigstore.verify import Verifier
-            from sigstore.verify.policy import UnsafeNoOp
+        from sigstore.models import Bundle
+        from sigstore.verify import Verifier
+        from sigstore.verify.policy import UnsafeNoOp
 
+        try:
             verifier = Verifier.production()
             bundle = Bundle.from_json(bundle_bytes)
             verifier.verify_artifact(
@@ -259,15 +259,6 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 status="pass",
                 severity="info",
                 metadata={"signature_type": "cosign-bundle", "identity_verified": False},
-            )
-        except ImportError:
-            return Finding(
-                id="verification:signature-valid",
-                title="Sigstore Library Not Available",
-                description="The sigstore library is not installed — cannot verify cosign bundle.",
-                status="warning",
-                severity="low",
-                metadata={"signature_type": "cosign-bundle"},
             )
         except Exception as exc:
             return Finding(

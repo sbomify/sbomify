@@ -15,6 +15,7 @@ import dramatiq
 from django.db import connection, transaction
 from django.db.utils import DatabaseError, OperationalError
 from django.utils import timezone
+from dramatiq_crontab import cron
 from tenacity import (
     before_sleep_log,
     retry,
@@ -22,20 +23,6 @@ from tenacity import (
     stop_after_delay,
     wait_exponential,
 )
-
-try:
-    from dramatiq_crontab import cron
-except ImportError:
-    logging.getLogger(__name__).warning("dramatiq-crontab not installed - cron scheduling disabled for plugin tasks")
-
-    def cron(schedule: str) -> Callable[..., Any]:
-        """Fallback decorator when dramatiq-crontab is not installed."""
-
-        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-            return func
-
-        return decorator
-
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.models import User
