@@ -25,6 +25,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
+from django_ratelimit.core import is_ratelimited  # type: ignore[import-untyped]
 
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.teams.models import Team
@@ -33,9 +34,7 @@ from sbomify.logging import getLogger
 from . import billing_processing
 from .billing_helpers import (
     RATE_LIMIT,
-    RATE_LIMIT_PERIOD,
     acquire_checkout_lock,
-    check_rate_limit,
     release_checkout_lock,
     require_billing_manager,
 )
@@ -87,7 +86,13 @@ class _BaseEnterpriseContactView(View):
         return f"enterprise_contact_ip:{get_client_ip(request) or 'unknown'}"
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        if check_rate_limit(self._get_rate_limit_key(request), limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
+        if is_ratelimited(
+            request,
+            group="enterprise_contact",
+            key=lambda _group, req: self._get_rate_limit_key(req),
+            rate=RATE_LIMIT,
+            increment=True,
+        ):
             messages.error(request, "Too many requests. Please try again later.")
             return redirect(self.redirect_target)
 
@@ -313,9 +318,7 @@ class SelectPlanView(LoginRequiredMixin, View):
         return self._render_plan_page(request, team, stripe_pricing_data)
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        from .billing_helpers import check_rate_limit
-
-        if check_rate_limit(f"select_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
+        if is_ratelimited(request, group="select_plan", key="user", rate=RATE_LIMIT, increment=True):
             messages.error(request, "Too many requests. Please try again later.")
             return redirect("billing:select_plan", team_key=team_key)
 
