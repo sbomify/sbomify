@@ -58,6 +58,17 @@ def test_default_surface_is_the_still_card(rendered: str) -> None:
     assert "animate-" not in card
 
 
+def test_the_card_is_a_surface_that_hands_its_corners_down(rendered: str) -> None:
+    # The card does not clip, so a menu inside it can overflow. Its first and
+    # last children take its inner curve from the data-surface rule instead,
+    # which is what keeps a header wash or a flush table inside the corner.
+    at = rendered.index("Body copy")
+    opening = rendered[rendered.rindex("<div", 0, rendered.rindex(CARD_SHELL, 0, at)) :]
+    opening = opening[: opening.index(">")]
+    assert "data-surface" in opening
+    assert "overflow-hidden" not in opening
+
+
 def test_header_band_carries_the_rule_and_the_wash(rendered: str) -> None:
     header = _open_tag(rendered, "Plain surface", depth=1)
     assert "px-6 py-5 border-b border-solid" in header
