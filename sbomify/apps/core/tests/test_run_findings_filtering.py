@@ -297,8 +297,9 @@ class TestPagingAndFiltersTravelTogether:
         state dropdown reading "No decision" for every row, and a filter for a
         concept that does not apply."""
         client, component = signed_in
+        # Past one page, so the toolbar is offered at all.
         findings = [
-            {"id": f"check-{n:03d}", "title": f"Field {n}", "description": "d", "status": "fail"} for n in range(5)
+            {"id": f"check-{n:03d}", "title": f"Field {n}", "description": "d", "status": "fail"} for n in range(30)
         ]
         run = _run_with(component, findings, category="compliance")
 
@@ -308,6 +309,20 @@ class TestPagingAndFiltersTravelTogether:
         assert "run_severity" not in body
         assert "run_state" not in body
         assert "run_kev" not in body
+
+    def test_a_short_compliance_run_reads_whole_without_a_toolbar(self, signed_in) -> None:
+        """A handful of checks under their assessment row needs no search or pager:
+        the toolbar would be the biggest thing in the open row."""
+        client, component = signed_in
+        findings = [
+            {"id": f"check-{n:03d}", "title": f"Field {n}", "description": "d", "status": "fail"} for n in range(5)
+        ]
+        run = _run_with(component, findings, category="compliance")
+
+        body = _open(client, run).content.decode()
+
+        assert "run_search" not in body
+        assert "Field 4" in body
 
     def test_a_security_run_is_offered_the_filters(self, signed_in) -> None:
         client, component = signed_in

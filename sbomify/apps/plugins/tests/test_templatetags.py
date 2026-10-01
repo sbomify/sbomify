@@ -5,9 +5,6 @@ from sbomify.apps.plugins.templatetags.plugins_extras import (
     format_finding_description,
     format_run_reason,
     has_compliance_failures,
-    status_border_class,
-    status_icon,
-    status_text_class,
 )
 
 
@@ -31,72 +28,6 @@ class TestFormatRunReason:
 
     def test_unknown_returns_original(self) -> None:
         assert format_run_reason("unknown_reason") == "unknown_reason"
-
-
-class TestStatusBorderClass:
-    """Tests for status_border_class filter."""
-
-    def test_pass(self) -> None:
-        assert status_border_class("pass") == "border-success"
-
-    def test_fail(self) -> None:
-        assert status_border_class("fail") == "border-warning"
-
-    def test_error(self) -> None:
-        assert status_border_class("error") == "border-danger"
-
-    def test_warning(self) -> None:
-        assert status_border_class("warning") == "border-info"
-
-    def test_info(self) -> None:
-        assert status_border_class("info") == "border-secondary"
-
-    def test_unknown_returns_secondary(self) -> None:
-        assert status_border_class("unknown") == "border-secondary"
-
-
-class TestStatusTextClass:
-    """Tests for status_text_class filter."""
-
-    def test_pass(self) -> None:
-        assert status_text_class("pass") == "text-success"
-
-    def test_fail(self) -> None:
-        assert status_text_class("fail") == "text-warning"
-
-    def test_error(self) -> None:
-        assert status_text_class("error") == "text-danger"
-
-    def test_warning(self) -> None:
-        assert status_text_class("warning") == "text-info"
-
-    def test_info(self) -> None:
-        assert status_text_class("info") == "text-secondary"
-
-    def test_unknown_returns_secondary(self) -> None:
-        assert status_text_class("unknown") == "text-secondary"
-
-
-class TestStatusIcon:
-    """Tests for status_icon filter."""
-
-    def test_pass(self) -> None:
-        assert status_icon("pass") == "fas fa-check-circle"
-
-    def test_fail(self) -> None:
-        assert status_icon("fail") == "fas fa-times-circle"
-
-    def test_warning(self) -> None:
-        assert status_icon("warning") == "fas fa-exclamation-circle"
-
-    def test_error(self) -> None:
-        assert status_icon("error") == "fas fa-exclamation-triangle"
-
-    def test_info(self) -> None:
-        assert status_icon("info") == "fas fa-info-circle"
-
-    def test_unknown_returns_info(self) -> None:
-        assert status_icon("unknown") == "fas fa-info-circle"
 
 
 class TestFormatFindingDescription:

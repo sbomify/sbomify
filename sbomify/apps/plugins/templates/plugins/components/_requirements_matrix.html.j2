@@ -1,0 +1,94 @@
+{% load humanize plugins_extras advisory_tags %}
+{% comment %}The aggregate: one row per SBOM requirement, one column per standard, built by services/requirements.py. A missing author is one row marked in every standard it holds back, not a failure repeated inside each standard's report. Rows that need work lead and open in place with the fix; met requirements fold away behind a toggle. Expects matrix (assessment_runs.requirements).{% endcomment %}
+<c-tables.table>
+<c-tables.head>
+<c-tables.header-cell compact>Requirement</c-tables.header-cell>
+{% for column in matrix.columns %}
+    <c-tables.header-cell compact nowrap class="w-24 max-sm:hidden" title="{{ column.name }}">
+    <span class="flex flex-col items-center gap-0.5 text-center">
+        <span>{{ column.label }}</span>
+        <span class="font-medium normal-case tracking-normal tabular-nums {% if column.issues %}text-warning{% else %}text-success{% endif %}">{{ column.passed|intcomma }}/{{ column.total|intcomma }}</span>
+    </span>
+    </c-tables.header-cell>
+{% endfor %}
+</c-tables.head>
+{% for requirement in matrix.requirements %}
+    {% if requirement.notes %}
+        <tbody x-data="{ open: false }">
+            <c-tables.row>
+            <c-tables.cell compact>
+            <button type="button"
+                    class="flex w-full cursor-pointer items-start gap-2 text-left"
+                    aria-expanded="false"
+                    :aria-expanded="open"
+                    aria-controls="requirement-{{ forloop.counter }}"
+                    @click="open = !open">
+                <i class="fas fa-chevron-right mt-1 w-3 shrink-0 text-[0.625rem] text-text-muted transition-transform duration-200"
+                   :class="open ? 'rotate-90' : ''"
+                   aria-hidden="true"></i>
+                <span class="flex min-w-0 flex-col gap-0.5">
+                    <span class="font-semibold text-text">{{ requirement.label }}</span>
+                    <span class="text-xs text-text-muted">
+                        {% if requirement.status == 'warning' %}
+                            Needs review in
+                        {% else %}
+                            Not met in
+                        {% endif %}
+                        <span class="max-sm:hidden">{{ requirement.standards_not_met|intcomma }} standard{{ requirement.standards_not_met|pluralize }}</span>
+                        <span class="sm:hidden">{{ requirement.held_back|join:", " }}</span>
+                    </span>
+                </span>
+            </button>
+            </c-tables.cell>
+            {% for status in requirement.row %}
+                <c-tables.cell compact class="max-sm:hidden">
+                <span class="flex justify-center"><c-assessments.verdict status="{{ status }}" /></span>
+                </c-tables.cell>
+            {% endfor %}
+            </c-tables.row>
+            <tr id="requirement-{{ forloop.counter }}" x-show="open" x-cloak>
+                <c-tables.cell compact colspan="{{ matrix.columns|length|add:1 }}">
+                <div class="flex flex-col gap-3 pb-2 pl-5">
+                    {% for fix in requirement.fixes %}
+                        <p class="m-0 text-sm text-text">
+                            <span class="font-semibold">How to fix:</span> {{ fix }}
+                        </p>
+                    {% endfor %}
+                    <ul class="m-0 p-0">
+                        {% for note in requirement.notes %}
+                            <c-assessments.check status="{{ note.status }}" title="{{ note.standard }}">
+                            <span class="text-text">{{ note.title }}</span>
+                            {% if note.description %}
+                                <div class="mt-1">{{ note.description|advisory_prose|format_finding_description }}</div>
+                            {% endif %}
+                            </c-assessments.check>
+                        {% endfor %}
+                    </ul>
+                </div>
+                </c-tables.cell>
+            </tr>
+        </tbody>
+    {% endif %}
+{% endfor %}
+{% if matrix.met %}
+    <tbody x-show="showMet" x-cloak>
+        {% for requirement in matrix.requirements %}
+            {% if not requirement.notes %}
+                <c-tables.row>
+                <c-tables.cell compact>
+                <span class="flex flex-col gap-0.5 pl-5">
+                    <span class="font-medium text-text">{{ requirement.label }}</span>
+                    <span class="text-xs text-text-muted">Met</span>
+                </span>
+                </c-tables.cell>
+                {% for status in requirement.row %}
+                    <c-tables.cell compact class="max-sm:hidden">
+                    <span class="flex justify-center"><c-assessments.verdict status="{{ status }}" /></span>
+                    </c-tables.cell>
+                {% endfor %}
+                </c-tables.row>
+            {% endif %}
+        {% endfor %}
+    </tbody>
+{% endif %}
+</c-tables.table>
