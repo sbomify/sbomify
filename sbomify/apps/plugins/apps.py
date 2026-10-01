@@ -289,15 +289,17 @@ class PluginsConfig(AppConfig):
                 "category": metadata.category.value,
                 "version": metadata.version,
                 "plugin_class_path": f"{plugin_class.__module__}.{plugin_class.__qualname__}",
-                "is_enabled": True,
-                "is_beta": True,
                 "is_builtin": True,
-                "default_config": {},
                 **extra,
             }
+            # The plugins admin lets an operator disable a plugin, mark it stable and
+            # tune its default config, so a deploy only seeds those on a new row.
+            seed = {"is_enabled": True, "is_beta": True, "default_config": defaults.pop("default_config", {})}
             try:
                 with transaction.atomic():
-                    RegisteredPlugin.objects.update_or_create(name=metadata.name, defaults=defaults)
+                    RegisteredPlugin.objects.update_or_create(
+                        name=metadata.name, defaults=defaults, create_defaults={**defaults, **seed}
+                    )
             except OperationalError as e:
                 logger.debug("Could not register plugin '%s' (table/column may not exist yet): %s", metadata.name, e)
             except ProgrammingError as e:
