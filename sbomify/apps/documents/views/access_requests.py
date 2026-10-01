@@ -729,7 +729,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
                 # For HTMX requests, return the updated access request queue
                 if request.headers.get("HX-Request") == "true":
-                    return _queue_response(request, team, "refreshAccessRequests")
+                    return _queue_response(request, team)
 
                 return _back(team_key, active_tab)
 
@@ -816,7 +816,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             # For HTMX requests, return the updated access request queue
             if request.headers.get("HX-Request") == "true":
-                return _queue_response(request, team, "refreshAccessRequests,closeInviteModal")
+                return _queue_response(request, team, "closeInviteModal")
 
             return _back(team_key, active_tab)
 
@@ -927,6 +927,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         # For HTMX requests, return the updated access request queue content
         if request.headers.get("HX-Request") == "true":
-            return _queue_response(request, team, "refreshAccessRequests")
+            return _queue_response(request, team)
 
         return _back(team_key, active_tab)

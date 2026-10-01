@@ -1,8 +1,8 @@
 """What the access-request queue answers after each action.
 
-An htmx post gets the refreshed queue section and a trigger. Any other post
-lands on the trust-center tab, told to refresh, when it came from there, and on
-the queue otherwise.
+An htmx post gets the refreshed queue section and no event that makes the page
+fetch it again. Any other post lands on the trust-center tab, told to refresh,
+when it came from there, and on the queue otherwise.
 """
 
 import pytest
@@ -41,7 +41,7 @@ def test_an_htmx_decision_returns_the_refreshed_queue(queue, team_with_business_
     response = client.post(url, {"action": "approve", "request_id": access_request.id}, HTTP_HX_REQUEST="true")
 
     assert response.status_code == 200
-    assert response["HX-Trigger"] == "refreshAccessRequests"
+    assert "HX-Trigger" not in response
     body = response.content.decode()
     assert "Approved Requests" in body
     assert guest_user.email in body
@@ -53,7 +53,7 @@ def test_an_htmx_invite_returns_the_queue_and_closes_the_modal(queue, sample_use
     response = client.post(url, {"action": "invite", "email": "invitee@example.com"}, HTTP_HX_REQUEST="true")
 
     assert response.status_code == 200
-    assert response["HX-Trigger"] == "refreshAccessRequests,closeInviteModal"
+    assert response["HX-Trigger"] == "closeInviteModal"
     body = response.content.decode()
     assert "invitee@example.com" in body
     assert sample_user.email in body
@@ -67,7 +67,7 @@ def test_an_htmx_cancellation_returns_the_queue_without_the_invitation(queue, te
     response = client.post(url, {"action": "cancel_invitation", "invitation_id": invitation.id}, HTTP_HX_REQUEST="true")
 
     assert response.status_code == 200
-    assert response["HX-Trigger"] == "refreshAccessRequests"
+    assert "HX-Trigger" not in response
     assert "invitee@example.com" not in response.content.decode()
     assert not Invitation.objects.filter(pk=invitation.pk).exists()
     assert cache.get(f"invitation_inviter:{invitation.token}") is None
