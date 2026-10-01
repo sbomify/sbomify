@@ -65,7 +65,7 @@ def test_tables_stack_by_default_and_can_opt_out() -> None:
 def test_stacked_table_rules_exist_and_beat_utilities() -> None:
     css = CSS.read_text()
     start = css.index("Stacked tables")
-    block = css[start : css.index("Custom Utilities using CSS variables", start)]
+    block = css[start : css.index("\n/* ====", start)]
     assert "@media (max-width: 639.98px)" in block
     assert "content: attr(data-label)" in block
     # Unlayered, so the rules win over utility padding, borders and `hidden`.
