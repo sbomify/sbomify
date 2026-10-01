@@ -1,20 +1,17 @@
 """Billing integrity: community-downgrade cancels the real subscription, grace period is
-enforced and not reset on repeated failures."""
+not reset on repeated failures."""
 
 import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.contrib.auth import get_user_model
-from django.http import HttpResponseForbidden
 from django.utils import timezone
 
 from sbomify.apps.billing import billing_processing
 from sbomify.apps.billing.apis import _handle_community_downgrade
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Team
 
-User = get_user_model()
 pytestmark = pytest.mark.django_db
 
 
@@ -68,42 +65,6 @@ def test_payment_failed_does_not_reset_failure_time():
     team.refresh_from_db()
     assert team.billing_plan_limits["subscription_status"] == "past_due"
     assert team.billing_plan_limits["payment_failed_at"] == original  # not reset to now
-
-
-def test_past_due_without_failed_at_is_enforced():
-    """A past_due subscription with no payment_failed_at must not escape enforcement: it is
-    backfilled so the grace window starts and eventually blocks."""
-    BillingPlan.objects.create(key="business", name="Business", max_products=10)
-    team = Team.objects.create(
-        name="T",
-        key="test-team-nofail",
-        billing_plan="business",
-        billing_plan_limits={"subscription_status": "past_due"},  # no payment_failed_at
-    )
-    user = User.objects.create_user(username="nofail_user", email="nofail@example.com")
-    Member.objects.create(team=team, user=user, role="owner")
-
-    request = MagicMock()
-    request.method = "POST"
-    request.session = {"current_team": {"key": "test-team-nofail"}}
-    request.headers = {}
-    request.META = {}
-
-    @billing_processing.check_billing_limits("product")
-    def view(request):
-        return "success"
-
-    # First call backfills payment_failed_at to now -> within grace -> allowed, and persisted.
-    assert view(request) == "success"
-    team.refresh_from_db()
-    assert "payment_failed_at" in team.billing_plan_limits
-
-    # Age the backfilled stamp past the grace window -> blocked (no longer bypassed).
-    team.billing_plan_limits["payment_failed_at"] = (timezone.now() - datetime.timedelta(days=4)).isoformat()
-    team.save()
-    result = view(request)
-    assert isinstance(result, HttpResponseForbidden)
-    assert "Grace period expired" in result.content.decode()
 
 
 def test_payment_recovery_clears_failure_marker_so_grace_resets():

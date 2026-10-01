@@ -1,5 +1,4 @@
 import Alpine from 'alpinejs';
-import $axios from '../utils';
 import { showError, showWarning, showInfo, showConfirmation } from '../alerts';
 
 // Fallback polling when WebSocket is not available
@@ -140,9 +139,10 @@ export function registerSiteNotifications() {
 
         async fetchNotifications(isInitialLoad: boolean = false) {
             try {
-                const response = await $axios.get('/api/v1/notifications/');
+                const response = await fetch('/api/v1/notifications/');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const oldNotifications = [...this.notifications];
-                this.notifications = response.data;
+                this.notifications = await response.json();
                 this.consecutiveErrors = 0;
 
                 if (!isInitialLoad) {

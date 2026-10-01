@@ -13,7 +13,12 @@ class OnboardingConfig(AppConfig):
     verbose_name = "Onboarding"
 
     def ready(self) -> None:
-        """Import signal handlers and cron tasks when the app is ready."""
-        from . import cron, signals
+        """Import signal handlers and tasks when the app is ready.
 
-        _ = (signals, cron)
+        The worker registers the actors in tasks/__init__.py only through this
+        import, because rundramatiq hands a tasks package's submodules to the
+        worker processes, not the package itself.
+        """
+        from . import signals, tasks
+
+        _ = (signals, tasks)

@@ -112,16 +112,22 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
 
 class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    """Handle individual control status update POST (HTMX inline)."""
+    """Handle a control status update POST (HTMX inline), workspace-wide or for one product."""
 
     allowed_roles = list(ADMINISTER)
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def post(self, request: HttpRequest, team_key: str, product_id: str | None = None) -> HttpResponse:
+        from sbomify.apps.core.models import Product
         from sbomify.apps.teams.utils import redirect_to_team_settings
 
+        def back() -> HttpResponse:
+            if product_id is None:
+                return redirect_to_team_settings(team_key, "controls")
+            return redirect("core:product_details", product_id=product_id)
+
         if not _check_team_key_matches_session(request, team_key):
             messages.error(request, "Unauthorized: workspace mismatch")
-            return redirect_to_team_settings(team_key, "controls")
+            return back()
 
         user = cast(User, request.user)
         control_id = request.POST.get("control_id", "")
@@ -129,66 +135,26 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if not control_id or not status:
             messages.error(request, "Missing control or status")
-            return redirect_to_team_settings(team_key, "controls")
+            return back()
 
         try:
             control = Control.objects.get(id=control_id, catalog__team__key=team_key)
         except Control.DoesNotExist:
             messages.error(request, "Control not found")
-            return redirect_to_team_settings(team_key, "controls")
+            return back()
 
-        upsert_result = upsert_status(control, None, status, user)
-        if not upsert_result.ok:
-            messages.error(request, upsert_result.error or "Failed to update status")
-            return redirect_to_team_settings(team_key, "controls")
-
-        if request.headers.get("HX-Request"):
-            return render(
-                request,
-                "controls/controls_table.html.j2",
-                {"controls": controls_table_context(request, control.catalog)},
-            )
-
-        messages.success(request, "Control status updated.")
-        return redirect_to_team_settings(team_key, "controls")
-
-
-class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    """Handle product-level control status update POST (HTMX inline)."""
-
-    allowed_roles = list(ADMINISTER)
-
-    def post(self, request: HttpRequest, team_key: str, product_id: str) -> HttpResponse:
-        from sbomify.apps.core.models import Product
-
-        if not _check_team_key_matches_session(request, team_key):
-            messages.error(request, "Unauthorized: workspace mismatch")
-            return redirect("core:product_details", product_id=product_id)
-
-        user = cast(User, request.user)
-        control_id = request.POST.get("control_id", "")
-        status = request.POST.get("status", "")
-
-        if not control_id or not status:
-            messages.error(request, "Missing control or status")
-            return redirect("core:product_details", product_id=product_id)
-
-        try:
-            control = Control.objects.get(id=control_id, catalog__team__key=team_key)
-        except Control.DoesNotExist:
-            messages.error(request, "Control not found")
-            return redirect("core:product_details", product_id=product_id)
-
-        try:
-            product = Product.objects.get(id=product_id, team__key=team_key)
-        except Product.DoesNotExist:
-            messages.error(request, "Product not found")
-            return redirect("core:product_details", product_id=product_id)
+        product = None
+        if product_id is not None:
+            try:
+                product = Product.objects.get(id=product_id, team__key=team_key)
+            except Product.DoesNotExist:
+                messages.error(request, "Product not found")
+                return back()
 
         upsert_result = upsert_status(control, product, status, user)
         if not upsert_result.ok:
             messages.error(request, upsert_result.error or "Failed to update status")
-            return redirect("core:product_details", product_id=product_id)
+            return back()
 
         if request.headers.get("HX-Request"):
             return render(
@@ -198,7 +164,7 @@ class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View)
             )
 
         messages.success(request, "Control status updated.")
-        return redirect("core:product_details", product_id=product_id)
+        return back()
 
 
 class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):

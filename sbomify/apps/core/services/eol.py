@@ -4,28 +4,17 @@
 happened when they arrived. The dates were the easy half; these are the
 obligations attached to them.
 
-Three pieces, in the order a product actually moves through them:
-
-1. :func:`eol_readiness` — what stands between the product and a defensible
-   EOL. Checklist 6.1.6 requires every known critical and high vulnerability
-   patched **or formally risk-accepted** before EOL, which is why this waited
-   on the risk-acceptance state: without it there was no way to distinguish
-   "unresolved" from "accepted deliberately".
-2. :func:`build_eol_advisory` — the announcement, published through the same
-   channel as security advisories (6.1.4/6.1.6 explicitly want one channel).
-3. :func:`final_artifacts` — the last release's SBOM and VEX, which is what a
-   downstream integrator actually needs after support stops. A durable
-   artifact rather than a notification.
-
-Nothing here fires automatically. An EOL announcement is an irreversible
-public statement about a product's support, so the sweep surfaces the
-obligation and a human publishes it.
+:func:`eol_readiness` reports what stands between the product and a defensible
+EOL. Checklist 6.1.6 requires every known critical and high vulnerability
+patched **or formally risk-accepted** before EOL, which is why this waited on
+the risk-acceptance state: without it there was no way to distinguish
+"unresolved" from "accepted deliberately".
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 # Checklist 6.1.6 recommends twelve months' notice for enterprise products.
@@ -116,12 +105,7 @@ def eol_readiness(
     """
     from sbomify.apps.plugins.models import VulnerabilityLifecycle
     from sbomify.apps.sboms.models import SBOM
-    from sbomify.apps.vulnerability_scanning import triage as triage_module
-    from sbomify.apps.vulnerability_scanning.triage import current_triage_index
-
-    # The risk-accepted state ships in #1296; until that lands this degrades
-    # to "nothing is accepted", which fails safe — findings stay blocking.
-    risk_accepted_state = getattr(triage_module, "RISK_ACCEPTED_STATE", "risk_accepted")
+    from sbomify.apps.vulnerability_scanning.triage import RISK_ACCEPTED_STATE, current_triage_index
 
     today = today or date.today()
     readiness = EolReadiness(
@@ -146,7 +130,7 @@ def eol_readiness(
     accepted: set[tuple[str, str]] = set()
     for component in components:
         for statement in current_triage_index(component).values():
-            if statement.get("state") != risk_accepted_state:
+            if statement.get("state") != RISK_ACCEPTED_STATE:
                 continue
             raw = statement.get("accepted_until")
             try:
@@ -178,95 +162,3 @@ def eol_readiness(
         readiness.has_final_sbom = SBOM.BomType.SBOM in types
         readiness.has_final_vex = SBOM.BomType.VEX in types
     return readiness
-
-
-def build_eol_advisory(product: Any, user: Any, *, migration_path: str = "") -> Any:
-    """Draft the EOL announcement as a workspace advisory.
-
-    Deliberately a draft: an EOL announcement is an irreversible public
-    statement about a product's support, so a human publishes it. The
-    advisory channel is the same one 6.1.4 and 6.1.6 ask EOL notices to share
-    with security advisories, and the Trust Center already surfaces it.
-    """
-    from sbomify.apps.security_advisories.models import AdvisoryEvent, AdvisoryProduct, SecurityAdvisory
-
-    readiness = eol_readiness(product)
-    when = product.end_of_life or product.end_of_support
-    body_lines = [
-        f"{product.name} reaches end of life on {when.isoformat()}." if when else f"{product.name} is being retired.",
-        "",
-        "After that date the product receives no further security updates, "
-        "including for vulnerabilities disclosed after this notice.",
-    ]
-    if product.end_of_support and product.end_of_life and product.end_of_support != product.end_of_life:
-        body_lines.append(
-            f"Bug fixes stopped on {product.end_of_support.isoformat()}; security-only support runs to "
-            f"{product.end_of_life.isoformat()}."
-        )
-    if migration_path:
-        body_lines += ["", f"Migration path: {migration_path}"]
-    if readiness.accepted_count:
-        body_lines += [
-            "",
-            f"{readiness.accepted_count} known vulnerability(ies) are formally risk-accepted rather than "
-            "patched; the final VEX records each decision.",
-        ]
-
-    advisory = SecurityAdvisory.objects.create(
-        team=product.team,
-        title=f"End of life: {product.name}",
-        summary=f"{product.name} reaches end of life" + (f" on {when.isoformat()}" if when else ""),
-        description="\n".join(body_lines),
-        # The retirement is decided, so the remediation axis is closed. It is
-        # the publication axis that stays draft until a human says so.
-        remediation_status=SecurityAdvisory.RemediationStatus.WONT_FIX,
-        created_by=user,
-    )
-    AdvisoryProduct.objects.create(advisory=advisory, product=product)
-    AdvisoryEvent.objects.create(
-        advisory=advisory,
-        event_type=AdvisoryEvent.EventType.STATUS_CHANGE,
-        actor=user,
-        body="End-of-life notice drafted.",
-        payload={"to": SecurityAdvisory.RemediationStatus.WONT_FIX.value, "kind": "eol"},
-    )
-    return advisory
-
-
-def final_artifacts(product: Any) -> dict[str, Any]:
-    """The SBOM and VEX to publish as final, from the product's newest release.
-
-    What a downstream integrator needs after support stops: the last known
-    composition and the last statement about which vulnerabilities in it
-    matter.
-    """
-    from sbomify.apps.sboms.models import SBOM
-
-    release = _final_release(product)
-    if release is None:
-        return {"release": None, "sboms": [], "vex": []}
-
-    artifacts = list(SBOM.objects.filter(releaseartifact__release=release).only("id", "name", "version", "bom_type"))
-    return {
-        "release": release,
-        "sboms": [a for a in artifacts if a.bom_type == SBOM.BomType.SBOM],
-        "vex": [a for a in artifacts if a.bom_type == SBOM.BomType.VEX],
-    }
-
-
-def products_approaching_eol(team: Any, *, within_days: int = 90, today: date | None = None) -> list[Any]:
-    """Products whose end-of-support or end-of-life lands inside the window.
-
-    Past dates are included: a product that quietly passed its EOL without
-    an announcement is the case most worth surfacing, not the one to hide.
-    """
-    from django.db.models import Q
-
-    from sbomify.apps.core.models import Product
-
-    today = today or date.today()
-    horizon = today + timedelta(days=within_days)
-    in_window = Q(end_of_support__isnull=False, end_of_support__lte=horizon) | Q(
-        end_of_life__isnull=False, end_of_life__lte=horizon
-    )
-    return list(Product.objects.filter(team=team).filter(in_window).order_by("end_of_life", "end_of_support"))

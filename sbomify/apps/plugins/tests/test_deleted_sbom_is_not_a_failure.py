@@ -55,7 +55,8 @@ def _run_with(monkeypatch, error: Exception) -> dict:
     def raise_it(*args, **kwargs):
         raise error
 
-    monkeypatch.setattr(PluginOrchestrator, "run_assessment_by_name", raise_it)
+    monkeypatch.setattr(PluginOrchestrator, "get_plugin_instance", lambda *args, **kwargs: object())
+    monkeypatch.setattr(PluginOrchestrator, "run_assessment", raise_it)
     return tasks.run_assessment_task.fn(
         sbom_id=MISSING_SBOM_ID,
         plugin_name="ntia",

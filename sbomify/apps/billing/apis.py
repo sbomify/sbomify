@@ -6,6 +6,7 @@ from django.db import transaction
 from django.http import HttpRequest
 from django.urls import reverse
 from django.utils import timezone
+from django_ratelimit.core import is_ratelimited  # type: ignore[import-untyped]
 from ninja import Router
 from ninja.security import django_auth
 
@@ -18,10 +19,8 @@ from sbomify.apps.teams.models import Team
 
 from .billing_helpers import (
     RATE_LIMIT,
-    RATE_LIMIT_PERIOD,
     acquire_checkout_lock,
     apply_community_downgrade,
-    check_rate_limit,
     get_community_plan_limits,
     release_checkout_lock,
 )
@@ -102,7 +101,7 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
 )
 def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any]:
     """Change the current team's billing plan."""
-    if check_rate_limit(f"change_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
+    if is_ratelimited(request, group="change_plan", key="user", rate=RATE_LIMIT, increment=True):
         return 429, {"detail": "Too many requests. Please try again later."}
 
     team_key = data.team_key or request.session.get("current_team", {}).get("key")

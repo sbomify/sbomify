@@ -1,4 +1,3 @@
-{% load widget_tweaks %}
 <c-layout.frame class="max-w-5xl">
 <c-layout.page-header title="Contact sales" subtitle="Tell us what your organization needs from sbomify." />
 {% if messages %}
@@ -32,7 +31,7 @@
                        class="block text-sm font-semibold text-text-secondary mb-1.5">
                     {{ form.company_name.label }} <span class="text-danger" aria-hidden="true">*</span>
                 </label>
-                {% render_field form.company_name %}
+                {{ form.company_name }}
                 {% if form.company_name.errors %}
                     <p class="text-danger text-sm mt-1" role="alert">{{ form.company_name.errors.0 }}</p>
                 {% endif %}
@@ -42,7 +41,7 @@
                        class="block text-sm font-semibold text-text-secondary mb-1.5">
                     {{ form.company_size.label }} <span class="text-danger" aria-hidden="true">*</span>
                 </label>
-                {% render_field form.company_size %}
+                {{ form.company_size }}
                 {% if form.company_size.errors %}
                     <p class="text-danger text-sm mt-1" role="alert">{{ form.company_size.errors.0 }}</p>
                 {% endif %}
@@ -50,7 +49,7 @@
             <div>
                 <label for="{{ form.industry.id_for_label }}"
                        class="block text-sm font-semibold text-text-secondary mb-1.5">{{ form.industry.label }}</label>
-                {% render_field form.industry %}
+                {{ form.industry }}
                 {% if form.industry.errors %}
                     <p class="text-danger text-sm mt-1" role="alert">{{ form.industry.errors.0 }}</p>
                 {% endif %}
@@ -70,7 +69,7 @@
                        class="block text-sm font-semibold text-text-secondary mb-1.5">
                     {{ form.first_name.label }} <span class="text-danger" aria-hidden="true">*</span>
                 </label>
-                {% render_field form.first_name %}
+                {{ form.first_name }}
                 {% if form.first_name.errors %}
                     <p class="text-danger text-sm mt-1" role="alert">{{ form.first_name.errors.0 }}</p>
                 {% endif %}
@@ -80,7 +79,7 @@
                        class="block text-sm font-semibold text-text-secondary mb-1.5">
                     {{ form.last_name.label }} <span class="text-danger" aria-hidden="true">*</span>
                 </label>
-                {% render_field form.last_name %}
+                {{ form.last_name }}
                 {% if form.last_name.errors %}
                     <p class="text-danger text-sm mt-1" role="alert">{{ form.last_name.errors.0 }}</p>
                 {% endif %}
@@ -90,13 +89,13 @@
                        class="block text-sm font-semibold text-text-secondary mb-1.5">
                     {{ form.email.label }} <span class="text-danger" aria-hidden="true">*</span>
                 </label>
-                {% render_field form.email %}
+                {{ form.email }}
                 {% if form.email.errors %}<p class="text-danger text-sm mt-1" role="alert">{{ form.email.errors.0 }}</p>{% endif %}
             </div>
             <div>
                 <label for="{{ form.phone.id_for_label }}"
                        class="block text-sm font-semibold text-text-secondary mb-1.5">{{ form.phone.label }}</label>
-                {% render_field form.phone %}
+                {{ form.phone }}
                 {% if form.phone.errors %}<p class="text-danger text-sm mt-1" role="alert">{{ form.phone.errors.0 }}</p>{% endif %}
             </div>
             <div class="md:col-span-2">
@@ -104,7 +103,7 @@
                        class="block text-sm font-semibold text-text-secondary mb-1.5">
                     {{ form.job_title.label }}
                 </label>
-                {% render_field form.job_title %}
+                {{ form.job_title }}
                 {% if form.job_title.errors %}
                     <p class="text-danger text-sm mt-1" role="alert">{{ form.job_title.errors.0 }}</p>
                 {% endif %}
@@ -124,7 +123,7 @@
                        class="block text-sm font-semibold text-text-secondary mb-1.5">
                     {{ form.primary_use_case.label }} <span class="text-danger" aria-hidden="true">*</span>
                 </label>
-                {% render_field form.primary_use_case %}
+                {{ form.primary_use_case }}
                 {% if form.primary_use_case.errors %}
                     <p class="text-danger text-sm mt-1" role="alert">{{ form.primary_use_case.errors.0 }}</p>
                 {% endif %}
@@ -132,7 +131,7 @@
             <div>
                 <label for="{{ form.timeline.id_for_label }}"
                        class="block text-sm font-semibold text-text-secondary mb-1.5">{{ form.timeline.label }}</label>
-                {% render_field form.timeline %}
+                {{ form.timeline }}
                 {% if form.timeline.errors %}
                     <p class="text-danger text-sm mt-1" role="alert">{{ form.timeline.errors.0 }}</p>
                 {% endif %}
@@ -151,7 +150,7 @@
                    class="block text-sm font-semibold text-text-secondary mb-1.5">
                 {{ form.message.label }} <span class="text-danger" aria-hidden="true">*</span>
             </label>
-            {% render_field form.message rows="5" %}
+            {{ form.message }}
             {% if form.message.errors %}
                 <p class="text-danger text-sm mt-1" role="alert">{{ form.message.errors.0 }}</p>
             {% endif %}
@@ -162,7 +161,7 @@
     </div>
     <div class="mb-6">
         <label class="flex items-start gap-3 cursor-pointer">
-            {% render_field form.newsletter_signup %}
+            {{ form.newsletter_signup }}
             <span class="text-sm text-text-secondary">{{ form.newsletter_signup.label }}</span>
         </label>
     </div>
@@ -178,14 +177,14 @@
                  data-sitekey="{{ turnstile_site_key }}"
                  data-callback="turnstileCallback"
                  data-error-callback="turnstileErrorCallback"></div>
-            {% render_field form.cf_turnstile_response %}
+            {{ form.cf_turnstile_response }}
             {% if form.cf_turnstile_response.errors %}
                 <p class="text-danger text-sm mt-2" role="alert">{{ form.cf_turnstile_response.errors.0 }}</p>
             {% endif %}
         </div>
     {% else %}
         <c-feedback.alert variant="warning" title="Development mode" class="mb-6">Turnstile verification is not configured. In production, this form includes spam protection.</c-feedback.alert>
-        {% render_field form.cf_turnstile_response %}
+        {{ form.cf_turnstile_response }}
     {% endif %}
     <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-border">
         <c-buttons.secondary href="{{ back_url|default:'/' }}">

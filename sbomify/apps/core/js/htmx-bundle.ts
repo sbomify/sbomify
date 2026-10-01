@@ -2,9 +2,7 @@
 import '../../../assets/css/tailwind.src.css';
 
 import '../../vulnerability_scanning/js/vulnerability-chart';
-import './layout-interactions';
 import './alerts-global';
-import './clipboard-global';
 
 // Centralized Alpine components and HTMX lifecycle
 import { initHtmxLifecycle } from './htmx-lifecycle';

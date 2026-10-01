@@ -209,14 +209,8 @@ class NTIAFeatureGatingTestCase(TestCase):
         self.assertTrue(self.business_plan.has_ntia_compliance)
         self.assertTrue(self.enterprise_plan.has_ntia_compliance)
 
-    def test_billing_plan_has_vulnerability_scanning_property(self):
-        """Test that billing plans have correct vulnerability scanning properties."""
-        # OSV vulnerability scanning is now available for all teams
-        self.assertTrue(self.community_plan.has_vulnerability_scanning)
-        self.assertTrue(self.business_plan.has_vulnerability_scanning)
-        self.assertTrue(self.enterprise_plan.has_vulnerability_scanning)
-
-        # But Dependency Track access is only for business/enterprise
+    def test_billing_plan_has_dependency_track_access_property(self):
+        """Dependency Track access is only for business/enterprise."""
         self.assertFalse(self.community_plan.has_dependency_track_access)
         self.assertTrue(self.business_plan.has_dependency_track_access)
         self.assertTrue(self.enterprise_plan.has_dependency_track_access)

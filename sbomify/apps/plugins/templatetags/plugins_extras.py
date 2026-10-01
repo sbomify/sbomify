@@ -59,9 +59,10 @@ def format_run_reason(reason: str) -> str:
         reason: The run reason code. Expected values:
             - "on_upload": Triggered by SBOM upload
             - "manual": Manually triggered by user
-            - "scheduled": Triggered by scheduled job
             - "config_change": Triggered by configuration change
-            - "migration": Triggered during data migration
+            - "scheduled_refresh": Triggered by a scheduled job
+            - "dependency_changed": Re-run after a plugin it depends on finished
+            - "on_release_association": Recorded on runs from before release attachments reused the run
 
     Returns:
         Human-readable display string for the reason.
@@ -69,9 +70,10 @@ def format_run_reason(reason: str) -> str:
     reasons = {
         "on_upload": "Upload",
         "manual": "Manual",
-        "scheduled": "Scheduled",
         "config_change": "Config Change",
-        "migration": "Migration",
+        "scheduled_refresh": "Scheduled",
+        "dependency_changed": "Dependency Update",
+        "on_release_association": "Release",
     }
     return reasons.get(reason, reason)
 

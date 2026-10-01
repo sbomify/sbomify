@@ -23,8 +23,7 @@ if TYPE_CHECKING:
 logger = getLogger(__name__)
 
 # Shared rate-limit defaults (used by views.py and apis.py)
-RATE_LIMIT = 5
-RATE_LIMIT_PERIOD = 60
+RATE_LIMIT = "5/m"
 
 
 def require_billing_manager(team: Team, user: Any) -> tuple[bool, str]:
@@ -87,37 +86,6 @@ def notify_billing_managers(team: Team, notification_fn: Callable[..., Any], *ar
     # costs an extra query — and this now fans out to admins as well as owners.
     for member in Member.objects.filter(team=team, role__in=ADMINISTER).select_related("user"):
         notification_fn(team, member, *args, **kwargs)
-
-
-def check_rate_limit(key: str, limit: int = 5, period: int = 60) -> bool:
-    """Check if rate limit is exceeded. Uses atomic cache operations.
-
-    Returns True if rate limit exceeded, False otherwise.
-
-    Fails closed: if the cache is unavailable after retries, returns True
-    (rate-limited) to protect billing endpoints from abuse.
-
-    Skips rate limiting when DummyCache is configured (dev/test environments).
-    """
-    from django.conf import settings
-
-    backend = settings.CACHES.get("default", {}).get("BACKEND", "")
-    if "DummyCache" in backend:
-        return False
-
-    cache_key = f"ratelimit:{key}"
-    count: int | None = None
-    for _attempt in range(2):
-        try:
-            cache.add(cache_key, 0, period)
-            count = cache.incr(cache_key)
-            break
-        except ValueError:
-            cache.set(cache_key, 0, period)
-    if count is None:
-        logger.warning("Rate limit cache unavailable for %s — failing closed", cache_key)
-        return True
-    return count > limit
 
 
 def handle_community_downgrade_visibility(team: Team) -> None:

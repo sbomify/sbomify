@@ -15,15 +15,6 @@ from .loader import get_license_list, validate_expression
 router = Router(tags=["Licensing"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
-class LicenseSchema(Schema):
-    """Schema for license information."""
-
-    key: str
-    name: str
-    origin: str
-    url: str | None = None
-
-
 class ValidationRequestSchema(Schema):
     """Schema for license expression validation request."""
 

@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 
 from sbomify.apps.plugins.builtins._spdx_shared import (
+    is_valid_timestamp,
     iter_spdx3_elements,
     spdx2_annotation_targets_document,
     spdx2_root_spdxid,
@@ -410,3 +411,23 @@ class TestIterSpdx3Elements:
         """Both containers unusable → empty iteration, no raise."""
         data = {"@graph": "broken", "elements": 42}
         assert list(iter_spdx3_elements(data)) == []
+
+
+# ============================================================================
+# is_valid_timestamp
+# ============================================================================
+
+
+class TestIsValidTimestamp:
+    @pytest.mark.parametrize("value", ["2024-01-01T00:00:00Z", "2024-01-01T00:00:00+02:00", "2024-01-01"])
+    def test_iso_8601_strings_are_valid(self, value: str) -> None:
+        assert is_valid_timestamp(value) is True
+
+    @pytest.mark.parametrize("value", [None, "", "nonsense", "2024-13-45T00:00:00Z"])
+    def test_missing_and_malformed_strings_are_invalid(self, value: str | None) -> None:
+        assert is_valid_timestamp(value) is False
+
+    @pytest.mark.parametrize("value", [1700000000, 1.5, True, ["2024-01-01T00:00:00Z"], {"created": "2024-01-01"}])
+    def test_values_that_are_not_strings_are_invalid(self, value: Any) -> None:
+        """A document can carry any JSON type here; none of them may crash the assessment."""
+        assert is_valid_timestamp(value) is False

@@ -56,7 +56,7 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # a stable, sensible order.
         # Every AssessmentCategory (sdk.enums) is listed so none falls into the unknown
         # bucket; anything unlisted still degrades gracefully via the category tiebreaker.
-        category_order = {"compliance": 0, "license": 1, "security": 2, "attestation": 3}
+        category_order = {"compliance": 0, "security": 2, "attestation": 3}
         # Group by category for {% regroup %} (which only groups adjacent rows, so the
         # category string keeps same-category plugins contiguous even when two unknown
         # categories both fall back to 99). Within a category, preserve the API's ordering:

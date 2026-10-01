@@ -262,7 +262,7 @@ def _create_advisory(request: HttpRequest, *, on_error: str) -> HttpResponse:
 
 
 class SecurityAdvisoriesTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
-    """HTMX table refresh, mirroring ProductsTableView."""
+    """HTMX table refresh."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
         return render(request, "core/security_advisories_table.html.j2", _advisories_context(request))

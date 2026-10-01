@@ -25,11 +25,6 @@ small context of lists and assert on the output; it is not routed anywhere.
 <c-navigation.stepper-connector />
 <c-navigation.stepper-step label="Declaration" label_class="hidden sm:inline" class="ml-1" data-probe="step">3</c-navigation.stepper-step>
 </c-navigation.stepper>
-<c-navigation.stepper-vertical class="mt-4" data-probe="vertical">
-<c-navigation.stepper-step state="completed" label="Upload">1</c-navigation.stepper-step>
-<c-navigation.stepper-connector completed />
-<c-navigation.stepper-step label="Publish">2</c-navigation.stepper-step>
-</c-navigation.stepper-vertical>
 <c-navigation.accordion class="mb-4" x-data="{ open: 'org' }" data-probe="accordion">
 <c-navigation.accordion-item label="Organisational controls" state="open === 'org'" @click="open = open === 'org' ? '' : 'org'">
 <p class="m-0">Policies, roles and supplier relationships.</p>

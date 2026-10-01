@@ -283,17 +283,6 @@ class DashboardView(admin.AdminSite):
         }
         return TemplateResponse(request, "admin/dashboard_health.html", context)
 
-    @admin.display(description="Social Accounts")
-    def get_social_accounts(self, obj: Any) -> str:
-        accounts = obj.socialaccount_set.all()
-        if not accounts:
-            return format_html('<span style="color: #666;">None</span>')
-        return format_html_join(
-            format_html("<br>"),
-            "{}: {}",
-            ((account.provider, account.uid) for account in accounts),
-        )
-
 
 class CustomUserAdmin(UserAdmin):  # type: ignore[type-arg]
     """Custom admin for User model with Keycloak integration."""

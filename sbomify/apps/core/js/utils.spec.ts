@@ -4,7 +4,6 @@ import {
     formatDateTime,
     formatRelativeDate,
     formatCompactRelativeDate,
-    formatLastChecked,
 } from './utils'
 
 describe('Utils', () => {
@@ -177,31 +176,6 @@ describe('Utils', () => {
         })
     })
 
-    describe('getErrorMessage', () => {
-        test('should extract message from Error object', () => {
-            const getErrorMessage = (error: Error | unknown): string => {
-                if (error instanceof Error) {
-                    return error.message
-                }
-                return String(error)
-            }
-
-            expect(getErrorMessage(new Error('Test error'))).toBe('Test error')
-        })
-
-        test('should convert non-Error to string', () => {
-            const getErrorMessage = (error: Error | unknown): string => {
-                if (error instanceof Error) {
-                    return error.message
-                }
-                return String(error)
-            }
-
-            expect(getErrorMessage('string error')).toBe('string error')
-            expect(getErrorMessage(123)).toBe('123')
-        })
-    })
-
     describe('formatDate', () => {
         test('should format a valid date string', () => {
             const result = formatDate('2024-01-15')
@@ -340,170 +314,24 @@ describe('Utils', () => {
         })
     })
 
-    describe('formatLastChecked', () => {
+    describe('formatDateTime as the domain "last checked" time', () => {
+        const lastChecked = (value?: string | null) => formatDateTime(value, { use24Hour: false, fallback: 'Never' })
+
         test('should return "Never" for null/undefined/empty', () => {
-            expect(formatLastChecked(null)).toBe('Never')
-            expect(formatLastChecked(undefined)).toBe('Never')
-            expect(formatLastChecked('')).toBe('Never')
+            expect(lastChecked(null)).toBe('Never')
+            expect(lastChecked(undefined)).toBe('Never')
+            expect(lastChecked('')).toBe('Never')
         })
 
         test('should return formatted datetime for valid input', () => {
-            const result = formatLastChecked('2024-06-15T14:30:00Z')
+            const result = lastChecked('2024-06-15T14:30:00Z')
             expect(result).toContain('2024')
             expect(result).not.toBe('Never')
         })
 
         test('should use 12-hour format', () => {
-            const result = formatLastChecked('2024-06-15T14:30:00Z')
+            const result = lastChecked('2024-06-15T14:30:00Z')
             expect(result).not.toMatch(/\b14:/)
-        })
-
-        test('should use custom fallback when provided', () => {
-            expect(formatLastChecked(null, { fallback: 'Unknown' })).toBe('Unknown')
-        })
-    })
-
-    describe('EventEmitter', () => {
-        test('should register event listeners', () => {
-            const events: Record<string, Array<() => void>> = {}
-
-            const on = (event: string, callback: () => void) => {
-                if (!events[event]) {
-                    events[event] = []
-                }
-                events[event].push(callback)
-            }
-
-            on('test', () => { })
-            expect(events['test']).toHaveLength(1)
-
-            on('test', () => { })
-            expect(events['test']).toHaveLength(2)
-        })
-
-        test('should remove event listeners', () => {
-            const events: Record<string, Array<() => void>> = {}
-            const callback = () => { }
-
-            const on = (event: string, cb: () => void) => {
-                if (!events[event]) events[event] = []
-                events[event].push(cb)
-            }
-
-            const off = (event: string, cb: () => void) => {
-                if (!events[event]) return
-                const index = events[event].indexOf(cb)
-                if (index > -1) {
-                    events[event].splice(index, 1)
-                }
-            }
-
-            on('test', callback)
-            expect(events['test']).toHaveLength(1)
-
-            off('test', callback)
-            expect(events['test']).toHaveLength(0)
-        })
-
-        test('should emit events to listeners', () => {
-            let callCount = 0
-            const events: Record<string, Array<(...args: unknown[]) => void>> = {}
-
-            const on = (event: string, cb: () => void) => {
-                if (!events[event]) events[event] = []
-                events[event].push(cb)
-            }
-
-            const emit = (event: string) => {
-                if (!events[event]) return
-                events[event].forEach(cb => cb())
-            }
-
-            on('test', () => { callCount++ })
-            emit('test')
-            expect(callCount).toBe(1)
-
-            emit('test')
-            expect(callCount).toBe(2)
-        })
-    })
-
-    describe('CSRF interceptor logic', () => {
-        test('should set X-CSRFToken header when token is available', () => {
-            const getCsrfToken = () => 'test-csrf-token'
-            const headers = new Map<string, string>()
-
-            // Simulate interceptor logic
-            const config = {
-                headers: { set: (key: string, value: string) => headers.set(key, value) }
-            }
-
-            try {
-                const token = getCsrfToken()
-                config.headers.set('X-CSRFToken', token)
-            } catch {
-                // noop
-            }
-
-            expect(headers.get('X-CSRFToken')).toBe('test-csrf-token')
-        })
-
-        test('should not throw when getCsrfToken fails', () => {
-            const getCsrfToken = () => { throw new Error('No CSRF meta tag') }
-            const headers = new Map<string, string>()
-
-            const config = {
-                headers: { set: (key: string, value: string) => headers.set(key, value) }
-            }
-
-            try {
-                const token = getCsrfToken()
-                config.headers.set('X-CSRFToken', token)
-            } catch {
-                // CSRF token not available, let the request proceed without it
-            }
-
-            expect(headers.has('X-CSRFToken')).toBe(false)
-        })
-
-        test('should initialize headers when undefined', () => {
-            const getCsrfToken = () => 'test-token'
-            let headersInitialized = false
-
-            const config: { headers: { set: (k: string, v: string) => void } | null } = {
-                headers: null
-            }
-
-            try {
-                const token = getCsrfToken()
-                if (!config.headers) {
-                    config.headers = { set: () => {} }
-                    headersInitialized = true
-                }
-                config.headers.set('X-CSRFToken', token)
-            } catch {
-                // noop
-            }
-
-            expect(headersInitialized).toBe(true)
-        })
-    })
-
-    describe('EVENTS constants', () => {
-        test('should have all required event names', () => {
-            const EVENTS = {
-                REFRESH_PRODUCTS: 'refresh_products',
-                REFRESH_COMPONENTS: 'refresh_components',
-                ITEM_CREATED: 'item_created',
-                ITEM_UPDATED: 'item_updated',
-                ITEM_DELETED: 'item_deleted'
-            }
-
-            expect(EVENTS.REFRESH_PRODUCTS).toBe('refresh_products')
-            expect(EVENTS.REFRESH_COMPONENTS).toBe('refresh_components')
-            expect(EVENTS.ITEM_CREATED).toBe('item_created')
-            expect(EVENTS.ITEM_UPDATED).toBe('item_updated')
-            expect(EVENTS.ITEM_DELETED).toBe('item_deleted')
         })
     })
 })

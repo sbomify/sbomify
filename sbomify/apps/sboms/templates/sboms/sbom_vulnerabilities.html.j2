@@ -1,5 +1,4 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
 {% load advisory_tags %}
@@ -48,12 +47,6 @@
                 <c-chips.metric.value>{{ scan_timestamp }}</c-chips.metric.value>
                 </c-chips.metric-chip>
             {% endif %}
-            {% if is_processing %}
-                <c-chips.metric-chip accent="info">
-                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
-                <c-chips.metric.value>Processing</c-chips.metric.value>
-                </c-chips.metric-chip>
-            {% endif %}
         </div>
         <c-cards.card title="Scan results" :flush="scan_panel">
         {% if can_triage %}
@@ -71,13 +64,6 @@
             <c-feedback.alert variant="danger" icon="fas fa-exclamation-triangle" title="Vulnerability Scan Failed">
             <c-slot name="body">
             <div class="whitespace-pre-wrap break-words">{{ error_message }}</div>
-            {% if error_details and error_details != error_message %}
-                <hr class="my-4 border-border" />
-                <div>
-                    <strong class="text-text">Additional Details:</strong>
-                    <pre class="mt-2 p-4 bg-background border border-border rounded-lg text-sm overflow-auto max-h-[300px] whitespace-pre-wrap break-words">{{ error_details }}</pre>
-                </div>
-            {% endif %}
             </c-slot>
             </c-feedback.alert>
         {% elif skipped_scans %}
@@ -97,52 +83,17 @@
         {% elif scan_timestamp %}
             <c-feedback.empty-state compact icon="fas fa-check" title="No vulnerabilities found" message="The latest scan found no known vulnerabilities in this SBOM." />
         {% else %}
-            {% if is_processing %}
-                <c-feedback.alert variant="info" title="Processing Vulnerability Scan">
-                <c-slot name="mark">
-                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
-                </c-slot>
-                <c-slot name="body">
-                <p class="mb-2">
-                    Your SBOM has been uploaded to {{ processing_provider|default:"the vulnerability scanner" }} and is currently being analyzed for vulnerabilities.
-                    This process typically takes {{ processing_message }}.
-                </p>
-                <p class="text-sm mb-4">
-                    <i class="fas fa-clock mr-1" aria-hidden="true"></i>
-                    Started: {{ scan_timestamp }}
-                </p>
-                <div class="flex items-center gap-4">
-                    <c-buttons.secondary @click="location.reload()">
-                    <i class="fas fa-sync-alt mr-2" aria-hidden="true"></i>Refresh page
-                    </c-buttons.secondary>
-                    <span class="text-sm">This page will update automatically once processing is complete.</span>
-                </div>
-                </c-slot>
-                </c-feedback.alert>
-                {# WebSocket-based refresh for scan completion #}
-                <div x-data
-                     @ws:message.window="if ($event.detail.type === 'scan_complete' && $event.detail.sbom_id === '{{ sbom.id }}') { location.reload(); }">
-                </div>
-                <script>
-                        setTimeout(function() {
-                            var wsConnected = window.Alpine && window.Alpine.store('ws') && window.Alpine.store('ws').connected;
-                            if (!wsConnected) { location.reload(); }
-                        }, 60000);
-                        setTimeout(function() { location.reload(); }, 300000);
-                </script>
-            {% else %}
-                <c-feedback.alert variant="warning" icon="fas fa-hourglass-half" title="No Scan Data Available">
-                <c-slot name="body">
-                <p class="mb-2">
-                    No vulnerability scan data found for this SBOM, or the scan is still in progress. Please try again later.
-                </p>
-                <p class="text-sm">
-                    <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-                    Note: Scans are performed asynchronously. If you just uploaded this SBOM, the scan might not be complete yet.
-                </p>
-                </c-slot>
-                </c-feedback.alert>
-            {% endif %}
+            <c-feedback.alert variant="warning" icon="fas fa-hourglass-half" title="No Scan Data Available">
+            <c-slot name="body">
+            <p class="mb-2">
+                No vulnerability scan data found for this SBOM, or the scan is still in progress. Please try again later.
+            </p>
+            <p class="text-sm">
+                <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+                Note: Scans are performed asynchronously. If you just uploaded this SBOM, the scan might not be complete yet.
+            </p>
+            </c-slot>
+            </c-feedback.alert>
         {% endif %}
         </c-cards.card>
     </div>

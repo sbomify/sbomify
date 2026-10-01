@@ -46,10 +46,7 @@ class InventoryView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
 
 class ProductsDashboardView(InventoryView):
-    def post(self, request: HttpRequest) -> HttpResponse:
-        # Kept so anything still posting the create form at the list URL keeps
-        # working; the form itself now lives at product_new.
-        return _create_product(request)
+    """The Products inventory page."""
 
 
 class ProductCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
@@ -64,13 +61,3 @@ class ProductCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         return _create_product(request)
-
-
-class ProductsTableView(InventoryView):
-    """Keep the existing table refresh URL available."""
-
-    def get(self, request: HttpRequest) -> HttpResponse:
-        result = build_inventory_context(request, kind=self.inventory_kind)
-        if not result.ok:
-            return HttpResponse(result.error, status=result.status_code or 400)
-        return render(request, "core/products_inventory.html.j2", result.value)

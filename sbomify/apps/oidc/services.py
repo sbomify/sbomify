@@ -20,7 +20,7 @@ Three public services back the HTTP layer:
   the binding by immutable IDs, mints a short-lived AccessToken row.
 
 Two internal helpers (``provision_bot_user_for_binding``,
-``delete_bot_user_for_binding``) handle the bot-User lifecycle. The
+``delete_bot_user_by_id``) handle the bot-User lifecycle. The
 delete helper is also wired to ``post_delete`` on ``OIDCBinding`` so
 revoking a binding via any path triggers credential cleanup.
 """
@@ -283,19 +283,6 @@ def delete_bot_user_by_id(bot_user_id: int) -> None:
     deleted_count, _ = UserModel.objects.filter(pk=bot_user_id).delete()
     if deleted_count:
         logger.info("Removed OIDC bot user pk=%s after binding deletion", bot_user_id)
-
-
-def delete_bot_user_for_binding(binding_id: str) -> None:
-    """Legacy username-based fallback. Kept for idempotency-test compat.
-
-    Prefer ``delete_bot_user_by_id`` in new code — that path is robust
-    to username changes.
-    """
-    UserModel = get_user_model()
-    username = _bot_username(binding_id)
-    deleted_count, _ = UserModel.objects.filter(username=username).delete()
-    if deleted_count:
-        logger.info("Removed OIDC bot user %s after binding deletion (legacy fallback)", username)
 
 
 # ============================================================================

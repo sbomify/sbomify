@@ -27,7 +27,7 @@ class RegisteredPlugin(models.Model):
         display_name: Human-readable name for UI display.
         description: Description of what the plugin does.
         category: Assessment category for classification (security, compliance,
-            attestation, license). Under the scan-once-per-SBOM model, all
+            attestation). Under the scan-once-per-SBOM model, all
             plugins run on SBOM upload; release associations update the
             existing run's M2M without triggering a rescan.
         version: Current version of the plugin.
@@ -222,11 +222,9 @@ class AssessmentRun(models.Model):
         completed_at: When the assessment completed.
         error_message: Error details if the assessment failed.
         triggered_by_user: User who triggered a manual run.
-        triggered_by_token: API token used to trigger the run.
         input_content_digest: SHA256 of SBOM content for auditability.
         result: JSON containing the AssessmentResult.
         result_schema_version: Version of the result schema.
-        raw_output_key: S3 key for raw tool output (optional).
         created_at: When the record was created.
     """
 
@@ -317,14 +315,6 @@ class AssessmentRun(models.Model):
         related_name="triggered_assessment_runs",
         help_text="User who triggered a manual run (null for automated runs)",
     )
-    triggered_by_token = models.ForeignKey(
-        "access_tokens.AccessToken",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="triggered_assessment_runs",
-        help_text="API token used to trigger the run (null for UI or automated runs)",
-    )
 
     # Input reference
     input_content_digest = models.CharField(
@@ -361,13 +351,6 @@ class AssessmentRun(models.Model):
         max_length=10,
         default="1.0",
         help_text="Version of the result schema",
-    )
-
-    # Large output storage (optional)
-    raw_output_key = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="S3 key for raw tool output (optional)",
     )
 
     # Timestamps
@@ -419,15 +402,6 @@ class AssessmentRun(models.Model):
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
         return None
-
-    @property
-    def is_successful(self) -> bool:
-        """Check if the assessment completed successfully.
-
-        Returns:
-            True if status is COMPLETED.
-        """
-        return self.status == RunStatus.COMPLETED.value
 
 
 class AssessmentRunRelease(models.Model):

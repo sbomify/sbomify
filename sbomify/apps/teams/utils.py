@@ -18,7 +18,6 @@ from django.utils import timezone
 
 from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.billing.stripe_client import get_stripe_client
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import number_to_random_token
@@ -27,24 +26,9 @@ from sbomify.logging import getLogger
 from .models import Invitation, Member, Team, get_team_name_for_user
 from .queries import count_team_members, get_team_user_counts, invitation_email
 
-# Valid tab names for team settings - used for input validation
 # Names still linked to by fragment that have no settings page of their own.
 # Kept as literals so a redirect to one cannot carry a request-derived string.
 FRAGMENT_ONLY_TABS: tuple[str, ...] = ("integrations",)
-
-ALLOWED_TABS = frozenset(
-    {
-        "general",
-        "members",
-        "tokens",
-        "trust-center",
-        "controls",
-        "contact-profiles",
-        "integrations",
-        "billing",
-        "branding",
-    }
-)
 
 
 def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> HttpResponseRedirect:
@@ -53,7 +37,7 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
 
     Args:
         team_key: The workspace key to redirect
-        active_tab: Optional tab name to append as URL fragment (validated against ALLOWED_TABS)
+        active_tab: Optional settings tab, or a name in FRAGMENT_ONLY_TABS to append as URL fragment
 
     Returns:
         HttpResponseRedirect to the team settings page
@@ -74,8 +58,8 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
         return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab)
 
     base_url = reverse("teams:team_settings", kwargs={"team_key": team_key})
-    # The names still in ALLOWED_TABS with no page of their own keep the old
-    # fragment, so links to them are not broken by the move.
+    # The names with no page of their own keep the old fragment, so links to
+    # them are not broken by the move.
     #
     # The fragment is taken from this tuple rather than interpolated from the
     # argument. Equality proves the two are the same string, but only the
@@ -139,7 +123,6 @@ def normalize_host(host: str) -> str:
 
 
 logger = getLogger(__name__)
-stripe_client = get_stripe_client()
 
 
 def get_app_hostname() -> str:
@@ -167,23 +150,7 @@ def get_app_hostname() -> str:
 
 def plan_has_custom_domain_access(billing_plan: str | None) -> bool:
     """Check if the billing plan allows custom domain feature."""
-    if not billing_plan:
-        return False
-
-    plan_key = str(billing_plan).strip().lower()
-    if not plan_key:
-        return False
-
-    # Business and Enterprise plans have access
-    if plan_key in ("business", "enterprise"):
-        return True
-
-    # Check if it's a BillingPlan in the database with custom domain access
-    try:
-        plan = BillingPlan.objects.get(key=plan_key)
-        return getattr(plan, "has_custom_domain_access", False)
-    except BillingPlan.DoesNotExist:
-        return False
+    return (billing_plan or "").strip().lower() in ("business", "enterprise")
 
 
 def compute_user_teams_checksum(user_teams: dict[str, Any] | None) -> str:
@@ -520,73 +487,6 @@ def create_user_team_and_subscription(user: User) -> Team | None:
     _setup_community_plan(team)
 
     return team
-
-
-def setup_trial_subscription(user: User, team: Team) -> bool:
-    """
-    Set up a trial subscription for a team.
-
-    Args:
-        user: The team owner
-        team: The team to set up subscription for
-
-    Returns:
-        True if successful, False otherwise
-    """
-    from sbomify.apps.billing.config import is_billing_enabled
-
-    if not is_billing_enabled():
-        return False
-
-    try:
-        business_plan = BillingPlan.objects.get(key="business")
-        if not business_plan.stripe_price_monthly_id:
-            logger.error("Business plan has no stripe_price_monthly_id configured")
-            _setup_community_plan(team)
-            return False
-        customer = stripe_client.create_customer(
-            email=user.email, name=team.name, metadata={"team_key": team.key or ""}
-        )
-        subscription = stripe_client.create_subscription(
-            customer_id=customer.id,
-            price_id=business_plan.stripe_price_monthly_id,
-            trial_days=settings.TRIAL_PERIOD_DAYS,
-            metadata={"team_key": team.key or "", "plan_key": "business"},
-        )
-        try:
-            with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
-                team.billing_plan = "business"
-                team.billing_plan_limits = {
-                    "max_products": business_plan.max_products,
-                    "max_components": business_plan.max_components,
-                    "stripe_customer_id": customer.id,
-                    "stripe_subscription_id": subscription.id,
-                    "subscription_status": "trialing",
-                    "is_trial": True,
-                    "trial_end": subscription.trial_end,
-                    "last_updated": timezone.now().isoformat(),
-                }
-                team.save()
-        except Exception:
-            # DB transaction failed — clean up orphaned Stripe resources
-            logger.warning(
-                "DB update failed after Stripe resources created; cleaning up subscription %s",
-                subscription.id,
-            )
-            try:
-                stripe_client.cancel_subscription(subscription.id)
-            except Exception:
-                logger.error("Failed to clean up orphaned Stripe subscription %s", subscription.id)
-            raise
-
-        logger.info("Created trial subscription for team %s (%s)", team.key, team.name)
-        return True
-
-    except Exception as e:
-        logger.error("Failed to create trial subscription for team %s: %s", team.key, e)
-        _setup_community_plan(team)
-        return False
 
 
 def _setup_community_plan(team: Team) -> None:

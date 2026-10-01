@@ -8,10 +8,12 @@ from typing import Any
 
 import dramatiq
 from django.contrib.auth import get_user_model
+from dramatiq_crontab import cron
 
 from sbomify.logging import getLogger
 from sbomify.task_utils import record_task_breadcrumb
 
+from ..models import OnboardingEmail
 from ..services import OnboardingEmailService
 
 User = get_user_model()
@@ -51,117 +53,63 @@ def send_welcome_email_task(user_id: int) -> None:
 
 
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=3, time_limit=60000)
-def send_quick_start_email_task(user_id: int) -> None:
-    """Send quick start guide email to a user (day 1)."""
+def send_drip_email_task(user_id: int, email_type: str) -> None:
+    """Send one drip email to a user: quick start (day 1), first component (day 3),
+    first SBOM (day 7) or collaboration (day 10)."""
+    tag = f"[TASK_send_{email_type}]"
+    breadcrumb = f"send_{email_type}_email_task"
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        logger.warning("[TASK_send_quick_start] User with ID %s not found, skipping", user_id)
+        logger.warning("%s User with ID %s not found, skipping", tag, user_id)
         return
 
-    logger.info("[TASK_send_quick_start] Starting for user %s", user_id)
-    record_task_breadcrumb("send_quick_start_email_task", "start", data={"user_id": user_id})
+    logger.info("%s Starting for user %s", tag, user_id)
+    record_task_breadcrumb(breadcrumb, "start", data={"user_id": user_id})
     try:
-        success = OnboardingEmailService.send_quick_start_email(user)
+        success = OnboardingEmailService.send_drip_email(user, email_type)
         if success:
-            logger.info("[TASK_send_quick_start] Successfully sent to user %s", user_id)
-            record_task_breadcrumb("send_quick_start_email_task", "sent", data={"user_id": user_id})
+            logger.info("%s Successfully sent to user %s", tag, user_id)
+            record_task_breadcrumb(breadcrumb, "sent", data={"user_id": user_id})
         else:
-            logger.warning("[TASK_send_quick_start] Failed to send to user %s", user_id)
+            logger.warning("%s Failed to send to user %s", tag, user_id)
     except Exception as e:
-        logger.error("[TASK_send_quick_start] Error for user %s: %s", user_id, e)
-        record_task_breadcrumb("send_quick_start_email_task", "error", level="error", data={"error": str(e)})
+        logger.error("%s Error for user %s: %s", tag, user_id, e)
+        record_task_breadcrumb(breadcrumb, "error", level="error", data={"error": str(e)})
         raise
+
+
+# Each drip email had its own actor before send_drip_email_task. The names stay
+# registered so messages already queued under them still run.
+@dramatiq.actor(queue_name="onboarding_emails", max_retries=3, time_limit=60000)
+def send_quick_start_email_task(user_id: int) -> None:
+    send_drip_email_task(user_id, OnboardingEmail.EmailType.QUICK_START)
 
 
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=3, time_limit=60000)
 def send_first_component_email_task(user_id: int) -> None:
-    """Send first component reminder email to a user (day 3)."""
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        logger.warning("[TASK_send_first_component] User with ID %s not found, skipping", user_id)
-        return
-
-    logger.info("[TASK_send_first_component] Starting for user %s", user_id)
-    record_task_breadcrumb("send_first_component_email_task", "start", data={"user_id": user_id})
-    try:
-        success = OnboardingEmailService.send_first_component_email(user)
-        if success:
-            logger.info("[TASK_send_first_component] Successfully sent to user %s", user_id)
-            record_task_breadcrumb("send_first_component_email_task", "sent", data={"user_id": user_id})
-        else:
-            logger.warning("[TASK_send_first_component] Failed to send to user %s", user_id)
-    except Exception as e:
-        logger.error("[TASK_send_first_component] Error for user %s: %s", user_id, e)
-        record_task_breadcrumb("send_first_component_email_task", "error", level="error", data={"error": str(e)})
-        raise
+    send_drip_email_task(user_id, OnboardingEmail.EmailType.FIRST_COMPONENT)
 
 
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=3, time_limit=60000)
 def send_first_sbom_email_task(user_id: int) -> None:
-    """Send first SBOM upload reminder email to a user (day 7)."""
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        logger.warning("[TASK_send_first_sbom] User with ID %s not found, skipping", user_id)
-        return
-
-    logger.info("[TASK_send_first_sbom] Starting for user %s", user_id)
-    record_task_breadcrumb("send_first_sbom_email_task", "start", data={"user_id": user_id})
-    try:
-        success = OnboardingEmailService.send_first_sbom_email(user)
-        if success:
-            logger.info("[TASK_send_first_sbom] Successfully sent to user %s", user_id)
-            record_task_breadcrumb("send_first_sbom_email_task", "sent", data={"user_id": user_id})
-        else:
-            logger.warning("[TASK_send_first_sbom] Failed to send to user %s", user_id)
-    except Exception as e:
-        logger.error("[TASK_send_first_sbom] Error for user %s: %s", user_id, e)
-        record_task_breadcrumb("send_first_sbom_email_task", "error", level="error", data={"error": str(e)})
-        raise
+    send_drip_email_task(user_id, OnboardingEmail.EmailType.FIRST_SBOM)
 
 
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=3, time_limit=60000)
 def send_collaboration_email_task(user_id: int) -> None:
-    """Send collaboration/invite email to a user (day 10)."""
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        logger.warning("[TASK_send_collaboration] User with ID %s not found, skipping", user_id)
-        return
-
-    logger.info("[TASK_send_collaboration] Starting for user %s", user_id)
-    record_task_breadcrumb("send_collaboration_email_task", "start", data={"user_id": user_id})
-    try:
-        success = OnboardingEmailService.send_collaboration_email(user)
-        if success:
-            logger.info("[TASK_send_collaboration] Successfully sent to user %s", user_id)
-            record_task_breadcrumb("send_collaboration_email_task", "sent", data={"user_id": user_id})
-        else:
-            logger.warning("[TASK_send_collaboration] Failed to send to user %s", user_id)
-    except Exception as e:
-        logger.error("[TASK_send_collaboration] Error for user %s: %s", user_id, e)
-        record_task_breadcrumb("send_collaboration_email_task", "error", level="error", data={"error": str(e)})
-        raise
+    send_drip_email_task(user_id, OnboardingEmail.EmailType.COLLABORATION)
 
 
+@cron("0 9 * * *")  # type: ignore[untyped-decorator]  # Daily at 9:00 AM UTC
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=1, time_limit=300000)
 def process_onboarding_sequence_batch_task() -> None:
     """
     Process all onboarding sequence emails for eligible users.
 
-    Finds users eligible for each email type and queues individual tasks.
+    Finds users eligible for each email type and queues individual tasks. The
+    welcome email is not part of this: a signal queues it when the user is created.
     """
-    from ..models import OnboardingEmail as OE
-
-    task_map: dict[str, Any] = {
-        OE.EmailType.QUICK_START: send_quick_start_email_task,
-        OE.EmailType.FIRST_COMPONENT: send_first_component_email_task,
-        OE.EmailType.FIRST_SBOM: send_first_sbom_email_task,
-        OE.EmailType.COLLABORATION: send_collaboration_email_task,
-    }
-
     try:
         logger.info("[TASK_process_onboarding_sequence] Starting batch processing")
         eligible_by_type = OnboardingEmailService.get_users_for_onboarding_sequence()
@@ -169,13 +117,9 @@ def process_onboarding_sequence_batch_task() -> None:
         total_queued = 0
         failed_to_queue = 0
         for email_type, users in eligible_by_type.items():
-            task_fn = task_map.get(email_type)
-            if not task_fn:
-                logger.warning("[TASK_process_onboarding_sequence] No task function for email type %s", email_type)
-                continue
             for user in users:
                 try:
-                    task_fn.send(user.id)
+                    send_drip_email_task.send(user.id, email_type)
                     total_queued += 1
                 except Exception as e:
                     failed_to_queue += 1
@@ -189,28 +133,6 @@ def process_onboarding_sequence_batch_task() -> None:
         logger.info("[TASK_process_onboarding_sequence] Completed: %d queued, %d failed", total_queued, failed_to_queue)
     except Exception as e:
         logger.error("[TASK_process_onboarding_sequence] Batch processing error: %s", e)
-        raise
-
-
-@dramatiq.actor(queue_name="onboarding_emails", max_retries=1, time_limit=600000)
-def process_all_onboarding_reminders_task() -> None:
-    """
-    Process all onboarding reminder emails (the 4-stage drip sequence).
-
-    Designed to be run on a schedule (e.g., daily via cron or periodic task).
-    Fans out to ``process_onboarding_sequence_batch_task``, which queues
-    quick-start / first-component / first-sbom / collaboration emails for
-    users at the right point in their drip clock. The welcome email is NOT
-    part of this fan-out — it is signal-driven via ``queue_welcome_email``
-    on user creation, not on a daily cron.
-    """
-    try:
-        logger.info("[TASK_process_all_onboarding_reminders] Starting onboarding email processing")
-        process_onboarding_sequence_batch_task.send_with_options(args=(), delay=0)
-        logger.info("[TASK_process_all_onboarding_reminders] Successfully queued sequence processing")
-
-    except Exception as e:
-        logger.error("[TASK_process_all_onboarding_reminders] Error: %s", e)
         raise
 
 

@@ -2,7 +2,7 @@
 
 Covers: checkout session lock, fail-closed rate limiter, enterprise contact rate limiting,
 plan_key in API checkout metadata, Turnstile remoteip, get_community_plan_limits helper,
-price_id validation in trial setup, and session_id masking in billing return.
+and session_id masking in billing return.
 """
 
 from unittest.mock import MagicMock, patch
@@ -16,7 +16,6 @@ from django.urls import reverse
 from sbomify.apps.billing.billing_helpers import (
     CHECKOUT_LOCK_TTL,
     acquire_checkout_lock,
-    check_rate_limit,
     get_community_plan_limits,
     release_checkout_lock,
 )
@@ -70,61 +69,41 @@ class TestCheckoutSessionLock:
 
 @pytest.mark.django_db
 class TestFailClosedRateLimiter:
-    """Test that rate limiter fails closed when cache is unavailable."""
+    """The billing rate limit counts per user and refuses requests when the cache cannot count."""
 
     def setup_method(self):
         cache.clear()
 
-    def test_rate_limit_not_exceeded(self):
-        assert check_rate_limit("test_key", limit=5, period=60) is False
+    def _change_plan(self, client):
+        return client.post(
+            "/api/v1/billing/change-plan/", data={"plan": "business"}, content_type="application/json"
+        )
 
-    def test_rate_limit_exceeded_after_threshold(self):
-        for _ in range(5):
-            check_rate_limit("test_key", limit=5, period=60)
-        assert check_rate_limit("test_key", limit=5, period=60) is True
+    def test_sixth_plan_change_in_a_window_is_refused(self, client, sample_user):
+        client.force_login(sample_user)
 
-    def test_rate_limit_separate_keys(self):
-        for _ in range(5):
-            check_rate_limit("key_a", limit=5, period=60)
-        assert check_rate_limit("key_a", limit=5, period=60) is True
-        assert check_rate_limit("key_b", limit=5, period=60) is False
+        with patch("django_ratelimit.core._get_window", return_value=0):
+            codes = [self._change_plan(client).status_code for _ in range(6)]
 
-    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
-    @patch("sbomify.apps.billing.billing_helpers.cache")
-    def test_fails_closed_when_cache_unavailable(self, mock_cache):
-        """When cache.incr raises ValueError on both attempts, return True (rate-limited)."""
-        mock_cache.add.return_value = True
-        mock_cache.incr.side_effect = ValueError("Key not found")
-        mock_cache.set.return_value = True
+        assert 429 not in codes[:5]
+        assert codes[5] == 429
 
-        result = check_rate_limit("broken_cache_key", limit=5, period=60)
-        assert result is True
+    def test_fails_closed_when_cache_unavailable(self, client, sample_user):
+        client.force_login(sample_user)
+        unreachable = MagicMock(**{"add.return_value": None, "incr.return_value": None})
 
-    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
-    @patch("sbomify.apps.billing.billing_helpers.cache")
-    def test_recovers_on_second_attempt(self, mock_cache):
-        """When first attempt fails but second succeeds, return based on count."""
-        call_count = 0
+        with patch("django_ratelimit.core.caches", {"default": unreachable}):
+            assert self._change_plan(client).status_code == 429
 
-        def add_side_effect(key, value, timeout):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise ValueError("First attempt fails")
-            return True
+    def test_never_limits_on_dummy_cache(self, client, sample_user):
+        """DummyCache (dev) never limits."""
+        client.force_login(sample_user)
+        dummy = {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}
 
-        mock_cache.add.side_effect = add_side_effect
-        mock_cache.set.return_value = True
-        mock_cache.incr.return_value = 1
+        with override_settings(CACHES={"default": dummy, "throttle": dummy}):
+            codes = [self._change_plan(client).status_code for _ in range(10)]
 
-        result = check_rate_limit("recovery_key", limit=5, period=60)
-        assert result is False
-
-    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}})
-    def test_skips_rate_limiting_with_dummy_cache(self):
-        """DummyCache (dev/test) should bypass rate limiting entirely."""
-        for _ in range(20):
-            assert check_rate_limit("dummy_key", limit=1, period=60) is False
+        assert 429 not in codes
 
 
 # ============================================================================
@@ -143,27 +122,27 @@ class TestEnterpriseContactRateLimiting:
         """Authenticated users get user-PK-based rate limit key."""
         client.force_login(sample_user)
 
-        with patch("sbomify.apps.billing.views.check_rate_limit", return_value=True) as mock_rl:
+        with patch("sbomify.apps.billing.views.is_ratelimited", return_value=True) as mock_rl:
             response = client.post(reverse("billing:enterprise_contact"), {})
             assert response.status_code == 302
             mock_rl.assert_called_once()
-            key = mock_rl.call_args[0][0]
+            key = mock_rl.call_args.kwargs["key"]("enterprise_contact", mock_rl.call_args.args[0])
             assert key == f"enterprise_contact:{sample_user.pk}"
 
     def test_unauthenticated_user_rate_limit_key(self, client):
         """Unauthenticated users get IP-based rate limit key."""
-        with patch("sbomify.apps.billing.views.check_rate_limit", return_value=True) as mock_rl:
+        with patch("sbomify.apps.billing.views.is_ratelimited", return_value=True) as mock_rl:
             response = client.post(reverse("public_enterprise_contact"), {}, REMOTE_ADDR="1.2.3.4")
             assert response.status_code == 302
             mock_rl.assert_called_once()
-            key = mock_rl.call_args[0][0]
+            key = mock_rl.call_args.kwargs["key"]("enterprise_contact", mock_rl.call_args.args[0])
             assert key == "enterprise_contact_ip:1.2.3.4"
 
     def test_rate_limited_response_redirects(self, client, sample_user):
         """When rate limited, user is redirected with error message."""
         client.force_login(sample_user)
 
-        with patch("sbomify.apps.billing.views.check_rate_limit", return_value=True):
+        with patch("sbomify.apps.billing.views.is_ratelimited", return_value=True):
             response = client.post(reverse("billing:enterprise_contact"), {})
             assert response.status_code == 302
 
@@ -299,7 +278,7 @@ class TestTurnstileRemoteip:
 
     def test_view_passes_remote_addr_to_form(self, client):
         """PublicEnterpriseContactView passes REMOTE_ADDR to form."""
-        with patch("sbomify.apps.billing.views.check_rate_limit", return_value=False):
+        with patch("sbomify.apps.billing.views.is_ratelimited", return_value=False):
             with patch("sbomify.apps.billing.views.PublicEnterpriseContactForm") as MockForm:
                 mock_form = MagicMock()
                 mock_form.is_valid.return_value = False
@@ -341,76 +320,6 @@ class TestGetCommunityPlanLimits:
         limits = get_community_plan_limits()
         assert limits["max_products"] is None
         assert limits["max_components"] is None
-
-
-# ============================================================================
-# Task #50: price_id Validation in Trial Setup Tests
-# ============================================================================
-
-
-@pytest.mark.django_db
-class TestPriceIdValidationInTrialSetup:
-    """Test that setup_trial_subscription validates stripe_price_monthly_id."""
-
-    def test_falls_back_to_community_when_no_price_id(self, sample_user, community_plan):
-        """When business plan has no stripe_price_monthly_id, falls back to community."""
-        from sbomify.apps.teams.utils import setup_trial_subscription
-
-        BillingPlan.objects.get_or_create(
-            key="business",
-            defaults={
-                "name": "Business",
-                "description": "For growing teams",
-                "max_products": 10,
-                "max_components": 100,
-                "stripe_product_id": "prod_test",
-                "stripe_price_monthly_id": "",  # Empty = no price configured
-                "stripe_price_annual_id": "price_annual",
-            },
-        )
-        BillingPlan.objects.filter(key="business").update(stripe_price_monthly_id="")
-
-        from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Member, Team
-
-        team = Team.objects.create(name="Trial Test Team")
-        team.key = number_to_random_token(team.pk)
-        team.save()
-        Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
-
-        result = setup_trial_subscription(sample_user, team)
-        assert result is False
-
-        team.refresh_from_db()
-        assert team.billing_plan == "community"
-
-    def test_proceeds_when_price_id_present(self, sample_user, business_plan, community_plan):
-        """When business plan has stripe_price_monthly_id, proceeds with trial setup."""
-        from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Member, Team
-        from sbomify.apps.teams.utils import setup_trial_subscription
-
-        team = Team.objects.create(name="Trial Test Team 2")
-        team.key = number_to_random_token(team.pk)
-        team.save()
-        Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
-
-        mock_customer = MagicMock()
-        mock_customer.id = "cus_trial_test"
-        mock_sub = MagicMock()
-        mock_sub.id = "sub_trial_test"
-        mock_sub.trial_end = 1700000000
-
-        with patch("sbomify.apps.teams.utils.stripe_client") as mock_stripe:
-            mock_stripe.create_customer.return_value = mock_customer
-            mock_stripe.create_subscription.return_value = mock_sub
-
-            result = setup_trial_subscription(sample_user, team)
-
-        assert result is True
-        team.refresh_from_db()
-        assert team.billing_plan == "business"
-        assert team.billing_plan_limits["stripe_subscription_id"] == "sub_trial_test"
 
 
 # ============================================================================

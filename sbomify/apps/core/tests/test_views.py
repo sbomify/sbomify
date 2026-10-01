@@ -80,7 +80,6 @@ def test_logout_redirect(sample_user: AbstractBaseUser):
         KEYCLOAK_REALM="sbomify",
         APP_BASE_URL="http://test-return.url",
         KEYCLOAK_CLIENT_ID="sbomify",
-        KEYCLOAK_PUBLIC_URL="https://test-domain.com/",
     ):
         response: HttpResponse = client.get(reverse("core:logout"))
         assert response.status_code == 302
@@ -99,7 +98,6 @@ def test_logout_view(client: Client, sample_user: AbstractBaseUser):
         KEYCLOAK_REALM="sbomify",
         APP_BASE_URL="http://test-return.url",
         KEYCLOAK_CLIENT_ID="sbomify",
-        KEYCLOAK_PUBLIC_URL="https://test-domain.com/",
     ):
         response = client.get(reverse("core:logout"))
         assert response.status_code == 302

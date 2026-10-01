@@ -522,6 +522,19 @@ class TestSPDXValidation:
         timestamp_finding = next(f for f in result.findings if "timestamp" in f.id)
         assert timestamp_finding.status == "fail"
 
+    def test_spdx_numeric_timestamp_fails_the_timestamp_check(self) -> None:
+        """A number where the date belongs is a failed check, not a failed assessment."""
+        sbom_data = {
+            "spdxVersion": "SPDX-2.3",
+            "packages": [{"SPDXID": "SPDXRef-Package", "name": "example-package", "versionInfo": "1.0.0"}],
+            "creationInfo": {"creators": ["Tool: example-tool"], "created": 1700000000},
+        }
+
+        result = self._assess_sbom(sbom_data)
+
+        timestamp_finding = next(f for f in result.findings if "timestamp" in f.id)
+        assert timestamp_finding.status == "fail"
+
     def test_spdx_with_invalid_external_ref_type(self) -> None:
         """Test SPDX SBOM with invalid externalRef type fails unique identifier requirement.
 

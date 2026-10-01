@@ -11,15 +11,13 @@ from sbomify.apps.teams.models import Team
 pytestmark = pytest.mark.django_db
 
 
-@pytest.mark.parametrize("destination", ["new", "dashboard"])
 @pytest.mark.parametrize("name", [" ", "x" * 256])
 @pytest.mark.parametrize("kind", ["product", "component"])
 def test_invalid_name_keeps_form_values(
-    authenticated_web_client: Client, team_with_business_plan: Team, destination: str, name: str, kind: str
+    authenticated_web_client: Client, team_with_business_plan: Team, name: str, kind: str
 ) -> None:
-    route = f"core:{kind}_new" if destination == "new" else f"core:{kind}s_dashboard"
     data = {"name": name, "description": "Keep these notes", "component_type": "document", "is_global": "on"}
-    response = authenticated_web_client.post(reverse(route), data)
+    response = authenticated_web_client.post(reverse(f"core:{kind}_new"), data)
     assert response.status_code == 200
     form = response.context["form"]
     assert form.errors["name"]

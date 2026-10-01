@@ -1,6 +1,6 @@
 
 import { parseJsonScript, formatRelativeDate } from '../utils';
-import { showSuccess, showError } from '../alerts-global';
+import { showSuccess, showError } from '../alerts';
 
 interface AccessToken {
     id: string;

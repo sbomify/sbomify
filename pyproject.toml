@@ -10,12 +10,9 @@ dependencies = [
     "python-dotenv>=1.2.2,<2",
     "urllib3>=2.7.0,<3",
     "psycopg2-binary>=2.9.9,<3",
-    "django-extensions~=4.1",
-    "django-widget-tweaks>=1.5.0,<2",
     "django-ratelimit>=4.1,<5",
     "pyjwt>=2.13.0,<3",
     "pydantic>=2.11.9,<3",
-    "django-anymail[sendgrid]~=15.0",
     "whitenoise>=6.11.0,<7",
     "sentry-sdk>=2.38.0,<3",
     "django-ninja>=1.4.3,<2",
@@ -46,12 +43,6 @@ dependencies = [
     "compliance-trestle>=4.1.0,<5",
     "posthog>=3.20.0,<8",
     "tzdata>=2025.2",
-    # Used by the pre-existing ``sbomify.apps.plugins.builtins.verification``
-    # plugin to verify user-uploaded SBOM cosign attestations (a different
-    # feature from CRA export signing, which was dropped from this PR).
-    # The plugin has a ``try/except ImportError`` fallback, but installing
-    # the library lets it actually perform signature verification instead
-    # of always reporting "library not available".
     "sigstore>=4.2.0",
     # Renders the CRA bundle's markdown documents (Declaration of
     # Conformity, VDP, risk assessment, etc.) to PDF so the export ZIP
@@ -84,15 +75,12 @@ dev = [
     "django-debug-toolbar>=6.0.0,<8",
     "pre-commit>=4.3.0,<5",
     "datamodel-code-generator[http]~=0.44",
-    "pytest-json-report>=1.5.0,<2",
     "pytest-playwright>=0.7.1,<0.9",
     "djlint>=1.36.4,<2",
-    "django-cors-headers>=4.9.0",
     "django-stubs[compatible-mypy]>=5.2.0,<7",
     "types-boto3>=1.42.0,<2",
     "types-psycopg2>=2.9.21,<3",
     "types-PyYAML>=6.0.12,<7",
-    "types-gunicorn>=25.1.0,<27",
     "types-channels>=4.3.0,<5",
     "types-requests>=2.32.0,<3",
     "types-defusedxml>=0.7.0.20260504",
@@ -136,7 +124,6 @@ env = [
     "DJANGO_TEST_PASSWORD=test",
     "DJANGO_TEST_EMAIL=test@example.com",
     "DEFAULT_FROM_EMAIL=test@example.com",
-    "SENDGRID_API_KEY=invalid-key",
     "DJANGO_ALLOW_ASYNC_UNSAFE=1",  # Required for Playwright e2e tests - allows sync Django ORM operations in async context
     # Bind Django live test server on all interfaces so the Chromium container can access it via host.docker.internal
     "DJANGO_LIVE_TEST_SERVER_ADDRESS=0.0.0.0:0",
@@ -159,7 +146,7 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["sbomify", "core", "access_tokens", "sboms", "teams"]
+source = ["sbomify"]
 omit = [
     "*apps.py",
     "*migrations/*",
@@ -178,22 +165,6 @@ omit = [
 ]
 
 [tool.coverage.report]
-omit = [
-    "*apps.py",
-    "*migrations/*",
-    "*settings*",
-    "*/migrations/*",
-    "tests.py",
-    "fixtures.py",
-    "*urls.py",
-    "*wsgi/*",
-    "manage.py",
-    "conftest.py",
-    "asgi.py",
-    "wsgi.py",
-    "sboms/sbom_format_schemas/*",
-    "*/tests/*"
-]
 fail_under = 80
 
 [tool.bandit]
@@ -268,21 +239,17 @@ django_settings_module = "sbomify.settings"
 
 # Packages with inline types but no py.typed marker
 [[tool.mypy.overrides]]
-module = ["django_redis.*", "django_vite.*", "ruid.*", "defusedcsv", "defusedcsv.*", "fastjsonschema"]
+module = ["django_redis.*", "defusedcsv", "defusedcsv.*", "fastjsonschema"]
 follow_untyped_imports = true
 
 # Packages with no/minimal types and no stubs on PyPI
 [[tool.mypy.overrides]]
 module = [
     "allauth.*",
-    "anymail.*",
-    "whitenoise.*",
     "health_check.*",
     "license_expression.*",
     "dramatiq_crontab.*",
     "django_dramatiq.*",
-    "channels_redis.*",
-    "widget_tweaks.*",
     "debug_toolbar.*",
 ]
 ignore_missing_imports = true
