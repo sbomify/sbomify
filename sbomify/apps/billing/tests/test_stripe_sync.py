@@ -172,7 +172,7 @@ class TestSyncEndedSubscription:
 
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
-    def test_cancel_at_once_keeps_or_applies_the_downgrade(
+    def test_cancel_at_once_moves_to_community(
         self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
     ):
         """Stripe answers a cancel at once with the flag false, which the sync must not take for a reactivation."""
@@ -191,13 +191,9 @@ class TestSyncEndedSubscription:
 
         team.refresh_from_db()
         limits = team.billing_plan_limits
-        # The schedule still waits for the deleted event, unless the sync moved the workspace to Community itself
-        if team.billing_plan == BillingPlan.KEY_COMMUNITY:
-            assert limits["cancel_at_period_end"] is False
-            assert "scheduled_downgrade_plan" not in limits
-        else:
-            assert limits["cancel_at_period_end"] is True
-            assert limits["scheduled_downgrade_plan"] == "community"
+        assert team.billing_plan == BillingPlan.KEY_COMMUNITY
+        assert limits["cancel_at_period_end"] is False
+        assert "scheduled_downgrade_plan" not in limits
 
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
@@ -221,7 +217,7 @@ class TestSyncEndedSubscription:
     @pytest.mark.parametrize("status", ["unpaid", "paused"])
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
-    def test_unpaid_or_paused_keeps_a_pending_cancel_or_applies_the_downgrade(
+    def test_unpaid_or_paused_keeps_a_pending_cancel(
         self, mock_client, mock_cache, status, team_with_subscription, mock_stripe_subscription
     ):
         """Stripe can still resume these statuses, so a pending cancel stays recorded while the plan is paid."""
@@ -237,13 +233,9 @@ class TestSyncEndedSubscription:
 
             team.refresh_from_db()
             limits = team.billing_plan_limits
-            # Community has nothing left to downgrade
-            if team.billing_plan == BillingPlan.KEY_COMMUNITY:
-                assert limits["cancel_at_period_end"] is False
-                assert "scheduled_downgrade_plan" not in limits
-            else:
-                assert limits["cancel_at_period_end"] is True
-                assert limits["scheduled_downgrade_plan"] == "community"
+            assert team.billing_plan == BillingPlan.KEY_BUSINESS
+            assert limits["cancel_at_period_end"] is True
+            assert limits["scheduled_downgrade_plan"] == "community"
 
 
 class TestSyncNextBillingDate:
