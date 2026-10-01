@@ -54,11 +54,11 @@ from sbomify.apps.controls.services.status_service import (
     upsert_status,
 )
 from sbomify.apps.core.api.errors import CSV_RESPONSE_DOCS
-from sbomify.apps.core.authz import ADMINISTER, can
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Product, User
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -88,10 +88,8 @@ def _get_user_team(request: HttpRequest) -> tuple[Team | None, tuple[int, ErrorR
 
 
 def _check_admin_role(request: HttpRequest, team: Team) -> tuple[int, ErrorResponse] | None:
-    """Return an error tuple if the user is not owner or admin."""
-    user = cast(User, request.user)
-    member = Member.objects.filter(user=user, team=team).only("role").first()
-    if not member or member.role not in ADMINISTER:
+    """Return an error tuple unless the caller is an owner or admin and, for a token, its scope allows it."""
+    if not can(request, "workspace:administer", team):
         return 403, ErrorResponse(detail="Only workspace owners and admins can perform this action")
     return None
 

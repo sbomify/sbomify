@@ -7,6 +7,7 @@ from django.test import Client
 
 from sbomify.apps.controls.models import ControlCatalog, ControlStatus
 from sbomify.apps.controls.services.catalog_service import activate_builtin_catalog
+from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.teams.models import Member
 
@@ -403,6 +404,15 @@ def _call(client, method, path, payload, **headers):
     return getattr(client, method)(path, json.dumps(payload), content_type="application/json", **headers)
 
 
+def _scoped_token(member, scopes):
+    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+    token = create_personal_access_token(member.user)
+    AccessToken.objects.create(user=member.user, encoded_token=token, description="t", team=member.team, scopes=scopes)
+    return token
+
+
 @pytest.mark.django_db
 class TestEndpointChecks:
     """Reads need workspace:read and writes an owner or admin, endpoint by endpoint."""
@@ -446,3 +456,48 @@ class TestEndpointChecks:
         response = _call(Client(), method, path, payload, HTTP_AUTHORIZATION=f"Bearer {token}")
 
         assert (response.status_code, response.json()["detail"]) == (403, "Forbidden")
+
+    @pytest.mark.parametrize(("method", "path", "payload"), ADMIN_ENDPOINTS)
+    @pytest.mark.parametrize("scopes", [["artifact:publish"], SCOPE_PRESETS["read_only"]], ids=["publish", "read_only"])
+    def test_a_token_without_administer_scope_cannot_write(
+        self, sample_team_with_owner_member, scopes, method, path, payload
+    ):
+        token = _scoped_token(sample_team_with_owner_member, scopes)
+
+        response = _call(Client(), method, path, payload, HTTP_AUTHORIZATION=f"Bearer {token}")
+
+        assert (response.status_code, response.json()["detail"]) == (
+            403,
+            "Only workspace owners and admins can perform this action",
+        )
+
+    @pytest.mark.parametrize(
+        "scopes",
+        [None, ["*"], ["workspace:*"], ["workspace:administer"]],
+        ids=["unscoped", "wildcard", "workspace_bundle", "administer"],
+    )
+    def test_a_token_that_grants_administer_can_write(self, sample_team_with_owner_member, scopes):
+        token = _scoped_token(sample_team_with_owner_member, scopes)
+
+        response = _call(
+            Client(),
+            "post",
+            "/api/v1/controls/catalogs/activate/",
+            {"catalog_name": "soc2-type2"},
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        assert response.status_code == 201
+
+    def test_a_read_only_token_cannot_delete_a_catalog(
+        self, sample_team_with_owner_member, sample_catalog, sample_controls
+    ):
+        token = _scoped_token(sample_team_with_owner_member, SCOPE_PRESETS["read_only"])
+
+        response = Client().delete(
+            f"/api/v1/controls/catalogs/{sample_catalog.id}/", HTTP_AUTHORIZATION=f"Bearer {token}"
+        )
+
+        assert response.status_code == 403
+        assert ControlCatalog.objects.filter(pk=sample_catalog.pk).exists()
+        assert sample_catalog.controls.count() == len(sample_controls)
