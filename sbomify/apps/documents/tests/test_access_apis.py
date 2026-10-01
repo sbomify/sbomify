@@ -540,3 +540,30 @@ class TestSignNDAAPIRequestStatus:
         notify.assert_not_called()
         assert broadcast.call_args.kwargs["data"]["status"] == status.value
         assert NDASignature.objects.filter(access_request=pending_access_request).count() == 1
+
+
+@pytest.mark.django_db
+class TestCreateAccessRequestAPI:
+    """The response to a new request says whether the NDA has to be signed next."""
+
+    @staticmethod
+    def _create(team, user):
+        return _session_client(user).post(
+            reverse("api-1:create_access_request", kwargs={"team_key": team.key}),
+            {},
+            content_type="application/json",
+        )
+
+    def test_names_the_nda_the_requester_has_to_sign(self, team_with_business_plan, guest_user, company_nda_document):
+        response = self._create(team_with_business_plan, guest_user)
+
+        assert response.status_code == 201
+        assert response.json()["requires_nda"] is True
+        assert response.json()["nda_document_id"] == company_nda_document.id
+
+    def test_says_no_nda_is_needed_when_the_workspace_has_none(self, team_with_business_plan, guest_user):
+        response = self._create(team_with_business_plan, guest_user)
+
+        assert response.status_code == 201
+        assert response.json()["requires_nda"] is False
+        assert response.json()["nda_document_id"] is None

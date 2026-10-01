@@ -20,6 +20,7 @@ from sbomify.apps.teams.models import Member, Team
 
 from .access_models import AccessRequest, NDASignature
 from .access_schemas import (
+    AccessRequestCreatedResponse,
     AccessRequestListResponse,
     AccessRequestResponse,
     NDASignatureResponse,
@@ -52,7 +53,7 @@ router = Router(tags=["Access Requests"], auth=(PersonalAccessTokenAuth(), djang
     "/teams/{team_key}/access-request",
     response={
         200: dict,
-        201: AccessRequestResponse,
+        201: AccessRequestCreatedResponse,
         400: ErrorResponse,
         401: ErrorResponse,
         403: ErrorResponse,
@@ -147,23 +148,7 @@ def create_access_request(
             if not requires_nda:
                 notify_admins_of_access_request(access_request, team, requires_nda=False)
 
-            # If NDA is required, return info that NDA signing is needed
-            if requires_nda:
-                assert company_nda is not None  # guaranteed by requires_nda check
-                return 201, AccessRequestResponse(
-                    id=access_request.id,
-                    team_id=str(team.id),
-                    user_id=str(user.id),
-                    status=access_request.status,
-                    requested_at=access_request.requested_at.isoformat(),
-                    decided_at=None,
-                    decided_by_id=None,
-                    revoked_at=None,
-                    revoked_by_id=None,
-                    notes=access_request.notes,
-                ).model_dump() | {"requires_nda": True, "nda_document_id": str(company_nda.id)}
-
-            return 201, AccessRequestResponse(
+            return 201, AccessRequestCreatedResponse(
                 id=access_request.id,
                 team_id=str(team.id),
                 user_id=str(user.id),
@@ -174,6 +159,8 @@ def create_access_request(
                 revoked_at=None,
                 revoked_by_id=None,
                 notes=access_request.notes,
+                requires_nda=requires_nda,
+                nda_document_id=str(company_nda.id) if company_nda else None,
             )
 
     except Exception as e:
