@@ -132,34 +132,19 @@ def _store_external_vex(
     # Explicit None-check: a falsy-but-present version (e.g. 0) is still a version.
     version = "" if raw_version is None else str(raw_version)
 
-    s3 = StorageClient("SBOMS")
-    filename = s3.upload_sbom(file_content)
-
-    sbom = SBOM(
-        name=component.name,
-        component=component,
-        format=vex_format,
-        format_version=format_version[:20],
-        version=version,
-        source=source,
-        sbom_filename=filename,
-        sha256_hash=sha256_hash,
-        bom_type=SBOM.BomType.VEX.value,
+    return _save_sbom(
+        {
+            "name": component.name,
+            "component": component,
+            "format": vex_format,
+            "format_version": format_version[:20],
+            "version": version,
+            "source": source,
+            "sha256_hash": sha256_hash,
+            "bom_type": SBOM.BomType.VEX.value,
+        },
+        file_content,
     )
-    try:
-        with transaction.atomic():
-            sbom.save()
-    except IntegrityError:
-        log_orphaned_object(filename)
-        raise
-
-    # The row is committed; a broadcast hiccup must not fail the upload.
-    try:
-        _broadcast_sbom_uploaded(component, sbom)
-    except Exception:
-        log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
-    schedule_vex_reapply(component.id)
-    return 201, {"id": sbom.id}
 
 
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
@@ -408,6 +393,15 @@ def _save_sbom(sbom_dict: dict[str, Any], content: bytes) -> tuple[int, dict[str
     Shared by the API and file uploads of both formats. ``sbom_dict`` holds
     the SBOM row's fields apart from ``sbom_filename``.
     """
+    # Refused before the upload: Postgres rejects the long value at save, after the file is stored.
+    for field in ("name", "version"):
+        limit: int = getattr(SBOM._meta.get_field(field), "max_length")
+        if len(sbom_dict.get(field) or "") > limit:
+            return 400, {
+                "detail": f"The {field} in the document is longer than {limit} characters.",
+                "error_code": ErrorCode.VALIDATION_ERROR,
+            }
+
     component = sbom_dict["component"]
     bom_type = sbom_dict["bom_type"]
     sbom_version = sbom_dict.get("version", "")

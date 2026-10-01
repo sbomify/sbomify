@@ -605,6 +605,37 @@ def test_sbom_upload_api_cyclonedx_without_metadata_component(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("field", ["name", "version"])
+def test_sbom_upload_api_cyclonedx_rejects_a_field_longer_than_its_column(
+    field: str,
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """A name or version too long to save is refused with the field named, and nothing is stored."""
+    mocker.patch("boto3.resource")
+    upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    subject = {"type": "application", "name": "app", "version": "1.0.0", field: "x" * 256}
+    sbom_data = {"bomFormat": "CycloneDX", "specVersion": "1.6", "version": 1, "metadata": {"component": subject}}
+
+    response = Client().post(
+        reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id}),
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 400
+    assert field in response.json()["detail"]
+    assert "longer than 255 characters" in response.json()["detail"]
+    upload.assert_not_called()
+    assert not SBOM.objects.exists()
+
+
+@pytest.mark.django_db
 def test_sbom_upload_api_spdx3_without_spdxdocument_name(
     sample_access_token: AccessToken,  # noqa: F811
     sample_component: Component,  # noqa: F811
