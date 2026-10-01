@@ -629,14 +629,16 @@ class NDASigningView(View):
 
                         return redirect("core:dashboard")
 
-            # Now that NDA is signed, send notification to admins (request is now complete)
-            # Invalidate cache after transaction commits
-            transaction.on_commit(lambda: invalidate_access_requests_cache(team))
-            transaction.on_commit(lambda: notify_admins_of_access_request(access_request, team, requires_nda=True))
-
-            messages.success(
-                request, "NDA signed successfully. Your access request has been submitted and is pending approval."
-            )
+            # Only a pending request is waiting on the admins; a re-signed or closed one is not news to them
+            if access_request.status == AccessRequest.Status.PENDING:
+                transaction.on_commit(lambda: invalidate_access_requests_cache(team))
+                transaction.on_commit(lambda: notify_admins_of_access_request(access_request, team, requires_nda=True))
+                messages.success(
+                    request,
+                    "NDA signed successfully. Your access request has been submitted and is pending approval.",
+                )
+            else:
+                messages.success(request, "NDA signed successfully.")
 
             # Check for return URL in session
             return_url = request.session.pop("nda_signing_return_url", None)

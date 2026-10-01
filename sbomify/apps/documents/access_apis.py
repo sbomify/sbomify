@@ -313,14 +313,14 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
                 request, access_request, company_nda, nda_content_hash, payload.signed_name
             )
 
-            # Now that NDA is signed, send notification to admins (request is now complete)
-            # Invalidate cache after transaction commits
-            transaction.on_commit(lambda: invalidate_access_requests_cache(access_request.team))
-            transaction.on_commit(
-                lambda: notify_admins_of_access_request(access_request, access_request.team, requires_nda=True)
-            )
+            # Only a pending request is waiting on the admins; a re-signed or closed one is not news to them
+            if access_request.status == AccessRequest.Status.PENDING:
+                transaction.on_commit(lambda: invalidate_access_requests_cache(access_request.team))
+                transaction.on_commit(
+                    lambda: notify_admins_of_access_request(access_request, access_request.team, requires_nda=True)
+                )
 
-            # Broadcast to workspace for real-time UI updates (admins see new pending request)
+            # Broadcast to workspace for real-time UI updates
             # Capture values for lambda closure (using different names to avoid shadowing function parameters)
             ws_team_key: str = access_request.team.key  # type: ignore[assignment]
             ws_request_id = str(access_request.id)
@@ -332,7 +332,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
                     data={
                         "access_request_id": ws_request_id,
                         "user_id": ws_user_id,
-                        "status": "pending",
+                        "status": access_request.status,
                         "action": "nda_signed",
                     },
                 )
