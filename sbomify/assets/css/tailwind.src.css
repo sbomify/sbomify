@@ -370,6 +370,28 @@ html.no-transitions * {
 }
 
 /* ============================================
+   Surface corners
+   ============================================ */
+/* Surfaces (cards, table shells, collapsibles, dropdown panels) are rounded-xl
+   and do not clip, because a menu inside one must be free to overflow it. So
+   whatever paints into their corners takes the curve itself: the first child
+   the top corners, the last child the bottom, at the surface radius less the
+   1px border it sits inside. A table's scroll box is such a child, and it
+   clips its header band to that curve, so header cells never round
+   themselves. Zero specificity: a child that states its own radius wins. */
+@layer base {
+  :where([data-surface]) > :where(:first-child) {
+    border-top-left-radius: calc(var(--radius-xl) - 1px);
+    border-top-right-radius: calc(var(--radius-xl) - 1px);
+  }
+
+  :where([data-surface]) > :where(:last-child) {
+    border-bottom-left-radius: calc(var(--radius-xl) - 1px);
+    border-bottom-right-radius: calc(var(--radius-xl) - 1px);
+  }
+}
+
+/* ============================================
    Custom Utilities using CSS variables
    ============================================ */
 

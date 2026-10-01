@@ -18,7 +18,8 @@ from django.test import Client, RequestFactory
 from django.urls import reverse
 
 from sbomify.apps.billing.stripe_client import BillingRetryableError, StripeError, StripeResourceMissingError
-from sbomify.apps.sboms.models import Component
+from sbomify.apps.plugins.models import TeamPluginSettings
+from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.teams.models import Team
 
 pytestmark = pytest.mark.django_db
@@ -136,6 +137,20 @@ def test_a_subscription_missing_at_stripe_downgrades_locally(
     assert limits["subscription_status"] == "canceled"
     assert "scheduled_downgrade_plan" not in limits
     assert limits["cancel_at_period_end"] is False
+
+
+def test_a_local_downgrade_applies_the_community_rules(ensure_billing_plans, team_with_business_plan, sample_user):
+    product = Product.objects.create(name="private-product", team=team_with_business_plan, is_public=False)
+    TeamPluginSettings.objects.create(team=team_with_business_plan, enabled_plugins=["osv", "dependency-track"])
+
+    response = _downgrade(
+        team_with_business_plan, sample_user, _stripe(error=StripeResourceMissingError("No such subscription"))
+    )
+
+    assert response.status_code == 200
+    product.refresh_from_db()
+    assert product.is_public
+    assert TeamPluginSettings.objects.get(team=team_with_business_plan).enabled_plugins == ["osv"]
 
 
 @pytest.mark.parametrize("status", ["canceled", "incomplete_expired"])

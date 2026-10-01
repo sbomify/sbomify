@@ -285,7 +285,13 @@ def check_stale_trials_task() -> None:
     This is a defensive measure - normally trial expiration is handled by
     Stripe webhooks, but this catches cases where webhooks were missed.
     """
-    from sbomify.apps.billing.stripe_client import StripeClient, StripeError, StripeResourceMissingError
+    from sbomify.apps.billing.billing_helpers import downgrade_ended_subscription
+    from sbomify.apps.billing.stripe_client import (
+        TERMINAL_SUBSCRIPTION_STATUSES,
+        StripeClient,
+        StripeError,
+        StripeResourceMissingError,
+    )
     from sbomify.apps.billing.stripe_sync import reconcile_missing_subscription
     from sbomify.apps.teams.models import Team
 
@@ -358,6 +364,9 @@ def check_stale_trials_task() -> None:
                     stripe_is_trial,
                 )
                 synced_count += 1
+
+            if stripe_status in TERMINAL_SUBSCRIPTION_STATUSES:
+                downgrade_ended_subscription(team.pk, subscription_id)
 
         except StripeResourceMissingError:
             # The stored id refers to nothing at Stripe, and re-asking gets the

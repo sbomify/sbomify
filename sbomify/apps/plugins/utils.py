@@ -120,3 +120,25 @@ def get_http_session() -> requests.Session:
     session = requests.Session()
     session.headers.update({"User-Agent": get_user_agent()})
     return session
+
+
+def drop_plugins_outside_plan(team: Any) -> list[str]:
+    """Remove the plugins the workspace's plan no longer includes. Returns what it removed.
+
+    Written with a queryset update: saving the settings row fires the signal that
+    re-assesses recent SBOMs, and dropping a plugin is no reason to re-run the rest.
+    """
+    from django.utils import timezone
+
+    from .models import TeamPluginSettings
+    from .services.access import team_has_plugin_access
+
+    settings = TeamPluginSettings.objects.filter(team=team).only("id", "enabled_plugins").first()
+    if settings is None or not settings.enabled_plugins:
+        return []
+
+    kept = [name for name in settings.enabled_plugins if team_has_plugin_access(team, name)]
+    dropped = [name for name in settings.enabled_plugins if name not in kept]
+    if dropped:
+        TeamPluginSettings.objects.filter(pk=settings.pk).update(enabled_plugins=kept, updated_at=timezone.now())
+    return dropped

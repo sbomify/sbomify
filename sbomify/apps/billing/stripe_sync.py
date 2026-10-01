@@ -16,7 +16,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
-from .billing_helpers import parse_cancel_at
+from .billing_helpers import downgrade_ended_subscription, parse_cancel_at
 from .stripe_cache import get_cached_subscription, invalidate_subscription_cache, set_cached_subscription
 from .stripe_client import TERMINAL_SUBSCRIPTION_STATUSES, StripeError, StripeResourceMissingError, get_stripe_client
 
@@ -110,6 +110,9 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
             billing_limits["last_updated"] = timezone.now().isoformat()
             locked.billing_plan_limits = billing_limits
             locked.save()
+            # Under the lock that checked the id: it is cleared now, so there is
+            # nothing left for the downgrade to compare against.
+            downgrade_ended_subscription(team.pk)
             reconciled = True
 
     # Only for the id actually settled, and only when both halves of the key
@@ -387,10 +390,18 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                     billing_limits.pop("stripe_customer_id", None)
                 team.billing_plan_limits = billing_limits
                 team.save()
+                # After the write and under its lock. Run before it, the downgrade's
+                # cleared cancel fields would be written back over the Community plan.
+                if real_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
+                    downgrade_ended_subscription(team.pk, stripe_sub_id)
 
                 logger.info(f"Synced subscription data: {', '.join(updated_fields)}")
             return True
 
+        # Checked on every sync, not only on a change: this is also what moves a
+        # workspace whose ended subscription left it on the paid plan.
+        if real_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
+            downgrade_ended_subscription(team.pk, stripe_sub_id)
         return True  # No update needed, but sync was successful
 
     except StripeError as e:

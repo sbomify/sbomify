@@ -2,7 +2,7 @@
  * Assessment Results Card
  *
  * This component uses server-side rendering with Django templates.
- * Alpine.js x-collapse handles the expand/collapse functionality.
+ * Alpine opens one assessment report at a time from the scorecard tiles.
  *
  * The only JavaScript needed is for handling URL hash navigation to specific plugins
  * and toggling package lists in findings.
@@ -78,6 +78,13 @@ function handleAnchorLink(): void {
     const element = document.getElementById(`plugin-${pluginName}`)
 
     if (element) {
+      // Open the tile's report. The click also fetches its findings, but only
+      // once htmx has wired the listener, which may not have happened yet.
+      const engine = (window as Window & { htmx?: { process(el: Element): void } }).htmx
+      engine?.process(element.closest('#assessment-results') ?? element)
+      const trigger = element.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')
+      trigger?.click()
+
       // Scroll to the element
       setTimeout(() => {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' })

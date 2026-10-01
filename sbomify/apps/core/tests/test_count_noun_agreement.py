@@ -61,7 +61,11 @@ def test_the_scan_count_agrees_and_uses_the_whole_word(total, expected):
         "result": {"summary": {"by_severity": {"high": total}, "total_findings": total}},
     }
 
-    rendered = render_to_string("plugins/components/_assessment_run_item.html.j2", {"run": run, "loop_index": 1})
+    from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
+
+    rendered = render_to_string(
+        "plugins/components/_assessment_run_item.html.j2", {"run": run, "tile": scorecard_for_run(run)}
+    )
 
     assert expected in " ".join(rendered.split())
     assert "vulns" not in rendered

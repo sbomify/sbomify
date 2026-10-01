@@ -57,7 +57,13 @@ from .schemas import (
     validate_cyclonedx_sbom,
     validate_spdx_sbom,
 )
-from .services.sboms import delete_sbom_record, get_crypto_inventory, get_sbom_detail, schedule_vex_reapply
+from .services.sboms import (
+    delete_sbom_record,
+    get_crypto_inventory,
+    get_sbom_detail,
+    schedule_vex_reapply,
+    upload_sbom_file,
+)
 
 log = logging.getLogger(__name__)
 
@@ -431,10 +437,11 @@ def _save_sbom(sbom_dict: dict[str, Any], content: bytes) -> tuple[int, dict[str
         return duplicate
 
     s3 = StorageClient("SBOMS")
-    filename = s3.upload_sbom(content)
 
+    filename = ""
     try:
         with transaction.atomic():
+            filename = upload_sbom_file(s3, content)
             sbom = SBOM(sbom_filename=filename, **sbom_dict)
             sbom.save()
     except IntegrityError as e:

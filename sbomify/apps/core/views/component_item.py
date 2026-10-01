@@ -24,6 +24,7 @@ from sbomify.apps.core.url_utils import (
 from sbomify.apps.documents.services.documents import get_document_detail
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.public_assessment_utils import get_sbom_passing_assessments, passing_assessments_to_dict
+from sbomify.apps.plugins.services.requirements import build_requirements
 from sbomify.apps.sboms.services.sboms import get_sbom_detail
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -451,6 +452,9 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     for run in assessment_runs["latest_runs"]:
                         run["current_version"] = coverage.value.outdated.get(run["plugin_name"])
                         run["run_blocked"] = run["plugin_name"] not in coverage.value.runnable
+                requirements = build_requirements(assessment_runs["latest_runs"])
+                if requirements.ok:
+                    assessment_runs["requirements"] = requirements.value
             except Exception:
                 # Degrade to no assessments section rather than failing the page,
                 # but leave a trace — a silent None here hides real data problems.

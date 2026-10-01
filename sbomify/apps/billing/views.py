@@ -35,6 +35,7 @@ from . import billing_processing
 from .billing_helpers import (
     RATE_LIMIT,
     acquire_checkout_lock,
+    apply_community_downgrade,
     release_checkout_lock,
     require_billing_manager,
 )
@@ -426,6 +427,7 @@ class SelectPlanView(LoginRequiredMixin, View):
                 )
                 team.billing_plan_limits = existing_limits
                 team.save()
+                apply_community_downgrade(team)
             messages.success(request, f"Successfully switched to {plan.name} plan")
             return redirect("core:dashboard")
         return None

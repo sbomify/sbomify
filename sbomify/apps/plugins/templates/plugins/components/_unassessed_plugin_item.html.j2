@@ -1,12 +1,6 @@
-{% comment %}A plugin the workspace runs that has no result for this artifact, usually because it was turned on after the upload. Same bordered surface as a run's card so it sits in the stack, but there is nothing to expand, so it has no trigger. Expects plugin ({plugin_name, plugin_display_name}), sbom_id and can_rerun.{% endcomment %}
-<c-cards.collapsible id="plugin-{{ plugin.plugin_name }}">
-<div class="flex items-center justify-between gap-3 px-6 py-5">
-    <div class="flex items-center gap-3 flex-wrap min-w-0">
-        <span class="font-semibold text-text">{{ plugin.plugin_display_name|default:plugin.plugin_name }}</span>
-        <c-badges.secondary class="whitespace-nowrap" title="This plugin has not run on this artifact.">
-        <i class="fas fa-circle-minus mr-1" aria-hidden="true"></i>Not assessed
-        </c-badges.secondary>
-    </div>
-    {% include 'plugins/components/_rerun_button.html.j2' with run=plugin label="Run" %}
-</div>
-</c-cards.collapsible>
+{% comment %}A plugin the workspace runs that has no result for this artifact, usually because it was turned on after the upload. It takes a row in the assessment list like any run, but there is nothing to open, so the row carries the Run control instead. Expects plugin ({plugin_name, plugin_display_name}), sbom_id and can_rerun.{% endcomment %}
+<c-assessments.row anchor="plugin-{{ plugin.plugin_name }}" name="{{ plugin.plugin_display_name|default:plugin.plugin_name }}" tone="neutral" label="Not assessed" caption="Has not run on this artifact yet.">
+<c-slot name="action">
+{% include 'plugins/components/_rerun_button.html.j2' with run=plugin label="Run" %}
+</c-slot>
+</c-assessments.row>

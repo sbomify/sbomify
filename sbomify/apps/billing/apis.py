@@ -20,8 +20,8 @@ from sbomify.apps.teams.models import Team
 from .billing_helpers import (
     RATE_LIMIT,
     acquire_checkout_lock,
+    apply_community_downgrade,
     get_community_plan_limits,
-    handle_community_downgrade_visibility,
     release_checkout_lock,
 )
 from .models import BillingPlan
@@ -197,7 +197,7 @@ def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, An
                 existing_limits.pop("stripe_customer_id", None)
                 existing_limits["subscription_status"] = "canceled"
             team.billing_plan_limits = existing_limits
-            handle_community_downgrade_visibility(team)
+            apply_community_downgrade(team)
 
         team.save()
     return 200, {"success": True}
