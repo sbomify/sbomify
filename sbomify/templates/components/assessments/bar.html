@@ -1,0 +1,21 @@
+{% comment %}
+A proportional bar of one assessment's outcomes: passed, warned and failed
+checks, or a scan's vulnerabilities by severity. Each segment grows by its
+count, so the bar reads as a ratio at a glance and needs no axis.
+
+segments is a list of {tone, count}, zero counts already dropped; tone is one
+of success, info, warning, danger or neutral. label is the written breakdown
+("6 passed, 1 failed") and is what a screen reader hears, so colour is never
+the only carrier. With no segments the empty track still renders, which keeps a
+column of rows aligned when one of them has nothing to measure. The bar has no
+width of its own: the caller sizes it with one width utility in class.
+{% endcomment %}
+<c-vars segments label class />
+<span class="flex h-1.5 gap-0.5 overflow-hidden rounded-full bg-surface-hover{% if class %} {{ class }}{% endif %}"
+      {% if label %}role="img" aria-label="{{ label }}"{% else %}aria-hidden="true"{% endif %}
+      {{ attrs }}>
+    {% for segment in segments %}
+        <span class="basis-0 rounded-full {% if segment.tone == 'success' %}bg-success{% elif segment.tone == 'info' %}bg-info{% elif segment.tone == 'warning' %}bg-warning{% elif segment.tone == 'danger' %}bg-danger{% elif segment.tone == 'critical' %}bg-severity-critical{% elif segment.tone == 'high' %}bg-severity-high{% elif segment.tone == 'medium' %}bg-severity-medium{% else %}bg-text-muted/50{% endif %}"
+              style="flex-grow: {{ segment.count }}"></span>
+    {% endfor %}
+</span>
