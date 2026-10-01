@@ -8,6 +8,8 @@ from django.apps import apps
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Func, JSONField, Value
+from django.db.models.functions import Coalesce
 
 from .utils import PRICE_VALIDATION_TOLERANCE, is_test_environment
 
@@ -202,48 +204,30 @@ class BillingPlan(models.Model):
 
     def _update_teams_with_new_limits(self) -> None:
         """
-        Update all teams using this plan with the current limits from the model.
+        Copy this plan's limits onto the workspaces on it.
 
-        Uses bulk_update for efficiency when updating multiple teams.
-        Only updates teams whose limits actually changed (idempotent).
+        One UPDATE merges just the three limit keys into each workspace's JSON, so a
+        checkout or payment webhook writing the same row is never read around and
+        overwritten: Postgres redoes the merge on whatever that transaction committed.
+        Workspaces that already hold these limits are left alone.
         """
         from sbomify.apps.teams.models import Team
 
-        teams = Team.objects.filter(billing_plan=self.key)
-        team_count = teams.count()
-
-        if team_count == 0:
-            return
-
-        # Prepare updates for bulk operation - only for teams that actually need updates
-        teams_to_update = []
-        new_limit_values: dict[str, int | None] = {
+        limits = {
             "max_products": self.max_products,
             "max_components": self.max_components,
             "max_users": self.max_users,
         }
-
-        for team in teams:
-            existing_limits = team.billing_plan_limits or {}
-
-            # Check if limits actually changed (idempotency check)
-            needs_update = False
-            for key, new_value in new_limit_values.items():
-                if existing_limits.get(key) != new_value:
-                    needs_update = True
-                    break
-
-            if not needs_update:
-                continue
-
-            new_limits = existing_limits.copy()
-            new_limits.update(new_limit_values)
-            team.billing_plan_limits = new_limits
-            teams_to_update.append(team)
-
-        # Use bulk_update for better performance
-        if teams_to_update:
-            Team.objects.bulk_update(teams_to_update, ["billing_plan_limits"], batch_size=100)
+        merged = Func(
+            Coalesce("billing_plan_limits", Value({}, JSONField())),
+            Value(limits, JSONField()),
+            arg_joiner=" || ",
+            template="%(expressions)s",
+            output_field=JSONField(),
+        )
+        Team.objects.filter(billing_plan=self.key).exclude(billing_plan_limits__contains=limits).update(
+            billing_plan_limits=merged
+        )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """
