@@ -29,9 +29,9 @@ from typing import Any, Sequence
 from django.core.management.base import BaseCommand, CommandParser
 from django.utils import timezone
 
-from sbomify.apps.billing.billing_helpers import ENDED_SUBSCRIPTION_STATUSES, downgrade_ended_subscription
+from sbomify.apps.billing.billing_helpers import downgrade_ended_subscription
 from sbomify.apps.billing.config import is_billing_enabled
-from sbomify.apps.billing.stripe_client import StripeClient, StripeError
+from sbomify.apps.billing.stripe_client import TERMINAL_SUBSCRIPTION_STATUSES, StripeClient, StripeError
 from sbomify.apps.teams.models import Team
 
 logger = logging.getLogger(__name__)
@@ -215,7 +215,7 @@ class Command(BaseCommand):
 
             team.billing_plan_limits = updated_limits
             team.save()
-            if stripe_status in ENDED_SUBSCRIPTION_STATUSES:
+            if stripe_status in TERMINAL_SUBSCRIPTION_STATUSES:
                 downgrade_ended_subscription(team.pk, subscription_id)
 
             self.stdout.write(self.style.SUCCESS(f"    Updated {team.name}"))

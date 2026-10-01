@@ -21,7 +21,6 @@ from sbomify.logging import getLogger
 
 from . import email_notifications
 from .billing_helpers import (
-    ENDED_SUBSCRIPTION_STATUSES,
     apply_community_downgrade,
     downgrade_ended_subscription,
     generate_webhook_id,
@@ -444,7 +443,7 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
     try:
         team, billing_limits = _resolve_team_from_subscription(subscription)
 
-        valid_statuses = LIVE_SUBSCRIPTION_STATUSES | ENDED_SUBSCRIPTION_STATUSES
+        valid_statuses = LIVE_SUBSCRIPTION_STATUSES | TERMINAL_SUBSCRIPTION_STATUSES
         if subscription.status not in valid_statuses:
             raise StripeError(f"Invalid subscription status: {subscription.status}")
 
@@ -653,7 +652,7 @@ def _update_billing_from_subscription(
 
         # An ended subscription still lists its prices; reading the plan off them
         # would put the workspace back on the plan it stopped paying for.
-        if items_data and subscription.status not in ENDED_SUBSCRIPTION_STATUSES:
+        if items_data and subscription.status not in TERMINAL_SUBSCRIPTION_STATUSES:
             try:
                 found_plan = None
 
@@ -697,7 +696,7 @@ def _update_billing_from_subscription(
         # Inside the block that recorded the event: if the downgrade fails, the
         # event is not marked applied and Stripe's retry runs it again, and no
         # newer event can be applied in between.
-        if subscription.status in ENDED_SUBSCRIPTION_STATUSES:
+        if subscription.status in TERMINAL_SUBSCRIPTION_STATUSES:
             downgrade_ended_subscription(team.pk, subscription.id)
 
     if subscription.status == "trialing" and subscription.trial_end:

@@ -3,13 +3,16 @@
 Every path that learns a subscription has ended moves the workspace to Community
 limits and publishes its components: the deleted webhook with or without a
 scheduled cancel, an updated webhook carrying an ended status, the Stripe sync,
-the missing-subscription reconcile and the stale-trial sweep. A payment that
-recovers restores the paid plan. Enterprise workspaces are set by hand and keep
-their plan.
+the missing-subscription reconcile and the stale-trial sweep. Only ``canceled``
+and ``incomplete_expired`` count as ended. An ``unpaid`` or ``paused``
+subscription can return to ``active``, and publishing cannot be taken back, so
+those leave the plan and private resources alone. Enterprise workspaces are set
+by hand and keep their plan.
 """
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -21,10 +24,12 @@ from sbomify.apps.billing import billing_processing, stripe_sync
 from sbomify.apps.billing.billing_helpers import downgrade_ended_subscription
 from sbomify.apps.billing.billing_processing import BillingRetryableError
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.stripe_client import StripeError
 from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.teams.models import Team
 
-ENDED_STATUSES = ["canceled", "unpaid", "incomplete_expired", "paused"]
+ENDED_STATUSES = ["canceled", "incomplete_expired"]
+RECOVERABLE_STATUSES = ["unpaid", "paused"]
 
 pytestmark = pytest.mark.django_db
 
@@ -75,6 +80,14 @@ def _assert_on_community(team: Team) -> None:
     assert not Component.objects.filter(team=team).exclude(visibility=Component.Visibility.PUBLIC).exists()
 
 
+def _assert_still_on_the_paid_plan(team: Team, product: Product) -> None:
+    team.refresh_from_db()
+    product.refresh_from_db()
+    assert team.billing_plan == "business"
+    assert Component.objects.filter(team=team, visibility=Component.Visibility.PRIVATE).exists()
+    assert not product.is_public
+
+
 def test_deleted_subscription_without_a_scheduled_cancel_moves_to_community(paid_workspace):
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted"))
 
@@ -119,14 +132,36 @@ def test_a_failed_downgrade_leaves_the_updated_event_to_be_retried(paid_workspac
     _assert_on_community(paid_workspace)
 
 
-def test_payment_recovery_restores_the_paid_plan(paid_workspace):
-    billing_processing.handle_subscription_updated(_subscription("unpaid"), event=_event("evt_unpaid"))
-    billing_processing.handle_subscription_updated(_subscription("active"), event=_event("evt_active"))
+@pytest.mark.parametrize("status", RECOVERABLE_STATUSES)
+def test_updated_event_with_a_recoverable_status_keeps_the_workspace_as_it_was(paid_workspace, status):
+    product = Product.objects.create(name="private-product", team=paid_workspace)
 
-    paid_workspace.refresh_from_db()
-    business = BillingPlan.objects.get(key="business")
-    assert paid_workspace.billing_plan == "business"
-    assert paid_workspace.billing_plan_limits["max_products"] == business.max_products
+    with contextlib.suppress(StripeError):
+        billing_processing.handle_subscription_updated(_subscription(status), event=_event(f"evt_{status}"))
+
+    _assert_still_on_the_paid_plan(paid_workspace, product)
+
+
+@pytest.mark.parametrize("status", RECOVERABLE_STATUSES)
+def test_stripe_sync_of_a_recoverable_status_keeps_the_workspace_as_it_was(paid_workspace, status):
+    product = Product.objects.create(name="private-product", team=paid_workspace)
+    subscription = stripe.Subscription.construct_from(
+        {
+            "id": "sub_test123",
+            "customer": "cus_test123",
+            "status": status,
+            "cancel_at_period_end": False,
+            "cancel_at": None,
+            "current_period_end": int(timezone.now().timestamp()),
+            "items": {"data": [{"price": {"id": "price_x", "recurring": {"interval": "month"}}}]},
+        },
+        "sk_test",
+    )
+    with patch.object(stripe_sync.stripe_client, "get_subscription", return_value=subscription):
+        assert stripe_sync.sync_subscription_from_stripe(paid_workspace, force_refresh=True)
+
+    _assert_still_on_the_paid_plan(paid_workspace, product)
+    assert paid_workspace.billing_plan_limits["subscription_status"] == status
 
 
 def test_stripe_sync_of_an_ended_subscription_moves_to_community(paid_workspace):

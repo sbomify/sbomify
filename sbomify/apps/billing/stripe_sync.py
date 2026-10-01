@@ -16,7 +16,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
-from .billing_helpers import ENDED_SUBSCRIPTION_STATUSES, downgrade_ended_subscription, parse_cancel_at
+from .billing_helpers import downgrade_ended_subscription, parse_cancel_at
 from .stripe_cache import get_cached_subscription, invalidate_subscription_cache, set_cached_subscription
 from .stripe_client import TERMINAL_SUBSCRIPTION_STATUSES, StripeError, StripeResourceMissingError, get_stripe_client
 
@@ -392,7 +392,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                 team.save()
                 # After the write and under its lock. Run before it, the downgrade's
                 # cleared cancel fields would be written back over the Community plan.
-                if real_sub_status in ENDED_SUBSCRIPTION_STATUSES:
+                if real_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
                     downgrade_ended_subscription(team.pk, stripe_sub_id)
 
                 logger.info(f"Synced subscription data: {', '.join(updated_fields)}")
@@ -400,7 +400,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
 
         # Checked on every sync, not only on a change: this is also what moves a
         # workspace whose ended subscription left it on the paid plan.
-        if real_sub_status in ENDED_SUBSCRIPTION_STATUSES:
+        if real_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
             downgrade_ended_subscription(team.pk, stripe_sub_id)
         return True  # No update needed, but sync was successful
 

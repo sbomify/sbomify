@@ -16,8 +16,6 @@ from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.teams.models import Member
 from sbomify.logging import getLogger
 
-from .stripe_client import TERMINAL_SUBSCRIPTION_STATUSES
-
 if TYPE_CHECKING:
     from sbomify.apps.teams.models import Team
 
@@ -167,11 +165,6 @@ def apply_community_downgrade(team: Team) -> None:
         logger.info("Community downgrade: disabled %s for team %s", ", ".join(dropped), team.key)
 
 
-# Stripe statuses after which a subscription no longer pays for anything. ``unpaid``
-# and ``paused`` can come back to ``active``; the plan follows it back when they do.
-ENDED_SUBSCRIPTION_STATUSES = TERMINAL_SUBSCRIPTION_STATUSES | {"unpaid", "paused"}
-
-
 def downgrade_ended_subscription(team_pk: int, subscription_id: str | None = None) -> bool:
     """Move a workspace whose subscription ended onto Community.
 
@@ -207,7 +200,7 @@ def downgrade_ended_subscription(team_pk: int, subscription_id: str | None = Non
         team.billing_plan = BillingPlan.KEY_COMMUNITY
         team.billing_plan_limits = limits
         team.save()
-        # Under the same row lock as the plan change: a payment that recovers in
+        # Under the same row lock as the plan change: a new subscription landing in
         # between would restore the paid plan, and publishing afterwards would
         # then act on a workspace that pays again.
         apply_community_downgrade(team)
