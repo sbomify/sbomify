@@ -1,6 +1,6 @@
 {% load humanize plugins_extras advisory_tags %}
 {% comment %}The aggregate: one row per SBOM requirement, one column per standard, built by services/requirements.py. A missing author is one row marked in every standard it holds back, not a failure repeated inside each standard's report. Rows that need work lead and open in place with the fix; met requirements fold away behind a toggle. Expects matrix (assessment_runs.requirements).{% endcomment %}
-<c-tables.table>
+<c-tables.table stack="false">
 <c-tables.head>
 <c-tables.header-cell compact>Requirement</c-tables.header-cell>
 {% for column in matrix.columns %}
