@@ -38,6 +38,7 @@ from sbomify.apps.documents.services.access_emails import (
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.queries import invitation_email
 from sbomify.apps.teams.utils import (
     switch_active_workspace,
     update_user_teams_session,
@@ -530,7 +531,7 @@ class NDASigningView(View):
             if pending_invitation_token:
                 current_user = cast(User, request.user)
                 invitation = Invitation.objects.filter(token=pending_invitation_token, team=team).first()
-                if invitation and (current_user.email or "").lower() == invitation.email.lower():
+                if invitation and invitation_email(current_user).lower() == invitation.email.lower():
                     # Get inviter from cache if available
                     cache_key = f"invitation_inviter:{invitation.token}"
                     inviter_id = cache.get(cache_key)
@@ -747,7 +748,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     ).first()
                     if access_request and access_request.decided_by:
                         inviter_email = access_request.decided_by.email
-                except User.DoesNotExist:
+                except (User.DoesNotExist, User.MultipleObjectsReturned):
                     # Invited user not found, continue without inviter_email
                     pass
 
@@ -859,7 +860,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                                 ).first()
                                 if access_request and access_request.decided_by:
                                     inviter_email = access_request.decided_by.email
-                            except User.DoesNotExist:
+                            except (User.DoesNotExist, User.MultipleObjectsReturned):
                                 # Invited user not found, continue without inviter_email
                                 pass
 
@@ -919,8 +920,8 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Check if user is already a member
             UserModel = get_user_model()
             try:
-                user = UserModel.objects.get(email__iexact=email)
-                if Member.objects.filter(team=team, user=user).exists():
+                invitee = UserModel.objects.get(email__iexact=email)
+                if Member.objects.filter(team=team, user=invitee).exists():
                     messages.error(request, f"{email} is already a member of this workspace")
                     if active_tab == "trust-center":
                         response = redirect(
@@ -929,7 +930,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
                     return redirect("documents:access_request_queue", team_key=team_key)
-            except UserModel.DoesNotExist:
+            except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
                 # User doesn't exist yet, will be created when they accept invitation
                 pass
 
@@ -956,9 +957,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             cache_key = f"invitation_inviter:{invitation.token}"
             cache.set(cache_key, user.id, timeout=60 * 60 * 24 * 7)  # 7 days (same as invitation expiry)
 
-            # If user already exists, create/update AccessRequest with inviter set as decided_by
+            # If user already exists, create/update AccessRequest with inviter set as decided_by.
+            # Only an account that confirmed the address counts as its holder.
             try:
-                invited_user = User.objects.get(email__iexact=email)
+                invited_user = UserModel.objects.get(email__iexact=email, email_verified=True)
                 access_request, created = AccessRequest.objects.get_or_create(
                     team=team,
                     user=invited_user,
@@ -971,7 +973,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 if not created and not access_request.decided_by:
                     access_request.decided_by = user
                     access_request.save(update_fields=["decided_by"])
-            except User.DoesNotExist:
+            except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
                 # User doesn't exist yet, will be handled when they accept invitation
                 pass
 
@@ -1289,7 +1291,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         ).first()
                         if ar and ar.decided_by:
                             inviter_email = ar.decided_by.email
-                    except UserModel.DoesNotExist:
+                    except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
                         pass
 
                 invitations_with_inviter.append(

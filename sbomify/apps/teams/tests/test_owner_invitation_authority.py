@@ -16,7 +16,9 @@ def team(ensure_billing_plans):
 @pytest.fixture
 def make_member(django_user_model, team):
     def make(username, role):
-        user = django_user_model.objects.create_user(username=username, email=f"{username}@example.com")
+        user = django_user_model.objects.create_user(
+            username=username, email=f"{username}@example.com", email_verified=True
+        )
         Member.objects.create(team=team, user=user, role=role)
         return user
 
@@ -130,7 +132,9 @@ class TestAcceptingOwnerInvitations:
 
     def test_new_member_joins_as_admin_when_the_issuer_is_not_an_owner(self, team, make_member, django_user_model):
         admin = make_member("admin1", "admin")
-        newcomer = django_user_model.objects.create_user(username="newcomer", email="newcomer@example.com")
+        newcomer = django_user_model.objects.create_user(
+            username="newcomer", email="newcomer@example.com", email_verified=True
+        )
         invitation = Invitation.objects.create(team=team, email=newcomer.email, role="owner", invited_by=admin)
         client = Client()
         client.force_login(newcomer)
@@ -141,7 +145,9 @@ class TestAcceptingOwnerInvitations:
 
     def test_new_member_joins_as_owner_when_an_owner_issued_it(self, team, make_member, django_user_model):
         owner = make_member("owner1", "owner")
-        newcomer = django_user_model.objects.create_user(username="newcomer", email="newcomer@example.com")
+        newcomer = django_user_model.objects.create_user(
+            username="newcomer", email="newcomer@example.com", email_verified=True
+        )
         invitation = Invitation.objects.create(team=team, email=newcomer.email, role="owner", invited_by=owner)
         client = Client()
         client.force_login(newcomer)
@@ -152,7 +158,9 @@ class TestAcceptingOwnerInvitations:
 
     def test_settings_accept_applies_the_same_rule(self, team, make_member, django_user_model):
         admin = make_member("admin1", "admin")
-        newcomer = django_user_model.objects.create_user(username="newcomer", email="newcomer@example.com")
+        newcomer = django_user_model.objects.create_user(
+            username="newcomer", email="newcomer@example.com", email_verified=True
+        )
         invitation = Invitation.objects.create(team=team, email=newcomer.email, role="owner", invited_by=admin)
         client = Client()
         client.force_login(newcomer)
@@ -165,7 +173,9 @@ class TestAcceptingOwnerInvitations:
         from sbomify.apps.teams.signals.handlers import _accept_pending_invitations
 
         admin = make_member("admin1", "admin")
-        newcomer = django_user_model.objects.create_user(username="newcomer", email="newcomer@example.com")
+        newcomer = django_user_model.objects.create_user(
+            username="newcomer", email="newcomer@example.com", email_verified=True
+        )
         Invitation.objects.create(team=team, email=newcomer.email, role="owner", invited_by=admin)
 
         _accept_pending_invitations(newcomer)
@@ -209,7 +219,9 @@ class TestShowingOwnerInvitations:
         from sbomify.apps.teams.queries import get_pending_invitations_for_user
 
         admin = make_member("admin1", "admin")
-        newcomer = django_user_model.objects.create_user(username="newcomer", email="newcomer@example.com")
+        newcomer = django_user_model.objects.create_user(
+            username="newcomer", email="newcomer@example.com", email_verified=True
+        )
         Invitation.objects.create(team=team, email=newcomer.email, role="owner", invited_by=admin)
 
         assert [i["role"] for i in get_pending_invitations_for_user(newcomer)] == ["admin"]

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import uuid
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, cast
 
 from defusedxml.ElementTree import DefusedXMLParser, ParseError
@@ -226,15 +227,15 @@ def update_team_branding_field(
     current_branding = BrandingInfo(**branding_data)
     update_data = current_branding.model_dump()
 
-    s3_client = StorageClient("MEDIA")
-
-    # Handle file deletions
-    if field in ["icon", "logo"] and data.value is None and update_data.get(field):
-        old_filename = update_data[field]
-        try:
-            s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, old_filename)
-        except Exception as e:
-            logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
+    if field in ["icon", "logo"]:
+        # A file key only ever comes from an upload; this endpoint can only clear it.
+        if data.value is not None:
+            return 400, {"detail": f"Upload a file to set the {field}. Send null to clear it."}
+        if old_filename := update_data.get(field):
+            try:
+                delete_from_s3(team, field, old_filename)
+            except Exception as e:
+                logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
         update_data[field] = ""
     else:
         update_data[field] = data.value
@@ -384,17 +385,29 @@ def upload_to_s3(
     s3_client.upload_media(filename, data, content_type)
 
 
-def delete_from_s3(
-    filename: str,
-) -> None:
+def _is_own_branding_key(team: Team, field: str, filename: str) -> bool:
+    """True when the key is one this workspace's uploads generate, current or legacy."""
+    if "/" in filename:
+        return False
+    if filename.startswith(f"team_{team.key}_{field}_"):
+        return True
+    suffix = Path(filename).suffix
+    return bool(suffix) and filename == f"{team.key}_{field}{suffix}"
+
+
+def delete_from_s3(team: Team, field: str, filename: str) -> None:
+    """Delete a replaced or cleared branding file, only if this workspace uploaded it."""
+    if not _is_own_branding_key(team, field, filename):
+        logger.warning(f"Not deleting {field} key {filename!r}: not an upload of workspace {team.key}")
+        return
     s3_client = StorageClient("MEDIA")
     s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
 
 
-def _delete_branding_files(filenames: Sequence[str]) -> None:
-    for filename in filenames:
+def _delete_branding_files(team: Team, files: Sequence[tuple[str, str]]) -> None:
+    for field, filename in files:
         try:
-            delete_from_s3(filename)
+            delete_from_s3(team, field, filename)
         except Exception as e:
             logger.warning(f"Failed to delete branding file {filename}: {e}")
 
@@ -456,8 +469,8 @@ def update_team_branding(
     branding_info = BrandingInfo(**branding_data).model_dump()
 
     # Old files go only once the new keys are committed. A failed upload or save removes this request's uploads.
-    uploaded: list[str] = []
-    replaced: list[str] = []
+    uploaded: list[tuple[str, str]] = []
+    replaced: list[tuple[str, str]] = []
     for field in ["icon", "logo"]:
         old_filename = branding_info.get(field)
 
@@ -472,14 +485,14 @@ def update_team_branding(
                 upload_to_s3(branding_info[field], file.read(), content_type)
             except Exception:
                 logger.exception(f"Failed to upload {field} file {branding_info[field]}")
-                _delete_branding_files([*uploaded, branding_info[field]])
+                _delete_branding_files(team, [*uploaded, (field, branding_info[field])])
                 raise
-            uploaded.append(branding_info[field])
+            uploaded.append((field, branding_info[field]))
         else:
             continue
 
         if old_filename:
-            replaced.append(old_filename)
+            replaced.append((field, old_filename))
 
     branding_info["brand_color"] = payload.brand_color or branding_info.get("brand_color")
     branding_info["accent_color"] = payload.accent_color or branding_info.get("accent_color")
@@ -492,9 +505,9 @@ def update_team_branding(
     try:
         team.save(update_fields=["branding_info"])
     except Exception:
-        _delete_branding_files(uploaded)
+        _delete_branding_files(team, uploaded)
         raise
-    transaction.on_commit(lambda: _delete_branding_files(replaced))
+    transaction.on_commit(lambda: _delete_branding_files(team, replaced))
 
     updated_branding_data = _normalize_branding_payload(team.branding_info)
     updated_branding = BrandingInfo(**updated_branding_data)
@@ -560,7 +573,7 @@ def upload_branding_file(
         # Only delete old file after successful database commit
         if old_filename:
             try:
-                s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, old_filename)
+                delete_from_s3(team, file_type, old_filename)
             except Exception as e:
                 logger.warning(f"Failed to delete old {file_type} file {old_filename}: {e}")
 
@@ -689,6 +702,16 @@ def _upsert_entities(
     existing_ids = [getattr(e, "id") for e in valid_entities if getattr(e, "id", None)]
 
     if is_update:
+        # Reject IDs that are not part of this profile *before* deleting anything:
+        # the delete below removes every entity not named in ``existing_ids``, so a
+        # foreign or stale ID would wipe the profile and then be skipped by the
+        # update loop, committing an empty profile.
+        if existing_ids:
+            known_ids = set(profile.entities.filter(id__in=existing_ids).values_list("id", flat=True))
+            unknown_ids = [entity_id for entity_id in existing_ids if entity_id not in known_ids]
+            if unknown_ids:
+                raise ValueError(f"Entity '{unknown_ids[0]}' does not belong to this contact profile.")
+
         profile.entities.exclude(id__in=existing_ids).delete()
 
     for entity_data in valid_entities:
@@ -709,12 +732,15 @@ def _upsert_entities(
                 # Model's save() calls full_clean() automatically
                 entity.save()
             except ContactEntity.DoesNotExist:
+                # IDs are validated above, so this is only reachable if a concurrent
+                # write removed the row mid-transaction. Fail the update so it rolls
+                # back instead of silently committing a profile with fewer entities.
                 logger.warning(
-                    "Entity %s not found in profile %s during update - skipping",
+                    "Entity %s vanished from profile %s during update",
                     entity_id,
                     profile.id,
                 )
-                continue
+                raise ValueError(f"Entity '{entity_id}' does not belong to this contact profile.") from None
         else:
             # Check if this is an author-only entity
             is_author_only = (
@@ -1019,6 +1045,9 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
             if payload.authors:
                 _upsert_authors(profile, payload.authors, fallback_email)
 
+            if not profile.entities.exists():
+                raise ValueError("Add at least one entity before creating a contact profile.")
+
         # Re-fetch with prefetch_related for efficient serialization
         profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
         return 201, serialize_contact_profile(profile)
@@ -1135,6 +1164,11 @@ def update_contact_profile(
             # Handle authors (CycloneDX aligned - individuals, not organizations)
             if payload.authors is not None:
                 _upsert_authors(profile, payload.authors, fallback_email)
+
+            # Same postcondition as creation, enforced inside the transaction so an
+            # update that would empty the profile rolls back entirely.
+            if not profile.entities.exists():
+                raise ValueError("Add at least one entity before saving a contact profile.")
 
         # Re-fetch with prefetch_related for efficient serialization
         profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)

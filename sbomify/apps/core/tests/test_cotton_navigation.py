@@ -94,7 +94,10 @@ def test_tab_row_carries_the_arrow_home_and_end_keys(rendered: str) -> None:
 
 def test_pills_variant_swaps_the_recipe_and_marks_the_row(rendered: str) -> None:
     row = _open_tag(rendered, "div", 'data-probe="pills"')
-    assert "flex w-max min-w-full items-center gap-0.5 rounded-lg border border-solid border-border bg-surface-hover p-0.5" in row
+    assert (
+        "flex w-max min-w-full items-center gap-0.5 rounded-lg border border-solid border-border bg-surface-hover p-0.5"
+        in row
+    )
     assert "data-tabs-pills" in row
     assert "border-b " not in row
     assert "gap-1" not in row
@@ -552,3 +555,13 @@ def test_segment_is_never_taken_out_of_the_tab_order(rendered: str) -> None:
     seg = _nav_probe(rendered, "segment")
     assert "tabindex" not in seg
     assert "aria-selected" not in seg
+
+
+def test_link_tab_can_bind_selection_while_a_panel_loads(rendered: str) -> None:
+    link = unescape(_chunk(rendered, "a", 'data-probe="live-link"'))
+    assert 'href="/products/?view=components"' in link
+    assert ":aria-current=\"(kind === 'components') ? 'page' : null\"" in link
+    assert ":data-active=\"kind === 'components'\"" in link
+    assert "data-[active=true]:bg-surface-hover" in link
+    assert "data-[active=true]:text-text" in link
+    assert 'role="tab"' not in link

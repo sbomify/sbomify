@@ -199,6 +199,8 @@ def run_assessment_task(
     # Track retry info if RetryLaterError occurs (set inside atomic block)
     # This allows the transaction to commit before scheduling the retry
     retry_later_info: dict[str, Any] | None = None
+    # Stays None only when the orchestrator skips: the retry branch below always returns.
+    assessment_run = None
 
     try:
         # Convert string run_reason back to enum
@@ -993,6 +995,7 @@ def enqueue_assessments_for_sbom(
     queue_name="plugins",
     max_retries=1,
     time_limit=600000,  # 10 minutes for large teams
+    store_results=True,
 )
 @retry(
     retry=retry_if_exception_type((OperationalError, DatabaseError)),
@@ -1440,7 +1443,7 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 
 @cron("*/20 * * * *")  # type: ignore[untyped-decorator]  # Every 20 minutes
 @dramatiq.actor(queue_name="plugins", max_retries=1, time_limit=600000)
-def sweep_stranded_runs_task() -> int:
+def sweep_stranded_runs_task() -> None:
     """Settle assessment runs that nothing will come back for.
 
     A run is written before its work is queued, so a lost message leaves a row
@@ -1452,12 +1455,12 @@ def sweep_stranded_runs_task() -> int:
     """
     from sbomify.apps.plugins.stranded import sweep_stranded_runs
 
-    return sweep_stranded_runs()
+    logger.info(f"[TASK_sweep_stranded_runs] settled {sweep_stranded_runs()} runs")
 
 
 @cron("15 3 * * *")  # type: ignore[untyped-decorator]  # Daily, before the other sweeps
 @dramatiq.actor(queue_name="assessment_retention", max_retries=1, time_limit=1800000)
-def prune_assessment_runs_task() -> int:
+def prune_assessment_runs_task() -> None:
     """Apply the assessment-run retention policy.
 
     plugins_assessment_runs is append-only and grows with every scan, retry and
@@ -1468,4 +1471,3 @@ def prune_assessment_runs_task() -> int:
 
     removed = prune_assessment_runs()
     logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs")
-    return removed

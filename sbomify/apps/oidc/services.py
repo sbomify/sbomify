@@ -125,7 +125,8 @@ def _bot_username(binding_id: str) -> str:
 
 
 def _bot_email(binding_id: str) -> str:
-    return f"{BOT_USERNAME_PREFIX}{binding_id}@{_BOT_EMAIL_DOMAIN}"
+    # Lower case, as User.save() stores every address.
+    return f"{BOT_USERNAME_PREFIX}{binding_id}@{_BOT_EMAIL_DOMAIN}".lower()
 
 
 def is_synthetic_bot_user(user: Any) -> bool:

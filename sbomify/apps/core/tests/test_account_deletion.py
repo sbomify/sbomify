@@ -233,6 +233,8 @@ class TestSoftDeleteUserAccount:
         team.key = number_to_random_token(team.pk)
         team.save()
         Invitation.objects.create(team=team, email=user_no_team.email, role="admin")
+        user_no_team.email_verified = True
+        user_no_team.save(update_fields=["email_verified"])
 
         with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
             soft_delete_user_account(user_no_team)

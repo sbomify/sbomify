@@ -719,17 +719,18 @@ def _update_billing_from_subscription(
 
 
 def _send_subscription_notifications(team: Team, status: str, previous_status: Any) -> None:
-    """Send appropriate notifications based on subscription status *transitions*."""
+    """Send appropriate notifications based on subscription status *transitions*.
+
+    A move to active sends nothing: the payment behind it sends its own receipt
+    from ``handle_payment_succeeded``, and Stripe delivers the two events in
+    either order.
+    """
     if status == previous_status:
         return
 
     if status == "past_due":
         notify_billing_managers(team, email_notifications.notify_payment_past_due)
         logger.warning("Payment past due notification sent")
-
-    elif status == "active":
-        notify_billing_managers(team, email_notifications.notify_payment_succeeded)
-        logger.info("Payment restored notification sent")
 
     elif status == "canceled":
         notify_billing_managers(team, email_notifications.notify_subscription_cancelled)

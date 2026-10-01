@@ -15,6 +15,30 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+def _provider_confirmed_email(sociallogin: SocialLogin) -> bool:
+    """Whether the identity provider confirmed the address this login carries.
+
+    allauth fills ``email_addresses`` from the provider's claims, and its own
+    email login trusts nothing else. The claim is not at the top of
+    ``extra_data``: since allauth 65.11 OpenID Connect keeps it under
+    ``userinfo`` and ``id_token``.
+    """
+    email = (sociallogin.user.email or "").lower()
+    return bool(email) and any(a.verified and a.email.lower() == email for a in sociallogin.email_addresses)
+
+
+def _account_owns_its_email(user: Any) -> bool:
+    """Whether an account's address belongs to whoever signs in to it.
+
+    The identity provider confirmed the address, or nobody can have signed in
+    to the account yet: no login and no password, as with one the
+    access-request form made. allauth's own confirmation does not count: its
+    link binds the address to whichever account asked for it, not to the
+    person who clicked.
+    """
+    return bool(user.email_verified or (user.last_login is None and not user.has_usable_password()))
+
+
 class SpaceEncodedOAuth2Client(OAuth2Client):  # type: ignore[misc]
     """An authorize URL whose spaces are ``%20``, not ``+``.
 
@@ -152,21 +176,35 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
         existing_user = sociallogin.user
         if existing_user.id is None and existing_user.email:
             # Block soft-deleted users from re-authenticating via SSO
-            if User.objects.filter(email=existing_user.email, deleted_at__isnull=False).exists():
+            if User.objects.filter(email__iexact=existing_user.email, deleted_at__isnull=False).exists():
                 from allauth.exceptions import ImmediateHttpResponse
                 from django.shortcuts import render
 
                 raise ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))
 
+            holders = User.objects.filter(email__iexact=existing_user.email, is_active=True, deleted_at__isnull=True)
             try:
-                existing_user = User.objects.get(
-                    email=existing_user.email,
-                    is_active=True,
-                    deleted_at__isnull=True,
-                )
-                sociallogin.connect(request, existing_user)
+                existing_user = holders.get()
+                # Only an address the provider confirmed may claim an existing account, and only an
+                # account that owns that address too.
+                if _provider_confirmed_email(sociallogin) and _account_owns_its_email(existing_user):
+                    sociallogin.connect(request, existing_user)
             except User.DoesNotExist:
                 pass
+            except User.MultipleObjectsReturned:
+                ids = sorted(holders.values_list("id", flat=True))
+                logger.warning("Social sign-in refused: accounts %s share one email address", ids)
+                from allauth.core.exceptions import ImmediateHttpResponse
+                from django.shortcuts import render
+
+                raise ImmediateHttpResponse(
+                    render(
+                        request,
+                        "socialaccount/authentication_error.html.j2",
+                        {"error_message": "More than one account uses this email address. Contact support to sign in."},
+                        status=409,
+                    )
+                )
 
         # Sync email_verified status from social provider on every login
         extra_data = sociallogin.account.extra_data or {}
@@ -174,7 +212,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
 
         # Extract email_verified from provider-specific field
         if provider == "keycloak":
-            email_verified = extra_data.get("email_verified", False)
+            email_verified = _provider_confirmed_email(sociallogin)
         elif provider == "github":
             email_verified = extra_data.get("email_verified", False)
         elif provider == "google":
@@ -211,7 +249,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
         if sociallogin.account.provider == "keycloak":
             # Set email verification status
             user.is_active = True  # Keycloak handles activation
-            user.email_verified = data.get("email_verified", False)
+            user.email_verified = _provider_confirmed_email(sociallogin)
 
             # Map Keycloak name fields directly to Django fields (try both possible keys)
             user.first_name = data.get("given_name") or data.get("first_name", "")
