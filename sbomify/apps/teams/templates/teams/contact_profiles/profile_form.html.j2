@@ -14,7 +14,7 @@
                 {% else %}
                     Edit
                 {% endif %}
-                Contact Profile
+                contact profile
             </h5>
             <p class="text-sm leading-[1.5] text-text-muted mt-0.5">
                 {% if is_create %}
@@ -35,28 +35,26 @@
         <div class="flex flex-col gap-8 p-6">
             {# Profile Details Section #}
             <div class="flex flex-col gap-4">
-                <c-layout.section-header icon="fas fa-id-card" title="Profile Details" subtitle="Basic information about this contact profile" />
-                <c-cards.card>
+                <c-layout.section-header icon="fas fa-id-card" title="Profile details" subtitle="Basic information about this contact profile" />
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <div class="lg:col-span-8">
-                        <c-forms.label for="{{ form.name.id_for_label }}" required>Profile Name</c-forms.label>
+                        <c-forms.label for="{{ form.name.id_for_label }}" required>Profile name</c-forms.label>
                         <c-forms.input name="{{ form.name.html_name }}" id="{{ form.name.id_for_label }}" value="{{ form.name.value|default:'' }}" placeholder="e.g., Default Profile, Engineering Team" required title="A unique name to identify this contact profile" />
                         <c-forms.hint>A descriptive name for this collection of contacts</c-forms.hint>
                         {% if form.name.errors %}<c-forms.error>{{ form.name.errors.0 }}</c-forms.error>{% endif %}
                     </div>
                     <div class="lg:col-span-4">
-                        <c-forms.label>Default Status</c-forms.label>
+                        <c-forms.label>Default status</c-forms.label>
                         <c-forms.checkbox name="{{ form.is_default.html_name }}" :checked="form.is_default.value">Set as default</c-forms.checkbox>
                     </div>
                 </div>
-                </c-cards.card>
             </div>
             {# Entities Section #}
             <div class="flex flex-col gap-4">
                 <c-layout.section-header icon="fas fa-building" accent="success" title="Entities" subtitle="Organizations (Manufacturer, Supplier, Author)">
                 <c-slot name="actions">
                 <c-buttons.primary size="sm" @click="addEntity" ::disabled="manufacturerCount >= 1 && supplierCount >= 1" ::title="manufacturerCount >= 1 && supplierCount >= 1 ? 'Both manufacturer and supplier roles are filled' : 'Add a new entity'">
-                <i class="fas fa-plus mr-1.5"></i>Add Entity
+                <i class="fas fa-plus mr-1.5" aria-hidden="true"></i>Add entity
                 </c-buttons.primary>
                 </c-slot>
                 </c-layout.section-header>
@@ -76,7 +74,7 @@
                 {# Empty State for Entities #}
                 <c-feedback.empty-state compact icon="fas fa-building" icon_size="sm" icon_variant="neutral" title="No entities added" message="Add an entity to define the manufacturer, supplier, or author information." x-show="visibleEntitiesCount === 0" x-transition>
                 <c-buttons.secondary size="sm" @click="addEntity">
-                <i class="fas fa-plus mr-1.5"></i>Add Entity
+                <i class="fas fa-plus mr-1.5" aria-hidden="true"></i>Add entity
                 </c-buttons.secondary>
                 </c-feedback.empty-state>
             </div>
@@ -87,11 +85,11 @@
             Cancel
             </c-buttons.secondary>
             <c-buttons.primary type="submit" ::disabled="hasErrors || visibleEntitiesCount === 0">
-            <i class="fas fa-check mr-2"></i>
+            <i class="fas fa-check mr-2" aria-hidden="true"></i>
             {% if is_create %}
-                Create Profile
+                Create profile
             {% else %}
-                Save Changes
+                Save profile
             {% endif %}
             </c-buttons.primary>
         </div>

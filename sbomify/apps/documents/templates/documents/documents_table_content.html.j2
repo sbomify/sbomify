@@ -34,8 +34,8 @@
             <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='documents' item_id='DOC_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='documents' item_id='DOC_ID' %}{% endif %}'.replace('DOC_ID', item.document.id)"
                class="text-primary font-medium hover:underline"
                x-text="item.document.name"></a>
-            {# Mobile: Show type #}
-            <div class="md:hidden mt-1">
+            {# sm to md: the Type column is hidden. Below sm the table stacks and shows it. #}
+            <div class="hidden sm:block md:hidden mt-1">
                 <c-badges.warning x-text="item.document.document_type_display || 'Document'" />
             </div>
             </c-tables.cell>
