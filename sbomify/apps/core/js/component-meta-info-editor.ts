@@ -36,6 +36,16 @@ const formatLifecyclePhase = (phase: string): string => {
     return phase.charAt(0).toUpperCase() + phase.slice(1);
 };
 
+// Ninja answers a validation failure with a list of issues, not a string.
+const describeError = (detail: unknown): string | null => {
+    if (typeof detail === 'string') return detail;
+    if (!Array.isArray(detail)) return null;
+    return detail.map(({ loc = [], msg = '' }: { loc?: (string | number)[]; msg?: string }) => {
+        const field = String(loc[loc.length - 1] ?? '').replace(/_/g, ' ');
+        return field ? `${field.charAt(0).toUpperCase()}${field.slice(1)}: ${msg}` : msg;
+    }).join('. ') || null;
+};
+
 export function registerComponentMetaInfoEditor() {
     Alpine.data('componentMetaInfoEditor', (props: ComponentMetaInfoEditorProps) => ({
         componentId: props.componentId,
@@ -304,9 +314,9 @@ export function registerComponentMetaInfoEditor() {
                     contact_profile_id: this.metadata.contact_profile_id,
                     uses_custom_contact: this.metadata.uses_custom_contact,
                     // Lifecycle event fields (aligned with Common Lifecycle Enumeration)
-                    release_date: this.metadata.release_date,
-                    end_of_support: this.metadata.end_of_support,
-                    end_of_life: this.metadata.end_of_life
+                    release_date: this.metadata.release_date || null,
+                    end_of_support: this.metadata.end_of_support || null,
+                    end_of_life: this.metadata.end_of_life || null
                 };
 
                 const response = await fetch(`/api/v1/components/${this.componentId}/metadata`, {
@@ -320,7 +330,7 @@ export function registerComponentMetaInfoEditor() {
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                    throw new Error(describeError(errorData.detail) || `HTTP ${response.status}`);
                 }
 
                 this.hasUnsavedChanges = false;

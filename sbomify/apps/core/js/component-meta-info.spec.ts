@@ -105,6 +105,38 @@ describe('component metadata toasts', () => {
         expect(toasts()).toEqual([['error', 'Supplier name is too long']])
     })
 
+    test('a validation refusal names the field instead of printing the error objects', async () => {
+        respond(
+            Response.json(
+                {
+                    detail: [
+                        {
+                            type: 'date_from_datetime_parsing',
+                            loc: ['body', 'metadata', 'release_date'],
+                            msg: 'Input should be a valid date or datetime, input is too short',
+                        },
+                    ],
+                    error_code: 'VALIDATION_ERROR',
+                },
+                { status: 422 }
+            )
+        )
+        await editor().updateMetaData()
+        expect(toasts()).toEqual([['error', 'Release date: Input should be a valid date or datetime, input is too short']])
+    })
+
+    test('a cleared lifecycle date is saved as no date', async () => {
+        const fetcher = respond(Response.json({}))
+        const form = editor()
+        form.metadata.release_date = ''
+        form.metadata.end_of_support = '2027-01-01'
+
+        await form.updateMetaData()
+
+        const sent = JSON.parse(fetcher.mock.calls[0][1].body)
+        expect([sent.release_date, sent.end_of_support, sent.end_of_life]).toEqual([null, '2027-01-01', null])
+    })
+
     test('a successful save shows one toast and reloads the display once', async () => {
         const fetcher = respond(Response.json({}))
         const display = wrapper()
