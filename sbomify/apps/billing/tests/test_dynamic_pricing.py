@@ -297,8 +297,8 @@ class TestBillingPlanAdmin(TestCase):
         """Test that last_synced_at is readonly."""
         assert "last_synced_at" in self.admin.readonly_fields
 
-    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
-    def test_sync_prices_action(self, mock_client):
+    @patch("sbomify.apps.billing.admin.StripeClient")
+    def test_sync_prices_action(self, mock_stripe_client_class):
         """Test the sync prices admin action."""
         from django.contrib.messages.storage.fallback import FallbackStorage
         from django.http import HttpRequest
@@ -307,7 +307,9 @@ class TestBillingPlanAdmin(TestCase):
         mock_price = MagicMock()
         mock_price.unit_amount = 19900
 
+        mock_client = MagicMock()
         mock_client.get_price.return_value = mock_price
+        mock_stripe_client_class.return_value = mock_client
 
         # Create request with messages middleware
         request = HttpRequest()

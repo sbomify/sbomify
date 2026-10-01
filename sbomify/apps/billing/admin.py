@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.contrib import admin, messages
-from django.db.models import Q
 from django.http import HttpRequest
+from django.utils import timezone
 
 from .models import BillingPlan
-from .stripe_sync import sync_plan_prices_from_stripe
+from .stripe_client import StripeClient, StripeError
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -21,23 +21,64 @@ else:
 def sync_prices_from_stripe(
     modeladmin: BillingPlanAdmin, request: HttpRequest, queryset: QuerySet[BillingPlan]
 ) -> None:
-    """Admin action to sync prices from Stripe for selected plans.
+    """Admin action to sync prices from Stripe for selected plans."""
+    stripe_client = StripeClient()
+    updated_count = 0
+    error_count = 0
 
-    Community has no Stripe prices, and a plan without a key would make the
-    sync run for every plan, so both are left out.
-    """
-    synced = failed = 0
-    for key in queryset.exclude(Q(key__isnull=True) | Q(key=BillingPlan.KEY_COMMUNITY)).values_list("key", flat=True):
-        results = sync_plan_prices_from_stripe(key)
-        synced += results["synced"]
-        failed += results["failed"]
-        for error in results["errors"]:
-            modeladmin.message_user(request, error, level=messages.ERROR)
+    for plan in queryset:
+        updated = False
+        errors: list[str] = []
 
-    if synced:
-        modeladmin.message_user(request, f"Successfully synced prices for {synced} plan(s).", level=messages.SUCCESS)
-    if failed:
-        modeladmin.message_user(request, f"Encountered errors for {failed} plan(s).", level=messages.WARNING)
+        # Sync monthly price
+        if plan.stripe_price_monthly_id:
+            try:
+                stripe_price = stripe_client.get_price(plan.stripe_price_monthly_id)
+                if stripe_price.unit_amount:
+                    plan.monthly_price = stripe_price.unit_amount / 100
+                    updated = True
+            except StripeError as e:
+                errors.append(f"Monthly: {e!s}")
+                modeladmin.message_user(
+                    request,
+                    f"Error syncing monthly price for {plan.name}: {e!s}",
+                    level=messages.ERROR,
+                )
+
+        # Sync annual price
+        if plan.stripe_price_annual_id:
+            try:
+                stripe_price = stripe_client.get_price(plan.stripe_price_annual_id)
+                if stripe_price.unit_amount:
+                    plan.annual_price = stripe_price.unit_amount / 100
+                    updated = True
+            except StripeError as e:
+                errors.append(f"Annual: {e!s}")
+                modeladmin.message_user(
+                    request,
+                    f"Error syncing annual price for {plan.name}: {e!s}",
+                    level=messages.ERROR,
+                )
+
+        if updated:
+            plan.last_synced_at = timezone.now()
+            plan.save()
+            updated_count += 1
+        elif errors:
+            error_count += 1
+
+    if updated_count > 0:
+        modeladmin.message_user(
+            request,
+            f"Successfully synced prices for {updated_count} plan(s).",
+            level=messages.SUCCESS,
+        )
+    if error_count > 0:
+        modeladmin.message_user(
+            request,
+            f"Encountered errors for {error_count} plan(s).",
+            level=messages.WARNING,
+        )
 
 
 class BillingPlanAdmin(_BillingPlanAdminBase):
