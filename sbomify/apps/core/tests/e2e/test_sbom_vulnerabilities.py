@@ -371,3 +371,63 @@ def test_a_refresh_keeps_a_half_written_triage_justification(authenticated_page,
 
     expect(detail).to_be_visible()
     expect(detail).to_have_value("Not reachable from any entry point")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1280, 390])
+def test_report_previews_and_uploads_vex(authenticated_page, sbom_with_findings, mocker, width):
+    """Import decisions from the report without replacing the scanned artifact."""
+    import json
+
+    from django.urls import reverse
+    from playwright.sync_api import expect
+
+    from sbomify.apps.sboms.models import SBOM
+
+    upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_sbom", return_value="uploaded-vex.json")
+    mocker.patch("sbomify.apps.sboms.services.sboms.schedule_vex_reapply")
+    sbom = sbom_with_findings
+    original_filename = sbom.sbom_filename
+    document = json.dumps(
+        {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "metadata": {"component": {"type": "application", "name": "Example", "version": "1.0"}},
+            "vulnerabilities": [
+                {
+                    "id": "CVE-2024-0001",
+                    "analysis": {"state": "not_affected", "justification": "code_not_reachable"},
+                    "affects": [{"ref": "pkg:pypi/requests@2.31.0"}],
+                }
+            ],
+        }
+    ).encode()
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto(reverse("sboms:sbom_vulnerabilities", args=[sbom.id]))
+    page.get_by_role("button", name="Upload VEX", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Upload VEX", exact=True)
+    expect(dialog).to_be_visible()
+    expect(dialog.get_by_label("Artifact type", exact=True)).to_have_value("vex")
+    with page.expect_response(lambda response: response.url.endswith("/vex-preview")) as preview:
+        dialog.locator('input[type="file"]').set_input_files(
+            {
+                "name": "decisions.vex.json",
+                "mimeType": "application/json",
+                "buffer": document,
+            }
+        )
+    assert preview.value.status == 200
+    assert preview.value.json()["would_suppress"] == 1
+    expect(dialog.get_by_text("Preview: nothing stored yet")).to_be_visible()
+    assert not SBOM.objects.filter(component_id=sbom.component_id, bom_type="vex").exists()
+    upload.assert_not_called()
+    with page.expect_response(lambda response: "/upload-file/" in response.url) as applied:
+        dialog.get_by_role("button", name="Apply this VEX", exact=True).click()
+    assert applied.value.status == 201
+    expect(dialog).to_be_hidden()
+    assert SBOM.objects.filter(component_id=sbom.component_id, bom_type="vex").count() == 1
+    assert upload.call_args.args[0] == document
+    sbom.refresh_from_db()
+    assert sbom.sbom_filename == original_filename

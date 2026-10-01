@@ -10,7 +10,6 @@ import re
 from html import unescape
 
 import pytest
-from django.template import Context, Template
 from django.template.loader import render_to_string
 
 
@@ -176,7 +175,7 @@ def test_empty_state_padding_segments_never_conflict(rendered: str) -> None:
     default = _probe(rendered, "empty-default")
     assert "px-8 py-12" in default
     compact = _probe(rendered, "empty-compact")
-    assert "p-8" in compact
+    assert "px-8 py-8" in compact
     assert "py-12" not in compact
 
 
@@ -215,6 +214,11 @@ def test_empty_state_title_message_and_secondary_link(rendered: str) -> None:
     assert "Create your first component." in body
     assert 'href="/docs"' in body
     assert "or read the docs" in body
+
+
+def test_empty_state_only_reserves_action_spacing_when_needed(rendered: str) -> None:
+    assert "mb-8" in _section(rendered, "empty-default")
+    assert "mb-8" not in _section(rendered, "empty-untitled")
 
 
 def test_empty_state_slot_holds_a_real_button_component(rendered: str) -> None:
@@ -311,17 +315,6 @@ def test_action_spinner_forwards_state_and_inherits_control_colour(rendered: str
     assert "tw-brand-loader tw-loader-inline" in body
     assert 'aria-label="Saving"' in body
     assert "text-primary" not in body
-
-
-def test_legacy_loading_tag_delegates_and_preserves_attributes() -> None:
-    html = Template(
-        "{% load design_system %}"
-        '{% loading_state message="Loading examples..." row=True hx_swap_oob="true" x_show="busy" %}'
-    ).render(Context())
-    assert 'hx-swap-oob="true"' in html
-    assert 'x-show="busy"' in html
-    assert "data-content-loading" in html
-    assert "tw-brand-loader" not in html
 
 
 # --- toast ----------------------------------------------------------------

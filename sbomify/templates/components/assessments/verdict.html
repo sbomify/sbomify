@@ -1,0 +1,18 @@
+{% comment %}
+One standard's verdict on one requirement, as a glyph in a matrix cell. The
+glyph is decorative and the outcome is written out for a screen reader, so a
+column of icons still reads as words.
+
+status is the worst outcome that standard gave the requirement: fail, error,
+warning, pass or info. Empty means the standard does not check it, which is
+shown as a quiet dash rather than left blank, so a gap reads as "not asked"
+and not as "not loaded". Failed takes the warning ink and error the danger ink,
+the same mapping as the checks list; a pass is a plain tick in the success ink.
+{% endcomment %}
+<c-vars status />
+<span class="inline-flex h-6 w-6 items-center justify-center text-sm {% if status == 'fail' %}text-warning{% elif status == 'error' %}text-danger{% elif status == 'warning' %}text-info{% elif status == 'pass' %}text-success{% else %}text-text-muted{% endif %}"
+      {{ attrs }}>
+    <i class="fas {% if status == 'fail' %}fa-circle-xmark{% elif status == 'error' %}fa-circle-exclamation{% elif status == 'warning' %}fa-triangle-exclamation{% elif status == 'pass' %}fa-check{% elif status == 'info' %}fa-circle-info{% else %}fa-minus text-xs opacity-50{% endif %}"
+       aria-hidden="true"></i>
+    <span class="sr-only">{% if status == 'fail' %}Not met{% elif status == 'error' %}Error{% elif status == 'warning' %}Needs review{% elif status == 'pass' %}Met{% elif status == 'info' %}Note{% else %}Not checked{% endif %}</span>
+</span>
