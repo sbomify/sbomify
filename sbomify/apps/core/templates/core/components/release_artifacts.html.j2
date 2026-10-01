@@ -57,7 +57,7 @@
         </template>
         </c-forms.select>
         <c-slot name="right">
-        <c-tables.page-size id="artifact-page-size" x-model="pageSize" @change="currentPage = 1">
+        <c-tables.page-size id="artifact-page-size" x-model.number="pageSize" @change="currentPage = 1">
         <option value="10">10</option>
         <option value="25">25</option>
         <option value="50">50</option>
