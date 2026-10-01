@@ -237,11 +237,11 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         cryptographically valid but does NOT check signer identity.
         A proper identity policy should be configured per-deployment.
         """
-        from sigstore.models import Bundle
-        from sigstore.verify import Verifier
-        from sigstore.verify.policy import UnsafeNoOp
-
         try:
+            from sigstore.models import Bundle
+            from sigstore.verify import Verifier
+            from sigstore.verify.policy import UnsafeNoOp
+
             verifier = Verifier.production()
             bundle = Bundle.from_json(bundle_bytes)
             verifier.verify_artifact(
