@@ -1790,15 +1790,8 @@ def list_components(
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
-@router.get(
-    "/components/{component_id}",
-    response={200: ComponentResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,
-    tags=["Components"],
-)
-@decorate_view(optional_token_auth)
-def get_component(request: HttpRequest, component_id: str, return_instance: bool = False) -> Any:
-    """Get a specific component by ID."""
+def get_accessible_component(request: HttpRequest, component_id: str) -> tuple[int, Any]:
+    """Return (200, component) when the caller may see it, otherwise (status, error body)."""
     try:
         component = optimize_component_queryset(Component.objects.filter(pk=component_id)).get()
     except Component.DoesNotExist:
@@ -1807,8 +1800,7 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
     # Check if component allows public access (PUBLIC or GATED visibility)
     # Gated components are publicly viewable but downloads require access
     if component.public_access_allowed:
-        response = component if return_instance else _build_component_response(request, component)
-        return 200, response
+        return 200, component
 
     # For private components, require authentication and team access
     if not request.user or not request.user.is_authenticated:
@@ -1817,8 +1809,20 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
     if not can(request, "component:manage", component):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    response = component if return_instance else _build_component_response(request, component)
-    return 200, response
+    return 200, component
+
+
+@router.get(
+    "/components/{component_id}",
+    response={200: ComponentResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
+    tags=["Components"],
+)
+@decorate_view(optional_token_auth)
+def get_component(request: HttpRequest, component_id: str) -> Any:
+    """Get a specific component by ID."""
+    status_code, result = get_accessible_component(request, component_id)
+    return status_code, _build_component_response(request, result) if status_code == 200 else result
 
 
 @router.put(

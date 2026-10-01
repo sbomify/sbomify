@@ -942,17 +942,8 @@ def list_contact_profiles(request: HttpRequest, team_key: str) -> tuple[int, Any
     return 200, [serialize_contact_profile(profile) for profile in profiles]
 
 
-@router.get(
-    "/{team_key}/contact-profiles/{profile_id}",
-    response={200: ContactProfileSchema, 403: ErrorResponse, 404: ErrorResponse},
-)
-def get_contact_profile(
-    request: HttpRequest, team_key: str, profile_id: str, return_instance: bool = False
-) -> tuple[int, Any]:
-    """Get a specific contact profile.
-
-    All team members can view contact profiles, but only owners and admins can manage them.
-    """
+def get_readable_contact_profile(request: HttpRequest, team_key: str, profile_id: str) -> tuple[int, Any]:
+    """Return (200, profile) when the caller may read it, otherwise (status, error body)."""
     team, role, error = _get_team_and_membership_role(request, team_key)
     if error:
         return error
@@ -969,8 +960,20 @@ def get_contact_profile(
     except ContactProfile.DoesNotExist:
         return 404, {"detail": "Contact profile not found"}
 
-    response = profile if return_instance else serialize_contact_profile(profile)
-    return 200, response
+    return 200, profile
+
+
+@router.get(
+    "/{team_key}/contact-profiles/{profile_id}",
+    response={200: ContactProfileSchema, 403: ErrorResponse, 404: ErrorResponse},
+)
+def get_contact_profile(request: HttpRequest, team_key: str, profile_id: str) -> tuple[int, Any]:
+    """Get a specific contact profile.
+
+    All team members can view contact profiles, but only owners and admins can manage them.
+    """
+    status_code, result = get_readable_contact_profile(request, team_key, profile_id)
+    return status_code, serialize_contact_profile(result) if status_code == 200 else result
 
 
 @router.post(
