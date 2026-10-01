@@ -265,12 +265,15 @@ def detect_format(sbom_data: dict[str, Any]) -> str:
     return "unknown"
 
 
-def is_valid_timestamp(timestamp: str | None) -> bool:
-    """Validate that a timestamp is in valid ISO-8601 format."""
-    if not timestamp:
+def is_valid_timestamp(timestamp: object) -> bool:
+    """Validate that a timestamp is a string in valid ISO-8601 format.
+
+    The value comes straight from the uploaded document, so it can be any JSON type.
+    """
+    if not isinstance(timestamp, str) or not timestamp:
         return False
     try:
         datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         return True
-    except (ValueError, TypeError):
+    except ValueError:
         return False
