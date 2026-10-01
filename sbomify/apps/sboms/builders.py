@@ -455,14 +455,12 @@ class BaseSPDXBuilder(BaseSBOMBuilder):
         elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
             packages = sbom_data.get("packages", [])
             if packages:
-                # Use first package or the one referenced by documentDescribes
-                pkg = packages[0]
-                doc_describes = sbom_data.get("documentDescribes", [])
-                if doc_describes:
-                    for p in packages:
-                        if p.get("SPDXID") == doc_describes[0]:
-                            pkg = p
-                            break
+                from sbomify.apps.plugins.builtins._spdx_shared import spdx2_root_spdxid
+
+                # The package the document describes, through documentDescribes or a DESCRIBES
+                # relationship, else the first one
+                root_id = spdx2_root_spdxid(sbom_data)
+                pkg = next((p for p in packages if root_id and p.get("SPDXID") == root_id), packages[0])
 
                 name = pkg.get("name", "Unknown")
                 version = pkg.get("versionInfo")
