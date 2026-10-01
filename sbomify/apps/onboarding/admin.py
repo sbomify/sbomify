@@ -55,6 +55,7 @@ class OnboardingStatusAdmin(_OnboardingStatusAdmin):
     ]
 
     readonly_fields = [
+        "id",
         "user",
         "created_at",
         "updated_at",
@@ -65,6 +66,10 @@ class OnboardingStatusAdmin(_OnboardingStatusAdmin):
     ]
 
     ordering = ["-created_at"]
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        # The app creates these rows, and the user is read-only here.
+        return False
 
     @admin.display(description="Email", ordering="user__email")
     def user_email(self, obj: OnboardingStatus) -> str:
@@ -131,6 +136,7 @@ class OnboardingEmailAdmin(_OnboardingEmailAdmin):
     ]
 
     readonly_fields = [
+        "id",
         "user",
         "email_type",
         "subject",
@@ -140,6 +146,9 @@ class OnboardingEmailAdmin(_OnboardingEmailAdmin):
     ]
 
     ordering = ["-sent_at"]
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
 
     @admin.display(description="Email", ordering="user__email")
     def user_email(self, obj: OnboardingEmail) -> str:
