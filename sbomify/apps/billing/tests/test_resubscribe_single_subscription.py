@@ -226,7 +226,7 @@ def test_event_for_the_replacement_applies_when_the_stored_subscription_ended(st
     assert team_with_business_plan.billing_plan_limits["subscription_status"] == "active"
 
 
-@pytest.mark.parametrize("status", ["unpaid", "paused"])
+@pytest.mark.parametrize("status", ["not_a_status"])
 def test_an_unknown_subscription_status_is_refused(status, stripe_client, team_with_business_plan):
     _set_limits(team_with_business_plan, stripe_subscription_id="sub_live", subscription_status="active")
 
@@ -253,7 +253,7 @@ def test_the_downgrade_rolls_back_when_the_visibility_change_fails(team_with_bus
 
     with (
         patch(
-            "sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility",
+            "sbomify.apps.billing.billing_processing.apply_community_downgrade",
             side_effect=DatabaseError,
         ),
         pytest.raises(BillingRetryableError),

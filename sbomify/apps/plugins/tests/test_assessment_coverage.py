@@ -215,7 +215,8 @@ class TestArtifactPage:
         html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
 
         assert "Out of date" in html
-        assert "Latest v1.1.0" in html
+        # The badge names the version a re-run would use.
+        assert "The latest is v1.1.0." in html
 
     def test_a_current_result_is_not_marked(self, sample_sbom, sample_user, plugins):
         _enable(sample_sbom.component.team, NTIA)
@@ -330,33 +331,49 @@ class TestRerunHiddenWhenRefused:
         assert f"/api/v1/plugins/assessments/{sample_sbom.id}/" in html
 
 
-@pytest.mark.parametrize(("failing", "label"), [(1, "Issue"), (2, "Issues"), (0, "Issues")])
-def test_the_issue_chip_agrees_with_its_count(failing: int, label: str):
-    import re
-
+@pytest.mark.parametrize(
+    ("to_fix", "columns", "expected", "absent"),
+    [
+        (1, 1, "1 requirement to fix · Meets 0 of 1 standard", "requirements to fix"),
+        (2, 3, "2 requirements to fix · Meets 0 of 3 standards", "requirement to fix "),
+        (0, 2, "Meets 2 of 2 standards", "to fix"),
+    ],
+)
+def test_the_heading_counts_agree_with_their_nouns(to_fix: int, columns: int, expected: str, absent: str):
     from django.utils.html import strip_tags
 
     status = {
-        "overall_status": "has_failures" if failing else "all_pass",
-        "total_assessments": 2,
-        "passing_count": 2 - failing,
-        "failing_count": failing,
+        "overall_status": "has_failures" if to_fix else "all_pass",
+        "total_assessments": columns,
+        "passing_count": columns - bool(to_fix) * columns,
+        "failing_count": bool(to_fix) * columns,
         "pending_count": 0,
         "in_progress_count": 0,
         "skipped_count": 0,
     }
+    matrix = {
+        "columns": [object()] * columns,
+        "sources": [],
+        "requirements": [],
+        "to_fix": to_fix,
+        "met": 0,
+        "standards_met": 0 if to_fix else columns,
+    }
     html = render_to_string(
         "plugins/components/assessment_results_card.html.j2",
-        {"assessment_runs": {"status_summary": status, "latest_runs": []}, "sbom_id": "abc"},
+        {"assessment_runs": {"status_summary": status, "latest_runs": [], "requirements": matrix}, "sbom_id": "abc"},
     )
 
     text = " ".join(strip_tags(html).split())
-    assert re.search(rf"\b{failing} {label}\b", text), text
+    assert expected in text, text
+    assert absent not in text
 
 
 def test_a_crowded_run_header_wraps_and_leaves_the_chevron_clear():
-    """At 375 px one-line badges ran into the chevron. The row wraps instead,
-    and the trigger keeps a gap the chevron never gives up."""
+    """At 375 px one-line badges ran into the chevron. The name and its badge
+    wrap instead, and the chevron never gives up its width."""
+    from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
+
     run = {
         "id": "r1",
         "plugin_name": NTIA,
@@ -367,10 +384,13 @@ def test_a_crowded_run_header_wraps_and_leaves_the_chevron_clear():
         "status": "completed",
         "result": {"summary": {"total_findings": 5, "fail_count": 3, "pass_count": 2}, "findings": []},
     }
-    html = render_to_string("plugins/components/_assessment_run_item.html.j2", {"run": run, "loop_index": 1})
+    html = render_to_string(
+        "plugins/components/_assessment_run_item.html.j2", {"run": run, "tile": scorecard_for_run(run)}
+    )
 
-    assert "flex w-full items-center justify-between gap-3 px-6" in html
-    assert "fa-chevron-down shrink-0" in html
-    assert '<div class="flex flex-wrap items-center gap-x-3 gap-y-2 flex-grow min-w-0">' in html
-    assert '<span class="min-w-0 font-semibold text-text">' in html
-    assert html.count("whitespace-nowrap") >= 2  # "3 Issues" and "Out of date"
+    assert '<span class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">' in html
+    assert "fa-chevron-down w-4 shrink-0" in html
+    assert "3 issues" in html
+    # "Out of date" stays whole rather than breaking across two lines.
+    badge = html[: html.index("Out of date")]
+    assert "whitespace-nowrap" in badge[badge.rindex("<span") :]

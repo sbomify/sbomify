@@ -104,7 +104,7 @@ class TestVexDocuments:
         component = Component.objects.create(name="vex-empty", team=team, component_type="bom")
         response = _client(sample_user, team).get(f"/component/{component.id}/vex/")
         assert response.status_code == 200
-        assert "No VEX documents uploaded yet" in response.content.decode()
+        assert "No VEX documents yet" in response.content.decode()
 
     def test_delete_removes_vex(self, sample_user, sample_team_with_owner_member, s3, reapply_stub) -> None:
         team = sample_team_with_owner_member.team
