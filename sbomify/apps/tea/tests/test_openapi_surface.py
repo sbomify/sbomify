@@ -40,3 +40,41 @@ def test_the_route_names_resolve_without_a_doubled_namespace():
     only reversing catches it."""
     assert reverse("tea:openapi-json").endswith("openapi.json")
     assert reverse("tea:api-root") == BASE
+
+
+WORKSPACE_BASE = f"/public/DBirHY9Rei/tea/v{TEA_API_VERSION}/"
+
+
+@pytest.mark.parametrize("path", ["docs", "openapi.json"])
+def test_the_openapi_surface_is_reachable_under_a_workspace_key(client: Client, path: str):
+    """The same module is mounted a second time under /public/<workspace_key>/.
+
+    Both mounts share the "tea" namespace, so django-ninja's reverse() only
+    ever finds the custom-domain pattern -- which has no workspace_key -- and
+    this surface 500'd with NoReverseMatch.
+    """
+    response = client.get(f"{WORKSPACE_BASE}{path}")
+
+    assert response.status_code == 200
+
+
+def test_the_workspace_scoped_schema_describes_its_own_prefix(client: Client):
+    """A schema advertising /tea/... to a caller on /public/<key>/tea/... sends
+    them to a 404, so the prefix has to follow the mount."""
+    schema = client.get(f"{WORKSPACE_BASE}openapi.json").json()
+
+    assert schema["paths"]
+    assert all(route.startswith(WORKSPACE_BASE) for route in schema["paths"]), sorted(schema["paths"])[:3]
+
+
+def test_the_workspace_scoped_docs_page_points_at_its_own_schema(client: Client):
+    body = client.get(f"{WORKSPACE_BASE}docs").content.decode()
+
+    assert f"{WORKSPACE_BASE}openapi.json" in body
+
+
+def test_the_custom_domain_schema_still_describes_the_bare_prefix(client: Client):
+    """The fallback path: no workspace key, so nothing should have moved."""
+    schema = client.get(f"{BASE}openapi.json").json()
+
+    assert all(route.startswith(BASE) for route in schema["paths"]), sorted(schema["paths"])[:3]
