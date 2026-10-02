@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any
 from urllib.parse import parse_qsl, quote, urlencode
 
 from allauth.account.adapter import DefaultAccountAdapter
-from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from allauth.socialaccount.adapter import DefaultSocialAccountAdapter, get_adapter
 from allauth.socialaccount.models import SocialLogin
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.http import HttpRequest
 
 logger = logging.getLogger(__name__)
@@ -67,6 +70,109 @@ class SpaceEncodedOAuth2Client(OAuth2Client):  # type: ignore[misc]
         # parameters here, so a parameter allauth adds later still travels.
         pairs = parse_qsl(query, keep_blank_values=True)
         return f"{base}?{urlencode(pairs, quote_via=quote)}"
+
+
+# The OpenID Connect discovery document, keyed by the URL it was fetched from so
+# a changed ``server_url`` cannot read back the previous provider's endpoints.
+_OIDC_DISCOVERY_PREFIX = "oidc:discovery:"
+
+# Enough of the document that the login and callback views can complete. Anything
+# short of this is a body we parsed but cannot act on — a proxy's JSON error page,
+# a realm that is still starting — and caching it would turn one bad minute into a
+# cached hour of the same failure.
+_OIDC_REQUIRED_KEYS = ("authorization_endpoint", "token_endpoint")
+
+
+def _oidc_discovery_cache_keys(server_url: str) -> tuple[str, str]:
+    """The fresh key and the stale-fallback key for one discovery URL."""
+    digest = hashlib.sha256(server_url.encode("utf-8")).hexdigest()[:32]
+    return f"{_OIDC_DISCOVERY_PREFIX}fresh:{digest}", f"{_OIDC_DISCOVERY_PREFIX}stale:{digest}"
+
+
+def _oidc_cache_get(key: str) -> dict[str, Any] | None:
+    """``cache.get`` that cannot be the reason a login fails.
+
+    The ``default`` alias already swallows Redis failures (``IGNORE_EXCEPTIONS``),
+    but this path exists to keep logins up when something is down, so it does not
+    rely on that being configured — a cache that raises is a cache miss here.
+    """
+    try:
+        value = cache.get(key)
+    except Exception:  # pragma: no cover - defensive, alias swallows these
+        logger.warning("OIDC discovery cache read failed for %s", key, exc_info=True)
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _oidc_cache_set(key: str, config: dict[str, Any], timeout: int) -> None:
+    """``cache.set`` that cannot be the reason a login fails."""
+    try:
+        cache.set(key, config, timeout)
+    except Exception:  # pragma: no cover - defensive, alias swallows these
+        logger.warning("OIDC discovery cache write failed for %s", key, exc_info=True)
+
+
+def load_openid_config(server_url: str) -> dict[str, Any]:
+    """The provider's discovery document, cached, with the last good copy as a floor.
+
+    allauth memoises this document on the adapter instance, and the adapter is
+    built per request, so every single login and callback made a blocking HTTPS
+    GET to the identity provider's ``.well-known`` endpoint before it could
+    redirect. That put the provider's worst latency directly in front of the
+    login page with nothing between them: when Keycloak answered slowly the
+    five-second read timeout expired and the user got a 500, and when it
+    answered 521 the ``raise_for_status`` did the same. Both were live in
+    production, on the login path, which is the one page a user cannot route
+    around.
+
+    So the document is cached, which removes the fetch from almost every login,
+    and a longer-lived copy is kept as a fallback for when the fetch fails
+    anyway. A discovery document is derived from the realm URL and changes
+    essentially never, so serving the last good copy through a provider outage
+    is both safe and the difference between a slow login and no login at all.
+    If the fetch fails and there is no copy to fall back to, the error is raised
+    as before — there is nothing better to do with it.
+    """
+    fresh_key, stale_key = _oidc_discovery_cache_keys(server_url)
+
+    config = _oidc_cache_get(fresh_key)
+    if config is not None:
+        return config
+
+    try:
+        with get_adapter().get_requests_session() as sess:
+            resp = sess.get(server_url)
+            resp.raise_for_status()
+            config = resp.json()
+        if not isinstance(config, dict) or not all(config.get(key) for key in _OIDC_REQUIRED_KEYS):
+            raise ValueError(f"OIDC discovery document from {server_url} is missing {_OIDC_REQUIRED_KEYS}")
+    except Exception:
+        stale = _oidc_cache_get(stale_key)
+        if stale is None:
+            raise
+        logger.warning(
+            "OIDC discovery fetch from %s failed; serving the last known good document",
+            server_url,
+            exc_info=True,
+        )
+        return stale
+
+    _oidc_cache_set(fresh_key, config, settings.OIDC_DISCOVERY_CACHE_SECONDS)
+    _oidc_cache_set(stale_key, config, settings.OIDC_DISCOVERY_STALE_SECONDS)
+    return config
+
+
+def cached_openid_config(self: Any) -> dict[str, Any]:
+    """Replacement for ``OpenIDConnectOAuth2Adapter.openid_config``.
+
+    Keeps allauth's per-instance memoisation — several properties read this
+    document within one request — and puts the shared cache behind it.
+    """
+    config: dict[str, Any] | None = getattr(self, "_openid_config", None)
+    if config is None:
+        config = load_openid_config(self.get_provider().server_url)
+        self._openid_config = config
+    return config
 
 
 class CustomAccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]

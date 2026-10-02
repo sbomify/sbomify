@@ -28,9 +28,16 @@ class CoreConfig(AppConfig):
         # form-urlencoding rules.
         from allauth.socialaccount.providers.openid_connect.views import OpenIDConnectOAuth2Adapter
 
-        from sbomify.apps.core.adapters import SpaceEncodedOAuth2Client
+        from sbomify.apps.core.adapters import SpaceEncodedOAuth2Client, cached_openid_config
 
         OpenIDConnectOAuth2Adapter.client_class = SpaceEncodedOAuth2Client
+
+        # Same seam, same reason: allauth memoises the provider's discovery
+        # document on the adapter instance, and it builds one adapter per
+        # request, so every login blocked on a fetch from Keycloak. Ours caches
+        # it and keeps the last good copy, so a slow or unhappy provider costs
+        # latency at worst instead of a 500 on the login page.
+        OpenIDConnectOAuth2Adapter.openid_config = property(cached_openid_config)
 
         self._validate_storage_credentials()
 
