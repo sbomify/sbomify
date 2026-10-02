@@ -15,6 +15,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
+from django.forms import ChoiceField
 from django.http import (
     HttpResponse,
     HttpResponseForbidden,
@@ -26,7 +27,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST, ROLE_OWNER, can
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_DESCRIPTIONS, ROLE_GUEST, ROLE_OWNER, can
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -234,6 +235,11 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
 
     can_grant_owner = bool(can(request, "member:grant_owner", team))
     context["can_grant_owner"] = can_grant_owner
+    # Explain exactly the roles the select offers, in the words the Members tab uses.
+    role_field = typing.cast(ChoiceField, InviteUserForm(can_grant_owner=can_grant_owner).fields["role"])
+    role_choices = typing.cast(list[tuple[str, str]], role_field.choices)
+    offered = {value for value, _label in role_choices}
+    context["role_descriptions"] = [role for role in ROLE_DESCRIPTIONS if role[0] in offered]
 
     if request.method == "POST":
         invite_user_form = InviteUserForm(request.POST, can_grant_owner=can_grant_owner)

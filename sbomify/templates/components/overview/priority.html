@@ -13,14 +13,12 @@ and opens the shared triage modal for that advisory and package.
 {% if dashboard.needs_attention %}
     <c-overview.table aria-label="Priority vulnerabilities">
     <c-tables.head>
-    <tr>
-        <c-tables.header-cell>Vulnerability</c-tables.header-cell>
-        <c-tables.header-cell>Severity</c-tables.header-cell>
-        <c-tables.header-cell nowrap>Patch SLA</c-tables.header-cell>
-        <c-tables.header-cell>Decision</c-tables.header-cell>
-        <c-tables.header-cell>Where</c-tables.header-cell>
-        <c-tables.header-cell end>Action</c-tables.header-cell>
-    </tr>
+    <c-tables.header-cell>Vulnerability</c-tables.header-cell>
+    <c-tables.header-cell>Severity</c-tables.header-cell>
+    <c-tables.header-cell nowrap>Patch SLA</c-tables.header-cell>
+    <c-tables.header-cell>Decision</c-tables.header-cell>
+    <c-tables.header-cell>Where</c-tables.header-cell>
+    <c-tables.header-cell end>Action</c-tables.header-cell>
     </c-tables.head>
     <tbody>
         {% for finding in dashboard.needs_attention %}
