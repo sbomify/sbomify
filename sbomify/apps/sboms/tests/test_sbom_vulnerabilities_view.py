@@ -104,6 +104,172 @@ def test_purl_less_row_stays_separate_when_namespaces_are_ambiguous(sample_sbom:
 
 
 @pytest.mark.django_db
+def test_one_package_under_two_ecosystem_spellings_is_one_row(sample_sbom: SBOM):
+    """OSV says "Go" where a purl says golang. Two spellings of one package must
+    not read as two packages carrying the same advisory."""
+    _run(
+        sample_sbom,
+        "osv",
+        [
+            {
+                "id": "GHSA-x",
+                "aliases": ["CVE-1"],
+                "severity": "high",
+                "component": {"name": "golang.org/x/net", "version": "0.1.0", "ecosystem": "Go"},
+            }
+        ],
+    )
+    _run(
+        sample_sbom,
+        "dependency-track",
+        [
+            {
+                "id": "CVE-1",
+                "severity": "high",
+                "component": {
+                    "name": "golang.org/x/net",
+                    "version": "0.1.0",
+                    "ecosystem": "golang",
+                    "purl": "pkg:golang/golang.org/x/net@0.1.0",
+                },
+            }
+        ],
+    )
+    client = Client()
+    team = sample_sbom.component.team
+    setup_test_session(client, team, team.members.first())
+
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
+
+    assert [row["id"] for row in _rows(response)] == ["CVE-1"]
+
+
+@pytest.mark.django_db
+def test_a_row_keeps_the_ecosystem_spelling_its_scanner_used(sample_sbom: SBOM):
+    """The newest scanner opens the package. Rows from the other still read as that scanner wrote them."""
+    _run(
+        sample_sbom,
+        "osv",
+        [
+            {
+                "id": "DEBIAN-CVE-1",
+                "severity": "high",
+                "component": {"name": "glibc", "version": "2.40", "ecosystem": "Debian"},
+            }
+        ],
+    )
+    _run(
+        sample_sbom,
+        "dependency-track",
+        [
+            {
+                "id": "CVE-2",
+                "severity": "high",
+                "component": {
+                    "name": "glibc",
+                    "version": "2.40",
+                    "ecosystem": "deb",
+                    "purl": "pkg:deb/debian/glibc@2.40",
+                },
+            }
+        ],
+    )
+    client = Client()
+    team = sample_sbom.component.team
+    setup_test_session(client, team, team.members.first())
+
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
+
+    assert {row["id"]: row["ecosystem"] for row in _rows(response)} == {"DEBIAN-CVE-1": "Debian", "CVE-2": "deb"}
+
+
+@pytest.mark.django_db
+def test_the_report_counts_what_the_sbom_card_counts(sample_sbom: SBOM):
+    """One advisory on glibc 2.40 reported for a CPE-only, a deb and a generic
+    component is three vulnerabilities on the report and on the card alike."""
+    from sbomify.apps.vulnerability_scanning.utils import merge_findings_by_alias
+
+    component = {"name": "glibc", "version": "2.40"}
+    advisory = {"id": "CVE-2019-1010025", "severity": "low"}
+    run = _run(
+        sample_sbom,
+        "dependency-track",
+        [
+            {**advisory, "component": {**component, "ecosystem": "unknown"}},
+            {**advisory, "component": {**component, "ecosystem": "deb", "purl": "pkg:deb/debian/glibc@2.40"}},
+            {**advisory, "component": {**component, "ecosystem": "generic", "purl": "pkg:generic/glibc@2.40"}},
+        ],
+    )
+    client = Client()
+    team = sample_sbom.component.team
+    setup_test_session(client, team, team.members.first())
+
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
+
+    assert len(_rows(response)) == len(merge_findings_by_alias([run.result])["findings"]) == 3
+
+
+@pytest.mark.django_db
+def test_a_finding_that_ties_two_advisories_together_makes_them_one_row(sample_sbom: SBOM):
+    """A third report naming both ids joins the two earlier ones, on the report as on the card."""
+    from sbomify.apps.vulnerability_scanning.utils import merge_findings_by_alias
+
+    component = {"name": "lodash", "version": "4.17.15", "ecosystem": "npm"}
+    osv = _run(
+        sample_sbom,
+        "osv",
+        [
+            {"id": "GHSA-x", "severity": "high", "cvss_score": 7.0, "component": component},
+            {
+                "id": "OSV-9",
+                "aliases": ["CVE-1", "GHSA-x"],
+                "severity": "critical",
+                "cvss_score": 9.1,
+                "component": component,
+            },
+        ],
+    )
+    dt = _run(
+        sample_sbom,
+        "dependency-track",
+        [{"id": "CVE-1", "severity": "medium", "cvss_score": 5.0, "component": component}],
+    )
+    client = Client()
+    team = sample_sbom.component.team
+    setup_test_session(client, team, team.members.first())
+
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
+
+    rows = _rows(response)
+    assert len(rows) == len(merge_findings_by_alias([dt.result, osv.result])["findings"]) == 1
+    assert rows[0]["id"] == "CVE-1"
+    assert set(rows[0]["aliases"]) == {"GHSA-x", "OSV-9"}
+    assert (rows[0]["severity"], rows[0]["cvss_score"]) == ("critical", 9.1)
+
+
+@pytest.mark.django_db
+def test_a_bare_string_alias_does_not_fold_unrelated_advisories(sample_sbom: SBOM):
+    """Older stored results hold an alias as a bare string. Read as a list of
+    characters, "CVE-2026-1" and "CVE-2026-2" share a "C" and read as one advisory."""
+    component = {"name": "lodash", "version": "4.17.15", "ecosystem": "npm"}
+    _run(
+        sample_sbom,
+        "osv",
+        [
+            {"id": "GHSA-a", "aliases": "CVE-2026-1", "severity": "high", "component": component},
+            {"id": "GHSA-b", "aliases": "CVE-2026-2", "severity": "high", "component": component},
+        ],
+    )
+    client = Client()
+    team = sample_sbom.component.team
+    setup_test_session(client, team, team.members.first())
+
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
+
+    assert sorted(row["id"] for row in _rows(response)) == ["GHSA-a", "GHSA-b"]
+
+
+@pytest.mark.django_db
 def test_scanner_status_markers_are_not_vulnerability_rows(sample_sbom: SBOM):  # noqa: F811
     """A skipped Dependency Track run reports its state through the findings
     array (dependency-track:no-product). That marker is for the error panel,
