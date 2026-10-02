@@ -148,7 +148,19 @@ class SBOMAssessmentsResponse(BaseModel):
     sbom_id: str
     status_summary: AssessmentStatusSummary
     latest_runs: list[AssessmentRunSchema] = Field(description="Latest run for each plugin")
-    all_runs: list[AssessmentRunSchema] = Field(description="All assessment runs, ordered by date")
+    all_runs: list[AssessmentRunSchema] = Field(
+        description=(
+            "Assessment run history, newest first, bounded by the ``history_limit`` "
+            "query parameter. Use ``all_runs_total`` to tell whether it was truncated."
+        )
+    )
+    all_runs_total: int = Field(
+        default=0,
+        description=(
+            "How many runs exist for this SBOM, whatever ``history_limit`` returned. "
+            "Equals len(all_runs) when the history was not truncated."
+        ),
+    )
 
 
 class AssessmentBadgeData(BaseModel):
