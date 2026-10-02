@@ -178,7 +178,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         current_team = request.session.get("current_team")
         if current_team and current_team.get("key"):
-            return redirect("teams:team_tokens", team_key=current_team["key"])
+            return redirect("teams:team_settings_tab", team_key=current_team["key"], tab="tokens")
 
         messages.add_message(
             request,

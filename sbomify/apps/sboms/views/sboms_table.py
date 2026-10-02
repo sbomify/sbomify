@@ -6,11 +6,11 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.sboms.services.sboms_table import build_sboms_table_context, delete_sbom_from_request
 
 
-class SbomsTableView(View):
+class SbomsTableView(HtmxFragmentMixin, View):
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Gate the private route only, the way DocumentsTableView does.
 

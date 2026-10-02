@@ -5,7 +5,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.teams.apis import (
     get_team,
@@ -17,7 +17,7 @@ from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.schemas import UpdateTeamBrandingSchema
 
 
-class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:

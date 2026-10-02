@@ -5,13 +5,13 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.utils import get_app_hostname, plan_has_custom_domain_access
 
 
-class TeamCustomDomainView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamCustomDomainView(TeamRoleRequiredMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """View for managing workspace custom domain settings."""
 
     allowed_roles = list(ADMINISTER)

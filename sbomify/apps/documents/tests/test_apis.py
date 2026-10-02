@@ -959,7 +959,7 @@ def test_document_table_edit_persists_and_clears_subcategory(
     client.force_login(sample_user)
     url = reverse("documents:documents_table", kwargs={"component_id": sample_document.component_id})
 
-    page = client.get(url)
+    page = client.get(url, headers={"hx-request": "true"})
     assert page.status_code == 200
     assert b"editForm.compliance_subcategory" in page.content
     assert b"soc2-type1" in page.content
@@ -1049,7 +1049,7 @@ def test_the_edit_modal_is_not_teleported_so_htmx_can_wire_its_form(
     client.force_login(sample_user)
     url = reverse("documents:documents_table", kwargs={"component_id": sample_document.component_id})
 
-    page = client.get(url)
+    page = client.get(url, headers={"hx-request": "true"})
 
     assert page.status_code == 200
     body = page.content.decode()

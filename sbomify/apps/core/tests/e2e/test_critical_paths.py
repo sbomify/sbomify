@@ -164,8 +164,11 @@ class TestCriticalPaths:
             f"Content preview: {content[:1000] if len(content) > 1000 else content}"
         )
 
-        # Verify token appears in list on a fresh fetch
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        # Verify token appears in list on a fresh fetch, sent the way the
+        # settings tab's refresh sends it: the list is a section, not a page.
+        response = client.get(
+            reverse("teams:team_tokens", kwargs={"team_key": team.key}), headers={"HX-Request": "true"}
+        )
         assert response.status_code == 200
         content = response.content.decode()
         assert "Test Token" in content

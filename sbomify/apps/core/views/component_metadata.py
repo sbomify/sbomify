@@ -15,7 +15,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import Component
 from sbomify.apps.teams.forms import ContactEntityFormSet, ContactProfileContactFormSet
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
@@ -25,7 +25,7 @@ from sbomify.apps.teams.views.contact_profiles import ValidationError, _format_f
 logger = logging.getLogger(__name__)
 
 
-class ComponentMetadataFormView(LoginRequiredMixin, View):
+class ComponentMetadataFormView(LoginRequiredMixin, HtmxFragmentMixin, View):
     """View for rendering and handling the component metadata FormSet-based form."""
 
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:

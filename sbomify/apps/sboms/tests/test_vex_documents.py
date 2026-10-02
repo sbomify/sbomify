@@ -63,7 +63,7 @@ def _store_vex(component: Component, s3: dict[str, bytes], source: str, cve: str
 
 
 def _client(user: Any, team: Any) -> Client:
-    client = Client()
+    client = Client(headers={"hx-request": "true"})
     setup_authenticated_client_session(client, team, user)
     return client
 
@@ -96,7 +96,7 @@ class TestVexDocuments:
         _store_vex(component, s3, "manual_upload", "CVE-2021-45046", name="g.json")
 
         # Anonymous: reaches the public-listing gate but not component downloads.
-        response = Client().get(f"/component/{component.id}/vex/")
+        response = Client(headers={"hx-request": "true"}).get(f"/component/{component.id}/vex/")
         assert "CVE-2021-45046" not in response.content.decode()
 
     def test_empty_state(self, sample_user, sample_team_with_owner_member, s3) -> None:

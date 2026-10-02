@@ -27,7 +27,7 @@ def _mock_s3(mocker: MockerFixture, payload: bytes | None) -> None:
 
 
 def _owner_client(sbom: SBOM) -> Client:
-    client = Client()
+    client = Client(headers={"hx-request": "true"})
     team = sbom.component.team
     setup_test_session(client, team, team.members.first())
     return client
@@ -75,7 +75,7 @@ def test_card_empty_for_unknown_sbom(sample_sbom: SBOM, mocker: MockerFixture): 
 @pytest.mark.django_db
 def test_card_does_not_leak_private_to_anonymous(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
-    response = Client().get(_card_url(sample_sbom.id))  # anon, component is private
+    response = Client(headers={"hx-request": "true"}).get(_card_url(sample_sbom.id))  # anon, component is private
     assert response.status_code == 200
     assert "RSA-2048" not in response.content.decode()
 
@@ -85,7 +85,7 @@ def test_card_visible_on_public_component_to_anonymous(sample_sbom: SBOM, mocker
     sample_sbom.component.visibility = Component.Visibility.PUBLIC
     sample_sbom.component.save()
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
-    response = Client().get(_card_url(sample_sbom.id))
+    response = Client(headers={"hx-request": "true"}).get(_card_url(sample_sbom.id))
     assert response.status_code == 200
     assert "RSA-2048" in response.content.decode()
 

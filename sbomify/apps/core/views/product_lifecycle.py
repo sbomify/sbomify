@@ -13,14 +13,14 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.services.cle import create_cle_event
 
 logger = logging.getLogger(__name__)
 
 
-class ProductLifecycleView(LoginRequiredMixin, View):
+class ProductLifecycleView(LoginRequiredMixin, HtmxFragmentMixin, View):
     """View for product lifecycle HTMX partial."""
 
     template_name = "core/components/product_lifecycle_card.html.j2"

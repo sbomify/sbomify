@@ -11,6 +11,7 @@ from django.views.decorators.vary import vary_on_headers
 from sbomify.apps.core.apis import create_product
 from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.core.forms import ProductCreateForm
+from sbomify.apps.core.htmx import HtmxFragmentMixin
 from sbomify.apps.core.schemas import ProductCreateSchema
 from sbomify.apps.core.services.inventory_page import build_inventory_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -66,8 +67,10 @@ class ProductCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         return _create_product(request)
 
 
-class ProductsTableView(InventoryView):
+class ProductsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """Keep the existing table refresh URL available."""
+
+    inventory_kind: str | None = None
 
     def get(self, request: HttpRequest) -> HttpResponse:
         result = build_inventory_context(request, kind=self.inventory_kind)

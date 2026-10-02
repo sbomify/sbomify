@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 from sbomify.logging import getLogger
@@ -19,7 +19,7 @@ from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, upd
 logger = getLogger(__name__)
 
 
-class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """View for managing team plugin settings."""
 
     allowed_roles = list(ADMINISTER)
@@ -157,7 +157,7 @@ class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return render(request, "plugins/plugins_page.html.j2")
 
 
-class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, HtmxFragmentMixin, View):
     """HTMX partial: returns the plugin summary bar with counts."""
 
     allowed_roles = list(ADMINISTER)
