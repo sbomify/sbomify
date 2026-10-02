@@ -5,6 +5,7 @@ from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
 from sbomify.apps.tea.mappers import TEA_API_VERSION
+from sbomify.apps.tea.urls import workspace_urlpatterns as tea_workspace_urlpatterns
 
 from . import views
 from .views.component_metadata import ComponentMetadataFormView
@@ -171,10 +172,13 @@ urlpatterns = [
         views.TrustCenterAdvisoryDetailView.as_view(),
         name="advisory_details_public_current",
     ),
-    # TEA (Transparency Exchange API) endpoints for non-branded trust centers
+    # TEA (Transparency Exchange API) endpoints for non-branded trust centers.
+    # Its own namespace: the custom-domain mount in sbomify.urls already holds
+    # "tea", and a second claim on that name would hide these routes from
+    # reverse() -- which is how /docs and /openapi.json 500'd here.
     path(
         f"public/<str:workspace_key>/tea/v{TEA_API_VERSION}/",
-        include("sbomify.apps.tea.urls"),
+        include(tea_workspace_urlpatterns),
     ),
     path(
         "component/<str:component_id>/transfer",
