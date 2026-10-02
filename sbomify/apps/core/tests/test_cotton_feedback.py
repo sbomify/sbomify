@@ -224,7 +224,7 @@ def test_empty_state_only_reserves_action_spacing_when_needed(rendered: str) -> 
 def test_empty_state_slot_holds_a_real_button_component(rendered: str) -> None:
     action = _section(rendered, "empty-default")
     assert 'href="/components/new"' in action
-    assert "bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)]" in action
+    assert "bg-[linear-gradient(135deg,var(--color-primary-fill)_0%,var(--color-primary-fill-end)_100%)]" in action
 
 
 # --- skeleton -------------------------------------------------------------

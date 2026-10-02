@@ -7,6 +7,7 @@ import { initThemeManager } from './theme-manager';
 initThemeManager();
 
 import './layout-interactions';
+import './table-stack';
 import './notifications-modal';
 
 import Alpine from 'alpinejs';

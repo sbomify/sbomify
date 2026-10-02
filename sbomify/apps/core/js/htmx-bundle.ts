@@ -3,6 +3,7 @@ import '../../../assets/css/tailwind.src.css';
 
 import '../../vulnerability_scanning/js/vulnerability-chart';
 import './layout-interactions';
+import './table-stack';
 import './alerts-global';
 import './clipboard-global';
 
