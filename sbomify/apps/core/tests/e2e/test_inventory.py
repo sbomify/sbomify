@@ -9,6 +9,9 @@ from playwright.sync_api import Page, expect
 
 from sbomify.apps.core.models import Product
 
+# Each inventory tab is its own URL, so a test holding tab requests has to match all three.
+INVENTORY_URLS = re.compile(r".*/(products|releases|components)/.*")
+
 pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
 
 
@@ -37,6 +40,10 @@ def test_inventory_navigation_and_filters(
         scroll_before = page.evaluate("window.scrollY")
         navigation.get_by_role("link", name=re.compile(f"^{kind}")).click()
         expect(page.get_by_role("table", name=kind, exact=True)).to_be_visible()
+        expect(page.locator("#inventory-navigation [aria-current=page]")).to_have_attribute(
+            "aria-label", "Products" if kind == "Releases" else kind
+        )
+        expect(page).to_have_url(re.compile(f"/{kind.lower()}/$"))
         expect(page.locator("#inventory-content")).not_to_have_class(re.compile("htmx-settling"))
         assert page.evaluate("window.scrollY") == scroll_before
         assert navigation.evaluate(
@@ -92,7 +99,7 @@ def test_inventory_navigation_and_filters(
     expect(release_tab).to_have_attribute("href", re.compile(f"product={product.id}"))
     page.get_by_label("Filter by product").select_option("unassigned")
     expect(components).to_contain_text("Unassigned")
-    expect(release_tab).to_have_attribute("href", re.compile(r"[?&]product=(&|$)"))
+    expect(release_tab).to_have_attribute("href", "/releases/")
     page.get_by_role("navigation", name="Product inventory").get_by_role("link", name=re.compile("^Releases")).click()
     expect(page.get_by_role("table", name="Releases", exact=True)).to_be_visible()
     page.get_by_role("link", name="Create release", exact=True).click()
@@ -114,7 +121,7 @@ def test_inventory_result_swaps_keep_sort_refresh_and_history(
     authenticated_page: Page, dashboard: dict[str, Any], kind: str
 ) -> None:
     page = authenticated_page
-    page.goto(f"/products/?view={kind}")
+    page.goto(f"/{kind}/")
     table = page.get_by_role("table", name=kind.title(), exact=True)
     search = page.get_by_role("searchbox", name=f"Search {kind}", exact=True)
     search_element = search.element_handle()
@@ -162,7 +169,7 @@ def test_inventory_tabs_respond_before_the_response_arrives(
         else:
             route.continue_()
 
-    page.route("**/products/**", hold_panel)
+    page.route(INVENTORY_URLS, hold_panel)
     releases = navigation.get_by_role("link", name=re.compile("^Releases"))
     releases.click()
     expect(releases).to_have_attribute("aria-current", "page")
@@ -180,9 +187,9 @@ def test_inventory_tabs_respond_before_the_response_arrives(
     pending.pop().continue_()
     expect(page.get_by_role("table", name="Releases", exact=True)).to_be_visible()
     expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_hidden()
-    expect(page).to_have_url(re.compile("view=releases"))
+    expect(page).to_have_url(re.compile("/releases/"))
     assert nav_element.evaluate("el => el.isConnected")
-    page.unroute("**/products/**", hold_panel)
+    page.unroute(INVENTORY_URLS, hold_panel)
     page.go_back()
     expect(page.get_by_role("table", name="Products", exact=True)).to_be_visible()
     expect(navigation.get_by_role("link", name=re.compile("^Products"))).to_have_attribute("aria-current", "page")
@@ -207,14 +214,14 @@ def test_inventory_tab_failure_restores_previous_view_and_allows_retry(
         else:
             route.abort()
 
-    page.route("**/products/**", fail_panel)
+    page.route(INVENTORY_URLS, fail_panel)
     navigation = page.get_by_role("navigation", name="Product inventory")
     navigation.get_by_role("link", name=re.compile("^Components")).click()
     expect(page.get_by_role("alert").filter(has_text="Unable to load this tab")).to_be_visible()
     expect(page.get_by_role("table", name="Products", exact=True)).to_be_visible()
     expect(navigation.get_by_role("link", name=re.compile("^Products"))).to_have_attribute("aria-current", "page")
     expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_hidden()
-    page.unroute("**/products/**", fail_panel)
+    page.unroute(INVENTORY_URLS, fail_panel)
     navigation.get_by_role("link", name=re.compile("^Components")).click()
     expect(page.get_by_role("table", name="Components", exact=True)).to_be_visible()
     expect(page.get_by_role("alert").filter(has_text="Unable to load this tab")).to_be_hidden()
@@ -234,7 +241,7 @@ def test_inventory_rapid_tab_changes_keep_the_last_selection(
         else:
             route.continue_()
 
-    page.route("**/products/**", hold_panel)
+    page.route(INVENTORY_URLS, hold_panel)
     navigation = page.get_by_role("navigation", name="Product inventory")
     navigation.get_by_role("link", name=re.compile("^Releases")).click()
     expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_visible()
@@ -247,7 +254,7 @@ def test_inventory_rapid_tab_changes_keep_the_last_selection(
     expect(components).to_have_attribute("aria-current", "page")
     pending[1].continue_()
     expect(page.get_by_role("table", name="Components", exact=True)).to_be_visible()
-    expect(page).to_have_url(re.compile("view=components"))
+    expect(page).to_have_url(re.compile("/components/"))
     expect(page.get_by_text("Outdated releases", exact=True)).to_have_count(0)
     expect(page.get_by_role("status").filter(has_text="Loading inventory")).to_be_hidden()
 
