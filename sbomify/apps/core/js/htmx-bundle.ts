@@ -2,6 +2,7 @@
 import '../../../assets/css/tailwind.src.css';
 
 import '../../vulnerability_scanning/js/vulnerability-chart';
+import './table-stack';
 import './alerts-global';
 
 // Centralized Alpine components and HTMX lifecycle

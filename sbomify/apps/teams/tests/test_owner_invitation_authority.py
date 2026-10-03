@@ -192,7 +192,7 @@ class TestShowingOwnerInvitations:
             _client_for(team, admin).get(reverse("teams:invite_user", kwargs={"team_key": team.key})).content.decode()
         )
 
-        assert "has full control" not in body
+        assert "Full control of the workspace" not in body
 
     def test_owner_invite_page_describes_the_owner_role(self, team, make_member):
         owner = make_member("owner1", "owner")
@@ -201,7 +201,8 @@ class TestShowingOwnerInvitations:
             _client_for(team, owner).get(reverse("teams:invite_user", kwargs={"team_key": team.key})).content.decode()
         )
 
-        assert "has full control" in body
+        # The help comes from ROLE_DESCRIPTIONS, the same words the Members tab shows.
+        assert "Full control of the workspace" in body
 
     def test_members_tab_lists_an_invitation_by_the_role_it_grants(self, team, make_member):
         owner = make_member("owner1", "owner")
@@ -225,3 +226,22 @@ class TestShowingOwnerInvitations:
         Invitation.objects.create(team=team, email=newcomer.email, role="owner", invited_by=admin)
 
         assert [i["role"] for i in get_pending_invitations_for_user(newcomer)] == ["admin"]
+
+    def test_role_help_matches_the_roles_offered(self, team, make_member):
+        """The help once explained only Owner and Admin, and described Admin with what a
+        Member can do, while the select defaulted to Member. It now explains exactly
+        the roles on offer, in the Members tab's words."""
+        from sbomify.apps.core.authz import ROLE_DESCRIPTIONS
+
+        descriptions = {key: text for key, _label, text in ROLE_DESCRIPTIONS}
+        admin = make_member("admin1", "admin")
+
+        body = (
+            _client_for(team, admin).get(reverse("teams:invite_user", kwargs={"team_key": team.key})).content.decode()
+        )
+
+        assert descriptions["admin"] in body
+        assert descriptions["member"] in body
+        assert descriptions["owner"] not in body
+        # Guests arrive through the Trust Center, never by invitation.
+        assert descriptions["guest"] not in body

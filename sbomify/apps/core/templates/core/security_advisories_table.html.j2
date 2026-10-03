@@ -57,8 +57,8 @@
                     <span class="text-text font-medium block truncate" x-text="advisory.title"></span>
                     <span class="text-xs text-text-muted font-mono"
                           x-text="advisory.vulnerability_id || advisory.id"></span>
-                    {# Mobile: show the products the hidden column carries #}
-                    <div class="md:hidden mt-1">
+                    {# sm to md: the products column is hidden. Below sm the table stacks and shows it. #}
+                    <div class="hidden sm:block md:hidden mt-1">
                         <span class="text-xs text-text-muted"
                               x-text="(advisory.products || []).map(p => p.name).join(', ')"></span>
                     </div>

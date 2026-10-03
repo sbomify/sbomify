@@ -6,6 +6,7 @@ initSentry();
 import { initThemeManager } from './theme-manager';
 initThemeManager();
 
+import './table-stack';
 import './notifications-modal';
 
 import Alpine from 'alpinejs';

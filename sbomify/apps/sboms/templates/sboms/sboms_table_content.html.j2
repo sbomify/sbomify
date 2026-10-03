@@ -59,14 +59,14 @@
                class="text-primary font-medium hover:underline"
                x-text="item.sbom.name"></a>
             {% comment %}
-            Mobile fallback for the columns hidden under md: format pill (with format_version)
-            plus the SBOM version. flex-wrap lets each pill drop to its own line if the column
-            is narrow, so the table doesn't horizontally scroll.
+            Fallback for the columns hidden from sm to md: format pill (with format_version)
+            plus the SBOM version. Below sm the table stacks and shows those columns itself.
+            flex-wrap lets each pill drop to its own line if the column is narrow.
 
             The format is only known in the browser, so the pill binds data-format
             and the badge holds both recipes.
             {% endcomment %}
-            <div class="md:hidden mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+            <div class="hidden sm:flex md:hidden mt-1 flex-wrap items-center gap-1.5 text-xs">
                 <c-badges.format ::data-format="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'cyclonedx' : 'spdx'" x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version" />
                 <span class="text-text-muted font-mono"
                       x-text="'v' + (item.sbom.version.length > 16 ? item.sbom.version.slice(0, 16) + '…' : item.sbom.version)"

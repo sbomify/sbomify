@@ -6,13 +6,11 @@
 {% if products %}
     <c-overview.table aria-label="Product exposure">
     <c-tables.head>
-    <tr>
-        <c-tables.header-cell>Product</c-tables.header-cell>
-        <c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
-        <c-tables.header-cell nowrap>Past SLA</c-tables.header-cell>
-        <c-tables.header-cell>Evidence</c-tables.header-cell>
-        <c-tables.header-cell end>Action</c-tables.header-cell>
-    </tr>
+    <c-tables.header-cell>Product</c-tables.header-cell>
+    <c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
+    <c-tables.header-cell nowrap>Past SLA</c-tables.header-cell>
+    <c-tables.header-cell>Evidence</c-tables.header-cell>
+    <c-tables.header-cell end>Action</c-tables.header-cell>
     </c-tables.head>
     <tbody>
         {% for product in products %}

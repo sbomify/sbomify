@@ -23,7 +23,7 @@ def _button_holding(rendered: str, marker: str) -> str:
 @pytest.mark.parametrize(
     ("marker", "recipe_bit"),
     [
-        ("Save", "var(--color-primary)_0%,var(--color-primary-dark)_100%"),
+        ("Save", "var(--color-primary-fill)_0%,var(--color-primary-fill-end)_100%"),
         ("Care", "var(--color-warning)_0%,var(--color-warning-dark)_100%"),
         ("Delete", "var(--color-danger)_0%,var(--color-danger-dark)_100%"),
         ("Cancel", "bg-surface"),
