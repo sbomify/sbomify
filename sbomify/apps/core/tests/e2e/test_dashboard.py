@@ -379,6 +379,8 @@ def test_dashboard_view_switch_and_trend_filters(
                 getComputedStyle(canvas).getPropertyValue('--color-text-muted').trim();
         }""")
     page.get_by_role("combobox", name="Time range").select_option("7")
+    # HTMX binds a swapped-in control during the settle phase; a change before then is dropped.
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
     expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
     page.wait_for_function(
         "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
@@ -389,6 +391,7 @@ def test_dashboard_view_switch_and_trend_filters(
     expect(page.get_by_role("heading", name="No vulnerability data")).to_be_visible()
     page.wait_for_function("Object.keys(Chart.instances).length === 0")
     expect(page.get_by_role("combobox", name="Product", exact=True)).to_be_visible()
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
     page.get_by_role("combobox", name="Product", exact=True).select_option(dashboard["products"][0].id)
     expect(chart).to_be_visible()
     expect(page.get_by_role("button", name="Severity", exact=True)).to_have_attribute("aria-pressed", "true")
