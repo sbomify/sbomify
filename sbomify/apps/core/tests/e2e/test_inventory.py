@@ -84,12 +84,16 @@ def test_inventory_navigation_and_filters(
     page.get_by_role("navigation", name="Product inventory").get_by_role("link", name=re.compile("^Components")).click()
     components = page.get_by_role("table", name="Components", exact=True)
     expect(components).to_be_visible()
+    # HTMX binds a swapped-in control during the settle phase; a change before then is dropped.
+    inventory = page.locator("#inventory-content")
+    expect(inventory).not_to_have_class(re.compile("htmx-settling"))
     product = dashboard["products"][0]
     page.get_by_label("Filter by product").select_option(product.id)
     release_tab = page.get_by_role("navigation", name="Product inventory").get_by_role(
         "link", name=re.compile("^Releases")
     )
     expect(release_tab).to_have_attribute("href", re.compile(f"product={product.id}"))
+    expect(inventory).not_to_have_class(re.compile("htmx-settling"))
     page.get_by_label("Filter by product").select_option("unassigned")
     expect(components).to_contain_text("Unassigned")
     expect(release_tab).to_have_attribute("href", re.compile(r"[?&]product=(&|$)"))
