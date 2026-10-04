@@ -18,7 +18,7 @@ from typing import Any
 
 from sbomify.apps.sboms.apis import _extract_spdx3_primary_package
 from sbomify.apps.sboms.builders import _spdx3_component_info
-from sbomify.apps.sboms.schemas import SPDX3Schema
+from sbomify.apps.sboms.schemas import SPDX3Package, SPDX3Schema
 
 CONTEXT = "https://spdx.org/rdf/3.0.1/spdx-context.jsonld"
 
@@ -168,3 +168,64 @@ def test_a_malformed_graph_falls_back_to_the_elements_alias():
         ],
     }
     assert _spdx3_component_info(document) == ("board", "2", None)
+
+
+class TestNonStringDeclaredFields:
+    """A package field that is present but not a string.
+
+    ``SPDX3Package`` defaults every field because it is meant to take what it
+    is given, but declaring them ``str`` made a present-and-sloppy value fatal
+    where an absent one was fine. The exception escaped
+    ``SPDX3Schema.packages`` and reached the upload endpoint, which can only
+    answer "Invalid request" to a failure from that depth -- so one numeric
+    version rejected a document that was otherwise readable.
+    """
+
+    @staticmethod
+    def _package(**fields: Any) -> SPDX3Package:
+        document = {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [{"type": "software_Package", "spdxId": "urn:p", **fields}],
+        }
+        return SPDX3Schema.model_validate(document).packages[0]
+
+    def test_a_numeric_version_is_kept_as_written(self) -> None:
+        """What the producer meant is a version of "3", not no version."""
+        assert self._package(name="p", software_packageVersion=3).version == "3"
+
+    def test_a_numeric_name_is_kept_as_written(self) -> None:
+        assert self._package(name=12345, software_packageVersion="1.0").name == "12345"
+
+    def test_an_explicit_null_reads_as_absent(self) -> None:
+        """JSON producers write null for an optional field they have nothing
+        for; that is the same statement as leaving it out."""
+        package = self._package(name=None, software_packageVersion=None)
+
+        assert package.name == ""
+        assert package.version == ""
+
+    def test_a_nested_object_falls_back_to_the_default(self) -> None:
+        package = self._package(name="p", software_packageVersion={"not": "a string"})
+
+        assert package.version == ""
+        assert package.name == "p"
+
+    def test_the_rest_of_the_document_still_parses(self) -> None:
+        """The point of the whole thing: one bad field costs that field, not
+        the upload."""
+        document = {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [
+                {"type": "software_Package", "spdxId": "urn:a", "name": 1, "software_packageVersion": {}},
+                {"type": "software_Package", "spdxId": "urn:b", "name": "good", "software_packageVersion": "2.0"},
+            ],
+        }
+
+        packages = SPDX3Schema.model_validate(document).packages
+
+        assert [(p.name, p.version) for p in packages] == [("1", ""), ("good", "2.0")]
+
+    def test_a_string_field_is_untouched(self) -> None:
+        package = self._package(name="p", software_packageVersion="1.0")
+
+        assert (package.name, package.version, package.spdx_id) == ("p", "1.0", "urn:p")

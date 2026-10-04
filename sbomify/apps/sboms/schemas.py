@@ -856,6 +856,48 @@ class SPDX3Package(BaseModel):
     spdx_id: str = Field("", alias="spdxId")
     type: str = ""
 
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_declared_strings(cls, data: Any) -> Any:
+        """Keep a sloppy field from rejecting the whole document.
+
+        Every field here is declared with a default because this parser is
+        meant to take what it is given: a package that says nothing about its
+        version is a package with no version, not a bad upload. Declaring the
+        types as ``str`` quietly undid that for the values that are present
+        but not strings. ``"software_packageVersion": 3`` -- a plain number,
+        which producers do emit -- raised out of :attr:`SPDX3Schema.packages`,
+        and the upload endpoint, which can only answer "Invalid request" to an
+        exception from this deep, rejected a document it could otherwise read.
+        An explicit ``null`` for an absent optional field did the same.
+
+        The SPDX 2 side already assumes exactly this. ``_spdx2_described_ids``
+        checks every value it reads before using it as an ID, on the stated
+        reasoning that a number or a nested object reaching that point should
+        be a silent no-match rather than an error. This is that rule, applied
+        where the document is parsed rather than where it is read.
+
+        A number is the value the producer meant, so it is kept as its string
+        form. Anything with no sensible string form -- null, a bool, an object,
+        a list -- falls back to the field default, and the raw element is still
+        carried on the model for anything that wants to look.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        coerced = dict(data)
+        for key in ("name", "type", "version", "software_packageVersion", "spdx_id", "spdxId"):
+            if key not in coerced:
+                continue
+            value = coerced[key]
+            if isinstance(value, str):
+                continue
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                coerced[key] = str(value)
+            else:
+                del coerced[key]
+        return coerced
+
     @property
     def purl(self) -> str:
         # Deferred so this parsing module carries no import-time edge into the
