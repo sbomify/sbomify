@@ -13,7 +13,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
 )
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM, Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Member, Team
 
 User = get_user_model()
 
@@ -78,8 +78,15 @@ class TestReleaseArtifactsAPI(TestCase):
         for sbom in extras[:2]:
             ReleaseArtifact.objects.get_or_create(release=self.release, sbom=sbom)
 
+        # The available listing is the release editor's picker and answers only
+        # someone who can edit the release.
+        editor = User.objects.create_user(username="release-editor", email="editor@example.com")
+        Member.objects.create(team=self.team, user=editor, role="owner")
+        client = Client()
+        client.force_login(editor)
+
         for mode in ("existing", "available"):
-            response = Client().get(f"/api/v1/releases/{self.release.id}/artifacts?mode={mode}&page_size=-1")
+            response = client.get(f"/api/v1/releases/{self.release.id}/artifacts?mode={mode}&page_size=-1")
             assert response.status_code == 200, mode
             payload = json.loads(response.content)
             assert payload["pagination"]["total"] > 1, f"{mode} fixture proves nothing"

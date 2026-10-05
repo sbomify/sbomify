@@ -1,7 +1,7 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load django_vite %}
 {% load teams %}
-{% block title %}sbomify Workspace Settings: {{ team.name|workspace_display }}{% endblock %}
+{% block title %}Settings · {{ team.name|workspace_display }} · sbomify{% endblock %}
 {% block content %}
     {% include "teams/team_settings_content.html.j2" %}
 {% endblock %}

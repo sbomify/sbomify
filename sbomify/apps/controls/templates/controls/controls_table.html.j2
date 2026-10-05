@@ -1,7 +1,8 @@
+{% load humanize %}
 {% comment %}One control table for workspace defaults and product overrides. The caller supplies its context and the parent owns spacing.{% endcomment %}
 <c-cards.card flush id="controls-table-{{ controls.catalog.id }}" x-data="{ statusFilter: 'all', expandedGroups: {} }">
 <c-tables.toolbar>
-<c-layout.section-header title="{{ controls.catalog.name }}" subtitle="{{ controls.total }} control{{ controls.total|pluralize }}" level="3" />
+<c-layout.section-header title="{{ controls.catalog.name }}" subtitle="{{ controls.total|intcomma }} control{{ controls.total|pluralize }}" level="3" />
 <c-slot name="right">
 {% if not controls.product %}
     <c-actions-menu label="Export {{ controls.catalog.name }}" caption="Export" icon="fas fa-download">
@@ -17,7 +18,7 @@
 </c-tables.toolbar>
 <c-navigation.accordion density="sm">
 {% for category in controls.categories %}
-    <c-navigation.accordion-item state="expandedGroups['{{ category.name|escapejs }}']" label="{{ category.name }} ({{ category.controls|length }})" @click="expandedGroups['{{ category.name|escapejs }}'] = !expandedGroups['{{ category.name|escapejs }}']">
+    <c-navigation.accordion-item state="expandedGroups['{{ category.name|escapejs }}']" label="{{ category.name }} ({{ category.controls|length|intcomma }})" @click="expandedGroups['{{ category.name|escapejs }}'] = !expandedGroups['{{ category.name|escapejs }}']">
     <div class="flex flex-col gap-3">
         <c-progress :value="category.percentage" />
         {% if controls.can_edit and not controls.product %}

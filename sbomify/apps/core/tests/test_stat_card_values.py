@@ -36,39 +36,48 @@ def test_crypto_posture_stats_keep_counts_and_default_missing_counts_to_zero() -
     assert values == {"Vulnerable": "2", "Review": "0", "Quantum-safe": "1"}
 
 
+def assessment_breakdown(run: dict[str, Any]) -> str | None:
+    """The written counts behind an assessment row's outcome bar.
+
+    The row replaced the per-run stat cards; this is where those counts live
+    now, and what a screen reader hears in place of the bar.
+    """
+    from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
+
+    html = render_to_string(
+        "plugins/components/_assessment_run_item.html.j2", {"run": run, "tile": scorecard_for_run(run)}
+    )
+    found = re.search(r'role="img" aria-label="([^"]*)"', html)
+    return found.group(1) if found else None
+
+
 @pytest.mark.parametrize("skipped", [False, True])
-def test_security_assessment_stats_keep_severity_counts_and_skip_marker_out_of_total(skipped: bool) -> None:
-    values = stat_values(
-        "plugins/components/_assessment_run_item.html.j2",
+def test_security_assessment_counts_keep_severities_and_skip_marker_out(skipped: bool) -> None:
+    breakdown = assessment_breakdown(
         {
-            "loop_index": 1,
-            "run": {
-                "id": "run1",
-                "plugin_name": "osv",
-                "category": "security",
-                "status": "completed",
-                "result": {
-                    "metadata": {"skipped": skipped},
-                    "summary": {"by_severity": {"critical": 2, "high": 3, "low": 1}},
-                },
+            "id": "run1",
+            "plugin_name": "osv",
+            "category": "security",
+            "status": "completed",
+            "result": {
+                "metadata": {"skipped": skipped},
+                "summary": {"by_severity": {"critical": 2, "high": 3, "low": 1}},
+                "findings": [{"title": "Skipped"}],
             },
-        },
+        }
     )
-    assert values == {"Critical": "2", "High": "3", "Medium": "0", "Low": "1", "Total": "0" if skipped else "6"}
+    # A skipped scan counts nothing: no bar, so no breakdown at all.
+    assert breakdown == (None if skipped else "2 critical, 3 high, 1 medium or low")
 
 
-def test_compliance_assessment_stats_keep_nonzero_counts() -> None:
-    values = stat_values(
-        "plugins/components/_assessment_run_item.html.j2",
+def test_compliance_assessment_counts_keep_nonzero_outcomes() -> None:
+    breakdown = assessment_breakdown(
         {
-            "loop_index": 1,
-            "run": {
-                "id": "run1",
-                "plugin_name": "ntia",
-                "category": "compliance",
-                "status": "completed",
-                "result": {"summary": {"pass_count": 8, "fail_count": 2, "warning_count": 1, "total_findings": 11}},
-            },
-        },
+            "id": "run1",
+            "plugin_name": "ntia",
+            "category": "compliance",
+            "status": "completed",
+            "result": {"summary": {"pass_count": 8, "fail_count": 2, "warning_count": 1, "total_findings": 11}},
+        }
     )
-    assert values == {"Pass": "8", "Fail": "2", "Error": "0", "Warn": "1", "Info": "0", "Total": "11"}
+    assert breakdown == "8 passed, 1 warning, 2 failed"

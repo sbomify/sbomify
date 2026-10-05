@@ -1,17 +1,24 @@
 {% comment %}
 The workspace picker uses live workspace membership from the teams tag.
 Dropdown keyboard navigation stays with c-dropdowns; current workspace is
-identified by its external key.
+identified by its external key. Open, dismiss and focus return match the header
+menus: Escape stops at this component, so closing the picker inside the mobile
+drawer no longer closes the drawer with it.
 {% endcomment %}
 {% load teams %}
 {% user_workspaces as available_workspaces %}
 {% with workspace=request.session.current_team %}
     {% if workspace %}
         <div class="relative"
-             x-data="{ open: false }"
-             @keydown.escape.window="open = false">
+             x-data="{ open: false, close() { this.open = false; this.$refs.trigger.focus(); }, first() { this.open = true; this.$nextTick(() => setTimeout(() => { if (this.open) this.$refs.menu.querySelector('[role=menuitem]')?.focus({ preventScroll: true }); })); } }"
+             {% comment %}Swallow Escape only while the picker is open: this component
+             sits inside the mobile drawer, whose own Escape is the next one up.{% endcomment %}
+             @keydown.escape="if (open) { $event.stopPropagation(); $event.preventDefault(); close(); }"
+             @focusout="if (!$el.contains($event.relatedTarget)) open = false">
             <button type="button"
+                    x-ref="trigger"
                     @click="open = !open"
+                    @keydown.arrow-down.prevent="first()"
                     :aria-expanded="open"
                     aria-haspopup="menu"
                     aria-label="Switch workspace"
@@ -26,7 +33,7 @@ identified by its external key.
                 <i class="fas fa-chevron-down text-[0.625rem] text-text-muted"
                    aria-hidden="true"></i>
             </button>
-            <c-dropdowns.dropdown class="left-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)]" x-show="open" x-cloak @click.outside="open = false" aria-label="Workspaces">
+            <c-dropdowns.dropdown x-ref="menu" class="left-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)]" x-show="open" x-cloak @click.outside="open = false" aria-label="Workspaces">
             <c-dropdowns.header>Switch workspace</c-dropdowns.header>
             <div class="max-h-64 overflow-y-auto">
                 {% for workspace_key, workspace_info in available_workspaces.items %}

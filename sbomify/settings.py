@@ -34,7 +34,11 @@ from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
-from sbomify.logging_filters import is_benign_shielded_future_error, is_on_demand_tls_ask_denial
+from sbomify.logging_filters import (
+    is_benign_shielded_future_error,
+    is_on_demand_tls_ask_denial,
+    redact_access_log_secrets,
+)
 from sbomify.sentry_config import (
     is_repeat_self_healing_notice,
     resolve_environment,
@@ -326,9 +330,11 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "sbomify.apps.core.middleware.ContentSecurityPolicyMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "sbomify.apps.core.middleware.IdentityProviderUnavailableMiddleware",
 ]
 
-GZIP_REQUEST_MAX_SIZE = 200 * 1024 * 1024  # 200 MB – safety limit for decompressed request bodies
+# A compressed body inflates no further than an uncompressed one may weigh.
+GZIP_REQUEST_MAX_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
 
 if REQUEST_TIMING_LOGGING_ENABLED:
     MIDDLEWARE.insert(
@@ -787,7 +793,7 @@ def build_dramatiq_redis_options(location: str, ca_certs: str = "") -> dict[str,
 
 _dramatiq_redis_options: dict[str, Any] = build_dramatiq_redis_options(REDIS_WORKER_URL, REDIS_CA_CERTS)
 DRAMATIQ_BROKER = {
-    "BROKER": "dramatiq.brokers.redis.RedisBroker",
+    "BROKER": "sbomify.dramatiq_broker.RedisBroker",
     "OPTIONS": _dramatiq_redis_options,
     "MIDDLEWARE": [
         "dramatiq.middleware.Callbacks",
@@ -982,6 +988,11 @@ LOGGING = {
     },
 }
 
+# uvicorn (and gunicorn's UvicornWorker) install the access logger's handlers
+# before the app loads. Naming the logger in LOGGING would make dictConfig strip
+# those handlers, so the filter is attached to the logger directly instead.
+logging.getLogger("uvicorn.access").addFilter(redact_access_log_secrets)
+
 
 # Feature flags
 USE_KEYCLOAK = os.environ.get("USE_KEYCLOAK", "").lower() in ("true", "1", "yes")
@@ -1015,7 +1026,6 @@ KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
 KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
-KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
 
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {

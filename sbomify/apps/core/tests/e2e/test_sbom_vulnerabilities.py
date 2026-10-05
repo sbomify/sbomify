@@ -267,3 +267,167 @@ def test_full_report_saves_package_triage(authenticated_page, sbom_with_findings
     assert decision["affects"][0]["ref"] == "pkg:pypi/requests@2.31.0"
     sbom.refresh_from_db()
     assert sbom.sbom_filename == original_filename
+
+
+@pytest.mark.django_db
+def test_a_refresh_keeps_an_open_findings_panel_and_its_filters(authenticated_page, sbom_with_findings, monkeypatch):
+    """The whole point of swapping instead of reloading.
+
+    The artifact page refreshes its content region when an assessment finishes.
+    The server has no idea which panels the reader has opened, so its response
+    always carries the unopened placeholder; without hx-preserve the morph
+    would put that placeholder back over a table the reader had filtered, and
+    the panel's once trigger has already fired so nothing would fetch it again.
+    """
+    from copy import deepcopy
+
+    from django.urls import reverse
+    from playwright.sync_api import expect
+
+    from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.vulnerability_scanning import kev
+
+    sbom = sbom_with_findings
+    run = AssessmentRun.objects.get(sbom=sbom, plugin_name="dependency_track")
+    findings = run.result["findings"]
+    for index in range(4, 16):
+        finding = deepcopy(findings[-1])
+        finding["id"] = f"CVE-2024-{index:04d}"
+        findings.append(finding)
+    run.save(update_fields=["result"])
+    monkeypatch.setattr(kev, "kev_ids_for_serialization", lambda: frozenset({"cve-2024-0001"}))
+
+    page = authenticated_page
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(reverse("core:component_item", args=[sbom.component_id, "sboms", sbom.id]))
+    # The panel's fetch is bound to a click on a different element, with once.
+    # Clicking before htmx has wired that up loses it for good.
+    page.wait_for_load_state("networkidle")
+
+    page.locator(f"#run-trigger-{run.id}").click()
+    panel = page.locator(f"#findings-{run.id}")
+    expect(panel.get_by_role("combobox", name="Rows per page")).to_be_visible()
+    panel.get_by_role("combobox", name="Rows per page").select_option("5")
+    expect(panel.get_by_text("Showing 1 to 5 of 15 vulnerabilities", exact=True)).to_be_visible()
+
+    # Observable readiness, not a delay: dispatch and wait for htmx to settle
+    # the region, or the assertions below race the swap.
+    page.evaluate(
+        """() => {
+            window.__refreshSettled = false;
+            document.body.addEventListener(
+                'htmx:afterSettle', () => { window.__refreshSettled = true }, { once: true }
+            );
+            document.body.dispatchEvent(new CustomEvent('refresh-assessments'));
+        }"""
+    )
+    page.wait_for_function("window.__refreshSettled === true")
+
+    # Still the loaded table, still on five rows.
+    expect(panel.get_by_role("combobox", name="Rows per page")).to_be_visible()
+    expect(panel.get_by_text("Showing 1 to 5 of 15 vulnerabilities", exact=True)).to_be_visible()
+    expect(panel.get_by_text("Loading assessment results...")).to_have_count(0)
+
+
+@pytest.mark.django_db
+def test_a_refresh_keeps_a_half_written_triage_justification(authenticated_page, sbom_with_findings, monkeypatch):
+    """A refresh arriving mid sentence must not take what was typed."""
+    from django.urls import reverse
+    from playwright.sync_api import expect
+
+    from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.vulnerability_scanning import kev
+
+    sbom = sbom_with_findings
+    run = AssessmentRun.objects.get(sbom=sbom, plugin_name="dependency_track")
+    monkeypatch.setattr(kev, "kev_ids_for_serialization", lambda: frozenset({"cve-2024-0001"}))
+
+    page = authenticated_page
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(reverse("core:component_item", args=[sbom.component_id, "sboms", sbom.id]))
+    page.wait_for_load_state("networkidle")
+    page.locator(f"#run-trigger-{run.id}").click()
+    panel = page.locator(f"#findings-{run.id}")
+    expect(panel.get_by_role("button", name="Triage").first).to_be_visible()
+    # The control a reader uses, not a synthesised event.
+    panel.get_by_role("button", name="Triage").first.click()
+    # By id: the visible label reads "Detail (optional)".
+    detail = page.locator("#triage-detail")
+    expect(detail).to_be_visible()
+    detail.fill("Not reachable from any entry point")
+
+    # Observable readiness, not a delay: dispatch and wait for htmx to settle
+    # the region, or the assertions below race the swap.
+    page.evaluate(
+        """() => {
+            window.__refreshSettled = false;
+            document.body.addEventListener(
+                'htmx:afterSettle', () => { window.__refreshSettled = true }, { once: true }
+            );
+            document.body.dispatchEvent(new CustomEvent('refresh-assessments'));
+        }"""
+    )
+    page.wait_for_function("window.__refreshSettled === true")
+
+    expect(detail).to_be_visible()
+    expect(detail).to_have_value("Not reachable from any entry point")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1280, 390])
+def test_report_previews_and_uploads_vex(authenticated_page, sbom_with_findings, mocker, width):
+    """Import decisions from the report without replacing the scanned artifact."""
+    import json
+
+    from django.urls import reverse
+    from playwright.sync_api import expect
+
+    from sbomify.apps.sboms.models import SBOM
+
+    upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_sbom", return_value="uploaded-vex.json")
+    mocker.patch("sbomify.apps.sboms.services.sboms.schedule_vex_reapply")
+    sbom = sbom_with_findings
+    original_filename = sbom.sbom_filename
+    document = json.dumps(
+        {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "metadata": {"component": {"type": "application", "name": "Example", "version": "1.0"}},
+            "vulnerabilities": [
+                {
+                    "id": "CVE-2024-0001",
+                    "analysis": {"state": "not_affected", "justification": "code_not_reachable"},
+                    "affects": [{"ref": "pkg:pypi/requests@2.31.0"}],
+                }
+            ],
+        }
+    ).encode()
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto(reverse("sboms:sbom_vulnerabilities", args=[sbom.id]))
+    page.get_by_role("button", name="Upload VEX", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Upload VEX", exact=True)
+    expect(dialog).to_be_visible()
+    expect(dialog.get_by_label("Artifact type", exact=True)).to_have_value("vex")
+    with page.expect_response(lambda response: response.url.endswith("/vex-preview")) as preview:
+        dialog.locator('input[type="file"]').set_input_files(
+            {
+                "name": "decisions.vex.json",
+                "mimeType": "application/json",
+                "buffer": document,
+            }
+        )
+    assert preview.value.status == 200
+    assert preview.value.json()["would_suppress"] == 1
+    expect(dialog.get_by_text("Preview: nothing stored yet")).to_be_visible()
+    assert not SBOM.objects.filter(component_id=sbom.component_id, bom_type="vex").exists()
+    upload.assert_not_called()
+    with page.expect_response(lambda response: "/upload-file/" in response.url) as applied:
+        dialog.get_by_role("button", name="Apply this VEX", exact=True).click()
+    assert applied.value.status == 201
+    expect(dialog).to_be_hidden()
+    assert SBOM.objects.filter(component_id=sbom.component_id, bom_type="vex").count() == 1
+    assert upload.call_args.args[0] == document
+    sbom.refresh_from_db()
+    assert sbom.sbom_filename == original_filename

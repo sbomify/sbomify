@@ -1014,7 +1014,9 @@ def test_last_used_at_stamped_for_oidc_token(sample_user):  # noqa: F811
     from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
 
     token_str = create_personal_access_token(sample_user, expires_at=time() + 900, token_type=TOKEN_TYPE_OIDC)
-    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="oidc")
+    record = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, token_type=TOKEN_TYPE_OIDC, description="oidc"
+    )
 
     get_user_and_token_record(token_str)
 

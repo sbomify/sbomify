@@ -311,3 +311,32 @@ class TestWorkspaceCryptoSnapshot:
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [375, 1920])
+@pytest.mark.parametrize("kind", ["artifacts", "documents"])
+def test_empty_artifact_search_can_be_cleared(
+    authenticated_page: Page,
+    request: pytest.FixtureRequest,
+    width: int,
+    kind: str,
+) -> None:
+    page = authenticated_page
+    component: Component = request.getfixturevalue(
+        "sbom_component_details" if kind == "artifacts" else "document_component_details"
+    )
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto(f"/component/{component.id}/artifacts/" if kind == "artifacts" else f"/component/{component.id}/")
+    search = page.get_by_role("searchbox", name=f"Search {kind}")
+    search.fill("no-artifact-has-this-name")
+    panel = page.locator("[data-empty-state]").filter(has=page.get_by_role("heading", name=f"No matching {kind}"))
+    expect(panel).to_be_visible()
+    expect(page.get_by_role("table", name=kind.title(), exact=True)).to_be_hidden()
+    bounds = panel.bounding_box()
+    assert bounds is not None
+    assert bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= width
+    panel.get_by_role("button", name="Clear filters" if kind == "artifacts" else "Clear search").click()
+    expect(search).to_have_value("")
+    expect(panel).to_be_hidden()
+    expect(page.get_by_role("table", name=kind.title(), exact=True)).to_be_visible()

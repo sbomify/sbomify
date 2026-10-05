@@ -77,113 +77,6 @@ def format_run_reason(reason: str) -> str:
 
 
 @register.filter
-def status_border_class(status: str) -> str:
-    """Map finding status to Bootstrap border CSS class.
-
-    Args:
-        status: The finding status. Expected values:
-            - "pass": Finding passed validation
-            - "fail": Finding failed validation
-            - "error": Error occurred during validation
-            - "warning": Warning condition detected
-            - "info": Informational finding
-
-    Returns:
-        Bootstrap border class (e.g., "border-success", "border-warning").
-    """
-    classes = {  # nosec B105
-        "pass": "border-success",
-        "fail": "border-warning",
-        "error": "border-danger",
-        "warning": "border-info",
-        "info": "border-secondary",
-    }
-    return classes.get(status, "border-secondary")
-
-
-@register.filter
-def status_text_class(status: str) -> str:
-    """Map finding status to Bootstrap text color CSS class.
-
-    Args:
-        status: The finding status. Expected values:
-            - "pass": Finding passed validation
-            - "fail": Finding failed validation
-            - "error": Error occurred during validation
-            - "warning": Warning condition detected
-            - "info": Informational finding
-
-    Returns:
-        Bootstrap text color class (e.g., "text-success", "text-warning").
-    """
-    classes = {  # nosec B105
-        "pass": "text-success",
-        "fail": "text-warning",
-        "error": "text-danger",
-        "warning": "text-info",
-        "info": "text-secondary",
-    }
-    return classes.get(status, "text-secondary")
-
-
-@register.filter
-def severity_border_class(severity: str) -> str:
-    """Map vulnerability severity to border CSS class.
-
-    Args:
-        severity: The severity level (critical, high, medium, low).
-
-    Returns:
-        CSS border class string.
-    """
-    classes = {
-        "critical": "border-danger",
-        "high": "border-warning",
-        "medium": "border-info",
-        "low": "border-success",
-    }
-    return classes.get(severity, "border-secondary")
-
-
-@register.filter
-def severity_text_class(severity: str) -> str:
-    """Map vulnerability severity to text color CSS class.
-
-    Args:
-        severity: The severity level (critical, high, medium, low).
-
-    Returns:
-        CSS text color class string.
-    """
-    classes = {
-        "critical": "text-danger",
-        "high": "text-warning",
-        "medium": "text-info",
-        "low": "text-success",
-    }
-    return classes.get(severity, "text-secondary")
-
-
-@register.filter
-def severity_icon(severity: str) -> str:
-    """Map vulnerability severity to Font Awesome icon class.
-
-    Args:
-        severity: The severity level (critical, high, medium, low).
-
-    Returns:
-        Font Awesome icon class string.
-    """
-    icons = {
-        "critical": "fas fa-shield-alt",
-        "high": "fas fa-shield-alt",
-        "medium": "fas fa-exclamation-circle",
-        "low": "fas fa-info-circle",
-    }
-    return icons.get(severity, "fas fa-info-circle")
-
-
-@register.filter
 def is_security_category(category: str) -> bool:
     """Check if the category is a security category.
 
@@ -194,31 +87,6 @@ def is_security_category(category: str) -> bool:
         True if the category is "security".
     """
     return category == "security"
-
-
-@register.filter
-def status_icon(status: str) -> str:
-    """Map finding status to Font Awesome icon class.
-
-    Args:
-        status: The finding status. Expected values:
-            - "pass": Finding passed validation
-            - "fail": Finding failed validation
-            - "error": Error occurred during validation
-            - "warning": Warning condition detected
-            - "info": Informational finding
-
-    Returns:
-        Font Awesome icon class (e.g., "fas fa-check-circle").
-    """
-    icons = {  # nosec B105
-        "pass": "fas fa-check-circle",
-        "fail": "fas fa-times-circle",
-        "warning": "fas fa-exclamation-circle",
-        "error": "fas fa-exclamation-triangle",
-        "info": "fas fa-info-circle",
-    }
-    return icons.get(status, "fas fa-info-circle")
 
 
 def _build_package_span_args(packages: list[str]) -> list[tuple[str, str, str]]:
@@ -396,6 +264,38 @@ def vulnerability_findings(findings: Any) -> list[Any]:
 
 
 @register.filter
+def vulnerability_table_rows(findings: Any) -> list[dict[str, Any]]:
+    """A page of stored findings as c-vulnerabilities.table rows.
+
+    The shape the component and report pages render, so a scan opened on the
+    artifact page reads the same. The shared row builder takes a whole result
+    and re-sorts it; a run's page is already filtered, ordered and sliced, so
+    each finding goes through on its own. What the builder leaves out and this
+    panel always showed rides along: the read-time exploited and malicious
+    marks, and the advisory's own text and links.
+    """
+    from sbomify.apps.vulnerability_scanning.utils import extract_finding_rows
+
+    rows = []
+    for finding in vulnerability_findings(findings):
+        extracted = extract_finding_rows({"findings": [finding]})
+        if not extracted:
+            continue
+        references = finding.get("references") or []
+        rows.append(
+            {
+                **extracted[0],
+                "kev": bool(finding.get("kev")),
+                "euvd": bool(finding.get("euvd")),
+                "malicious": bool(finding.get("malicious")) or extracted[0]["malicious"],
+                "details": finding.get("description") or "",
+                "references": [ref for ref in references if isinstance(ref, str) and ref],
+            }
+        )
+    return rows
+
+
+@register.filter
 def vex_justification_label(value: object) -> str:
     """Human wording for a stored finding's raw VEX justification enum."""
     from sbomify.apps.vulnerability_scanning.utils import justification_label
@@ -424,3 +324,11 @@ def vulnerability_total(summary: object) -> int:
         return 0
     # bool subclasses int, and a stray True must not count as one vulnerability.
     return sum(value for value in by_severity.values() if isinstance(value, int) and not isinstance(value, bool))
+
+
+@register.filter
+def assessment_scorecards(assessment_runs: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """One row per assessment, most urgent first. See services/assessment_scorecard.py."""
+    from sbomify.apps.plugins.services.assessment_scorecard import build_scorecards
+
+    return build_scorecards(assessment_runs)

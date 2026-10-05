@@ -1,3 +1,4 @@
+{% load humanize %}
 {% load pqc_extras %}
 {% comment %}
 Lazy-loaded component-level post-quantum posture card (HTMX partial, no base
@@ -36,7 +37,7 @@ nothing (placeholder collapses) when the latest artifact has no crypto assets.
     <div class="flex flex-wrap items-center justify-between gap-2">
         <a href="{% url 'core:component_item' component_id 'sboms' sbom_id %}"
            class="text-sm text-primary hover:underline inline-flex items-center gap-1">
-            View {{ posture.count }} cryptographic asset{{ posture.count|pluralize }}
+            View {{ posture.count|intcomma }} cryptographic asset{{ posture.count|pluralize }}
             <i class="fas fa-arrow-right text-xs"></i>
         </a>
         {% if posture.by_asset_type.certificate %}
