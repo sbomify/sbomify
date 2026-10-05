@@ -41,8 +41,8 @@ def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Team]:
 
 def dashboard_cache_key(team_id: int) -> str:
     """The overview snapshot's cache key, versioned: an entry cached before the snapshot gained a key would read it as
-    zero, so the version moves with every new key (v4: the unmeasured flags)."""
-    return f"dashboard-page:v4:{team_id}"
+    zero, so the version moves with every new key (v5: medium_low)."""
+    return f"dashboard-page:v5:{team_id}"
 
 
 def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
@@ -142,6 +142,7 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
         "metrics": {
             "open": open_findings,
             "critical_high": sum(count["critical"] + count["high"] for count in counts.values()),
+            "medium_low": sum(count["medium"] + count["low"] for count in counts.values()),
             "past_sla": past_sla,
             "sla_unknown": sum(count["total"] for count in counts.values())
             - len(picture["findings"])
