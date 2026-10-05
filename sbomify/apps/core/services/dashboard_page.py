@@ -45,10 +45,16 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.freshness import freshness_state
 
-    # v4 adds the unmeasured flags below. An entry cached by the previous
-    # release has no such key, and a missing flag reads as false in the
-    # template, which is the confident zero this change exists to stop.
-    cache_key = f"dashboard-page:v4:{team_id}"
+    # v5 adds needs_attention_total, which the digest panel compares against
+    # the rows it shows to decide whether to state the slice. An entry cached
+    # by the previous release has no such key, and a missing value makes that
+    # comparison false, so for the life of the entry the panel goes back to
+    # hiding how much of the list it is showing.
+    #
+    # v4 added the unmeasured flags below. An entry cached by the release
+    # before it has no such key, and a missing flag reads as false in the
+    # template, which is the confident zero that change exists to stop.
+    cache_key = f"dashboard-page:v5:{team_id}"
     cached = django_cache.get(cache_key)
     if cached is not None:
         return ServiceResult.success(cast("dict[str, Any]", cached))

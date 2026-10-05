@@ -111,6 +111,9 @@
         <c-overview.evidence :product="overview_demo_evidence" />
     </div>
     </c-cards.card>
+    <c-forms.hint>Each panel is a slice of a longer list and states its own scope: the digest counts the findings it ranked, and exposure says why its rows cannot be added up.</c-forms.hint>
+    <c-overview.priority :dashboard="overview_demo_digest" />
+    <c-overview.products :products="overview_demo_products" :product_count="overview_demo_product_count" />
     <c-overview.priority :dashboard="overview_demo_empty" />
     <c-overview.products />
     <c-forms.hint>An empty workspace shows setup in place of metrics and tables, using the onboarding explanations and existing upload controls.</c-forms.hint>

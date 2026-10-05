@@ -120,3 +120,33 @@ def test_trends_page_hands_its_filters_to_the_fragment_it_fetches(
     hx_get = re.search(rb'hx-get="([^"]+)"', filtered.content)
     assert hx_get
     assert hx_get[1].decode() == f"{fragment}?show_product_filter=true&amp;release_id=&amp;days=7"
+
+
+def test_the_overview_metric_labels_are_not_second_person(
+    client: Client, sample_user: User, sample_team_with_owner_member: Member, mocker: MockerFixture
+) -> None:
+    """Three of the four metric labels never addressed the reader; the fourth did.
+
+    Asserted on the page rather than on the gallery, because the gallery copy
+    was already right while the page's own card had quietly gone back to the
+    old wording in a merge.
+    """
+    from sbomify.apps.core.models import Component
+    from sbomify.apps.sboms.models import SBOM
+
+    workspace = sample_team_with_owner_member.team
+    # The metric cards only render once the workspace holds an artifact;
+    # before that the page is repository setup and has no labels to check.
+    component = Component.objects.create(name="Example component", team=workspace, component_type="bom")
+    SBOM.objects.create(name="example.json", component=component, format="cyclonedx")
+    setup_authenticated_client_session(client, workspace, sample_user)
+    session = client.session
+    session["current_team"]["has_completed_wizard"] = True
+    session.save()
+    mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
+
+    page = client.get(reverse("core:dashboard"))
+
+    assert page.status_code == 200
+    assert b"Past patch SLA" in page.content
+    assert b"Past your patch SLA" not in page.content
