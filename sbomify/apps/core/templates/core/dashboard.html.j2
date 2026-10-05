@@ -43,7 +43,7 @@
             </c-feedback.alert>
         {% endif %}
         <c-overview.priority :dashboard="dashboard" workspace_key="{{ current_team.key }}" />
-        <c-overview.products :products="dashboard.products" :product_count="dashboard.product_count" />
+        <c-overview.products :products="dashboard.products" :product_count="dashboard.product_count" :shares_components="dashboard.shares_components" :omits_components="dashboard.omits_components" />
         {% if can_manage %}<div id="priority-triage-host" class="contents"></div>{% endif %}
     {% endif %}
 {% endblock %}

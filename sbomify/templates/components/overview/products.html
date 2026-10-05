@@ -9,8 +9,13 @@ printing the same words twice in one row under two different treatments.
 Past SLA is ink, not a pill, and every row carries the same shape whether the
 count is zero or not. It matches the inventory table's column, which is the
 other place a reader compares these numbers.
+
+The footer explains a mismatch only when there is one. shares_components and
+omits_components are facts about this workspace, not a standing disclaimer: a
+workspace whose components each sit in exactly one product really does add up
+to the workspace total, and telling that reader otherwise is simply wrong.
 {% endcomment %}
-<c-vars products product_count />
+<c-vars products product_count shares_components omits_components />
 <c-cards.card flush>
 <c-cards.header compact title="Exposure by product"><c-buttons.ghost size="sm" href="{% url 'core:products_dashboard' %}">View products<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost></c-cards.header>
 {% if products %}
@@ -42,12 +47,22 @@ other place a reader compares these numbers.
         {% endfor %}
     </tbody>
     </c-overview.table>
-    <c-cards.footer>
-    <p class="m-0 max-w-prose text-xs text-text-muted">
-        {% if product_count > products|length %}Showing {{ products|length|intcomma }} of {{ product_count|intcomma }} products.{% endif %}
-        A shared component counts in every product that has it, and a component in no product is not listed, so these do not add up to the workspace total.
-    </p>
-    </c-cards.footer>
+    {% if product_count > products|length or shares_components or omits_components %}
+        <c-cards.footer>
+        <p class="m-0 max-w-prose text-xs text-text-muted">
+            {% if product_count > products|length %}
+                Showing {{ products|length|intcomma }} of {{ product_count|intcomma }} products.
+            {% endif %}
+            {% if shares_components and omits_components %}
+                These count a shared component under every product that has it, and leave out a component in no product, so they do not match the workspace total.
+            {% elif shares_components %}
+                These count a shared component under every product that has it, so they can add up to more than the workspace total.
+            {% elif omits_components %}
+                A component in no product is not listed here, so these can add up to less than the workspace total.
+            {% endif %}
+        </p>
+        </c-cards.footer>
+    {% endif %}
 {% else %}
     <c-feedback.empty-state compact icon_size="sm" icon="fas fa-cube" title="No products yet" message="Add a product to group your components and see their exposure together." />
 {% endif %}

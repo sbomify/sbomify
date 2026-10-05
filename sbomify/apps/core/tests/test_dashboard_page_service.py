@@ -409,3 +409,41 @@ def test_overview_evidence_distinguishes_missing_from_stale(sample_team_with_own
     assert result.ok and result.value is not None
     assert result.value["products"][0]["missing_sboms"] == 1
     assert result.value["products"][0]["stale"] == 1
+
+
+def test_exposure_reports_whether_its_rows_can_be_added_up(sample_team_with_owner_member: Member) -> None:
+    """The footer explains a mismatch only when the workspace has one.
+
+    Both facts are asked of the components the bars count, which is the same
+    set the workspace total counts: a shared one is in two bars, one in no
+    product is in none, and either way the rows stop summing to the total.
+    """
+    from sbomify.apps.core.models import Product
+
+    workspace = sample_team_with_owner_member.team
+    settled = Component.objects.create(name="settled", team=workspace)
+    only_product = Product.objects.create(name="Only", team=workspace)
+    only_product.components.add(settled)
+    cache.clear()
+
+    tidy = build_dashboard_context(workspace.id)
+    assert tidy.ok and tidy.value is not None
+    assert tidy.value["shares_components"] is False
+    assert tidy.value["omits_components"] is False
+
+    second_product = Product.objects.create(name="Second", team=workspace)
+    second_product.components.add(settled)
+    cache.clear()
+
+    shared = build_dashboard_context(workspace.id)
+    assert shared.ok and shared.value is not None
+    assert shared.value["shares_components"] is True
+    assert shared.value["omits_components"] is False
+
+    Component.objects.create(name="orphan", team=workspace)
+    cache.clear()
+
+    both = build_dashboard_context(workspace.id)
+    assert both.ok and both.value is not None
+    assert both.value["shares_components"] is True
+    assert both.value["omits_components"] is True

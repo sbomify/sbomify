@@ -22,6 +22,27 @@ _CACHE_TTL_SECONDS = 60
 _DIGEST_LIMIT = 4
 _PRODUCT_LIMIT = 8
 
+# The cached context's shape. v5 adds needs_attention_total, which the digest
+# panel compares against the rows it shows to decide whether to state the
+# slice, and the two product-membership flags the exposure footer uses to say
+# why its rows do not sum. v4 added the unmeasured flags. An entry written by
+# the previous release has none of these keys, and each missing value reads as
+# false, so the panel silently drops the sentence it exists to show.
+_CACHE_VERSION = "v5"
+
+
+def dashboard_cache_key(team_id: int) -> str:
+    """The one place this key is spelled.
+
+    Everything that invalidates the snapshot has to move when the version
+    does, and it did not: the patch SLA writer still deleted v3 long after the
+    context went to v4, so changing a workspace's SLA targets left the overview
+    showing the old deadlines until the entry expired on its own. The test
+    covering that invalidation seeded and read the same stale key, so it passed
+    throughout. One function, imported by both sides, cannot drift again.
+    """
+    return f"dashboard-page:{_CACHE_VERSION}:{team_id}"
+
 
 def get_first_component(team_id: int) -> ServiceResult[Component]:
     """Uncached on purpose: the digest cache may lag a just-created component,
@@ -45,16 +66,7 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.freshness import freshness_state
 
-    # v5 adds needs_attention_total, which the digest panel compares against
-    # the rows it shows to decide whether to state the slice. An entry cached
-    # by the previous release has no such key, and a missing value makes that
-    # comparison false, so for the life of the entry the panel goes back to
-    # hiding how much of the list it is showing.
-    #
-    # v4 added the unmeasured flags below. An entry cached by the release
-    # before it has no such key, and a missing flag reads as false in the
-    # template, which is the confident zero that change exists to stop.
-    cache_key = f"dashboard-page:v5:{team_id}"
+    cache_key = dashboard_cache_key(team_id)
     cached = django_cache.get(cache_key)
     if cached is not None:
         return ServiceResult.success(cast("dict[str, Any]", cached))
@@ -136,6 +148,14 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     counts = picture["counts"]
     for finding in picture["findings"]:
         finding["products"] = product_names_by_component.get(finding["component_id"], [])
+    # Why the exposure rows need not sum to the workspace total, as two facts
+    # rather than a standing disclaimer. Both are asked of the components the
+    # bars count, which is the same set the workspace total counts, so a
+    # workspace where neither holds really does add up and is told nothing.
+    shares_components = any(
+        len(product_names_by_component.get(component_id, ())) > 1 for component_id in component_names
+    )
+    omits_components = any(component_id not in product_names_by_component for component_id in component_names)
     open_findings = sum(count["total"] for count in counts.values())
     past_sla = sum(overdue_by_component.values())
     known_exploited = sum(bool(finding["kev"]) for finding in picture["findings"])
@@ -175,6 +195,8 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
         "unassessed": unassessed,
         "products": products[:_PRODUCT_LIMIT],
         "product_count": len(products),
+        "shares_components": shares_components,
+        "omits_components": omits_components,
     }
     # The first upload must replace setup immediately, without waiting for a
     # cached empty snapshot to expire.

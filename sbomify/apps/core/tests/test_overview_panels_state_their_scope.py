@@ -63,8 +63,10 @@ def product(name: str, **overrides: Any) -> dict[str, Any]:
     return row
 
 
-def exposure_text(rows: list[dict[str, Any]], product_count: int) -> str:
-    return text_of("components/overview/products.html", {"products": rows, "product_count": product_count})
+def exposure_text(rows: list[dict[str, Any]], product_count: int, **facts: bool) -> str:
+    context: dict[str, Any] = {"products": rows, "product_count": product_count}
+    context.update(facts)
+    return text_of("components/overview/products.html", context)
 
 
 def test_the_digest_says_how_much_of_the_list_it_is_showing() -> None:
@@ -77,11 +79,23 @@ def test_a_digest_that_is_the_whole_list_says_nothing_about_a_count() -> None:
     assert "of 3" not in whole
 
 
-def test_exposure_says_its_counts_do_not_add_up_and_why() -> None:
-    note = exposure_text([product("Example product")], product_count=1)
-    assert "do not add up to the workspace total" in note
-    assert "counts in every product that has it" in note
-    assert "is not listed" in note
+def test_exposure_explains_a_mismatch_only_when_there_is_one() -> None:
+    """A workspace whose components each sit in exactly one product really does
+    add up, and a standing disclaimer telling that reader otherwise is wrong."""
+    rows = [product("Example product")]
+    settled = exposure_text(rows, product_count=1, shares_components=False, omits_components=False)
+    assert "workspace total" not in settled
+
+    shared = exposure_text(rows, product_count=1, shares_components=True, omits_components=False)
+    assert "under every product that has it" in shared
+    assert "more than the workspace total" in shared
+
+    omitted = exposure_text(rows, product_count=1, shares_components=False, omits_components=True)
+    assert "in no product is not listed here" in omitted
+    assert "less than the workspace total" in omitted
+
+    both = exposure_text(rows, product_count=1, shares_components=True, omits_components=True)
+    assert "do not match the workspace total" in both
 
 
 def test_exposure_says_how_many_products_it_left_out() -> None:

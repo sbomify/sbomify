@@ -71,7 +71,11 @@ def update_patch_sla(workspace_key: str, targets: dict[str, int | None]) -> Serv
             return ServiceResult.failure("Workspace not found", status_code=404)
         workspace.patch_sla_days = targets
         workspace.save(update_fields=["patch_sla_days"])
-        transaction.on_commit(lambda: cache.delete(f"dashboard-page:v3:{workspace.pk}"))
+        # Imported here rather than at module scope: core's dashboard service
+        # already imports this app's models.
+        from sbomify.apps.core.services.dashboard_page import dashboard_cache_key
+
+        transaction.on_commit(lambda: cache.delete(dashboard_cache_key(workspace.pk)))
     return ServiceResult.success()
 
 
