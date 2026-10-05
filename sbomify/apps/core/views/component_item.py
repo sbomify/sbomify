@@ -13,7 +13,7 @@ from sbomify.apps.core.apis import _build_item_response, get_component
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
-    build_custom_domain_url,
+    custom_domain_redirect,
     get_component_public_slug,
     get_public_path,
     get_workspace_public_url,
@@ -24,6 +24,7 @@ from sbomify.apps.core.url_utils import (
 from sbomify.apps.documents.services.documents import get_document_detail
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.public_assessment_utils import get_sbom_passing_assessments, passing_assessments_to_dict
+from sbomify.apps.plugins.services.requirements import build_requirements
 from sbomify.apps.sboms.services.sboms import get_sbom_detail
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -195,7 +196,9 @@ class ComponentItemPublicView(View):
                 item_type=item_type,
                 item_id=item_id,
             )
-            return HttpResponseRedirect(build_custom_domain_url(component.team, path, request.is_secure()))
+            redirect = custom_domain_redirect(component.team, path, request.is_secure())
+            if redirect is not None:
+                return redirect
 
         # After the redirect, so a gated artifact lands on the workspace's own
         # domain exactly as a public one does; a gate served from the app domain
@@ -431,6 +434,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             # Get assessment runs for this SBOM
             try:
                 from sbomify.apps.plugins.apis import get_sbom_assessments
+                from sbomify.apps.plugins.services.coverage import get_assessment_coverage
 
                 # The card loops `latest_runs` alone, reads counts from each
                 # run's summary, and shows one title; the findings list behind
@@ -441,6 +445,17 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 assessment_response = get_sbom_assessments(request, item_id, findings_limit=1, include_history=False)
                 # Use mode='json' to ensure datetime objects are serialized as ISO strings
                 assessment_runs = assessment_response.model_dump(mode="json")
+                coverage = get_assessment_coverage(item_id, component.team, assessment_runs["latest_runs"])
+                if coverage.ok and coverage.value is not None:
+                    assessment_runs["plugins_enabled"] = coverage.value.plugins_enabled
+                    assessment_runs["plan_excludes_plugins"] = coverage.value.plan_excludes_plugins
+                    assessment_runs["unassessed_plugins"] = coverage.value.unassessed
+                    for run in assessment_runs["latest_runs"]:
+                        run["current_version"] = coverage.value.outdated.get(run["plugin_name"])
+                        run["run_blocked"] = run["plugin_name"] not in coverage.value.runnable
+                requirements = build_requirements(assessment_runs["latest_runs"])
+                if requirements.ok:
+                    assessment_runs["requirements"] = requirements.value
             except Exception:
                 # Degrade to no assessments section rather than failing the page,
                 # but leave a trace — a silent None here hides real data problems.
@@ -465,10 +480,9 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         # Same tier the rerun endpoint enforces, so the button is only offered
         # to a caller the API would actually accept.
         can_rerun = can(request, "component:manage", component)
+        can_manage_plugins = can(request, "workspace:administer", component.team)
 
-        # Page-header context: the icon is conditional and the copy chip and
-        # breadcrumb trail are lists, so the view builds them per the design
-        # system contract.
+        # The header takes the copy chip and breadcrumb trail as lists.
         if is_vex:
             item_kind = "VEX"
         elif is_cbom:
@@ -477,7 +491,6 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             item_kind = "SBOM"
         else:
             item_kind = "Document"
-        header_icon = "fas fa-file-code" if is_sbom_backed else "fas fa-file-alt"
         header_copy_values = [{"value": item_id, "title": f"ID: {item_id} (click to copy)"}]
         breadcrumb_items = [
             {"label": component.name, "url": reverse("core:component_details", args=[component_id])},
@@ -491,7 +504,6 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "APP_BASE_URL": settings.APP_BASE_URL,
                 "item": item,
                 "item_type": item_type,
-                "header_icon": header_icon,
                 "header_copy_values": header_copy_values,
                 "breadcrumb_items": breadcrumb_items,
                 "component": component,
@@ -506,6 +518,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "is_sbom_backed": is_sbom_backed,
                 "can_triage": can_triage,
                 "can_rerun": can_rerun,
+                "can_manage_plugins": can_manage_plugins,
                 "team_key": component.team.key,
             },
         )

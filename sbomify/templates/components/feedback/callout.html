@@ -7,6 +7,7 @@ the only accent the design system ships; without it the border falls back to the
 plain hairline.
 {% endcomment %}
 <c-vars variant class />
-<div class="bg-surface rounded-xl border border-solid border-[color-mix(in_oklab,var(--callout-accent,var(--color-border))_30%,var(--color-border))] shadow-[var(--shadow-xs)]{% if variant == 'warning' %} [--callout-accent:var(--color-warning)]{% endif %}{% if class %} {{ class }}{% endif %}"
+<div data-surface
+     class="bg-surface rounded-xl border border-solid border-[color-mix(in_oklab,var(--callout-accent,var(--color-border))_30%,var(--color-border))] shadow-[var(--shadow-xs)]{% if variant == 'warning' %} [--callout-accent:var(--color-warning)]{% endif %}{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>{{ slot }}
 </div>

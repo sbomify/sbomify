@@ -1,7 +1,7 @@
 <span x-data="editableSingleField({ itemType: '{{ item_type }}', itemId: '{{ item_id }}', itemValue: '{{ item_value|escapejs }}', fieldName: '{{ field_name|default:"name" }}', fieldType: '{{ field_type|default:"text" }}', displayValue: '{{ display_value|default:""|escapejs }}', placeholder: '{{ placeholder|default:""|escapejs }}' })">
     <template x-if="isEditing">
         <span :class="{ 'block': isTextarea }"
-              class="inline-flex items-center gap-1">
+              class="inline-flex items-center gap-1 min-w-0 max-w-full">
             <template x-if="isTextarea">
                 <c-forms.textarea x-model="fieldValue" ::placeholder="placeholder" rows="3" @keyup.escape="cancelEdit()" />
             </template>
@@ -17,14 +17,15 @@
         </span>
     </template>
     <template x-if="!isEditing">
-        <span class="inline-flex items-center gap-1 cursor-pointer group"
+        <span class="inline-flex items-center gap-1 min-w-0 max-w-full cursor-pointer group"
               role="button"
               tabindex="0"
               @click="startEdit()"
               @keydown.enter.prevent="startEdit()">
-            <span :class="{ 'text-text-muted italic': !displayText }"
+            <span class="min-w-0 [overflow-wrap:anywhere]"
+                  :class="{ 'text-text-muted italic': !displayText }"
                   x-text="displayText || placeholder"></span>
-            <i class="fas fa-edit text-sm text-text-muted group-hover:text-primary transition-colors"
+            <i class="fas fa-edit shrink-0 text-sm text-text-muted group-hover:text-primary transition-colors"
                aria-hidden="true"></i>
         </span>
     </template>

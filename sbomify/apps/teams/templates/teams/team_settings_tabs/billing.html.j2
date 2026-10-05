@@ -1,120 +1,54 @@
-{% comment %}
-    Billing, in the settings-tab style the branding tab set: no card chrome, an
-    h2 and one explainer line up top with the plan badge beside them, then
-    plain h3 sections separated by hairlines.
-{% endcomment %}
-<div>
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-lg font-semibold text-text m-0">Billing</h2>
-            <p class="text-sm text-text-muted mt-1 m-0">Your subscription and what it includes.</p>
-        </div>
+<div class="flex flex-col gap-5">
+    <c-layout.section-header level="2" title="Billing" subtitle="Your subscription, limits and included features." />
+    <c-cards.card flush>
+    <c-cards.header compact title="Current plan" />
+    <c-forms.field horizontal label="{{ team.billing_plan|default:'community'|title }}" hint="{{ plan_pricing.amount|default:'$0' }} {{ plan_pricing.period|default:'' }}">
+    {% if can_administer %}
+        <c-buttons.primary size="sm" href="{% url 'billing:select_plan' team.key %}">
         {% if team.billing_plan == 'community' or not team.billing_plan %}
-            <c-badges.secondary>Community</c-badges.secondary>
-        {% elif team.billing_plan == 'business' %}
-            <c-badges.success>Business</c-badges.success>
-        {% elif team.billing_plan == 'enterprise' %}
-            <c-badges.primary>Enterprise</c-badges.primary>
-        {% endif %}
-    </div>
-    {# Current plan #}
-    <section class="mt-8">
-        <h3 class="text-sm font-semibold text-text m-0">Current plan</h3>
-        <div class="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-                <div class="flex items-center gap-3 mb-2">
-                    <h4 class="text-2xl font-bold text-text m-0">{{ team.billing_plan|default:'Community'|title }}</h4>
-                    {% if plan_pricing.billing_period and team.billing_plan and team.billing_plan != 'community' %}
-                        <c-badges.info>
-                        Billed
-                        {% if plan_pricing.billing_period == 'annual' %}
-                            Annually
-                        {% else %}
-                            {{ plan_pricing.billing_period|title }}
-                        {% endif %}
-                        </c-badges.info>
-                    {% endif %}
-                </div>
-                <div class="flex items-baseline gap-2">
-                    <span class="text-3xl font-bold {% if team.billing_plan and team.billing_plan != 'community' %}text-primary{% else %}text-text{% endif %}">{{ plan_pricing.amount|default:'$0' }}</span>
-                    {% if plan_pricing.period %}<span class="text-text-muted">{{ plan_pricing.period }}</span>{% endif %}
-                </div>
-                {# Status Messages #}
-                {% if team.billing_plan_limits.subscription_status == 'past_due' %}
-                    <c-feedback.alert variant="danger" class="mt-3">
-                    Payment Failed
-                    {% if team.billing_plan_limits.payment_failed_at %}- Check Dashboard for grace period status.{% endif %}
-                    </c-feedback.alert>
-                {% elif plan_pricing.next_billing_date %}
-                    <div class="flex items-center gap-2 mt-3 text-sm text-text-muted">
-                        <i class="fas fa-calendar-alt"></i>
-                        {% if team.billing_plan_limits.cancel_at_period_end %}
-                            <span>Plan ends on <strong class="text-warning">{{ plan_pricing.next_billing_date|date:"j M Y" }}</strong></span>
-                        {% else %}
-                            <span>Next billing: <strong>{{ plan_pricing.next_billing_date|date:"j M Y" }}</strong></span>
-                        {% endif %}
-                    </div>
-                {% endif %}
-            </div>
-            {% if can_administer %}
-                <c-buttons.primary href="{% url 'billing:select_plan' team.key %}" class="flex-shrink-0">
-                <i class="fas fa-{% if team.billing_plan == 'community' or not team.billing_plan %}arrow-up{% else %}sync-alt{% endif %} mr-2"></i>
-                {% if team.billing_plan == 'community' or not team.billing_plan %}
-                    Upgrade plan
-                {% else %}
-                    Change plan
-                {% endif %}
-                </c-buttons.primary>
-            {% endif %}
-        </div>
-    </section>
-    {# Plan limits #}
-    {% if plan_limits %}
-        <section class="mt-8 pt-8 border-t border-border">
-            <h3 class="text-sm font-semibold text-text m-0">Plan limits</h3>
-            <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                {% for limit in plan_limits %}
-                    <c-layout.stat-card compact icon="fas fa-{{ limit.icon }}">
-                    <c-layout.stat.value>{{ limit.value }}</c-layout.stat.value>
-                    <c-layout.stat.label>{{ limit.label }}</c-layout.stat.label>
-                    </c-layout.stat-card>
-                {% endfor %}
-            </div>
-        </section>
-    {% endif %}
-    {# Plan features #}
-    {% if plan_features %}
-        <section class="mt-8 pt-8 border-t border-border">
-            <h3 class="text-sm font-semibold text-text m-0">Included features</h3>
-            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {% for feature in plan_features %}
-                    <div class="flex items-center gap-3">
-                        <div class="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
-                            <i class="fas fa-check text-success text-xs"></i>
-                        </div>
-                        <span class="text-text text-sm">{{ feature }}</span>
-                    </div>
-                {% endfor %}
-            </div>
-        </section>
-    {% endif %}
-    {# Upgrade CTA for Community Plan #}
-    {% if team.billing_plan == 'community' or not team.billing_plan %}
-        <c-feedback.alert variant="info" icon="fas fa-rocket" title="Ready to upgrade?" class="mt-8">
-        Get access to higher limits, advanced compliance plugins, vulnerability scanning with Dependency Track, and priority support.
-        {% if can_administer %}
-            {# A block wrapper, because the alert's message is one paragraph and the action starts its own line. #}
-            <span class="block mt-4">
-                <c-buttons.gradient href="{% url 'billing:select_plan' team.key %}">
-                <i class="fas fa-arrow-up mr-2"></i>View Plans &amp; Pricing
-                </c-buttons.gradient>
-            </span>
+            Upgrade plan
         {% else %}
-            <span class="block mt-4">
-                <i class="fas fa-info-circle mr-1"></i>
-                Contact the workspace owner to upgrade your plan.
-            </span>
+            Change plan
         {% endif %}
-        </c-feedback.alert>
+        </c-buttons.primary>
+    {% endif %}
+    </c-forms.field>
+    {% if plan_pricing.billing_period and team.billing_plan and team.billing_plan != 'community' %}
+        <c-forms.field horizontal label="Billing cycle"><c-badges.secondary>{{ plan_pricing.billing_period|title }}</c-badges.secondary></c-forms.field>
+    {% endif %}
+    {% if plan_pricing.next_billing_date %}
+        <c-forms.field horizontal label="
+        {% if team.billing_plan_limits.cancel_at_period_end %}
+            Plan ends on
+        {% else %}
+            Next billing
+        {% endif %}
+        ">
+        <c-forms.hint>{{ plan_pricing.next_billing_date|date:'j M Y' }}</c-forms.hint>
+        </c-forms.field>
+    {% endif %}
+    </c-cards.card>
+    {% if team.billing_plan_limits.subscription_status == 'past_due' %}
+        <c-feedback.alert variant="danger" title="Payment Failed">Check your dashboard for the grace period status and update your billing details.</c-feedback.alert>
+    {% endif %}
+    {% if plan_limits %}
+        <section class="flex flex-col gap-4">
+            <c-layout.section-header title="Plan limits" />
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {% for limit in plan_limits %}
+                    <c-layout.stat-card compact icon="fas fa-{{ limit.icon }}" :value="limit.value" label="{{ limit.label }}" />
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+    {% if plan_features %}
+        <c-cards.card flush>
+        <c-cards.header compact title="Included features" />
+        <c-cards.body>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for feature in plan_features %}<c-feedback.status tone="success" label="{{ feature }}" />{% endfor %}
+        </div>
+        </c-cards.body>
+        </c-cards.card>
     {% endif %}
 </div>

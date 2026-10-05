@@ -15,9 +15,8 @@ Only the page leaves Postgres whole. Resolving the stored result to render
 twenty-five rows meant de-TOASTing and parsing every finding the scan produced,
 which is most of what opening a card costs: at 4,075 findings the blob is about
 12 MB uncompressed and 22.7 ms of the 33 ms the page takes. Filtering and the
-toolbar's counts read seven keys per finding and never touch a title,
-description or reference list, so those seven come back as a flat projection and
-the rest stays in the database until the page is known.
+toolbar's counts read a small projection, including the title for name searches.
+Descriptions and references stay in the database until the page is known.
 """
 
 from __future__ import annotations
@@ -42,6 +41,8 @@ PARAM_PREFIX = "run_"
 #: Findings per page in the card. The component panel shows five because it sits
 #: in a page full of other cards; this one owns its accordion, so it shows more.
 PAGE_SIZE = 25
+
+_CHECK_ORDER = {"error": 0, "fail": 0, "warning": 1, "info": 2, "pass": 4}  # nosec B105 - check outcomes, not credentials
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,8 @@ def _filterable(finding: dict[str, Any]) -> dict[str, Any]:
         "package": component.get("name") or "",
         "ecosystem": component.get("ecosystem") or "",
         "vex_state": state,
+        "severity": str(finding.get("severity") or "unknown").lower(),
+        "version": component.get("version") or "",
         "vex_suppressed": state in SUPPRESSED_STATES,
     }
 
@@ -96,8 +99,8 @@ def _filterable(finding: dict[str, Any]) -> dict[str, Any]:
 #: Every finding in the run, carrying only what a filter or a count reads.
 #:
 #: ``_matches`` reads the severity, the VEX state, the KEV mark and the search
-#: haystack; the haystack is the advisory id, its aliases, the package and its
-#: ecosystem. The option lists and the KEV and suppressed totals read the same
+#: haystack; the haystack includes the advisory title and the package version.
+#: The option lists and the KEV and suppressed totals read the same
 #: keys again. Nothing in that set is large, and nothing outside it is needed
 #: until a row renders, so the projection stops there.
 #:
@@ -116,7 +119,9 @@ _PROJECTION_SQL = """
            t.finding ->> 'severity',
            t.finding ->> 'analysis_state',
            t.finding -> 'component' ->> 'name',
-           t.finding -> 'component' ->> 'ecosystem'
+           t.finding -> 'component' ->> 'ecosystem',
+           COALESCE(NULLIF(t.finding ->> 'title', ''), t.finding ->> 'summary'),
+           t.finding -> 'component' ->> 'version'
     FROM {table} run
     CROSS JOIN LATERAL jsonb_array_elements(
         CASE WHEN jsonb_typeof(run.result -> 'findings') = 'array'
@@ -167,9 +172,10 @@ def _projected_findings(run_id: UUID, table: str) -> list[dict[str, Any]]:
             "aliases": aliases or [],
             "severity": severity,
             "analysis_state": state,
-            "component": {"name": name, "ecosystem": ecosystem},
+            "title": title or "",
+            "component": {"name": name, "ecosystem": ecosystem, "version": version},
         }
-        for position, advisory_id, status, aliases, severity, state, name, ecosystem in rows
+        for position, advisory_id, status, aliases, severity, state, name, ecosystem, title, version in rows
     ]
 
 
@@ -261,6 +267,10 @@ def build_run_findings_page(request: Any, run_id: str, params: Any = None) -> Se
         # so the mark is stamped here as well as on the page. Its two inputs,
         # the advisory id and its aliases, are in the projection too.
         findings = stamp_exploited(findings, kev_ids, euvd_ids)
+    else:
+        # Checks come in the plugin's own order; the reader wants what failed
+        # first. Stable, so checks of one outcome keep the plugin's order.
+        findings = sorted(findings, key=lambda finding: _CHECK_ORDER.get(finding.get("status") or "", 3))
 
     query = parse_finding_query(params if params is not None else {}, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE)
     panel = browse_finding_rows([_filterable(finding) for finding in findings], query)

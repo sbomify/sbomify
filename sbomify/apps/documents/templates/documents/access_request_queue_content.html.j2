@@ -16,7 +16,9 @@
         <div>
             <div class="flex items-center gap-2 mb-3">
                 <h6 class="text-sm font-medium text-text m-0">Pending Requests</h6>
-                {% if pending_requests %}<c-badges.warning size="sm">{{ pending_requests|length }}</c-badges.warning>{% endif %}
+                {% if pending_requests %}
+                    <c-badges.warning size="sm">{{ pending_requests|length|intcomma }}</c-badges.warning>
+                {% endif %}
             </div>
             {% if pending_requests %}
                 <c-tables.table>
@@ -56,7 +58,7 @@
                         {% if req.nda_signatures.all|length > 1 %}
                             <div class="text-xs text-text-muted mt-1"
                                  title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }} — {{ sig.signed_name }} — {{ sig.signed_at|date:'M j, Y g:i A' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
-                                {{ req.nda_signatures.all|length }} signatures on record
+                                {{ req.nda_signatures.all|length|intcomma }} signatures on record
                             </div>
                         {% endif %}
                         </c-tables.cell>
@@ -104,7 +106,9 @@
         <div class="pt-4 border-t border-border">
             <div class="flex items-center gap-2 mb-3">
                 <h6 class="text-sm font-medium text-text m-0">Pending invitations</h6>
-                {% if pending_invitations %}<c-badges.info size="sm">{{ pending_invitations|length }}</c-badges.info>{% endif %}
+                {% if pending_invitations %}
+                    <c-badges.info size="sm">{{ pending_invitations|length|intcomma }}</c-badges.info>
+                {% endif %}
             </div>
             {% if pending_invitations %}
                 <c-tables.table>
@@ -147,7 +151,9 @@
         <div class="pt-4 border-t border-border">
             <div class="flex items-center gap-2 mb-3">
                 <h6 class="text-sm font-medium text-text m-0">Approved Requests</h6>
-                {% if approved_requests %}<c-badges.success size="sm">{{ approved_requests|length }}</c-badges.success>{% endif %}
+                {% if approved_requests %}
+                    <c-badges.success size="sm">{{ approved_requests|length|intcomma }}</c-badges.success>
+                {% endif %}
             </div>
             {% if approved_requests %}
                 <c-tables.table>
@@ -193,7 +199,7 @@
                         {% if req.nda_signatures.all|length > 1 %}
                             <div class="text-xs text-text-muted mt-1"
                                  title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }} — {{ sig.signed_name }} — {{ sig.signed_at|date:'M j, Y g:i A' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
-                                {{ req.nda_signatures.all|length }} signatures on record
+                                {{ req.nda_signatures.all|length|intcomma }} signatures on record
                             </div>
                         {% endif %}
                         </c-tables.cell>
@@ -221,7 +227,9 @@
         <div class="pt-4 border-t border-border">
             <div class="flex items-center gap-2 mb-3">
                 <h6 class="text-sm font-medium text-text m-0">Rejected Requests</h6>
-                {% if rejected_requests %}<c-badges.danger size="sm">{{ rejected_requests|length }}</c-badges.danger>{% endif %}
+                {% if rejected_requests %}
+                    <c-badges.danger size="sm">{{ rejected_requests|length|intcomma }}</c-badges.danger>
+                {% endif %}
             </div>
             {% if rejected_requests %}
                 <c-tables.table>

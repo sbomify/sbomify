@@ -25,12 +25,12 @@ from sbomify.apps.core.utils import number_to_random_token
 from sbomify.logging import getLogger
 
 from .models import Invitation, Member, Team, get_team_name_for_user
-from .queries import count_team_members, get_team_user_counts
+from .queries import count_team_members, get_team_user_counts, invitation_email
 
 # Valid tab names for team settings - used for input validation
 # Names still linked to by fragment that have no settings page of their own.
 # Kept as literals so a redirect to one cannot carry a request-derived string.
-FRAGMENT_ONLY_TABS: tuple[str, ...] = ("controls", "integrations")
+FRAGMENT_ONLY_TABS: tuple[str, ...] = ("integrations",)
 
 ALLOWED_TABS = frozenset(
     {
@@ -461,9 +461,9 @@ def create_user_team_and_subscription(user: User) -> Team | None:
         return Team.objects.filter(members=user).first()
 
     # Skip auto-creation if the user has an active invitation to another workspace
-    if user.email:
+    if email := invitation_email(user):
         pending_invitations = list(
-            Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).select_related("team")
+            Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).select_related("team")
         )
         if pending_invitations:
             joinable_invites = []
@@ -687,6 +687,19 @@ def on_demand_tls_cache_key(domain_normalized: str) -> str:
     import hashlib
 
     return f"ondemand_tls:{hashlib.sha256(domain_normalized.encode()).hexdigest()}"
+
+
+def custom_domain_challenge(team_pk: int, domain: str) -> str:
+    """The value this deployment serves on a claimed domain's domain-check path.
+
+    Public on purpose: the verification probe fetches it from the domain through
+    public DNS, and a match shows the domain's operator serves it, normally by
+    pointing the domain here. Keyed on SECRET_KEY, so another deployment serving
+    the same name cannot produce it.
+    """
+    from django.utils.crypto import salted_hmac
+
+    return salted_hmac("sbomify.custom-domain-challenge", f"{team_pk}:{domain}", algorithm="sha256").hexdigest()
 
 
 def invalidate_custom_domain_cache(domain: str | None) -> None:

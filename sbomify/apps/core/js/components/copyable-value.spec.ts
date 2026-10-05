@@ -15,6 +15,7 @@ interface CopyableValueParams {
     value: string
     hideValue: boolean
     copyFrom: string
+    copySelector?: string
     title: string
 }
 
@@ -22,9 +23,10 @@ interface Component {
     value: string
     copyFrom: string
     copied: boolean
-    copyToClipboard(): void
+    copyToClipboard(): Promise<void>
     destroy(): void
     $dispatch: ReturnType<typeof mock>
+    $el: HTMLElement
 }
 
 /** Builds the real Alpine component, with the clipboard and $dispatch stubbed. */
@@ -57,6 +59,22 @@ describe('Copyable Value', () => {
     })
 
     describe('Copy confirmation', () => {
+        test('reports an unavailable clipboard without claiming success', async () => {
+            const { component } = build()
+            Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true, writable: true })
+            const consoleError = console.error
+            console.error = () => undefined
+            try {
+                await component.copyToClipboard()
+            } finally {
+                console.error = consoleError
+            }
+            expect(component.copied).toBe(false)
+            expect(component.$dispatch).toHaveBeenCalledWith('messages', {
+                value: [{ type: 'error', message: 'Failed to copy to clipboard' }]
+            })
+        })
+
         // The chip confirms in place. It used to dispatch a success toast, which was
         // far too loud for something that sits in every page header.
         test('enters the copied state and dispatches no toast on success', async () => {
@@ -103,6 +121,22 @@ describe('Copyable Value', () => {
     })
 
     describe('Value resolution', () => {
+        test('reads current code from its own container, without the copy button label', async () => {
+            let textContent = 'first command\n  --flag'
+            const querySelector = mock(() => ({ get textContent() { return textContent } }))
+            const closest = mock(() => ({ querySelector }))
+            const { component, clipboardWrite } = build({ copySelector: 'code' })
+            component.$el = { closest } as unknown as HTMLElement
+            await component.copyToClipboard()
+            expect(closest).toHaveBeenCalledWith('[data-copy-container]')
+            expect(querySelector).toHaveBeenCalledWith('code')
+            expect(clipboardWrite).toHaveBeenLastCalledWith('first command\n  --flag')
+            textContent = 'updated command'
+            await component.copyToClipboard()
+            expect(clipboardWrite).toHaveBeenLastCalledWith('updated command')
+            component.destroy()
+        })
+
         test('copies the direct value when copyFrom is empty', async () => {
             const { component, clipboardWrite } = build({ value: 'direct-value' })
             component.copyToClipboard()
@@ -124,16 +158,45 @@ describe('Copyable Value', () => {
             component.destroy()
         })
 
-        test('copies an empty string when the referenced element is missing', async () => {
+        test('refuses to copy when the referenced element is missing', async () => {
+            // Writing '' succeeds, so the chip would go green while clearing the
+            // clipboard: the same false success this component exists to avoid.
             Object.defineProperty(globalThis, 'document', {
                 value: { getElementById: () => null },
                 configurable: true,
                 writable: true
             })
             const { component, clipboardWrite } = build({ value: 'ignored', copyFrom: 'missing' })
-            component.copyToClipboard()
-            await Promise.resolve()
-            expect(clipboardWrite).toHaveBeenCalledWith('')
+            const logged = mock(() => undefined)
+            console.error = logged
+            await component.copyToClipboard()
+            expect(clipboardWrite).not.toHaveBeenCalled()
+            expect(component.copied).toBe(false)
+            expect(component.$dispatch).toHaveBeenCalledWith('messages', {
+                value: [{ type: 'error', message: 'Failed to copy to clipboard' }]
+            })
+            component.destroy()
+        })
+
+        test('copies through copySelector, which is the branch the token display uses', async () => {
+            const tokenNode = { textContent: 'sbom_pat_9f2A' }
+            const container = { querySelector: (sel: string) => (sel === '[data-token-value]' ? tokenNode : null) }
+            const { component, clipboardWrite } = build({ value: '', copySelector: '[data-token-value]' })
+            component.$el = { closest: () => container } as unknown as HTMLElement
+            await component.copyToClipboard()
+            expect(clipboardWrite).toHaveBeenCalledWith('sbom_pat_9f2A')
+            expect(component.copied).toBe(true)
+            component.destroy()
+        })
+
+        test('refuses to copy when the selector resolves to nothing', async () => {
+            const { component, clipboardWrite } = build({ value: '', copySelector: '[data-token-value]' })
+            component.$el = { closest: () => ({ querySelector: () => null }) } as unknown as HTMLElement
+            const logged = mock(() => undefined)
+            console.error = logged
+            await component.copyToClipboard()
+            expect(clipboardWrite).not.toHaveBeenCalled()
+            expect(component.copied).toBe(false)
             component.destroy()
         })
     })

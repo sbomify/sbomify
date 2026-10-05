@@ -793,7 +793,6 @@
         profiles: [],
         filteredProfiles: [],
         searchQuery: '',
-        expandedProfiles: [],
         sortColumn: 'name',
         sortDirection: 'asc',
 
@@ -875,14 +874,6 @@
             });
         },
 
-        togglePreview(profileId) {
-            if (this.expandedProfiles.includes(profileId)) {
-                this.expandedProfiles = this.expandedProfiles.filter(id => id !== profileId);
-            } else {
-                this.expandedProfiles.push(profileId);
-            }
-        },
-        
         filterProfiles() {
             this.applyFilterAndSort();
         },
@@ -1098,17 +1089,6 @@
     container.appendChild(newRow);
     totalInput.value = index + 1;
 };
-
-    document.body.addEventListener('htmx:afterSettle', function(event) {
-        if (event.detail.target.id === 'contact-profiles-content' || event.detail.target.id === 'custom-contact-form-container') {
-            initAlpineComponents();
-            requestAnimationFrame(() => {
-                if (window.Alpine) {
-                    Alpine.initTree(event.detail.target);
-                }
-            });
-        }
-    });
 
     // Delete confirmation via the app-wide confirm modal included in base.html.j2.
     window.showDeleteConfirmation = function(itemName, callback) {

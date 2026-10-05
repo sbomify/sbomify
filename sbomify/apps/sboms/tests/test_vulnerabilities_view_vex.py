@@ -93,12 +93,12 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
         return sbom
 
     @staticmethod
-    def _packages(client: Client, sbom: SBOM):
+    def _rows(client: Client, sbom: SBOM):
         response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sbom.id}))
         assert response.status_code == 200
-        data = response.context["vulnerabilities"]
-        assert data and data.get("results"), "the page listed no packages at all"
-        return data["results"][0]["packages"]
+        data = response.context["scan_panel"]
+        assert data and data["rows"], "the page listed no vulnerabilities"
+        return data["rows"]
 
     def test_a_cleared_advisory_does_not_count_as_open(self, signed_in: tuple[Client, Component]) -> None:
         """Both ids of one advisory, both cleared by the document's own VEX."""
@@ -111,21 +111,19 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
             ],
         )
 
-        package = self._packages(client, sbom)[0]
+        package = self._rows(client, sbom)[0]
 
-        assert package["open_count"] == 0, "a cleared advisory was counted as open"
-        assert package["suppressed_count"] == 1
-        assert package["vulnerabilities"][0]["vex_suppressed"] is True
+        assert package["vex_suppressed"] is True
 
     def test_it_is_still_listed_rather_than_hidden(self, signed_in: tuple[Client, Component]) -> None:
         """The page's job is the advisory list, so a cleared one stays, marked."""
         client, component = signed_in
         sbom = self._scanned(component, [_finding("CVE-2026-59890", [], analysis_state="resolved")])
 
-        package = self._packages(client, sbom)[0]
+        package = self._rows(client, sbom)[0]
 
-        assert len(package["vulnerabilities"]) == 1
-        assert package["vulnerabilities"][0]["id"] == "CVE-2026-59890"
+        assert len(self._rows(client, sbom)) == 1
+        assert package["id"] == "CVE-2026-59890"
 
     def test_a_live_report_clears_the_state_as_well_as_the_flag(self, signed_in: tuple[Client, Component]) -> None:
         """The record must not say "resolved" on a row it marks live."""
@@ -138,7 +136,7 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
             ],
         )
 
-        advisory = self._packages(client, sbom)[0]["vulnerabilities"][0]
+        advisory = self._rows(client, sbom)[0]
 
         assert advisory["vex_suppressed"] is False
         assert advisory["vex_state"] == "", "the state contradicted the flag"
@@ -196,13 +194,11 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
         self._uploaded_vex(component, mocker, purl=SETUPTOOLS["purl"], advisory_id="CVE-2026-59890")
         sbom = self._scanned(component, [_finding("CVE-2026-59890", [])])
 
-        package = self._packages(client, sbom)[0]
-
-        assert package["open_count"] == 0, "an uploaded VEX did not clear the advisory it names"
-        assert package["suppressed_count"] == 1
-        advisory = package["vulnerabilities"][0]
+        advisory = self._rows(client, sbom)[0]
         assert advisory["vex_suppressed"] is True
         assert advisory["vex_state"] == "not_affected"
+        assert advisory["vex_justification"] == "code_not_reachable"
+        assert advisory["purl"] == SETUPTOOLS["purl"]
 
     def test_a_fully_annotated_page_never_reads_the_vex(
         self, signed_in: tuple[Client, Component], mocker: "MockerFixture"
@@ -217,7 +213,7 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
         load = mocker.patch.object(vex, "load_vex_suppressions", return_value=[])
         sbom = self._scanned(component, [_finding("CVE-2026-59890", [], analysis_state="resolved")])
 
-        assert self._packages(client, sbom)[0]["suppressed_count"] == 1
+        assert self._rows(client, sbom)[0]["vex_suppressed"] is True
         load.assert_not_called()
 
     def test_an_uploaded_vex_for_another_package_suppresses_nothing(
@@ -228,10 +224,9 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
         self._uploaded_vex(component, mocker, purl="pkg:pypi/requests@2.32.0", advisory_id="CVE-2026-59890")
         sbom = self._scanned(component, [_finding("CVE-2026-59890", [])])
 
-        package = self._packages(client, sbom)[0]
+        package = self._rows(client, sbom)[0]
 
-        assert package["open_count"] == 1
-        assert package["vulnerabilities"][0]["vex_suppressed"] is False
+        assert package["vex_suppressed"] is False
 
     def test_a_live_fold_keeps_a_state_that_is_not_suppressing(self, signed_in: tuple[Client, Component]) -> None:
         """Clearing the flag must not also discard a state that agrees with it.
@@ -248,7 +243,7 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
             ],
         )
 
-        advisory = self._packages(client, sbom)[0]["vulnerabilities"][0]
+        advisory = self._rows(client, sbom)[0]
 
         assert advisory["vex_suppressed"] is False
         assert advisory["vex_state"] == "in_triage"
@@ -258,11 +253,9 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
         client, component = signed_in
         sbom = self._scanned(component, [_finding("CVE-2026-11111", [])])
 
-        package = self._packages(client, sbom)[0]
+        package = self._rows(client, sbom)[0]
 
-        assert package["open_count"] == 1
-        assert package["suppressed_count"] == 0
-        assert package["vulnerabilities"][0]["vex_suppressed"] is False
+        assert package["vex_suppressed"] is False
 
     def test_one_provider_still_calling_it_live_wins(self, signed_in: tuple[Client, Component]) -> None:
         """Folding two reports of one advisory must not lose the live one."""
@@ -275,7 +268,6 @@ class TestASuppressedAdvisoryIsNotListedAsLive:
             ],
         )
 
-        package = self._packages(client, sbom)[0]
+        package = self._rows(client, sbom)[0]
 
-        assert package["open_count"] == 1, "a live report was folded away by a suppressed one"
-        assert package["vulnerabilities"][0]["vex_suppressed"] is False
+        assert package["vex_suppressed"] is False, "a live report was folded away by a suppressed one"

@@ -1,24 +1,16 @@
 {% extends "core/base.html.j2" %}
 {% block title %}Payment Successful{% endblock %}
 {% block content %}
-    <div class="container mx-auto py-12 px-4">
-        <div class="max-w-lg mx-auto">
-            <c-cards.card body_class="text-center">
-            <div class="mb-6">
-                <i class="fas fa-check-circle text-success text-6xl"></i>
-            </div>
-            <h2 class="text-2xl font-semibold text-success mb-4">Payment Successful!</h2>
-            <p class="text-lg text-text-muted mb-6">
-                Thank you for your purchase. Your subscription is now active and you can start using all the features of your plan.
-            </p>
-            <p class="text-sm text-text-muted mb-8">
-                You will receive a confirmation email shortly with your receipt and subscription details.
-            </p>
-            <c-buttons.primary href="{% url 'core:dashboard' %}" size="lg">
-            <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
-            <span>Go to Dashboard</span>
-            </c-buttons.primary>
-            </c-cards.card>
+    <main id="main-content" class="max-w-3xl mx-auto px-4 py-8">
+        <c-layout.frame>
+        <c-layout.page-header title="Payment successful" subtitle="Thank you for your purchase." />
+        <c-cards.card>
+        <div class="flex flex-col gap-5">
+            <c-feedback.alert variant="success">Your subscription is now active and you can start using all the features of your plan.</c-feedback.alert>
+            <c-typography.description>You will receive a confirmation email shortly with your receipt and subscription details.</c-typography.description>
+            <c-buttons.primary href="{% url 'core:dashboard' %}" class="self-start">Go to dashboard</c-buttons.primary>
         </div>
-    </div>
+        </c-cards.card>
+        </c-layout.frame>
+    </main>
 {% endblock %}

@@ -27,7 +27,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 
 from sbomify.apps.core.utils import get_client_ip
-from sbomify.apps.sboms.models import Product
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
@@ -36,13 +35,21 @@ from .billing_helpers import (
     RATE_LIMIT,
     RATE_LIMIT_PERIOD,
     acquire_checkout_lock,
+    apply_community_downgrade,
     check_rate_limit,
     release_checkout_lock,
     require_billing_manager,
 )
 from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
-from .stripe_client import BillingRetryableError, StripeError, WorkspaceGoneError, get_stripe_client
+from .stripe_client import (
+    TERMINAL_SUBSCRIPTION_STATUSES,
+    BillingEventTooEarlyError,
+    BillingRetryableError,
+    StripeError,
+    WorkspaceGoneError,
+    get_stripe_client,
+)
 from .stripe_pricing_service import StripePricingService
 from .stripe_sync import sync_subscription_from_stripe
 from .tasks import send_enterprise_inquiry_email
@@ -208,7 +215,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
         sub_status = billing_limits.get("subscription_status")
         cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
 
-        if sub_status == "canceled" or not sub_id:
+        if sub_status in TERMINAL_SUBSCRIPTION_STATUSES or not sub_id:
             messages.info(request, "Your subscription has ended. Please select a new plan to continue.")
             return redirect("billing:select_plan", team_key=team.key)
 
@@ -304,7 +311,7 @@ class SelectPlanView(LoginRequiredMixin, View):
         sync_subscription_from_stripe(team, force_refresh=False)
         team.refresh_from_db()
 
-        return self._render_plan_page(request, team, team_key, stripe_pricing_data)
+        return self._render_plan_page(request, team, stripe_pricing_data)
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from .billing_helpers import check_rate_limit
@@ -354,7 +361,7 @@ class SelectPlanView(LoginRequiredMixin, View):
         if plan.key == BillingPlan.KEY_COMMUNITY and cancel_at_period_end:
             return self._handle_scheduled_downgrade(team, team_key, scheduled_downgrade_plan, request)
 
-        if not stripe_sub_id or current_sub_status == "canceled":
+        if not stripe_sub_id or current_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
             result = self._handle_subscription_cancel(team, team_key, plan, request)
             if result is not None:
                 return result
@@ -417,6 +424,7 @@ class SelectPlanView(LoginRequiredMixin, View):
                 )
                 team.billing_plan_limits = existing_limits
                 team.save()
+                apply_community_downgrade(team)
             messages.success(request, f"Successfully switched to {plan.name} plan")
             return redirect("core:dashboard")
         return None
@@ -485,64 +493,12 @@ class SelectPlanView(LoginRequiredMixin, View):
         self,
         request: HttpRequest,
         team: Team,
-        team_key: str,
         stripe_pricing_data: dict[str, dict[str, Any]],
     ) -> HttpResponse:
-        plans_list = list(BillingPlan.objects.all())
-        order: dict[str, int] = {
-            BillingPlan.KEY_COMMUNITY: 0,
-            BillingPlan.KEY_BUSINESS: 1,
-            BillingPlan.KEY_ENTERPRISE: 2,
-        }
-        plans = sorted(plans_list, key=lambda p: order.get(p.key or "", 99))
+        from .services.plan_selection import build_plan_selection_context
 
-        # Count products and components per team. The Project layer was
-        # removed; the corresponding ``BillingPlan.max_projects`` quota
-        # (and its downgrade-guard branch) went with it in migration 0011.
-        from sbomify.apps.sboms.models import Component
-
-        product_count: int = Product.objects.filter(team=team).count()
-        component_count: int = Component.objects.filter(team=team).count()
-
-        billing_limits = team.billing_plan_limits or {}
-        current_plan_key = team.billing_plan or BillingPlan.KEY_COMMUNITY
-        is_subscribed = billing_limits.get("subscription_status") in ["active", "trialing"]
-
-        for plan in plans:
-            plan_key_str: str = plan.key or ""
-            plan.stripe_pricing = stripe_pricing_data.get(plan_key_str, {})  # type: ignore[attr-defined]
-            if plan.promo_message and "promo_message" not in plan.stripe_pricing:  # type: ignore[attr-defined]
-                plan.stripe_pricing["promo_message"] = plan.promo_message  # type: ignore[attr-defined]
-
-            plan_order = order.get(plan_key_str, 99)
-            current_plan_order = order.get(current_plan_key, 99)
-            plan.exceeds_downgrade_limits = False  # type: ignore[attr-defined]
-            plan.downgrade_exceeded_resources = []  # type: ignore[attr-defined]
-
-            if is_subscribed and plan_order < current_plan_order:
-                if plan.max_products is not None and product_count > plan.max_products:
-                    plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
-                    plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
-                        f"{product_count} products (limit: {plan.max_products})"
-                    )
-
-                if plan.max_components is not None and component_count > plan.max_components:
-                    plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
-                    plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
-                        f"{component_count} components (limit: {plan.max_components})"
-                    )
-
-        return render(
-            request,
-            "billing/select_plan.html.j2",
-            {
-                "plans": plans,
-                "team_key": team_key,
-                "team": team,
-                "product_count": product_count,
-                "component_count": component_count,
-            },
-        )
+        result = build_plan_selection_context(request, team, stripe_pricing_data)
+        return render(request, "billing/select_plan.html.j2", result.value)
 
 
 class BillingReturnView(LoginRequiredMixin, View):
@@ -613,6 +569,7 @@ class BillingReturnView(LoginRequiredMixin, View):
                         messages.success(request, "Your subscription is already active.")
                         return redirect("core:dashboard")
 
+                    plan: BillingPlan | None = None
                     try:
                         plan = BillingPlan.objects.get(key=plan_key)
                     except BillingPlan.DoesNotExist:
@@ -622,6 +579,12 @@ class BillingReturnView(LoginRequiredMixin, View):
                             "Billing plan configuration error. Please contact support.",
                         )
                         return redirect("core:dashboard")
+
+                    # The checkout webhook cancels the subscription this one
+                    # replaces, but only if it lands before this return. Whichever
+                    # comes first has to, or both subscriptions keep billing.
+                    if existing_subscription_id:
+                        billing_processing.cancel_replaced_subscription(existing_subscription_id)
 
                     billing_period = "monthly"
                     items_data = getattr(subscription, "items", None)
@@ -767,6 +730,9 @@ class StripeWebhookView(View):
 
             return HttpResponse(status=200)
 
+        except BillingEventTooEarlyError as e:
+            logger.warning("Webhook arrived before the event it depends on (Stripe will retry): %s", e)
+            return HttpResponse(status=503)
         except BillingRetryableError as e:
             # Transient/recoverable failure — do NOT acknowledge, let Stripe retry.
             # 503 (vs the 500 below) is deliberate: it flags an *anticipated* transient

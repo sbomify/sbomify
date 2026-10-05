@@ -135,8 +135,10 @@ class TestMemberCannotOverstep:
         response = client.get(reverse("teams:team_settings", kwargs={"team_key": team.key}))
         assert response.status_code == 200
         body = response.content.decode()
-        assert "Trust Center" not in body
-        assert "Branding" not in body
+        assert 'data-settings-tab="tokens"' in body
+        assert 'data-settings-tab="account"' in body
+        assert 'data-settings-tab="trust-center"' not in body
+        assert 'data-settings-tab="branding"' not in body
 
     def test_member_cannot_change_workspace_settings(self, member_client):
         """Reaching the page is not the same as being able to act on it.

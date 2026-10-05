@@ -1,0 +1,5 @@
+{% comment %}One triage action for component rows, full reports and plugin findings. The host supplies one modal and checks the live publish_vex capability.{% endcomment %}
+<c-vars id purl state justification detail aliases />
+<c-buttons.secondary size="sm" @click="$dispatch('open-triage', { id: '{{ id|escapejs }}', purl: '{{ purl|default:''|escapejs }}', state: '{{ state|default:''|escapejs }}', justification: '{{ justification|default:''|escapejs }}', detail: '{{ detail|default:''|escapejs }}', aliases: '{{ aliases|default:''|join:','|escapejs }}' })" only>
+<i class="fas fa-stethoscope" aria-hidden="true"></i>Triage
+</c-buttons.secondary>

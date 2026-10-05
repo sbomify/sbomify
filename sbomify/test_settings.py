@@ -175,6 +175,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "sbomify.apps.core.middleware.IdentityProviderUnavailableMiddleware",
 ]
 
 # This module builds its own MIDDLEWARE rather than importing the real one, so
