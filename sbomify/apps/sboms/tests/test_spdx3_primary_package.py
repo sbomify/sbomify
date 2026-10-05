@@ -229,3 +229,98 @@ class TestNonStringDeclaredFields:
         package = self._package(name="p", software_packageVersion="1.0")
 
         assert (package.name, package.version, package.spdx_id) == ("p", "1.0", "urn:p")
+
+
+class TestWhereTheLenientParserActuallyApplies:
+    """Through ``validate_spdx_sbom``, which is what an upload calls.
+
+    The tests above drive ``SPDX3Schema`` directly, so they establish what the
+    parser does but not what an upload does. The two differ: a document
+    claiming a 3.0.x ``@context`` is also held to the vendored official
+    schema, and that schema rejects a non-string ``software_packageVersion``
+    outright. So the lenient parsing cannot rescue such a field on an element
+    the schema gate actually inspects -- nor should it, since the document is
+    invalid by its own declared spec.
+
+    What it does rescue is the case the gate does not reach:
+    ``MAX_VALIDATED_ELEMENTS`` caps the gate at the first 500 graph elements,
+    and a real SBOM is much larger than that. In the Yocto fixture here, 224
+    of 259 packages sit beyond the cap.
+    """
+
+    @staticmethod
+    def _yocto() -> dict[str, Any]:
+        import json
+        from pathlib import Path
+
+        fixture = Path(__file__).parent / "test_data" / "yocto_core-image-minimal.spdx3.json"
+        return json.loads(fixture.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+
+    @staticmethod
+    def _package_indexes(graph: list[Any]) -> list[int]:
+        return [
+            i
+            for i, element in enumerate(graph)
+            if isinstance(element, dict) and element.get("type") == "software_Package"
+        ]
+
+    def test_the_fixture_validates_before_anything_is_broken(self) -> None:
+        """A baseline, so the two tests below are about the field and nothing else."""
+        from sbomify.apps.sboms.schemas import validate_spdx_sbom
+
+        payload, version = validate_spdx_sbom(self._yocto())
+
+        assert version == "3.0.1"
+        assert len(payload.packages) > 200
+
+    def test_a_wrong_typed_version_beyond_the_cap_no_longer_costs_the_upload(self) -> None:
+        """The case this change is for, driven through the upload's validator."""
+        import copy
+
+        from sbomify.apps.sboms.schemas import validate_spdx_sbom
+        from sbomify.apps.sboms.spdx3_validation import MAX_VALIDATED_ELEMENTS
+
+        document = copy.deepcopy(self._yocto())
+        graph = document["@graph"]
+        beyond = [i for i in self._package_indexes(graph) if i > MAX_VALIDATED_ELEMENTS]
+        assert beyond, "fixture no longer has packages beyond the validation cap"
+
+        index = beyond[0]
+        # Keyed on spdxId, not name: the fixture has several packages sharing
+        # a name (a recipe and its native build, for instance).
+        spdx_id = graph[index]["spdxId"]
+        graph[index]["software_packageVersion"] = 3
+
+        payload, version = validate_spdx_sbom(document)
+
+        assert version == "3.0.1"
+        broken = [package for package in payload.packages if package.spdx_id == spdx_id]
+        assert len(broken) == 1
+        # Read as the string the producer meant, and every other package is
+        # unaffected.
+        assert broken[0].version == "3"
+        assert len(payload.packages) > 200
+
+    def test_the_schema_gate_still_rejects_one_inside_the_cap(self) -> None:
+        """Deliberately pinned, because it bounds the claim.
+
+        An element the official schema inspects is held to it. The lenient
+        parser does not -- and must not -- override that: the document is
+        invalid by the spec it declares, and saying so is the correct answer.
+        """
+        import copy
+
+        import pytest
+
+        from sbomify.apps.sboms.schemas import validate_spdx_sbom
+        from sbomify.apps.sboms.spdx3_validation import MAX_VALIDATED_ELEMENTS
+
+        document = copy.deepcopy(self._yocto())
+        graph = document["@graph"]
+        inside = [i for i in self._package_indexes(graph) if i < MAX_VALIDATED_ELEMENTS]
+        assert inside, "fixture no longer has packages inside the validation cap"
+
+        graph[inside[0]]["software_packageVersion"] = 3
+
+        with pytest.raises(ValueError, match="schema validation"):
+            validate_spdx_sbom(document)

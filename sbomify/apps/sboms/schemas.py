@@ -849,7 +849,13 @@ class SPDXSchema(BaseModel):
 class SPDX3Package(BaseModel):
     """Lenient parser for SPDX 3.0 software_Package elements."""
 
-    model_config = ConfigDict(extra="allow")
+    # ``populate_by_name``: the validator below coerces ``version`` and
+    # ``spdx_id`` as well as their aliases, because a caller constructing one
+    # of these by field name is as likely as a document carrying the spec
+    # spelling. Without this, pydantic accepts only the alias, so those two
+    # keys landed in ``model_extra`` while the declared fields kept their
+    # defaults -- the coercion ran and then had nowhere to put the result.
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     name: str = ""
     version: str = Field("", alias="software_packageVersion")
@@ -879,8 +885,13 @@ class SPDX3Package(BaseModel):
 
         A number is the value the producer meant, so it is kept as its string
         form. Anything with no sensible string form -- null, a bool, an object,
-        a list -- falls back to the field default, and the raw element is still
-        carried on the model for anything that wants to look.
+        a list -- is dropped from the copy, so the field takes its default.
+
+        The dropped value is *not* recoverable from this model: deleting the
+        key is what makes the default apply, and ``extra="allow"`` can only
+        keep what is still in the input it is given. The original element is
+        reachable one level up, on :attr:`SPDX3Schema.graph`, which is where
+        anything needing the raw value has to look.
         """
         if not isinstance(data, dict):
             return data
