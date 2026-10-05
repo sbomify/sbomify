@@ -444,6 +444,18 @@ def triage_lands_immediately(mocker):
     test has no worker for; running it inline keeps these tests about whether
     the page asks for the new rows, not about queue latency.
     """
+    _patch_triage_storage(mocker)
+
+    from sbomify.apps.vulnerability_scanning.tasks import reapply_vex_to_component_scans
+
+    mocker.patch(
+        "sbomify.apps.sboms.services.sboms.schedule_vex_reapply",
+        side_effect=lambda component_id: reapply_vex_to_component_scans.fn(component_id),
+    )
+
+
+def _patch_triage_storage(mocker):
+    """Make a stored VEX artifact readable back, without an object store."""
     store: dict[str, bytes] = {}
 
     def upload(payload, *args, **kwargs):
@@ -456,12 +468,38 @@ def triage_lands_immediately(mocker):
         side_effect=lambda filename, *args, **kwargs: store.get(filename),
     )
 
-    from sbomify.apps.vulnerability_scanning.tasks import reapply_vex_to_component_scans
 
+@pytest.fixture
+def triage_reapply_stays_queued(mocker):
+    """Triage stores the VEX, and the re-annotation waits to be run by hand.
+
+    This is production's shape, which the inline fixture above deliberately
+    collapses: ``schedule_vex_reapply`` enqueues, the POST returns, and the
+    stored scan results are still annotated with the old verdicts. What
+    replaces those rows is the ``vex_reapplied`` broadcast arriving later.
+
+    Returns a callable that runs the queued re-annotation, so a test can hold
+    the task across the immediate refresh and settle it afterwards.
+    """
+    _patch_triage_storage(mocker)
+
+    queued: list[str] = []
     mocker.patch(
         "sbomify.apps.sboms.services.sboms.schedule_vex_reapply",
-        side_effect=lambda component_id: reapply_vex_to_component_scans.fn(component_id),
+        side_effect=queued.append,
     )
+
+    def run_queued() -> int:
+        from sbomify.apps.vulnerability_scanning.tasks import reapply_vex_to_component_scans
+
+        assert queued, "triage enqueued no re-annotation"
+        for component_id in queued:
+            reapply_vex_to_component_scans.fn(component_id)
+        count = len(queued)
+        queued.clear()
+        return count
+
+    return run_queued
 
 
 @pytest.mark.django_db(transaction=True)
@@ -534,6 +572,144 @@ def test_a_saved_triage_shows_where_it_was_made(authenticated_page, sbom_with_fi
     # asserted: a not_affected decision suppresses the finding, and whether a
     # suppressed row stays listed is each panel's own filter default.
     expect(panel.locator('[aria-current="page"]')).to_have_text("2")
+    expect(panel.get_by_role("combobox", name="Rows per page")).to_have_value("5")
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    "view",
+    [
+        "component",
+        "report",
+        pytest.param(
+            "plugin",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "An open findings panel is emptied by this broadcast. The artifact page "
+                    "bridges vex_reapplied on #artifact-content and morphs the whole frame, so "
+                    "the lazy findings region comes back as its unopened placeholder: after the "
+                    "broadcast the panel has no rows, no pagination and no filters, not merely a "
+                    "different page. The immediate refresh from the save keeps them, so this is "
+                    "specific to the later broadcast. Fixing it is a choice between bridging on "
+                    "the panel instead of the frame and teaching morph-preserve about an opened "
+                    "panel, which is more than this test should decide."
+                ),
+            ),
+        ),
+    ],
+)
+def test_the_broadcast_refreshes_the_panel_without_losing_the_readers_place(
+    authenticated_page, sbom_with_findings, triage_reapply_stays_queued, view
+):
+    """The ``@ws:message`` bridges, tested as themselves.
+
+    ``test_a_saved_triage_shows_where_it_was_made`` passes with these bridges
+    deleted: it runs the re-annotation inline, so the immediate
+    ``refresh-assessments`` from the save already shows the decision. The
+    bridges are what carries the *later* broadcast --
+    ``reapply_vex_to_component_scans`` fires ``vex_reapplied`` when the
+    re-annotation lands, which in production is after the POST has returned
+    and while the reader is still on the page.
+
+    Asserting on row text cannot distinguish the two refreshes, because the
+    panel reads the stored VEX live and so already renders "Not affected"
+    before the re-annotation runs at all. So this asserts on the refresh
+    itself: that the broadcast causes a fetch, that the fetch carries the page
+    and filters the reader had, and that an unrelated component's broadcast
+    causes nothing.
+    """
+    from copy import deepcopy
+
+    from django.urls import reverse
+    from playwright.sync_api import expect
+
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    sbom = sbom_with_findings
+    run = AssessmentRun.objects.get(sbom=sbom, plugin_name="dependency_track")
+    findings = run.result["findings"]
+    for index in range(4, 16):
+        finding = deepcopy(findings[-1])
+        finding["id"] = f"CVE-2024-{index:04d}"
+        findings.append(finding)
+    run.save(update_fields=["result"])
+
+    page = authenticated_page
+    page.set_viewport_size({"width": 1280, "height": 900})
+    if view == "component":
+        page.goto(reverse("core:component_details", args=[sbom.component_id]))
+        panel = page.locator("#component-vulnerabilities-table")
+    elif view == "report":
+        page.goto(reverse("sboms:sbom_vulnerabilities", args=[sbom.id]))
+        panel = page.locator("#scan-vulnerabilities")
+    else:
+        page.goto(reverse("core:component_item", args=[sbom.component_id, "sboms", sbom.id]))
+        page.wait_for_load_state("networkidle")
+        page.locator(f"#run-trigger-{run.id}").click()
+        panel = page.locator(f"#findings-{run.id}")
+
+    # Five to a page, on page two: somewhere a reload would not return them to.
+    expect(panel.get_by_role("combobox", name="Rows per page")).to_be_visible()
+    panel.get_by_role("combobox", name="Rows per page").select_option("5")
+    expect(panel.get_by_text("Showing 1 to 5 of 15 vulnerabilities", exact=True)).to_be_visible()
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
+    panel.get_by_role("link", name="Next page", exact=True).click()
+    expect(panel.get_by_text("Showing 6 to 10 of 15 vulnerabilities", exact=True)).to_be_visible()
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
+
+    panel.get_by_role("button", name="Triage", exact=True).first.click()
+    modal = page.locator("#triage-modal")
+    expect(modal).to_be_visible()
+    modal.locator("#triage-state").select_option("not_affected")
+    with page.expect_response(
+        lambda response: response.url.endswith("/triage") and response.request.method == "POST"
+    ) as response:
+        modal.get_by_role("button", name="Save decision", exact=True).click()
+    assert response.value.status == 200
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
+
+    # The queued re-annotation runs, as the worker would, after the POST.
+    assert triage_reapply_stays_queued() == 1
+
+    def _broadcast(component_id: str) -> None:
+        page.evaluate(
+            """(componentId) => {
+                window.dispatchEvent(new CustomEvent('ws:message', {
+                    detail: { type: 'vex_reapplied', component_id: componentId },
+                }));
+            }""",
+            component_id,
+        )
+
+    # Every GET the page makes from here, so both halves below can read it.
+    # The bridges debounce for 500ms, so each wait has to outlast that.
+    fetches: list[str] = []
+    page.on("request", lambda request: fetches.append(request.url) if request.method == "GET" else None)
+
+    # Another component's re-apply must not refetch this panel: one workspace
+    # socket carries every component's broadcasts.
+    _broadcast("some-other-component-id")
+    page.wait_for_timeout(1200)
+    assert fetches == [], f"an unrelated component's broadcast refetched the panel: {fetches}"
+
+    # This component's does.
+    _broadcast(str(sbom.component_id))
+    page.wait_for_timeout(1200)
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
+    assert fetches, "the vex_reapplied broadcast refreshed nothing"
+
+    # The refresh carried the reader's place, in the query and on the screen.
+    refreshed = next((url for url in fetches if "page=2" in url), None)
+    assert refreshed is not None, f"no refresh carried the reader's page: {fetches}"
+
+    # Generous, because the plugin view refreshes the whole artifact frame and
+    # the findings panel then re-fetches itself inside the morphed result.
+    # The total is deliberately not asserted, for the same reason as the test
+    # above: a not_affected decision suppresses the finding, and whether a
+    # suppressed row stays listed is each panel's own filter default.
+    expect(panel.locator('[aria-current="page"]')).to_have_text("2", timeout=15_000)
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
     expect(panel.get_by_role("combobox", name="Rows per page")).to_have_value("5")
 
 
