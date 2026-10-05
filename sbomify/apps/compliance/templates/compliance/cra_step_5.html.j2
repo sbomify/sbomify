@@ -155,24 +155,24 @@
                     </div>
                     </c-slot>
                     <c-buttons.secondary @click="refreshStale()" ::disabled="isRefreshing" class="w-full">
-                    <span x-show="!isRefreshing"><i class="fas fa-sync mr-2"></i> Refresh Stale Documents</span>
+                    <span x-show="!isRefreshing"><i class="fas fa-sync mr-2" aria-hidden="true"></i> Refresh stale documents</span>
                     <span x-show="isRefreshing" x-cloak>
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                     Refreshing...</span>
                     </c-buttons.secondary>
                     {# Prominent DoC preview — CRA Article 28 declaration must be reviewed before signing #}
                     <c-buttons.secondary @click="previewDocument('declaration_of_conformity', 'Declaration of Conformity')" data-testid="preview-doc-btn" class="w-full">
-                    <i class="fas fa-eye mr-2"></i> Preview Declaration of Conformity
+                    <i class="fas fa-eye mr-2" aria-hidden="true"></i> Preview declaration
                     </c-buttons.secondary>
                     {# On-demand DoC PDF — sidesteps the full bundle export when an auditor or notified body just wants the signed Article 28 declaration as a PDF #}
                     <c-buttons.secondary @click="downloadDocumentPdf('declaration_of_conformity', 'Declaration of Conformity')" ::disabled="downloadingDocPdf" data-testid="download-doc-pdf-btn" class="w-full">
-                    <span x-show="!downloadingDocPdf"><i class="fas fa-file-pdf mr-2"></i> Download Declaration of Conformity (PDF)</span>
+                    <span x-show="!downloadingDocPdf"><i class="fas fa-file-pdf mr-2" aria-hidden="true"></i> Download declaration (PDF)</span>
                     <span x-show="downloadingDocPdf" x-cloak>
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                     Preparing PDF…</span>
                     </c-buttons.secondary>
                     <c-buttons.primary @click="exportBundle()" ::disabled="isExporting || !exportAvailable" class="w-full">
-                    <span x-show="!isExporting"><i class="fas fa-download mr-2"></i> Export Compliance Bundle</span>
+                    <span x-show="!isExporting"><i class="fas fa-download mr-2" aria-hidden="true"></i> Export compliance bundle</span>
                     <span x-show="isExporting" x-cloak>
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                     Exporting...</span>

@@ -45,6 +45,7 @@ from sbomify.task_utils import format_task_error
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError, SBOMGoneError
 from ..sdk.base import RetryLaterError
 from ..sdk.enums import RunReason, ScanMode
+from ..services.access import plugin_plan_requirement, team_has_plugin_access
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +199,8 @@ def run_assessment_task(
     # Track retry info if RetryLaterError occurs (set inside atomic block)
     # This allows the transaction to commit before scheduling the retry
     retry_later_info: dict[str, Any] | None = None
+    # Stays None only when the orchestrator skips: the retry branch below always returns.
+    assessment_run = None
 
     try:
         # Convert string run_reason back to enum
@@ -481,11 +484,13 @@ def enqueue_assessment(
     triggered_by_token: AccessToken | None = None,
     delay_ms: int | None = None,
     release_id: str | None = None,
-) -> None:
+) -> bool:
     """Enqueue an assessment to be run asynchronously.
 
     This is the primary interface for triggering assessments. It serializes
-    the arguments and sends the task to the Dramatiq queue.
+    the arguments and sends the task to the Dramatiq queue. It refuses a plugin
+    the workspace's billing plan does not include, and returns whether it accepted the
+    request. Inside a transaction, the send still waits for the commit.
 
     The task dispatch is wrapped in transaction.on_commit() to ensure that
     the SBOM and any related data are visible to the worker when the task
@@ -521,6 +526,20 @@ def enqueue_assessment(
         ...     run_reason=RunReason.ON_UPLOAD,
         ... )
     """
+    # Every path that starts a run comes through here, so this is where the plan
+    # decides. Checking only when a workspace enables a plugin let a workspace that
+    # later left the plan keep running it.
+    if plugin_plan_requirement(plugin_name) is not None:
+        from sbomify.apps.sboms.models import SBOM
+
+        sbom = SBOM.objects.select_related("component__team").filter(id=sbom_id).first()
+        if sbom is None:
+            logger.info(f"[PLUGIN] Skipped {plugin_name}: SBOM {sbom_id} not found")
+            return False
+        if not team_has_plugin_access(sbom.component.team, plugin_name):
+            logger.info(f"[PLUGIN] Skipped {plugin_name} for SBOM {sbom_id}: the workspace's plan does not include it")
+            return False
+
     # Capture values at call time for the closure, as on_commit callbacks execute after this function returns
     task_sbom_id = sbom_id
     task_plugin_name = plugin_name
@@ -594,6 +613,7 @@ def enqueue_assessment(
         )
 
     transaction.on_commit(_capture_scan_initiated)
+    return True
 
 
 # Delay for attestation plugins in milliseconds (2 minutes)
@@ -953,7 +973,7 @@ def enqueue_assessments_for_sbom(
         # Apply delay for attestation plugins to allow external systems to process
         delay_ms = ATTESTATION_DELAY_MS if plugin_category == AssessmentCategory.ATTESTATION.value else None
 
-        enqueue_assessment(
+        queued = enqueue_assessment(
             sbom_id=sbom_id,
             plugin_name=plugin_name,
             run_reason=run_reason,
@@ -963,7 +983,8 @@ def enqueue_assessments_for_sbom(
             delay_ms=delay_ms,
             release_id=release_id,
         )
-        enqueued.append(plugin_name)
+        if queued:
+            enqueued.append(plugin_name)
 
     logger.info(f"[PLUGIN] Enqueued {len(enqueued)} assessments for SBOM {sbom_id}: {enqueued}")
 
@@ -974,6 +995,7 @@ def enqueue_assessments_for_sbom(
     queue_name="plugins",
     max_retries=1,
     time_limit=600000,  # 10 minutes for large teams
+    store_results=True,
 )
 @retry(
     retry=retry_if_exception_type((OperationalError, DatabaseError)),
@@ -1421,7 +1443,7 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 
 @cron("*/20 * * * *")  # type: ignore[untyped-decorator]  # Every 20 minutes
 @dramatiq.actor(queue_name="plugins", max_retries=1, time_limit=600000)
-def sweep_stranded_runs_task() -> int:
+def sweep_stranded_runs_task() -> None:
     """Settle assessment runs that nothing will come back for.
 
     A run is written before its work is queued, so a lost message leaves a row
@@ -1433,12 +1455,12 @@ def sweep_stranded_runs_task() -> int:
     """
     from sbomify.apps.plugins.stranded import sweep_stranded_runs
 
-    return sweep_stranded_runs()
+    logger.info(f"[TASK_sweep_stranded_runs] settled {sweep_stranded_runs()} runs")
 
 
 @cron("15 3 * * *")  # type: ignore[untyped-decorator]  # Daily, before the other sweeps
 @dramatiq.actor(queue_name="assessment_retention", max_retries=1, time_limit=1800000)
-def prune_assessment_runs_task() -> int:
+def prune_assessment_runs_task() -> None:
     """Apply the assessment-run retention policy.
 
     plugins_assessment_runs is append-only and grows with every scan, retry and
@@ -1449,4 +1471,3 @@ def prune_assessment_runs_task() -> int:
 
     removed = prune_assessment_runs()
     logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs")
-    return removed

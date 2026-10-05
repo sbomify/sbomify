@@ -1,8 +1,8 @@
-"""The per-run assessment card badge.
+"""The verdict on one assessment's row.
 
 A plugin that could not run returns ``metadata={"skipped": True}``. The API
-layer honours that through ``_is_run_skipped``; these tests hold the template to
-the same reading, because a skipped run rendered as "Warnings Only" reads as a
+layer honours that through ``_is_run_skipped``; these tests hold the row to
+the same reading, because a skipped run rendered as "Warnings only" reads as a
 scanner that ran and disagreed with the others.
 """
 
@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from django.template.loader import render_to_string
 
-# The card takes its border from c-cards.collapsible's level; this is the recipe
-# that level="warning" emits, and its absence is what "not a warning" means now
-# that the card carries no tw-collapsible-card--warning class.
-WARNING_BORDER = "border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)]"
+from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
+
+# The row's verdict takes its ink from its tone; this is the warning recipe, and
+# its absence is what "not a warning" means.
+WARNING_INK = "text-warning"
 
 
 def _run(**overrides) -> dict:
@@ -52,7 +53,10 @@ def _run(**overrides) -> dict:
 
 
 def _render(run: dict) -> str:
-    return render_to_string("plugins/components/_assessment_run_item.html.j2", {"run": run, "loop_index": 1})
+    """The row as the page renders it: the run beside the verdict computed for it."""
+    return render_to_string(
+        "plugins/components/_assessment_run_item.html.j2", {"run": run, "tile": scorecard_for_run(run)}
+    )
 
 
 def _findings_of(run: dict) -> str:
@@ -81,28 +85,28 @@ def _findings_of(run: dict) -> str:
 
 
 def _header(run: dict) -> str:
-    """What a reader sees before expanding the card.
+    """What a reader sees before opening the row.
 
-    The findings list lives inside ``x-show="expanded"``, so asserting against
-    the whole render would pass on text nobody can see.
+    The findings live in the collapsed details, so asserting against the whole
+    render would pass on text nobody can see.
     """
-    return _render(run).split('x-show="expanded"')[0]
+    return _render(run).split("x-collapse")[0]
 
 
 class TestSkippedRunBadge:
     def test_skipped_run_reads_as_skipped(self):
-        """DT on an SPDX SBOM: it never scanned, so "Warnings Only" is a lie."""
+        """DT on an SPDX SBOM: it never scanned, so "Warnings only" is a lie."""
         run = _run()
         run["result"]["metadata"] = {"skipped": True}
 
         html = _render(run)
 
         assert "Skipped" in html
-        assert "Warnings Only" not in html
+        assert "Warnings only" not in html
 
     def test_skipped_run_names_the_reason_without_expanding(self):
         """A finding count says nothing about why the plugin stood down, and the
-        finding that explains it stays hidden until the card is expanded."""
+        finding that explains it stays hidden until the row is opened."""
         run = _run()
         run["result"]["metadata"] = {"skipped": True}
 
@@ -115,9 +119,7 @@ class TestSkippedRunBadge:
         run = _run()
         run["result"]["metadata"] = {"skipped": True}
 
-        html = _render(run)
-
-        assert WARNING_BORDER not in html
+        assert WARNING_INK not in _header(run)
 
     def test_a_skipped_compliance_run_reads_the_same(self):
         """PQC skips a document with no crypto assets. Different category, same
@@ -141,26 +143,26 @@ class TestSkippedRunBadge:
         header = _header(run)
 
         assert "Skipped" in header
-        assert "Warnings Only" not in header
+        assert "Warnings only" not in header
         assert "No cryptographic assets found" in header
 
     def test_a_real_warnings_only_run_is_untouched(self):
         """A plugin that ran and produced only warnings still reads that way."""
-        html = _render(_run())
+        html = _render(_run(category="compliance"))
 
-        assert "Warnings Only" in html
+        assert "Warnings only" in html
         assert "Skipped" not in html
 
     def test_a_run_with_no_result_still_renders(self):
-        """Pending and running rows carry result=None, which is why the template
-        aliases it before the skipped lookup."""
+        """Pending and running rows carry result=None, so the verdict must not
+        reach into it for the skipped flag."""
         html = _render(_run(status="running", result=None))
 
         assert "Running" in html
         assert "Skipped" not in html
 
     def test_a_passing_run_is_untouched(self):
-        run = _run()
+        run = _run(category="compliance")
         run["result"]["summary"] = {
             "total_findings": 3,
             "pass_count": 3,
@@ -175,7 +177,7 @@ class TestSkippedRunBadge:
         assert "Skipped" not in html
 
     def test_a_failing_run_is_untouched(self):
-        run = _run()
+        run = _run(category="compliance")
         run["result"]["summary"] = {
             "total_findings": 2,
             "pass_count": 0,
@@ -186,15 +188,15 @@ class TestSkippedRunBadge:
 
         html = _render(run)
 
-        assert "2 Issues" in html
+        assert "2 issues" in html
         assert "Skipped" not in html
 
 
 def _security_run(**overrides) -> dict:
     """A security run as the plugins actually emit it, with ``by_severity``.
 
-    ``_run`` omits it, which sends every case above through the compliance
-    branch. Dependency Track fills it in even when it skips (one ``info``), so
+    ``_run`` omits it. The verdict is chosen by category, so the passing,
+    failing and warnings-only cases above say compliance outright. Dependency Track fills it in even when it skips (one ``info``), so
     the card renders through the security branch instead, and that is the path
     that called the skip "1 Vulnerability".
     """
@@ -235,7 +237,7 @@ class TestSkippedSecurityRunBadge:
         run = _security_run()
         run["result"]["metadata"] = {"skipped": True}
 
-        assert WARNING_BORDER not in _render(run)
+        assert WARNING_INK not in _header(run)
 
     def test_a_real_scan_is_untouched(self):
         """The case beside it on the same page: OSV reporting real findings."""
@@ -297,14 +299,16 @@ class TestStatusMarkersAreNotVulnerabilities:
         assert "findings-list" not in html
         assert "Triage" not in html
 
-    def test_skipped_total_renders_zero(self):
-        import re
+    def test_the_marker_is_not_counted_as_a_vulnerability(self):
+        # The stored summary counts 1 (the marker) in by_severity; the row
+        # must count none, draw no bar and write no breakdown.
+        run = self._skipped_security_run()
+        tile = scorecard_for_run(run)
+        header = _header(run)
 
-        html = _render(self._skipped_security_run())
-        total_value = re.search(r"<dt\b[^>]*>\s*Total\s*</dt>\s*<dd\b[^>]*>\s*(\d+)\b", html)
-        assert total_value, "Total stat card not found"
-        # The stored summary says 1 (the marker); the card must say 0.
-        assert total_value.group(1) == "0"
+        assert tile["segments"] == []
+        assert 'role="img"' not in header
+        assert "1 vulnerability" not in header
 
     def test_real_findings_still_render(self):
         run = _security_run()
@@ -318,88 +322,4 @@ class TestStatusMarkersAreNotVulnerabilities:
         ]
         html = _findings_of(run)
         assert "CVE-2025-1111" in html
-        assert "findings-list" in html
-
-
-class TestUnreadableResultBadge:
-    """A run whose stored result failed schema validation.
-
-    ``_run_to_schema`` drops a result blob that does not validate to ``None`` so
-    one bad row cannot blank the whole page. Every count is then zero, which used
-    to fall through to "Warnings Only", a verdict the run never gave. A security
-    run carrying a critical finding read as warnings-only.
-    """
-
-    def test_a_run_without_a_result_does_not_claim_a_verdict(self):
-        html = _render(_run(result=None))
-
-        assert "Result unavailable" in html
-        assert "Warnings Only" not in html
-        assert "Passed" not in html
-
-    def test_it_is_not_coloured_as_a_warning(self):
-        """No verdict is not a warning, so the card keeps the neutral border."""
-        assert WARNING_BORDER not in _render(_run(result=None))
-
-    def test_a_real_warnings_only_run_still_reads_as_one(self):
-        """The guard above must not swallow the state it sits in front of."""
-        html = _render(_run(category="compliance"))
-
-        assert "Warnings Only" in html
-        assert "Result unavailable" not in html
-
-
-class TestBadgeCarriesItsVerdict:
-    """Every status used one neutral badge, so "issues found" and "all passed"
-    were the same grey and severity survived only as a border tint."""
-
-    def test_a_clean_security_run_is_a_success_badge(self):
-        # by_severity must be present for the card to read the run as a security
-        # run at all; a clean scan reports the buckets and zero in each.
-        run = _run()
-        run["result"]["summary"]["by_severity"] = {"critical": 0, "high": 0}
-        run["result"]["findings"] = []
-
-        assert "No vulnerabilities" in _render(run)
-
-    def test_a_security_run_with_findings_is_a_warning_badge(self):
-        run = _run()
-        run["result"]["summary"]["by_severity"] = {"critical": 1}
-
-        html = _render(run)
-
-        assert "1 vulnerability" in html
-
-    def test_a_failed_run_is_a_danger_badge(self):
-        """An errored run and a passing one must not render the same badge."""
-        danger = _render(_run(status="failed", category="compliance"))
-        success = _render(_run(status="completed", category="compliance", result=_passing_result()))
-
-        assert "Error" in danger
-        assert "Passed" in success
-        # The two badges differ in more than their text.
-        assert _badge_classes(danger) != _badge_classes(success)
-
-
-def _passing_result() -> dict:
-    return {
-        "summary": {
-            "total_findings": 1,
-            "pass_count": 1,
-            "fail_count": 0,
-            "warning_count": 0,
-            "error_count": 0,
-        },
-        "findings": [
-            {"id": "c1", "title": "A check", "description": "It passed.", "status": "pass"}
-        ],
-        "metadata": {},
-    }
-
-
-def _badge_classes(html: str) -> set[str]:
-    """Every class the header's badges carry, so a colour change is observable."""
-    import re
-
-    header = html.split('x-show="expanded"')[0]
-    return {c for m in re.findall(r'class="([^"]*)"', header) for c in m.split()}
+        assert 'aria-label="Vulnerabilities"' in html

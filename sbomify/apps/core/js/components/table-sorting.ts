@@ -38,9 +38,10 @@ export function initTableSorting(): void {
         // The event is dispatched on the replacement; detail.target can be the
         // detached original when the swap uses outerHTML.
         if (!position || !(event.target instanceof HTMLElement)) return;
-        pending.delete(event.detail.xhr);
         const viewport = viewports(event.target)[position.index];
         if (!viewport || viewport.querySelector('table')?.getAttribute('aria-label') !== position.label) return;
+        // A sidebar's out-of-band swap can arrive before the table for this request.
+        pending.delete(event.detail.xhr);
 
         if (position.focusedColumn !== null) {
             const control = Array.from(viewport.querySelectorAll<HTMLElement>('[data-table-sort]'))

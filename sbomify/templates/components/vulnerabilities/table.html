@@ -1,4 +1,4 @@
-{% comment %}The flat vulnerability list shared by component and artifact reports. Each row is one advisory/package occurrence. Only the page of filtered rows reaches this component; triage uses the shared action and host modal.{% endcomment %}
+{% comment %}The flat vulnerability list shared by the component report, the artifact report and an artifact's scan rows. Each row is one advisory/package occurrence. Only the page of filtered rows reaches this component; triage uses the shared action and host modal. Status is carried by the severity badge and the marks beside the advisory (Malicious, KEV, EU KEV), never by a coloured edge on the row.{% endcomment %}
 {% load advisory_tags plugins_extras %}
 <c-vars rows can_triage />
 <c-tables.table aria-label="Vulnerabilities">
@@ -42,8 +42,14 @@
                 <span class="font-medium text-text-muted">{{ vuln.id }}</span>
             {% endif %}
         {% endwith %}
+        {% if vuln.malicious %}
+            <c-badges.solid-danger size="sm" class="ml-1.5 align-middle" title="Malicious package: remove it rather than upgrade">Malicious</c-badges.solid-danger>
+        {% endif %}
         {% if vuln.kev %}
             <c-badges.solid-danger size="sm" class="ml-1.5 align-middle" title="In CISA's Known Exploited Vulnerabilities catalog">KEV</c-badges.solid-danger>
+        {% endif %}
+        {% if vuln.euvd %}
+            <c-badges.solid-danger size="sm" class="ml-1.5 align-middle" title="In ENISA's EUVD exploited vulnerabilities list">EU KEV</c-badges.solid-danger>
         {% endif %}
         {% if vuln.title %}
             <div class="text-xs text-text-muted mt-1 whitespace-normal max-w-md">

@@ -72,6 +72,16 @@ class BillingRetryableError(StripeError):
     pass
 
 
+class BillingEventTooEarlyError(BillingRetryableError):
+    """The event arrived before the one it depends on, so Stripe should redeliver it.
+
+    Retryable like its parent, but an expected ordering rather than a fault, so the
+    webhook view reports it as a warning without a traceback.
+    """
+
+    pass
+
+
 class WorkspaceGoneError(StripeError):
     """The workspace this event belongs to no longer exists.
 

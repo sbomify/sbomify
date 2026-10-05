@@ -177,7 +177,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
         captured = []
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+            lambda **kwargs: captured.append(kwargs["plugin_name"]) or True,
         )
 
         enqueued = enqueue_assessments_for_sbom(
@@ -211,7 +211,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
         captured = []
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+            lambda **kwargs: captured.append(kwargs["plugin_name"]) or True,
         )
 
         enqueued = enqueue_assessments_for_sbom(
@@ -244,7 +244,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
         captured = []
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+            lambda **kwargs: captured.append(kwargs["plugin_name"]) or True,
         )
 
         enqueued = enqueue_assessments_for_sbom(
@@ -302,7 +302,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
         captured: list[str] = []
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+            lambda **kwargs: captured.append(kwargs["plugin_name"]) or True,
         )
 
         enqueued = enqueue_assessments_for_sbom(
@@ -547,7 +547,7 @@ class TestBulkBackfillFiltering:
         captured: list[str] = []
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+            lambda **kwargs: captured.append(kwargs["plugin_name"]) or True,
         )
 
         result = enqueue_assessments_for_existing_sboms_task(
