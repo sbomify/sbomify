@@ -1254,6 +1254,28 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-code-inline>level</c-code-inline>.
     </p>
     </c-cards.card>
+    <h2 id="version-summaries" class="text-xl font-semibold text-text">Version summaries</h2>
+    <c-cards.card>
+    {% comment %}A version row's two answers as table cells: what is still open, worst first, and the first check it fails. Every state each one can take.{% endcomment %}
+    {% with demo=version_summary_demo %}
+        <div class="flex flex-col gap-6">
+            <div class="flex flex-wrap items-start gap-10">
+                <c-vulnerabilities.open :summary="demo.open" />
+                <c-vulnerabilities.open :summary="demo.high_only" />
+                <c-vulnerabilities.open :summary="demo.other_only" />
+                <c-vulnerabilities.open :summary="demo.none" />
+                <c-vulnerabilities.open :summary="demo.nothing_scanned" />
+                <c-vulnerabilities.open :summary="demo.not_scanned" />
+            </div>
+            <div class="flex flex-wrap items-start gap-10">
+                <c-assessments.compliance :summary="demo.fails" href="#version-summaries" />
+                <c-assessments.compliance :summary="demo.error" href="#version-summaries" />
+                <c-assessments.compliance :summary="demo.checking" />
+                <c-assessments.compliance :summary="demo.meets" />
+            </div>
+        </div>
+    {% endwith %}
+    </c-cards.card>
     <h2 id="progress" class="text-xl font-semibold text-text">Progress</h2>
     <c-cards.card>
     {% comment %}

@@ -10,6 +10,7 @@ from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.forms import SbomDeleteForm
 from sbomify.apps.sboms.services.sboms import delete_sbom_record
+from sbomify.apps.sboms.services.version_rows import build_version_rows
 from sbomify.apps.teams.apis import get_team
 
 
@@ -159,19 +160,23 @@ def build_sboms_table_context(
     # (the "View all" toggle) returns the complete history.
     full_view = request.GET.get("full") == "1"
     total_artifact_count = len(sbom_items)
+    # The private card is one row per version, not per file: see version_rows.
+    versions = build_version_rows(component_id, sbom_items) if not full_view and not is_public_view else None
     if not full_view:
         sbom_items = _summary_artifacts(sbom_items)
 
-    if not is_public_view:
+    if not is_public_view and versions is None:
         _attach_vulnerability_counts(sbom_items, component_id, merged=not full_view)
 
+    shown = sum(len(row["downloads"]) for row in versions) if versions is not None else len(sbom_items)
     context = {
         "component_id": component_id,
         "sboms": sbom_items,
+        "versions": versions,
         "is_public_view": is_public_view,
         "has_crud_permissions": component.get("has_crud_permissions", False),
         "full_view": full_view,
-        "show_view_all": not full_view and total_artifact_count > len(sbom_items),
+        "show_view_all": not full_view and total_artifact_count > shown,
         "total_artifact_count": total_artifact_count,
     }
 
