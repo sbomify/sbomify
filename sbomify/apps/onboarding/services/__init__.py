@@ -11,6 +11,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, OperationalError
 from django.db.models import QuerySet
+from django.template import TemplateDoesNotExist, TemplateSyntaxError
 
 from sbomify.logging import getLogger
 
@@ -86,17 +87,24 @@ def _is_transient_send_error(exc: BaseException) -> bool:
 
 
 def _render_or_report(template_name: str, context: dict[str, Any], user_id: Any) -> tuple[str, str] | None:
-    """Render a message, or report the failure and answer ``None``.
+    """Render a message, or report a broken template and answer ``None``.
 
     Rendering sits outside the send block, so without this a missing or broken
     template left the service as an ordinary exception, and the task re-raised
     it into dramatiq's retry budget. Three more attempts run the same template
     against the same context and fail the same way: a template is not a
     transport, and no amount of waiting repairs one.
+
+    Only the two failures that say *the template itself is wrong* are caught.
+    Rendering also touches things that break for a while and then stop — a
+    loader reading from disk, a tag that queries — and swallowing those would
+    acknowledge the message and spend none of the retry budget this exists to
+    protect. Anything else leaves here and reaches the actor, which is what
+    gets another attempt.
     """
     try:
         return render_email_templates(template_name, context)
-    except Exception as e:
+    except (TemplateDoesNotExist, TemplateSyntaxError) as e:
         logger.error("Failed to render %s email for user %s: %s", template_name, user_id, e, exc_info=True)
         return None
 

@@ -1538,6 +1538,49 @@ class TestTransientSendFailuresRetry:
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
+    def test_a_transient_failure_while_rendering_still_retries(self) -> None:
+        """Rendering touches things that break for a while and then stop.
+
+        A loader reading from disk, a tag that queries. Catching those as if
+        the template were wrong would acknowledge the message and spend none of
+        the retry budget this whole change exists to protect.
+        """
+        from django.db import OperationalError
+
+        user = self._user("rendertransient")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with pytest.raises(OperationalError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_loader_io_error_while_rendering_still_retries(self) -> None:
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("renderio")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=OSError(113, "No route to host"),
+        ):
+            with pytest.raises((OSError, TransientEmailError)):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_render_failure_reaching_the_task_is_not_acknowledged(self) -> None:
+        """The actor has to see it, or dramatiq never schedules another go."""
+        from django.db import OperationalError
+
+        user = self._user("rendertask")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with pytest.raises(OperationalError):
+                send_welcome_email_task(user.id)
+
     def test_a_broken_template_is_reported_as_permanent(self) -> None:
         """Rendering happens before the send block, so it needs its own answer.
 
