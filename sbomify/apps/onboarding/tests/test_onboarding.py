@@ -1506,13 +1506,17 @@ class TestTransientSendFailuresRetry:
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
-    def test_one_permanent_refusal_among_temporary_ones_does_not_retry(self) -> None:
-        """A retry re-sends the whole message, so all-4xx is the rule, not any.
+    def test_a_mixed_refusal_retries_for_the_recipient_that_can_still_accept(self) -> None:
+        """smtplib raises this only when the message reached nobody.
 
-        With a mix, another attempt would redeliver to the greylisted recipient
-        and be refused again by the one that does not exist.
+        So a retry cannot duplicate anything, and a mixed 450/550 set is
+        exactly when it is worth making: the 550 address refuses again, and the
+        450 address may accept. Requiring every code to be temporary would drop
+        the recipients that were only asked to wait.
         """
         import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
 
         user = self._user("mixedrefusal")
 
@@ -1523,7 +1527,8 @@ class TestTransientSendFailuresRetry:
                     "gone@example.com": (550, b"No such user here"),
                 }
             )
-            assert OnboardingEmailService.send_welcome_email(user) is False
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
 
     def test_a_dropped_connection_retries(self) -> None:
         """No server answer at all, so there is no code to read — transport."""
@@ -1547,13 +1552,15 @@ class TestTransientSendFailuresRetry:
         """
         from django.db import OperationalError
 
+        from sbomify.apps.onboarding.services import TransientEmailError
+
         user = self._user("rendertransient")
 
         with patch(
             "sbomify.apps.onboarding.services.render_email_templates",
             side_effect=OperationalError("server closed the connection unexpectedly"),
         ):
-            with pytest.raises(OperationalError):
+            with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
     def test_a_loader_io_error_while_rendering_still_retries(self) -> None:
@@ -1569,8 +1576,16 @@ class TestTransientSendFailuresRetry:
                 OnboardingEmailService.send_welcome_email(user)
 
     def test_a_render_failure_reaching_the_task_is_not_acknowledged(self) -> None:
-        """The actor has to see it, or dramatiq never schedules another go."""
+        """The actor has to see it, or dramatiq never schedules another go.
+
+        And it has to arrive classified, or the task writes an error-level line
+        — and so a Sentry issue — on each of the four attempts, which is the
+        reporting this change exists to stop.
+        """
         from django.db import OperationalError
+
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+        from sbomify.apps.onboarding.services import TransientEmailError
 
         user = self._user("rendertask")
 
@@ -1578,8 +1593,12 @@ class TestTransientSendFailuresRetry:
             "sbomify.apps.onboarding.services.render_email_templates",
             side_effect=OperationalError("server closed the connection unexpectedly"),
         ):
-            with pytest.raises(OperationalError):
-                send_welcome_email_task(user.id)
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(TransientEmailError):
+                    send_welcome_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
 
     def test_a_broken_template_is_reported_as_permanent(self) -> None:
         """Rendering happens before the send block, so it needs its own answer.

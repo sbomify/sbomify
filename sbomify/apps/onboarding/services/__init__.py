@@ -9,7 +9,7 @@ from typing import Any
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
-from django.db import IntegrityError, OperationalError
+from django.db import IntegrityError, InterfaceError, OperationalError
 from django.db.models import QuerySet
 from django.template import TemplateDoesNotExist, TemplateSyntaxError
 
@@ -60,11 +60,13 @@ def _is_transient_send_error(exc: BaseException) -> bool:
     """
     if isinstance(exc, smtplib.SMTPRecipientsRefused):
         # The one response error that carries no ``smtp_code``: the codes are
-        # per recipient. One recipient here, but the rule generalises — a retry
-        # sends the whole message again, so it only helps if nothing was
-        # permanently refused.
+        # per recipient. smtplib raises this only when the message reached none
+        # of them, so a retry cannot duplicate anything — and a mixed 450/550
+        # set is exactly when it is worth making: the 550 address refuses again
+        # and the 450 address may accept. Requiring every code to be temporary
+        # would drop the recipients that were only asked to wait.
         refusals = (exc.recipients or {}).values()
-        return bool(refusals) and all(_is_temporary_smtp_code(code) for code, _ in refusals)
+        return any(_is_temporary_smtp_code(code) for code, _ in refusals)
     if isinstance(exc, smtplib.SMTPNotSupportedError):
         # The server does not speak something we asked for. It will not have
         # learned it by the next attempt, and it carries no code to read.
@@ -107,6 +109,14 @@ def _render_or_report(template_name: str, context: dict[str, Any], user_id: Any)
     except (TemplateDoesNotExist, TemplateSyntaxError) as e:
         logger.error("Failed to render %s email for user %s: %s", template_name, user_id, e, exc_info=True)
         return None
+    except (OSError, OperationalError, InterfaceError) as e:
+        # Classified here rather than left to the task: the answer to "is this
+        # worth retrying" belongs on the exception, so one place decides it.
+        # Letting these reach the actor unlabelled retried them, but wrote an
+        # error-level line — and so a Sentry issue — on every attempt, which is
+        # the reporting this change exists to stop.
+        logger.warning("Transient failure rendering %s email for user %s: %s", template_name, user_id, e)
+        raise TransientEmailError(f"{template_name} template for user {user_id}") from e
 
 
 def _is_mailable(user: Any) -> bool:
