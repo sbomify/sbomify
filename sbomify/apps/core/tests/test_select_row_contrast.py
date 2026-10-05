@@ -99,16 +99,30 @@ def light(stylesheet: str) -> dict[str, tuple[int, int, int]]:
     return _declarations(stylesheet, ":root.light")
 
 
-def warning_badge_tint() -> float:
-    """The tint ``c-badges.warning`` paints behind its own text.
+def badge_recipe(variant: str) -> tuple[str, str, float]:
+    """What ``c-badges.<variant>`` actually paints: its ink, tint token and strength.
 
-    Read out of the component rather than hardcoded, so restyling the badge moves
-    this check with it instead of leaving it pinned to a strength nothing uses.
+    Read out of the component rather than restated here, so restyling a badge
+    moves this check with it instead of leaving it pinned to a pair nothing
+    renders. That is not a tidiness point: the secondary badge was checked as
+    ``--color-text-secondary`` over the bare row surface, while it ships
+    ``--color-text-muted`` over a 30% ``--color-border`` tint -- a different
+    foreground over a different background, so the real badge could fall under
+    AA with this file green.
+
+    Returns ``(ink token, tint token, tint strength)``, each without the
+    ``--color-`` prefix, matching the keys ``_declarations`` yields.
     """
-    body = (COMPONENTS / "badges" / "warning.html").read_text(encoding="utf-8")
-    tints = re.findall(r"var\(--color-warning\)_(\d+)%", body)
-    assert tints, "c-badges.warning no longer paints a warning tint"
-    return min(int(percent) for percent in tints) / 100
+    body = (COMPONENTS / "badges" / f"{variant}.html").read_text(encoding="utf-8")
+
+    ink = re.search(r"\btext-(?!\[)([a-z0-9-]+)", body)
+    assert ink, f"c-badges.{variant} names no text colour"
+
+    # ``in_oklab``: Tailwind arbitrary values carry underscores for spaces.
+    tint = re.search(r"bg-\[color-mix\(in[ _]oklab,var\(--color-([a-z0-9-]+)\)_(\d+)%", body)
+    assert tint, f"c-badges.{variant} no longer paints a mixed tint"
+
+    return ink.group(1), tint.group(1), int(tint.group(2)) / 100
 
 
 def greyed_pairs(theme: dict[str, tuple[int, int, int]]) -> dict[str, tuple[tuple, tuple]]:
@@ -120,14 +134,24 @@ def greyed_pairs(theme: dict[str, tuple[int, int, int]]) -> dict[str, tuple[tupl
     ``--color-text``.
     """
     surface = theme["surface"]
+
+    def badge(variant: str) -> tuple[tuple, tuple]:
+        """A badge's own ink over its own tint, composited on the row surface."""
+        ink, tint_token, strength = badge_recipe(variant)
+        return theme[ink], over(theme[tint_token], surface, strength)
+
     return {
-        "plan-required badge on its own tint": (
-            theme["warning"],
-            over(theme["warning"], surface, warning_badge_tint()),
-        ),
+        # The plan-required badge. `c-badges.warning` is warning ink over a
+        # warning tint.
+        "plan-required badge on its own tint": badge("warning"),
         "restriction description": (theme["text-muted"], surface),
         "row title and upgrade CTA": (theme["text"], surface),
-        "secondary badge text": (theme["text-secondary"], surface),
+        # Muted ink over a border tint, not text-secondary over the surface:
+        # the version, artifact-type and count badges all render this.
+        "secondary badge on its own tint": badge("secondary"),
+        # The Beta badge, which the gated Dependency Track row renders and this
+        # file previously omitted: info ink over an info tint.
+        "beta badge on its own tint": badge("info"),
     }
 
 
