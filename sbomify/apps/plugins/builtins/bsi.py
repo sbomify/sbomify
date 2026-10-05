@@ -63,10 +63,16 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_licenses,
     get_spdx3_package_fields,
     get_spdx3_package_license,
+    is_spdx3,
     iter_spdx3_external_identifiers,
     resolve_spdx3_agent,
+    spdx3_refs,
 )
-from sbomify.apps.plugins.builtins._spdx_shared import spdx2_reference_type, spdx3_document_subjects
+from sbomify.apps.plugins.builtins._spdx_shared import (
+    spdx2_reference_type,
+    spdx2_yocto_source_downloads,
+    spdx3_document_subjects,
+)
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
@@ -125,6 +131,19 @@ def _parse_version(version_str: str) -> tuple[int, ...]:
         except ValueError:
             parts.append(0)
     return tuple(parts)
+
+
+def _spdx3_context_version(sbom_data: dict[str, Any]) -> str:
+    """The 3.x version an SPDX 3 document declares in its @context, or "".
+
+    A document that carries no CreationInfo specVersion still names its line in
+    the context URL. Reading it is what keeps the caller from defaulting an
+    unversioned document to 3.0.1 and passing it through the BSI floor on a
+    version nobody stated.
+    """
+    context = sbom_data.get("@context", "")
+    match = re.search(r"spdx\.org/rdf/(\d+\.\d+(?:\.\d+)?)/", str(context))
+    return match.group(1) if match else ""
 
 
 def _version_gte(version: str, min_version: str) -> bool:
@@ -413,22 +432,21 @@ class BSICompliancePlugin(AssessmentPlugin):
                 version = version[5:]
             return self.FORMAT_SPDX, version
 
-        # Check for SPDX 3.0 spec-compliant format (@context + @graph)
-        context = sbom_data.get("@context", "")
-        is_spdx3_context = False
-        if isinstance(context, str):
-            is_spdx3_context = "spdx.org/rdf/3.0" in context
-        elif isinstance(context, (list, dict)):
-            is_spdx3_context = "spdx.org/rdf/3.0" in str(context)
-        if is_spdx3_context:
+        # SPDX 3, through the one shared detector rather than a private copy.
+        if is_spdx3(sbom_data):
             # Extract version from CreationInfo in graph
             for elem in sbom_data.get("@graph", []):
-                if elem.get("type") == "CreationInfo":
-                    return self.FORMAT_SPDX, elem.get("specVersion", "3.0.1")
+                if not isinstance(elem, dict):
+                    continue
+                if elem.get("type") == "CreationInfo" and elem.get("specVersion"):
+                    return self.FORMAT_SPDX, elem["specVersion"]
                 ci = elem.get("creationInfo")
-                if isinstance(ci, dict) and "specVersion" in ci:
+                if isinstance(ci, dict) and ci.get("specVersion"):
                     return self.FORMAT_SPDX, ci["specVersion"]
-            return self.FORMAT_SPDX, "3.0.1"
+            # No element stated a version. Read the line off the @context
+            # rather than assuming 3.0.1, which would pass the BSI floor on a
+            # version the document never claimed.
+            return self.FORMAT_SPDX, _spdx3_context_version(sbom_data)
 
         # Check for CycloneDX
         if isinstance(sbom_data.get("bomFormat"), str) and sbom_data["bomFormat"].lower() == "cyclonedx":
@@ -455,6 +473,21 @@ class BSICompliancePlugin(AssessmentPlugin):
         else:
             min_version = MIN_CYCLONEDX_VERSION
             format_name = "CycloneDX"
+
+        # BSI §4 accepts officially released versions only, so 3.1 must not
+        # clear the floor just by sorting above 3.0.1. Same minor-version test
+        # the upload gate uses.
+        if sbom_format == self.FORMAT_SPDX and _parse_version(version)[:2] > (3, 0):
+            return self._create_finding(
+                "sbom_format",
+                status="fail",
+                details=f"SPDX {version} is not an officially released version",
+                remediation=(
+                    f"BSI TR-03183-2 v2.1.0 §4 accepts officially released specification "
+                    f"versions only. SPDX {version} has not been released; send SPDX 3.0.1 "
+                    f"or CycloneDX {MIN_CYCLONEDX_VERSION}+."
+                ),
+            )
 
         is_valid = _version_gte(version, min_version)
 
@@ -932,8 +965,8 @@ class BSICompliancePlugin(AssessmentPlugin):
                 status="pass" if sbom_creator else "fail",
                 details=None if sbom_creator else "No valid email or URL found for SBOM creator in CreationInfo",
                 remediation=(
-                    "Add createdBy reference to a Person or Organization element with "
-                    "externalIdentifiers containing email or URL."
+                    "Point createdBy at a Person or Organization element carrying an "
+                    "externalIdentifier of type email or urlScheme."
                 ),
             )
         )
@@ -1163,7 +1196,10 @@ class BSICompliancePlugin(AssessmentPlugin):
                 "unique_identifiers",
                 status="pass" if not identifier_warnings else "warning",
                 details=self._format_failure_details(identifier_warnings) if identifier_warnings else None,
-                remediation="Add externalIdentifiers with cpe22, cpe23, swid, or packageURL types.",
+                remediation=(
+                    "Add software_packageUrl to each package, or an externalIdentifier "
+                    "of type packageUrl, cpe22, cpe23 or swid."
+                ),
             )
         )
 
@@ -1183,8 +1219,8 @@ class BSICompliancePlugin(AssessmentPlugin):
                 status="pass" if not source_code_uri_warnings else "warning",
                 details=self._format_failure_details(source_code_uri_warnings) if source_code_uri_warnings else None,
                 remediation=(
-                    "Populate software_sourceInfo or add an externalIdentifier referencing the source "
-                    "repository (vcs) for each package."
+                    "Populate software_sourceInfo, or add an externalRef of type vcs "
+                    "naming the source repository, for each package."
                 ),
             )
         )
@@ -1357,10 +1393,11 @@ class BSICompliancePlugin(AssessmentPlugin):
             )
         )
 
-        # Unique identifiers (skip file-type entries — they don't have package IDs)
+        # Unique identifiers (skip file-type entries and Yocto source downloads, which have no package IDs)
         identifier_warnings = []
+        source_downloads = spdx2_yocto_source_downloads(data)
         for i, pkg in enumerate(packages):
-            if _is_file_pkg(pkg):
+            if _is_file_pkg(pkg) or str(pkg.get("SPDXID") or "") in source_downloads:
                 continue
             purl = pkg.get("purl")
             external_refs = pkg.get("externalRefs")
@@ -1711,10 +1748,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         if not creation_info:
             return None
 
-        created_by = creation_info.get("createdBy", [])
-        if not isinstance(created_by, list):
-            return None
-        for ref in created_by:
+        for ref in spdx3_refs(creation_info.get("createdBy")):
             entity = resolve_spdx3_agent(ref, persons_orgs)
             for ext_id in iter_spdx3_external_identifiers(entity):
                 id_type: str = ext_id.get("externalIdentifierType", "")
@@ -1729,10 +1763,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         self, package: dict[str, Any], persons_orgs: dict[str, dict[str, Any]]
     ) -> str | None:
         """Extract component creator email or URL from SPDX 3.x package."""
-        originated_by = package.get("originatedBy", [])
-        if not isinstance(originated_by, list):
-            return None
-        for ref in originated_by:
+        for ref in spdx3_refs(package.get("originatedBy")):
             entity = resolve_spdx3_agent(ref, persons_orgs)
             for ext_id in iter_spdx3_external_identifiers(entity):
                 id_type: str = ext_id.get("externalIdentifierType", "")

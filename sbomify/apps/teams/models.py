@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinLengthValidator, RegexValidator
+from django.core.validators import MaxValueValidator, MinLengthValidator, MinValueValidator, RegexValidator
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -234,6 +234,12 @@ class Team(models.Model):
     branding_info = models.JSONField(default=dict)
     has_completed_wizard = models.BooleanField(default=False)
     onboarding_goal = models.TextField(blank=True, default="")
+    default_support_period_years = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(5), MaxValueValidator(100)],
+        help_text="Default support period for new product assessments. Product support dates take precedence.",
+    )
     is_public = models.BooleanField(
         default=True, help_text="Controls whether the workspace Trust Center is publicly accessible."
     )
@@ -254,6 +260,17 @@ class Team(models.Model):
             "Publish the vulnerability posture of a release on the public Trust Center. "
             "Off by default: which vulnerabilities a workspace is carrying is its own to "
             "disclose, and a Trust Center is readable by anyone holding the link."
+        ),
+    )
+    csaf_feed_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=(
+            "When this workspace's CSAF TLP:WHITE distribution last changed. Bumped whenever a "
+            "public advisory is written or deleted, because a marker aggregated from the advisories "
+            "still present would move backwards when one is removed and a polling aggregator would "
+            "miss the removal."
         ),
     )
     security_txt_config = models.JSONField(
@@ -578,6 +595,31 @@ class Invitation(models.Model):
     role = models.CharField(max_length=255, choices=settings.TEAMS_INVITABLE_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=calculate_invitation_expiry)
+    # Who issued it, read again at accept time: an owner invitation only makes
+    # someone an owner while its issuer is still an owner. Null on rows written
+    # before this was recorded, and on trust-center guest invitations.
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    @property
+    def granted_role(self) -> str:
+        """The role accepting this invitation gives.
+
+        An owner invitation whose issuer is no longer an owner, or is unknown,
+        gives admin instead.
+        """
+        from sbomify.apps.core.authz import ROLE_ADMIN, ROLE_OWNER, can
+
+        if self.role != ROLE_OWNER:
+            return self.role
+        if self.invited_by is not None and can(self.invited_by, "member:grant_owner", self.team):
+            return ROLE_OWNER
+        return ROLE_ADMIN
+
+    def get_granted_role_display(self) -> str:
+        role = self.granted_role
+        return str(dict(settings.TEAMS_INVITABLE_ROLES).get(role, role))
 
     def clean(self) -> None:
         # Friendly Python-level guard, invoked by Django forms and any

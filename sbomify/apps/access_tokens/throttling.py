@@ -168,6 +168,16 @@ class AnonymousIPRateThrottle(AccessTokenRateThrottle):
     ``X-Real-IP`` from a trusted proxy, so the key cannot be spoofed to escape
     the limit either.
 
+    That makes this limit only as good as the value Caddy puts in ``X-Real-IP``,
+    which is a dependency worth naming because it has already failed once. The
+    Caddyfile sent ``header_up X-Real-IP {remote_host}`` — the *peer* address —
+    so behind Cloudflare every visitor on the internet arrived wearing one of a
+    handful of edge addresses and shared one budget: exactly the "trivially
+    exhausted" pool this docstring warns about. It now sends ``{client_ip}``,
+    which Caddy resolves from ``Cf-Connecting-Ip`` for trusted peers. If per-IP
+    limits ever look like they are firing on innocent traffic, check that
+    placeholder before tuning the rates.
+
     A request that already carries a token is left to the token throttle, so an
     authenticated integration is not charged twice for one call.
     """

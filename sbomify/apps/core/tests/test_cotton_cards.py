@@ -58,6 +58,17 @@ def test_default_surface_is_the_still_card(rendered: str) -> None:
     assert "animate-" not in card
 
 
+def test_the_card_is_a_surface_that_hands_its_corners_down(rendered: str) -> None:
+    # The card does not clip, so a menu inside it can overflow. Its first and
+    # last children take its inner curve from the data-surface rule instead,
+    # which is what keeps a header wash or a flush table inside the corner.
+    at = rendered.index("Body copy")
+    opening = rendered[rendered.rindex("<div", 0, rendered.rindex(CARD_SHELL, 0, at)) :]
+    opening = opening[: opening.index(">")]
+    assert "data-surface" in opening
+    assert "overflow-hidden" not in opening
+
+
 def test_header_band_carries_the_rule_and_the_wash(rendered: str) -> None:
     header = _open_tag(rendered, "Plain surface", depth=1)
     assert "px-6 py-5 border-b border-solid" in header
@@ -100,7 +111,7 @@ def test_flush_card_drops_the_padded_body(rendered: str) -> None:
 
 def test_footer_slot_renders_the_footer_band(rendered: str) -> None:
     footer = _open_tag(rendered, "Footer actions")
-    assert "px-6 py-4 border-t border-solid" in footer
+    assert "px-5 py-4 sm:px-6 border-t border-solid" in footer
     assert "bg-[color-mix(in_oklab,var(--color-background)_30%,transparent)]" in footer
 
 
@@ -138,7 +149,7 @@ def test_dashboard_clips_the_surface(rendered: str) -> None:
 
 def test_variant_forwards_a_named_slot_to_the_card(rendered: str) -> None:
     footer = _open_tag(rendered, "Dashboard footer")
-    assert "px-6 py-4 border-t border-solid" in footer
+    assert "px-5 py-4 sm:px-6 border-t border-solid" in footer
 
 
 @pytest.mark.parametrize(
@@ -304,7 +315,7 @@ def test_collapsible_shell_takes_attrs(rendered: str) -> None:
 def test_collapsible_trigger_is_a_real_button_with_state(rendered: str) -> None:
     trigger = _button_holding(rendered, "Product links")
     assert 'type="button"' in trigger
-    assert "flex w-full items-center justify-between px-6 py-5 text-left" in trigger
+    assert "flex w-full items-center justify-between gap-3 px-6 py-5 text-left" in trigger
     assert "hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)]" in trigger
     assert "focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in trigger
     # Django escapes the quotes in the expression; the browser hands Alpine the
@@ -315,7 +326,7 @@ def test_collapsible_trigger_is_a_real_button_with_state(rendered: str) -> None:
 
 def test_collapsible_trigger_turns_the_chevron_over(rendered: str) -> None:
     trigger = _button_holding(rendered, "Clean run")
-    assert '<i class="fas fa-chevron-down text-text-muted transition-transform duration-300"' in trigger
+    assert '<i class="fas fa-chevron-down shrink-0 text-text-muted transition-transform duration-300"' in trigger
     assert ":class=\"expanded ? 'rotate-180' : ''\"" in trigger
     assert '<span class="flex items-center gap-3 font-semibold text-text">Clean run</span>' in trigger
 
@@ -325,7 +336,7 @@ def test_bare_trigger_puts_the_row_straight_into_the_button(rendered: str) -> No
     assert '<span class="flex items-center gap-3 font-semibold text-text">' not in trigger
     assert '<div class="flex items-center gap-3 flex-grow min-w-0">' in trigger
     # The chevron and the state binding are the trigger's own either way.
-    assert '<i class="fas fa-chevron-down text-text-muted transition-transform duration-300"' in trigger
+    assert '<i class="fas fa-chevron-down shrink-0 text-text-muted transition-transform duration-300"' in trigger
     assert ':aria-expanded="expanded"' in trigger
 
 

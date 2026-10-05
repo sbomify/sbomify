@@ -42,6 +42,7 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
 from sbomify.apps.plugins.builtins._spdx_shared import (
     SPDX2_IDENTIFIER_TYPES,
     spdx2_reference_type,
+    spdx2_yocto_source_downloads,
 )
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -249,6 +250,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         component_name_failures: list[str] = []
         version_failures: list[str] = []
         unique_id_failures: list[str] = []
+        source_downloads = spdx2_yocto_source_downloads(data)
 
         # Check each package for required elements
         for i, package in enumerate(packages):
@@ -274,7 +276,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             # 4. Unique identifiers (PURL, CPE, SWID via externalRefs)
             # Only accept externalRefs with valid identifier types
             # Note: hashes are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
-            if not is_file_entry:
+            if not is_file_entry and spdx_id not in source_downloads:
                 purl = package.get("purl")
                 has_unique_id = (isinstance(purl, str) and bool(purl)) or any(
                     spdx2_reference_type(ref) in SPDX2_IDENTIFIER_TYPES
@@ -438,7 +440,10 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
                 "unique_identifiers",
                 status="fail" if unique_id_failures else "pass",
                 details=f"Missing for: {', '.join(unique_id_failures)}" if unique_id_failures else None,
-                remediation="Add externalIdentifiers with packageURL, cpe23, or swid type.",
+                remediation=(
+                    "Add software_packageUrl to each package, or an externalIdentifier "
+                    "of type packageUrl, cpe23 or swid."
+                ),
             )
         )
 

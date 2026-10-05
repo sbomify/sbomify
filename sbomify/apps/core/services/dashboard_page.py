@@ -12,92 +12,160 @@ from typing import Any, cast
 
 from django.core.cache import cache as django_cache
 
-from sbomify.apps.core.models import Component
+from sbomify.apps.core.models import Component, Product
+from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.core.services.security_snapshot import build_component_security_picture
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as _SEVERITY_RANK
+from sbomify.apps.teams.models import Team
 
 _CACHE_TTL_SECONDS = 60
-_DIGEST_LIMIT = 3
+_DIGEST_LIMIT = 4
 
 
-def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> list[dict[str, Any]]:
-    """Worst non-suppressed findings across the given components."""
-    from sbomify.apps.plugins.models import AssessmentRun
-    from sbomify.apps.vulnerability_scanning.utils import extract_finding_rows, merge_findings_by_alias
-    from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
-
-    latest_sboms = (
-        SBOM.objects.filter(component_id__in=component_ids, bom_type=SBOM.BomType.SBOM)
-        .order_by("component_id", "-created_at")
-        .distinct("component_id")
-        .values("id", "component_id", "version")
-    )
-    sbom_meta = {str(row["id"]): row for row in latest_sboms}
-    runs = (
-        AssessmentRun.objects.filter(sbom_id__in=sbom_meta.keys(), category="security", status="completed")
-        .order_by("sbom_id", "plugin_name", "-created_at")
-        .distinct("sbom_id", "plugin_name")
-        .values("sbom_id", "result", "created_at")
-    )
-    results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
-    scanned_at_by_sbom: dict[str, Any] = {}
-    for run in runs:
-        sbom_key = str(run["sbom_id"])
-        results_by_sbom.setdefault(sbom_key, []).append(run["result"])
-        if sbom_key not in scanned_at_by_sbom or run["created_at"] > scanned_at_by_sbom[sbom_key]:
-            scanned_at_by_sbom[sbom_key] = run["created_at"]
-
-    vex_cache: dict[Any, list[dict[str, Any]]] = {}
-    findings: list[dict[str, Any]] = []
-    for sbom_id, provider_results in results_by_sbom.items():
-        meta = sbom_meta[sbom_id]
-        component_id = meta["component_id"]
-        merged = merge_findings_by_alias(provider_results)
-        # VEX lives in S3; skip the fetch entirely for clean components.
-        statements = load_vex_suppressions(component_id, cache=vex_cache) if merged["findings"] else []
-        for row in extract_finding_rows(merged, statements):
-            if row.get("vex_suppressed"):
-                continue
-            findings.append(
-                {
-                    **row,
-                    "component_id": component_id,
-                    "component_name": component_names.get(component_id, ""),
-                    "sbom_version": meta["version"],
-                    "scanned_at": scanned_at_by_sbom.get(sbom_id),
-                }
-            )
-    # Worst severity first; within a severity band, the most recently updated
-    # component leads, so a critical from today's scan outranks one from last
-    # month's.
-    findings.sort(
-        key=lambda r: (
-            _SEVERITY_RANK.get(r["severity"], 5),
-            -(r["scanned_at"].timestamp() if r["scanned_at"] else 0.0),
-            -(r.get("cvss_score") or 0),
-        )
-    )
-    return findings[:_DIGEST_LIMIT]
-
-
-def get_first_component(team_id: int) -> Component | None:
+def get_first_component(team_id: int) -> ServiceResult[Component]:
     """Uncached on purpose: the digest cache may lag a just-created component,
     and the onboarding hero must reflect it immediately."""
-    return Component.objects.filter(team_id=team_id).first()
+    return ServiceResult.success(
+        Component.objects.filter(team_id=team_id, component_type=Component.ComponentType.BOM).first()
+    )
 
 
-def build_dashboard_context(team_id: int) -> dict[str, Any]:
-    cache_key = f"dashboard-page:{team_id}"
+def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Team]:
+    if not workspace_key:
+        return ServiceResult.success()
+    workspace = Team.objects.filter(key=workspace_key).first()
+    if workspace is None:
+        return ServiceResult.failure("Workspace not found", status_code=404)
+    return ServiceResult.success(workspace)
+
+
+def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
+    """One workspace snapshot for the overview, without per-product scan reads."""
+    from sbomify.apps.documents.models import Document
+    from sbomify.apps.sboms.freshness import freshness_state
+
+    # v4 adds the unmeasured flags below. An entry cached by the previous
+    # release has no such key, and a missing flag reads as false in the
+    # template, which is the confident zero this change exists to stop.
+    cache_key = f"dashboard-page:v4:{team_id}"
     cached = django_cache.get(cache_key)
     if cached is not None:
-        return cast("dict[str, Any]", cached)
+        return ServiceResult.success(cast("dict[str, Any]", cached))
 
-    components = dict(Component.objects.filter(team_id=team_id).values_list("id", "name"))
-    has_artifacts = SBOM.objects.filter(component__team_id=team_id).exists()
+    workspace = Team.objects.filter(id=team_id).first()
+    if workspace is None:
+        return ServiceResult.failure("Workspace not found", status_code=404)
 
+    components = list(
+        Component.objects.filter(team_id=team_id, component_type=Component.ComponentType.BOM).values(
+            "id", "name", "sbom_freshness_days"
+        )
+    )
+    component_names = {component["id"]: component["name"] for component in components}
+    picture = build_component_security_picture(list(component_names), component_names, workspace.patch_sla_days or {})
+    has_artifacts = (
+        SBOM.objects.filter(component__team_id=team_id).exists()
+        or Document.objects.filter(component__team_id=team_id).exists()
+    )
+    stale_components: set[str] = set()
+    without_policy: set[str] = set()
+    for component in components:
+        latest = picture["latest_sboms"].get(component["id"])
+        override = component["sbom_freshness_days"]
+        window = override if override is not None else workspace.sbom_freshness_days
+        freshness = freshness_state(latest["created_at"] if latest else None, window)
+        if freshness and freshness["is_stale"]:
+            stale_components.add(component["id"])
+        if latest and window is None:
+            without_policy.add(component["id"])
+
+    products: list[dict[str, Any]] = []
+    product_names_by_component: dict[str, list[str]] = {}
+    overdue_by_component: dict[str, int] = {}
+    for finding in picture["findings"]:
+        if finding["sla"]["overdue"]:
+            component_id = finding["component_id"]
+            overdue_by_component[component_id] = overdue_by_component.get(component_id, 0) + 1
+    # The prefetched join is tenant-scoped on both sides.
+    from django.db.models import Prefetch
+
+    for product in (
+        Product.objects.filter(team_id=team_id)
+        .order_by("name")
+        .prefetch_related(Prefetch("components", queryset=Component.objects.filter(team_id=team_id).only("id")))
+    ):
+        component_ids = {component.id for component in product.components.all()}
+        security_ids = component_ids & component_names.keys()
+        for component_id in component_ids:
+            product_names_by_component.setdefault(component_id, []).append(product.name)
+        counts = {
+            key: sum(picture["counts"].get(component_id, {}).get(key, 0) for component_id in security_ids)
+            for key in ("total", "critical", "high", "medium", "low")
+        }
+        counts["other"] = counts["total"] - counts["critical"] - counts["high"]
+        counts["unknown"] = counts["other"] - counts["medium"] - counts["low"]
+        products.append(
+            {
+                "id": product.id,
+                "name": product.name,
+                "component_count": len(component_ids),
+                "security_component_count": len(security_ids),
+                "counts": counts,
+                "unassessed": len(security_ids & picture["unassessed"]),
+                "stale": len(security_ids & stale_components),
+                "missing_sboms": len(security_ids - picture["latest_sboms"].keys()),
+                "no_policy": len(security_ids & without_policy),
+                "past_sla": sum(overdue_by_component.get(component_id, 0) for component_id in security_ids),
+            }
+        )
+    products.sort(
+        key=lambda row: (
+            -row["counts"]["critical"],
+            -row["counts"]["high"],
+            -row["counts"]["total"],
+            row["name"].lower(),
+        )
+    )
+    counts = picture["counts"]
+    for finding in picture["findings"]:
+        finding["products"] = product_names_by_component.get(finding["component_id"], [])
+    open_findings = sum(count["total"] for count in counts.values())
+    past_sla = sum(overdue_by_component.values())
+    known_exploited = sum(bool(finding["kev"]) for finding in picture["findings"])
+    unassessed = len(picture["unassessed"])
     context = {
         "is_first_visit": not has_artifacts,
-        "needs_attention": _digest_rows(list(components), components) if has_artifacts else [],
+        "needs_attention": picture["findings"][:_DIGEST_LIMIT],
+        "metrics": {
+            "open": open_findings,
+            "critical_high": sum(count["critical"] + count["high"] for count in counts.values()),
+            "past_sla": past_sla,
+            "sla_unknown": sum(count["total"] for count in counts.values())
+            - len(picture["findings"])
+            + sum(finding["sla"]["label"] == "Awaiting history" for finding in picture["findings"]),
+            "known_exploited": known_exploited,
+            "stale": len(stale_components),
+            # The same zero the product page cannot stand behind, on the surface
+            # a reader lands on first. All three counts read the newest SBOM per
+            # component, so a component whose newest SBOM has not finished
+            # scanning contributes nothing, and scanning is asynchronous: that is
+            # the normal state after every upload, not an edge case.
+            #
+            # Only a zero, and only while something is unassessed. A non-zero
+            # count is real information even when partial, and the alert under
+            # the cards already says what is still missing. "Components with
+            # stale SBOMs" is measured from upload timestamps rather than scan
+            # results, so its zero is always honest and stays a number.
+            "unmeasured_open": open_findings == 0 and unassessed > 0,
+            "unmeasured_past_sla": past_sla == 0 and unassessed > 0,
+            "unmeasured_known_exploited": known_exploited == 0 and unassessed > 0,
+        },
+        "unassessed": unassessed,
+        "products": products[:8],
+        "product_count": len(products),
     }
-    django_cache.set(cache_key, context, _CACHE_TTL_SECONDS)
-    return context
+    # The first upload must replace setup immediately, without waiting for a
+    # cached empty snapshot to expire.
+    if has_artifacts:
+        django_cache.set(cache_key, context, _CACHE_TTL_SECONDS)
+    return ServiceResult.success(context)

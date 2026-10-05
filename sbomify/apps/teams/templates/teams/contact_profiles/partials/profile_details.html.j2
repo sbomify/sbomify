@@ -68,29 +68,29 @@
                     </template>
                     {# Contacts with role badges #}
                     <template x-if="entity.contacts && entity.contacts.length > 0">
-                        <div class="border-t border-border pt-2 mt-2">
-                            <c-layout.stat.label>
-                            <i class="fas fa-users mr-1" aria-hidden="true"></i>Contacts
-                            </c-layout.stat.label>
-                            <template x-for="(contact, contactIdx) in entity.contacts"
-                                      :key="contact.name + (contact.email || '') + contactIdx">
-                                <div class="flex items-center flex-wrap gap-1 mb-1 text-sm">
-                                    <i class="fas fa-user text-text-muted opacity-50"></i>
-                                    <span class="text-text" x-text="contact.name"></span>
-                                    <template x-if="contact.email">
-                                        <span class="text-text-muted" x-text="'(' + contact.email + ')'"></span>
-                                    </template>
-                                    <template x-if="contact.is_author">
-                                        <c-badges.badge size="sm">Author</c-badges.badge>
-                                    </template>
-                                    <template x-if="contact.is_security_contact">
-                                        <c-badges.badge size="sm">Security</c-badges.badge>
-                                    </template>
-                                    <template x-if="contact.is_technical_contact">
-                                        <c-badges.badge size="sm">Technical</c-badges.badge>
-                                    </template>
-                                </div>
-                            </template>
+                        <div class="border-t border-border pt-2 mt-2 flex flex-col gap-4">
+                            <c-layout.section-header title="Contacts" />
+                            <div class="flex flex-col gap-1">
+                                <template x-for="(contact, contactIdx) in entity.contacts"
+                                          :key="contact.name + (contact.email || '') + contactIdx">
+                                    <div class="flex items-center flex-wrap gap-1 text-sm">
+                                        <i class="fas fa-user text-text-muted opacity-50"></i>
+                                        <span class="text-text" x-text="contact.name"></span>
+                                        <template x-if="contact.email">
+                                            <span class="text-text-muted" x-text="'(' + contact.email + ')'"></span>
+                                        </template>
+                                        <template x-if="contact.is_author">
+                                            <c-badges.badge size="sm">Author</c-badges.badge>
+                                        </template>
+                                        <template x-if="contact.is_security_contact">
+                                            <c-badges.badge size="sm">Security</c-badges.badge>
+                                        </template>
+                                        <template x-if="contact.is_technical_contact">
+                                            <c-badges.badge size="sm">Technical</c-badges.badge>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                     </template>
                 </div>

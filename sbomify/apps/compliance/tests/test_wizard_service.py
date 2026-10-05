@@ -19,8 +19,8 @@ from sbomify.apps.compliance.services.wizard_service import (
     get_step_context,
     save_step_data,
 )
-from sbomify.apps.core.models import Product
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
+from sbomify.apps.core.models import Product, User
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member
 
 
 @pytest.fixture
@@ -994,3 +994,34 @@ class TestStep1EuRepresentation:
 
         assert not result.ok
         assert "boolean" in (result.error or "")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("years", [5, 7, 10])
+def test_new_assessment_uses_support_default_without_overwriting_existing(
+    sample_team_with_owner_member: Member, sample_user: User, years: int
+) -> None:
+    workspace = sample_team_with_owner_member.team
+    workspace.default_support_period_years = years
+    workspace.save(update_fields=["default_support_period_years"])
+    product = Product.objects.create(name="Example product", team=workspace, release_date=datetime.date(2024, 2, 29))
+    result = get_or_create_assessment(product.pk, sample_user, workspace)
+    assert result.ok
+    assert result.value.support_period_end == datetime.date(2024 + years, 2, 28)
+    workspace.default_support_period_years = 20
+    workspace.save(update_fields=["default_support_period_years"])
+    existing = get_or_create_assessment(product.pk, sample_user, workspace)
+    assert existing.value.support_period_end == result.value.support_period_end
+
+
+@pytest.mark.django_db
+def test_product_support_date_takes_precedence_over_workspace_default(
+    sample_team_with_owner_member: Member, sample_user: User
+) -> None:
+    workspace = sample_team_with_owner_member.team
+    workspace.default_support_period_years = 10
+    workspace.save(update_fields=["default_support_period_years"])
+    product = Product.objects.create(name="Example product", team=workspace, end_of_support=datetime.date(2031, 6, 1))
+    result = get_or_create_assessment(product.pk, sample_user, workspace)
+    assert result.ok
+    assert result.value.support_period_end == product.end_of_support

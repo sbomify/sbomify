@@ -20,6 +20,13 @@
 		# - Cloudflare IPv4 ranges (https://www.cloudflare.com/ips/)
 		trusted_proxies static 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22
 		trusted_proxies_strict
+		# Resolves {client_ip} to the origin address. Consulted ONLY for
+		# requests whose direct peer is in the list above, so a client that
+		# reaches this edge without going through Cloudflare cannot set its own
+		# {client_ip} — Caddy falls back to the peer it actually sees.
+		# Cf-Connecting-Ip is first because Cloudflare overwrites it on every
+		# request it proxies, so unlike X-Forwarded-For it is a single address
+		# that a client cannot prepend to.
 		client_ip_headers Cf-Connecting-Ip X-Forwarded-For X-Real-IP
 	}
 
@@ -47,7 +54,7 @@
 	handle @django_health {
 		log_skip
 		reverse_proxy sbomify-backend:8000 {
-			header_up X-Real-IP {remote_host}
+			header_up X-Real-IP {client_ip}
 			header_up Host {host}
 			header_down -Server
 		}
@@ -63,7 +70,7 @@
 		}
 		handle @allowed_internal {
 			reverse_proxy sbomify-backend:8000 {
-				header_up X-Real-IP {remote_host}
+				header_up X-Real-IP {client_ip}
 				header_up Host {host}
 				header_down -Server
 			}
@@ -76,8 +83,21 @@
 	# Main reverse proxy to Django backend
 	# Note: Caddy automatically handles WebSocket upgrades (ws/wss) via reverse_proxy
 	reverse_proxy sbomify-backend:8000 {
-		# Headers
-		header_up X-Real-IP {remote_host}
+		# Headers.
+		#
+		# {client_ip}, never {remote_host}: behind Cloudflare the peer address
+		# is a Cloudflare edge node, so {remote_host} collapsed every visitor
+		# onto a handful of addresses. Django keys its per-IP rate limits and
+		# its audit fields on X-Real-IP (core.utils.get_client_ip), so that made
+		# the anonymous budget a shared pool one scanner could drain for
+		# everyone, and wrote the CDN's address into the audit trail.
+		#
+		# header_up REPLACES the header, so a client-supplied X-Real-IP never
+		# survives this hop. That is what makes Caddy the only resolver of the
+		# origin address and why Django must keep reading X-Real-IP alone: raw
+		# Cf-Connecting-Ip is forwarded upstream untouched and is spoofable by
+		# anything that reaches this edge directly.
+		header_up X-Real-IP {client_ip}
 		header_up Host {host}
 		header_down -Server
 
@@ -152,7 +172,7 @@ https:// {
 	handle @django_health {
 		log_skip
 		reverse_proxy sbomify-backend:8000 {
-			header_up X-Real-IP {remote_host}
+			header_up X-Real-IP {client_ip}
 			header_up Host {host}
 			header_down -Server
 		}
@@ -176,7 +196,7 @@ https:// {
 			@allowed_internal client_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
 			handle @allowed_internal {
 				reverse_proxy sbomify-backend:8000 {
-					header_up X-Real-IP {remote_host}
+					header_up X-Real-IP {client_ip}
 					header_up Host {host}
 					header_down -Server
 				}
@@ -189,7 +209,7 @@ https:// {
 		# Main reverse proxy to Django backend
 		# Note: Caddy automatically handles WebSocket upgrades (ws/wss) via reverse_proxy
 		reverse_proxy sbomify-backend:8000 {
-			header_up X-Real-IP {remote_host}
+			header_up X-Real-IP {client_ip}
 			header_up Host {host}
 			header_down -Server
 			# Timeouts (0 = no timeout, required for WebSocket connections)

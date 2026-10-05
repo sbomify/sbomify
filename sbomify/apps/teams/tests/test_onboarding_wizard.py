@@ -180,7 +180,7 @@ class TestOnboardingWizard:
 
         # Check success message
         messages = list(get_messages(response.wsgi_request))
-        assert any("SBOM identity has been set up" in str(m) for m in messages)
+        assert any("Your workspace settings are saved." in str(m) for m in messages)
 
         # Verify workspace was renamed
         team.refresh_from_db()

@@ -659,7 +659,7 @@ class TestSPDXValidation:
         """A compliant SPDX 2.2 SBOM must produce the same pass/fail shape
         as the same content with spdxVersion: "SPDX-2.3". SPDX 2.2 and 2.3
         share a compatible core schema — the plugin dispatch already treats
-        them uniformly (schemas.get_spdx_module), but this pins the
+        them uniformly, but this pins the
         behaviour end-to-end so a future divergence can't silently drop
         SPDX 2.2 uploads from the compliance workflow.
         """

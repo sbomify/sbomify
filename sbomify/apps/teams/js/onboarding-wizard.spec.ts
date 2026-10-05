@@ -1,317 +1,93 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test'
+import { afterEach, beforeEach, describe, test, expect, mock } from 'bun:test';
 
-const mockAlpineData = mock<(name: string, callback: () => unknown) => void>()
+mock.module('alpinejs', () => ({ default: { data: mock() } }));
+const { onboardingWizard } = await import('./onboarding-wizard');
 
-mock.module('alpinejs', () => ({
-    default: {
-        data: mockAlpineData
-    }
-}))
+const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+beforeEach(() => {
+    globalThis.requestAnimationFrame = callback => { callback(0); return 1; };
+});
+afterEach(() => { globalThis.requestAnimationFrame = originalRequestAnimationFrame; });
 
-interface OnboardingWizardState {
-    companyName: string
-    contactName: string
-    email: string
-    website: string
-    isSubmitting: boolean
-    touched: {
-        companyName: boolean
-        contactName: boolean
-        email: boolean
-        website: boolean
-    }
+function build() {
+    const organisationField = { disabled: false, checkValidity: mock(() => true), reportValidity: mock() };
+    const securityField = { disabled: false, checkValidity: mock(() => true), reportValidity: mock() };
+    const refs = {
+        organisation: { querySelectorAll: () => [organisationField] },
+        security: { querySelectorAll: () => [securityField] },
+        email: { value: 'author@example.com' },
+        securityEmail: { value: '' },
+        organisationTitle: { focus: mock(), scrollIntoView: mock() },
+        securityTitle: { focus: mock(), scrollIntoView: mock() },
+    };
+    const wizard = Object.assign(onboardingWizard({ step: 'organisation', addressExpanded: false }), {
+        $refs: refs,
+        $nextTick: (callback: () => void) => callback(),
+    });
+    return { wizard, refs, organisationField, securityField };
 }
 
-describe('Onboarding Wizard', () => {
-    beforeEach(() => {
-        mockAlpineData.mockClear()
-    })
+function submitEvent() {
+    return { preventDefault: mock() } as unknown as SubmitEvent;
+}
 
-    describe('Company Name Validation', () => {
-        test('should validate non-empty company name', () => {
-            const isCompanyValid = (companyName: string): boolean => {
-                return companyName.trim().length > 0
-            }
+describe('Onboarding flow', () => {
+    test('validates organisation before advancing and supplies the contact suggestion', () => {
+        const { wizard, refs, organisationField } = build();
+        organisationField.checkValidity.mockReturnValue(false);
+        wizard.next();
+        expect(wizard.step).toBe('organisation');
+        expect(organisationField.reportValidity).toHaveBeenCalled();
+        organisationField.checkValidity.mockReturnValue(true);
+        wizard.next();
+        expect(wizard.step).toBe('security');
+        expect(refs.securityEmail.value).toBe('author@example.com');
+        expect(refs.securityTitle.focus).toHaveBeenCalled();
+        expect(refs.securityTitle.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
+    });
 
-            expect(isCompanyValid('Acme Inc')).toBe(true)
-            expect(isCompanyValid('  Acme Inc  ')).toBe(true)
-            expect(isCompanyValid('')).toBe(false)
-            expect(isCompanyValid('   ')).toBe(false)
-        })
-    })
+    test('Back retains a separately chosen security email', () => {
+        const { wizard, refs } = build();
+        wizard.next();
+        refs.securityEmail.value = 'security@example.com';
+        wizard.back();
+        expect(refs.organisationTitle.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
+        refs.email.value = 'new-author@example.com';
+        wizard.next();
+        expect(refs.securityEmail.value).toBe('security@example.com');
+        expect(refs.organisationTitle.focus).toHaveBeenCalled();
+    });
 
-    describe('Contact Name Validation', () => {
-        test('should validate non-empty contact name', () => {
-            const isContactNameValid = (contactName: string): boolean => {
-                return contactName.trim().length > 0
-            }
+    test('Enter on the organisation step advances without saving', () => {
+        const { wizard } = build();
+        const event = submitEvent();
+        wizard.submit(event);
+        expect(event.preventDefault).toHaveBeenCalled();
+        expect(wizard.step).toBe('security');
+        expect(wizard.isSubmitting).toBe(false);
+    });
 
-            expect(isContactNameValid('John Doe')).toBe(true)
-            expect(isContactNameValid('  John  ')).toBe(true)
-            expect(isContactNameValid('')).toBe(false)
-            expect(isContactNameValid('   ')).toBe(false)
-        })
-    })
-
-    describe('Email Validation', () => {
-        test('should accept empty email (optional field)', () => {
-            const isEmailValid = (email: string): boolean => {
-                if (!email || email.trim() === '') {
-                    return true
-                }
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-                return emailRegex.test(email.trim())
-            }
-
-            expect(isEmailValid('')).toBe(true)
-            expect(isEmailValid('   ')).toBe(true)
-        })
-
-        test('should validate email format when provided', () => {
-            const isEmailValid = (email: string): boolean => {
-                if (!email || email.trim() === '') {
-                    return true
-                }
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-                return emailRegex.test(email.trim())
-            }
-
-            expect(isEmailValid('user@example.com')).toBe(true)
-            expect(isEmailValid('user.name@example.co.uk')).toBe(true)
-            expect(isEmailValid('invalid-email')).toBe(false)
-            expect(isEmailValid('missing@domain')).toBe(false)
-            expect(isEmailValid('@nodomain.com')).toBe(false)
-        })
-    })
-
-    describe('Website Validation', () => {
-        test('should accept empty website (optional field)', () => {
-            const isWebsiteValid = (website: string): boolean => {
-                if (!website || website.trim() === '') {
-                    return true
-                }
-                try {
-                    new URL(website.trim())
-                    return true
-                } catch {
-                    return false
-                }
-            }
-
-            expect(isWebsiteValid('')).toBe(true)
-            expect(isWebsiteValid('   ')).toBe(true)
-        })
-
-        test('should validate URL format when provided', () => {
-            const isWebsiteValid = (website: string): boolean => {
-                if (!website || website.trim() === '') {
-                    return true
-                }
-                try {
-                    new URL(website.trim())
-                    return true
-                } catch {
-                    return false
-                }
-            }
-
-            expect(isWebsiteValid('https://example.com')).toBe(true)
-            expect(isWebsiteValid('http://example.com')).toBe(true)
-            expect(isWebsiteValid('https://example.com/path')).toBe(true)
-            expect(isWebsiteValid('not-a-url')).toBe(false)
-            expect(isWebsiteValid('example.com')).toBe(false)
-        })
-    })
-
-    describe('Can Submit Check', () => {
-        test('should allow submit when all required fields are valid', () => {
-            const canSubmit = (state: OnboardingWizardState): boolean => {
-                const isCompanyValid = state.companyName.trim().length > 0
-                const isContactNameValid = state.contactName.trim().length > 0
-                const isEmailValid = !state.email || state.email.trim() === '' ||
-                    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email.trim())
-                const isWebsiteValid = !state.website || state.website.trim() === '' ||
-                    (() => { try { new URL(state.website.trim()); return true } catch { return false } })()
-
-                return isCompanyValid && isContactNameValid && isEmailValid && isWebsiteValid && !state.isSubmitting
-            }
-
-            const validState: OnboardingWizardState = {
-                companyName: 'Acme Inc',
-                contactName: 'John Doe',
-                email: '',
-                website: '',
-                isSubmitting: false,
-                touched: { companyName: false, contactName: false, email: false, website: false }
-            }
-
-            expect(canSubmit(validState)).toBe(true)
-        })
-
-        test('should prevent submit when required fields are empty', () => {
-            const canSubmit = (state: OnboardingWizardState): boolean => {
-                const isCompanyValid = state.companyName.trim().length > 0
-                const isContactNameValid = state.contactName.trim().length > 0
-
-                return isCompanyValid && isContactNameValid && !state.isSubmitting
-            }
-
-            const invalidState: OnboardingWizardState = {
-                companyName: '',
-                contactName: 'John Doe',
-                email: '',
-                website: '',
-                isSubmitting: false,
-                touched: { companyName: false, contactName: false, email: false, website: false }
-            }
-
-            expect(canSubmit(invalidState)).toBe(false)
-        })
-
-        test('should prevent submit when already submitting', () => {
-            const canSubmit = (state: OnboardingWizardState): boolean => {
-                return !state.isSubmitting
-            }
-
-            const submittingState: OnboardingWizardState = {
-                companyName: 'Acme Inc',
-                contactName: 'John Doe',
-                email: '',
-                website: '',
-                isSubmitting: true,
-                touched: { companyName: false, contactName: false, email: false, website: false }
-            }
-
-            expect(canSubmit(submittingState)).toBe(false)
-        })
-    })
-
-    describe('Touched State Management', () => {
-        test('should mark field as touched', () => {
-            const touched = {
-                companyName: false,
-                contactName: false,
-                email: false,
-                website: false
-            }
-
-            const markTouched = (field: keyof typeof touched) => {
-                touched[field] = true
-            }
-
-            markTouched('companyName')
-            expect(touched.companyName).toBe(true)
-            expect(touched.contactName).toBe(false)
-        })
-
-        test('should mark all fields as touched on invalid submit', () => {
-            const touched = {
-                companyName: false,
-                contactName: false,
-                email: false,
-                website: false
-            }
-
-            const markAllTouched = () => {
-                touched.companyName = true
-                touched.contactName = true
-                touched.email = true
-                touched.website = true
-            }
-
-            markAllTouched()
-            expect(touched.companyName).toBe(true)
-            expect(touched.contactName).toBe(true)
-            expect(touched.email).toBe(true)
-            expect(touched.website).toBe(true)
-        })
-    })
-
-    describe('Validation Class Generation', () => {
-        test('should return is-valid for valid fields with content', () => {
-            const getValidationClass = (
-                field: 'companyName' | 'contactName' | 'email' | 'website',
-                value: string,
-                isValid: boolean,
-                isTouched: boolean
-            ): string => {
-                if (field === 'companyName' || field === 'contactName') {
-                    if (value.trim().length > 0) {
-                        return isValid ? 'tw-form-input-success' : 'tw-form-input-error'
-                    }
-                    return isTouched ? 'tw-form-input-error' : ''
-                }
-
-                if (field === 'email' || field === 'website') {
-                    if (!value || value.trim() === '') {
-                        return ''
-                    }
-                    return isValid ? 'tw-form-input-success' : 'tw-form-input-error'
-                }
-
-                return ''
-            }
-
-            expect(getValidationClass('companyName', 'Acme', true, false)).toBe('tw-form-input-success')
-            expect(getValidationClass('companyName', '', false, true)).toBe('tw-form-input-error')
-            expect(getValidationClass('companyName', '', false, false)).toBe('')
-            expect(getValidationClass('email', '', true, false)).toBe('')
-            expect(getValidationClass('email', 'user@example.com', true, false)).toBe('tw-form-input-success')
-            expect(getValidationClass('email', 'invalid', false, false)).toBe('tw-form-input-error')
-        })
-    })
-
-    describe('Initial Config', () => {
-        test('should accept initial email from config', () => {
-            const config = {
-                initialEmail: 'user@example.com',
-                initialContactName: 'John Doe'
-            }
-
-            expect(config.initialEmail).toBe('user@example.com')
-            expect(config.initialContactName).toBe('John Doe')
-        })
-
-        test('should use empty string as fallback for missing config', () => {
-            const getInitialValue = (configValue?: string): string => {
-                return configValue || ''
-            }
-
-            expect(getInitialValue(undefined)).toBe('')
-            expect(getInitialValue('')).toBe('')
-            expect(getInitialValue('value')).toBe('value')
-        })
-    })
-
-    describe('Submit Handler', () => {
-        test('should set isSubmitting to true on valid submit', () => {
-            let isSubmitting = false
-
-            const handleSubmit = (canSubmit: boolean): boolean => {
-                if (!canSubmit) {
-                    return false
-                }
-                isSubmitting = true
-                return true
-            }
-
-            expect(handleSubmit(true)).toBe(true)
-            expect(isSubmitting).toBe(true)
-        })
-
-        test('should return false and not submit when validation fails', () => {
-            let isSubmitting = false
-
-            const handleSubmit = (canSubmit: boolean): boolean => {
-                if (!canSubmit) {
-                    return false
-                }
-                isSubmitting = true
-                return true
-            }
-
-            expect(handleSubmit(false)).toBe(false)
-            expect(isSubmitting).toBe(false)
-        })
-    })
-})
+    test('returns to the relevant step for an invalid control and blocks duplicate saves', () => {
+        const { wizard, organisationField, securityField } = build();
+        wizard.next();
+        organisationField.checkValidity.mockReturnValue(false);
+        const invalid = submitEvent();
+        wizard.submit(invalid);
+        expect(invalid.preventDefault).toHaveBeenCalled();
+        expect(wizard.step).toBe('organisation');
+        organisationField.checkValidity.mockReturnValue(true);
+        wizard.next();
+        securityField.checkValidity.mockReturnValue(false);
+        wizard.submit(submitEvent());
+        expect(wizard.isSubmitting).toBe(false);
+        expect(securityField.reportValidity).toHaveBeenCalled();
+        securityField.checkValidity.mockReturnValue(true);
+        const valid = submitEvent();
+        wizard.submit(valid);
+        expect(valid.preventDefault).not.toHaveBeenCalled();
+        expect(wizard.isSubmitting).toBe(true);
+        const duplicate = submitEvent();
+        wizard.submit(duplicate);
+        expect(duplicate.preventDefault).toHaveBeenCalled();
+    });
+});

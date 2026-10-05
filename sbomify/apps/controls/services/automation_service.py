@@ -39,7 +39,6 @@ PLUGIN_CONTROL_MAP: dict[str, list[str]] = {
     # GitHub-published Sigstore attestation.
     "sbom-verification": ["CC8.1"],
     "bsi-tr03183-v2.1-compliance": ["CC2.1", "CC5.1", "CC5.2"],
-    "cra-compliance-2024": ["CC5.1", "CC5.2", "CC5.3"],
 }
 
 

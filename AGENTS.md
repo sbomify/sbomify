@@ -33,10 +33,10 @@ Always run tests in Docker:
 # Start test services
 docker compose -f docker-compose.tests.yml up -d
 
-# All tests (parallel — requires pytest-xdist installed in container)
+# All backend tests (parallel). If Docker runs out of memory, use -n 4 instead.
 docker compose -f docker-compose.tests.yml exec tests uv run pytest -n auto --ignore=sbomify/apps/core/tests/e2e
 
-# All tests (sequential)
+# All tests (sequential). For --pdb, which xdist cannot support.
 docker compose -f docker-compose.tests.yml exec tests uv run pytest --ignore=sbomify/apps/core/tests/e2e
 
 # Specific file or directory
@@ -70,6 +70,9 @@ docker compose -f docker-compose.tests.yml exec db psql -U sbomify_test -d postg
 
 E2E tests use Playwright via Chrome DevTools Protocol in Docker with visual regression (baseline screenshots in `__snapshots__/`, diffs in `__diffs__/`):
 
+Run browser tests sequentially. Workers share one CDP browser, so parallel runs
+can interfere with focus and overwrite emulated motion preferences.
+
 ```bash
 docker compose -f docker-compose.tests.yml exec tests uv run pytest sbomify/apps/core/tests/e2e/
 ```
@@ -80,6 +83,10 @@ Frontend tests:
 bun test
 bun test path/to/file.spec.ts
 ```
+
+For UI work, read [UI change considerations and CI](docs/ui-change-considerations.md)
+before choosing tests. A page can render components owned by several apps;
+testing only the app containing the edited template can miss a failing consumer.
 
 ### Key Test Fixtures
 
@@ -100,6 +107,12 @@ Global fixtures (no import needed — registered in root `conftest.py`):
 Session setup helper: `setup_authenticated_client_session(client, team, user)` from `sbomify.apps.core.tests.shared_fixtures`.
 
 Test settings: `sbomify.test_settings`. Tests run with `--nomigrations` (bare schema). Deselect slow tests: `-m "not slow"`.
+
+`test_settings` pins `PASSWORD_HASHERS` to MD5. That is not a shortcut to tidy
+away: PBKDF2 at Django's default work factor costs 0.13 s per hash, the fixtures
+set a password on nearly every user they build, and restoring the real hasher
+puts roughly fifteen minutes back into a full run. Nothing outside
+`test_settings` may pin a hasher, and no test should assert on one.
 
 ### Linting and Formatting
 
@@ -221,11 +234,17 @@ utilities (grid, flex, spacing) and nothing else. The moment you write a
 styled control, a repeated visual pattern, or anything wanting its own class,
 it belongs in `sbomify/templates/components/`.
 
+The app canvas is a `<c-layout.frame>` with a default vertical gap. Use the same
+frame for an HTMX replacement root or a page group that needs its own width.
+Parents own spacing between components through flex/grid gaps; components do
+not supply external margins or switches to remove them. Nested groups can use
+a smaller gap for their internal layout.
+
 ```html
 {# No load tag needed: <c-dir.name> works in any template #}
 <c-tables.shell>
   <c-tables.toolbar>
-    <c-tables.search id="things-search" label="Search things" x-model="search" />
+    <c-forms.search-input size="sm" id="things-search" label="Search things" x-model="search" />
   </c-tables.toolbar>
   <c-tables.table fixed>…</c-tables.table>
 </c-tables.shell>
@@ -243,6 +262,15 @@ gallery first.
 Adding to the library: a variant is a new file nesting the base and passing
 `variant_class`; a modifier (size, state, density) is a prop. Ship it with a
 gallery demo in `core/design_system.html.j2` in the same change.
+
+**Loading convention**: content uses `<c-feedback.loading>` (card body), or its
+`loading-table`, `loading-list`, `loading-chart`, `loading-stats` and `loading-page`
+variants. Choose the shape of the content being loaded; keep the page header
+visible. Each supplies an accessible status and decorative, motion-aware
+skeletons. Do not build page-specific loaders or cover already loaded content
+with a navigation overlay. `<c-feedback.spinner>` and button `loading` are for
+small actions such as saving and uploading. Skeleton primitives have no external
+margins; their parent owns gaps, just like loaded components.
 
 Colour, radius, shadow and type come from the tokens in
 `sbomify/assets/css/tailwind.src.css` (`:root` is dark, `:root.light`
@@ -275,6 +303,33 @@ in a diff is a review blocker.
 - **Referencing a class that does not exist fails silently.** Grep before shipping.
 - **Copy is part of the component.** See Copy under Key Conventions; in UI it is a
   review blocker, same as a raw hex.
+
+#### UI change considerations and CI
+
+`CLAUDE.md` links to this file. Keep one set of agent rules here. The
+[UI change considerations](docs/ui-change-considerations.md) record failures
+from the UI migration and link to the tests that protect each affected behavior.
+Read them when changing shared components, page structure or interaction flows.
+
+- **Small visual changes can affect many test suites.** Search component callers,
+  template includes, labels, selectors and old assertions across `sbomify/apps/`.
+  Follow the app groups in [CI](.github/workflows/ci-cd.yml), including the backend
+  tests that render HTML. The design-system gallery and a browser screenshot are
+  only part of validation.
+- **Keep behavior and accessibility intact.** Preserve routes, permissions, IDs,
+  HTMX targets, Alpine state and filter parameters. When presentation intentionally
+  changes, update tests to verify the user-visible result and interaction. Do not
+  remove accessibility attributes or restore duplicate UI to satisfy old markup
+  assertions. Exact style assertions still belong in component contract tests.
+- **Inspect visual failures before accepting them.** Shared table wrapping once
+  crushed short labels; that needed a component fix. Intended header, card, modal
+  and spacing changes need reviewed baselines at every affected viewport. Never
+  widen screenshot tolerances or skip tests to hide a difference.
+- **Validate the production path and all affected consumers before committing.**
+  Build assets before browser tests, check Docker source copies when adding app
+  assets, and use the guide's validation scope. Shared component changes require
+  broader checks than a few selected tests on the page being edited. Report local
+  results and GitHub status separately; an unfinished or crashed run is not a pass.
 
 #### Other
 
@@ -355,9 +410,7 @@ the token on library buttons only. `c-buttons.primary` hardcodes `text-white`,
 so a filled library button there is white text over whatever colour the
 workspace picked, with no ink measurement: fine on navy, unreadable on pale
 amber. No token can fix it, because the ink is not a token. **So do not put a
-filled main-library button on a public page.** There are 8 today across 5 pages
-this branch has not touched; each needs a neutral button or an ink measured from
-`ink_on_color`.
+filled main-library button on a public page.**
 
 ### API Layer
 
@@ -421,7 +474,7 @@ Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"me
 
 Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` = `READ_INTERNAL` (+ member) ⊂ `PUBLISH` = `READ_INTERNAL_OR_BOT` (+ bot).
 
-`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities. Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capability they lack is deleting the workspace (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities. Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
 
 Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 
@@ -435,6 +488,70 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 **`guest` is an external role and holds no capability tier at all.** A guest `Member` row is an ACL anchor for the trust-center access-request/NDA machinery, not a grant: guests reach restricted content solely through the attribute-based `component:access` path (`core/services/access_control.py`), never through a role check. `GuestAccessBlockedMixin` redirects guest members to the public workspace page. Do not add `guest` to a tier — if an external user needs to contribute, that is what the internal roles are for.
 
 **Templates must not branch on `request.session.current_team.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
+
+## This repository is public
+
+Commit messages, branch names, pull request titles and bodies are all
+world-readable the moment you push. **An edit does not take it back.** GitHub
+keeps the previous revision in its edit history, where anyone with read access
+can open it, and every watcher was emailed the original when it landed.
+
+The mistake worth naming is not leaking a credential. It is quoting a figure
+out of the issue you are working from, because the issue and the pull request
+felt like one conversation. They are two audiences, and moving text between
+them is a decision rather than a formatting step.
+
+**Never put in a commit message, branch name, PR title or PR body:**
+
+- Customer or workspace counts, revenue, MRR, ARR, churn, conversion or signup
+  figures, and any sentence that characterises them. "The real number is much
+  lower" gives away as much as the number.
+- Internal tracker ids, branch names included. They link a public change to a
+  private thread. Reference issues in this repo by number instead.
+- Real names, email addresses, or anything identifying a customer or a
+  workspace. Fixtures use `example.com`.
+- Screenshots or logs taken against real data. Seed what you need.
+
+**Write instead** what the code does, why it is wrong today, and how you know
+the change is right. That is the whole audience for a PR description. If a
+figure genuinely has to be public, get a human to say so before it goes out.
+
+## Audit your own diff before you commit
+
+Read every hunk of `git --no-pager diff` and `git --no-pager diff --staged`
+before committing. A hunk that does not serve the change you were asked to
+make is noise, and noise is expensive: it buries the real change in review,
+churns `git blame`, and turns a three-line fix into a two-hundred-line pull
+request nobody can check.
+
+**Revert any hunk whose only effect is one of these:**
+
+- Rewrapping prose, comments or docstrings to a different width, joining lines
+  onto one line, or splitting one line across several.
+- Blank lines, trailing whitespace or a trailing newline added or removed in
+  code you did not otherwise change.
+- Reordering imports, dict keys, template attributes or CSS classes with no
+  functional reason.
+- Swapping quote style, `.format()` for an f-string, or `List[str]` for
+  `list[str]` on lines the task did not touch. Modern syntax is the rule for
+  code you write, not a licence to sweep the file.
+- Renaming a local, reordering parameters or restyling a conditional because
+  you prefer it the other way.
+- Re-serialising a JSON, YAML or lock file with different indentation or key
+  order. Lockfiles are regenerated with `uv` or `bun`, never hand-edited.
+
+**The formatters own the shape of a file, you do not.** `ruff format`,
+`eslint --fix`, `djlint` and the pre-commit hooks are the only things allowed
+to reformat, and what they change belongs in the diff. If one of them rewrites
+a file far past your edit, that file was unformatted before you arrived: put
+the reformat in its own commit and say so in the message. The same goes for a
+cleanup that is genuinely worth doing. A rename, a reorder, a dead-code
+removal — each is its own commit, never folded into the change under review.
+
+Two commands catch most of it. `git --no-pager diff --stat`: if the line count
+is much larger than the change you would describe in one sentence, there is
+reformatting in there. `git --no-pager diff -w`: if that is much smaller than
+the plain diff, the gap is whitespace churn to revert.
 
 ## Key Conventions
 

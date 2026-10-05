@@ -1,24 +1,19 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.vary import vary_on_headers
 
-from sbomify.apps.core.apis import get_product, patch_product
-from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.schemas import ProductPatchSchema
-from sbomify.apps.tea.mappers import get_product_tei_urn
+from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.services.product_page import build_product_page_context, update_product_page
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
-from sbomify.apps.teams.queries import get_member_role_by_key
-
-logger = logging.getLogger(__name__)
 
 
 class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
@@ -30,131 +25,25 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             return ProductDetailsPublicView.as_view()(request, *args, **kwargs)
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(vary_on_headers("HX-Target"))
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
-        status_code, product = get_product(request, product_id)
-        if status_code != 200:
-            return error_response(
-                request, HttpResponse(status=status_code, content=product.get("detail", "Unknown error"))
-            )
-
-        current_team = request.session.get("current_team", {})
-        team_billing_plan = current_team.get("billing_plan")
-
-        # Live Member row, not the session cache: these gate rendering, and the
-        # cache has a 300s TTL, so a demoted user would keep seeing controls the
-        # handlers behind them now refuse. Resolved once and reused.
-        is_admin_or_owner = get_member_role_by_key(request.user, current_team.get("key")) in ADMINISTER
-
-        # Build TEI URN if TEA is enabled with a validated custom domain
-        product_tei = get_product_tei_urn(product["id"], product["team_id"])
-
-        # CRA assessment card — use session billing plan to avoid extra Team query
-        cra_assessment = None
-        has_cra_access = False
-        try:
-            from sbomify.apps.compliance.models import CRAAssessment
-            from sbomify.apps.compliance.permissions import check_cra_access
-
-            has_cra_access = is_admin_or_owner and check_cra_access(billing_plan_key=team_billing_plan)
-
-            if has_cra_access:
-                cra = CRAAssessment.objects.filter(
-                    product_id=product["id"],
-                    team_id=product["team_id"],
-                ).first()
-                if cra:
-                    cra_assessment = {
-                        "id": cra.id,
-                        "status": cra.status,
-                        "completed_steps": cra.completed_steps,
-                        "current_step": cra.current_step,
-                    }
-        except ImportError:
-            logger.warning("Compliance app not available — CRA card disabled")
-        except DatabaseError:
-            logger.exception("Failed to load CRA assessment data for product %s", product_id)
-
-        # Fetch product-level controls for all active catalogs
-        product_controls_list: list[dict[str, Any]] = []
-        try:
-            from sbomify.apps.controls.models import ControlCatalog
-            from sbomify.apps.controls.services.status_service import get_controls_detail, get_controls_summary
-            from sbomify.apps.core.models import Product as ProductModel
-
-            team_id = product.get("team_id") or current_team.get("id")
-            if team_id:
-                product_obj = ProductModel.objects.filter(id=product_id, team_id=team_id).first()
-                catalogs = ControlCatalog.objects.filter(team_id=team_id, is_active=True)
-                for catalog in catalogs:
-                    summary_result = get_controls_summary(catalog.team, product=product_obj, catalog=catalog)
-                    detail_result = get_controls_detail(catalog, product=product_obj)
-                    if summary_result.ok and detail_result.ok:
-                        product_controls_list.append(
-                            {
-                                "catalog": catalog,
-                                "summary": summary_result.value,
-                                "categories": detail_result.value or [],
-                                "team_key": catalog.team.key,
-                                "product_id": product_id,
-                            }
-                        )
-        except ModuleNotFoundError:
-            import logging
-
-            logging.getLogger(__name__).warning("Controls app not available", exc_info=True)
-
-        # Components-and-security table + severity rollup, and the releases strip.
-        from sbomify.apps.core.services.product_page import (
-            build_product_components_rows,
-            build_product_releases_summary,
-        )
-
-        components_data = build_product_components_rows(product_id)
-        component_rows = components_data["rows"]
-        releases_summary = build_product_releases_summary(product_id)
-
-        header_copy_values = [
-            {"value": product["id"], "title": f"Product ID: {product['id']} (click to copy)"},
-        ]
-        if product_tei:
-            header_copy_values.append({"value": product_tei, "title": f"TEI: {product_tei} (click to copy)"})
-
-        return render(
-            request,
-            "core/product_details_private.html.j2",
-            {
-                "APP_BASE_URL": settings.APP_BASE_URL,
-                "cra_assessment": cra_assessment,
-                "has_cra_access": has_cra_access,
-                "current_team": current_team,
-                "is_admin_or_owner": is_admin_or_owner,
-                "product": product,
-                "product_tei": product_tei,
-                "header_copy_values": header_copy_values,
-                "team_billing_plan": team_billing_plan,
-                "product_controls": product_controls_list[0] if product_controls_list else None,
-                "product_controls_list": product_controls_list,
-                "component_rows": component_rows,
-                "component_terms": [f"{r['name']}".lower() for r in component_rows],
-                "component_statuses": [r["status"] for r in component_rows],
-                "assigned_component_ids": [r["id"] for r in component_rows],
-                "vuln_rollup": components_data["rollup"],
-                "releases_summary": releases_summary,
-                "identifiers_locked": team_billing_plan not in ("business", "enterprise"),
-            },
-        )
+        result = build_product_page_context(request, product_id)
+        if not result.ok:
+            return error_response(request, HttpResponse(result.error, status=result.status_code or 400))
+        template = {
+            "product-content": "core/product_content.html.j2",
+            "product-components": "core/product_components.html.j2",
+        }.get(request.headers.get("HX-Target", ""), "core/product_details_private.html.j2")
+        return render(request, template, result.value)
 
     def post(self, request: HttpRequest, product_id: str) -> HttpResponse:
-        """Handle product description updates."""
-        action = request.POST.get("action")
-
-        if action == "update_description":
-            description = request.POST.get("description", "").strip()
-            payload = ProductPatchSchema(description=description if description else None)  # type: ignore[call-arg]
-            status_code, result = patch_product(request, product_id, payload)
-
-            if status_code != 200:
-                # TODO: Add proper error handling/flash message
-                pass
-
+        result = update_product_page(request, product_id)
+        if request.headers.get("HX-Request"):
+            if not result.ok:
+                return htmx_error_response(result.error or "Unable to update product")
+            return htmx_success_response(result.value or "Product updated", triggers={"refresh-product": True})
+        if result.ok:
+            messages.success(request, result.value or "Product updated")
+        else:
+            messages.error(request, result.error or "Unable to update product")
         return redirect("core:product_details", product_id=product_id)

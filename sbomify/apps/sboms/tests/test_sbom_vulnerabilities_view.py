@@ -1,6 +1,4 @@
-"""Package grouping on the full scan report: cross-provider rows merge on the
-artifact tail, while distinct purl namespaces sharing an artifact name stay
-separate."""
+"""Flat report rows merge matching advisories without conflating package namespaces."""
 
 from __future__ import annotations
 
@@ -36,8 +34,8 @@ def _finding(advisory: str, name: str, version: str = "1.0", purl: str = "") -> 
     return {"id": advisory, "severity": "high", "component": component}
 
 
-def _packages(response) -> list[dict]:
-    return response.context["vulnerabilities"]["results"][0]["packages"]
+def _rows(response) -> list[dict]:
+    return response.context["scan_panel"]["rows"]
 
 
 @pytest.mark.django_db
@@ -57,9 +55,9 @@ def test_distinct_purl_namespaces_do_not_merge(sample_sbom: SBOM):  # noqa: F811
 
     response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
-    packages = _packages(response)
+    packages = _rows(response)
     assert len(packages) == 2
-    names = sorted(p["package"]["name"] for p in packages)
+    names = sorted(p["package"] for p in packages)
     assert names == ["com.bar:shared-artifact", "com.foo:shared-artifact"]
 
 
@@ -79,9 +77,9 @@ def test_purl_less_provider_row_merges_with_single_namespace(sample_sbom: SBOM):
 
     response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
-    packages = _packages(response)
+    packages = _rows(response)
     assert len(packages) == 1
-    assert len(packages[0]["vulnerabilities"]) == 1  # same advisory folded, not duplicated
+    assert packages[0]["id"] == "GHSA-1"  # same advisory folded, not duplicated
 
 
 @pytest.mark.django_db
@@ -102,7 +100,7 @@ def test_purl_less_row_stays_separate_when_namespaces_are_ambiguous(sample_sbom:
     response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
     # Two namespaces plus one unattributable purl-less row: never guess.
-    assert len(_packages(response)) == 3
+    assert len(_rows(response)) == 3
 
 
 @pytest.mark.django_db
@@ -130,8 +128,8 @@ def test_scanner_status_markers_are_not_vulnerability_rows(sample_sbom: SBOM):  
     response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
     assert response.status_code == 200
 
-    packages = _packages(response)
-    names = [p["package"]["name"] for p in packages]
+    packages = _rows(response)
+    names = [p["package"] for p in packages]
     assert "django" in names
     assert len(packages) == 1
 

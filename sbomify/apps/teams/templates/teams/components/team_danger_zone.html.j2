@@ -2,37 +2,26 @@
 <div x-cloak
      x-data="{ showDeleteModal: false, confirmText: '', isExpanded: false, get canConfirm() { return this.confirmText.toLowerCase() === 'delete'; } }">
     <c-cards.dangerzone-collapsible>
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div class="flex items-start gap-3">
-            <c-chips.icon-chip accent="danger">
-            <i class="fas fa-trash-alt" aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <div>
-                <h6 class="font-semibold text-text m-0">Delete Workspace</h6>
-                <p class="text-sm text-text-muted m-0 mt-1">Permanently remove this workspace and all its associated data.</p>
-                {% if is_default_team %}
-                    <p class="text-sm text-warning m-0 mt-2">
-                        <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-                        You must set another workspace as default before deleting this one.
-                    </p>
-                {% endif %}
-            </div>
-        </div>
-        <c-buttons.danger size="sm" id="del_{{ team_key }}" class="flex-shrink-0" :disabled="is_default_team" @click.prevent.stop="showDeleteModal = true" aria-label="Delete workspace {{ team_name }}">
-        <i class="fas fa-trash-alt mr-2" aria-hidden="true"></i>
-        Delete Workspace
-        </c-buttons.danger>
+    <div class="flex flex-col gap-4">
+        <c-layout.section-header title="Delete workspace" subtitle="Delete this workspace and all its products, components and artifacts.">
+        <c-slot name="actions">
+        <c-buttons.danger size="sm" id="del_{{ team_key }}" :disabled="is_default_team" @click.prevent.stop="showDeleteModal = true" aria-label="Delete workspace {{ team_name }}">Delete workspace</c-buttons.danger>
+        </c-slot>
+        </c-layout.section-header>
+        {% if is_default_team %}
+            <c-feedback.alert variant="warning">Set another workspace as your default before deleting this one.</c-feedback.alert>
+        {% endif %}
     </div>
     </c-cards.dangerzone-collapsible>
     {# Custom Delete Modal for Workspace #}
-    <c-modal id="deleteWorkspaceModal" show="showDeleteModal" title="Delete Workspace" icon="fas fa-exclamation-triangle" role="alertdialog" aria-describedby="deleteWorkspaceModalDesc">
-    <p class="text-text mb-2">
+    <c-modal id="deleteWorkspaceModal" show="showDeleteModal" title="Delete workspace" icon="fas fa-exclamation-triangle" role="alertdialog" aria-describedby="deleteWorkspaceModalDesc">
+    <p class="mb-2">
         Are you sure you want to delete the workspace
-        <span class="font-semibold text-danger">{{ team_name }}</span>?
+        <strong>{{ team_name }}</strong>?
     </p>
-    <p id="deleteWorkspaceModalDesc" class="text-sm text-text-muted mb-4">
-        This action cannot be undone. All products, components, SBOMs, and documents in this workspace will be permanently deleted.
-    </p>
+    <c-forms.hint id="deleteWorkspaceModalDesc" class="mb-4">
+    This action cannot be undone. All products, components, SBOMs, and documents in this workspace will be permanently deleted.
+    </c-forms.hint>
     <c-forms.label for="delete-confirm-{{ team_key }}">Type <strong>delete</strong> to confirm:</c-forms.label>
     <c-forms.input id="delete-confirm-{{ team_key }}" placeholder="Type 'delete' to confirm" autocomplete="off" x-model="confirmText" @keydown.enter="if (canConfirm) $refs.deleteForm.submit()" />
     <c-slot name="footer">
@@ -43,7 +32,7 @@
         {% csrf_token %}
         <input type="hidden" name="action" value="delete">
         <c-buttons.danger type="submit" ::disabled="!canConfirm">
-        <i class="fas fa-trash mr-2" aria-hidden="true"></i>Delete Workspace
+        <i class="fas fa-trash mr-2" aria-hidden="true"></i>Delete workspace
         </c-buttons.danger>
     </form>
     </c-slot>

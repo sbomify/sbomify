@@ -1,0 +1,7 @@
+{% comment %}Chart panel placeholder. Reserve the chart's height without suggesting values while data is loading.{% endcomment %}
+<c-vars message="Loading chart..." class="" />
+<c-feedback.loading message="{{ message }}" class="{{ class }}" :attrs="attrs">
+<c-feedback.skeleton type="title" width="14rem" />
+<c-feedback.skeleton width="45%" />
+<c-feedback.skeleton type="image" height="16rem" />
+</c-feedback.loading>

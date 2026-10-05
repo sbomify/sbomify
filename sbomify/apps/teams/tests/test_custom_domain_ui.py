@@ -1,13 +1,20 @@
 """Tests for custom domain UI in workspace branding settings."""
 
+import re
+
 import pytest
 from django.test import Client, override_settings
+from django.utils.html import strip_tags
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Member, Team
 from sbomify.apps.teams.utils import get_app_hostname, plan_has_custom_domain_access
+
+
+def _dns_targets(content: str) -> list[str]:
+    return [strip_tags(value).strip() for value in re.findall(r"<code\b[^>]*>(.*?)</code>", content, re.DOTALL)]
 
 
 class TestGetAppHostname:
@@ -142,10 +149,10 @@ class TestTeamBrandingViewCustomDomain:
         assert response.status_code == 200
 
         content = response.content.decode()
-        assert "Custom Domain" in content
+        assert "Custom domain" in content
         # Check app_hostname appears in the CNAME target instructions
-        assert "app.sbomify.io" in content
-        assert "Target:" in content or "dns-record-label" in content
+        assert any(target == "app.sbomify.io" for target in _dns_targets(content))
+        assert "Target" in content
         # Check that the upgrade badge is NOT shown (hasAccess should be true)
         assert "hasAccess: true" in content
 
@@ -159,9 +166,9 @@ class TestTeamBrandingViewCustomDomain:
         assert response.status_code == 200
 
         content = response.content.decode()
-        assert "Custom Domain Feature" in content
+        assert "Use your own domain" in content
         # Check for upgrade prompt with billing link (owner sees Upgrade Plan button)
-        assert "Upgrade Plan" in content
+        assert "Upgrade plan" in content
         assert f"/billing/select-plan/{community_team.key}" in content
         assert "Business and Enterprise plans" in content
 
@@ -231,12 +238,12 @@ class TestTeamBrandingViewCustomDomain:
 
         content = response.content.decode()
         # Check DCV hostname appears in the instructions (target is <domain>.<dcv_hostname>)
-        assert ".abc123.dcv.cloudflare.com" in content
+        assert any(target == ".abc123.dcv.cloudflare.com" for target in _dns_targets(content))
         # Check _acme-challenge prefix is shown
         assert "_acme-challenge." in content
         # Check the DCV section title is present
-        assert "SSL Certificate CNAME Record" in content
-        assert "DCV Delegation" in content
+        assert "Certificate (DCV delegation)" in content
+        assert "DCV delegation" in content
         # Check the explanatory note is present
         assert "automatic SSL certificate issuance" in content
 
@@ -252,11 +259,11 @@ class TestTeamBrandingViewCustomDomain:
         content = response.content.decode()
         # DCV-specific content should not appear
         assert "_acme-challenge." not in content
-        assert "SSL Certificate CNAME Record" not in content
-        assert "DCV Delegation" not in content
+        assert "Certificate (DCV delegation)" not in content
+        assert "DCV delegation" not in content
         # But regular CNAME instructions should still be present
         assert "CNAME" in content
-        assert "app.sbomify.io" in content
+        assert any(target == "app.sbomify.io" for target in _dns_targets(content))
 
     @override_settings(APP_BASE_URL="https://app.sbomify.io", CLOUDFLARE_DCV_HOSTNAME="test.dcv.cloudflare.com")
     def test_dcv_instructions_show_both_records(self, business_team, sample_user):
@@ -269,9 +276,8 @@ class TestTeamBrandingViewCustomDomain:
 
         content = response.content.decode()
         # Check both record titles are present
-        assert "1. Domain CNAME Record" in content
-        assert "2. SSL Certificate CNAME Record" in content
+        assert "Purpose" in content
+        assert "Certificate (DCV delegation)" in content
         # Check both targets are present (DCV target is <domain>.<dcv_hostname>)
-        assert "app.sbomify.io" in content
-        assert ".test.dcv.cloudflare.com" in content
-
+        assert any(target == "app.sbomify.io" for target in _dns_targets(content))
+        assert any(target == ".test.dcv.cloudflare.com" for target in _dns_targets(content))

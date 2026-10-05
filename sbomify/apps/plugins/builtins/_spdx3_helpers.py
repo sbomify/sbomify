@@ -18,9 +18,11 @@ Field mappings (SPDX 2.x → 3.0.1):
     relationships           → @graph elements with type "Relationship"
 
 Reading rules that keep old documents scoring:
-    - ``externalIdentifier`` is the spec property; ``externalIdentifiers`` is a
-      non-spec spelling this codebase both wrote into fixtures and accepted
-      from producers, so stored artifacts carry it. Both are read everywhere.
+    - ``externalIdentifier`` is the spec property. ``externalIdentifiers`` is
+      not valid SPDX: a 3.0.1 upload carrying it is rejected, and nothing
+      here should emit it. It is still read, only because artifacts are never
+      rewritten: 3.0.1 documents stored before schema validation, and the
+      lenient 3.0.0 and ``spdxVersion`` shapes, can carry it.
     - ``packageUrl`` is the vocabulary value; ``packageURL`` and ``purl`` are
       accepted variants for the same reason.
     - Anything in Agent position (createdBy, originatedBy, suppliedBy) may be
@@ -80,6 +82,26 @@ def is_spdx3(sbom_data: dict[str, Any]) -> bool:
     return False
 
 
+def spdx3_refs(value: Any) -> list[Any]:
+    """The members of a set-valued SPDX 3 property, as a list to iterate.
+
+    ``createdBy``, ``originatedBy``, ``suppliedBy`` and ``createdUsing`` are
+    all sets in the schema, and JSON-LD compact form serialises a one-element
+    set as a bare string or a bare object. The same document is conformant
+    written either way. A reader that only iterates lists finds nobody in the
+    compact form; one that iterates the value directly walks a string
+    character by character. Anything else resolves nobody rather than
+    guessing.
+    """
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        return [value]
+    if isinstance(value, str):
+        return [value]
+    return []
+
+
 def resolve_spdx3_agent(ref: Any, agents: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """Resolve anything legal in an Agent position to an agent dict.
 
@@ -98,7 +120,8 @@ def resolve_spdx3_agent(ref: Any, agents: dict[str, dict[str, Any]]) -> dict[str
 
 
 def iter_spdx3_external_identifiers(entity: dict[str, Any]) -> Iterator[dict[str, Any]]:
-    """All ExternalIdentifier dicts on an element, spec and legacy spellings."""
+    """All ExternalIdentifier dicts on an element, including the invalid plural
+    spelling stored artifacts may carry (see the module docstring)."""
     for key in ("externalIdentifier", "externalIdentifiers"):
         value = entity.get(key)
         if isinstance(value, list):
@@ -230,14 +253,7 @@ def get_spdx3_creation_info_fields(
 
     tools = tools or {}
 
-    # Extract creators from createdBy references. Normalized like the
-    # package agent fields: a bare string is a singleton reference, and any
-    # other non-list shape resolves nobody instead of iterating characters.
-    created_by = creation_info.get("createdBy", [])
-    if isinstance(created_by, str):
-        created_by = [created_by]
-    elif not isinstance(created_by, list):
-        created_by = []
+    created_by = spdx3_refs(creation_info.get("createdBy"))
     creators: list[str] = []
     for ref in created_by:
         entity = resolve_spdx3_agent(ref, persons_orgs)
@@ -253,21 +269,19 @@ def get_spdx3_creation_info_fields(
     # Extract tool names from createdUsing references. A SoftwareAgent lives
     # in the agents map, so the lookup checks both.
     tool_entries: list[str] = []
-    refs = creation_info.get("createdUsing", [])
-    if isinstance(refs, list):
-        for ref in refs:
-            if isinstance(ref, str):
-                tool_element = tools.get(ref) or persons_orgs.get(ref)
-                if tool_element:
-                    tool_name = tool_element.get("name", "")
-                    if tool_name:
-                        tool_entries.append(tool_name)
-                        continue
-                tool_entries.append(ref)
-            elif isinstance(ref, dict):
-                tool_name = ref.get("name", "")
+    for ref in spdx3_refs(creation_info.get("createdUsing")):
+        if isinstance(ref, str):
+            tool_element = tools.get(ref) or persons_orgs.get(ref)
+            if tool_element:
+                tool_name = tool_element.get("name", "")
                 if tool_name:
                     tool_entries.append(tool_name)
+                    continue
+            tool_entries.append(ref)
+        elif isinstance(ref, dict):
+            tool_name = ref.get("name", "")
+            if tool_name:
+                tool_entries.append(tool_name)
 
     timestamp = creation_info.get("created")
 
@@ -292,16 +306,8 @@ def get_spdx3_package_fields(
     """
     name = package.get("name", "")
     version = package.get("software_packageVersion", "")
-    originated_by = package.get("originatedBy", [])
-    if isinstance(originated_by, str):
-        originated_by = [originated_by]
-    elif not isinstance(originated_by, list):
-        originated_by = []
-    supplied_by = package.get("suppliedBy")
-    if isinstance(supplied_by, str):
-        supplied_by = [supplied_by]
-    elif not isinstance(supplied_by, list):
-        supplied_by = []
+    originated_by = spdx3_refs(package.get("originatedBy"))
+    supplied_by = spdx3_refs(package.get("suppliedBy"))
     supplier_refs = originated_by if originated_by else supplied_by
     download_location = package.get("software_downloadLocation", "")
 

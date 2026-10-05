@@ -1,0 +1,29 @@
+<form id="patch-sla-form"
+      method="post"
+      hx-post="{% url 'teams:team_general' team.key %}"
+      hx-disabled-elt="find button[type='submit']"
+      hx-swap="none"
+      x-data="{ mode: '{{ patch_sla_mode }}' }"
+      class="space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="update_patch_sla">
+    <c-cards.card flush>
+    <c-cards.header compact title="Patch SLA" />
+    <c-forms.field horizontal label="Patch targets" for="patch-sla-mode" hint="Measure time to fix vulnerabilities on your dashboard. Recommended: critical 7, high 30 and medium 90 days. Low has no target.">
+    <c-forms.select size="sm" id="patch-sla-mode" name="mode" x-model="mode">
+    <option value="recommended">Recommended</option>
+    <option value="custom">Custom</option>
+    </c-forms.select>
+    </c-forms.field>
+    {% for field in patch_sla_form %}
+        {% if field.name != 'mode' %}
+            <c-forms.field horizontal label="{{ field.label }} (days)" for="patch-sla-{{ field.name }}" x-show="mode === 'custom'" x-cloak>
+            <c-forms.input size="sm" type="number" id="patch-sla-{{ field.name }}" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}" min="0" max="3650" step="1" placeholder="No target" ::disabled="mode !== 'custom'" />
+            </c-forms.field>
+        {% endif %}
+    {% endfor %}
+    </c-cards.card>
+    <div class="flex justify-end">
+        <c-buttons.primary size="sm" type="submit">Save patch targets</c-buttons.primary>
+    </div>
+</form>

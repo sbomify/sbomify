@@ -38,6 +38,15 @@ class PluginsConfig(AppConfig):
         from django.db import transaction
         from django.db.utils import OperationalError, ProgrammingError
 
+        # The registry's version is what a stored run is compared against to tell
+        # whether its result is out of date, so it must come from the class.
+        from .builtins.bsi import BSICompliancePlugin
+        from .builtins.cisa_2025 import CISA2025MinimumElementsPlugin
+        from .builtins.cisa_2026 import CISAMinimumElementsPlugin
+        from .builtins.fda_medical_device_cybersecurity import FDAMedicalDevicePlugin
+        from .builtins.ntia import NTIAMinimumElementsPlugin
+        from .builtins.openchain_telco import OpenChainTelcoPlugin
+        from .builtins.verification import SBOMVerificationPlugin
         from .models import RegisteredPlugin
 
         def _is_missing_schema_error(exc: BaseException) -> bool:
@@ -81,7 +90,7 @@ class PluginsConfig(AppConfig):
                     "SBOM Author, and Timestamp."
                 ),
                 "category": "compliance",
-                "version": "0.1.0",
+                "version": NTIAMinimumElementsPlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.ntia.NTIAMinimumElementsPlugin",
                 "is_enabled": True,
                 "is_beta": True,
@@ -107,7 +116,7 @@ class PluginsConfig(AppConfig):
                     "a warning rather than a miss."
                 ),
                 "category": "compliance",
-                "version": "2.0.0",
+                "version": CISAMinimumElementsPlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.cisa_2026.CISAMinimumElementsPlugin",
                 "is_enabled": True,
                 "is_beta": True,
@@ -132,7 +141,7 @@ class PluginsConfig(AppConfig):
                     "asks for the 2025 elements by name; otherwise use the 2026 plugin."
                 ),
                 "category": "compliance",
-                "version": "1.0.0",
+                "version": CISA2025MinimumElementsPlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.cisa_2025.CISA2025MinimumElementsPlugin",
                 "is_enabled": True,
                 "is_beta": True,
@@ -154,7 +163,7 @@ class PluginsConfig(AppConfig):
                     "CONTAINS relationships, and the build information including the CISA SBOM Type."
                 ),
                 "category": "compliance",
-                "version": "1.0.0",
+                "version": OpenChainTelcoPlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.openchain_telco.OpenChainTelcoPlugin",
                 "is_enabled": True,
                 "is_beta": True,
@@ -175,7 +184,7 @@ class PluginsConfig(AppConfig):
                     "data including software support status and end-of-support dates for each component."
                 ),
                 "category": "compliance",
-                "version": "0.1.0",
+                "version": FDAMedicalDevicePlugin.VERSION,
                 "plugin_class_path": (
                     "sbomify.apps.plugins.builtins.fda_medical_device_cybersecurity.FDAMedicalDevicePlugin"
                 ),
@@ -200,7 +209,7 @@ class PluginsConfig(AppConfig):
                     "For digital signature requirements, use in combination with attestation plugins."
                 ),
                 "category": "compliance",
-                "version": "1.0.0",
+                "version": BSICompliancePlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.bsi.BSICompliancePlugin",
                 "is_enabled": True,
                 "is_beta": True,
@@ -230,7 +239,7 @@ class PluginsConfig(AppConfig):
                     "verifies the SBOM."
                 ),
                 "category": "attestation",
-                "version": "2.0.0",
+                "version": SBOMVerificationPlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.verification.SBOMVerificationPlugin",
                 "is_enabled": True,
                 "is_beta": True,

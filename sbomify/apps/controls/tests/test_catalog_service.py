@@ -215,9 +215,7 @@ class TestImportOscalCatalog:
 
     def test_rejects_empty_groups(self, sample_team_with_owner_member) -> None:
         team = sample_team_with_owner_member.team
-        result = import_oscal_catalog(team, {
-            "catalog": {"metadata": {"title": "Empty"}, "groups": []}
-        })
+        result = import_oscal_catalog(team, {"catalog": {"metadata": {"title": "Empty"}, "groups": []}})
         assert not result.ok
         assert result.status_code == 400
 
@@ -296,7 +294,7 @@ def test_every_builtin_catalogue_has_a_tile_in_settings() -> None:
     lists is the only thing that notices.
     """
     from sbomify.apps.controls.services.catalog_service import _BUILTIN_CATALOGS
-    from sbomify.apps.teams.views.team_settings import BUILTIN_CATALOG_TILES
+    from sbomify.apps.controls.services.page_context import BUILTIN_CATALOG_TILES
 
     tiles = {slug for slug, _name, _label, _icon in BUILTIN_CATALOG_TILES}
 

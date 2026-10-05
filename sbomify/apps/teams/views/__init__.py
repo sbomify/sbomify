@@ -12,8 +12,10 @@ if typing.TYPE_CHECKING:
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
+from django.forms import ChoiceField
 from django.http import (
     HttpResponse,
     HttpResponseForbidden,
@@ -22,10 +24,10 @@ from django.http import (
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY, READ_INTERNAL, ROLE_GUEST, ROLE_OWNER
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_DESCRIPTIONS, ROLE_GUEST, ROLE_OWNER, can
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -38,8 +40,7 @@ from sbomify.apps.teams.models import (
     Team,
 )
 from sbomify.apps.teams.permissions import check_member_removal
-from sbomify.apps.teams.queries import count_team_members
-from sbomify.apps.teams.services.member_notifications import notify_owners_of_owner_invitation
+from sbomify.apps.teams.queries import count_team_members, invitation_email
 from sbomify.apps.teams.utils import (
     redirect_to_team_settings,
     switch_active_workspace,
@@ -232,11 +233,21 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
     except Team.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Team not found"))
 
-    if request.method == "POST":
-        invite_user_form = InviteUserForm(request.POST)
+    can_grant_owner = bool(can(request, "member:grant_owner", team))
+    context["can_grant_owner"] = can_grant_owner
+    # Explain exactly the roles the select offers, in the words the Members tab uses.
+    role_field = typing.cast(ChoiceField, InviteUserForm(can_grant_owner=can_grant_owner).fields["role"])
+    role_choices = typing.cast(list[tuple[str, str]], role_field.choices)
+    offered = {value for value, _label in role_choices}
+    context["role_descriptions"] = [role for role in ROLE_DESCRIPTIONS if role[0] in offered]
 
-        # Check user limits before form validation to show as form error
-        from sbomify.apps.teams.utils import can_add_user_to_team
+    if request.method == "POST":
+        invite_user_form = InviteUserForm(request.POST, can_grant_owner=can_grant_owner)
+
+        # Advisory, so the limit shows as a form error rather than as a refusal
+        # after the user has filled the form in. The authoritative check is taken
+        # under a lock at the point the invitation is written, below.
+        from sbomify.apps.teams.utils import can_add_user_to_team, user_seat
 
         can_add, error_message = can_add_user_to_team(team)
 
@@ -264,12 +275,23 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                 # Invitation doesn't exist, proceed with creating new one
                 pass
 
-            invitation = Invitation(
-                team_id=team_id,
-                email=invite_user_form.cleaned_data["email"],
-                role=invite_user_form.cleaned_data["role"],
-            )
-            invitation.save()
+            # Counted and written under one lock. The advisory check above ran
+            # before the form was even validated, so by here another invitation
+            # may have taken the last seat. The email is sent afterwards, on
+            # purpose: an SMTP round trip has no business inside a row lock.
+            with user_seat(team) as (seat_available, seat_error):
+                if not seat_available:
+                    invite_user_form.add_error(None, seat_error)
+                    context["invite_user_form"] = invite_user_form
+                    return render(request, "teams/invite.html.j2", context)
+
+                invitation = Invitation(
+                    team_id=team_id,
+                    email=invite_user_form.cleaned_data["email"],
+                    role=invite_user_form.cleaned_data["role"],
+                    invited_by=cast(User, request.user),
+                )
+                invitation.save()
 
             email_context = {
                 "team": team,
@@ -303,19 +325,6 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             email_domain = invited_email.rsplit("@", 1)[-1].lower() if "@" in invited_email else ""
             captured_role = invite_user_form.cleaned_data["role"]
             captured_team_key = team.key
-
-            # Admins may invite at any level, including owner. That makes the
-            # "admins cannot remove an owner" rule bypassable in principle — an
-            # admin could mint an owner they control. The boundary is about
-            # preventing accidents, not defending against a malicious admin, so
-            # rather than forbidding it we make it visible: tell the existing
-            # owners whenever an owner-level invitation is created.
-            actor_role = (
-                Member.objects.filter(user=cast(User, request.user), team=team).values_list("role", flat=True).first()
-                or ""
-            )
-            if captured_role in OWNER_ONLY and actor_role not in OWNER_ONLY:
-                notify_owners_of_owner_invitation(team, cast(User, request.user), invited_email)
             transaction.on_commit(
                 lambda: capture_for_request(
                     request,
@@ -335,24 +344,18 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
         # If form has errors, fall through to render the form with errors
         context["invite_user_form"] = invite_user_form
     else:
-        invite_user_form = InviteUserForm()
+        invite_user_form = InviteUserForm(can_grant_owner=can_grant_owner)
         context["invite_user_form"] = invite_user_form
 
     return render(request, "teams/invite.html.j2", context)
 
 
-@require_GET
+@require_http_methods(["GET", "POST"])
 def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFound | HttpResponse:
-    log.info("Accepting invitation %s", invite_token)
-
-    invitation = Invitation.objects.filter(token=invite_token).first()
-
-    # Backward compatibility for legacy numeric invite links
-    if invitation is None and invite_token.isdigit():
-        try:
-            invitation = Invitation.objects.filter(id=int(invite_token)).first()
-        except ValueError:
-            pass
+    try:
+        invitation = Invitation.objects.filter(token=invite_token).first()
+    except ValidationError:
+        return error_response(request, HttpResponseNotFound("Unknown invitation"))
 
     if invitation is None:
         # If user is not authenticated, store token and redirect to login
@@ -370,12 +373,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         # If the invitation was auto-accepted during login, recover using session data
         auto_accepted_invites = request.session.get("auto_accepted_invites", [])
         matched = next(
-            (
-                inv
-                for inv in auto_accepted_invites
-                if inv.get("invitation_token") == invite_token
-                or (invite_token.isdigit() and str(inv.get("invitation_id")) == invite_token)
-            ),
+            (inv for inv in auto_accepted_invites if inv.get("invitation_token") == invite_token),
             None,
         )
         if not matched:
@@ -414,19 +412,23 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         redirect_url = reverse("teams:accept_invite", kwargs={"invite_token": invite_token})
         return redirect(f"{login_url}?next={quote(redirect_url)}")
 
-    # Check if we have a pending invitation token in session (from login redirect)
-    # Use session token if available, otherwise use URL token
-    pending_token = request.session.pop("pending_invitation_token", None)
-    if pending_token:
-        # Use the token from session (more reliable after login redirect)
-        session_invitation = Invitation.objects.filter(token=pending_token).first()
-        if session_invitation:
-            invitation = session_invitation
-            invite_token = pending_token
+    # The URL names the invitation. A token saved in the session never replaces it
+    # and is dropped either way, so a stale one cannot reach a later step.
+    request.session.pop("pending_invitation_token", None)
 
-    if (request.user.email or "").lower() != invitation.email.lower():
+    if invitation_email(request.user).lower() != invitation.email.lower():
         # Avoid revealing whether an invitation exists for another email
         return error_response(request, HttpResponseNotFound("Unknown invitation"))
+
+    # The emailed link only offers the invitation; accepting it is the
+    # confirmation page's POST. A zero count drops the toast that sends the
+    # user to settings to accept it, since this page does that.
+    if request.method == "GET":
+        return render(
+            request, "teams/accept_invite.html.j2", {"invitation": invitation, "pending_invitations_count": 0}
+        )
+
+    log.info("Accepting invitation %s", invitation.pk)
 
     # Check if we already have a membership
     try:
@@ -434,6 +436,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         if existing_membership:
             # Update role if invitation role is different
             old_role = existing_membership.role
+            new_role = invitation.granted_role
 
             # An invitation must never DEMOTE an existing owner. Accepting one
             # re-writes the membership's role, which would otherwise route
@@ -443,7 +446,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             # last owner would also leave the workspace ownerless — nobody could
             # then delete it (OWNER_ONLY) and the primary-owner lookup in
             # teams.apis would return None.
-            if old_role == ROLE_OWNER and invitation.role != ROLE_OWNER:
+            if old_role == ROLE_OWNER and new_role != ROLE_OWNER:
                 invitation.delete()
                 messages.add_message(
                     request,
@@ -453,14 +456,14 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
                 )
                 return redirect("core:dashboard")
 
-            role_changed = old_role != invitation.role
+            role_changed = old_role != new_role
             if role_changed:
-                existing_membership.role = invitation.role
+                existing_membership.role = new_role
                 existing_membership.save(update_fields=["role"])
                 update_user_teams_session(request, request.user)
 
                 # If user was upgraded from guest to admin/owner, remove their access requests
-                if old_role == ROLE_GUEST and invitation.role in READ_INTERNAL:
+                if old_role == ROLE_GUEST and new_role in READ_INTERNAL:
                     from sbomify.apps.documents.access_models import AccessRequest
                     from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
 
@@ -469,19 +472,19 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
                     # Invalidate cache so the queue updates immediately
                     _invalidate_access_requests_cache(invitation.team)
 
-            switch_active_workspace(request, invitation.team, invitation.role)
+            switch_active_workspace(request, invitation.team, new_role)
 
             if role_changed:
                 messages.add_message(
                     request,
                     messages.SUCCESS,
-                    f"Your role in {invitation.team.name} has been updated to {invitation.role}",
+                    f"Your role in {invitation.team.name} has been updated to {new_role}",
                 )
             else:
                 messages.add_message(
                     request,
                     messages.INFO,
-                    f"You have already joined {invitation.team.name} as {invitation.role}",
+                    f"You have already joined {invitation.team.name} as {new_role}",
                 )
             invitation.delete()
             return redirect("core:dashboard")
@@ -533,22 +536,36 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
 
         return redirect("documents:sign_nda", team_key=invitation.team.key, request_id=access_request.id)
 
-    # Check user limits before accepting invitation
-    from sbomify.apps.teams.utils import can_add_user_to_team
+    # Counted and taken under one lock. is_joining_via_invite allows total ==
+    # max because this user's own pending invitation already occupies a slot,
+    # and that only holds if nobody else can take the slot in between.
+    from sbomify.apps.teams.utils import user_seat
 
-    can_add, error_message = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
-    if not can_add:
-        return _render_workspace_availability_page(request, invitation.team, invitation, error_message)
+    with user_seat(invitation.team, is_joining_via_invite=True) as (can_add, error_message):
+        if not can_add:
+            return _render_workspace_availability_page(request, invitation.team, invitation, error_message)
 
-    # Set default workspace if user does not have one yet (common for invite-only signups)
-    has_default_team = Member.objects.filter(user=request.user, is_default_team=True).exists()
-    membership = Member(
-        team_id=invitation.team_id,
-        user_id=request.user.id,
-        role=invitation.role,
-        is_default_team=not has_default_team,
-    )
-    membership.save()
+        # Set default workspace if user does not have one yet (common for invite-only signups)
+        has_default_team = Member.objects.filter(user=request.user, is_default_team=True).exists()
+        membership = Member(
+            team_id=invitation.team_id,
+            user_id=request.user.id,
+            role=invitation.granted_role,
+            is_default_team=not has_default_team,
+        )
+        membership.save()
+
+        # Inside the lock with the membership. The count is members plus pending
+        # invitations, so between creating one and deleting the other this user
+        # occupies two seats, and a concurrent acceptance would be refused a seat
+        # that is actually free. Taking a seat and releasing the invitation that
+        # reserved it is one transition.
+        #
+        # Everything below reads these rather than the invitation, because the
+        # row is gone once the block closes.
+        joined_team = invitation.team
+        joined_role = membership.role
+        invitation.delete()
 
     # Create/approve AccessRequest for trust center invitations (only when NO NDA is required)
     # If NDA was required, it would have been handled above and user redirected to sign NDA
@@ -573,7 +590,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     from sbomify.apps.documents.access_models import AccessRequest
 
     access_request, created = AccessRequest.objects.get_or_create(
-        team=invitation.team,
+        team=joined_team,
         user=request.user,
         defaults={
             "status": AccessRequest.Status.APPROVED,
@@ -606,18 +623,19 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     # Invalidate cache to refresh the access requests list
     from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
 
-    _invalidate_access_requests_cache(invitation.team)
+    _invalidate_access_requests_cache(joined_team)
 
     update_user_teams_session(request, request.user)
-    switch_active_workspace(request, invitation.team, invitation.role)
+    switch_active_workspace(request, joined_team, joined_role)
 
-    messages.add_message(request, messages.INFO, f"You have joined {invitation.team.name} as {invitation.role}")
+    messages.add_message(request, messages.INFO, f"You have joined {joined_team.name} as {joined_role}")
 
-    # Capture invitation fields into locals BEFORE the delete() below;
-    # the deferred ``on_commit`` lambdas reference these by closure and
-    # ``invitation`` becomes invalid after deletion.
-    captured_role = invitation.role
-    captured_team_key = invitation.team.key
+    # The invitation is already gone: it is deleted inside the user_seat block
+    # above, so that taking the seat and releasing the one the invitation held
+    # is a single transition under the lock. These read joined_* rather than the
+    # row, and the deferred on_commit lambdas below reference them by closure.
+    captured_role = joined_role
+    captured_team_key = joined_team.key
     transaction.on_commit(
         lambda: capture_for_request(
             request,
@@ -639,8 +657,6 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
                 team_key=captured_team_key,
             )
         )
-
-    invitation.delete()
 
     return redirect("core:dashboard")
 
