@@ -20,7 +20,7 @@ VERSION_LIMIT = 5
 
 _SECURITY = "security"
 # Worst first: the verdict a version gets for a check is its worst file's.
-_STATUS_RANK = {"fail": 0, "error": 1, "pending": 2, "pass": 3, "skipped": 4}
+_STATUS_RANK = {"fail": 0, "error": 1, "pending": 2, "pass": 3, "skipped": 4}  # nosec B105 - check outcomes, not credentials
 _ITEM_TYPES = {"sbom": "sboms", "vex": "vex", "cbom": "cbom"}
 
 
