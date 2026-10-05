@@ -97,7 +97,7 @@ def _scope_counts(workspace: Team, product_id: str = "") -> dict[str, int]:
     return {"products": products.count(), "components": components.count(), "releases": releases.count()}
 
 
-def _tab_href(params: dict[str, Any], kind: str, target: str) -> str:
+def _tab_href(params: dict[str, Any], kind: str, target: str, *, chose_order: bool = False) -> str:
     """Carry the slice the user built, drop what belongs to the list they typed it into.
 
     Risk, visibility, ordering and page size describe the same question asked of
@@ -105,9 +105,13 @@ def _tab_href(params: dict[str, Any], kind: str, target: str) -> str:
     one list and are left behind. Anything the target kind cannot honour, a
     gated visibility outside components or a sort key it has no column for, is
     dropped here rather than silently reset on arrival.
+
+    An order the reader never chose is the source kind's own default, and each
+    kind is entitled to its own; chose_order says the order came from the query
+    string, and then it travels even where it matches that default.
     """
     sort, direction = params["sort"], params["direction"]
-    if (sort, direction) == DEFAULT_ORDER[kind] or sort not in dict(COLUMNS[target]):
+    if (not chose_order and (sort, direction) == DEFAULT_ORDER[kind]) or sort not in dict(COLUMNS[target]):
         sort = direction = ""
     return _url(
         {
@@ -463,6 +467,7 @@ def build_inventory_table(
     """
     base_url = base_url or reverse(f"core:{kind}_dashboard")
     default_sort, default_direction = DEFAULT_ORDER[kind]
+    chose_order = request.GET.get("sort") in dict(COLUMNS[kind]) or request.GET.get("direction") in ("asc", "desc")
     params: dict[str, Any] = {
         "search": request.GET.get("search", "").strip(),
         "risk": request.GET.get("risk", "all"),
@@ -571,7 +576,7 @@ def build_inventory_table(
                 # it counts the workspace, so no badge promises rows the table
                 # under it will not show.
                 "badge": str(tab_counts[key] if tab_counts and key != "products" else snapshot["counts"][key]),
-                "href": _tab_href(params, kind, key),
+                "href": _tab_href(params, kind, key, chose_order=chose_order),
             }
             for key in KINDS
         ],

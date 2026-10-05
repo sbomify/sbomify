@@ -102,8 +102,9 @@ describe('inventory panel navigation', () => {
 
 
 describe('inventory headings follow the open tab', () => {
-    test('the heading starts on the panel the server rendered', () => {
-        document.title = 'Releases · sbomify';
+    test('the heading starts on the panel on screen, titling a restored one', () => {
+        // Back restores a panel under whatever title the page was left with.
+        document.title = 'Components · sbomify';
         const { tabs } = setup('releases');
         expect(tabs.heading).toBe('Releases');
         expect(tabs.headingSubtitle).toBe('Every release here.');

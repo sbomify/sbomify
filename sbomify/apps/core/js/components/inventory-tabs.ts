@@ -61,8 +61,11 @@ export function inventoryTabs(): AlpineComponent<InventoryTabs> {
             // History may restore a later panel inside the original frame.
             this.loadedKind = this.$el.querySelector<HTMLElement>('#inventory-panel')?.dataset.inventoryKind || 'products';
             this.selectedKind = this.loadedKind;
-            // The server already rendered this page's title and heading.
-            this.applyHeading(this.loadedKind, false);
+            // On a fresh page this restates the words the server already
+            // rendered. On Back it corrects them: HTMX snapshots the title when
+            // it leaves a page, by which point the tab being opened has already
+            // retitled it, so the restored panel can arrive under the wrong one.
+            this.applyHeading(this.loadedKind, true);
         },
 
         applyHeading(kind, retitle) {

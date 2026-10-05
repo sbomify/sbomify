@@ -369,11 +369,14 @@
         use the same header and title alignment as list pages.
         <code class="tw-code-inline">copy_values</code> adds click-to-copy identifiers beside the title, and the
         named <code class="tw-code-inline">meta</code> slot puts a status the title is qualified by on the same
-        line. <code class="tw-code-inline">breadcrumbs</code> replaces the subtitle. Set
+        line. <code class="tw-code-inline">breadcrumbs</code> is the trail to the page, under the title; a
+        page may carry both a trail and a subtitle, as the one below does.
+        <code class="tw-code-inline">x_heading</code> and <code class="tw-code-inline">x_caption</code> bind the
+        title and the subtitle to Alpine expressions, for a heading that changes in place. Set
         <code class="tw-code-inline">editable_item_type</code> and
         <code class="tw-code-inline">editable_item_id</code> to render the title as the inline editable field.
     </p>
-    <c-layout.page-header title="An advisory with supporting detail" subtitle="Security advisory" description="Supporting descriptions use the same header. Longer text can be expanded without clipping the page title. This keeps the complete title readable while leaving the page's actions available at every screen size." />
+    <c-layout.page-header title="An advisory with supporting detail" subtitle="Security advisory" :breadcrumbs="demo_breadcrumbs" description="Supporting descriptions use the same header. Longer text can be expanded without clipping the page title. This keeps the complete title readable while leaving the page's actions available at every screen size." />
     <hr class="border-border">
     <div class="flex flex-col gap-4">
         <c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />

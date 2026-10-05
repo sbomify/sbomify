@@ -423,6 +423,26 @@ def test_tab_links_carry_the_slice_and_leave_the_list_behind(sample_team_with_ow
     assert "direction" not in tabs["releases"]
 
 
+def test_an_order_the_reader_chose_travels_even_when_it_matches_the_default(
+    sample_team_with_owner_member: Member,
+) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    member = sample_team_with_owner_member
+    chosen = {
+        tab["id"]: parse_qs(urlsplit(tab["href"]).query)
+        for tab in inventory(member, view="products", sort="name", direction="asc")["tabs"]
+    }
+    # Products already opens on name ascending, but the reader said so here, and
+    # releases would otherwise open on their own newest-first default.
+    assert chosen["releases"]["sort"] == ["name"]
+    assert chosen["releases"]["direction"] == ["asc"]
+    untouched = {
+        tab["id"]: parse_qs(urlsplit(tab["href"]).query) for tab in inventory(member, view="products")["tabs"]
+    }
+    assert "sort" not in untouched["releases"]
+
+
 def test_tab_badges_count_the_scope_their_link_opens(sample_team_with_owner_member: Member) -> None:
     member = sample_team_with_owner_member
     product = Product.objects.create(team=member.team, name="Filtered")
