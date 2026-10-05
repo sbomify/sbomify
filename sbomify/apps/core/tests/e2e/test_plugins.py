@@ -161,18 +161,20 @@ def _ancestor_compositing(locator) -> list[dict]:
 def test_a_plan_restricted_row_never_fades_the_reason_it_is_restricted(
     authenticated_page: Page, team_with_business_plan: Team, theme: str
 ) -> None:
-    """The restriction notice and its CTA must keep the contrast they were designed with.
+    """Nothing on the live page may fade the restriction notice or its CTA.
 
     The row used to carry ``opacity-50 grayscale``. opacity composites the whole
     subtree against the page, which took the plan-required badge to 1.4:1 and the
     description to 2.0:1 against a 4.5:1 AA floor -- the sentence telling a
     customer what to buy became the least readable text on the page.
 
-    grayscale is kept: the filter matrix is the luminance matrix, so it drains
-    the hue without moving relative luminance, and every pair in the row keeps
-    its contrast. This pins the distinction rather than the pixels, because the
-    token contrast is already pinned in ``test_severity_contrast`` and reading it
-    back out of an anti-aliased screenshot only adds noise.
+    This asserts the live DOM has no ancestor fading these elements, which is the
+    part only a browser can answer: the real page composes the component with
+    billing state, badges and a CTA that no template test assembles. What the
+    surviving ``grayscale`` does to each contrast ratio is a property of the
+    palette, not of the page, and is pinned off the real tokens in
+    ``test_select_row_contrast`` -- deliberately not re-derived from pixels here,
+    since the same crop measured 4.54-4.88:1 across runs on anti-aliasing alone.
     """
     team_with_business_plan.billing_plan = "community"
     team_with_business_plan.save(update_fields=["billing_plan"])
@@ -201,9 +203,10 @@ def test_a_plan_restricted_row_never_fades_the_reason_it_is_restricted(
                 )
                 assert ancestor["filter"] in ("none", "grayscale(1)"), (
                     f"{label} sits under filter {ancestor['filter']!r} on "
-                    f"<{ancestor['tag']} class={ancestor['cls']!r}>; only grayscale "
-                    "is luminance-preserving, anything else moves contrast"
+                    f"<{ancestor['tag']} class={ancestor['cls']!r}>; grayscale is the "
+                    "only filter whose effect on these ratios has been measured"
                 )
 
-        # The row is still visibly inert: the control blocks it and the colour is drained.
+        # The row is still visibly inert, and derived from the control rather than a
+        # prop: the disabled input alone is what greys it.
         assert "grayscale(1)" in row.evaluate("el => getComputedStyle(el).filter")
