@@ -170,10 +170,20 @@ class TestAgainstTheRealMiddlewareChain:
         return broker
 
     @staticmethod
-    def _sentry(events: list[Any]):
-        """A client wired as production wires it, capturing instead of sending."""
+    def _sentry(events: list[Any], with_logging: bool = True):
+        """A client wired as production wires it, capturing instead of sending.
+
+        ``LoggingIntegration`` is part of "as production wires it" and not an
+        extra: ``settings.py`` passes all three, and leaving it out here hid
+        four events per outage, because dramatiq's worker logs every failed
+        attempt at error level on top of what the dramatiq integration
+        captures.
+        """
+        import logging as logging_module
+
         import sentry_sdk
         from sentry_sdk.integrations.dramatiq import DramatiqIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
 
         from sbomify.sentry_config import throttle_self_healing_notices
 
@@ -189,15 +199,21 @@ class TestAgainstTheRealMiddlewareChain:
                 if event is not None:
                     events.append(event)
 
+        integrations: list[Any] = [DramatiqIntegration()]
+        if with_logging:
+            integrations.append(LoggingIntegration(level=logging_module.INFO, event_level=logging_module.ERROR))
+
         return sentry_sdk.Client(
             dsn="https://public@example.invalid/1",
-            integrations=[DramatiqIntegration()],
+            integrations=integrations,
             default_integrations=False,
             before_send=throttle_self_healing_notices,
             transport=_transport,
         )
 
-    def _run_until_exhausted(self, events: list[Any], actor_name: str, max_retries: int) -> None:
+    def _run_until_exhausted(
+        self, events: list[Any], actor_name: str, max_retries: int, with_logging: bool = True
+    ) -> None:
         import dramatiq
         import sentry_sdk
 
@@ -219,7 +235,7 @@ class TestAgainstTheRealMiddlewareChain:
         # threads, and an isolation-scoped client would not reach them.
         scope = sentry_sdk.get_global_scope()
         previous = scope.client
-        scope.set_client(self._sentry(events))
+        scope.set_client(self._sentry(events, with_logging))
         try:
             worker = dramatiq.Worker(broker, worker_timeout=50, worker_threads=1)
             worker.start()
@@ -253,10 +269,39 @@ class TestAgainstTheRealMiddlewareChain:
 
         assert len(events) == 1, f"expected one event for four attempts, got {len(events)}"
 
+    def test_the_workers_own_log_line_is_not_a_second_issue(self) -> None:
+        """Both integrations, because production wires both.
+
+        dramatiq's worker logs "Failed to process message ... with unhandled
+        exception" at error level on every attempt, and ``LoggingIntegration``
+        turns each into its own event. Filtering only what
+        ``DramatiqIntegration`` captured left four of those behind, so the
+        outage still arrived as five issues rather than one.
+        """
+        from sbomify.sentry_config import REPORT_ON_RETRY_EXHAUSTION_ONLY
+
+        events: list[Any] = []
+        self._run_until_exhausted(events, next(iter(REPORT_ON_RETRY_EXHAUSTION_ONLY)), max_retries=3)
+
+        loggers = [event.get("logger") for event in events]
+        assert len(events) == 1, f"expected one event for four attempts, got {len(events)}: {loggers}"
+        assert loggers == [None], "the surviving event should be the captured exception, not a log line"
+
+    def test_an_unlisted_actor_still_reports_both_copies(self) -> None:
+        """The filter is scoped, and the control says so.
+
+        Four attempts, each producing the worker's log line and the captured
+        exception. Nothing outside the named senders changes.
+        """
+        events: list[Any] = []
+        self._run_until_exhausted(events, "some_other_actor_task", max_retries=3)
+
+        assert len(events) == 8, f"expected two events per attempt, got {len(events)}"
+
     def test_an_actor_not_on_the_list_reports_every_attempt(self) -> None:
         """The control: without the filter this is what the senders did too."""
         events: list[Any] = []
-        self._run_until_exhausted(events, "some_other_actor_task", max_retries=3)
+        self._run_until_exhausted(events, "some_other_actor_task", max_retries=3, with_logging=False)
 
         assert len(events) == 4, f"expected one event per attempt, got {len(events)}"
 
@@ -265,7 +310,17 @@ class TestAgainstTheRealMiddlewareChain:
         events: list[Any] = []
         self._run_until_exhausted(events, "some_other_actor_task", max_retries=1)
 
-        event = events[0]
+        # The captured exception, picked out rather than indexed: the worker
+        # also logs each failed attempt, so this actor produces two events per
+        # attempt and only one of them is the shape under test.
+        event = next(
+            e
+            for e in events
+            if any(
+                (v.get("mechanism") or {}).get("type") == "dramatiq"
+                for v in (e.get("exception") or {}).get("values") or []
+            )
+        )
         mechanisms = [(value.get("mechanism") or {}).get("type") for value in event["exception"]["values"]]
         assert "dramatiq" in mechanisms, mechanisms
 

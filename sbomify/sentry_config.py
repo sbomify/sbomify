@@ -235,15 +235,49 @@ def _dramatiq_will_retry(event: Any) -> bool:
     return retries <= max_retries
 
 
+#: The logger dramatiq's worker writes "Failed to process message ... with
+#: unhandled exception" on, at error level, for every attempt that raises.
+_DRAMATIQ_WORKER_LOGGER = "dramatiq.worker.WorkerThread"
+
+
+def _duplicates_the_dramatiq_event(event: Any) -> bool:
+    """Whether this is the worker's log line about an exception already captured.
+
+    ``DramatiqIntegration`` captures the exception itself; the worker then logs
+    that it failed, and ``LoggingIntegration`` is wired at ``event_level=ERROR``
+    in ``settings.py``, so the same failure arrives twice. Filtering only the
+    first left four of these per outage: the integrations have to be considered
+    together, which is why the regression test for this wires both rather than
+    the one under discussion.
+
+    Dropped on every attempt, not only the retried ones. On the attempt that
+    gives up, the captured exception is the better of the two copies -- it
+    carries the traceback rather than a sentence about it -- so this one is
+    redundant there as well.
+
+    Scoped to the same actors as ``REPORT_ON_RETRY_EXHAUSTION_ONLY``: elsewhere
+    a per-attempt line is still how an actor's failures are seen.
+    """
+    if (event or {}).get("logger") != _DRAMATIQ_WORKER_LOGGER:
+        return False
+
+    message = (((event or {}).get("contexts") or {}).get("dramatiq") or {}).get("data")
+    if not isinstance(message, dict):
+        return False
+
+    return message.get("actor_name") in REPORT_ON_RETRY_EXHAUSTION_ONLY
+
+
 def throttle_self_healing_notices(event: Any, hint: Any) -> Any:
     """``before_send`` hook: report a recovering outage once, not once a second.
 
     Returns the event to send it, or ``None`` to drop it. Only the notices
-    listed above and the retry attempts of the actors in
-    ``REPORT_ON_RETRY_EXHAUSTION_ONLY`` are ever dropped; everything else is
-    returned untouched, so this cannot quietly swallow a real error.
+    listed above, the retry attempts of the actors in
+    ``REPORT_ON_RETRY_EXHAUSTION_ONLY``, and the worker's own log line about an
+    exception already captured for those actors are ever dropped; everything
+    else is returned untouched, so this cannot quietly swallow a real error.
     """
-    if _dramatiq_will_retry(event):
+    if _dramatiq_will_retry(event) or _duplicates_the_dramatiq_event(event):
         return None
 
     record = (hint or {}).get("log_record")
