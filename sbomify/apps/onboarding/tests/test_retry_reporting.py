@@ -135,3 +135,141 @@ class TestTheBudgetComesFromTheActor:
         from sbomify.sentry_config import _actor_max_retries
 
         assert _actor_max_retries("no_such_actor_anywhere") is None
+
+
+class TestAgainstTheRealMiddlewareChain:
+    """The event shape, taken from dramatiq rather than written down here.
+
+    Everything above builds the event dict by hand, so a change in how
+    ``SentryMiddleware`` serializes the message -- a renamed key, a missing
+    ``options.retries``, a different nesting -- would make every attempt
+    report while those tests stayed green.
+
+    These run a real actor through a real broker with the real middleware,
+    against a real Sentry client wired the way ``settings.py`` wires it
+    (``DramatiqIntegration`` plus ``before_send=throttle_self_healing_notices``),
+    and assert on what reaches the transport. Nothing about the event shape is
+    asserted from memory.
+    """
+
+    @staticmethod
+    def _broker():
+        """A StubBroker carrying SentryMiddleware where the integration puts it.
+
+        At index 0, as ``DramatiqIntegration`` does when it patches
+        ``Broker.__init__``. The position is what the filter depends on:
+        ``emit_after`` walks middleware in reverse, so first means last --
+        after Retries has incremented and decided.
+        """
+        from dramatiq.brokers.stub import StubBroker
+        from sentry_sdk.integrations.dramatiq import SentryMiddleware
+
+        broker = StubBroker()
+        broker.emit_after("process_boot")
+        broker.add_middleware(SentryMiddleware(), before=type(broker.middleware[0]))
+        return broker
+
+    @staticmethod
+    def _sentry(events: list[Any]):
+        """A client wired as production wires it, capturing instead of sending."""
+        import sentry_sdk
+        from sentry_sdk.integrations.dramatiq import DramatiqIntegration
+
+        from sbomify.sentry_config import throttle_self_healing_notices
+
+        def _transport(payload: Any) -> None:
+            # A function transport is handed the event dict itself, not an
+            # envelope; keep the envelope branch so this does not depend on
+            # which one a future sentry-sdk passes.
+            if isinstance(payload, dict):
+                events.append(payload)
+                return
+            for item in getattr(payload, "items", []):
+                event = item.get_event()
+                if event is not None:
+                    events.append(event)
+
+        return sentry_sdk.Client(
+            dsn="https://public@example.invalid/1",
+            integrations=[DramatiqIntegration()],
+            default_integrations=False,
+            before_send=throttle_self_healing_notices,
+            transport=_transport,
+        )
+
+    def _run_until_exhausted(self, events: list[Any], actor_name: str, max_retries: int) -> None:
+        import dramatiq
+        import sentry_sdk
+
+        broker = self._broker()
+
+        @dramatiq.actor(
+            broker=broker,
+            actor_name=actor_name,
+            max_retries=max_retries,
+            # The real values are minutes; the arithmetic under test does not
+            # depend on them and a test should not wait them out.
+            min_backoff=1,
+            max_backoff=2,
+        )
+        def failing() -> None:
+            raise RuntimeError("the mail server is not answering")
+
+        # Bind the client on the global scope: the middleware runs on worker
+        # threads, and an isolation-scoped client would not reach them.
+        scope = sentry_sdk.get_global_scope()
+        previous = scope.client
+        scope.set_client(self._sentry(events))
+        try:
+            worker = dramatiq.Worker(broker, worker_timeout=50, worker_threads=1)
+            worker.start()
+            try:
+                failing.send()
+                broker.join(failing.queue_name, fail_fast=False)
+                worker.join()
+            finally:
+                worker.stop()
+            sentry_sdk.flush()
+        finally:
+            scope.set_client(previous)
+
+    def test_the_middleware_order_is_what_the_filter_assumes(self) -> None:
+        from dramatiq.middleware.retries import Retries
+        from sentry_sdk.integrations.dramatiq import SentryMiddleware
+
+        order = [type(middleware) for middleware in self._broker().middleware]
+
+        assert order.index(SentryMiddleware) < order.index(Retries), (
+            "SentryMiddleware must precede Retries, so that in the reversed "
+            "after_process_message order it runs after it"
+        )
+
+    def test_only_the_exhausting_attempt_reaches_the_transport(self) -> None:
+        """The behaviour this change is for, with nothing stubbed but the wire."""
+        from sbomify.sentry_config import REPORT_ON_RETRY_EXHAUSTION_ONLY
+
+        events: list[Any] = []
+        self._run_until_exhausted(events, next(iter(REPORT_ON_RETRY_EXHAUSTION_ONLY)), max_retries=3)
+
+        assert len(events) == 1, f"expected one event for four attempts, got {len(events)}"
+
+    def test_an_actor_not_on_the_list_reports_every_attempt(self) -> None:
+        """The control: without the filter this is what the senders did too."""
+        events: list[Any] = []
+        self._run_until_exhausted(events, "some_other_actor_task", max_retries=3)
+
+        assert len(events) == 4, f"expected one event per attempt, got {len(events)}"
+
+    def test_the_fields_the_filter_depends_on_are_present_in_the_real_event(self) -> None:
+        """Named individually, so a renamed or dropped key fails here."""
+        events: list[Any] = []
+        self._run_until_exhausted(events, "some_other_actor_task", max_retries=1)
+
+        event = events[0]
+        mechanisms = [(value.get("mechanism") or {}).get("type") for value in event["exception"]["values"]]
+        assert "dramatiq" in mechanisms, mechanisms
+
+        message = event["contexts"]["dramatiq"]["data"]
+        assert message["actor_name"] == "some_other_actor_task"
+        assert "retries" in message["options"], message["options"]
+        assert isinstance(message["options"]["retries"], int)
