@@ -1600,6 +1600,56 @@ class TestTransientSendFailuresRetry:
         assert task_logger.error.call_count == 0
         assert task_logger.warning.call_count == 1
 
+    def test_a_database_outage_before_rendering_is_reported_as_retryable(self) -> None:
+        """The ORM is reached all over a send, not only inside the classifier.
+
+        The context build queries before anything is rendered, so a database
+        that goes away arrives at the task as itself rather than wrapped. It is
+        retried either way; reporting it at error level would raise a Sentry
+        issue on each of the four attempts, which is the thing this reporting
+        path exists to stop.
+        """
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+
+        user = self._user("dbbeforerender")
+
+        with patch(
+            "sbomify.apps.onboarding.services.get_email_context",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(OperationalError):
+                    send_welcome_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_an_eligibility_database_error_is_reported_as_retryable(self) -> None:
+        """``_send_onboarding_email`` re-raises OperationalError on purpose."""
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+
+        user = self._user("dbeligibility")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch.object(
+            OnboardingStatus,
+            "should_receive_quick_start",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(OperationalError):
+                    send_quick_start_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
     def test_a_broken_template_is_reported_as_permanent(self) -> None:
         """Rendering happens before the send block, so it needs its own answer.
 

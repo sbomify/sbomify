@@ -37,6 +37,26 @@ class TransientEmailError(Exception):
     """
 
 
+#: Database failures that are the connection rather than the query: a restart,
+#: a failover, a connection the pooler closed under us. The ORM is reached all
+#: over a send — the eligibility check, the context build, every record write —
+#: so these arrive from places no single ``try`` here covers.
+TRANSIENT_DB_ERRORS = (OperationalError, InterfaceError)
+
+
+def is_retryable_failure(exc: BaseException) -> bool:
+    """Whether a failure out of this module deserves another attempt.
+
+    The sending tasks ask this to decide how loudly to report, so it has to
+    cover what the send paths classify *and* what simply escapes them. A
+    ``TransientEmailError`` has already been judged; a bare database transport
+    error has not, because it comes from an ORM call rather than from the
+    mailer, and wrapping every one of those at its call site would be a lot of
+    ``try`` for one bit of information.
+    """
+    return isinstance(exc, (TransientEmailError, *TRANSIENT_DB_ERRORS))
+
+
 def _is_temporary_smtp_code(code: object) -> bool:
     """Whether an SMTP reply code is a 4xx, which means "not now" rather than "no".
 
@@ -109,7 +129,7 @@ def _render_or_report(template_name: str, context: dict[str, Any], user_id: Any)
     except (TemplateDoesNotExist, TemplateSyntaxError) as e:
         logger.error("Failed to render %s email for user %s: %s", template_name, user_id, e, exc_info=True)
         return None
-    except (OSError, OperationalError, InterfaceError) as e:
+    except (OSError, *TRANSIENT_DB_ERRORS) as e:
         # Classified here rather than left to the task: the answer to "is this
         # worth retrying" belongs on the exception, so one place decides it.
         # Letting these reach the actor unlabelled retried them, but wrote an
