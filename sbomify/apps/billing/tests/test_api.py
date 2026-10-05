@@ -72,7 +72,7 @@ def test_get_usage_no_team(client: Client, sample_user: AbstractBaseUser):  # no
 
     # Ensure session is empty
     session = client.session
-    session["current_team"] = {}
+    session["current_workspace"] = {}
     session.save()
 
     response = client.get(reverse("api-1:get_usage"))
@@ -281,7 +281,7 @@ def test_change_plan_no_team_selected(
 
     # Explicitly clear the session data
     session = client.session
-    session["current_team"] = {}
+    session["current_workspace"] = {}
     session.save()
 
     response = client.post(

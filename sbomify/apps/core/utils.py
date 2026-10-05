@@ -207,7 +207,7 @@ def get_current_team_id(request: HttpRequest) -> int | None:
 
     If no current team is found in the request session, return None.
     """
-    team_key = request.session.get("current_team", {}).get("key")
+    team_key = request.session.get("current_workspace", {}).get("key")
     if team_key is None:
         return None
 
@@ -430,7 +430,7 @@ def get_team_id_from_session(request: Any) -> str | None:
         str | None: The team ID as string, or None if not found
     """
     session = request.session
-    current_team = session.get("current_team")
+    current_team = session.get("current_workspace")
 
     if not current_team:
         return None

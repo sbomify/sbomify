@@ -150,7 +150,7 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
     # from a live membership check, and could ask for one that is not.
     # Re-reading before giving up turns a KeyError 500 into the switch the user
     # asked for.
-    user_teams: dict[str, Any] = request.session.get("user_teams") or {}
+    user_teams: dict[str, Any] = request.session.get("user_workspaces") or {}
     if team_key not in user_teams:
         from sbomify.apps.teams.utils import get_user_teams
 
@@ -159,14 +159,14 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
         # matches — the cache being consulted is the thing suspected of being
         # wrong. The refreshed map is written back so the next reader benefits.
         user_teams = get_user_teams(user)
-        request.session["user_teams"] = user_teams
+        request.session["user_workspaces"] = user_teams
         request.session.modified = True
     if team_key not in user_teams:
         messages.add_message(request, messages.ERROR, "You are not a member of that workspace")
         return redirect("core:dashboard")
 
     team = dict(key=team_key, **user_teams[team_key])
-    request.session["current_team"] = team
+    request.session["current_workspace"] = team
 
     # Check if user is a guest member of the newly switched workspace
     from sbomify.apps.teams.models import Member
@@ -689,7 +689,7 @@ def settings_redirect(request: HttpRequest) -> HttpResponse:
     Redirect /workspace/settings/ to the current team's settings page.
     This provides backward compatibility for the old URL structure.
     """
-    current_team = request.session.get("current_team")
+    current_team = request.session.get("current_workspace")
     if current_team and current_team.get("key"):
         return redirect("teams:team_settings", team_key=current_team["key"])
     else:

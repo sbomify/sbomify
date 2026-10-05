@@ -40,7 +40,7 @@ def get_member_role(user_id: int, team_id: str) -> str | None:
 def get_member_role_by_key(user: Any, team_key: str | None) -> str | None:
     """The user's live role in a workspace, by workspace key.
 
-    Use this for anything that decides what to render. ``session["current_team"]["role"]``
+    Use this for anything that decides what to render. ``session["current_workspace"]["role"]``
     is a cache with a 300s TTL, so a demoted user keeps seeing controls they can
     no longer use (and a promoted one keeps missing controls they can) until it
     refreshes — while the handler behind the control enforces the real answer and

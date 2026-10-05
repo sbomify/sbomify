@@ -70,7 +70,7 @@ def _current_team(request: HttpRequest) -> Team | None:
     Confirmed against a live membership rather than trusted from the session
     alone, so a role cached there cannot outlive the membership it describes.
     """
-    key = (request.session.get("current_team") or {}).get("key")
+    key = (request.session.get("current_workspace") or {}).get("key")
     if not key:
         return None
     user = cast(User, request.user)
@@ -106,11 +106,11 @@ _ADVISORY_WRITE_ROLES = ADMINISTER
 def _can_write_advisories(request: HttpRequest) -> bool:
     """Whether this user may change advisories, from the live Member row.
 
-    Not from ``session["current_team"]["role"]``: that is a cache with a 300s
+    Not from ``session["current_workspace"]["role"]``: that is a cache with a 300s
     TTL, so a demoted user kept seeing the compose and edit controls (and a
     promoted one kept missing them) while the handler enforced the real answer.
     """
-    key = (request.session.get("current_team") or {}).get("key")
+    key = (request.session.get("current_workspace") or {}).get("key")
     if not key:
         return False
     return Member.objects.filter(user=cast(User, request.user), team__key=key, role__in=_ADVISORY_WRITE_ROLES).exists()
@@ -125,7 +125,7 @@ def _writable_team(request: HttpRequest) -> Team | None:
     The role is read from the membership row rather than the session, so a
     role cached there cannot outlive a demotion.
     """
-    key = (request.session.get("current_team") or {}).get("key")
+    key = (request.session.get("current_workspace") or {}).get("key")
     if not key:
         return None
     user = cast(User, request.user)
@@ -139,7 +139,7 @@ def _writable_team(request: HttpRequest) -> Team | None:
 
 
 def _advisories_context(request: HttpRequest) -> dict[str, Any]:
-    current_team = request.session.get("current_team") or {}
+    current_team = request.session.get("current_workspace") or {}
     team = _current_team(request)
     search = request.GET.get("search", "")
     advisories = (list_advisories(team, search).value or []) if team else []
@@ -188,7 +188,7 @@ class SecurityAdvisoryCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
         if not _can_write_advisories(request):
             raise Http404("Workspace not found")
 
-        current_team = request.session.get("current_team") or {}
+        current_team = request.session.get("current_workspace") or {}
 
         products = creation_options(team).value or []
         # ``?product=`` lets a product's row menu open this form with that
@@ -281,7 +281,7 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
             raise Http404("Advisory not found")
 
         advisory = result.value
-        current_team = request.session.get("current_team") or {}
+        current_team = request.session.get("current_workspace") or {}
         return render(
             request,
             "core/security_advisory_detail.html.j2",

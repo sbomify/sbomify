@@ -265,7 +265,7 @@ class TestVerifyItemAccessIsDbAuthoritative:
 
         request = RequestFactory().get("/")
         request.user = user
-        request.session = {"user_teams": user_teams}
+        request.session = {"user_workspaces": user_teams}
         return request
 
     def test_stale_cached_role_does_not_grant_elevated_access(self, sample_team_with_owner_member):
