@@ -27,7 +27,7 @@ def periodic_domain_verification() -> None:
     1. Finds teams with unvalidated custom domains
     2. Checks if enough time has passed based on exponential backoff
     3. Sends probe requests to /.well-known/com.sbomify.domain-check
-    4. Auto-validates domains when traffic is received
+    4. Validates a domain whose response carries its challenge
 
     Security: Uses Django endpoint (not Caddy /health) to ensure ALLOWED_HOSTS
     validation prevents DoS from random domains pointing to our server.

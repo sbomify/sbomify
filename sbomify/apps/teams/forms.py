@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
 
+from sbomify.apps.core.authz import ROLE_BOT, ROLE_GUEST, ROLE_OWNER
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 
 if TYPE_CHECKING:
@@ -69,6 +70,16 @@ class InviteUserForm(forms.Form):
         widget=forms.Select(attrs={"class": "form-control"}),
     )
 
+    def __init__(self, *args: Any, can_grant_owner: bool = False, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if not can_grant_owner:
+            role_field = cast(forms.ChoiceField, self.fields["role"])
+            role_field.choices = [
+                (role, label)
+                for role, label in settings.TEAMS_SUPPORTED_ROLES
+                if role not in (ROLE_GUEST, ROLE_BOT, ROLE_OWNER)
+            ]
+
 
 class TeamBrandingForm(forms.Form):
     brand_color = forms.CharField(required=False)
@@ -108,6 +119,20 @@ class TeamGeneralSettingsForm(forms.Form):
             }
         ),
     )
+
+
+class PatchSLAForm(forms.Form):
+    """Workspace patch targets, in days. Blank severities have no target."""
+
+    mode = forms.ChoiceField(choices=[("recommended", "Recommended"), ("custom", "Custom")])
+    critical = forms.IntegerField(required=False, min_value=0, max_value=3650)
+    high = forms.IntegerField(required=False, min_value=0, max_value=3650)
+    medium = forms.IntegerField(required=False, min_value=0, max_value=3650)
+    low = forms.IntegerField(required=False, min_value=0, max_value=3650)
+
+
+class SupportPeriodForm(forms.Form):
+    default_support_period_years = forms.IntegerField(required=False, min_value=5, max_value=100)
 
 
 class OnboardingProductForm(forms.Form):
@@ -152,8 +177,22 @@ class OnboardingComponentForm(forms.Form):
     )
 
 
-class OnboardingCompanyForm(forms.Form):
-    """Single-step onboarding form for SBOM identity setup."""
+class OnboardingCompanyForm(PatchSLAForm):
+    """Organisation and security settings saved together at the end of setup."""
+
+    mode = forms.ChoiceField(
+        choices=[("recommended", "Recommended"), ("custom", "Custom")], required=False, initial="recommended"
+    )
+    address = forms.CharField(required=False, max_length=2000)
+    security_email = forms.EmailField(required=False)
+    publish_security_txt = forms.BooleanField(required=False)
+    default_support_period_years = forms.IntegerField(required=False, min_value=5, max_value=100, initial=5)
+
+    def clean(self) -> dict[str, Any]:
+        cleaned = super().clean() or {}
+        if cleaned.get("publish_security_txt") and not cleaned.get("security_email"):
+            self.add_error("security_email", "Enter an email for vulnerability reports.")
+        return cleaned
 
     company_name = forms.CharField(
         label="Company / Organization Name",

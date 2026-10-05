@@ -1,0 +1,6 @@
+{% comment %}A plugin the workspace runs that has no result for this artifact, usually because it was turned on after the upload. It takes a row in the assessment list like any run, but there is nothing to open, so the row carries the Run control instead. Expects plugin ({plugin_name, plugin_display_name}), sbom_id and can_rerun.{% endcomment %}
+<c-assessments.row anchor="plugin-{{ plugin.plugin_name }}" name="{{ plugin.plugin_display_name|default:plugin.plugin_name }}" tone="neutral" label="Not assessed" caption="Has not run on this artifact yet.">
+<c-slot name="action">
+{% include 'plugins/components/_rerun_button.html.j2' with run=plugin label="Run" %}
+</c-slot>
+</c-assessments.row>

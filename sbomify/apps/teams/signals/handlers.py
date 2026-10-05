@@ -20,7 +20,8 @@ from django.utils import timezone
 from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.teams.models import Invitation, Member, Team
-from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, update_user_teams_session
+from sbomify.apps.teams.queries import invitation_email
+from sbomify.apps.teams.utils import get_user_teams, update_user_teams_session, user_seat
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,8 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
     Returns a list of dicts with accepted invitation metadata (team_key, invitation_id)
     to drive session selection and downstream flows.
     """
-    if not user.email:
+    email = invitation_email(user)
+    if not email:
         return []
 
     # Skip auto-accept for existing users who already have workspaces
@@ -49,8 +51,8 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
     accepted: list[dict[str, Any]] = []
     has_default = Member.objects.filter(user=user, is_default_team=True).exists()
 
-    pending_invites = Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).select_related(
-        "team"
+    pending_invites = Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).select_related(
+        "team", "invited_by"
     )
 
     for invitation in pending_invites:
@@ -59,19 +61,36 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
             invitation.delete()
             continue
 
-        can_add, error_msg = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
-        if not can_add:
-            logger.warning(
-                "Skipping invitation %s for user %s due to limit: %s", invitation.id, user.username, error_msg
-            )
-            continue
+        # Counted and taken under one lock. Several invitations can be accepted
+        # for one workspace at the same moment, here and from the accept views,
+        # and separate statements let them all pass the same count.
+        with user_seat(invitation.team, is_joining_via_invite=True) as (can_add, error_msg):
+            if not can_add:
+                logger.warning(
+                    "Skipping invitation %s for user %s due to limit: %s", invitation.id, user.username, error_msg
+                )
+                continue
 
-        membership = Member.objects.create(
-            user=user,
-            team=invitation.team,
-            role=invitation.role,
-            is_default_team=not has_default,
-        )
+            membership = Member.objects.create(
+                user=user,
+                team=invitation.team,
+                role=invitation.granted_role,
+                is_default_team=not has_default,
+            )
+            # Inside the lock with the membership. The count is members plus
+            # pending invitations, so between creating one and deleting the
+            # other this user occupies two seats, and a concurrent acceptance
+            # would be refused a seat that is actually free. Taking a seat and
+            # releasing the invitation that reserved it is one transition.
+            #
+            # Read what the deferred capture needs first: the row is gone after
+            # this and the lambda reads these by closure.
+            captured_role = membership.role
+            captured_team_key = invitation.team.key
+            captured_invitation_id = invitation.id
+            captured_token = str(invitation.token)
+            captured_team_name = invitation.team.name
+            invitation.delete()
         has_default = has_default or membership.is_default_team
         # Accepting deletes the invitation, so the pending-invitation
         # notification has nothing left to show and the user is put in a
@@ -83,23 +102,19 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
         # flag to decide whether it still has to say so itself.
         announced = False
         if request is not None and hasattr(request, "_messages"):
-            messages.info(request, f"You have joined {invitation.team.name} as {invitation.role}")
+            messages.info(request, f"You have joined {captured_team_name} as {captured_role}")
             announced = True
 
         accepted.append(
             {
-                "team_key": invitation.team.key,
-                "invitation_id": invitation.id,
-                "invitation_token": str(invitation.token),
+                "team_key": captured_team_key,
+                "invitation_id": captured_invitation_id,
+                "invitation_token": captured_token,
                 "announced": announced,
             }
         )
 
         if request is not None:
-            # Capture into locals BEFORE invitation.delete() below; the
-            # deferred ``on_commit`` lambda reads these by closure.
-            captured_role = invitation.role
-            captured_team_key = invitation.team.key
             transaction.on_commit(
                 lambda: capture_for_request(
                     request,
@@ -108,8 +123,6 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
                     team_key=captured_team_key,
                 )
             )
-
-        invitation.delete()
 
     if request is not None and accepted:
         request.session["auto_accepted_invites"] = accepted

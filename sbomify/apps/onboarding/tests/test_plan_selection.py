@@ -147,7 +147,7 @@ class TestOnboardingPlanSelectionGet:
         client, user, team = authed_client
         resp = client.get(_wizard_plan_url())
         assert resp.status_code == 200
-        assert b"Choose Your Plan" in resp.content
+        assert b"Choose your plan" in resp.content
 
     def test_redirects_if_already_selected(self, billing_enabled, existing_user):
         user, team = existing_user
@@ -335,7 +335,7 @@ class TestTrialExpirationDowngrade:
         mock_sub.metadata = {"plan_key": "business"}
 
         with (
-            patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility"),
+            patch("sbomify.apps.billing.billing_processing.apply_community_downgrade"),
             patch("sbomify.apps.billing.billing_processing.notify_billing_managers"),
         ):
             handle_trial_period(mock_sub, team)

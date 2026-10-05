@@ -67,6 +67,7 @@ COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
 COPY sbomify/apps/compliance/js/ ./sbomify/apps/compliance/js/
+COPY sbomify/apps/controls/js/ ./sbomify/apps/controls/js/
 
 # Copy templates for Tailwind CSS content scanning (@source directives)
 COPY sbomify/apps/core/templates/ ./sbomify/apps/core/templates/
@@ -78,6 +79,8 @@ COPY sbomify/apps/vulnerability_scanning/templates/ ./sbomify/apps/vulnerability
 COPY sbomify/apps/plugins/templates/ ./sbomify/apps/plugins/templates/
 COPY sbomify/apps/onboarding/templates/ ./sbomify/apps/onboarding/templates/
 COPY sbomify/apps/compliance/templates/ ./sbomify/apps/compliance/templates/
+COPY sbomify/apps/controls/templates/ ./sbomify/apps/controls/templates/
+COPY sbomify/apps/oidc/templates/ ./sbomify/apps/oidc/templates/
 COPY sbomify/templates/ ./sbomify/templates/
 
 # Copy existing static files
