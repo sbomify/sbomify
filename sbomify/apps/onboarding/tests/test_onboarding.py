@@ -1572,7 +1572,11 @@ class TestTransientSendFailuresRetry:
             "sbomify.apps.onboarding.services.render_email_templates",
             side_effect=OSError(113, "No route to host"),
         ):
-            with pytest.raises((OSError, TransientEmailError)):
+            # TransientEmailError specifically, not "either of these": a bare
+            # OSError would also reach the actor and be retried, but the task
+            # would report it at error level on every attempt. The wrapping is
+            # what this is here to hold.
+            with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
     def test_a_render_failure_reaching_the_task_is_not_acknowledged(self) -> None:
@@ -1649,6 +1653,28 @@ class TestTransientSendFailuresRetry:
 
         assert task_logger.error.call_count == 0
         assert task_logger.warning.call_count == 1
+
+    def test_an_eligibility_interface_error_is_not_swallowed(self) -> None:
+        """An InterfaceError is the same connection going away as the one above.
+
+        The broad handler around the eligibility check would otherwise read it
+        as "not eligible" and drop the mail without spending a retry.
+        """
+        from django.db import InterfaceError
+
+        user = self._user("eligibilityiface")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch.object(
+            OnboardingStatus,
+            "should_receive_quick_start",
+            side_effect=InterfaceError("connection already closed"),
+        ):
+            with pytest.raises(InterfaceError):
+                OnboardingEmailService.send_quick_start_email(user)
 
     def test_a_broken_template_is_reported_as_permanent(self) -> None:
         """Rendering happens before the send block, so it needs its own answer.

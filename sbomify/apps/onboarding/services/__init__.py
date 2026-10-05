@@ -291,7 +291,11 @@ class OnboardingEmailService:
         if eligible_check is not None:
             try:
                 is_eligible = eligible_check()
-            except OperationalError:
+            except TRANSIENT_DB_ERRORS:
+                # The whole transport, not just OperationalError: an
+                # InterfaceError is the same connection going away, and the
+                # broad handler below would have read it as "not eligible" and
+                # dropped the mail.
                 raise
             except Exception as e:
                 logger.error("%s eligibility check failed for user %s: %s", email_type, user.id, e, exc_info=True)
