@@ -29,14 +29,22 @@
     {% endif %}
     </c-cards.card>
     {% if team.billing_plan_limits.subscription_status == 'past_due' %}
-        <c-feedback.alert variant="danger" title="Payment Failed">Check your dashboard for the grace period status and update your billing details.</c-feedback.alert>
+        <c-feedback.alert variant="danger" title="Payment failed">Check your dashboard for the grace period status and update your billing details.</c-feedback.alert>
     {% endif %}
     {% if plan_limits %}
         <section class="flex flex-col gap-4">
-            <c-layout.section-header title="Plan limits" />
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <c-layout.section-header title="Usage and limits" subtitle="What this workspace is using against what your plan allows." />
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 {% for limit in plan_limits %}
-                    <c-layout.stat-card compact icon="fas fa-{{ limit.icon }}" :value="limit.value" label="{{ limit.label }}" />
+                    <c-layout.stat-card compact icon="fas fa-{{ limit.icon }}" :value="limit.used" label="{{ limit.label }}">
+                    <span class="text-sm font-medium tracking-normal text-text-muted">
+                        {% if limit.unlimited %}
+                            of unlimited
+                        {% else %}
+                            of {{ limit.value }}
+                        {% endif %}
+                    </span>
+                    </c-layout.stat-card>
                 {% endfor %}
             </div>
         </section>

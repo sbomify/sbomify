@@ -86,6 +86,21 @@ size themselves naturally on smaller screens.
                 </li>
             {% endfor %}
         </ul>
+        {% if plan.downgrade %}
+            <c-feedback.alert variant="warning" title="Moving here costs you">
+            <p class="m-0">Your subscription ends at the end of the billing period.</p>
+            {% if plan.lost_features %}
+                <ul class="mt-2 mb-0 flex list-none flex-col gap-1 p-0">
+                    {% for feature in plan.lost_features %}
+                        <li class="flex items-start gap-2.5">
+                            <i class="fas fa-xmark w-4 shrink-0 text-center leading-5"
+                               aria-hidden="true"></i><span>{{ feature }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            </c-feedback.alert>
+        {% endif %}
         <c-feedback.alert variant="warning" x-show="getDowngradeWarning('{{ plan.key|escapejs }}')" x-cloak><span x-text="getDowngradeWarning('{{ plan.key|escapejs }}')"></span></c-feedback.alert>
     </div>
 </div>

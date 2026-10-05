@@ -68,6 +68,7 @@ class TestGetPlanLimits:
         limits = pricing_service.get_plan_limits(team_with_business_plan, business_plan)
 
         icons = {item["label"]: item["icon"] for item in limits}
+        assert icons.get("Members") == "users"
         assert icons.get("Products") == "cube"
         assert icons.get("Components") == "puzzle-piece"
 
@@ -75,20 +76,22 @@ class TestGetPlanLimits:
         """Test passing BillingPlan object directly."""
         limits = pricing_service.get_plan_limits(team_with_business_plan, business_plan)
 
-        assert len(limits) == 2
+        assert len(limits) == 3
         labels = [item["label"] for item in limits]
+        assert "Members" in labels
         assert "Products" in labels
         assert "Components" in labels
 
     def test_fetches_billing_plan_if_not_provided(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
         """Test auto-fetch BillingPlan from DB when not provided."""
         limits = pricing_service.get_plan_limits(team_with_business_plan)
-        assert len(limits) == 2
+        assert len(limits) == 3
 
     def test_unlimited_display(self, pricing_service, team_with_business_plan, enterprise_plan):  # noqa: F811
         """Test -1 or None shows 'Unlimited'."""
         team_with_business_plan.billing_plan = "enterprise"
         team_with_business_plan.billing_plan_limits = {
+            "max_users": -1,
             "max_products": -1,
             "max_components": -1,
         }
@@ -98,6 +101,26 @@ class TestGetPlanLimits:
 
         for item in limits:
             assert item["value"] == "Unlimited"
+            assert item["unlimited"] is True
+
+    def test_an_unlimited_quota_keeps_its_tile(self, pricing_service, team_with_business_plan, enterprise_plan):  # noqa: F811
+        """A None limit on the model used to drop the tile, not read "Unlimited"."""
+        team_with_business_plan.billing_plan = "enterprise"
+        team_with_business_plan.billing_plan_limits = {}
+        team_with_business_plan.save()
+
+        limits = pricing_service.get_plan_limits(team_with_business_plan, enterprise_plan)
+
+        assert [item["label"] for item in limits] == ["Members", "Products", "Components"]
+        assert {item["value"] for item in limits} == {"Unlimited"}
+
+    def test_reports_usage_against_each_limit(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
+        """A limit on its own does not answer "how close am I?"."""
+        limits = {item["label"]: item for item in pricing_service.get_plan_limits(team_with_business_plan, business_plan)}
+
+        assert limits["Members"]["used"] == str(team_with_business_plan.members.count())
+        assert limits["Products"]["used"] == "0"
+        assert limits["Components"]["used"] == "0"
 
     def test_numeric_values(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
         """Test numeric limits are converted to strings."""

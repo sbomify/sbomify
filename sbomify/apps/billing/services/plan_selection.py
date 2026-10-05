@@ -7,7 +7,7 @@ from django.middleware.csrf import get_token
 from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.billing.plan_features import PLAN_FEATURES
+from sbomify.apps.billing.plan_features import PLAN_FEATURES, features_lost_moving_to
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.teams.models import Team
@@ -18,13 +18,12 @@ def build_plan_selection_context(
 ) -> ServiceResult[dict[str, Any]]:
     order = {BillingPlan.KEY_COMMUNITY: 0, BillingPlan.KEY_BUSINESS: 1, BillingPlan.KEY_ENTERPRISE: 2}
     usage = {
-        "users": workspace.members.count(),
+        "members": workspace.members.count(),
         "products": Product.objects.filter(team=workspace).count(),
         "components": Component.objects.filter(team=workspace).count(),
     }
     billing_limits = workspace.billing_plan_limits or {}
     current_plan = workspace.billing_plan or BillingPlan.KEY_COMMUNITY
-    is_subscribed = billing_limits.get("subscription_status") in ("active", "trialing")
     plans: list[dict[str, Any]] = []
     downgrade_limits: dict[str, Any] = {}
     annual_savings_percent = None
@@ -33,9 +32,14 @@ def build_plan_selection_context(
         key = plan.key or ""
         pricing = dict(stripe_pricing_data.get(key, {}))
         pricing.setdefault("promo_message", plan.promo_message)
+        is_downgrade = order.get(key, 99) < order.get(current_plan, 99)
         exceeded = []
-        if is_subscribed and order.get(key, 99) < order.get(current_plan, 99):
-            for resource, limit in (("products", plan.max_products), ("components", plan.max_components)):
+        if is_downgrade:
+            for resource, limit in (
+                ("members", plan.max_users),
+                ("products", plan.max_products),
+                ("components", plan.max_components),
+            ):
                 if limit is not None and usage[resource] > limit:
                     exceeded.append(f"{usage[resource]} {resource} (limit: {limit})")
         downgrade_limits[key] = {"exceeds": bool(exceeded), "resources": exceeded}
@@ -63,6 +67,8 @@ def build_plan_selection_context(
                 "description": plan.description,
                 "features": PLAN_FEATURES.get(key, ()),
                 "current": key == current_plan,
+                "downgrade": is_downgrade,
+                "lost_features": features_lost_moving_to(current_plan, key) if is_downgrade else [],
                 "prices": prices,
                 "limits": [
                     {"label": "member", "count": plan.max_users},

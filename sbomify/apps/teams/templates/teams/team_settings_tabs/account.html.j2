@@ -34,7 +34,7 @@
     </c-feedback.alert>
     <c-feedback.alert variant="info" title="Immediate effects" class="mb-4">
     <ul class="pl-4 space-y-1">
-        <li>Account deactivated (cannot log in)</li>
+        <li>Account deactivated (you cannot sign in)</li>
         <li>Personal access tokens revoked</li>
         <li>Pending invitations removed</li>
         <li>
@@ -46,8 +46,10 @@
     <c-feedback.alert variant="info" icon="fas fa-clock" title="After 14 days" class="mb-4">
     <ul class="pl-4 space-y-1">
         <li>Account permanently deleted</li>
-        <li>Contact support to cancel deletion within the grace period</li>
     </ul>
+    </c-feedback.alert>
+    <c-feedback.alert variant="info" icon="fas fa-life-ring" title="Changed your mind" class="mb-4">
+    Contact support within the 14 days and we can stop the deletion.
     </c-feedback.alert>
     {# Validation Error Display #}
     <c-feedback.alert variant="danger" class="mb-4" x-show="validationError" x-cloak>

@@ -6,7 +6,7 @@
     {% include 'teams/components/trust_center_toggle.html.j2' with label='Enable Trust Center' hint='Share your public products and security artifacts with visitors.' control_id='workspace-visibility-toggle' control_label='Make workspace publicly visible' action_name='visibility_action' field_name='is_public' enabled=team.is_public save_label='Save visibility' %}
     {% if team.is_public %}
         {% trust_center_absolute_url team as public_url %}
-        <c-forms.field horizontal label="Public URL" hint="The address you can share with customers.">
+        <c-forms.field horizontal wide label="Public URL" hint="The address you can share with customers.">
         <c-copy-field value="{{ public_url }}" label="public URL" id="trust-center-public-url">
         <c-buttons.icon-quiet size="sm" href="{{ public_url }}" target="_blank" rel="noopener" label="Open Trust Center"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.icon-quiet>
         </c-copy-field>
@@ -31,10 +31,12 @@
                 <c-forms.input size="sm" id="slug" name="slug" value="{{ team_obj.slug|default:'' }}" maxlength="63" minlength="3" pattern="[a-z0-9]([a-z0-9\-]*[a-z0-9])?" placeholder="my-company" disabled="{{ can_administer|yesno:',1' }}" x-model="slug" />
                 <c-forms.hint><span x-text="slug ? (slug + '.{{ trust_center_domain|escapejs }}') : 'Choose a subdomain'"></span></c-forms.hint>
                 </c-forms.field>
-                </c-cards.card>
+                <c-slot name="footer">
                 <div class="flex justify-end">
                     <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">Save slug</c-buttons.primary>
                 </div>
+                </c-slot>
+                </c-cards.card>
             </form>
         {% endif %}
         <c-cards.card flush>
@@ -65,13 +67,15 @@
             <input type="hidden" name="active_tab" value="trust-center">
             <c-cards.card flush>
             <c-cards.header compact title="Description" />
-            <c-forms.field horizontal label="Welcome message" for="trust_center_description" hint="Shown at the top of your Trust Center. Maximum 500 characters. Leave empty for the default description.">
+            <c-forms.field horizontal wide label="Welcome message" for="trust_center_description" hint="Shown at the top of your Trust Center. Maximum 500 characters. Leave empty for the default description.">
             <c-forms.textarea id="trust_center_description" name="trust_center_description" rows="4" maxlength="500" placeholder="Introduce your Trust Center" disabled="{{ can_administer|yesno:',1' }}" value="{{ branding_info.trust_center_description|default:'' }}" />
             </c-forms.field>
-            </c-cards.card>
+            <c-slot name="footer">
             <div class="flex justify-end">
                 <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">Save description</c-buttons.primary>
             </div>
+            </c-slot>
+            </c-cards.card>
         </form>
         {% include 'teams/components/security_txt_form.html.j2' %}
         <c-cards.card flush>
@@ -82,19 +86,22 @@
             <c-buttons.secondary size="sm" href="{% url 'documents:document_download' company_nda_document.id %}" target="_blank" rel="noopener">View NDA</c-buttons.secondary>
             </c-forms.field>
         {% endif %}
-        <c-cards.body>
         <form method="post"
               action="{% url 'teams:team_settings' team.key %}"
               enctype="multipart/form-data"
-              class="space-y-4"
               x-data="{ fileName: '' }">
             {% csrf_token %}
             <input type="hidden" name="company_nda_action" value="upload">
             <input type="hidden" name="active_tab" value="trust-center">
-            <c-forms.file-upload name="company_nda_file" id="company_nda_file" accept=".pdf" required disabled="{{ can_administer|yesno:',1' }}" hint="PDF only, up to {{ max_upload_size_mb }} MB." on_change="fileName = $event.target.files[0]?.name || ''"><span x-text="fileName || 'Choose an NDA file'"></span></c-forms.file-upload>
-            {% if company_nda_document %}
-                <c-feedback.alert variant="warning">Uploading a new version invalidates existing signatures. Requesters will need to sign again.</c-feedback.alert>
-            {% endif %}
+            <c-cards.body>
+            <div class="space-y-4">
+                <c-forms.file-upload name="company_nda_file" id="company_nda_file" accept=".pdf" required disabled="{{ can_administer|yesno:',1' }}" hint="PDF only, up to {{ max_upload_size_mb }} MB." on_change="fileName = $event.target.files[0]?.name || ''"><span x-text="fileName || 'Choose an NDA file'"></span></c-forms.file-upload>
+                {% if company_nda_document %}
+                    <c-feedback.alert variant="warning">Uploading a new version invalidates existing signatures. Requesters will need to sign again.</c-feedback.alert>
+                {% endif %}
+            </div>
+            </c-cards.body>
+            <c-cards.footer>
             <div class="flex justify-end">
                 <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">
                 {% if company_nda_document %}
@@ -104,8 +111,8 @@
                 {% endif %}
                 </c-buttons.primary>
             </div>
+            </c-cards.footer>
         </form>
-        </c-cards.body>
         </c-cards.card>
         <div id="access-requests-wrapper"
              x-data

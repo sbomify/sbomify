@@ -1,0 +1,13 @@
+{% comment %}
+The workspace role badge. Pass role, or bind data-role for an Alpine row; both
+select the same recipes on the shared badge shell, the way c-badges.severity
+does.
+
+Role is the one column on the members tab a reader scans rather than reads, so
+the tiers are told apart by tone: owner carries the primary tint, admin the
+warning tint, and every other role the neutral one. A twenty-person table with
+one tone in it is a table you have to read word by word to answer the question
+it exists to answer.
+{% endcomment %}
+<c-vars role="member" pill class />
+<c-badges.badge shape="role" data-role="{{ role }}" variant_class="text-text-muted bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] data-[role=owner]:text-[color:var(--color-primary)] data-[role=owner]:bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)] data-[role=owner]:border-[color-mix(in_oklab,var(--color-primary)_20%,transparent)] data-[role=admin]:text-[color:var(--color-warning)] data-[role=admin]:bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)] data-[role=admin]:border-[color-mix(in_oklab,var(--color-warning)_20%,transparent)]" :pill="pill" class="{{ class }}" :attrs="attrs">{{ slot }}</c-badges.badge>

@@ -1,26 +1,23 @@
 {% load humanize %}
 {# Access Requests Section #}
-{# Section shell in the settings-tab style: an h3 heading row with the action beside it, no card chrome. #}
-<div>
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h3 class="text-sm font-semibold text-text m-0">Access requests</h3>
-            <p class="text-sm text-text-muted mt-1 m-0">Who can reach your gated components.</p>
-        </div>
-        <c-buttons.primary size="sm" onclick="window.dispatchEvent(new CustomEvent('open-invite-user-modal'))">
-        <i class="fas fa-user-plus mr-1"></i>Invite
-        </c-buttons.primary>
-    </div>
-    <div class="mt-4 space-y-6">
+<c-cards.card flush>
+<c-cards.header compact title="Access requests" hint="Who can reach your gated components.">
+<c-buttons.primary size="sm" onclick="window.dispatchEvent(new CustomEvent('open-invite-user-modal'))">
+<i class="fas fa-user-plus mr-1" aria-hidden="true"></i>Invite
+</c-buttons.primary>
+</c-cards.header>
+{% if not pending_requests and not pending_invitations and not approved_requests and not rejected_requests %}
+    <c-feedback.empty-state compact icon="fas fa-user-shield" title="No access requests yet" message="Invite someone, or wait for a visitor to ask for access to a gated component." />
+{% else %}
+    <c-cards.body>
+    <div class="space-y-6">
         {# Pending Requests #}
-        <div>
-            <div class="flex items-center gap-2 mb-3">
-                <h6 class="text-sm font-medium text-text m-0">Pending Requests</h6>
-                {% if pending_requests %}
+        {% if pending_requests %}
+            <div class="space-y-3 border-t border-solid border-border pt-4 first:border-t-0 first:pt-0">
+                <div class="flex items-center gap-2">
+                    <h3 class="m-0 text-sm font-semibold text-text">Pending requests</h3>
                     <c-badges.warning size="sm">{{ pending_requests|length|intcomma }}</c-badges.warning>
-                {% endif %}
-            </div>
-            {% if pending_requests %}
+                </div>
                 <c-tables.table>
                 <c-tables.head>
                 <c-tables.header-cell nowrap>User</c-tables.header-cell>
@@ -98,19 +95,15 @@
                     {% endfor %}
                 </tbody>
                 </c-tables.table>
-            {% else %}
-                <p class="text-text-muted text-sm py-3">No pending access requests</p>
-            {% endif %}
-        </div>
-        {# Pending Invitations #}
-        <div class="pt-4 border-t border-border">
-            <div class="flex items-center gap-2 mb-3">
-                <h6 class="text-sm font-medium text-text m-0">Pending invitations</h6>
-                {% if pending_invitations %}
-                    <c-badges.info size="sm">{{ pending_invitations|length|intcomma }}</c-badges.info>
-                {% endif %}
             </div>
-            {% if pending_invitations %}
+        {% endif %}
+        {# Pending Invitations #}
+        {% if pending_invitations %}
+            <div class="space-y-3 border-t border-solid border-border pt-4 first:border-t-0 first:pt-0">
+                <div class="flex items-center gap-2">
+                    <h3 class="m-0 text-sm font-semibold text-text">Pending invitations</h3>
+                    <c-badges.info size="sm">{{ pending_invitations|length|intcomma }}</c-badges.info>
+                </div>
                 <c-tables.table>
                 <c-tables.head>
                 <c-tables.header-cell nowrap>Email</c-tables.header-cell>
@@ -143,19 +136,15 @@
                     {% endfor %}
                 </tbody>
                 </c-tables.table>
-            {% else %}
-                <p class="text-text-muted text-sm py-3">No pending invitations</p>
-            {% endif %}
-        </div>
-        {# Approved Requests #}
-        <div class="pt-4 border-t border-border">
-            <div class="flex items-center gap-2 mb-3">
-                <h6 class="text-sm font-medium text-text m-0">Approved Requests</h6>
-                {% if approved_requests %}
-                    <c-badges.success size="sm">{{ approved_requests|length|intcomma }}</c-badges.success>
-                {% endif %}
             </div>
-            {% if approved_requests %}
+        {% endif %}
+        {# Approved Requests #}
+        {% if approved_requests %}
+            <div class="space-y-3 border-t border-solid border-border pt-4 first:border-t-0 first:pt-0">
+                <div class="flex items-center gap-2">
+                    <h3 class="m-0 text-sm font-semibold text-text">Approved requests</h3>
+                    <c-badges.success size="sm">{{ approved_requests|length|intcomma }}</c-badges.success>
+                </div>
                 <c-tables.table>
                 <c-tables.head>
                 <c-tables.header-cell nowrap>User</c-tables.header-cell>
@@ -219,19 +208,15 @@
                     {% endfor %}
                 </tbody>
                 </c-tables.table>
-            {% else %}
-                <p class="text-text-muted text-sm py-3">No approved access requests</p>
-            {% endif %}
-        </div>
-        {# Rejected Requests #}
-        <div class="pt-4 border-t border-border">
-            <div class="flex items-center gap-2 mb-3">
-                <h6 class="text-sm font-medium text-text m-0">Rejected Requests</h6>
-                {% if rejected_requests %}
-                    <c-badges.danger size="sm">{{ rejected_requests|length|intcomma }}</c-badges.danger>
-                {% endif %}
             </div>
-            {% if rejected_requests %}
+        {% endif %}
+        {# Rejected Requests #}
+        {% if rejected_requests %}
+            <div class="space-y-3 border-t border-solid border-border pt-4 first:border-t-0 first:pt-0">
+                <div class="flex items-center gap-2">
+                    <h3 class="m-0 text-sm font-semibold text-text">Rejected requests</h3>
+                    <c-badges.danger size="sm">{{ rejected_requests|length|intcomma }}</c-badges.danger>
+                </div>
                 <c-tables.table>
                 <c-tables.head>
                 <c-tables.header-cell nowrap>User</c-tables.header-cell>
@@ -275,12 +260,12 @@
                     {% endfor %}
                 </tbody>
                 </c-tables.table>
-            {% else %}
-                <p class="text-text-muted text-sm py-3">No rejected access requests</p>
-            {% endif %}
-        </div>
+            </div>
+        {% endif %}
     </div>
-</div>
+    </c-cards.body>
+{% endif %}
+</c-cards.card>
 <script>
     // Menu items call these directly, so they survive HTMX swaps and the
     // actions menu teleporting its content to the body.

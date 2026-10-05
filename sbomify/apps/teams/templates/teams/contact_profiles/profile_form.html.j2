@@ -10,17 +10,17 @@
         <div>
             <h5 class="text-base font-semibold text-text m-0">
                 {% if is_create %}
-                    Create
+                    Add
                 {% else %}
                     Edit
                 {% endif %}
-                contact profile
+                party
             </h5>
             <p class="text-sm leading-[1.5] text-text-muted mt-0.5">
                 {% if is_create %}
-                    Create a new reusable contact profile for your components
+                    Add a party your components can reuse
                 {% else %}
-                    Update profile information and contacts
+                    Update this party's details and contacts
                 {% endif %}
             </p>
         </div>
@@ -60,7 +60,7 @@
                 </c-layout.section-header>
                 {# Info banner #}
                 <c-feedback.alert>
-                Each profile can have <strong>one manufacturer</strong> and <strong>one supplier</strong>.
+                Each party can have <strong>one manufacturer</strong> and <strong>one supplier</strong>.
                 A single entity can fulfill both roles.
                 </c-feedback.alert>
                 {{ entities_formset.management_form }}
@@ -87,9 +87,9 @@
             <c-buttons.primary type="submit" ::disabled="hasErrors || visibleEntitiesCount === 0">
             <i class="fas fa-check mr-2" aria-hidden="true"></i>
             {% if is_create %}
-                Create profile
+                Add party
             {% else %}
-                Save profile
+                Save party
             {% endif %}
             </c-buttons.primary>
         </div>

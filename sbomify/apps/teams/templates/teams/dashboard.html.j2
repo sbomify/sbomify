@@ -8,9 +8,7 @@
     </c-layout.page-header>
     {% if teams %}
         <section class="flex flex-col gap-3" aria-label="Your workspaces">
-            <c-layout.section-header title="Your workspaces" level="2">
-            <c-slot name="actions"><c-badges.secondary size="sm">{{ teams|length|intcomma }} workspace{{ teams|length|pluralize }}</c-badges.secondary></c-slot>
-            </c-layout.section-header>
+            <c-layout.section-header title="Your workspaces" subtitle="{{ teams|length|intcomma }} workspace{{ teams|length|pluralize }}." level="2" />
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {% for team in teams %}
                     {% current_member team.members as me %}

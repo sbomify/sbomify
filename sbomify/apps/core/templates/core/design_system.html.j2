@@ -1254,6 +1254,25 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-code-inline>level</c-code-inline>.
     </p>
     </c-cards.card>
+    <h2 id="role-badges" class="text-xl font-semibold text-text">Role badges</h2>
+    <c-cards.card>
+    <p class="text-sm text-text-muted mb-4">
+        The workspace roles, keyed the same way the severity scale is: pass
+        <c-code-inline>role</c-code-inline>, or bind <c-code-inline>::data-role</c-code-inline> for an Alpine
+        row. Owner and admin carry their own tone because the role column is scanned rather than read, and a
+        table where every tier looks alike has to be read word by word.
+    </p>
+    {% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/badges/role.html).
+    {% endcomment %}
+    <div class="flex flex-wrap items-center gap-2">
+        <c-badges.role role="owner">Owner</c-badges.role>
+        <c-badges.role role="admin">Admin</c-badges.role>
+        <c-badges.role role="member">Member</c-badges.role>
+        <c-badges.role role="guest">Guest</c-badges.role>
+    </div>
+    </c-cards.card>
     <h2 id="progress" class="text-xl font-semibold text-text">Progress</h2>
     <c-cards.card>
     {% comment %}
