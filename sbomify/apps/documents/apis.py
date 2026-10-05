@@ -3,15 +3,16 @@ import logging
 import mimetypes
 from typing import Any
 
-from django.db import transaction
+from django.conf import settings
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse
 from ninja import File, Query, Router, UploadedFile
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.object_store import S3Client
-from sbomify.apps.core.schemas import ErrorResponse
+from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
+from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.utils import broadcast_to_workspace, get_by_uuid_or_pk
 from sbomify.apps.oidc.permissions import is_authorised_for_component
 from sbomify.apps.sboms.models import Component
@@ -20,6 +21,7 @@ from sbomify.apps.sboms.utils import verify_download_token
 from .models import Document
 from .schemas import DocumentResponseSchema, DocumentUpdateRequest, DocumentUploadRequest
 from .services.documents import delete_document_record, get_document_detail, update_document_metadata
+from .utils import document_version_exists, duplicate_document_detail, is_duplicate_document_error
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +30,13 @@ router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth
 
 @router.post(
     "/",
-    response={201: DocumentUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        201: DocumentUploadRequest,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
 )
 def create_document(
     request: HttpRequest,
@@ -43,6 +51,10 @@ def create_document(
     try:
         # Extract component_id from various sources
         actual_component_id = None
+        # Bound for both input paths: only the multipart branch carries a
+        # subcategory field, and a raw-body compliance upload still reaches the
+        # document_dict assembly below.
+        subcategory_value = None
 
         if document_file:
             # File upload scenario - extract form data from request.POST
@@ -70,8 +82,9 @@ def create_document(
             # Check for known subcategory fields
             compliance_subcategory = request.POST.get("compliance_subcategory", "") or None
             # Determine which subcategory to use based on document type
-            subcategory_value = None
             if form_document_type == Document.DocumentType.COMPLIANCE and compliance_subcategory:
+                if compliance_subcategory not in Document.ComplianceSubcategory.values:
+                    return 400, {"detail": "Invalid compliance subcategory"}
                 subcategory_value = compliance_subcategory
 
             # Remove file extension if name not provided
@@ -80,10 +93,14 @@ def create_document(
             document_type = form_document_type
             description = form_description
 
-            # Validate file size (max 50MB for documents)
-            max_size = 50 * 1024 * 1024  # 50MB
+            # Same ceiling as every other artifact. Multipart file uploads are
+            # not measured against DATA_UPLOAD_MAX_MEMORY_SIZE, so this is the
+            # only thing standing between a large document and the object store.
+            max_size = settings.ARTIFACT_MAX_UPLOAD_SIZE
+            # The check is inclusive, so a file of exactly the limit is accepted.
+            # Says "or smaller" to match, and to match the SBOM path's wording.
             if file_size is not None and file_size > max_size:
-                return 400, {"detail": "File size must be less than 50MB"}
+                return 400, {"detail": f"File size must be {max_size // (1024 * 1024)}MB or smaller"}
         else:
             # Raw data scenario (API upload) - use query parameters
             actual_component_id = request.GET.get("component_id") or component_id
@@ -115,11 +132,21 @@ def create_document(
         if not is_authorised_for_component(request, component):
             return 403, {"detail": "Forbidden"}
 
+        # A document is identified by name + version within its component, so a
+        # re-upload of the same pair is a duplicate rather than a new artifact.
+        # Checked up front to avoid storing an S3 object for a row that cannot be
+        # written; the unique constraint below is what actually guarantees it.
+        if document_version_exists(component.id, document_name, version):
+            return 409, {
+                "detail": duplicate_document_detail(document_name, version),
+                "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+            }
+
         # Compute SHA256 hash of the document content
         sha256_hash = hashlib.sha256(content).hexdigest()
 
         # Upload to S3 using dedicated DOCUMENTS bucket (fallback to SBOMS if not configured)
-        s3 = S3Client("DOCUMENTS")
+        s3 = StorageClient("DOCUMENTS")
         filename = s3.upload_document(content)
 
         document_dict = {
@@ -140,9 +167,22 @@ def create_document(
         if document_type == Document.DocumentType.COMPLIANCE and subcategory_value:
             document_dict["compliance_subcategory"] = subcategory_value
 
-        with transaction.atomic():
-            document = Document(**document_dict)
-            document.save()
+        try:
+            with transaction.atomic():
+                document = Document(**document_dict)
+                document.save()
+        except IntegrityError as exc:
+            # The object is already stored and no row references it, whatever the
+            # constraint that rejected the insert, so record it before classifying.
+            log_orphaned_object(filename)
+            if is_duplicate_document_error(exc):
+                # Two concurrent uploads can both clear the check above; the
+                # constraint settles it and the loser gets the same 409.
+                return 409, {
+                    "detail": duplicate_document_detail(document_name, version),
+                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+                }
+            raise
 
         # Broadcast to workspace for real-time UI updates
         broadcast_to_workspace(
@@ -160,13 +200,25 @@ def create_document(
 
 @router.patch(
     "/{document_id}",
-    response={200: DocumentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: DocumentResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
 )
 def update_document(request: HttpRequest, document_id: str, payload: DocumentUpdateRequest) -> Any:
     """Update document metadata."""
     result = update_document_metadata(request, document_id, payload)
     if not result.ok:
-        return result.status_code or 400, {"detail": result.error or "Invalid request"}
+        status_code = result.status_code or 400
+        error: dict[str, Any] = {"detail": result.error or "Invalid request"}
+        if status_code == 409:
+            # Same machine-readable code the upload path returns, so a client can
+            # branch on a duplicate here without matching on the message.
+            error["error_code"] = ErrorCode.DUPLICATE_ARTIFACT
+        return status_code, error
 
     return 200, result.value
 
@@ -215,7 +267,7 @@ def download_document(request: HttpRequest, document_id: str) -> Any:
 
     if access_result.has_access:
         try:
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             document_data = s3.get_document_data(document.document_filename)
 
             if document_data:
@@ -337,7 +389,7 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
         return 404, {"detail": "Document file not found"}
 
     try:
-        s3 = S3Client("DOCUMENTS")
+        s3 = StorageClient("DOCUMENTS")
         document_data = s3.get_document_data(document.document_filename)
 
         if document_data:

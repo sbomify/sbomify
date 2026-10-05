@@ -1,6 +1,6 @@
 [project]
 name = "sbomify"
-version = "26.8.0"
+version = "26.9.0"
 description = "sbomify - the security artifact hub"
 authors = [{ name = "sbomify", email = "hello@sbomify.com" }]
 requires-python = ">=3.13,<4"
@@ -67,7 +67,9 @@ dependencies = [
     "weasyprint>=69.0,<70",
     "defusedxml>=0.7.1",
     "defusedcsv>=3.0.0",
+    "jsonschema>=4.26,<5",
     "django-cotton>=2.7.2",
+    "fastjsonschema>=2.22.2",
 ]
 
 [project.urls]
@@ -94,6 +96,7 @@ dev = [
     "types-channels>=4.3.0,<5",
     "types-requests>=2.32.0,<3",
     "types-defusedxml>=0.7.0.20260504",
+    "types-jsonschema>=4.25.0,<5",
 ]
 test = [
     "pytest>=9.0.3,<10",
@@ -104,6 +107,7 @@ test = [
     "diffimg==0.3.0",
     "freezegun==1.5.5",
     "pytest-asyncio>=1.3.0",
+    "pytest-xdist>=3.8.0,<4",
 ]
 
 [tool.uv]
@@ -254,6 +258,7 @@ extension = "j2"
 mypy_path = "."
 plugins = ["mypy_django_plugin.main"]
 strict = true
+enable_error_code = ["possibly-undefined"]
 exclude = [
     "migrations/",
     "manage\\.py",
@@ -272,7 +277,7 @@ django_settings_module = "sbomify.settings"
 
 # Packages with inline types but no py.typed marker
 [[tool.mypy.overrides]]
-module = ["django_redis.*", "django_vite.*", "ruid.*", "defusedcsv", "defusedcsv.*"]
+module = ["django_redis.*", "django_vite.*", "ruid.*", "defusedcsv", "defusedcsv.*", "fastjsonschema"]
 follow_untyped_imports = true
 
 # Packages with no/minimal types and no stubs on PyPI

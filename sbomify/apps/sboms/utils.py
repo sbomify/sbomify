@@ -15,9 +15,10 @@ from django.core import signing
 from django.db import DatabaseError, IntegrityError, OperationalError
 from django.utils import timezone
 
+from sbomify.apps.access_tokens.utils import token_fingerprint
 from sbomify.apps.core.models import Component, Product
 
-# S3Client import moved to function level to support test mocking
+# StorageClient import moved to function level to support test mocking
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
 from sbomify.apps.teams.models import ContactProfile
@@ -108,9 +109,9 @@ def get_sbom_data(sbom_id: str) -> tuple[SBOM, dict[str, Any]]:
         raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")
 
     # 2) Download SBOM data from S3
-    from sbomify.apps.core.object_store import S3Client
+    from sbomify.apps.core.object_store import StorageClient
 
-    s3_client = S3Client(bucket_type="SBOMS")
+    s3_client = StorageClient(bucket_type="SBOMS")
     sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
 
     if not sbom_bytes:
@@ -219,7 +220,13 @@ def _spdx_creator_names_sbomify_action(creator: str) -> bool:
     """
     if not creator.lower().startswith("tool:"):
         return False
-    tool_name = creator.split(":", 1)[1].strip()
+    return _tool_name_is_sbomify_action(creator.split(":", 1)[1].strip())
+
+
+def _tool_name_is_sbomify_action(tool_name: str) -> bool:
+    """The version-stripping half of the creator match, shared with the
+    SPDX 3 detector — Tool element names carry the same ``<name>-<version>``
+    composite without the ``Tool:`` prefix."""
     # No version segment: the entire payload IS the name.
     if _matches_sbomify_action_name(tool_name):
         return True
@@ -253,6 +260,29 @@ def _spdx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
         if isinstance(creator, str) and _spdx_creator_names_sbomify_action(creator):
             return True
     return False
+
+
+def _spdx3_metadata_has_sbomify_action(sbom_data: Any) -> bool:
+    """Detect sbomify-action in a parsed SPDX 3.x SBOM.
+
+    SPDX 3 has no root ``creationInfo.creators`` — tools live in
+    ``createdUsing`` on the CreationInfo element, pointing at Tool elements
+    in the graph. Same fail-safe shape guards as the other detectors.
+    """
+    if not isinstance(sbom_data, dict):
+        return False
+    from sbomify.apps.plugins.builtins._spdx3_helpers import (
+        extract_spdx3_elements,
+        get_spdx3_creation_info_fields,
+    )
+
+    try:
+        creation_info, _, _, agents, tools = extract_spdx3_elements(sbom_data)
+        fields = get_spdx3_creation_info_fields(creation_info, agents, tools)
+    except Exception:
+        return False
+    entries = fields.get("tool_entries", [])
+    return any(isinstance(entry, str) and _tool_name_is_sbomify_action(entry) for entry in entries)
 
 
 def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
@@ -300,18 +330,32 @@ def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
         return False
 
     try:
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        sbom_bytes = S3Client(bucket_type="SBOMS").get_sbom_data(sbom.sbom_filename)
+        sbom_bytes = StorageClient(bucket_type="SBOMS").get_sbom_data(sbom.sbom_filename)
         if not sbom_bytes:
             # Treat empty / missing as transient — the row points at a blob
             # we couldn't read, so we should retry sooner than a day.
             _cache_set(False, _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL)
             return False
         sbom_data = json.loads(sbom_bytes.decode("utf-8"))
+        if not isinstance(sbom_data, dict):
+            # Valid JSON that is not an object (a top-level list, a string)
+            # is a durable fact about the document, not a transient failure:
+            # fall through to the long-TTL cache with a clean negative.
+            _cache_set(False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+            return False
         fmt = (sbom.format or "").lower()
         if fmt == "spdx":
-            result = _spdx_metadata_has_sbomify_action(sbom_data)
+            # SPDX 3 keeps its tools in the graph, not in creators[] — the
+            # 2.x detector reads a field 3.x does not have, so every SPDX 3
+            # document from the action still showed the enrichment CTA.
+            from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+            if is_spdx3(sbom_data):
+                result = _spdx3_metadata_has_sbomify_action(sbom_data)
+            else:
+                result = _spdx_metadata_has_sbomify_action(sbom_data)
         else:
             # Default to CycloneDX detection — covers ``cyclonedx`` and any
             # future variant (sbom.format defaults to "spdx" but most uploads
@@ -375,9 +419,9 @@ def get_sbom_data_bytes(sbom_id: str) -> tuple[SBOM, bytes]:
         raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")
 
     # 2) Download SBOM data from S3
-    from sbomify.apps.core.object_store import S3Client
+    from sbomify.apps.core.object_store import StorageClient
 
-    s3_client = S3Client(bucket_type="SBOMS")
+    s3_client = StorageClient(bucket_type="SBOMS")
     sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
 
     if not sbom_bytes:
@@ -789,10 +833,10 @@ def spdx3_member_import(
     ``root_element_uri`` in its ``describes`` relationship; ``externalSpdxId`` and
     that referenced URI are identical so the cross-document reference resolves.
     """
-    is_spdx3 = "@graph" in sbom_data or (
-        str(sbom_data.get("spdxVersion", "")).startswith("SPDX-3.") and "elements" in sbom_data
-    )
-    if not is_spdx3:
+    # Function-local: sboms may not take a module-level edge into plugins.
+    from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+    if not is_spdx3(sbom_data):
         return None
     checksum = getattr(sbom_instance, "sha256_hash", None)
     if not _is_sha256_hex(checksum):  # goes into verifiedUsing as the integrity digest
@@ -990,36 +1034,25 @@ def _get_cyclonedx_type_for_product_link(link_type: str) -> Any:
 
 
 def _get_cyclonedx_type_for_document_type(document_type: str) -> Any:
-    """Map document types to CycloneDX external reference types."""
+    """Map a document type to its CycloneDX external reference type.
+
+    ``Document.cyclonedx_external_ref_type`` is the single source of truth for
+    this mapping. It used to be restated here as a second table, which is a
+    trap: the property looks authoritative, so a change made there silently
+    does nothing to the SBOM we actually emit. The two agreed by luck, and a
+    test now pins that every document type still resolves to a real Type3.
+    """
     cdx16 = _get_cyclonedx_model()
     if cdx16 is None:
         return None
 
-    mapping = {
-        "specification": cdx16.Type3.documentation,
-        "manual": cdx16.Type3.documentation,
-        "readme": cdx16.Type3.documentation,
-        "documentation": cdx16.Type3.documentation,
-        "build-instructions": cdx16.Type3.build_meta,
-        "configuration": cdx16.Type3.configuration,
-        "license": cdx16.Type3.license,
-        "compliance": cdx16.Type3.certification_report,
-        "evidence": cdx16.Type3.evidence,
-        "changelog": cdx16.Type3.release_notes,
-        "release-notes": cdx16.Type3.release_notes,
-        "security-advisory": cdx16.Type3.advisories,
-        "vulnerability-report": cdx16.Type3.vulnerability_assertion,
-        "threat-model": cdx16.Type3.threat_model,
-        "risk-assessment": cdx16.Type3.risk_assessment,
-        "pentest-report": cdx16.Type3.pentest_report,
-        "static-analysis": cdx16.Type3.static_analysis_report,
-        "dynamic-analysis": cdx16.Type3.dynamic_analysis_report,
-        "quality-metrics": cdx16.Type3.quality_metrics,
-        "maturity-report": cdx16.Type3.maturity_report,
-        "report": cdx16.Type3.other,
-        "other": cdx16.Type3.other,
-    }
-    return mapping.get(document_type, cdx16.Type3.other)
+    from sbomify.apps.documents.models import Document
+
+    ref_type = Document(document_type=document_type).cyclonedx_external_ref_type
+    try:
+        return cdx16.Type3(ref_type)
+    except ValueError:
+        return cdx16.Type3.other
 
 
 def _get_spdx_category_for_product_link(link_type: str) -> str:
@@ -1175,7 +1208,7 @@ class ProductSBOMBuilder:
         Returns:
             Tuple of (Path to the downloaded SBOM file, SBOM ID), or None if no SBOM found
         """
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         # Use the prefetched SBOMs to avoid additional queries
         sboms = list(component.sbom_set.all())
@@ -1190,7 +1223,7 @@ class ProductSBOMBuilder:
         sbom = sboms[0]
 
         # Download SBOM data from S3
-        s3_client = S3Client("SBOMS")
+        s3_client = StorageClient("SBOMS")
         try:
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
@@ -1423,7 +1456,7 @@ class ReleaseSBOMBuilder:
         Returns:
             Tuple of (Path to the downloaded SBOM file, SBOM ID), or None if not found
         """
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         if not sbom.sbom_filename:
             return None
@@ -1431,7 +1464,7 @@ class ReleaseSBOMBuilder:
         download_path = None
         try:
             # Download SBOM data from S3
-            s3_client = S3Client("SBOMS")
+            s3_client = StorageClient("SBOMS")
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
             download_path.write_bytes(sbom_data)
@@ -1549,11 +1582,11 @@ def verify_download_token(token: str, max_age: int = SIGNED_URL_MAX_AGE) -> dict
     try:
         payload: dict[str, Any] = get_signer().unsign_object(token, max_age=max_age)
         return payload
-    except signing.BadSignature:
-        log.warning(f"Invalid signature in download token: {token}")
-        return None
     except signing.SignatureExpired:
-        log.warning(f"Expired download token: {token}")
+        log.warning(f"Expired download token (fingerprint {token_fingerprint(token)})")
+        return None
+    except signing.BadSignature:
+        log.warning(f"Invalid signature in download token (fingerprint {token_fingerprint(token)})")
         return None
     except Exception as e:
         log.error(f"Error verifying download token: {e}")
@@ -1906,13 +1939,13 @@ def get_release_sbom_package(
     # An authorized requester's build may include gated/private members, so it
     # must neither be served from nor written to the public aggregate cache.
     if release.product.is_public and not include_non_public:
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         fingerprint = compute_release_aggregate_fingerprint(release)
         cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{fingerprint}.json"
         from botocore.exceptions import BotoCoreError, ClientError
 
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         # The cache is an optimization — a read failure scoped to the cache
         # (e.g. AccessDenied on the aggregates/ prefix while members stay
         # readable) falls back to a rebuild rather than 500'ing the download. A
@@ -2236,6 +2269,40 @@ def _contains_crypto_assets(sbom_data: dict[str, Any]) -> bool:
         return True
     metadata = sbom_data.get("metadata")
     return isinstance(metadata, dict) and is_crypto_asset(metadata.get("component"))
+
+
+def _states_vulnerabilities(sbom_data: dict[str, Any]) -> bool:
+    """Whether a CycloneDX document makes any vulnerability statement.
+
+    This is the whole of what a VEX has to carry. It is deliberately not
+    ``_is_vex``: a VEX routinely lists the components its ``affects`` entries
+    point at, so requiring an empty inventory would refuse the ordinary shape.
+    What no VEX can be is a document that says nothing about any vulnerability.
+    """
+    vulnerabilities = sbom_data.get("vulnerabilities")
+    return isinstance(vulnerabilities, list) and bool(vulnerabilities)
+
+
+def _is_vex(sbom_data: dict[str, Any]) -> bool:
+    """True when a CycloneDX document is a *pure* VEX: it carries vulnerability
+    statements and no inventory of its own.
+
+    A VEX and an SBOM are the same Pydantic model, because CycloneDX makes both
+    ``components`` and ``vulnerabilities`` optional, so nothing in schema
+    validation separates them. The subject of a VEX is named in
+    ``metadata.component``, which an SBOM fills in too, and that is why a VEX
+    uploaded as an SBOM was accepted, scanned, and then scored against NTIA,
+    BSI and FDA as though it were an inventory.
+
+    Mixed documents stay SBOMs, on the same reasoning as ``_is_cbom``: an
+    inventory that also carries vulnerability statements is a VDR, its
+    components are real, and every assessment that reads them should still run.
+    """
+    vulnerabilities = sbom_data.get("vulnerabilities")
+    if not (isinstance(vulnerabilities, list) and vulnerabilities):
+        return False
+    components = sbom_data.get("components")
+    return not (isinstance(components, list) and components)
 
 
 def _is_cbom(sbom_data: dict[str, Any]) -> bool:

@@ -98,40 +98,14 @@ class TestTrackedObjectCount:
 
 
 class TestUnsupportedFormatSkipped:
-    """DT should return a skipped (not error) result when given a non-CycloneDX SBOM.
+    """A document DT cannot read is a skip, not an error, and costs no database.
 
-    SPDX is a deliberate format choice, not an error condition — DT simply doesn't
-    support it. The UI/reporting layer should surface this as "not applicable"
-    rather than a hard error finding.
+    SPDX is no longer in this category: it is converted to CycloneDX and
+    scanned, which test_dt_spdx_conversion.py covers through the real upload
+    path. What remains here is input that is neither CycloneDX nor SPDX, so
+    there is nothing to convert from and the answer is reachable before any
+    lookup happens.
     """
-
-    def test_spdx_input_returns_skipped_not_error(self, tmp_path) -> None:
-        """Passing an SPDX 2.3 SBOM to DT should yield a skipped result."""
-        import json
-
-        spdx_sbom = {
-            "spdxVersion": "SPDX-2.3",
-            "SPDXID": "SPDXRef-DOCUMENT",
-            "name": "test",
-            "dataLicense": "CC0-1.0",
-            "documentNamespace": "https://example.com/test",
-            "creationInfo": {"created": "2026-01-01T00:00:00Z", "creators": ["Tool: test"]},
-            "packages": [],
-        }
-        sbom_path = tmp_path / "test.spdx.json"
-        sbom_path.write_text(json.dumps(spdx_sbom))
-
-        plugin = DependencyTrackPlugin(config={})
-        result = plugin.assess("sbom-id-does-not-matter", sbom_path)
-
-        assert result.summary.error_count == 0, f"SPDX input should not produce errors, got {result.summary}"
-        assert result.summary.warning_count == 1
-        assert result.metadata.get("skipped") is True
-        assert len(result.findings) == 1
-        finding = result.findings[0]
-        assert finding.id == "dependency-track:unsupported-format"
-        assert finding.status == "warning"
-        assert "skipped" in (finding.description or "").lower()
 
     def test_unrecognized_format_also_returns_skipped(self, tmp_path) -> None:
         """Anything that isn't valid CycloneDX (random JSON, truncated file, etc.)

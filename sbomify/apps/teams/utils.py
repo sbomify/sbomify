@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, cast
 from urllib.parse import urlparse
 
@@ -23,12 +25,12 @@ from sbomify.apps.core.utils import number_to_random_token
 from sbomify.logging import getLogger
 
 from .models import Invitation, Member, Team, get_team_name_for_user
-from .queries import count_team_members, get_team_user_counts
+from .queries import count_team_members, get_team_user_counts, invitation_email
 
 # Valid tab names for team settings - used for input validation
 # Names still linked to by fragment that have no settings page of their own.
 # Kept as literals so a redirect to one cannot carry a request-derived string.
-FRAGMENT_ONLY_TABS: tuple[str, ...] = ("controls", "integrations")
+FRAGMENT_ONLY_TABS: tuple[str, ...] = ("integrations",)
 
 ALLOWED_TABS = frozenset(
     {
@@ -331,6 +333,39 @@ def get_user_default_team(user: User) -> int | None:
         return None
 
 
+@contextmanager
+def user_seat(team: Team, *, is_joining_via_invite: bool = False) -> Iterator[tuple[bool, str]]:
+    """Hold the workspace row while a seat is counted and then taken.
+
+    ``can_add_user_to_team`` counts and returns a verdict, and a verdict cannot
+    hold a lock past its own return. Every caller wrote afterwards in a separate
+    statement, so two invitations accepted at the same moment both read the same
+    count, both passed, and the workspace went over ``max_users``. This is the
+    same defect the product and component checks had, in the one resource that
+    check does not cover.
+
+    So the count and the write happen under one lock. The caller's write goes
+    inside the ``with`` block, which is what makes the verdict still true when it
+    runs:
+
+        with user_seat(team) as (can_add, error):
+            if not can_add:
+                return refuse(error)
+            Member.objects.create(...)
+
+    ``is_joining_via_invite`` needs this most rather than least. It deliberately
+    allows ``total == max`` because the pending user already occupies a slot, and
+    that reasoning only holds if nobody else can take the slot between the count
+    and the acceptance.
+
+    Nested inside an outer transaction the lock is simply held until that one
+    commits, which is the behaviour wanted either way.
+    """
+    with transaction.atomic():
+        locked = Team.objects.select_for_update().get(pk=team.pk)
+        yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite)
+
+
 def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tuple[bool, str]:
     """
     Check if a team can add more users based on their billing plan limits.
@@ -426,13 +461,18 @@ def create_user_team_and_subscription(user: User) -> Team | None:
         return Team.objects.filter(members=user).first()
 
     # Skip auto-creation if the user has an active invitation to another workspace
-    if user.email:
+    if email := invitation_email(user):
         pending_invitations = list(
-            Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).select_related("team")
+            Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).select_related("team")
         )
         if pending_invitations:
             joinable_invites = []
             for invitation in pending_invitations:
+                # Unlocked on purpose. Nothing is written on the strength of
+                # this: it only decides whether to auto-create a personal
+                # workspace, and the real check runs again under a lock when the
+                # invitation is actually accepted. Holding a workspace row for an
+                # advisory read would block the acceptances that matter.
                 can_add, _ = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
                 if can_add:
                     joinable_invites.append(invitation)
@@ -649,6 +689,19 @@ def on_demand_tls_cache_key(domain_normalized: str) -> str:
     return f"ondemand_tls:{hashlib.sha256(domain_normalized.encode()).hexdigest()}"
 
 
+def custom_domain_challenge(team_pk: int, domain: str) -> str:
+    """The value this deployment serves on a claimed domain's domain-check path.
+
+    Public on purpose: the verification probe fetches it from the domain through
+    public DNS, and a match shows the domain's operator serves it, normally by
+    pointing the domain here. Keyed on SECRET_KEY, so another deployment serving
+    the same name cannot produce it.
+    """
+    from django.utils.crypto import salted_hmac
+
+    return salted_hmac("sbomify.custom-domain-challenge", f"{team_pk}:{domain}", algorithm="sha256").hexdigest()
+
+
 def invalidate_custom_domain_cache(domain: str | None) -> None:
     """
     Invalidate the cache for a custom domain.
@@ -827,3 +880,38 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     else:
         messages.info(request, f"Member {removed_user.username} removed from workspace.")
         return redirect_to_team_settings(removed_team_key, active_tab)
+
+
+def delete_workspace_with_billing_cleanup(team: Team) -> None:
+    """Delete a workspace and cancel whatever it was paying for.
+
+    Both delete paths route through here because the billing half is easy to
+    leave out and expensive when it is: the settings page's Danger Zone deleted
+    the row without it, so the subscription outlived the workspace and kept
+    charging. Keeping it in one place is what stops the next caller repeating
+    that.
+
+    The ids are read before the row goes, since they live on it. Cancelling is
+    queued rather than awaited: it is two calls to Stripe, and holding a web
+    worker open for them after the row has already been deleted risks a proxy
+    timing the request out with nothing left to retry.
+
+    Queued ``on_commit`` rather than straight away, so a caller that wraps this
+    in its own transaction cannot cancel a subscription whose workspace then
+    fails to delete. Outside a transaction the hook runs immediately, so the
+    two call sites here behave as before.
+    """
+    from sbomify.apps.billing.tasks import cleanup_stripe_for_deleted_workspace
+
+    limits = team.billing_plan_limits or {}
+    subscription_id = limits.get("stripe_subscription_id")
+    customer_id = limits.get("stripe_customer_id")
+    # key is nullable on the model, and this string only names the workspace in
+    # an alert after the row has gone.
+    workspace_key = team.key or f"pk={team.pk}"
+
+    with transaction.atomic():
+        team.delete()
+        transaction.on_commit(
+            lambda: cleanup_stripe_for_deleted_workspace.send(subscription_id, customer_id, workspace_key)
+        )

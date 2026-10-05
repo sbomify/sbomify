@@ -1,0 +1,54 @@
+{% load humanize %}
+{% load plugins_extras %}
+{% load advisory_tags %}
+{% comment %}One page of a single assessment run's findings, fetched when a reader opens the card.
+
+The run item beside this renders its header from result.summary, which is a handful of
+integers whatever the scan found. The list is the part that grows with the SBOM: a scanner
+reporting four thousand vulnerabilities, times every plugin on the page, is how the artifact
+page reached tens of megabytes and a gateway timeout. Nobody reads a closed accordion, so
+nothing here is built until one is opened.
+
+Swapped in whole, pager included, so a page link replaces the same region the first load
+filled.{% endcomment %}
+<div id="findings-{{ run.id }}"
+     class="run-findings"
+     hx-target="this"
+     hx-swap="outerHTML">
+    {% comment %}The toolbar narrows the list this card shows. Its parameters are
+    prefixed, so a URL that carries both this and the component panel's filters
+    stays readable. The form targets this region, which is the same region the
+    card's first fetch fills and the pager replaces.{% endcomment %}
+    {% if panel.unfiltered_total and show_toolbar %}
+        <c-vulnerabilities.filters :panel="panel" url="{{ findings_url }}" target="findings-{{ run.id }}" id="run-{{ run.id }}" prefix="run_" :security="is_security" />
+    {% endif %}
+    {% if panel.unfiltered_total and not findings %}
+        <c-feedback.empty-state compact icon="fas fa-search" icon_variant="neutral" title="No matches found" message="No findings match your search criteria" />
+    {% endif %}
+    {% if is_security %}
+        {% if findings %}
+            {% comment %}The same table the component and report pages use, so a scan reads alike wherever it is opened.{% endcomment %}
+            {% with rows=findings|vulnerability_table_rows %}
+                <c-vulnerabilities.table :rows="rows" :can_triage="can_triage" />
+            {% endwith %}
+        {% endif %}
+    {% else %}
+        {% if findings %}
+            {% comment %}Worst first, so an open row leads with what to fix. One flat list: the row above is the frame.{% endcomment %}
+            <ul class="m-0 px-4 py-1">
+                {% for finding in findings %}
+                    <c-assessments.check status="{{ finding.status }}" title="{{ finding.title }}" remediation="{{ finding.remediation|default:'' }}">
+                    {% if finding.description %}{{ finding.description|advisory_prose|format_finding_description }}{% endif %}
+                    </c-assessments.check>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endif %}
+    {% if panel.unfiltered_total %}
+        {% if is_security %}
+            <c-vulnerabilities.footer :panel="panel" url="{{ findings_url }}" query="{{ findings_query }}" prefix="run_" push_url="false" />
+        {% elif show_toolbar %}
+            <c-vulnerabilities.footer :panel="panel" url="{{ findings_url }}" query="{{ findings_query }}" prefix="run_" noun="checks" push_url="false" />
+        {% endif %}
+    {% endif %}
+</div>

@@ -97,7 +97,7 @@ def test_signature_upload_success(
     mocker: MockerFixture,
 ) -> None:
     mocker.patch("boto3.resource")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_sbom_signature", return_value="aaa.sig")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_sbom_signature", return_value="aaa.sig")
     # Prevent actual dramatiq dispatch
     mocker.patch("sbomify.apps.plugins.tasks.enqueue_assessment")
 
@@ -264,7 +264,7 @@ def test_signature_download_success(
 ) -> None:
     mocker.patch("boto3.resource")
     mocker.patch(
-        "sbomify.apps.core.object_store.S3Client.get_sbom_data",
+        "sbomify.apps.core.object_store.StorageClient.get_sbom_data",
         return_value=b"raw-signature-data",
     )
 
@@ -311,7 +311,7 @@ def test_provenance_upload_dsse_envelope(
 ) -> None:
     mocker.patch("boto3.resource")
     mocker.patch(
-        "sbomify.apps.core.object_store.S3Client.upload_sbom_provenance",
+        "sbomify.apps.core.object_store.StorageClient.upload_sbom_provenance",
         return_value="aaa.provenance.json",
     )
 
@@ -340,7 +340,7 @@ def test_provenance_upload_direct_statement(
 ) -> None:
     mocker.patch("boto3.resource")
     mocker.patch(
-        "sbomify.apps.core.object_store.S3Client.upload_sbom_provenance",
+        "sbomify.apps.core.object_store.StorageClient.upload_sbom_provenance",
         return_value="aaa.provenance.json",
     )
 
@@ -510,7 +510,7 @@ def test_provenance_download_success(
     mocker.patch("boto3.resource")
     provenance_json = json.dumps({"predicateType": "test"}).encode()
     mocker.patch(
-        "sbomify.apps.core.object_store.S3Client.get_sbom_data",
+        "sbomify.apps.core.object_store.StorageClient.get_sbom_data",
         return_value=provenance_json,
     )
 

@@ -5,6 +5,7 @@ from typing import Any, cast
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
@@ -12,6 +13,7 @@ from django.views import View
 from django.views.decorators.cache import never_cache
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
 from sbomify.apps.core.authz import ADMINISTER, MANAGE, ROLE_DESCRIPTIONS
@@ -24,76 +26,15 @@ from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, check_member_removal
 from sbomify.apps.teams.queries import get_member_role_by_key, get_pending_invitations_for_user
+from sbomify.apps.teams.services.settings_page import build_panel_context, profiles_context
 from sbomify.apps.teams.utils import refresh_current_team_session
 from sbomify.logging import getLogger
 
+# Enough to clear a burst of concurrent NDA uploads; each attempt re-reads the
+# versions in use, so a losing insert only ever has to step past what committed.
+NDA_VERSION_ALLOCATION_ATTEMPTS = 5
+
 logger = getLogger(__name__)
-
-PLAN_FEATURES = {
-    "community": [
-        "Unlimited SBOMs",
-        "Unlimited products & components",
-        "All data is public",
-        "Weekly vulnerability scans",
-        "Community support",
-        "API access",
-        "Workspace management",
-        "Public Trust Center",
-        "Custom branding (logo & colors)",
-    ],
-    "business": [
-        "Everything in Community",
-        "Private components/products",
-        "NTIA Minimum Elements check",
-        "Advanced vulnerability scanning (every 12 hours)",
-        "Product identifiers (SKUs/barcodes)",
-        "Priority support",
-        "Workspace management",
-        "Public Trust Center",
-        "Custom domain for Trust Center",
-        "Custom branding (logo & colors)",
-    ],
-    "enterprise": [
-        "Everything in Business",
-        "Unlimited users",
-        "Custom Dependency Track servers",
-        "Dedicated support",
-        "Custom integrations",
-        "SLA guarantee",
-        "Advanced security",
-        "Custom deployment options",
-        "Public Trust Center",
-        "Custom domain for Trust Center",
-        "Advanced custom branding (logo, colors, themes)",
-    ],
-}
-
-
-def _get_bulk_statuses() -> list[tuple[str, str]]:
-    """Return bulk status choices, importing from controls app if available."""
-    try:
-        from sbomify.apps.controls.views import BULK_STATUSES
-
-        return BULK_STATUSES
-    except ImportError:
-        return [
-            ("compliant", "Compliant"),
-            ("partial", "Partial"),
-            ("not_implemented", "Not Implemented"),
-            ("not_applicable", "N/A"),
-        ]
-
-
-PLAN_LIMITS = {
-    "max_products": {
-        "label": "Products",
-        "icon": "cube",
-    },
-    "max_components": {
-        "label": "Components",
-        "icon": "puzzle-piece",
-    },
-}
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -140,36 +81,81 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 request, HttpResponse(status=status_code, content=team.get("detail", "Unknown error"))
             )
 
-        # Sync subscription data from Stripe before displaying billing info
         from sbomify.apps.billing.config import is_billing_enabled
+        from sbomify.apps.teams.settings_tabs import resolve_tab
+
+        # Resolved before any billing work, because it decides whether that work
+        # is wanted at all. Live Member row rather than the session cache: this
+        # picks which sections are rendered, so a demoted user reading a stale
+        # role would be shown sections they can no longer act on.
+        role = get_member_role_by_key(request.user, team_key)
+        billing_enabled_flag = is_billing_enabled()
+        active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
+        if active_tab is None:
+            # Defence in depth: get_team() above already refuses non-members and
+            # guests, so nobody who reaches here should have an empty tab list.
+            # Kept because the two gates answer different questions — that one is
+            # about the workspace, this one about what the role opens — and a
+            # future tier that opens no section should be denied, not shown a
+            # blank page. The typed domain error rather than a hand-built
+            # HttpResponse: error_response understands it, it carries its own 403,
+            # and it keeps this on the same path as every other permission failure.
+            return error_response(request, PermissionDeniedError("No settings available for this role"))
+        # A stale or renamed slug resolves to the first section instead of 404ing;
+        # send the browser to the URL that actually rendered so the address bar,
+        # the highlighted tab and the content all agree. Returning here also
+        # means a redirect costs no billing work.
+        if tab is not None and tab != active_tab.key:
+            return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab.key)
+
+        # Stripe is reached only where its answer is on screen. Eight sections
+        # render from this view and one of them shows billing, so syncing on
+        # every tab made a page load depend on a third party with nothing to say
+        # to it, and the subscription sync bypasses its cache whenever the
+        # stored copy is over a minute old. The other tabs read the stored
+        # billing_plan_limits, which is what they showed between syncs anyway.
+        wants_fresh_billing = billing_enabled_flag and active_tab.key == "billing"
 
         try:
             team_obj = Team.objects.get(key=team_key)
-            if is_billing_enabled():
+            if wants_fresh_billing:
                 sync_subscription_from_stripe(team_obj)
                 # Refresh team data after sync
                 team_obj.refresh_from_db()
         except Team.DoesNotExist:
             team_obj = None
 
-        # Get plan features and pricing based on billing plan
+        # Built only for the tab that renders it. billing.html.j2 is the sole
+        # consumer of these three: the site-wide payment banner reads
+        # team.billing_plan_limits off the model, and select_plan belongs to
+        # another view. Building them everywhere is not merely wasted work,
+        # because get_plan_pricing reaches Stripe by two paths that no sync flag
+        # covers: list_subscriptions when a customer has no stored subscription
+        # id, and _fetch_invoice_amount when the cached invoice fields are
+        # missing. Skipping the call is the only way to be sure a tab with no
+        # billing on it does not depend on Stripe.
         billing_plan = team.billing_plan or Team.Plan.COMMUNITY
-        plan_features = PLAN_FEATURES.get(billing_plan, [])
+        plan_features: list[Any] = []
+        plan_pricing: dict[str, Any] = {}
+        plan_limits: list[dict[str, str]] = []
 
-        # Use pricing service to calculate plan pricing and limits
-        pricing_service = TeamPricingService()
-
-        # Fetch billing plan object once for reuse
-        try:
-            billing_plan_obj = BillingPlan.objects.get(key=billing_plan)
-        except BillingPlan.DoesNotExist:
-            billing_plan_obj = None
-
-        # Get pricing information
-        plan_pricing = pricing_service.get_plan_pricing(team, billing_plan_obj)
-
-        # Get plan limits
-        plan_limits = pricing_service.get_plan_limits(team, billing_plan_obj)
+        if wants_fresh_billing:
+            plan_features = list(PLAN_FEATURES.get(billing_plan, ()))
+            pricing_service = TeamPricingService()
+            try:
+                billing_plan_obj = BillingPlan.objects.get(key=billing_plan)
+            except BillingPlan.DoesNotExist:
+                billing_plan_obj = None
+            # Priced from the refreshed model, not the schema. `team` was built
+            # by get_team() before the sync above, so its billing_plan_limits
+            # still hold the pre-sync status, next billing date and amounts.
+            # The service used to hide this by syncing and refreshing again
+            # itself; now that it is told not to, the stale copy would show.
+            priced_from = team_obj or team
+            # The sync decision was made above, once, so this must not quietly
+            # make it again.
+            plan_pricing = pricing_service.get_plan_pricing(priced_from, billing_plan_obj, sync_from_stripe=False)
+            plan_limits = pricing_service.get_plan_limits(priced_from, billing_plan_obj)
 
         # Get actual Team model instance to access helper properties and enrich context
         # (The 'team' from get_team is a Pydantic schema which lacks these properties)
@@ -194,6 +180,16 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Inject properties used by global banners
             team_data["is_in_grace_period"] = team_obj.is_in_grace_period
             team_data["is_payment_restricted"] = team_obj.is_payment_restricted
+            # The billing fields come from the row, which the sync above may
+            # just have rewritten. get_team() built this schema before that ran,
+            # and the billing template reads subscription_status and
+            # cancel_at_period_end straight off it, so leaving the schema's copy
+            # would put a stale status beside freshly priced figures on one
+            # page. The pricing service used to overwrite the schema as a side
+            # effect of syncing; it no longer syncs here, so the copy is done
+            # where it can be seen.
+            team_data["billing_plan"] = team_obj.billing_plan
+            team_data["billing_plan_limits"] = team_obj.billing_plan_limits
         else:
             # Fallback if team_obj not found
             team_data = team  # Use schema as-is
@@ -205,157 +201,88 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         # Get company-wide NDA document if exists
         company_nda_document = None
-        if team_obj:
+        if team_obj and active_tab.key == "trust-center":
             company_nda_document = team_obj.get_company_nda_document()
 
         # Fetch contact profiles for the settings tab
-        _, profiles = list_contact_profiles(request, team_key)
+        profiles: list[Any] = []
+        if active_tab.key == "contact-profiles":
+            profiles_status, profiles = list_contact_profiles(request, team_key)
+            if profiles_status != 200:
+                return error_response(request, HttpResponse("Unable to load party profiles", status=profiles_status))
 
         # Count access tokens for account deletion tab
         from sbomify.apps.access_tokens.models import AccessToken
 
         user = cast(User, request.user)
-        access_token_count = AccessToken.objects.filter(user=user).count()
+        access_token_count = AccessToken.objects.filter(user=user).count() if active_tab.key == "account" else 0
 
         # Fetch incoming invitations for the current user (accept/reject UI on members tab)
-        pending_invitations = get_pending_invitations_for_user(user)
-
-        # Controls tab — all catalogs (active + inactive, including imports)
-        catalog_icon_map: dict[str, str] = {
-            "SOC 2 Type II": "fa-shield-halved",
-            "ISO 27001:2022": "fa-certificate",
-            "NIST Cybersecurity Framework 2.0": "fa-landmark",
-            "CIS Controls v8": "fa-lock",
-            "HIPAA": "fa-heart-pulse",
-            "GDPR": "fa-user-shield",
-            "CMMC 2.0": "fa-jet-fighter",
-            "CSA CCM": "fa-cloud",
-            "PCI DSS": "fa-credit-card",
-            "NIST SP 800-53": "fa-building-columns",
-        }
-        active_catalogs: list[dict[str, Any]] = []
-        if team_obj:
-            from sbomify.apps.controls.models import ControlCatalog
-            from sbomify.apps.controls.services.catalog_service import get_active_catalogs
-            from sbomify.apps.controls.services.status_service import get_controls_detail
-
-            catalogs_result = get_active_catalogs(team_obj)
-            if catalogs_result.ok and catalogs_result.value:
-                for catalog in catalogs_result.value:
-                    detail_result = get_controls_detail(catalog)
-                    categories = detail_result.value if detail_result.ok and detail_result.value else []
-                    active_catalogs.append(
-                        {
-                            "catalog": catalog,
-                            "categories": categories,
-                            "total_count": sum(len(c.get("controls", [])) for c in categories),
-                            "icon": catalog_icon_map.get(catalog.name, "fa-list-check"),
-                        }
-                    )
+        pending_invitations = get_pending_invitations_for_user(user) if active_tab.key == "members" else []
 
         # Which section is on screen, and which the nav offers. Resolved from
         # the registry so the two cannot disagree — a tab the member may not
-        # open is neither linked nor rendered.
-        from sbomify.apps.teams.settings_tabs import resolve_tab, visible_tabs
+        # open is neither linked nor rendered. Resolved at the top of this
+        # method, because it also decides whether Stripe is called.
+        from sbomify.apps.teams.settings_tabs import visible_tabs
 
-        # Live Member row, not the session cache. This decides which settings
-        # sections are linked AND rendered, so a demoted user reading a stale
-        # cached role would be shown sections they can no longer act on — and
-        # this view was just widened to MANAGE so members can reach their own
-        # tabs, which makes an accurate role here load-bearing rather than
-        # cosmetic.
-        role = get_member_role_by_key(request.user, team_key)
-        billing_enabled_flag = is_billing_enabled()
-        active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
-        if active_tab is None:
-            # Defence in depth: get_team() above already refuses non-members and
-            # guests, so nobody who reaches here should have an empty tab list.
-            # Kept because the two gates answer different questions — that one is
-            # about the workspace, this one about what the role opens — and a
-            # future tier that opens no section should be denied, not shown a
-            # blank page. The typed domain error rather than a hand-built
-            # HttpResponse: error_response understands it, it carries its own 403,
-            # and it keeps this on the same path as every other permission failure.
-            return error_response(request, PermissionDeniedError("No settings available for this role"))
-        # A stale or renamed slug resolves to the first section instead of 404ing;
-        # send the browser to the URL that actually rendered so the address bar,
-        # the highlighted tab and the content all agree.
-        if tab is not None and tab != active_tab.key:
-            return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab.key)
-
-        return render(
-            request,
-            "teams/team_settings.html.j2",
-            {
-                "APP_BASE_URL": settings.APP_BASE_URL,
-                "settings_tabs": visible_tabs(role, billing_enabled=billing_enabled_flag),
-                "active_tab": active_tab,
-                "team": team_data,
-                "team_obj": team_obj,  # Pass actual model in case specific valid/function call is lower down
-                # Members tab
-                "delete_member_form": DeleteMemberForm(),
-                "delete_invitation_form": DeleteInvitationForm(),
-                # Billing tab
-                "plan_features": plan_features,
-                "all_plan_features": PLAN_FEATURES,
-                "plan_pricing": plan_pricing,
-                "plan_limits": plan_limits,
-                "can_set_private": can_set_private,
-                # Trust center settings
-                "branding_info": branding_info,
-                "company_nda_document": company_nda_document,
-                "trust_center_domain": getattr(settings, "TRUST_CENTER_DOMAIN", ""),
-                "trust_center_url": (
-                    build_custom_domain_url(team_obj, "/", secure=True).rstrip("/") if team_obj else ""
-                ),
-                "security_txt_config": team_obj.security_txt_config if team_obj else {},
-                "security_txt_contacts": (
-                    ContactProfileContact.objects.filter(
-                        entity__profile__team=team_obj,
-                        entity__profile__is_component_private=False,
-                    )
-                    .order_by("entity__profile__name", "name")
-                    .values("id", "name", "email", "entity__profile__name")
-                    if team_obj and team_obj.is_public
-                    else []
-                ),
-                # Contact Profiles tab
-                "profiles": profiles,
-                # Account tab
-                "access_token_count": access_token_count,
-                # Members tab — incoming invitations for the current user
-                "pending_invitations": pending_invitations,
-                # Members tab — role legend, sourced from the capability table
-                "role_descriptions": ROLE_DESCRIPTIONS,
-                # Controls tab
-                "active_catalogs": active_catalogs,
-                "active_catalog_names": {c["catalog"].name for c in active_catalogs},
-                "imported_catalogs": list(
-                    ControlCatalog.objects.filter(team=team_obj, source="custom").values(
-                        "id", "name", "version", "is_active"
-                    )
+        context = {
+            "APP_BASE_URL": settings.APP_BASE_URL,
+            "settings_tabs": visible_tabs(role, billing_enabled=billing_enabled_flag),
+            "active_tab": active_tab,
+            "team": team_data,
+            "team_obj": team_obj,  # Pass actual model in case specific valid/function call is lower down
+            # Members tab
+            "delete_member_form": DeleteMemberForm(),
+            "delete_invitation_form": DeleteInvitationForm(),
+            # Billing tab
+            "plan_features": plan_features,
+            "all_plan_features": PLAN_FEATURES,
+            "plan_pricing": plan_pricing,
+            "plan_limits": plan_limits,
+            "can_set_private": can_set_private,
+            # Trust center settings
+            "branding_info": branding_info,
+            "company_nda_document": company_nda_document,
+            "max_upload_size_mb": settings.ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024),
+            "trust_center_domain": getattr(settings, "TRUST_CENTER_DOMAIN", ""),
+            "trust_center_url": (build_custom_domain_url(team_obj, "/", secure=True).rstrip("/") if team_obj else ""),
+            "security_txt_config": team_obj.security_txt_config if team_obj else {},
+            "security_txt_contacts": (
+                ContactProfileContact.objects.filter(
+                    entity__profile__team=team_obj,
+                    entity__profile__is_component_private=False,
                 )
-                if team_obj
-                else [],
-                "bulk_statuses": _get_bulk_statuses(),
-                "available_catalogs": [
-                    ("soc2-type2", "SOC 2 Type II", "SOC 2 Type II", "fa-shield-halved"),
-                    ("iso27001-2022", "ISO 27001:2022", "ISO 27001", "fa-certificate"),
-                    ("nist-csf-2", "NIST Cybersecurity Framework 2.0", "NIST CSF 2.0", "fa-landmark"),
-                    ("cis-controls-v8", "CIS Controls v8", "CIS v8", "fa-lock"),
-                    ("hipaa", "HIPAA", "HIPAA", "fa-heart-pulse"),
-                    ("gdpr", "GDPR", "GDPR", "fa-user-shield"),
-                    ("cmmc-2", "CMMC 2.0", "CMMC 2.0", "fa-jet-fighter"),
-                    ("csa-ccm-v4", "CSA CCM", "CSA CCM", "fa-cloud"),
-                    ("pci-dss-v4", "PCI DSS", "PCI DSS", "fa-credit-card"),
-                    ("nist-800-53-r5", "NIST SP 800-53", "NIST 800-53", "fa-building-columns"),
-                ],
-                # ``role`` above is the same live lookup against the same row;
-                # re-querying only asked the database a question it had already
-                # answered.
-                "is_admin_or_owner": role in ADMINISTER,
-            },
+                .order_by("entity__profile__name", "name")
+                .values("id", "name", "email", "entity__profile__name")
+                if team_obj and team_obj.is_public and active_tab.key == "trust-center"
+                else []
+            ),
+            # Contact Profiles tab
+            "profiles": profiles,
+            # Account tab
+            "access_token_count": access_token_count,
+            # Members tab — incoming invitations for the current user
+            "pending_invitations": pending_invitations,
+            # Members tab — role legend, sourced from the capability table
+            "role_descriptions": ROLE_DESCRIPTIONS,
+            # ``role`` above is the same live lookup against the same row;
+            # re-querying only asked the database a question it had already
+            # answered.
+            "is_admin_or_owner": role in ADMINISTER,
+        }
+        panel = build_panel_context(request, team_key, active_tab.key)
+        if not panel.ok:
+            return error_response(request, HttpResponse(panel.error, status=panel.status_code or 400))
+        context.update(panel.value or {})
+        if active_tab.key == "contact-profiles":
+            context.update(profiles_context(profiles))
+        template = (
+            "teams/team_settings_content.html.j2"
+            if request.headers.get("HX-Target") == "settings-content"
+            else "teams/team_settings.html.j2"
         )
+        return render(request, template, context)
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         if request.POST.get("visibility_action") == "update":
@@ -370,6 +297,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if request.POST.get("tea_action") == "update":
             return self._update_tea_enabled(request, team_key)
+
+        if request.POST.get("vulnerability_posture_action") == "update":
+            return self._update_vulnerability_posture(request, team_key)
 
         if request.POST.get("security_txt_action") == "update":
             return self._update_security_txt(request, team_key)
@@ -550,17 +480,25 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.error(request, "Only PDF files are allowed")
             return self._redirect_with_tab(request, team_key)
 
-        max_size = 50 * 1024 * 1024  # 50MB
+        # The one artifact upload that used to carry its own literal, so raising
+        # DATA_UPLOAD_MAX_MEMORY_SIZE_MB (which is what sets
+        # ARTIFACT_MAX_UPLOAD_SIZE) moved every ceiling except this one.
+        max_size = settings.ARTIFACT_MAX_UPLOAD_SIZE
+        max_size_mb = max_size // (1024 * 1024)
         if (uploaded_file.size or 0) > max_size:
-            messages.error(request, "File size must be less than 50MB")
+            messages.error(request, f"File size must be {max_size_mb}MB or smaller")
             return self._redirect_with_tab(request, team_key)
 
         try:
             import hashlib
-            from decimal import Decimal, InvalidOperation
 
-            from sbomify.apps.core.object_store import S3Client
+            from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
             from sbomify.apps.documents.models import Document
+            from sbomify.apps.documents.utils import (
+                bump_decimal_version,
+                is_duplicate_document_error,
+                next_free_document_version,
+            )
 
             # Read file content
             file_content = uploaded_file.read()
@@ -570,7 +508,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             content_hash = hashlib.sha256(file_content).hexdigest()
 
             # Upload to S3
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             filename = s3.upload_document(file_content)
 
             # Get or create company-wide component
@@ -579,55 +517,70 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Find all previous NDA documents for this component to determine next version
             previous_ndas = Document.objects.filter(
                 component=company_component,
-                document_type=Document.DocumentType.COMPLIANCE,
-                compliance_subcategory=Document.ComplianceSubcategory.NDA,
+                document_type=Document.DocumentType.NDA,
             ).order_by("-created_at")
 
-            # Calculate next version number
+            # Calculate next version number: count on from the newest NDA where the
+            # version is a number we can count on from ("1.0" -> "1.1"), otherwise
+            # from the first number inside it, otherwise from how many there are.
             next_version = "1.0"
             if previous_ndas.exists():
-                # Try to parse the latest version and increment
                 latest_nda = previous_ndas.first()
                 latest_version_str = latest_nda.version if latest_nda else "1.0"
-                try:
-                    # Try to parse as decimal (e.g., "1.0", "2.5")
-                    latest_version = Decimal(latest_version_str)
-                    next_version = str(latest_version + Decimal("0.1"))
-                    # Remove trailing zeros and unnecessary decimal point
-                    next_version = next_version.rstrip("0").rstrip(".")
-                except (InvalidOperation, ValueError):
-                    # If version is not a number, use a simple increment
-                    # Try to extract number from version string
+
+                bumped = bump_decimal_version(latest_version_str)
+                if bumped is None:
                     import re
 
                     match = re.search(r"(\d+(?:\.\d+)?)", latest_version_str)
-                    if match:
-                        try:
-                            latest_version = Decimal(match.group(1))
-                            next_version = str(latest_version + Decimal("0.1"))
-                            next_version = next_version.rstrip("0").rstrip(".")
-                        except (InvalidOperation, ValueError):
-                            # Fallback: append version number
-                            version_count = previous_ndas.count()
-                            next_version = f"{version_count + 1}.0"
-                    else:
-                        # No number found, use count-based version
-                        version_count = previous_ndas.count()
-                        next_version = f"{version_count + 1}.0"
+                    bumped = bump_decimal_version(match.group(1)) if match else None
+                if bumped is None:
+                    bumped = f"{previous_ndas.count() + 1}.0"
 
-            # Always create a new Document record (versioning)
-            document = Document.objects.create(
-                name=uploaded_file.name or "NDA",
-                version=next_version,
-                document_filename=filename,
-                component=company_component,
-                source="manual_upload",
-                document_type=Document.DocumentType.COMPLIANCE,
-                compliance_subcategory=Document.ComplianceSubcategory.NDA,
-                content_hash=content_hash,
-                content_type=uploaded_file.content_type,
-                file_size=uploaded_file.size,
-            )
+                next_version = bumped
+
+            # The version above is a guess: it counts on from the newest NDA, so it
+            # can name a version this component already holds (an out-of-order
+            # upload, or a version the duplicate migration suffixed). Documents are
+            # unique on component + name + version, so settle on a free one rather
+            # than fail the upload.
+            #
+            # The allocator reads the versions in use, so two uploads racing each
+            # other can be handed the same free one and one of them will lose the
+            # constraint. That is a conflict to re-resolve, not an error to show:
+            # re-read and retry, each attempt in its own savepoint so the failed
+            # insert does not poison the surrounding transaction.
+            document_name = uploaded_file.name or "NDA"
+            document = None
+            try:
+                for attempt in range(NDA_VERSION_ALLOCATION_ATTEMPTS):
+                    next_version = next_free_document_version(company_component.id, document_name, next_version)
+                    try:
+                        with transaction.atomic():
+                            # Always create a new Document record (versioning)
+                            document = Document.objects.create(
+                                name=document_name,
+                                version=next_version,
+                                document_filename=filename,
+                                component=company_component,
+                                source="manual_upload",
+                                document_type=Document.DocumentType.NDA,
+                                content_hash=content_hash,
+                                content_type=uploaded_file.content_type,
+                                file_size=uploaded_file.size,
+                            )
+                        break
+                    except IntegrityError as exc:
+                        if not is_duplicate_document_error(exc) or attempt == NDA_VERSION_ALLOCATION_ATTEMPTS - 1:
+                            raise
+            except IntegrityError:
+                # The object is already stored and no row will reference it, same
+                # as the artifact upload path.
+                log_orphaned_object(filename)
+                raise
+
+            if document is None:  # pragma: no cover - the loop either breaks or raises
+                raise RuntimeError("NDA version allocation did not settle")
 
             # Store Document ID in team's branding_info (point to latest version)
             # Create a copy of the dict to ensure Django detects the change
@@ -713,6 +666,35 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         refresh_current_team_session(request, team)
 
         messages.success(request, f"Transparency Exchange API is now {'enabled' if team.tea_enabled else 'disabled'}.")
+        return self._redirect_with_tab(request, team_key)
+
+    def _update_vulnerability_posture(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        user = cast(User, request.user)
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            messages.error(request, "Workspace not found")
+            return self._redirect_with_tab(request, team_key)
+
+        membership = Member.objects.filter(user=user, team=team).first()
+        if not membership or membership.role not in ADMINISTER:
+            messages.error(request, "Only workspace owners and admins can change Trust Center settings")
+            return self._redirect_with_tab(request, team_key)
+
+        values = request.POST.getlist("publish_vulnerability_posture")
+        team.publish_vulnerability_posture = self._parse_checkbox_value(
+            values, default=team.publish_vulnerability_posture
+        )
+        team.save()
+
+        refresh_current_team_session(request, team)
+
+        messages.success(
+            request,
+            "Vulnerability posture is now published on your Trust Center."
+            if team.publish_vulnerability_posture
+            else "Vulnerability posture is no longer published on your Trust Center.",
+        )
         return self._redirect_with_tab(request, team_key)
 
     def _update_security_txt(self, request: HttpRequest, team_key: str) -> HttpResponse:

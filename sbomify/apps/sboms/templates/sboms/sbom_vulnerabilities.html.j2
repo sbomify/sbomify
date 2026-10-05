@@ -3,9 +3,10 @@
 {% load static %}
 {% load django_vite %}
 {% load advisory_tags %}
+{% load plugins_extras %}
 {% block title %}sbomify SBOM Vulnerabilities{% endblock %}
 {% block content %}
-    <c-layout.page-header title="Vulnerabilities" icon="fas fa-shield-alt" mark="avatar" :breadcrumbs="breadcrumb_items" style="--avatar-accent: var(--color-warning)">
+    <c-layout.page-header title="Vulnerabilities" :breadcrumbs="breadcrumb_items">
     <c-buttons.secondary href="{% url 'core:component_item' component_id=sbom.component.id item_type='sboms' item_id=sbom.id %}">
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to SBOM
     </c-buttons.secondary>
@@ -54,173 +55,18 @@
                 </c-chips.metric-chip>
             {% endif %}
         </div>
-        {# Main Card #}
-        <c-cards.card>
-        <c-slot name="header">
-        {% comment %}
-            The band the app's cards carry: shorter than the library header and
-            without its wash. Kept as the page's own markup so the migration
-            moves no pixels; the library has no matching part yet.
-        {% endcomment %}
-        <div class="px-6 py-4 border-b border-border">
-            <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">Scan Results</h4>
-        </div>
-        </c-slot>
-        {% if vulnerabilities %}
-            {% if vulnerabilities.results %}
-                {% for result in vulnerabilities.results %}
-                    <div class="mb-8 {% if not forloop.last %}pb-8 border-b border-border{% endif %}">
-                        {% if result.packages %}
-                            <c-tables.shell nested>
-                            <c-tables.table sized>
-                            <c-tables.head>
-                            <c-tables.header-cell nowrap class="w-1/4">Package</c-tables.header-cell>
-                            <c-tables.header-cell class="w-1/4">Version</c-tables.header-cell>
-                            <c-tables.header-cell class="w-1/4">Ecosystem</c-tables.header-cell>
-                            <c-tables.header-cell class="w-1/4">Vulnerabilities</c-tables.header-cell>
-                            </c-tables.head>
-                            {% for pkg_vuln_info in result.packages %}
-                                <tbody x-data="{ open:
-                                    {% if forloop.first %}
-                                        true
-                                    {% else %}
-                                        false
-                                    {% endif %}
-                                    }">
-                                    {# Package row stays compact; its vulnerabilities span the full width in the row below. #}
-                                    <c-tables.row class="cursor-pointer" @click="open = !open">
-                                    <c-tables.cell nowrap>
-                                    <span class="font-semibold text-text">{{ pkg_vuln_info.package.name }}</span>
-                                    </c-tables.cell>
-                                    <c-tables.cell>
-                                    <c-code-inline>{{ pkg_vuln_info.package.version }}</c-code-inline>
-                                    </c-tables.cell>
-                                    <c-tables.cell>
-                                    <c-badges.secondary>{{ pkg_vuln_info.package.ecosystem }}</c-badges.secondary>
-                                    </c-tables.cell>
-                                    <c-tables.cell>
-                                    {% if pkg_vuln_info.vulnerabilities %}
-                                        <span class="inline-flex items-center gap-2 text-sm font-medium text-text">{{ pkg_vuln_info.vulnerabilities|length }} vulnerabilit{{ pkg_vuln_info.vulnerabilities|length|pluralize:"y,ies" }}<i class="fas fa-chevron-down text-xs text-text-muted transition-transform"
-   :class="open ? 'rotate-180' : ''"
-   aria-hidden="true"></i></span>
-                                    {% else %}
-                                        <span class="inline-flex items-center gap-1 text-success text-sm"><i class="fas fa-shield-alt"></i>None</span>
-                                    {% endif %}
-                                    </c-tables.cell>
-                                    </c-tables.row>
-                                    {% if pkg_vuln_info.vulnerabilities %}
-                                        <c-tables.row x-show="open" x-cloak>
-                                        {% comment %}
-                                            No padding override: the stylesheet's own
-                                            `.tw-table td` outranked the utilities this
-                                            cell used to carry, so its effective padding
-                                            was always the cell's default.
-                                        {% endcomment %}
-                                        {% comment %}
-                                            Not nowrap: this is the expanded detail panel,
-                                            free-form prose cards whose text must wrap inside
-                                            their borders — not a one-line table column.
-                                        {% endcomment %}
-                                        <c-tables.cell colspan="4">
-                                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                                            {% for vuln in pkg_vuln_info.vulnerabilities %}
-                                                <c-cards.card flush class="p-4 min-w-0">
-                                                <div class="flex flex-wrap justify-between items-start gap-2 mb-2">
-                                                    <div class="flex-1">
-                                                        {# Vulnerability ID with smart links #}
-                                                        {% with vuln_url=vuln.id|advisory_url %}
-                                                            {% if vuln_url %}
-                                                                <a href="{{ vuln_url }}"
-                                                                   target="_blank"
-                                                                   rel="noopener"
-                                                                   class="text-primary font-semibold hover:underline inline-flex items-center gap-1">
-                                                                    <i class="fas fa-external-link-alt text-xs"></i>{{ vuln.id }}
-                                                                </a>
-                                                            {% else %}
-                                                                <span class="text-text font-semibold">{{ vuln.id }}</span>
-                                                            {% endif %}
-                                                        {% endwith %}
-                                                        {% if vuln.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ vuln.aliases|join:", " }}</div>{% endif %}
-                                                    </div>
-                                                    <div class="flex items-center gap-2">
-                                                        {# Severity Badge #}
-                                                        {% if vuln.severity and vuln.severity != 'unknown' %}
-                                                            <c-badges.severity level="{{ vuln.severity|lower }}">{{ vuln.severity|upper }}</c-badges.severity>
-                                                        {% else %}
-                                                            <c-badges.severity level="medium">MEDIUM</c-badges.severity>
-                                                        {% endif %}
-                                                        {# CVSS Score #}
-                                                        {% if vuln.cvss_score %}
-                                                            <c-chips.neutral class="whitespace-nowrap">CVSS: {{ vuln.cvss_score }}</c-chips.neutral>
-                                                        {% endif %}
-                                                    </div>
-                                                </div>
-                                                {# Summary. Truncate from the FULL description when present — the scanner's own title can be pre-cut mid-word — so truncatewords always ends on a whole word. #}
-                                                {% if vuln.details and ' ' in vuln.details %}
-                                                    <p class="text-sm text-text-muted leading-relaxed mb-2 break-words">{{ vuln.details|truncatewords:20 }}</p>
-                                                {% elif vuln.summary and ' ' in vuln.summary %}
-                                                    <p class="text-sm text-text-muted leading-relaxed mb-2 break-words">{{ vuln.summary|truncatewords:20 }}</p>
-                                                {% else %}
-                                                    <p class="text-sm text-text-muted mb-2 italic"
-                                                       title="No summary provided by the scanner">
-                                                        No description provided …
-                                                    </p>
-                                                {% endif %}
-                                                {# References #}
-                                                {% if vuln.references and vuln.references|length > 0 %}
-                                                    <div class="mt-2">
-                                                        {% if vuln.references|length <= 3 %}
-                                                            <span class="text-xs text-text-muted">References:</span>
-                                                            {% for ref in vuln.references %}
-                                                                {% if ref and ref != "" %}
-                                                                    <a href="{{ ref }}"
-                                                                       target="_blank"
-                                                                       class="inline-flex items-center gap-1 text-xs text-primary hover:underline mr-2">
-                                                                        <i class="fas fa-external-link-alt"></i>Reference
-                                                                    </a>
-                                                                {% endif %}
-                                                            {% endfor %}
-                                                        {% else %}
-                                                            <details class="group">
-                                                                <summary class="cursor-pointer text-xs text-text-muted select-none py-1 hover:bg-background rounded inline-flex items-center gap-1">
-                                                                    <i class="fas fa-chevron-right transition-transform group-open:rotate-90"></i>
-                                                                    {{ vuln.references|length }} References (click to expand)
-                                                                </summary>
-                                                                <div class="mt-2 pl-4 border-l-2 border-border">
-                                                                    {% for ref in vuln.references %}
-                                                                        {% if ref and ref != "" %}
-                                                                            <a href="{{ ref }}"
-                                                                               target="_blank"
-                                                                               class="block text-xs text-primary hover:underline mb-1">
-                                                                                <i class="fas fa-external-link-alt mr-1"></i>{{ ref|truncatechars:60 }}
-                                                                            </a>
-                                                                        {% endif %}
-                                                                    {% endfor %}
-                                                                </div>
-                                                            </details>
-                                                        {% endif %}
-                                                    </div>
-                                                {% endif %}
-                                                </c-cards.card>
-                                            {% endfor %}
-                                        </div>
-                                        </c-tables.cell>
-                                        </c-tables.row>
-                                    {% endif %}
-                                </tbody>
-                            {% endfor %}
-                            </c-tables.table>
-                            </c-tables.shell>
-                        {% else %}
-                            <c-feedback.alert variant="info">No packages with vulnerability information found in this result.</c-feedback.alert>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            {% else %}
-                <c-feedback.alert variant="info">
-                Vulnerability scan data found, but no specific results or packages identified. The SBOM might be empty or not analyzable by the scanner.
-                </c-feedback.alert>
-            {% endif %}
+        <c-cards.card title="Scan results" :flush="scan_panel">
+        {% if can_triage %}
+            <c-slot name="header">
+            <c-cards.header title="Scan results" class="flex flex-wrap items-center justify-between gap-3">
+            <c-buttons.secondary size="sm" @click="$dispatch('open-upload')">
+            <i class="fas fa-upload" aria-hidden="true"></i>Upload VEX
+            </c-buttons.secondary>
+            </c-cards.header>
+            </c-slot>
+        {% endif %}
+        {% if scan_panel %}
+            {% include "sboms/components/scan_vulnerabilities.html.j2" %}
         {% elif error_message %}
             <c-feedback.alert variant="danger" icon="fas fa-exclamation-triangle" title="Vulnerability Scan Failed">
             <c-slot name="body">
@@ -234,6 +80,22 @@
             {% endif %}
             </c-slot>
             </c-feedback.alert>
+        {% elif skipped_scans %}
+            <c-feedback.alert variant="warning" icon="fas fa-ban" title="Nothing scanned">
+            <c-slot name="body">
+            <div class="mt-3 space-y-3">
+                {% for scan in skipped_scans %}
+                    <p>
+                        <strong>{{ scan.findings.0.title }}</strong>
+                        <br>
+                        {{ scan.findings.0.description }}
+                    </p>
+                {% endfor %}
+            </div>
+            </c-slot>
+            </c-feedback.alert>
+        {% elif scan_timestamp %}
+            <c-feedback.empty-state compact icon="fas fa-check" title="No vulnerabilities found" message="The latest scan found no known vulnerabilities in this SBOM." />
         {% else %}
             {% if is_processing %}
                 <c-feedback.alert variant="info" title="Processing Vulnerability Scan">
@@ -284,4 +146,8 @@
         {% endif %}
         </c-cards.card>
     </div>
+    {% if can_triage %}
+        {% include "plugins/components/triage_modal.html.j2" %}
+        {% include "sboms/components/sbom_upload.html.j2" with upload_title="Upload VEX" upload_bom_type="vex" %}
+    {% endif %}
 {% endblock %}

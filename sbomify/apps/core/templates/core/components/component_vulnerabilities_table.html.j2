@@ -1,0 +1,10 @@
+{% comment %}The component panel and its filters swap together. Its modal remains outside this region.{% endcomment %}
+<div id="component-vulnerabilities-table"
+     hx-target="this"
+     hx-swap="outerHTML">
+    <c-tables.shell nested>
+    <c-vulnerabilities.filters :panel="vuln_panel" url="{{ vuln_panel_url }}" target="component-vulnerabilities-table" id="vuln" prefix="vuln_" push_url="true" />
+    <c-vulnerabilities.table :rows="vuln_panel.rows" :can_triage="can_triage" />
+    <c-vulnerabilities.footer :panel="vuln_panel" url="{{ vuln_panel_url }}" query="{{ vuln_query_string }}" prefix="vuln_" />
+    </c-tables.shell>
+</div>

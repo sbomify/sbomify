@@ -1,0 +1,130 @@
+---
+# The Caddy edge is the whole reason this chart does not use an Ingress, so
+# `helm test` should exercise it rather than only the app behind it. Runs
+# in-cluster against the Service, so it needs no external DNS or LoadBalancer.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "sbomify.fullname" . }}-test-edge
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "test") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    # Not hook-succeeded: the Pod has to outlive the test for
+    # `helm test --logs` to read anything off it. The next run replaces it.
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: edge
+      image: {{ include "sbomify.image" . | quote }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+      command:
+        - python
+        - -c
+        - |
+          import sys, urllib.error, urllib.request
+
+          base = "http://{{ include "sbomify.fullname" . }}-caddy"
+          failures = []
+
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              """Report redirects instead of following them.
+
+              Following the HTTPS redirect would send the probe back to Caddy
+              over TLS, where it would fail certificate validation against the
+              local CA, testing the wrong thing.
+              """
+
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+
+          opener = urllib.request.build_opener(NoRedirect)
+
+          def check(name, path, expected, host=None, headers=None):
+              req = urllib.request.Request(base + path)
+              if host:
+                  req.add_header("Host", host)
+              for k, v in (headers or {}).items():
+                  req.add_header(k, v)
+              try:
+                  with opener.open(req, timeout=15) as r:
+                      status = r.status
+              except urllib.error.HTTPError as e:
+                  status = e.code
+              except Exception as e:
+                  failures.append(f"{name}: request failed: {e}")
+                  return
+              if status == expected:
+                  print(f"ok - {name} ({status})")
+              else:
+                  failures.append(f"{name}: expected {expected}, got {status}")
+
+          # Caddy answers its own health endpoint, proving the edge is serving.
+          check("edge is serving", "/health", 200)
+
+          # Proxied through to Django, and exempt from the HTTPS redirect so it
+          # stays reachable over plain HTTP inside the cluster.
+          check("app health via the edge", "{{ .Values.caddy.healthPath }}", 200,
+                host="localhost")
+
+          # Anything else on :80 is redirected rather than served. Caddy's
+          # `redir ... permanent` is a 301 (nginx would have said 308).
+          check("http redirects to https", "/", 301,
+                host="{{ include "sbomify.appHost" . }}")
+
+          {{- if .Values.caddy.blockInternalApi }}
+          {{- if .Values.caddy.trustUpstreamTls.enabled }}
+          # X-Forwarded-Proto: https selects the already-TLS-terminated path,
+          # which is where the internal-API guard lives.
+          check("internal API blocked", "/api/v1/internal/domains", 403,
+                host="{{ include "sbomify.appHost" . }}",
+                headers={"X-Forwarded-Proto": "https"})
+          {{- else }}
+          # The guard itself lives on the HTTPS listener. Over plain HTTP the
+          # only thing to assert is that this path is *not served in the clear*
+          # it is redirected like everything else. Setting X-Forwarded-Proto
+          # must not change that, which is the point of trustUpstreamTls being
+          # off: otherwise any caller could select the terminated path by
+          # sending a header.
+          check("internal API not served over http", "/api/v1/internal/domains", 301,
+                host="{{ include "sbomify.appHost" . }}")
+          check("forwarded-proto header is not trusted", "/api/v1/internal/domains", 301,
+                host="{{ include "sbomify.appHost" . }}",
+                headers={"X-Forwarded-Proto": "https"})
+          {{- end }}
+          {{- end }}
+
+          for f in failures:
+              print("FAIL - " + f)
+          sys.exit(1 if failures else 0)
+      env:
+        - name: HOME
+          value: /tmp
+      volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
+  volumes:
+    - name: tmp
+      emptyDir: {}

@@ -35,7 +35,7 @@ class TestSBOMUniquenessConstraintCycloneDX:
     ) -> None:
         """Test that uploading a duplicate CycloneDX SBOM returns 409 Conflict."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -85,7 +85,7 @@ class TestSBOMUniquenessConstraintCycloneDX:
     ) -> None:
         """Test that uploading CycloneDX SBOM with different version succeeds."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -151,7 +151,7 @@ class TestSBOMUniquenessConstraintCycloneDX:
     ) -> None:
         """Test that uploading duplicate SBOMs with empty versions returns 409."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -203,7 +203,7 @@ class TestSBOMUniquenessConstraintSPDX:
     ) -> None:
         """Test that uploading a duplicate SPDX SBOM returns 409 Conflict."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -263,7 +263,7 @@ class TestSBOMUniquenessConstraintSPDX:
     ) -> None:
         """Test that uploading SPDX SBOM with different version succeeds."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -319,7 +319,7 @@ class TestSBOMUniquenessConstraintSPDX:
         Two SBOMs with no versionInfo should still be considered duplicates.
         """
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -386,7 +386,7 @@ class TestSBOMUniquenessConstraintCrossFormat:
     ) -> None:
         """Test that uploading SBOM with same version but different format succeeds."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -452,7 +452,7 @@ class TestSBOMUniquenessConstraintCrossFormat:
     ) -> None:
         """Test that same version can be uploaded to different components."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -516,7 +516,7 @@ class TestSBOMUniquenessConstraintFileUpload:
     ) -> None:
         """Test that file upload of duplicate CycloneDX SBOM returns 409 Conflict."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -561,7 +561,7 @@ class TestSBOMUniquenessConstraintFileUpload:
     ) -> None:
         """Test that file upload of duplicate SPDX SBOM returns 409 Conflict."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -625,7 +625,7 @@ class TestSBOMUniquenessConstraintFileUploadQualifiers:
     ) -> None:
         """File upload of CycloneDX SBOMs with different qualifiers should both succeed."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -670,7 +670,7 @@ class TestSBOMUniquenessConstraintFileUploadQualifiers:
     ) -> None:
         """File upload of duplicate CycloneDX SBOMs with same qualifiers should return 409."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -714,7 +714,7 @@ class TestSBOMUniquenessConstraintErrorHandling:
     ) -> None:
         """Test that the 409 error message contains version and format details."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -760,7 +760,7 @@ class TestSBOMUniquenessConstraintErrorHandling:
     ) -> None:
         """Test that duplicate uploads do not upload files to S3."""
         mocker.patch("boto3.resource")
-        mock_upload = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mock_upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -807,7 +807,7 @@ class TestSBOMQualifierDedup:
     ) -> None:
         """Two CycloneDX SBOMs with same version but different PURL qualifiers should both be accepted."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -875,7 +875,7 @@ class TestSBOMQualifierDedup:
     ) -> None:
         """Two CycloneDX SBOMs with same version and same qualifiers should return 409."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -922,7 +922,7 @@ class TestSBOMQualifierDedup:
     ) -> None:
         """CycloneDX SBOM without a PURL should store empty qualifiers."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 
@@ -957,7 +957,7 @@ class TestSBOMQualifierDedup:
     ) -> None:
         """Two SPDX SBOMs with same version but different PURL qualifiers should both be accepted."""
         mocker.patch("boto3.resource")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
 
         SBOM.objects.all().delete()
 

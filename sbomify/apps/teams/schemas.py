@@ -51,7 +51,24 @@ class MemberSchema(BaseModel):
     id: int
     user: UserSchema
     role: str
-    is_default_team: bool
+    # Deprecated at the field, not the endpoint. RFC 9745 Deprecation and RFC
+    # 8594 Sunset are resource-level headers: putting them on this endpoint
+    # would tell every client the whole resource is going away, which is false.
+    # OpenAPI's own `deprecated` flag is the field-level mechanism, and it
+    # reaches both /api/v1/docs and generated clients.
+    #
+    # No Sunset date yet, deliberately. The sbomify action reads this to pick a
+    # workspace, and when the field goes its `.get` returns None, every
+    # membership reads False, and the picker falls through to the first
+    # workspace in the list. No error, uploads land somewhere nobody chose. The
+    # date can be set once sbomify-action#389 has shipped in a release.
+    is_default_team: bool = Field(
+        deprecated=True,
+        description="Deprecated, use is_default_workspace. Both carry the same value.",
+    )
+    is_default_workspace: bool = Field(
+        description="Whether this is the member's default workspace.",
+    )
     is_me: bool = False
 
 

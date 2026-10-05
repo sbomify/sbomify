@@ -219,6 +219,39 @@ class TestStripeClient:
             call_args = mock_create.call_args[1]
             assert call_args["trial_period_days"] == 14
 
+    @patch("stripe.Subscription.create")
+    def test_a_trial_says_what_happens_when_it_ends_without_a_card(self, mock_create):
+        """Stripe's default raises an invoice nobody can pay, which reads to the
+        customer as a failed payment for a trial they only let lapse."""
+        mock_customer = MagicMock()
+        mock_customer.metadata = {"team_key": "team_123"}
+
+        mock_subscription = MagicMock()
+        mock_subscription.metadata = {"team_key": "team_123"}
+
+        with patch.object(self.client, "get_customer", return_value=mock_customer):
+            mock_create.return_value = mock_subscription
+
+            self.client.create_subscription(customer_id="cus_123", price_id="price_123", trial_days=14)
+
+            settings_sent = mock_create.call_args[1]["trial_settings"]
+            assert settings_sent["end_behavior"]["missing_payment_method"] == "cancel"
+
+    @patch("stripe.Subscription.create")
+    def test_a_subscription_with_no_trial_sends_no_trial_settings(self, mock_create):
+        mock_customer = MagicMock()
+        mock_customer.metadata = {"team_key": "team_123"}
+
+        mock_subscription = MagicMock()
+        mock_subscription.metadata = {"team_key": "team_123"}
+
+        with patch.object(self.client, "get_customer", return_value=mock_customer):
+            mock_create.return_value = mock_subscription
+
+            self.client.create_subscription(customer_id="cus_123", price_id="price_123")
+
+            assert "trial_settings" not in mock_create.call_args[1]
+
     def test_create_subscription_no_team_key(self):
         """Test subscription creation with customer missing team_key."""
         mock_customer = MagicMock()

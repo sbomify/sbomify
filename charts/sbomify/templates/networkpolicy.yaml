@@ -1,0 +1,38 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $fullname := include "sbomify.fullname" . }}
+---
+# Only the Caddy edge may reach the web tier directly. Note this needs
+# a CNI that enforces NetworkPolicy, kind's default kindnet does not, so these
+# objects exist but are inert there.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-web
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "web") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sbomify.componentSelectorLabels" (dict "ctx" . "component" "web") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "sbomify.componentSelectorLabels" (dict "ctx" . "component" "caddy") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Sibling pods in this release (e.g. the helm test probe).
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "sbomify.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 8000
+    {{- with .Values.networkPolicy.extraIngress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

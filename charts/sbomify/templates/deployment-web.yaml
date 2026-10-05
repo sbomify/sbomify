@@ -1,0 +1,133 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sbomify.fullname" . }}-web
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "web") | nindent 4 }}
+spec:
+  {{- if not .Values.web.autoscaling.enabled }}
+  replicas: {{ .Values.web.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "sbomify.componentSelectorLabels" (dict "ctx" . "component" "web") | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- include "sbomify.configChecksums" . | nindent 8 }}
+        {{- with .Values.web.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "sbomify.componentLabels" (dict "ctx" . "component" "web") | nindent 8 }}
+        {{- with .Values.web.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "sbomify.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.web.terminationGracePeriodSeconds }}
+      initContainers:
+        {{- include "sbomify.waitForDepsInitContainer" . | nindent 8 }}
+      containers:
+        - name: web
+          image: {{ include "sbomify.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command:
+            - gunicorn
+            - sbomify.asgi:application
+            - --bind
+            - 0.0.0.0:8000
+            - --workers
+            - {{ .Values.web.workers | quote }}
+            - --worker-class
+            - uvicorn_worker.UvicornWorker
+            - --graceful-timeout
+            - {{ .Values.web.gracefulTimeout | quote }}
+            - --timeout
+            - {{ .Values.web.timeout | quote }}
+            - --access-logfile
+            - "-"
+            - --error-logfile
+            - "-"
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            {{- include "sbomify.envFrom" (dict "ctx" .) | nindent 12 }}
+          env:
+            {{- include "sbomify.env" (dict "ctx" .) | nindent 12 }}
+            {{- with .Values.web.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # Startup probe absorbs the cold start (Django app registry + static
+          # manifest). Liveness only begins once this has passed.
+          startupProbe:
+            httpGet:
+              {{- include "sbomify.healthProbeHttpGet" . | nindent 14 }}
+            failureThreshold: {{ .Values.web.probes.startup.failureThreshold }}
+            periodSeconds: {{ .Values.web.probes.startup.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              {{- include "sbomify.healthProbeHttpGet" . | nindent 14 }}
+            periodSeconds: {{ .Values.web.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.web.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.web.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              {{- include "sbomify.healthProbeHttpGet" . | nindent 14 }}
+            periodSeconds: {{ .Values.web.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.web.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.web.probes.readiness.failureThreshold }}
+          {{- if gt (int .Values.web.preStopSleep) 0 }}
+          # Keep serving for a moment after the pod is marked Terminating so the
+          # Caddy edge can remove it from its endpoint list first.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ .Values.web.preStopSleep }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "sbomify.scratchVolumeMounts" . | nindent 12 }}
+            {{- with .Values.web.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- include "sbomify.scratchVolumes" . | nindent 8 }}
+        {{- with .Values.web.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.web.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- include "sbomify.topologySpread" (dict "ctx" $ "component" "web" "constraints" .) | nindent 8 }}
+      {{- end }}

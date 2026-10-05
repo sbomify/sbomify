@@ -294,7 +294,7 @@ def _security_result(
 
 @pytest.fixture
 def fake_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
-    """Back :class:`S3Client` with an in-process dict instead of a bucket.
+    """Back :class:`StorageClient` with an in-process dict instead of a bucket.
 
     The screencast compose stack runs no S3 service. The other recordings
     work around that by no-op'ing the *write* (``vex_upload.py``), which is

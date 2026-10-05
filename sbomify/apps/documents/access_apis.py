@@ -1,8 +1,7 @@
 import hashlib
 import logging
-from typing import Any
+from typing import Any, cast
 
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -12,8 +11,9 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
-from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST, can
+from sbomify.apps.core.models import User
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.utils import broadcast_to_workspace, get_client_ip
@@ -21,7 +21,6 @@ from sbomify.apps.teams.models import Member, Team
 
 from .access_models import AccessRequest, NDASignature
 from .access_schemas import (
-    AccessRequestCreateRequest,
     AccessRequestListResponse,
     AccessRequestResponse,
     NDASignatureResponse,
@@ -39,7 +38,6 @@ from .services.access_emails import (
 # ask for access they already have.
 ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 
-User = get_user_model()
 log = logging.getLogger(__name__)
 
 router = Router(tags=["Access Requests"], auth=(PersonalAccessTokenAuth(), django_auth))
@@ -79,18 +77,22 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
 
 @router.post(
     "/teams/{team_key}/access-request",
-    response={200: dict, 201: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,  # Allow unauthenticated users to request access
+    response={
+        200: dict,
+        201: AccessRequestResponse,
+        400: ErrorResponse,
+        401: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
 )
 def create_access_request(
     request: HttpRequest,
     team_key: str,
-    payload: AccessRequestCreateRequest | None = None,
 ) -> Any:
     """Create a blanket access request for all gated components in a team.
 
-    Supports both authenticated and unauthenticated users.
-    For unauthenticated users, creates a user account from email.
+    The caller must be signed in and asks for themselves.
     """
     try:
         # Get team
@@ -99,32 +101,10 @@ def create_access_request(
         except Team.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
-        # Get or create user
-        user = None
-        if request.user.is_authenticated:
-            user = request.user
-        else:
-            if not payload or not payload.email:
-                return 400, {"detail": "Email is required for unauthenticated users"}
+        if not can(request, "access_request:submit", team):
+            return 403, {"detail": "Forbidden"}
 
-            # Check if user already exists
-            try:
-                user = User.objects.get(email=payload.email)
-            except User.DoesNotExist:
-                # Create new user
-                username = payload.email.split("@")[0]
-                # Ensure username is unique
-                base_username = username
-                counter = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{base_username}_{counter}"
-                    counter += 1
-
-                user = User.objects.create_user(
-                    username=username,
-                    email=payload.email,
-                    first_name=payload.name or "",
-                )
+        user = cast(User, request.user)
 
         # Check if user already has access
         try:
@@ -177,20 +157,7 @@ def create_access_request(
             if existing_request:
                 # If request is REVOKED or REJECTED, update it to PENDING
                 if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
-                    # Note: Old NDA signature remains linked to the old document version.
-                    # It will be replaced (not archived) when user signs the current NDA version
-                    # due to OneToOneField constraint. For full audit history, consider
-                    # changing the model to allow multiple signatures per access_request.
-
-                    # Update existing request to PENDING status
-                    existing_request.status = AccessRequest.Status.PENDING
-                    existing_request.requested_at = timezone.now()
-                    existing_request.decided_at = None
-                    existing_request.decided_by = None
-                    existing_request.revoked_at = None
-                    existing_request.revoked_by = None
-                    existing_request.notes = ""
-                    existing_request.save()
+                    existing_request.reopen()
                     access_request = existing_request
                     request_state_changed = True
                 elif existing_request.status == AccessRequest.Status.PENDING:
@@ -284,8 +251,18 @@ def create_access_request(
 
 @router.get(
     "/teams/{team_key}/access-request/{request_id}/nda",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,
+    # 200 is the NDA file itself, an HttpResponse ninja passes through
+    # unvalidated. 400 and 500 are the two catch-alls at the bottom of the
+    # body: undeclared, ninja raised ConfigError on them and the caller got an
+    # opaque 500 instead of the status the handler chose.
+    response={
+        200: None,
+        400: ErrorResponse,
+        401: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) -> Any:
     """Get NDA document for signing."""
@@ -300,20 +277,10 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user owns the request or is admin
-        if request.user.is_authenticated:
-            if access_request.user != request.user:
-                # Check if user is admin/owner
-                try:
-                    member = Member.objects.get(team=team, user=request.user)
-                    if member.role not in ADMINISTER:
-                        return 403, {"detail": "Forbidden"}
-                except Member.DoesNotExist:
-                    return 403, {"detail": "Forbidden"}
-        else:
-            # For unauthenticated, we can't verify - allow if request is pending
-            if access_request.status != AccessRequest.Status.PENDING:
-                return 403, {"detail": "Forbidden"}
+        # Only the requester, or an owner or admin of the workspace, reads the NDA
+        action = "access_request:submit" if access_request.user == request.user else "access_request:read"
+        if not can(request, action, team):
+            return 403, {"detail": "Forbidden"}
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
@@ -322,7 +289,7 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
 
         # Return NDA document for download
         try:
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
 
             if document_data:
@@ -350,8 +317,15 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
 
 @router.post(
     "/teams/{team_key}/access-request/{request_id}/sign-nda",
-    response={200: NDASignatureResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,
+    response={
+        200: NDASignatureResponse,
+        400: ErrorResponse,
+        401: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        # Storage is unreachable or the NDA will not read back.
+        500: ErrorResponse,
+    },
 )
 def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDASignRequest) -> Any:
     """Sign NDA for access request."""
@@ -366,14 +340,9 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user owns the request
-        if request.user.is_authenticated:
-            if access_request.user != request.user:
-                return 403, {"detail": "Forbidden"}
-        else:
-            # For unauthenticated, verify request is pending
-            if access_request.status != AccessRequest.Status.PENDING:
-                return 403, {"detail": "Forbidden"}
+        # Only the requester signs, for themselves
+        if access_request.user != request.user or not can(request, "access_request:submit", team):
+            return 403, {"detail": "Forbidden"}
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
@@ -382,7 +351,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
 
         # Get NDA document content and calculate hash
         try:
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
             if not document_data:
                 return 404, {"detail": "NDA document not found in storage"}
@@ -468,9 +437,11 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
         return 403, {"detail": "Authentication required"}
 
     # Get teams where user is owner or admin
-    member_teams = Member.objects.filter(user=request.user, role__in=("owner", "admin")).values_list(
-        "team_id", flat=True
-    )
+    member_teams = [
+        member.team_id
+        for member in Member.objects.filter(user=request.user, role__in=ADMINISTER).select_related("team")
+        if can(request, "access_request:read", member.team)
+    ]
 
     if not member_teams:
         return 403, {"detail": "Access denied"}
@@ -551,12 +522,7 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking
@@ -620,7 +586,8 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
 
 @router.post(
     "/access-requests/{request_id}/reject",
-    response={200: AccessRequestResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 400 is "not pending" below.
+    response={200: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def reject_access_request(request: HttpRequest, request_id: str) -> Any:
     """Reject access request (admin/owner only)."""
@@ -634,12 +601,7 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking
@@ -692,7 +654,8 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
 
 @router.post(
     "/access-requests/{request_id}/revoke",
-    response={200: AccessRequestResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 400 is "not approved" below.
+    response={200: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
     """Revoke access request and remove guest membership (admin/owner only)."""
@@ -706,12 +669,7 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking

@@ -21,9 +21,10 @@ The seven NTIA minimum data fields are:
     6. Author of SBOM Data - Name of entity that creates the SBOM data
     7. Timestamp - Record of date and time of SBOM data assembly
 
-Note: CISA released an updated draft in August 2025 with additional elements
-(Component Hash, License, Tool Name, Generation Context). When finalized,
-that will be implemented as a separate CISAMinimumElementsPlugin.
+Note: CISA replaced these elements in July 2026 with the 2026 Minimum
+Elements, which sbomify scores separately in ``cisa_2026.py``. This plugin stays
+because buyers still ask for the 2021 elements by name, and because the two
+answer different questions about the same document.
 """
 
 import json
@@ -35,7 +36,13 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
     get_spdx3_creation_info_fields,
     get_spdx3_package_fields,
+    has_spdx3_supplier,
     is_spdx3,
+)
+from sbomify.apps.plugins.builtins._spdx_shared import (
+    SPDX2_IDENTIFIER_TYPES,
+    spdx2_reference_type,
+    spdx2_yocto_source_downloads,
 )
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -243,6 +250,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         component_name_failures: list[str] = []
         version_failures: list[str] = []
         unique_id_failures: list[str] = []
+        source_downloads = spdx2_yocto_source_downloads(data)
 
         # Check each package for required elements
         for i, package in enumerate(packages):
@@ -268,13 +276,10 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             # 4. Unique identifiers (PURL, CPE, SWID via externalRefs)
             # Only accept externalRefs with valid identifier types
             # Note: hashes are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
-            if not is_file_entry:
-                valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
+            if not is_file_entry and spdx_id not in source_downloads:
                 purl = package.get("purl")
                 has_unique_id = (isinstance(purl, str) and bool(purl)) or any(
-                    isinstance(ref, dict)
-                    and isinstance(ref.get("referenceType"), str)
-                    and ref["referenceType"] in valid_identifier_types
+                    spdx2_reference_type(ref) in SPDX2_IDENTIFIER_TYPES
                     for ref in (_as_list(package.get("externalRefs")))
                 )
                 if not has_unique_id:
@@ -387,12 +392,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             pkg_name = pkg_fields["name"] or f"Package {i + 1}"
 
             # 1. Supplier name (originatedBy → Person/Org)
-            has_supplier = False
-            for ref in pkg_fields["supplier_refs"]:
-                if isinstance(ref, str) and ref in persons_orgs:
-                    has_supplier = True
-                    break
-            if not has_supplier:
+            if not has_spdx3_supplier(pkg_fields["supplier_refs"], persons_orgs):
                 supplier_failures.append(pkg_name)
 
             # 2. Component name
@@ -440,7 +440,10 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
                 "unique_identifiers",
                 status="fail" if unique_id_failures else "pass",
                 details=f"Missing for: {', '.join(unique_id_failures)}" if unique_id_failures else None,
-                remediation="Add externalIdentifiers with packageURL, cpe23, or swid type.",
+                remediation=(
+                    "Add software_packageUrl to each package, or an externalIdentifier "
+                    "of type packageUrl, cpe23 or swid."
+                ),
             )
         )
 

@@ -214,17 +214,48 @@ def synthesize(
     raise NarrationError(f"TTS request failed after {MAX_ATTEMPTS} attempts: {last_error}")
 
 
+#: The content type to upload each audio container under, by file extension.
+#: The synthesizer answers in WAV and the cache stores Opus, so both reach
+#: transcribe(): a probe passes the raw WAV, and proof() reads a cached clip
+#: back off disk. Declaring every upload as audio/wav meant proof() described
+#: Opus bytes as a WAV, which the endpoint either rejects or reads as noise --
+#: and a transcript of noise is worse than no transcript, because the whole
+#: point of proofing is to trust what it says a viewer hears.
+_AUDIO_MIME_TYPES = {
+    ".wav": "audio/wav",
+    ".opus": "audio/opus",
+    ".ogg": "audio/ogg",
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".flac": "audio/flac",
+    ".webm": "audio/webm",
+}
+
+
+def _audio_mime_type(filename: str) -> str:
+    """The content type for ``filename``, by extension.
+
+    Unknown extensions fall back to the generic octet-stream rather than to
+    WAV: the endpoint sniffs the container either way, and a wrong specific
+    type is worse than no claim.
+    """
+    return _AUDIO_MIME_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
+
+
 def transcribe(audio: bytes, filename: str = "probe.wav") -> str:
     """Send audio to the speech-to-text endpoint and return what was heard.
 
     This is what makes pronunciation checkable rather than guessable: the
     synthesizer speaks a term, and the transcript reports the sounds it
     actually produced.
+
+    ``filename`` decides the declared content type, so a caller passing a
+    cached ``.opus`` clip is not described as sending a WAV.
     """
     response = httpx.post(
         STT_URL,
         headers={"Authorization": f"Bearer {_api_key()}"},
-        files={"file": (filename, audio, "audio/wav")},
+        files={"file": (filename, audio, _audio_mime_type(filename))},
         data={"language": "en"},
         timeout=REQUEST_TIMEOUT,
     )

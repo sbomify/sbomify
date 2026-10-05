@@ -6,6 +6,7 @@ import json
 import logging
 from typing import Any
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -18,10 +19,10 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_au
 from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
 from sbomify.apps.core.apis import get_component_metadata, patch_component_metadata
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
 from sbomify.apps.core.purl import extract_purl_qualifiers
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
-from sbomify.apps.core.services.access_control import check_component_access, check_component_access_for_user
+from sbomify.apps.core.services.access_control import check_component_access_for_user
 from sbomify.apps.core.utils import (
     ExtractSpec,
     broadcast_to_workspace,
@@ -35,6 +36,8 @@ from sbomify.apps.sboms.utils import (
     _contains_crypto_assets,
     _is_cbom,
     _is_duplicate_integrity_error,
+    _is_vex,
+    _states_vulnerabilities,
     verify_download_token,
 )
 from sbomify.apps.teams.models import ContactProfile
@@ -59,12 +62,27 @@ from .schemas import (
     validate_cyclonedx_sbom,
     validate_spdx_sbom,
 )
-from .services.sboms import delete_sbom_record, get_crypto_inventory, get_sbom_detail, schedule_vex_reapply
+from .services.sboms import (
+    delete_sbom_record,
+    get_crypto_inventory,
+    get_sbom_detail,
+    schedule_vex_reapply,
+    upload_sbom_file,
+)
 
 log = logging.getLogger(__name__)
 
-# Max SBOM upload size in bytes (100MB — SPDX 3.0 SBOMs can be 50-100MB)
-SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+# Max SBOM upload size in bytes. SPDX 3 SBOMs from Yocto and similar image
+# builds run to tens of megabytes.
+#
+# Capped at DATA_UPLOAD_MAX_MEMORY_SIZE because a limit above it is unreachable:
+# Django raises RequestDataTooBig while reading the body, before this check can
+# run, so the caller gets a bare 400 rather than a message naming the size.
+# Raise DATA_UPLOAD_MAX_MEMORY_SIZE_MB to raise both.
+# One knob by default: DATA_UPLOAD_MAX_MEMORY_SIZE_MB moves this with it.
+# SBOM_MAX_UPLOAD_SIZE_MB holds BOMs lower if wanted. Both are parsed in
+# settings, so config parsing lives in one place.
+SBOM_MAX_UPLOAD_SIZE = settings.SBOM_MAX_UPLOAD_SIZE
 
 
 _VALID_BOM_TYPES = {choice[0] for choice in SBOM.BomType.choices}
@@ -125,8 +143,7 @@ def _store_external_vex(
     # Explicit None-check: a falsy-but-present version (e.g. 0) is still a version.
     version = "" if raw_version is None else str(raw_version)
 
-    s3 = S3Client("SBOMS")
-    filename = s3.upload_sbom(file_content)
+    s3 = StorageClient("SBOMS")
 
     sbom = SBOM(
         name=component.name,
@@ -135,12 +152,14 @@ def _store_external_vex(
         format_version=format_version[:20],
         version=version,
         source=source,
-        sbom_filename=filename,
         sha256_hash=sha256_hash,
         bom_type=SBOM.BomType.VEX.value,
     )
+    filename = ""
     try:
         with transaction.atomic():
+            filename = upload_sbom_file(s3, file_content)
+            sbom.sbom_filename = filename
             sbom.save()
     except IntegrityError:
         _cleanup_orphaned_s3_object(filename)
@@ -158,12 +177,10 @@ def _store_external_vex(
 def _cleanup_orphaned_s3_object(filename: str) -> None:
     """Log a potential orphaned S3 object for manual cleanup.
 
-    Under READ COMMITTED isolation, a synchronous .exists() check can race
-    with concurrent transactions, risking deletion of objects still needed.
-    Instead of immediate deletion, we log at WARNING level so operators can
-    monitor and clean up orphans manually or via future automation.
+    Shares one policy and one log format with the document upload path; the
+    reasoning for logging rather than deleting lives with the helper.
     """
-    log.warning("Potential orphaned S3 object after IntegrityError: %s", filename)
+    log_orphaned_object(filename)
 
 
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
@@ -279,39 +296,131 @@ def _extract_spdx_primary_package(
     return _extract_spdx2_primary_package(payload)
 
 
+def _spdx2_described_ids(payload: SPDXSchema) -> list[str]:
+    """SPDX IDs the document declares as its subject, through relationships.
+
+    ``documentDescribes`` is the shorthand. The spec says a DESCRIBES
+    relationship from the document, or a DESCRIBED_BY relationship pointing
+    back at it, states the same thing. Yocto writes the relationship form and
+    never the shorthand, so a reader that only knows ``documentDescribes``
+    sees no subject at all.
+
+    The document's own identifier comes from the document rather than from the
+    convention: ``SPDXRef-DOCUMENT`` is what every producer writes and what the
+    fallback assumes, but the schema types the field as a free string, so a
+    document that names itself otherwise still has its relationships read.
+    """
+    document_id = getattr(payload, "spdx_id", None) or "SPDXRef-DOCUMENT"
+    described: list[str] = []
+    # SPDXSchema is the lenient parser: it declares six fields and keeps the
+    # rest of the document as raw extras, so relationships arrive as raw dicts
+    # holding whatever the uploader put there. Every value read out of one is
+    # checked before it is used as an ID: this list is compared against
+    # package.SPDXID, and a number or a nested object reaching that comparison
+    # would be a silent no-match rather than an error.
+    for rel in getattr(payload, "relationships", None) or []:
+        if not isinstance(rel, dict):
+            continue
+        rel_type = rel.get("relationshipType")
+        source = rel.get("spdxElementId")
+        target = rel.get("relatedSpdxElement")
+        if rel_type == "DESCRIBES" and source == document_id and isinstance(target, str) and target:
+            described.append(target)
+        elif rel_type == "DESCRIBED_BY" and target == document_id and isinstance(source, str) and source:
+            described.append(source)
+    return described
+
+
 def _extract_spdx2_primary_package(
     payload: SPDXSchema,
 ) -> tuple[SPDXPackage, str] | tuple[None, str]:
     """Extract primary package from SPDX 2.x document.
 
-    Strategy:
-    1. Look for a package referenced by documentDescribes field
-    2. Fall back to matching package name with document name
+    Strategy, the same ladder the SPDX 3.0 reader already walks:
+    1. A package referenced by the documentDescribes field
+    2. A package named by a DESCRIBES or DESCRIBED_BY relationship
+    3. A package whose name matches the document name
+    4. The first package
     """
     if not payload.packages:
         return None, "No packages found in SPDX document"
 
     package: SPDXPackage | None = None
 
-    # First check if documentDescribes is present and points to a valid package
-    if hasattr(payload, "documentDescribes") and payload.documentDescribes:
-        described_ref: str = payload.documentDescribes[0]
-        for pkg in payload.packages:
-            if hasattr(pkg, "SPDXID") and pkg.SPDXID == described_ref:
-                package = pkg
+    # Strategy 1: the documentDescribes shorthand. Read off the raw extras for
+    # the same reason as the relationships above, so its shape is checked too.
+    document_describes = getattr(payload, "documentDescribes", None)
+    if isinstance(document_describes, list) and document_describes:
+        described_ref = document_describes[0]
+        if isinstance(described_ref, str):
+            for pkg in payload.packages:
+                if getattr(pkg, "SPDXID", None) == described_ref:
+                    package = pkg
+                    break
+
+    # Strategy 2: the relationship form of the same statement
+    if not package:
+        for described_id in _spdx2_described_ids(payload):
+            for pkg in payload.packages:
+                if getattr(pkg, "SPDXID", None) == described_id:
+                    package = pkg
+                    break
+            if package:
                 break
 
-    # If not found via documentDescribes, fall back to name matching
+    # Strategy 3: name match
     if not package:
         for pkg in payload.packages:
             if pkg.name == payload.name:
                 package = pkg
                 break
 
+    # Strategy 4: first package. A document that names no subject still carries
+    # an inventory worth storing, and the SPDX 3.0 reader has always taken it.
     if not package:
-        return None, f"No package found with name '{payload.name}' in SPDX document"
+        package = payload.packages[0]
 
     return package, ""
+
+
+#: Every spelling of the Sbom element type: the spec's underscore compact form
+#: and the bare name a full or compact IRI reduces to.
+_SBOM_TYPE_NAMES = frozenset({"software_Sbom", "Sbom"})
+
+
+def _spdx3_bom_roots(graph: Any, root_element_ids: set[str]) -> set[str]:
+    """The rootElements of any Sbom the document roots itself on.
+
+    One hop only. An Sbom's rootElement names what the BOM is about, so
+    resolving it is reading the document as written rather than guessing;
+    following further would be walking a graph the caller has not asked about.
+    """
+    roots: set[str] = set()
+    for element in graph if isinstance(graph, list) else []:
+        if not isinstance(element, dict):
+            continue
+        elem_type = element.get("type", element.get("@type", ""))
+        if not isinstance(elem_type, str):
+            continue
+        # Matched on the bare name rather than by substring: an element type
+        # arrives as a full IRI, a compact IRI or the underscore form, and a
+        # substring test says yes to anything merely containing the word.
+        if elem_type.rsplit("/", 1)[-1].rsplit(":", 1)[-1] not in _SBOM_TYPE_NAMES:
+            continue
+        element_id = element.get("spdxId", element.get("@id", ""))
+        # Checked for str before the set lookup, not for tidiness: a list or a
+        # dict here is unhashable and `in` against a set raises TypeError, so a
+        # producer emitting `spdxId: []` would crash extraction on a path whose
+        # whole design is to fall through to the next strategy.
+        if not isinstance(element_id, str) or element_id not in root_element_ids:
+            continue
+        nested = element.get("rootElement") or []
+        if isinstance(nested, str):
+            nested = [nested]
+        if not isinstance(nested, list):
+            continue
+        roots.update(r for r in nested if isinstance(r, str) and r)
+    return roots
 
 
 def _extract_spdx3_primary_package(
@@ -320,9 +429,13 @@ def _extract_spdx3_primary_package(
     """Extract primary package from SPDX 3.0 document.
 
     Strategy:
-    1. Find a 'describes' relationship and use its target package
-    2. Fall back to matching package name with document name
-    3. Fall back to first software_Package element
+    1. Follow the SpdxDocument's rootElement — how SPDX 3 declares the BOM
+       subject — and, where that names a BOM rather than a package, the
+       rootElement of that BOM
+    2. Find a 'describes' relationship and use its target package (SPDX 2
+       idiom some producers still write)
+    3. Fall back to matching package name with document name
+    4. Fall back to first software_Package element
     """
     packages = payload.packages
     if not packages:
@@ -330,12 +443,35 @@ def _extract_spdx3_primary_package(
 
     package: SPDX3Package | None = None
 
-    # Strategy 1: Find 'describes' relationship target
+    # Strategy 1: the declared BOM subject. spdx3_document_subjects handles
+    # the JSON-LD compact single-string form and a hostile @graph.
+    from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
+
+    _, root_element_ids = spdx3_document_subjects({"@graph": payload.graph})
+    # A document is free to root itself on its Sbom rather than straight onto
+    # the thing the Sbom is about, and Yocto does: SpdxDocument.rootElement
+    # names a software_Sbom, and that element's own rootElement names the
+    # image. Stopping at the first hop found no package and dropped through to
+    # the last resort, which labelled a whole image with the version of
+    # whichever package happened to serialise first.
+    root_element_ids |= _spdx3_bom_roots(payload.graph, root_element_ids)
+    for pkg in packages:
+        if pkg.spdx_id and pkg.spdx_id in root_element_ids:
+            package = pkg
+            break
+    if package:
+        return package, ""
+
+    # Strategy 2: Find 'describes' relationship target
     for rel in payload.relationships:
         rel_type = rel.get("relationshipType", "")
         if rel_type == "describes":
             target_ids = rel.get("to", [])
-            if target_ids:
+            # JSON-LD compact form: a one-element set may serialise as a bare
+            # string; indexing it would yield one character.
+            if isinstance(target_ids, str):
+                target_ids = [target_ids]
+            if isinstance(target_ids, list) and target_ids:
                 target_id = target_ids[0]
                 for pkg in packages:
                     if pkg.spdx_id == target_id:
@@ -344,14 +480,14 @@ def _extract_spdx3_primary_package(
             if package:
                 break
 
-    # Strategy 2: Match by document name
+    # Strategy 3: Match by document name
     if not package and payload.name:
         for pkg in packages:
             if pkg.name == payload.name:
                 package = pkg
                 break
 
-    # Strategy 3: Fall back to first package
+    # Strategy 4: Fall back to first package
     if not package:
         package = packages[0]
 
@@ -471,6 +607,20 @@ def sbom_upload_cyclonedx(
         sbom_version = sbom_dict.get("version", "")
         sbom_format = "cyclonedx"
 
+        # A VEX is not an inventory. It validates as CycloneDX because the spec
+        # makes both components and vulnerabilities optional, so nothing before
+        # this point can tell the two apart, and one stored as bom_type=sbom is
+        # scanned and then scored against NTIA, BSI and FDA as though its empty
+        # component list were the truth. Say so instead of accepting it.
+        if bom_type == SBOM.BomType.SBOM.value and _is_vex(sbom_data):
+            return 400, {
+                "detail": (
+                    "This looks like a VEX document: it carries vulnerability statements and no "
+                    "components. Upload it as a VEX rather than as an SBOM."
+                ),
+                "error_code": ErrorCode.VALIDATION_ERROR,
+            }
+
         # Auto-detect CBOM content: an action-published CBOM arrives with the
         # default bom_type; tag it cbom so the cbom-gated PQC plugin runs. Only
         # when the caller left the type as the default — an explicit bom_type
@@ -503,19 +653,20 @@ def sbom_upload_cyclonedx(
                 "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
 
-        s3 = S3Client("SBOMS")
-        filename = s3.upload_sbom(request.body)
+        s3 = StorageClient("SBOMS")
 
         sbom_dict["format"] = sbom_format
-        sbom_dict["sbom_filename"] = filename
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
         sbom_dict["sha256_hash"] = sha256_hash
         sbom_dict["qualifiers"] = sbom_qualifiers
         sbom_dict["bom_type"] = bom_type
 
+        filename = ""
         try:
             with transaction.atomic():
+                filename = upload_sbom_file(s3, request.body)
+                sbom_dict["sbom_filename"] = filename
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError as e:
@@ -596,6 +747,19 @@ def vex_artifact_upload(request: HttpRequest, component_id: str) -> tuple[int, d
             }
         is_xml = looks_like_xml(request.body)
         if vex_format == VEX_FORMAT_CYCLONEDX and not is_xml:
+            # detect_vex_format answers which format a document is written in,
+            # not whether it is a VEX: every CycloneDX document carries the
+            # bomFormat marker it keys on. So an inventory posted here would be
+            # stored as a VEX and would rewrite the component's posture from a
+            # document that states nothing about any vulnerability.
+            if isinstance(document, dict) and not _states_vulnerabilities(document):
+                return 400, {
+                    "detail": (
+                        "This document makes no vulnerability statement, so it is not a VEX. "
+                        "Upload it as an SBOM rather than as a VEX."
+                    ),
+                    "error_code": ErrorCode.VALIDATION_ERROR,
+                }
             return sbom_upload_cyclonedx(request, component_id, bom_type=SBOM.BomType.VEX.value)
 
         component = Component.objects.filter(id=component_id).first()
@@ -735,16 +899,17 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
                 "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
 
-        s3 = S3Client("SBOMS")
-        filename = s3.upload_sbom(request.body)
+        s3 = StorageClient("SBOMS")
 
         sbom_dict["version"] = sbom_version
-        sbom_dict["sbom_filename"] = filename
         sbom_dict["qualifiers"] = sbom_qualifiers
         sbom_dict["bom_type"] = bom_type
 
+        filename = ""
         try:
             with transaction.atomic():
+                filename = upload_sbom_file(s3, request.body)
+                sbom_dict["sbom_filename"] = filename
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError as e:
@@ -766,6 +931,13 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
         return 201, {"id": sbom.id}
 
     except Exception:
+        # Logged for the same reason the CycloneDX and VEX handlers beside this
+        # one log: everything reaching here becomes one opaque "Invalid
+        # request", and without a record there is nothing to tell a malformed
+        # document apart from a fault on our side. A missing jsonschema in the
+        # SPDX 3 validator surfaced as exactly that 400, with no trace of the
+        # ImportError anywhere.
+        log.exception("Error processing SPDX BOM upload")
         return 400, {"detail": "Invalid request"}
 
 
@@ -881,6 +1053,7 @@ def get_cyclonedx_component_metadata(
     response={200: SBOMResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public SBOMs
 )
+@decorate_view(optional_auth)
 def get_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
     """Get a specific SBOM by ID."""
     result = get_sbom_detail(request, sbom_id)
@@ -968,6 +1141,12 @@ def download_cipher_suite_inventory_csv(request: HttpRequest, sbom_id: str) -> A
             )
     response = HttpResponse(buffer.getvalue(), content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="cipher-suite-inventory-{sbom_id}.csv"'
+    # This route answers for public SBOMs and refuses the rest, so the same URL
+    # serves an authorised body to one caller and a 403 to the next. Without an
+    # explicit directive the 200 is publicly cacheable, and a CDN caches .csv by
+    # extension while ignoring Vary: Cookie, so the edge hands an authorised
+    # export to anyone who asks for it next.
+    response["Cache-Control"] = "private, no-store"
     return response
 
 
@@ -976,6 +1155,7 @@ def download_cipher_suite_inventory_csv(request: HttpRequest, sbom_id: str) -> A
     response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public SBOMs
 )
+@decorate_view(optional_auth)
 def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
     """Download an SBOM file.
 
@@ -995,11 +1175,12 @@ def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, An
     # Check access permissions using centralized access control
     # This handles public, gated (with approved guest access), and private components
     component = sbom.component
-    access_result = check_component_access(request, component)
-
-    if not access_result.has_access:
-        # Provide helpful error message based on access result
-        if access_result.requires_access_request:
+    # can() adds the API-token scope gate that check_component_access alone skips.
+    decision = can(request, "component:access", component)
+    if not decision:
+        # Only a gated_* reason is a denial an access request can lift. No
+        # approval widens a token's scope.
+        if decision.reason.startswith("gated_"):
             if not request.user.is_authenticated:
                 return 403, {
                     "detail": "Access denied. Please request access to download this SBOM.",
@@ -1016,7 +1197,7 @@ def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, An
         return 404, {"detail": "SBOM file not found"}
 
     try:
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         sbom_data = s3.get_sbom_data(sbom.sbom_filename)
 
         if sbom_data:
@@ -1125,7 +1306,7 @@ def download_sbom_signed(
         return 404, {"detail": "SBOM file not found"}
 
     try:
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         sbom_data = s3.get_sbom_data(sbom.sbom_filename)
 
         if sbom_data:
@@ -1292,16 +1473,17 @@ def sbom_upload_file(
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
 
-            s3 = S3Client("SBOMS")
-            filename = s3.upload_sbom(file_content)
+            s3 = StorageClient("SBOMS")
 
             sbom_dict["version"] = sbom_version
-            sbom_dict["sbom_filename"] = filename
             sbom_dict["qualifiers"] = sbom_qualifiers
             sbom_dict["bom_type"] = bom_type
 
+            filename = ""
             try:
                 with transaction.atomic():
+                    filename = upload_sbom_file(s3, file_content)
+                    sbom_dict["sbom_filename"] = filename
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError as e:
@@ -1353,6 +1535,30 @@ def sbom_upload_file(
             sbom_version = sbom_dict.get("version", "")
             sbom_format = "cyclonedx"
 
+            # The type comes from a dropdown here, so the mismatch runs both
+            # ways: picking VEX for an inventory stores a document that states
+            # nothing about any vulnerability as the component's VEX.
+            if bom_type == SBOM.BomType.VEX.value and not _states_vulnerabilities(sbom_data):
+                return 400, {
+                    "detail": (
+                        "This document makes no vulnerability statement, so it is not a VEX. "
+                        "Choose SBOM as the artifact type rather than VEX."
+                    ),
+                    "error_code": ErrorCode.VALIDATION_ERROR,
+                }
+
+            # A VEX is not an inventory; see the same guard on the CycloneDX
+            # API endpoint. Stored as bom_type=sbom it is scanned and scored
+            # against the SBOM compliance plugins as though it were one.
+            if bom_type == SBOM.BomType.SBOM.value and _is_vex(sbom_data):
+                return 400, {
+                    "detail": (
+                        "This looks like a VEX document: it carries vulnerability statements and no "
+                        "components. Choose VEX as the artifact type rather than SBOM."
+                    ),
+                    "error_code": ErrorCode.VALIDATION_ERROR,
+                }
+
             # Auto-detect CBOM content: tag a crypto BOM uploaded with the
             # default bom_type as cbom so the cbom-gated PQC plugin runs. Only when
             # the caller omitted bom_type — an explicit ?bom_type=sbom is honored.
@@ -1383,19 +1589,20 @@ def sbom_upload_file(
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
 
-            s3 = S3Client("SBOMS")
-            filename = s3.upload_sbom(file_content)
+            s3 = StorageClient("SBOMS")
 
             sbom_dict["format"] = sbom_format
-            sbom_dict["sbom_filename"] = filename
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
             sbom_dict["sha256_hash"] = sha256_hash
             sbom_dict["qualifiers"] = sbom_qualifiers
             sbom_dict["bom_type"] = bom_type
 
+            filename = ""
             try:
                 with transaction.atomic():
+                    filename = upload_sbom_file(s3, file_content)
+                    sbom_dict["sbom_filename"] = filename
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError as e:
@@ -1517,7 +1724,7 @@ def _download_blob(
 ) -> tuple[int, dict[str, Any]] | HttpResponse:
     """Download a blob from S3 and return as HttpResponse."""
     try:
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         data = s3.get_sbom_data(blob_key)
         if data is None:
             return 404, {"detail": "File not found in storage", "error_code": ErrorCode.NOT_FOUND}
@@ -1577,7 +1784,7 @@ def upload_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str,
 
     try:
         # Upload to S3 first (outside lock to avoid holding DB lock during I/O)
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         blob_key = s3.upload_sbom_signature(str(sbom.id), sbom.sha256_hash, data)
         # Then lock row and atomically claim the slot
         with transaction.atomic():
@@ -1702,7 +1909,7 @@ def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str
 
     try:
         # Upload to S3 first (outside lock to avoid holding DB lock during I/O)
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         blob_key = s3.upload_sbom_provenance(str(sbom.id), sbom.sha256_hash, raw_body)
         # Then lock row and atomically claim the slot
         with transaction.atomic():

@@ -1,6 +1,14 @@
+import type htmx from 'htmx.org';
 import { getCsrfToken } from './csrf';
 
 export function registerHtmxConfig(): void {
+    // Alpine owns inline visibility and positioning. HTMX's settle phase must
+    // not replace those live styles with the incoming HTML's resting state.
+    const engine = (window as Window & { htmx?: typeof htmx }).htmx;
+    if (engine) {
+        engine.config.attributesToSettle = engine.config.attributesToSettle.filter(attribute => attribute !== 'style');
+    }
+
     document.body.addEventListener('htmx:configRequest', (event: Event) => {
         const detail = (event as CustomEvent).detail;
         if (!detail?.headers) {

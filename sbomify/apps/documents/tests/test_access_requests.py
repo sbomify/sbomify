@@ -16,6 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.cache import cache
+from django.middleware.csrf import get_token
+from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
@@ -26,7 +28,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Member
+from sbomify.apps.teams.models import Invitation, Member
 
 
 @pytest.fixture
@@ -53,8 +55,7 @@ def company_nda_document(team_with_business_plan):
     document = Document.objects.create(
         name="Company NDA",
         component=component,
-        document_type=Document.DocumentType.COMPLIANCE,
-        compliance_subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
         document_filename="nda.pdf",
         content_type="application/pdf",
         file_size=len(content),
@@ -115,21 +116,23 @@ class TestAccessRequestCreation:
         ).exists()
 
     def test_create_access_request_api(
-        self, authenticated_api_client, team_with_business_plan, guest_user
+        self, team_with_business_plan, guest_user
     ):
         """Test creating an access request via API."""
-        client, access_token = authenticated_api_client
+        # The requester asks for themselves, on their own session, sending its
+        # CSRF token as a browser does.
+        token = get_token(RequestFactory().get("/"))
+        client = Client(enforce_csrf_checks=True, headers={"X-CSRFToken": token})
+        client.cookies["csrftoken"] = token
         client.force_login(guest_user)
         
         # API endpoint is /api/v1/teams/{team_key}/access-request
         url = f"/api/v1/teams/{team_with_business_plan.key}/access-request"
-        headers = get_api_headers(access_token)
         
         response = client.post(
             url,
             {},
             content_type="application/json",
-            **headers,
         )
         
         assert response.status_code in [200, 201]
@@ -184,6 +187,28 @@ class TestAccessRequestCreation:
 
 
 @pytest.mark.django_db
+class TestTrustCenterInvitation:
+    """Test inviting an address to the trust center."""
+
+    def test_inviting_an_existing_account_records_the_admin_as_inviter(
+        self, authenticated_web_client, team_with_business_plan, sample_user, guest_user
+    ):
+        """The invited account's request and the invitation name the admin who sent it."""
+        guest_user.email_verified = True
+        guest_user.save(update_fields=["email_verified"])
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+
+        authenticated_web_client.post(
+            reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key}),
+            {"action": "invite", "email": guest_user.email},
+        )
+
+        invitation = Invitation.objects.get(team=team_with_business_plan, email=guest_user.email)
+        assert AccessRequest.objects.get(team=team_with_business_plan, user=guest_user).decided_by == sample_user
+        assert cache.get(f"invitation_inviter:{invitation.token}") == sample_user.id
+
+
+@pytest.mark.django_db
 class TestNDASigning:
     """Test NDA signing functionality."""
 
@@ -196,7 +221,7 @@ class TestNDASigning:
         response = client.get(url)
         assert response.status_code in [302, 401, 403]
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_with_valid_hash(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan, 
         company_nda_document, pending_access_request, guest_user
@@ -231,7 +256,7 @@ class TestNDASigning:
         assert signature.nda_document == company_nda_document
         assert signature.nda_content_hash == company_nda_document.content_hash
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_with_invalid_hash(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan,
         company_nda_document, pending_access_request, guest_user
@@ -264,7 +289,7 @@ class TestNDASigning:
         # Verify signature was NOT created
         assert not NDASignature.objects.filter(access_request=pending_access_request).exists()
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_captures_correct_ip_with_proxy(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan,
         company_nda_document, pending_access_request, guest_user
@@ -299,7 +324,7 @@ class TestNDASigning:
         assert signature is not None
         assert signature.ip_address == "203.0.113.42"
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_falls_back_to_remote_addr_without_proxy(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan,
         company_nda_document, pending_access_request, guest_user
@@ -926,7 +951,7 @@ class TestGatedComponentAccess:
         response = client.get(url)
         assert response.status_code == 200
 
-    @patch("sbomify.apps.documents.views.document_download.S3Client")
+    @patch("sbomify.apps.documents.views.document_download.StorageClient")
     def test_gated_component_download_requires_access(
         self, mock_s3_client, client, gated_component, team_with_business_plan, guest_user
     ):
@@ -980,7 +1005,7 @@ class TestGatedComponentAccess:
 class TestNDADocumentVersioning:
     """Test NDA document versioning functionality."""
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_nda_versioning_creates_new_version(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan, company_nda_document, sample_user
     ):
@@ -1011,8 +1036,7 @@ class TestNDADocumentVersioning:
         # Verify new document was created (versioning creates a new document)
         all_ndas = Document.objects.filter(
             component=company_nda_document.component,
-            document_type=Document.DocumentType.COMPLIANCE,
-            compliance_subcategory=Document.ComplianceSubcategory.NDA,
+            document_type=Document.DocumentType.NDA,
         ).order_by("-created_at")
         
         # Should have at least 2 documents now (original + new version)
@@ -1104,11 +1128,16 @@ class TestAccessRequestQueueView:
     def test_access_request_queue_shows_pending_requests(
         self, authenticated_web_client, team_with_business_plan, pending_access_request, sample_user
     ):
-        """Test that queue view shows pending requests."""
+        """Test that queue view shows pending requests.
+
+        Fetched the way the trust-center tab fetches it. The template is a
+        section with no page around it, so a plain browser GET is sent to the
+        tab that renders it instead.
+        """
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url)
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         assert str(pending_access_request.user.email).encode() in response.content
@@ -1120,7 +1149,7 @@ class TestAccessRequestQueueView:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url, {"partial": "true"})
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         # Should render the partial template
@@ -1141,7 +1170,7 @@ class TestAccessRequestQueueView:
         )
         
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url)
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         assert str(pending_access_request.user.email).encode() in response.content

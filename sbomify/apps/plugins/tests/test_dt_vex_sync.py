@@ -61,7 +61,7 @@ class TestTriageVexSync:
         client = MagicMock()
         client.get_project_vex.return_value = json.dumps(vex_doc).encode()
         with (
-            patch("sbomify.apps.core.object_store.S3Client") as s3_cls,
+            patch("sbomify.apps.core.object_store.StorageClient") as s3_cls,
             patch("sbomify.apps.sboms.services.sboms.schedule_vex_reapply") as reapply,
         ):
             s3 = s3_cls.return_value

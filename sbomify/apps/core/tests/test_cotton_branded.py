@@ -252,6 +252,48 @@ def test_figures_are_never_branded(rendered: str) -> None:
     assert not any("var(--brand)" in utility for utility in stat)
 
 
+def test_a_credential_sits_on_the_panel_rather_than_restating_it(rendered: str) -> None:
+    """It nests c-branded.surface, so the panel recipe has one home."""
+    tile = _classes(rendered, "div", 'data-probe="credential"')
+    assert "rounded-xl" in tile
+    assert "bg-surface" in tile
+    assert "border-border" in tile
+    assert "py-6" in tile
+    assert "py-4" not in tile
+
+
+def test_a_credential_stretches_its_link_over_the_whole_tile(rendered: str) -> None:
+    """Same trick as a row, and for the same reason: one anchor to repaint."""
+    tile = rendered[rendered.index('data-probe="credential"') :]
+    anchor = tile[tile.index("<a ") : tile.index("</a>")]
+    assert "before:absolute before:inset-0" in anchor
+    assert "data-button" in anchor
+    assert "ISO 27001" in anchor
+    assert "relative" in _classes(rendered, "div", 'data-probe="credential"')
+
+
+def test_a_credential_seal_is_decorative(rendered: str) -> None:
+    """The label underneath already names it; announcing it twice is noise."""
+    tile = rendered[rendered.index('data-probe="credential"') :]
+    image = tile[tile.index("<img") : tile.index(">", tile.index("<img")) + 1]
+    assert 'alt=""' in image
+    assert 'aria-hidden="true"' in image
+
+
+def test_a_credential_without_a_seal_still_shows_what_it_is(rendered: str) -> None:
+    """A certification we have no artwork for is better shown than hidden."""
+    tile = rendered[rendered.index('data-probe="credential-imageless"') :]
+    tile = tile[: tile.index("data-probe=", 20)] if "data-probe=" in tile[20:] else tile
+    assert "<img" not in tile
+    assert "SOC 2 Type II" in tile
+
+
+def test_a_credential_is_not_branded(rendered: str) -> None:
+    """A seal is read, not acted on, so a pale brand would make it vanish."""
+    tile = _classes(rendered, "div", 'data-probe="credential"')
+    assert not any("var(--brand)" in utility for utility in tile)
+
+
 def test_no_public_template_uses_a_class_the_legacy_sheets_override() -> None:
     """The same guard, applied to the pages rather than the components.
 

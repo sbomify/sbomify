@@ -116,6 +116,7 @@ describe('Theme Manager', () => {
         }
         type FakeWindow = {
             matchMedia: ReturnType<typeof mock>
+            dispatchEvent: ReturnType<typeof mock>
             themeManager?: unknown
         }
 
@@ -128,6 +129,7 @@ describe('Theme Manager', () => {
 
         const installMocks = (fakeHtml: FakeHtml, storage: Record<string, string> = {}): FakeWindow => {
             const fakeWindow: FakeWindow = {
+                dispatchEvent: mock(() => true),
                 matchMedia: mock(() => ({
                     matches: false,
                     addEventListener: () => {},
@@ -176,6 +178,29 @@ describe('Theme Manager', () => {
             expect(fakeHtml.classList.add).not.toHaveBeenCalled()
             expect(fakeHtml.classList.remove).not.toHaveBeenCalled()
             expect(fakeWindow.themeManager).toBeUndefined()
+            expect(fakeWindow.dispatchEvent).not.toHaveBeenCalled()
+        })
+
+        test('system appearance changes notify mounted components', async () => {
+            const fakeHtml = makeFakeHtml({})
+            const fakeWindow = installMocks(fakeHtml, { 'sbomify-theme': 'system' })
+            let onChange = () => {}
+            let dark = false
+            fakeWindow.matchMedia.mockImplementation(() => ({
+                matches: dark,
+                addEventListener: (_event: string, callback: () => void) => { onChange = callback },
+            }))
+            const initThemeManager = await loadFreshInitThemeManager()
+            initThemeManager()
+            fakeWindow.dispatchEvent.mockClear()
+
+            dark = true
+            onChange()
+
+            expect(fakeHtml.style.colorScheme).toBe('dark')
+            expect(fakeWindow.dispatchEvent).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'theme-changed', detail: { theme: 'system' } }),
+            )
         })
 
         test('runs normally on auth pages (no data-theme attribute)', async () => {
@@ -187,6 +212,9 @@ describe('Theme Manager', () => {
 
             expect(fakeHtml.classList.add).toHaveBeenCalled()
             expect(fakeWindow.themeManager).toBeDefined()
+            expect(fakeWindow.dispatchEvent).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'theme-changed', detail: { theme: 'dark' } }),
+            )
         })
     })
 })

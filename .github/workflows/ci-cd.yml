@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.14"
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
@@ -167,7 +167,7 @@ jobs:
         with:
           python-version: "3.14"
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
@@ -250,7 +250,7 @@ jobs:
         with:
           python-version: "3.14"
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
@@ -312,7 +312,7 @@ jobs:
 
       - name: Upload E2E Test Diffs
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-test-diffs
           path: 'sbomify/apps/*/tests/e2e/__diffs__/*.jpg'
@@ -367,7 +367,22 @@ jobs:
           persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
+
+      # The Dockerfile ends in `COPY . .`, so .dockerignore is the only thing
+      # keeping the chart and the docs out of the image. Probe the real context
+      # rather than grepping .dockerignore, so the check reflects what Docker
+      # actually copies. busybox is pinned: a floating tag would let the probe
+      # change under CI without a commit.
+      - name: Build context excludes non-application files
+        run: |
+          set -e
+          printf 'FROM busybox:1.37.0\nCOPY . /code\n' > /tmp/probe.Dockerfile
+          docker build -q -f /tmp/probe.Dockerfile -t probe:ci . >/dev/null
+          docker run --rm probe:ci ls -1A /code > context.txt
+          grep -qx sbomify context.txt || { echo "::error::probe is broken, the app is missing"; exit 1; }
+          ! grep -qxE 'charts|deploy|\.github|docs' context.txt ||
+            { echo "::error::deployment files are in the build context, add them to .dockerignore"; exit 1; }
 
       - name: Log in to GitHub Container Registry
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
@@ -442,7 +457,7 @@ jobs:
           echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
 
       - name: Build and push to registries
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: build
         with:
           context: .

@@ -17,7 +17,7 @@ from .fixtures import sample_access_token, sample_component, sample_sbom  # noqa
 from .test_views import setup_test_session
 
 _DATA = Path(__file__).parent / "test_data"
-_S3_TARGET = "sbomify.apps.sboms.services.sboms.S3Client"
+_S3_TARGET = "sbomify.apps.sboms.services.sboms.StorageClient"
 
 
 def _url(sbom_id: str) -> str:

@@ -125,6 +125,31 @@ def test_get_client_ip_rejects_non_ip_x_real_ip_from_trusted_proxy():
     assert get_client_ip(request) == "10.0.0.1"
 
 
+def test_get_client_ip_ignores_cf_connecting_ip_even_from_trusted_proxy():
+    """Cf-Connecting-Ip is never read here, even when the peer is trusted.
+
+    Caddy resolves the origin address and writes it into X-Real-IP; it forwards
+    the client's raw Cf-Connecting-Ip upstream untouched. A request that reaches
+    the edge directly, bypassing Cloudflare, therefore controls that header, so
+    honouring it here would let any caller choose its own rate-limit bucket and
+    its own audit-log entry.
+    """
+    request = HttpRequest()
+
+    # Caddy says the origin is 1.2.3.4; the client claims otherwise. Caddy wins.
+    request.META = {
+        "HTTP_CF_CONNECTING_IP": "9.9.9.9",
+        "HTTP_X_REAL_IP": "1.2.3.4",
+        "REMOTE_ADDR": "10.0.0.1",
+    }
+    assert get_client_ip(request) == "1.2.3.4"
+
+    # With no X-Real-IP there is nothing Caddy vouched for, so fall back to the
+    # peer rather than believing the client's own header.
+    request.META = {"HTTP_CF_CONNECTING_IP": "9.9.9.9", "REMOTE_ADDR": "10.0.0.1"}
+    assert get_client_ip(request) == "10.0.0.1"
+
+
 @pytest.mark.django_db
 class TestAddArtifactToReleaseCrossTeamCheck:
     """Regression tests for the defense-in-depth cross-team check in add_artifact_to_release.

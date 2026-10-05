@@ -4,6 +4,7 @@ from django.urls import reverse
 
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.sboms.tests.test_views import setup_test_session
+from sbomify.apps.vulnerability_scanning.services.finding_browse import row_state
 
 
 @pytest.mark.django_db
@@ -315,7 +316,7 @@ class TestComponentItemVexAliasEnrichment:
                 }
             ],
         }
-        mocker.patch("sbomify.apps.core.object_store.S3Client").return_value.get_sbom_data.return_value = json.dumps(
+        mocker.patch("sbomify.apps.core.object_store.StorageClient").return_value.get_sbom_data.return_value = json.dumps(
             vex_doc
         ).encode()
 
@@ -397,9 +398,9 @@ class TestComponentItemVexAliasEnrichment:
 @pytest.mark.django_db
 class TestComponentVulnFilterContext:
     """The internal drill-down's filter data: suppressed rows stay in the list
-    (revealed by the toggle), the header counts exclude them so they reconcile
-    with the Trust Center posture, and the per-row parallel lists feed the
-    severity / analysis-state / KEV filters."""
+    (hidden only by the toggle), the header counts exclude them so they
+    reconcile with the Trust Center posture, and the filter dropdowns are built
+    from the severities and analysis states the rows actually carry."""
 
     def _component_with_vex(self, team):
 
@@ -470,7 +471,7 @@ class TestComponentVulnFilterContext:
         )
         member = sample_team_with_owner_member
         component, vex_doc = self._component_with_vex(member.team)
-        mocker.patch("sbomify.apps.core.object_store.S3Client").return_value.get_sbom_data.return_value = json.dumps(
+        mocker.patch("sbomify.apps.core.object_store.StorageClient").return_value.get_sbom_data.return_value = json.dumps(
             vex_doc
         ).encode()
         client = Client()
@@ -488,10 +489,157 @@ class TestComponentVulnFilterContext:
             "low": 0,
             "suppressed": 1,
         }
-        rows = {v["id"]: v for v in context["latest_vulns"]}
+        panel = context["vuln_panel"]
+        rows = {v["id"]: v for v in panel["rows"]}
         assert rows["CVE-2026-2"]["vex_suppressed"] is True
         assert rows["CVE-2026-2"]["vex_justification"] == "code_not_reachable"
         assert rows["CVE-2026-1"]["kev"] is True
-        assert context["latest_vuln_suppressed"] == [False, True]
-        assert context["latest_vuln_states"] == ["open", "not_affected"]
-        assert context["latest_vuln_kev"] == [True, False]
+        assert panel["suppressed_total"] == 1
+        assert [row_state(row) for row in panel["rows"]] == ["open", "not_affected"]
+        assert [row["kev"] for row in panel["rows"]] == [True, False]
+        # The dropdowns offer what the rows actually carry, so a filter can
+        # never be selected and come back empty.
+        assert panel["severity_options"] == ["critical", "high"]
+        assert [option["value"] for option in panel["state_options"]] == ["open", "not_affected"]
+
+
+@pytest.mark.django_db
+class TestDocumentComponentScopeControl:
+    """The scope switch on a document component page.
+
+    `ComponentScopeView` and its permission check were written and routed, and
+    then nothing rendered a control that posted to them. A certification only
+    earns a Trust Center badge once its component is workspace-wide, so through
+    the UI alone a workspace could upload a SOC 2 report, tag it correctly,
+    publish it, and never get the badge, with nothing saying why.
+    """
+
+    def setup_method(self):
+        self.client = Client()
+
+    def _document_component(self, team, *, is_global: bool) -> Component:
+        return Component.objects.create(
+            name="Certifications",
+            team=team,
+            component_type=Component.ComponentType.DOCUMENT,
+            visibility=Component.Visibility.PUBLIC,
+            is_global=is_global,
+        )
+
+    def _open(self, team, user, component):
+        self.client.login(username=user.username, password="test")
+        setup_test_session(self.client, team, user)
+        response = self.client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        # Otherwise a session regression turns these into assertions about a
+        # login page, which would pass or fail for the wrong reason.
+        assert response.status_code == 200
+        return response
+
+    def test_a_product_scoped_document_offers_the_switch(self, sample_team_with_owner_member, sample_user):
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=False)
+
+        response = self._open(team, sample_user, component)
+        body = response.content.decode()
+
+        assert reverse("core:component_scope", kwargs={"component_id": component.id}) in body
+        assert 'value="workspace"' in body
+        assert "Make workspace-wide" in body
+
+    def test_a_workspace_wide_document_offers_the_way_back(self, sample_team_with_owner_member, sample_user):
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=True)
+
+        body = self._open(team, sample_user, component).content.decode()
+
+        assert 'value="product"' in body
+        assert "Make product-scoped" in body
+
+    def test_a_published_workspace_wide_document_says_it_is_on_the_trust_center(
+        self, sample_team_with_owner_member, sample_user
+    ):
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=True)
+
+        body = self._open(team, sample_user, component).content.decode()
+
+        assert "It appears on your Trust Center." in body
+
+    def test_a_private_workspace_wide_document_does_not_claim_to_be_published(
+        self, sample_team_with_owner_member, sample_user
+    ):
+        """Scope and visibility are two decisions; scope alone publishes nothing."""
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=True)
+        component.visibility = Component.Visibility.PRIVATE
+        component.save()
+
+        body = self._open(team, sample_user, component).content.decode()
+
+        assert "It appears on your Trust Center." not in body
+        assert "Make it public or gated to show it on your Trust Center." in body
+
+    def test_the_switch_moves_the_component(self, sample_team_with_owner_member, sample_user):
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=False)
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, sample_user)
+
+        response = self.client.post(
+            reverse("core:component_scope", kwargs={"component_id": component.id}),
+            {"target_scope": "workspace"},
+        )
+
+        assert response.status_code == 302
+        component.refresh_from_db()
+        assert component.is_global is True
+
+    def test_the_message_does_not_promise_the_trust_center_to_a_private_document(
+        self, sample_team_with_owner_member, sample_user
+    ):
+        """The flash lands in the moment a reader is most likely to believe it."""
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=False)
+        component.visibility = Component.Visibility.PRIVATE
+        component.save()
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, sample_user)
+
+        response = self.client.post(
+            reverse("core:component_scope", kwargs={"component_id": component.id}),
+            {"target_scope": "workspace"},
+            follow=True,
+        )
+
+        said = [m.message for m in response.context["messages"]]
+        assert "Component is now workspace-wide. Make it public or gated to show it on your Trust Center." in said
+
+    def test_a_published_document_is_told_it_is_on_the_trust_center(self, sample_team_with_owner_member, sample_user):
+        team = sample_team_with_owner_member.team
+        component = self._document_component(team, is_global=False)
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, sample_user)
+
+        response = self.client.post(
+            reverse("core:component_scope", kwargs={"component_id": component.id}),
+            {"target_scope": "workspace"},
+            follow=True,
+        )
+
+        assert "Component is now workspace-wide and on your Trust Center." in [
+            m.message for m in response.context["messages"]
+        ]
+
+    def test_a_bom_component_never_offers_it(self, sample_team_with_owner_member, sample_user):
+        """Only documents can be workspace-wide, so the control must not appear."""
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(
+            name="Firmware",
+            team=team,
+            component_type=Component.ComponentType.BOM,
+            visibility=Component.Visibility.PUBLIC,
+        )
+
+        body = self._open(team, sample_user, component).content.decode()
+
+        assert reverse("core:component_scope", kwargs={"component_id": component.id}) not in body

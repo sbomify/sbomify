@@ -235,14 +235,21 @@ class TestEveryNonScanPathSaysSo:
     which nothing reads, and omitted ``skipped``, which everything reads. So an
     SPDX 3.0 upload earned a green "no known vulnerabilities" badge and, worse,
     ``lifecycle.run_scanned`` took its empty findings array as evidence and
-    resolved everything a previous real scan had found.
+    resolved everything a previous real scan had found. That path is gone now,
+    the document being converted here rather than refused, and the skip it left
+    behind is a document that names nothing to scan.
 
     Parametrised rather than written out three times, so a fourth non-scan path
     added later is one line away from being covered and cannot quietly ship
     without the marker.
     """
 
-    NON_SCAN_PATHS = ("_create_no_packages_result", "_create_unsupported_format_result")
+    #: (method, arguments). Pairs rather than bare names so a path that needs a
+    #: reason is still one line away from being covered.
+    NON_SCAN_PATHS = (
+        ("_create_no_packages_result", ()),
+        ("_create_conversion_failed_result", ("names no package to scan",)),
+    )
 
     def _run(self, result: dict[str, Any]):
         from sbomify.apps.plugins.models import AssessmentRun, RunStatus
@@ -255,7 +262,7 @@ class TestEveryNonScanPathSaysSo:
         )
 
     def _results(self, plugin: OSVPlugin) -> list[dict[str, Any]]:
-        built = [_as_dict(getattr(plugin, name)()) for name in self.NON_SCAN_PATHS]
+        built = [_as_dict(getattr(plugin, name)(*args)) for name, args in self.NON_SCAN_PATHS]
         return [*built, _as_dict(plugin._create_unsupported_spec_version_result())]
 
     def test_they_are_all_marked_skipped(self, plugin: OSVPlugin) -> None:

@@ -1,0 +1,42 @@
+sbomify {{ .Chart.AppVersion }} has been deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Base URL: {{ .Values.app.baseUrl }}
+
+Watch the rollout:
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "sbomify.fullname" . }}-web
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+Verify the deployment end to end:
+
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+Point DNS for {{ include "sbomify.appHost" . }}, and every workspace custom domain,
+at the Caddy edge service:
+
+  kubectl -n {{ .Release.Namespace }} get svc {{ include "sbomify.fullname" . }}-caddy
+
+{{- if .Values.caddy.onDemandTLS.enabled }}
+
+On-demand TLS is ON: Caddy issues a certificate for a custom domain on first
+request, after asking the app at {{ .Values.caddy.onDemandTLS.ask }} whether it
+recognises that domain. Adding a custom domain therefore needs no redeploy,
+just a DNS record.
+{{- end }}
+{{- if .Values.caddy.localCerts }}
+
+NOTE: caddy.localCerts is ON. Certificates come from Caddy's internal CA and
+browsers will not trust them. Local clusters only.
+{{- end }}
+{{- if and .Values.caddy.persistence.enabled (eq .Values.caddy.storage.module "file") }}
+
+The certificate store is a PVC marked helm.sh/resource-policy: keep, so
+`helm uninstall` leaves it behind on purpose: re-issuing every certificate from
+scratch is a fast route into Let's Encrypt rate limits.
+{{- end }}
+
+{{- if .Values.app.debug }}
+
+WARNING: app.debug is TRUE. Django DEBUG leaks stack traces and settings.
+Never run this way in production.
+{{- end }}

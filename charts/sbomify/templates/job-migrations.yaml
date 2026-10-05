@@ -1,0 +1,95 @@
+{{- if .Values.migrations.enabled }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "sbomify.fullname" . }}-migrations
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "migrations") | nindent 4 }}
+  annotations:
+    # Runs to completion before the app rolls, and fails the release if it does
+    # not succeed: new code must never serve an un-migrated schema.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": {{ .Values.migrations.hookDeletePolicy }}
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  # Exactly one migration pod at a time. A Job is "at least once", so without
+  # this a node going NotReady can leave the original pod running while a
+  # replacement starts. `Failed` holds the replacement until the previous pod is
+  # fully terminated. bin/release.py also takes a PostgreSQL advisory lock, so
+  # this is defence in depth rather than the only guard.
+  podReplacementPolicy: Failed
+  parallelism: 1
+  completions: 1
+  {{- with .Values.migrations.activeDeadlineSeconds }}
+  # Note: when this fires the pod is killed mid-migration. Atomic migrations
+  # roll back cleanly, but a non-atomic one can leave partial state behind, so
+  # prefer a generous value over a tight one.
+  activeDeadlineSeconds: {{ . }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "sbomify.componentLabels" (dict "ctx" . "component" "migrations") | nindent 8 }}
+      {{- with .Values.migrations.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "sbomify.migrationsServiceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.migrations.automountServiceAccountToken }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- include "sbomify.waitForDepsInitContainer" . | nindent 8 }}
+      containers:
+        - name: migrations
+          image: {{ include "sbomify.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          # bin/release.py logs the migration plan, applies migrations, then
+          # clears the Redis cache. It needs no shell, which matters because the
+          # production image is distroless.
+          command:
+            - python
+            - /code/bin/release.py
+          # Reads the short-lived copies from job-migrations-hookenv.yaml; the
+          # release's own ConfigMap/Secret are ordinary resources and do not
+          # exist yet at this point.
+          envFrom:
+            {{- include "sbomify.envFrom" (dict "ctx" . "configMapName" (printf "%s-migrations-config" (include "sbomify.fullname" .))) | nindent 12 }}
+          env:
+            {{- include "sbomify.migrationEnv" . | nindent 12 }}
+            {{- include "sbomify.env" (dict "ctx" . "secretName" (ternary .Values.secrets.existingSecret (printf "%s-migrations-secrets" (include "sbomify.fullname" .)) (ne .Values.secrets.existingSecret ""))) | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "sbomify.scratchVolumeMounts" . | nindent 12 }}
+            {{- with .Values.migrations.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- include "sbomify.scratchVolumes" . | nindent 8 }}
+        {{- with .Values.migrations.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.migrations.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migrations.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migrations.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -362,6 +362,8 @@ def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) ->
         "updated": updated_at.isoformat() if updated_at else "",
         "updated_display": display_date(updated_at),
         "published_at": advisory.published_at,
+        "withdrawn_at": advisory.withdrawn_at,
+        "withdrawal_reason": advisory.withdrawal_reason,
     }
 
     if detail:
@@ -788,6 +790,54 @@ def publish_advisory(team: Any, user: Any, advisory_id: str, *, visibility: str)
         actor=user,
         body=f"Published as {advisory.tracking_id} ({PUBLISHABLE_VISIBILITIES[visibility]['label'].lower()}).",
         payload={"visibility": visibility, "tracking_id": advisory.tracking_id},
+    )
+    return ServiceResult.success(advisory.id)
+
+
+@transaction.atomic
+def withdraw_advisory(team: Any, user: Any, advisory_id: str, *, reason: str) -> ServiceResult[str]:
+    """Retract a published advisory without erasing that it was published.
+
+    The row keeps its tracking id, its publication date and its visibility: a
+    reader who cited the advisory can still resolve it, and the trust center
+    goes on listing it, marked withdrawn and carrying the reason. Only a
+    published advisory can be withdrawn: a draft has disclosed nothing, so the
+    answer for one is a conflict that points the caller at delete.
+    """
+    reason = (reason or "").strip()
+    if not reason:
+        return ServiceResult.failure("Withdrawing an advisory requires a reason.", status_code=400)
+
+    advisory = (
+        SecurityAdvisory.objects.select_for_update()
+        .filter(team=team)
+        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
+        .first()
+    )
+    if advisory is None:
+        return ServiceResult.failure("Advisory not found", status_code=404)
+    if advisory.status == SecurityAdvisory.Status.WITHDRAWN:
+        return ServiceResult.failure("This advisory has already been withdrawn.", status_code=409)
+    if advisory.status != SecurityAdvisory.Status.PUBLISHED:
+        return ServiceResult.failure(
+            "Only a published advisory can be withdrawn; delete drafts instead.", status_code=409
+        )
+
+    advisory.status = SecurityAdvisory.Status.WITHDRAWN
+    advisory.withdrawn_at = timezone.now()
+    advisory.withdrawal_reason = reason
+    try:
+        advisory.full_clean()
+    except DjangoValidationError as error:
+        return ServiceResult.failure("; ".join(m for messages in error.message_dict.values() for m in messages), 400)
+
+    advisory.save(update_fields=["status", "withdrawn_at", "withdrawal_reason", "updated_at"])
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.WITHDRAWN,
+        actor=user,
+        body=reason,
+        payload={"reason": reason},
     )
     return ServiceResult.success(advisory.id)
 

@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 import warnings
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse, urlunparse
@@ -23,6 +24,7 @@ import dj_database_url
 import redis
 import sentry_sdk
 from django.contrib import messages
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import find_dotenv, load_dotenv
 from redis.asyncio.retry import Retry as AsyncRedisRetry
 from redis.backoff import ExponentialBackoff
@@ -32,8 +34,13 @@ from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
-from sbomify.logging_filters import is_benign_shielded_future_error
+from sbomify.logging_filters import (
+    is_benign_shielded_future_error,
+    is_on_demand_tls_ask_denial,
+    redact_access_log_secrets,
+)
 from sbomify.sentry_config import (
+    is_repeat_self_healing_notice,
     resolve_environment,
     should_warn_missing_dsn,
     throttle_self_healing_notices,
@@ -92,6 +99,26 @@ def _env_bool(value: str | None, default: bool) -> bool:
     return value.lower() in ("true", "1", "yes")
 
 
+def _env_positive_float(value: str | None, default: float) -> float:
+    """A positive, finite number from the environment, else the default.
+
+    Used for timeouts, where the value reaches a client library that raises on
+    a negative one and waits forever on an infinite one. A typo in deployment
+    config should fall back to the default rather than take startup down or
+    quietly disable the bound it was meant to set.
+    """
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+    # NaN fails every comparison, so this rejects it too.
+    if not (0 < parsed < float("inf")):
+        return default
+    return parsed
+
+
 # Request timing logging is disabled by default to avoid performance impact
 # Enable explicitly when needed for profiling (e.g., REQUEST_TIMING_LOGGING_ENABLED=true)
 REQUEST_TIMING_LOGGING_ENABLED = _env_bool(os.environ.get("REQUEST_TIMING_LOGGING_ENABLED"), default=False)
@@ -128,8 +155,47 @@ TRUSTED_PROXIES = [
     if cidr.strip()
 ]
 
-# Allow larger request bodies for OSCAL catalog imports (default is 2.5 MB)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB
+
+def _megabytes_from_env(name: str, default_mb: int) -> int:
+    """Bytes from a megabyte-valued env var, falling back on anything unusable.
+
+    These are read at import, so bad config would fail the boot rather than one
+    request. A value that is not a positive integer, such as "100MB" or a stray
+    space, and a zero or negative one that would refuse every request body, both
+    fall back to the default instead.
+    """
+    raw = (os.environ.get(name) or "").strip()
+    megabytes = int(raw) if raw.isdigit() else 0
+    return (megabytes if megabytes > 0 else default_mb) * 1024 * 1024
+
+
+# The ceiling on a request body Django will read into memory (its own default is
+# 2.5 MB). SBOM uploads are the large bodies here: a Yocto SPDX 3 image SBOM runs
+# to tens of megabytes, because SPDX 3 makes every relationship a standalone
+# element rather than an entry in an array.
+#
+# Keep this at or above sbomify.apps.sboms.apis.SBOM_MAX_UPLOAD_SIZE. Below it,
+# the endpoint's own limit never runs and never reports: Django raises
+# RequestDataTooBig while reading the body, so a document inside the advertised
+# cap is refused with no message naming a size. That is what this setting sitting
+# at 20 MB under a 100 MB endpoint cap did.
+DATA_UPLOAD_MAX_MEMORY_SIZE = _megabytes_from_env("DATA_UPLOAD_MAX_MEMORY_SIZE_MB", 100)
+
+# What any artifact upload may weigh: SBOM, CBOM, HBOM, AI BOM, SaaSBOM, VEX and
+# documents. One number so the formats cannot drift apart, and so a document is
+# not held to a different limit from the SBOM beside it.
+#
+# Documents arrive as multipart file uploads, which Django does not measure
+# against DATA_UPLOAD_MAX_MEMORY_SIZE, so that path enforces this itself.
+ARTIFACT_MAX_UPLOAD_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
+
+# Optional: hold BOMs to something smaller than the shared ceiling. Clamped to
+# it, because a cap above the body ceiling is unreachable, Django refuses the
+# body first and the caller never sees this limit's message.
+SBOM_MAX_UPLOAD_SIZE = min(
+    _megabytes_from_env("SBOM_MAX_UPLOAD_SIZE_MB", ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024)),
+    ARTIFACT_MAX_UPLOAD_SIZE,
+)
 
 # Prevent browsers from MIME-sniffing responses away from their declared
 # Content-Type — defense-in-depth for user-uploaded artifact downloads.
@@ -213,6 +279,33 @@ INSTALLED_APPS = [
 ]
 
 
+# /api/v1/ deprecation, announced per RFC 9745 and RFC 8594 by
+# ApiVersionDeprecationMiddleware. v2 renames the SBOM-era prefixes and the
+# team vocabulary; v1 keeps serving until the sunset below.
+#
+# Deprecation is announced; a retirement date is not. v1 stays up for a long
+# time, and a Sunset header is a promise of a date, so none is sent until one
+# is deliberately set here or in the environment.
+#
+# Both read from the environment as YYYY-MM-DD, with "none" meaning unset.
+# When a sunset is eventually committed to, give the action's users a long
+# runway: it runs in other people's CI and some of them pin a version and
+# forget it.
+
+
+def _sunset_date(name: str, default: str) -> datetime | None:
+    raw = os.environ.get(name, default).strip()
+    if raw.lower() in ("", "none", "never"):
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"{name} must be YYYY-MM-DD or 'none', got {raw!r}") from exc
+
+
+API_V1_DEPRECATED_ON = _sunset_date("API_V1_DEPRECATED_ON", "2026-08-26")
+API_V1_SUNSET = _sunset_date("API_V1_SUNSET", "none")
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     # Outer enough to see the final API response; copies the per-token throttle budget
@@ -229,6 +322,7 @@ MIDDLEWARE = [
     # Must precede CsrfViewMiddleware so the bearer exemption flag is set before any
     # CSRF enforcement can run (Ninja's check_csrf and CsrfViewMiddleware both honour it).
     "sbomify.apps.core.middleware.BearerAuthCsrfExemptMiddleware",
+    "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -236,9 +330,11 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "sbomify.apps.core.middleware.ContentSecurityPolicyMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "sbomify.apps.core.middleware.IdentityProviderUnavailableMiddleware",
 ]
 
-GZIP_REQUEST_MAX_SIZE = 200 * 1024 * 1024  # 200 MB – safety limit for decompressed request bodies
+# A compressed body inflates no further than an uncompressed one may weigh.
+GZIP_REQUEST_MAX_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
 
 if REQUEST_TIMING_LOGGING_ENABLED:
     MIDDLEWARE.insert(
@@ -288,13 +384,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "sbomify.apps.core.context_processors.version_context",
-                "sbomify.apps.core.context_processors.pending_invitations_context",
-                "sbomify.apps.core.context_processors.pending_access_requests_context",
-                "sbomify.apps.core.context_processors.global_modals_context",
-                "sbomify.apps.core.context_processors.team_context",
-                "sbomify.apps.core.context_processors.sentry_context",
-                "sbomify.apps.core.context_processors.posthog_context",
+                "sbomify.apps.core.context_processors.app_context",
             ],
         },
     },
@@ -703,7 +793,7 @@ def build_dramatiq_redis_options(location: str, ca_certs: str = "") -> dict[str,
 
 _dramatiq_redis_options: dict[str, Any] = build_dramatiq_redis_options(REDIS_WORKER_URL, REDIS_CA_CERTS)
 DRAMATIQ_BROKER = {
-    "BROKER": "dramatiq.brokers.redis.RedisBroker",
+    "BROKER": "sbomify.dramatiq_broker.RedisBroker",
     "OPTIONS": _dramatiq_redis_options,
     "MIDDLEWARE": [
         "dramatiq.middleware.Callbacks",
@@ -786,12 +876,30 @@ LOGGING = {
             "()": "django.utils.log.CallbackFilter",
             "callback": lambda record: not is_benign_shielded_future_error(record),
         },
+        # These two run on every console record, so both bail on a cheap
+        # attribute check before formatting a message. Between them they are
+        # most of what made the production log stream unreadable: a third of it
+        # was one repeated 404 path, and the error-level portion was dominated
+        # by faults that had already recovered.
+        "suppress_on_demand_tls_ask_denials": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_on_demand_tls_ask_denial(record),
+        },
+        # Keeps the first line of each distinct fault per five-minute window and
+        # drops the repeats, so an outage that lasts is still reported for as
+        # long as it lasts. Same throttle the Sentry before_send hook applies,
+        # with its own window.
+        "throttle_self_healing_notices": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_repeat_self_healing_notice(record),
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
             "formatter": "default",
+            "filters": ["suppress_on_demand_tls_ask_denials", "throttle_self_healing_notices"],
         },
         "console_asyncio": {
             "class": "logging.StreamHandler",
@@ -843,6 +951,15 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # CRA audit trail (sbomify.compliance.audit). Pinned for the same reason:
+        # scope-screening answers, step 1 classification and finding status changes
+        # back legally binding exports, and every emitter logs at INFO, so without
+        # this the whole trail vanishes the moment LOG_LEVEL is raised to WARNING.
+        "sbomify.compliance.audit": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "core": {
             "handlers": ["console"],
             "level": "DEBUG",
@@ -870,6 +987,11 @@ LOGGING = {
         # },
     },
 }
+
+# uvicorn (and gunicorn's UvicornWorker) install the access logger's handlers
+# before the app loads. Naming the logger in LOGGING would make dictConfig strip
+# those handlers, so the filter is attached to the logger directly instead.
+logging.getLogger("uvicorn.access").addFilter(redact_access_log_secrets)
 
 
 # Feature flags
@@ -904,7 +1026,6 @@ KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
 KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
-KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
 
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {
@@ -1125,7 +1246,10 @@ OIDC_GITHUB_LEEWAY_SECONDS = int(os.environ.get("OIDC_GITHUB_LEEWAY_SECONDS", "6
 # every request rewrite the field.
 ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = max(0, int(os.environ.get("ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS", "300")))
 
-# Localstack and AWS/S3 related settings
+# Object storage settings
+STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "s3")
+
+# AWS/S3 related settings
 AWS_REGION = os.environ.get("AWS_REGION", "")
 AWS_ENDPOINT_URL_S3 = os.environ.get("AWS_ENDPOINT_URL_S3", "")
 
@@ -1194,6 +1318,23 @@ STRIPE_SECRET_KEY = STRIPE_API_KEY
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_BILLING_URL = os.environ.get("STRIPE_BILLING_URL", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+# Pin the version our requests are made against, so a library upgrade cannot
+# quietly move it. Event payloads follow the account's own version, which is a
+# dashboard setting; this pins the half we control.
+#
+# The value is the installed stripe library's own current version, so it is one
+# Stripe accepts rather than a string somebody typed. test_stripe_api_version.py
+# compares the two, so bumping the library fails there until a person decides
+# whether to move the pin with it.
+STRIPE_API_VERSION = os.environ.get("STRIPE_API_VERSION", "2025-11-17.clover")
+
+# How long any one Stripe request may take. The library's own default is 80
+# seconds, and workspace settings reaches Stripe while rendering, twice: once
+# in TeamSettingsView and again through TeamPricingService. Unreachable Stripe
+# therefore held the page for longer than the edge would wait, and every tab of
+# the section answered 504 rather than rendering without fresh billing data.
+# Sync already fails soft, so a bounded wait degrades to slightly stale limits.
+STRIPE_TIMEOUT_SECONDS = _env_positive_float(os.environ.get("STRIPE_TIMEOUT_SECONDS"), 10.0)
 
 # Trial period settings
 TRIAL_PERIOD_DAYS = int(os.environ.get("TRIAL_PERIOD_DAYS", "14"))

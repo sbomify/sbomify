@@ -46,7 +46,7 @@ class TeamAdminForm(_TeamFormBase):
 
         # Override the billing_plan field with a Select widget
         self.fields["billing_plan"] = forms.ChoiceField(
-            choices=billing_plan_choices, required=False, help_text="Select the billing plan for this team"
+            choices=billing_plan_choices, required=False, help_text="Select the billing plan for this workspace"
         )
 
         # Make branding_info not required since it's user-managed
@@ -172,7 +172,7 @@ class TeamAdmin(_TeamAdminBase):
                     "billing_status_display",
                 ),
                 "description": (
-                    "Billing and subscription information for this team. "
+                    "Billing and subscription information for this workspace. "
                     "Plan limits are auto-populated based on selected plan."
                 ),
             },

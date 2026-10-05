@@ -443,6 +443,7 @@ def test_accept_invitation(
         username="admin_user",
         email="admin@example.com",
         password="adminpass",
+        email_verified=True,
     )
 
     # accept_invite
@@ -467,6 +468,7 @@ def test_accept_invitation_sets_default_team_and_session(django_user_model, comm
         username="invited-user",
         email="invited-user@example.com",
         password="secret",
+        email_verified=True,
     )
     team = Team.objects.create(name="Invited Workspace")
     invitation = Invitation.objects.create(team=team, email=invited_user.email, role="admin")
@@ -493,6 +495,7 @@ def test_skip_auto_workspace_creation_for_invited_user(django_user_model, commun
         username="pending-invite-user",
         email="pending-invite@example.com",
         password="secret",
+        email_verified=True,
     )
     team = Team.objects.create(name="Host Workspace")
     Invitation.objects.create(team=team, email=invited_user.email, role="guest")
@@ -509,6 +512,7 @@ def test_pending_invitation_auto_accept_on_login(django_user_model, community_pl
         username="login-invite-user",
         email="login-invite@example.com",
         password="secret",
+        email_verified=True,
     )
     team = Team.objects.create(name="Invited Team")
     Invitation.objects.create(team=team, email=invited_user.email, role="guest")
@@ -534,6 +538,7 @@ def test_accept_invitation_updates_existing_member_role(django_user_model, commu
         username="existing-guest-user",
         email="existing-guest@example.com",
         password="secret",
+        email_verified=True,
     )
     team = Team.objects.create(name="Test Workspace")
 
@@ -556,7 +561,7 @@ def test_accept_invitation_updates_existing_member_role(django_user_model, commu
     setup_authenticated_client_session(client, team, user)
 
     # Accept the invitation
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
     assert response.url == reverse("core:dashboard")
 
@@ -591,6 +596,7 @@ def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_us
         username="guest-upgrade-user",
         email="guest-upgrade@example.com",
         password="secret",
+        email_verified=True,
     )
     team = Team.objects.create(name="Test Workspace")
 
@@ -631,7 +637,7 @@ def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_us
     setup_authenticated_client_session(client, team, user)
 
     # Accept the invitation
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     # Verify membership role was updated
@@ -657,6 +663,7 @@ def test_accept_invitation_never_demotes_an_owner(django_user_model, community_p
         username="demote-target-owner",
         email="demote-target@example.com",
         password="secret",
+        email_verified=True,
     )
     team = Team.objects.create(name="Demotion Test Workspace", billing_plan=community_plan.key)
     membership = Member.objects.create(team=team, user=owner_user, role="owner", is_default_team=True)
@@ -668,7 +675,7 @@ def test_accept_invitation_never_demotes_an_owner(django_user_model, community_p
     assert client.login(username="demote-target-owner", password="secret")
     setup_authenticated_client_session(client, team, owner_user)
 
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     membership.refresh_from_db()
@@ -684,16 +691,19 @@ def test_accept_invitation_still_upgrades_to_owner(django_user_model, community_
         username="promote-to-owner",
         email="promote-owner@example.com",
         password="secret",
+        email_verified=True,
     )
     team = Team.objects.create(name="Promotion Test Workspace", billing_plan=community_plan.key)
     membership = Member.objects.create(team=team, user=user, role="admin", is_default_team=True)
-    invitation = Invitation.objects.create(team=team, email=user.email, role="owner")
+    issuer = django_user_model.objects.create_user(username="promote-issuer", email="issuer@example.com")
+    Member.objects.create(team=team, user=issuer, role="owner")
+    invitation = Invitation.objects.create(team=team, email=user.email, role="owner", invited_by=issuer)
 
     client = Client()
     assert client.login(username="promote-to-owner", password="secret")
     setup_authenticated_client_session(client, team, user)
 
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     membership.refresh_from_db()
@@ -707,6 +717,7 @@ def test_accept_invitation_no_role_change_when_same_role(django_user_model, comm
         username="same-role-user",
         email="same-role@example.com",
         password="secret",
+        email_verified=True,
     )
     team = Team.objects.create(name="Test Workspace")
 
@@ -726,7 +737,7 @@ def test_accept_invitation_no_role_change_when_same_role(django_user_model, comm
     setup_authenticated_client_session(client, team, user)
 
     # Accept the invitation
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     # Verify membership role unchanged
@@ -750,6 +761,7 @@ def test_accept_invitation_workspace_full_status_page(django_user_model):
         username="capacity-guest",
         email="capacity-guest@example.com",
         password="secret",
+        email_verified=True,
     )
 
     team = Team.objects.create(name="Capacity Limited Workspace")
@@ -759,7 +771,7 @@ def test_accept_invitation_workspace_full_status_page(django_user_model):
     client = Client()
     assert client.login(username="capacity-guest", password="secret")
 
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
 
     assert response.status_code == 403
     assert any(t.name == "teams/workspace_availability.html.j2" for t in response.templates)
@@ -1166,11 +1178,11 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     base_uri = f"/api/v1/workspaces/{team_key}/branding"
 
     # Mock S3 client methods
-    mock_upload = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_media")
-    mock_delete = mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
+    mock_upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_media")
+    mock_delete = mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object")
 
     # Set up mock to store the filename that was used
-    def upload_side_effect(filename, data):
+    def upload_side_effect(filename, data, content_type):
         mock_upload.filename = filename
 
     mock_upload.side_effect = upload_side_effect
@@ -1210,7 +1222,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
 
     # Test file upload
     with open("test_icon.png", "wb") as f:
-        f.write(b"fake png content")
+        f.write(b"\x89PNG\r\n\x1a\nfake png content")
 
     with open("test_icon.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
@@ -1228,7 +1240,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     # Test that uploaded file URL is correctly generated
     # The bug was that URLs were generated from old branding data before upload
     with open("test_logo.png", "wb") as f:
-        f.write(b"fake logo content")
+        f.write(b"\x89PNG\r\n\x1a\nfake logo content")
 
     with open("test_logo.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/logo", {"file": f}, format="multipart")
@@ -1262,13 +1274,13 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
     base_uri = f"/api/v1/workspaces/{team_key}/branding"
 
     # Mock S3 client methods
-    mock_upload = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_media")
-    mock_delete = mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
+    mock_upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_media")
+    mock_delete = mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object")
 
     uploaded_files = []
     deleted_files = []
 
-    def upload_side_effect(filename, data):
+    def upload_side_effect(filename, data, content_type):
         uploaded_files.append(filename)
 
     def delete_side_effect(bucket, filename):
@@ -1279,12 +1291,12 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
     # Test 1: Successful upload with old file cleanup for ICON
     team = sample_team_with_owner_member.team
-    team.branding_info = {"icon": "old_icon_file.png", "logo": "", "brand_color": "", "accent_color": ""}
+    team.branding_info = {"icon": f"team_{team_key}_icon_old.png", "logo": "", "brand_color": "", "accent_color": ""}
     team.save()
 
     # Upload new icon
     with open("test_icon.png", "wb") as f:
-        f.write(b"fake icon content")
+        f.write(b"\x89PNG\r\n\x1a\nfake icon content")
 
     with open("test_icon.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
@@ -1300,7 +1312,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
         # Verify old file was deleted
         assert len(deleted_files) == 1
-        assert deleted_files[0] == "old_icon_file.png"
+        assert deleted_files[0] == f"team_{team_key}_icon_old.png"
 
         # Verify database was updated
         team.refresh_from_db()
@@ -1314,11 +1326,16 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
     deleted_files.clear()
 
     # Set up existing logo
-    team.branding_info = {"icon": new_filename, "logo": "old_logo_file.jpg", "brand_color": "", "accent_color": ""}
+    team.branding_info = {
+        "icon": new_filename,
+        "logo": f"team_{team_key}_logo_old.jpg",
+        "brand_color": "",
+        "accent_color": "",
+    }
     team.save()
 
     with open("test_logo.jpg", "wb") as f:
-        f.write(b"fake logo content")
+        f.write(b"\xff\xd8\xfffake logo content")
 
     with open("test_logo.jpg", "rb") as f:
         response = client.post(f"{base_uri}/upload/logo", {"file": f}, format="multipart")
@@ -1333,7 +1350,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
         # Verify old file was deleted
         assert len(deleted_files) == 1
-        assert deleted_files[0] == "old_logo_file.jpg"
+        assert deleted_files[0] == f"team_{team_key}_logo_old.jpg"
 
         # Verify database was updated
         team.refresh_from_db()
@@ -1351,7 +1368,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
     team.save()
 
     with open("test_icon_new.png", "wb") as f:
-        f.write(b"new icon content")
+        f.write(b"\x89PNG\r\n\x1a\nnew icon content")
 
     with open("test_icon_new.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
@@ -1520,11 +1537,11 @@ def test_team_branding_api_preserves_company_nda_document_id(sample_team_with_ow
 
     # Test file upload - should preserve company_nda_document_id
     # Mock S3 client to avoid actual uploads
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_media")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_media")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object")
 
     with open("test_icon.png", "wb") as f:
-        f.write(b"fake png content")
+        f.write(b"\x89PNG\r\n\x1a\nfake png content")
 
     with open("test_icon.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")

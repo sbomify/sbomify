@@ -1,6 +1,4 @@
-"""Package grouping on the full scan report: cross-provider rows merge on the
-artifact tail, while distinct purl namespaces sharing an artifact name stay
-separate."""
+"""Flat report rows merge matching advisories without conflating package namespaces."""
 
 from __future__ import annotations
 
@@ -36,8 +34,8 @@ def _finding(advisory: str, name: str, version: str = "1.0", purl: str = "") -> 
     return {"id": advisory, "severity": "high", "component": component}
 
 
-def _packages(response) -> list[dict]:
-    return response.context["vulnerabilities"]["results"][0]["packages"]
+def _rows(response) -> list[dict]:
+    return response.context["scan_panel"]["rows"]
 
 
 @pytest.mark.django_db
@@ -57,9 +55,9 @@ def test_distinct_purl_namespaces_do_not_merge(sample_sbom: SBOM):  # noqa: F811
 
     response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
-    packages = _packages(response)
+    packages = _rows(response)
     assert len(packages) == 2
-    names = sorted(p["package"]["name"] for p in packages)
+    names = sorted(p["package"] for p in packages)
     assert names == ["com.bar:shared-artifact", "com.foo:shared-artifact"]
 
 
@@ -79,9 +77,9 @@ def test_purl_less_provider_row_merges_with_single_namespace(sample_sbom: SBOM):
 
     response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
-    packages = _packages(response)
+    packages = _rows(response)
     assert len(packages) == 1
-    assert len(packages[0]["vulnerabilities"]) == 1  # same advisory folded, not duplicated
+    assert packages[0]["id"] == "GHSA-1"  # same advisory folded, not duplicated
 
 
 @pytest.mark.django_db
@@ -102,7 +100,7 @@ def test_purl_less_row_stays_separate_when_namespaces_are_ambiguous(sample_sbom:
     response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
 
     # Two namespaces plus one unattributable purl-less row: never guess.
-    assert len(_packages(response)) == 3
+    assert len(_rows(response)) == 3
 
 
 @pytest.mark.django_db
@@ -130,7 +128,32 @@ def test_scanner_status_markers_are_not_vulnerability_rows(sample_sbom: SBOM):  
     response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
     assert response.status_code == 200
 
-    packages = _packages(response)
-    names = [p["package"]["name"] for p in packages]
+    packages = _rows(response)
+    names = [p["package"] for p in packages]
     assert "django" in names
     assert len(packages) == 1
+
+
+@pytest.mark.django_db
+def test_the_advisory_body_reaches_the_page_as_prose(sample_sbom: SBOM):  # noqa: F811
+    """OSV serves GHSA's CommonMark verbatim, and the card showed it raw: the
+    page carried the literal text "### Impact" and backticked package names."""
+    finding = _finding("GHSA-5jgf-p345-68v8", "fast-uri", version="3.1.5")
+    finding["description"] = (
+        "### Impact\n`fast-uri` decodes percent-encoded characters in the scheme "
+        "component with the legacy global `unescape()` and serializes the result back."
+    )
+    _run(sample_sbom, "osv", [finding])
+    client = Client()
+    team = sample_sbom.component.team
+    setup_test_session(client, team, team.members.first())
+
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
+
+    # Asserted before the strings below, so a redirect or an error page cannot
+    # pass this test by simply not containing the markup it is looking for.
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "### Impact" not in html
+    assert "`fast-uri`" not in html
+    assert "Impact fast-uri decodes percent-encoded characters" in html

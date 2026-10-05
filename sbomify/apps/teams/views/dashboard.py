@@ -117,13 +117,16 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     "Cannot delete the default workspace. Please set another workspace as default first.",
                 )
             else:
-                with transaction.atomic():
-                    team.delete()
+                from sbomify.apps.teams.utils import delete_workspace_with_billing_cleanup
+
+                workspace_name = team.name
+
+                delete_workspace_with_billing_cleanup(team)
 
                 messages.add_message(
                     request,
                     messages.INFO,
-                    f"Workspace {team.name} has been deleted",
+                    f"Workspace {workspace_name} has been deleted",
                 )
                 update_user_teams_session(request, user)
         except Member.DoesNotExist:

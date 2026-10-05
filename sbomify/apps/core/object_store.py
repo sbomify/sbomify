@@ -1,19 +1,79 @@
 """
-S3 Compatible Storage
+Object Storage
 
-Utilities for working with S3 compatible storage services.
+Utilities for working with S3-compatible storage services.
+Supports optional credentials to enable cloud workload identity (IRSA, Pod Identity, ADC).
 """
 
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
+from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.conf import settings
+
+log = logging.getLogger(__name__)
+
+# One marker for every artifact path that may strand an object, so an operator
+# (or a future reaper) has a single string to search for.
+ORPHANED_OBJECT_MARKER = "Potential orphaned S3 object after IntegrityError"
+
+
+def log_orphaned_object(object_name: str) -> None:
+    """Record an object whose row was never written, for later reconciliation.
+
+    An artifact upload stores the object before it writes the row, so losing the
+    race on a uniqueness constraint can leave the object behind. We deliberately
+    do NOT delete it here: under READ COMMITTED a synchronous reference check can
+    race with a concurrent transaction that has uploaded the same key but not yet
+    committed its row, and deleting then breaks a live artifact. A stranded object
+    is recoverable, a deleted one that something points at is not.
+
+    Document keys are the SHA-256 of their content, so an object is only ever
+    stranded when the losing upload carried different bytes; identical content
+    resolves to the key the winning row already references.
+    """
+    log.warning("%s: %s", ORPHANED_OBJECT_MARKER, object_name)
+
+
+class ObjectStoreClient(ABC):
+    """Base class for object storage backends."""
+
+    @abstractmethod
+    def put_object(self, bucket_name: str, key: str, data: bytes, content_type: str | None = None) -> None: ...
+
+    @abstractmethod
+    def get_object(self, bucket_name: str, key: str) -> bytes | None: ...
+
+    @abstractmethod
+    def delete_object(self, bucket_name: str, key: str) -> None: ...
+
+    @abstractmethod
+    def list_objects(self, bucket_name: str, prefix: str) -> list[str]: ...
+
+    @abstractmethod
+    def object_exists(self, bucket_name: str, key: str) -> bool: ...
+
+    @abstractmethod
+    def upload_file(self, bucket_name: str, file_path: str, key: str) -> None: ...
+
+    @abstractmethod
+    def download_file(self, bucket_name: str, key: str, file_path: str) -> None: ...
+
+    @abstractmethod
+    def generate_presigned_url(
+        self,
+        bucket_name: str,
+        key: str,
+        expires_in: int = 3600,
+        response_headers: dict[str, str] | None = None,
+    ) -> str: ...
 
 
 def _transfer_config() -> Config:
@@ -33,46 +93,173 @@ def _transfer_config() -> Config:
 
     The read timeout is per socket read, not per transfer, so a large artifact
     is unaffected: it only has to keep producing bytes.
+
+    ``signature_version`` is pinned rather than left to be resolved. A
+    presigned GET carrying response-header overrides (the CRA bundle
+    download) is rejected with SignatureDoesNotMatch by SeaweedFS under the
+    default configuration and accepted when this is set, even though the
+    default already resolves to s3v4. Addressing style is left alone
+    deliberately: it makes no difference here, and forcing path-style would
+    break AWS buckets created after Sept 2020.
     """
     return Config(
+        signature_version="s3v4",
         connect_timeout=int(getattr(settings, "AWS_CONNECT_TIMEOUT", 10)),
         read_timeout=int(getattr(settings, "AWS_READ_TIMEOUT", 30)),
         retries={"max_attempts": 3, "mode": "standard"},
     )
 
 
-class S3Client:
-    def __init__(self, bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> None:
-        self.bucket_type = bucket_type
-        access_key: str = getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID")
-        secret_key: str = getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY")
-        self.s3: Any = boto3.resource(
-            "s3",
-            region_name=settings.AWS_REGION,
-            endpoint_url=settings.AWS_ENDPOINT_URL_S3,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            config=_transfer_config(),
+class S3ObjectStoreClient(ObjectStoreClient):
+    """S3-compatible storage backend using boto3. Works with AWS S3, Cloudflare R2, and Minio."""
+
+    def __init__(
+        self,
+        region: str | None = None,
+        endpoint_url: str | None = None,
+        access_key: str | None = None,
+        secret_key: str | None = None,
+    ) -> None:
+        self._boto3_kwargs: dict[str, Any] = {
+            "region_name": region,
+            "endpoint_url": endpoint_url,
+            "aws_access_key_id": access_key,
+            "aws_secret_access_key": secret_key,
+            "config": _transfer_config(),
+        }
+        self._resource: Any = boto3.resource("s3", **self._boto3_kwargs)
+        self._client_instance: Any | None = None
+
+    def __repr__(self) -> str:
+        return (
+            f"S3ObjectStoreClient(region={self._boto3_kwargs['region_name']!r}, "
+            f"endpoint_url={self._boto3_kwargs['endpoint_url']!r})"
         )
 
-    def upload_data_as_file(self, bucket_name: str, object_name: str, data: bytes) -> None:
+    def put_object(self, bucket_name: str, key: str, data: bytes, content_type: str | None = None) -> None:
+        extra = {"ContentType": content_type} if content_type else {}
+        self._resource.Bucket(bucket_name).put_object(Key=key, Body=data, **extra)
+
+    def get_object(self, bucket_name: str, key: str) -> bytes | None:
         try:
-            self.s3.Bucket(bucket_name).put_object(Key=object_name, Body=data)
+            response = self._resource.Bucket(bucket_name).Object(key).get()
+            return response["Body"].read()  # type: ignore[no-any-return]
         except ClientError as e:
-            print(e)  # noqa F821
+            # Only a missing object is absence. "404" is checked alongside
+            # "NoSuchKey" because non-AWS implementations (Minio, R2) report a
+            # missing key by status code alone. A missing *bucket* reports
+            # NoSuchBucket, so it still raises rather than reading as empty.
+            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+                return None
             raise
 
-    def upload_media(self, object_name: str, data: bytes) -> None:
+    def delete_object(self, bucket_name: str, key: str) -> None:
+        self._resource.Object(bucket_name, key).delete()
+
+    def list_objects(self, bucket_name: str, prefix: str) -> list[str]:
+        return [obj.key for obj in self._resource.Bucket(bucket_name).objects.filter(Prefix=prefix)]
+
+    def object_exists(self, bucket_name: str, key: str) -> bool:
+        # HEAD rather than a prefix listing: listing needs the separate
+        # ListBucket permission, which least-privilege policies often withhold
+        # while still granting GetObject, and it costs more for one key.
+        try:
+            self._resource.Object(bucket_name, key).load()
+            return True
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+                return False
+            raise
+
+    def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
+        self._resource.Bucket(bucket_name).upload_file(file_path, key)
+
+    def download_file(self, bucket_name: str, key: str, file_path: str) -> None:
+        self._resource.Bucket(bucket_name).download_file(key, file_path)
+
+    @property
+    def _client(self) -> Any:
+        # Not thread-safe: assumes instances are not shared across threads (per-request lifecycle).
+        if self._client_instance is None:
+            self._client_instance = boto3.client("s3", **self._boto3_kwargs)
+        return self._client_instance
+
+    def generate_presigned_url(
+        self,
+        bucket_name: str,
+        key: str,
+        expires_in: int = 3600,
+        response_headers: dict[str, str] | None = None,
+    ) -> str:
+        if expires_in <= 0:
+            raise ValueError(f"expires_in must be positive, got {expires_in}")
+        # Response-header overrides (ResponseContentDisposition,
+        # ResponseContentType) are signed into the URL, so callers that need a
+        # download to arrive as an attachment rather than render inline can say
+        # so without reaching past this class for a raw boto3 client.
+        #
+        # Applied first so Bucket and Key always come from this call's own
+        # arguments: the other order would let a stray "Bucket" in the mapping
+        # sign a URL for a different object than the caller named.
+        params: dict[str, str] = dict(response_headers or {})
+        params["Bucket"] = bucket_name
+        params["Key"] = key
+        url: str = self._client.generate_presigned_url(
+            "get_object",
+            Params=params,
+            ExpiresIn=expires_in,
+        )
+        return url
+
+
+_VALID_BUCKET_TYPES = ("MEDIA", "SBOMS", "DOCUMENTS")
+
+
+def _create_store(bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> ObjectStoreClient:
+    """Create a storage backend based on STORAGE_BACKEND setting."""
+    if bucket_type not in _VALID_BUCKET_TYPES:
+        raise ValueError(f"Invalid bucket_type: {bucket_type!r}. Must be one of {_VALID_BUCKET_TYPES}")
+
+    if settings.STORAGE_BACKEND == "s3":
+        return S3ObjectStoreClient(
+            region=settings.AWS_REGION or None,
+            endpoint_url=settings.AWS_ENDPOINT_URL_S3 or None,
+            access_key=getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID", None) or None,
+            secret_key=getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY", None) or None,
+        )
+
+    raise ValueError(f"Unsupported STORAGE_BACKEND: {settings.STORAGE_BACKEND!r}. Supported values: 's3'")
+
+
+class StorageClient:
+    """Domain-level storage client. Delegates to an ObjectStoreClient backend."""
+
+    def __init__(self, bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> None:
+        self.bucket_type = bucket_type
+        self._store: ObjectStoreClient = _create_store(bucket_type)
+
+    def upload_data_as_file(self, bucket_name: str, object_name: str, data: bytes) -> None:
+        self._store.put_object(bucket_name, object_name, data)
+
+    def upload_media(self, object_name: str, data: bytes, content_type: str) -> None:
         if self.bucket_type != "MEDIA":
             raise ValueError("This method is only for MEDIA bucket")
 
-        self.upload_data_as_file(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, object_name, data)
+        # The media bucket is served to browsers as-is, so nothing goes in without a type of its own.
+        if not content_type:
+            raise ValueError("Media uploads need a ContentType")
+        self._store.put_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, object_name, data, content_type)
+
+    @staticmethod
+    def sbom_object_name(data: bytes) -> str:
+        """The key ``upload_sbom`` stores ``data`` under: identical bytes share one object."""
+        return hashlib.sha256(data).hexdigest() + ".json"
 
     def upload_sbom(self, data: bytes) -> str:
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
 
-        object_name = hashlib.sha256(data).hexdigest() + ".json"
+        object_name = self.sbom_object_name(data)
         self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)
 
         return object_name
@@ -90,22 +277,10 @@ class S3Client:
         fetches). For public releases the result is content-addressed (the key
         embeds an artifact-set hash), so it is cached in the SBOMS bucket and
         served directly on repeat downloads. A missing key returns ``None``.
-
-        Fetches directly rather than via ``get_file_data`` because a cache miss
-        (``NoSuchKey``) is expected on every cold build — ``get_file_data``
-        prints the ``ClientError`` before re-raising, which would spam logs.
         """
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
-        try:
-            response = self.s3.Bucket(settings.AWS_SBOMS_STORAGE_BUCKET_NAME).Object(object_name).get()
-            return response["Body"].read()  # type: ignore[no-any-return]
-        except ClientError as e:
-            # Only a missing object is an expected cache miss. A missing bucket is
-            # a misconfiguration and must fail loudly rather than degrade silently.
-            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
-                return None
-            raise
+        return self.get_file_data(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
 
     def put_cached_aggregate(self, object_name: str, data: bytes) -> None:
         """Store a built aggregated-SBOM blob under the given cache key (#998)."""
@@ -117,8 +292,7 @@ class S3Client:
         """Return cached-aggregate object keys under ``prefix`` (for orphan GC)."""
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
-        bucket = self.s3.Bucket(settings.AWS_SBOMS_STORAGE_BUCKET_NAME)
-        return [obj.key for obj in bucket.objects.filter(Prefix=prefix)]
+        return self._store.list_objects(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, prefix)
 
     def delete_cached_aggregate(self, object_name: str) -> None:
         """Delete one cached-aggregate object by key (for orphan GC)."""
@@ -162,33 +336,26 @@ class S3Client:
         return self.get_file_data(settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, object_name)
 
     def upload_file(self, bucket_name: str, file_path: str, object_name: str) -> None:
-        try:
-            self.s3.Bucket(bucket_name).upload_file(file_path, object_name)
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._store.upload_file(bucket_name, file_path, object_name)
 
     def download_file(self, bucket_name: str, object_name: str, file_path: str) -> None:
-        try:
-            self.s3.Bucket(bucket_name).download_file(object_name, file_path)
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._store.download_file(bucket_name, object_name, file_path)
 
     def get_file_data(self, bucket_name: str, file_path: str) -> bytes | None:
-        try:
-            response = self.s3.Bucket(bucket_name).Object(file_path).get()
-            if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
-                return response["Body"].read()  # type: ignore[no-any-return]
-            else:
-                return None
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        return self._store.get_object(bucket_name, file_path)
 
     def delete_object(self, bucket_name: str, object_name: str) -> None:
-        try:
-            self.s3.Object(bucket_name, object_name).delete()
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._store.delete_object(bucket_name, object_name)
+
+    def object_exists(self, bucket_name: str, object_name: str) -> bool:
+        """Return whether an object is present, without fetching its body."""
+        return self._store.object_exists(bucket_name, object_name)
+
+    def generate_presigned_url(
+        self,
+        bucket_name: str,
+        key: str,
+        expires_in: int = 3600,
+        response_headers: dict[str, str] | None = None,
+    ) -> str:
+        return self._store.generate_presigned_url(bucket_name, key, expires_in, response_headers)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import cast
 
 from django.conf import settings
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
 
@@ -13,8 +13,9 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
-    build_custom_domain_url,
+    custom_domain_redirect,
     get_back_url_from_referrer,
+    get_component_public_slug,
     get_public_path,
     get_workspace_public_url,
     resolve_component_identifier,
@@ -56,8 +57,12 @@ class ComponentDetailsPublicView(View):
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain
         if team and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
-            path = get_public_path("component", resolved_id, is_custom_domain=True, slug=component_obj.slug)
-            return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
+            path = get_public_path(
+                "component", resolved_id, is_custom_domain=True, slug=get_component_public_slug(component_obj, request)
+            )
+            redirect = custom_domain_redirect(team, path, request.is_secure())
+            if redirect is not None:
+                return redirect
 
         # Get assessment status for this component (only passing assessments)
         assessment_status = get_component_assessment_status(component_obj)
@@ -200,7 +205,14 @@ class ComponentDetailsPublicView(View):
             if pending_access_request and team is not None:
                 company_nda = team.get_company_nda_document()
                 if company_nda:
-                    has_signed = NDASignature.objects.live().filter(access_request=pending_access_request).exists()
+                    # Scoped to the current NDA: old signatures stay live when a
+                    # workspace uploads a new version, so liveness alone read as
+                    # "already signed" for a document they had never seen.
+                    has_signed = (
+                        NDASignature.objects.live()
+                        .filter(access_request=pending_access_request, nda_document=company_nda)
+                        .exists()
+                    )
                     if not has_signed:
                         pending_request_needs_nda = True
                         pending_request_id = pending_access_request.id

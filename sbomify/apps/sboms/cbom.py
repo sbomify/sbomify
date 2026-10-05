@@ -22,6 +22,8 @@ import uuid
 from functools import cache
 from typing import Any
 
+from django.db.models import QuerySet
+
 from sbomify.apps.sboms.crypto_inventory import is_crypto_asset
 
 logger = logging.getLogger(__name__)
@@ -31,12 +33,12 @@ def _document_from_cbom_sbom(cbom: Any) -> dict[str, Any] | None:
     """Load a CBOM SBOM row's document from S3. ``None`` when absent or unreadable."""
     from botocore.exceptions import BotoCoreError, ClientError
 
-    from sbomify.apps.core.object_store import S3Client
+    from sbomify.apps.core.object_store import StorageClient
 
     if cbom is None or not cbom.sbom_filename:
         return None
     try:
-        raw = S3Client("SBOMS").get_sbom_data(cbom.sbom_filename)
+        raw = StorageClient("SBOMS").get_sbom_data(cbom.sbom_filename)
     except (ClientError, BotoCoreError) as exc:
         # A missing/unreadable object must not 500 the merge — skip this CBOM, but
         # log so a genuinely misconfigured/unreachable bucket stays diagnosable.
@@ -142,17 +144,34 @@ def _normalize_crypto_component(comp: dict[str, Any], spec_version: str) -> dict
     return out
 
 
-def build_release_cbom(release: Any, spec_version: str = "1.6") -> dict[str, Any] | None:
+def release_cbom_artifacts(release: Any, *, include_non_public: bool) -> QuerySet[Any]:
+    """The release's CBOM artifacts that ``build_release_cbom`` reads for this audience.
+
+    The download cache keys on this same set, so whatever changes what a build reads,
+    a component's visibility included, changes the key too.
+    """
+    from sbomify.apps.core.models import Component, ReleaseArtifact
+    from sbomify.apps.sboms.models import SBOM
+
+    artifacts = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM)
+    if not include_non_public:
+        artifacts = artifacts.filter(sbom__component__visibility=Component.Visibility.PUBLIC)
+    return artifacts
+
+
+def build_release_cbom(
+    release: Any, spec_version: str = "1.6", *, include_non_public: bool = True
+) -> dict[str, Any] | None:
     """Merge the CBOM pinned in each component's release slot into one CycloneDX document.
 
     Only CBOM artifacts actually in the release (newest per component) are merged, so a component
     added to the product later never bleeds into an old release. Returns ``None`` when the release
     holds no CBOM. ``spec_version`` selects the output vocabulary ("1.6" default, "1.7" native).
+
+    ``include_non_public=False`` keeps gated and private components out, which is what an
+    anonymous reader of a public product gets, matching the release SBOM and VEX downloads.
     """
     from django.utils import timezone
-
-    from sbomify.apps.core.models import ReleaseArtifact
-    from sbomify.apps.sboms.models import SBOM
 
     components: list[dict[str, Any]] = []
     dependencies: list[dict[str, Any]] = []
@@ -160,11 +179,8 @@ def build_release_cbom(release: Any, spec_version: str = "1.6") -> dict[str, Any
     dep_by_ref: dict[str, dict[str, Any]] = {}  # merge dependsOn for a shared source ref
     seen_components: set[Any] = set()
     found = False
-    artifacts = (
-        ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM)
-        .select_related("sbom")
-        .order_by("sbom__component_id", "-sbom__created_at")
-    )
+    artifacts = release_cbom_artifacts(release, include_non_public=include_non_public)
+    artifacts = artifacts.select_related("sbom").order_by("sbom__component_id", "-sbom__created_at")
     for artifact in artifacts:
         cbom_sbom = artifact.sbom
         if cbom_sbom is None or cbom_sbom.component_id in seen_components:

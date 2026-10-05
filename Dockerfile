@@ -28,7 +28,7 @@ ARG VERSION=""
 ARG BUILD_TYPE=""
 
 ### Stage 0: Keycloak Theme Build (Fully Independent)
-FROM oven/bun:1.4-debian@sha256:5bb0f9be3a1a36a03e27c9a9dd894a3b1ad26657155c7df4dda771e17bf872ef AS keycloak-build
+FROM oven/bun:1.4-debian@sha256:4f6e31d1a54d6a3dd312daef655fc998101b5043d52e12592ac293ef04b9bc73 AS keycloak-build
 
 WORKDIR /keycloak-build
 
@@ -42,7 +42,7 @@ COPY keycloak/themes/ ./themes/
 RUN bun install --frozen-lockfile && bun run build
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.4-debian@sha256:5bb0f9be3a1a36a03e27c9a9dd894a3b1ad26657155c7df4dda771e17bf872ef AS js-build-prod
+FROM oven/bun:1.4-debian@sha256:4f6e31d1a54d6a3dd312daef655fc998101b5043d52e12592ac293ef04b9bc73 AS js-build-prod
 
 WORKDIR /js-build
 
@@ -67,6 +67,7 @@ COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
 COPY sbomify/apps/compliance/js/ ./sbomify/apps/compliance/js/
+COPY sbomify/apps/controls/js/ ./sbomify/apps/controls/js/
 
 # Copy templates for Tailwind CSS content scanning (@source directives)
 COPY sbomify/apps/core/templates/ ./sbomify/apps/core/templates/
@@ -78,6 +79,8 @@ COPY sbomify/apps/vulnerability_scanning/templates/ ./sbomify/apps/vulnerability
 COPY sbomify/apps/plugins/templates/ ./sbomify/apps/plugins/templates/
 COPY sbomify/apps/onboarding/templates/ ./sbomify/apps/onboarding/templates/
 COPY sbomify/apps/compliance/templates/ ./sbomify/apps/compliance/templates/
+COPY sbomify/apps/controls/templates/ ./sbomify/apps/controls/templates/
+COPY sbomify/apps/oidc/templates/ ./sbomify/apps/oidc/templates/
 COPY sbomify/templates/ ./sbomify/templates/
 
 # Copy existing static files
@@ -93,7 +96,7 @@ RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 RUN bun run copy-deps && bun x vite build
 
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.4-debian@sha256:5bb0f9be3a1a36a03e27c9a9dd894a3b1ad26657155c7df4dda771e17bf872ef AS frontend-dev-server
+FROM oven/bun:1.4-debian@sha256:4f6e31d1a54d6a3dd312daef655fc998101b5043d52e12592ac293ef04b9bc73 AS frontend-dev-server
 
 WORKDIR /app-frontend
 

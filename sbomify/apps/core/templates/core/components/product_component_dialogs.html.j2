@@ -1,0 +1,51 @@
+{% comment %}Product membership forms use current server state. The parent owns dialog state and refreshes after a successful HTMX submission.{% endcomment %}
+<c-modal teleport="false" show="assignOpen" title="Assign component" aria-label="Assign component">
+<div class="flex flex-col gap-4">
+    <c-forms.hint compact>Choose an existing component. Its visibility stays unchanged.</c-forms.hint>
+    {% if available_components %}
+        <form id="assign-product-component"
+              method="post"
+              action="{% url 'core:product_details' product.id %}"
+              hx-post="{% url 'core:product_details' product.id %}"
+              hx-swap="none">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="assign_component">
+            <c-forms.field label="Component" for="product-component-choice" required>
+            <c-forms.select name="component_id" id="product-component-choice" required>
+            <option value="">Choose a component</option>
+            {% for component in available_components %}
+                <option value="{{ component.id }}">{{ component.name }}</option>
+            {% endfor %}
+            </c-forms.select>
+            </c-forms.field>
+        </form>
+    {% else %}
+        <c-feedback.empty-state compact icon="fas fa-cube" title="No components to assign" message="Every available component is already assigned. Create a component to add another.">
+        <c-buttons.secondary size="sm" href="{% url 'core:component_new' %}">Create component</c-buttons.secondary>
+        </c-feedback.empty-state>
+    {% endif %}
+</div>
+<c-slot name="footer">
+<c-buttons.secondary @click="assignOpen = false">Cancel</c-buttons.secondary>
+{% if available_components %}
+    <c-buttons.primary type="submit" form="assign-product-component">Assign component</c-buttons.primary>
+{% endif %}
+</c-slot>
+</c-modal>
+<c-modal teleport="false" show="removeTarget" close="removeTarget = null" title="Remove component" aria-label="Remove component from product">
+<form id="remove-product-component"
+      method="post"
+      action="{% url 'core:product_details' product.id %}"
+      hx-post="{% url 'core:product_details' product.id %}"
+      hx-swap="none"
+      class="flex flex-col gap-4">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="remove_component">
+    <input type="hidden" name="component_id" :value="removeTarget?.id || ''">
+    <c-feedback.alert>Remove <strong x-text="removeTarget?.name"></strong> from this product? It stays in your workspace and in any other products that use it.</c-feedback.alert>
+</form>
+<c-slot name="footer">
+<c-buttons.secondary @click="removeTarget = null">Cancel</c-buttons.secondary>
+<c-buttons.danger type="submit" form="remove-product-component">Remove component</c-buttons.danger>
+</c-slot>
+</c-modal>

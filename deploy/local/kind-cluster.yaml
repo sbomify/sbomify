@@ -1,0 +1,26 @@
+---
+# Local development cluster for the sbomify chart.
+#
+# Host ports 80/443 map onto the Caddy edge Service's NodePorts, so a URL like
+# https://sbomify.localtest.me is identical from the host and from inside the
+# cluster. That matters for OIDC: Keycloak's issuer URL has to resolve the same
+# way for the browser and for the application pods.
+#
+# There is no ingress controller here: the chart runs Caddy as the edge, which
+# is what makes on-demand TLS for workspace custom domains possible.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: sbomify
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # host :80  -> node :30080 -> Caddy :80
+      - containerPort: 30080
+        hostPort: 80
+        protocol: TCP
+      # host :443 -> node :30443 -> Caddy :443
+      - containerPort: 30443
+        hostPort: 443
+        protocol: TCP
+  - role: worker
+  - role: worker

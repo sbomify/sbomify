@@ -31,6 +31,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 | Plugin                                  | Type        | Standard                                                                                                                                         |
 | --------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | NTIA Minimum Elements (2021)            | Compliance  | [NTIA Minimum Elements for SBOM](https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom)                                 |
+| CISA Minimum Elements (2026)            | Compliance  | [2026 Minimum Elements for an SBOM](https://www.cisa.gov/resources-tools/resources/2026-minimum-elements-software-bill-materials-sbom)           |
 | CISA Minimum Elements (2025 Draft)      | Compliance  | [CISA 2025 SBOM Minimum Elements](https://www.cisa.gov/sites/default/files/2025-08/2025_CISA_SBOM_Minimum_Elements.pdf) _(Public Comment Draft)_ |
 | BSI TR-03183-2 v2.1 (EU CRA)            | Compliance  | [BSI TR-03183-2: Cyber Resilience Requirements](https://bsi.bund.de/dok/TR-03183-en)                                                             |
 | FDA Medical Device Cybersecurity (2025) | Compliance  | [FDA Cybersecurity in Medical Devices](https://www.fda.gov/media/119933/download)                                                                |
@@ -74,6 +75,20 @@ For detailed information about the deployment process, including:
 See [docs/deployment.md](docs/deployment.md).
 
 For full production deployment instructions, see [the deployment guide](docs/deployment.md).
+
+### Kubernetes
+
+A Helm chart lives in [`charts/sbomify`](charts/sbomify/README.md). It deploys
+the application only. You provide PostgreSQL, Redis, S3-compatible storage and
+Keycloak.
+
+To try the whole stack on a local [kind](https://kind.sigs.k8s.io/) cluster
+(which also provisions throwaway versions of those four):
+
+```bash
+./bin/kind-up.sh          # create the cluster and deploy
+./bin/kind-up.sh --down   # tear it down
+```
 
 ## Local Development
 
@@ -280,7 +295,7 @@ Persistent storage for Keycloak is managed by Docker using a named volume (`keyc
 
 ##### Keycloak Bootstrapping
 
-Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**—just set the appropriate environment variables in your Docker Compose configuration to control the bootstrap process.
+Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**. Just set the appropriate environment variables in your Docker Compose configuration to control the bootstrap process.
 
 When running in development mode (using `docker-compose.dev.yml`), the bootstrap script automatically:
 

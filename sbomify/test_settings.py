@@ -1,4 +1,6 @@
 # Configure Dramatiq to use StubBroker for tests
+from datetime import UTC, datetime
+
 import dramatiq
 from dramatiq.brokers.stub import StubBroker
 from dramatiq.results import Results
@@ -97,10 +99,21 @@ else:
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
+# PBKDF2 at Django's default work factor costs 0.13 s per hash on CI hardware,
+# and the fixtures set a password for nearly every user they build. That is the
+# single largest line item in a suite run: measured against the real hasher the
+# same 769 tests spend minutes doing key stretching that proves nothing about
+# this application. Tests need a hash that round-trips, not one that resists an
+# offline attack, so use the cheapest one Django ships.
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
 # Override signed URL salt for testing (required)
 SIGNED_URL_SALT = "test-signed-url-salt-unique-per-installation"
 
 SECRET_KEY = "django-insecure-test-key-do-not-use-in-production"  # nosec B105 - This is a test-only key
+
+# Object storage settings
+STORAGE_BACKEND = "s3"
 
 # Mock AWS settings for testing
 AWS_REGION = "test-region"
@@ -156,12 +169,22 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "sbomify.apps.core.middleware.BearerAuthCsrfExemptMiddleware",
+    "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "sbomify.apps.core.middleware.IdentityProviderUnavailableMiddleware",
 ]
+
+# This module builds its own MIDDLEWARE rather than importing the real one, so
+# anything added there has to be added here too or it goes untested. The v1
+# sunset dates are fixed rather than copied from settings for the same reason a
+# test never reads the clock: the assertion should not change meaning on the
+# day the real sunset is moved.
+API_V1_DEPRECATED_ON = datetime(2026, 8, 26, tzinfo=UTC)
+API_V1_SUNSET = None
 
 # Configure ALLOWED_HOSTS for tests
 # Use wildcard - DynamicHostValidationMiddleware handles validation

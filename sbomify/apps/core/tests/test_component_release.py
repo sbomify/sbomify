@@ -8,7 +8,14 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 
-from sbomify.apps.core.models import Component, ComponentRelease, ComponentReleaseArtifact
+from sbomify.apps.core.models import (
+    Component,
+    ComponentRelease,
+    ComponentReleaseArtifact,
+    Product,
+    Release,
+    ReleaseArtifact,
+)
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.tests.fixtures import (  # noqa: F401
@@ -335,3 +342,47 @@ def test_component_release_str_with_qualifiers(sample_component: Component):  # 
     )
     result = str(cr)
     assert "arm64" in result
+
+
+@pytest.mark.django_db
+class TestReleaseComponentReleaseEdge:
+    """The diagram's "product release contains 1..n component release".
+
+    Derived through SBOM rather than stored: ComponentReleaseArtifact.sbom is
+    unique, so the two-hop join is single-valued and resolves in one query.
+    """
+
+    def _setup(self, team):
+        product = Product.objects.create(name="Lithium", team=team)
+        release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
+        component = Component.objects.create(name="auth-library", team=team)
+        # Saving the SBOM is what creates its ComponentRelease and the junction
+        # row; making them by hand collides with the unique constraint.
+        sbom = SBOM.objects.create(name="auth", component=component, format="cyclonedx", version="1.2.3")
+        component_release = ComponentRelease.objects.get(component=component, version="1.2.3")
+        ReleaseArtifact.objects.get_or_create(release=release, sbom=sbom)
+        return release, component_release
+
+    def test_a_release_lists_the_component_versions_it_ships(self, sample_team_with_owner_member):
+        release, component_release = self._setup(sample_team_with_owner_member.team)
+
+        assert list(release.component_releases()) == [component_release]
+
+    def test_the_mirror_direction_works_too(self, sample_team_with_owner_member):
+        release, component_release = self._setup(sample_team_with_owner_member.team)
+
+        assert list(component_release.product_releases()) == [release]
+
+    def test_it_resolves_in_a_single_query(self, sample_team_with_owner_member, django_assert_num_queries):
+        release, _ = self._setup(sample_team_with_owner_member.team)
+
+        with django_assert_num_queries(1):
+            list(release.component_releases())
+
+    def test_an_unpinned_component_version_is_not_listed(self, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        release, component_release = self._setup(team)
+        other_component = Component.objects.create(name="unrelated", team=team)
+        SBOM.objects.create(name="other", component=other_component, format="cyclonedx", version="9.9.9")
+
+        assert list(release.component_releases()) == [component_release]

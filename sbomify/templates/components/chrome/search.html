@@ -1,0 +1,98 @@
+{% comment %}
+The navigation palette composes the shared field, dropdown and feedback states.
+Alpine owns the request and active option; all appearance stays here. Selection
+uses aria-selected for both pointer and arrow keys, with focus kept in the field.
+The inset list scrolls independently, and the panel fits the viewport on phones.
+Starter pages and example searches are preloaded from the destination registry.
+id allows a live gallery example; only the navbar instance owns the shortcut.
+{% endcomment %}
+{% load spotlight_tags %}
+<c-vars id="navbar-search" />
+<div id="{{ id }}"
+     x-data="navbarSearch"
+     data-search-url="{% url 'core:search' %}"
+     @click.outside="dismiss()"
+     @keydown="keydown($event)"
+     @focusout="if (!$el.contains($event.relatedTarget)) dismiss()"
+     {% if id == 'navbar-search' %}@keydown.window="shortcut($event)"{% endif %}>
+    {% search_suggestions request as suggestions %}
+    {% with suggestions_id=id|add:"-suggestions" %}{{ suggestions|json_script:suggestions_id }}{% endwith %}
+    <c-forms.search-input id="{{ id }}-input" placeholder="Search or jump to a page" hint autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="{{ id }}-list" aria-describedby="{{ id }}-instructions" aria-label="Search products, components and pages" ::aria-expanded="open" ::aria-activedescendant="activeId" x-ref="input" @input="update($event.target.value, $event.isComposing)" @compositionend="update($event.target.value)" @focus="show()" @click="show()">
+    <span class="absolute inset-y-0 right-0 pr-3 hidden sm:flex items-center pointer-events-none"
+          aria-hidden="true">
+        <kbd class="inline-flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[10px] leading-4 font-normal text-text-muted">
+            <span x-text="shortcutLabel"></span>K
+        </kbd>
+    </span>
+    <c-dropdowns.dropdown flush role="" id="{{ id }}-dropdown" class="top-full left-0 right-0 mt-2 max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-[var(--app-header-height,4rem)] max-sm:mt-0" x-show="open" x-cloak>
+    <p x-show="status === 'suggested'"
+       class="px-5 pt-4 pb-1 text-xs leading-5 text-text-muted">Jump to a page or try a search below.</p>
+    <div id="{{ id }}-list"
+         x-ref="list"
+         role="listbox"
+         aria-label="Search results"
+         :aria-busy="status === 'loading'"
+         class="max-h-[min(26rem,calc(100dvh-var(--app-header-height,4rem)-5rem))] overflow-y-auto overscroll-contain scroll-py-2 [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [overflow-anchor:none]">
+        <template x-for="section in sections" :key="section.key">
+            <div role="group"
+                 :aria-labelledby="'{{ id }}-section-' + section.key"
+                 class="px-2 pb-2 pt-3">
+                <div :id="'{{ id }}-section-' + section.key"
+                     class="px-3 pb-1.5 text-[11px] leading-4 font-medium text-text-muted"
+                     x-text="section.label"></div>
+                <template x-for="result in section.results" :key="result.index">
+                    <a :id="'{{ id }}-option-' + result.index"
+                       :href="result.url"
+                       :title="result.title"
+                       role="option"
+                       tabindex="-1"
+                       :aria-selected="activeIndex === result.index"
+                       @pointermove="if ($event.pointerType === 'mouse') activeIndex = result.index"
+                       @mousedown.left.prevent
+                       @click="choose($event, result)"
+                       class="group flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm text-text no-underline aria-selected:bg-surface-hover aria-selected:shadow-[inset_0_0_0_1px_var(--color-border)]">
+                        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted group-aria-selected:text-text"
+                              aria-hidden="true">
+                            <i class="fas text-[13px]" :class="result.icon"></i>
+                        </span>
+                        <span class="min-w-0 flex-1 truncate" x-text="result.title"></span>
+                        <span class="shrink-0 text-text-muted opacity-0 group-aria-selected:opacity-100"
+                              aria-hidden="true">
+                            <span class="text-base leading-none">↵</span>
+                        </span>
+                    </a>
+                </template>
+            </div>
+        </template>
+    </div>
+    <div x-show="status === 'loading'" aria-hidden="true">
+        <c-feedback.loading-list message="Searching..." />
+    </div>
+    <div x-show="status === 'ready' && !results.length">
+        <c-feedback.empty-state size="sm" icon="fas fa-search" icon_variant="neutral" title="No results" message="Try a different name or keyword." />
+    </div>
+    <div x-show="status === 'error'">
+        <c-feedback.empty-state size="sm" icon="fas fa-search" icon_variant="neutral" title="Search is unavailable" message="Try again in a moment.">
+        <c-buttons.secondary size="sm" @click="$refs.input.focus({ preventScroll: true }); search()">Try again</c-buttons.secondary>
+        </c-feedback.empty-state>
+    </div>
+    <div x-show="status === 'expired'">
+        <c-feedback.empty-state size="sm" icon="far fa-user" icon_variant="neutral" title="Your session has expired" message="Sign in again to search your workspace.">
+        <c-buttons.secondary size="sm" href="{% url 'core:keycloak_login' %}">Sign in</c-buttons.secondary>
+        </c-feedback.empty-state>
+    </div>
+    <div class="hidden sm:flex items-center gap-4 border-t border-border px-4 py-2.5 text-[11px] leading-4 text-text-muted"
+         aria-hidden="true">
+        <span class="inline-flex items-center gap-1.5"><span>↑ ↓</span> Navigate</span>
+        <span class="inline-flex items-center gap-1.5"><span>↵</span> Open</span>
+        <span class="ml-auto inline-flex items-center gap-1.5"><span>Esc</span> Close</span>
+    </div>
+    </c-dropdowns.dropdown>
+    </c-forms.search-input>
+    <span id="{{ id }}-instructions" class="sr-only">Choose a suggestion or type at least 2 characters to search. Use the up and down arrow keys to choose a result, Enter to open it, and Escape to close.</span>
+    <span class="sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          x-text="announcement"></span>
+</div>

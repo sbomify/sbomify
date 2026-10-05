@@ -91,6 +91,14 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         if token.expires_at is None:
             continue
         days = days_until(token.expires_at, now)
+        lifetime = lifetime_days(token)
+        # A token that lives under a day is born inside its final day, so the
+        # final-day carve-out below would keep it on the bell for its whole
+        # life. The OIDC publish exchange mints a 15-minute token per CI run,
+        # which piled up one "expires tomorrow" badge per publish. Expiring
+        # that soon is the token's design, not an event.
+        if lifetime is not None and lifetime <= 1:
+            continue
         # Keep the final day for short-lived tokens: silence for the whole life
         # would let a pipeline start failing with no notice at all.
         if days > 1 and is_short_lived(token):

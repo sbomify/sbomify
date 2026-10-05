@@ -8,7 +8,9 @@ a page that had already done all its work into a 500.
 Switching that on trades one failure for another: a rate limiter decides from the
 window it reads back, and a swallowed failure reads as an empty window, so the
 limit disappears for as long as Redis is unwell. The throttle therefore keeps its
-own alias that still raises.
+own alias that still raises, and the throttle itself catches that raise and
+refuses the request: a 429 with a short Retry-After, never a silent pass and
+never a 500 for a request the app could not have served anyway.
 
 Both halves are pinned here, because the pair is the point. Turning either one
 round on its own is a regression the other test would not catch.
@@ -77,8 +79,9 @@ def test_throttle_refuses_rather_than_forgetting_its_window() -> None:
     Reading the window back is how the throttle decides. If a failed read looked
     like "no requests yet", every caller would get a fresh budget at exactly the
     moment Redis is struggling, and a caller hammering the API is one reason it
-    might be. The alias the throttle uses still raises, so the request fails
-    instead of passing unlimited.
+    might be. The alias the throttle uses still raises, and the throttle turns
+    that raise into a refusal with a short retry hint, so the request is limited
+    instead of passing unlimited and the client sees a 429 instead of a 500.
     """
     throttle = AccessTokenRateThrottle(rate="1/min")
     request = RequestFactory().get("/api/v1/whatever")
@@ -86,12 +89,12 @@ def test_throttle_refuses_rather_than_forgetting_its_window() -> None:
 
     with override_settings(CACHES=_caches_with_redis_down()):
         caches.close_all()
-        with pytest.raises(Exception) as excinfo:
-            throttle.allow_request(request)
+        allowed = throttle.allow_request(request)
 
-    # Whichever exception redis-py or django-redis raises, the point is that one
-    # arrives: a silent True here is the failure mode this pins.
-    assert "6399" in str(excinfo.value) or "onnect" in str(excinfo.value)
+    # A silent True here is the failure mode this pins: an unreachable window
+    # must read as "refuse and retry shortly", never as a fresh budget.
+    assert allowed is False
+    assert throttle.wait() == 5.0
 
 
 def test_the_anonymous_ip_limit_inherits_that_refusal() -> None:
@@ -108,8 +111,10 @@ def test_the_anonymous_ip_limit_inherits_that_refusal() -> None:
 
     with override_settings(CACHES=_caches_with_redis_down()):
         caches.close_all()
-        with pytest.raises(Exception):
-            throttle.allow_request(request)
+        allowed = throttle.allow_request(request)
+
+    assert allowed is False
+    assert throttle.wait() == 5.0
 
 
 def test_the_two_aliases_differ_in_exactly_one_option() -> None:

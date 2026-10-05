@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.utils import timezone
 
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeError
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 
@@ -14,6 +15,7 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     sample_user,
     team_with_business_plan,
 )
+from sbomify.apps.teams.models import Team
 
 pytestmark = pytest.mark.django_db
 
@@ -94,6 +96,7 @@ class TestSyncSubscriptionBasic:
 
         team.refresh_from_db()
         assert team.billing_plan_limits["cancel_at_period_end"] is True
+        assert team.billing_plan_limits["scheduled_downgrade_plan"] == "community"
 
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
@@ -135,6 +138,104 @@ class TestSyncReactivation:
         team.refresh_from_db()
         assert team.billing_plan_limits["cancel_at_period_end"] is False
         assert "scheduled_downgrade_plan" not in team.billing_plan_limits
+
+
+class TestSyncEndedSubscription:
+    """Stripe keeps cancel_at_period_end and cancel_at on a subscription after it ends."""
+
+    @pytest.mark.parametrize("status", ["canceled", "incomplete_expired"])
+    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
+    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
+    def test_sync_does_not_schedule_a_downgrade_again(
+        self, mock_client, mock_cache, status, team_with_community_plan, mock_stripe_subscription
+    ):
+        """A workspace already moved to Community gets no downgrade scheduled from its ended subscription."""
+        team = team_with_community_plan
+        team.billing_plan_limits = {
+            "stripe_subscription_id": "sub_test_123",
+            "stripe_customer_id": "cus_test_123",
+            "subscription_status": status,
+            "cancel_at_period_end": False,
+        }
+        team.save()
+
+        mock_stripe_subscription.status = status
+        mock_stripe_subscription.cancel_at_period_end = True
+        mock_stripe_subscription.cancel_at = int(timezone.now().timestamp())
+        mock_cache.return_value = mock_stripe_subscription
+
+        assert sync_subscription_from_stripe(team) is True
+
+        team.refresh_from_db()
+        assert team.billing_plan_limits["cancel_at_period_end"] is False
+        assert "scheduled_downgrade_plan" not in team.billing_plan_limits
+
+    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
+    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
+    def test_cancel_at_once_moves_to_community(
+        self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
+    ):
+        """Stripe answers a cancel at once with the flag false, which the sync must not take for a reactivation."""
+        team = team_with_subscription
+        # Still stored as active: the deleted event that follows downgrades only by a stored schedule
+        team.billing_plan_limits["cancel_at_period_end"] = True
+        team.billing_plan_limits["scheduled_downgrade_plan"] = "community"
+        team.save()
+
+        mock_stripe_subscription.status = "canceled"
+        mock_stripe_subscription.cancel_at_period_end = False
+        mock_stripe_subscription.cancel_at = None
+        mock_cache.return_value = mock_stripe_subscription
+
+        assert sync_subscription_from_stripe(team) is True
+
+        team.refresh_from_db()
+        limits = team.billing_plan_limits
+        assert team.billing_plan == BillingPlan.KEY_COMMUNITY
+        assert limits["cancel_at_period_end"] is False
+        assert "scheduled_downgrade_plan" not in limits
+
+    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
+    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
+    def test_a_subscription_stripe_ended_sets_neither_key(
+        self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
+    ):
+        """A subscription Stripe has ended schedules nothing, even when Stripe still reports a pending cancel."""
+        team = team_with_subscription
+
+        mock_stripe_subscription.status = "canceled"
+        mock_stripe_subscription.cancel_at_period_end = True
+        mock_stripe_subscription.cancel_at = int(timezone.now().timestamp())
+        mock_cache.return_value = mock_stripe_subscription
+
+        assert sync_subscription_from_stripe(team) is True
+
+        team.refresh_from_db()
+        assert team.billing_plan_limits["cancel_at_period_end"] is False
+        assert "scheduled_downgrade_plan" not in team.billing_plan_limits
+
+    @pytest.mark.parametrize("status", ["unpaid", "paused"])
+    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
+    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
+    def test_unpaid_or_paused_keeps_a_pending_cancel(
+        self, mock_client, mock_cache, status, team_with_subscription, mock_stripe_subscription
+    ):
+        """Stripe can still resume these statuses, so a pending cancel stays recorded while the plan is paid."""
+        team = team_with_subscription
+
+        mock_stripe_subscription.status = status
+        mock_stripe_subscription.cancel_at_period_end = True
+        mock_stripe_subscription.cancel_at = int(timezone.now().timestamp())
+        mock_cache.return_value = mock_stripe_subscription
+
+        for _ in range(2):
+            assert sync_subscription_from_stripe(team) is True
+
+            team.refresh_from_db()
+            limits = team.billing_plan_limits
+            assert team.billing_plan == BillingPlan.KEY_BUSINESS
+            assert limits["cancel_at_period_end"] is True
+            assert limits["scheduled_downgrade_plan"] == "community"
 
 
 class TestSyncNextBillingDate:
@@ -327,9 +428,7 @@ class TestSyncIntegration:
         from sbomify.apps.billing.tasks import sync_active_subscriptions_task
 
         mocker.patch("sbomify.apps.billing.tasks.is_billing_enabled", return_value=True)
-        mock_sync = mocker.patch(
-            "sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe", return_value=True
-        )
+        mock_sync = mocker.patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe", return_value=True)
 
         sync_active_subscriptions_task()
 
@@ -349,13 +448,19 @@ class TestSyncIntegration:
 
     @patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe")
     def test_team_settings_calls_sync(self, mock_sync, client, sample_user, team_with_subscription):
-        """Test that team settings view calls sync before displaying billing info."""
+        """The settings view syncs before displaying billing info.
+
+        Asked of the billing tab rather than the settings index. The index
+        resolves to the first section the role can open, which is General, and
+        General displays no billing info: syncing there reached Stripe on a page
+        that had nothing to show for it.
+        """
         client.force_login(sample_user)
         mock_sync.return_value = True
 
         from django.urls import reverse
 
-        url = reverse("teams:team_settings", kwargs={"team_key": team_with_subscription.key})
+        url = reverse("teams:team_settings_tab", kwargs={"team_key": team_with_subscription.key, "tab": "billing"})
         response = client.get(url)
 
         assert response.status_code == 200
@@ -377,7 +482,10 @@ class TestSyncIntegration:
         mock_sync.return_value = True
 
         # Mock checkout session
-        with mock_patch("sbomify.apps.billing.views.stripe_client") as mock_client:
+        with (
+            mock_patch("sbomify.apps.billing.views.stripe_client") as mock_client,
+            mock_patch("sbomify.apps.billing.billing_processing.stripe_client", mock_client),
+        ):
             mock_session = MagicMock()
             mock_session.payment_status = "paid"
             mock_session.subscription = "sub_test_123"
@@ -409,3 +517,35 @@ class TestSyncIntegration:
             assert response.status_code == 200
             # The view syncs after persisting the subscription.
             mock_sync.assert_called_once()
+
+
+class TestSyncAfterSubscriptionReplaced:
+    """A checkout can store a new subscription while the sync is still asking Stripe about the old one."""
+
+    @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
+    @patch("sbomify.apps.billing.stripe_sync.stripe_client")
+    def test_old_subscription_state_is_not_written_over_the_new_one(
+        self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
+    ):
+        stale_team = team_with_subscription
+        stale_team.billing_plan_limits["cancel_at_period_end"] = True
+        stale_team.billing_plan_limits["scheduled_downgrade_plan"] = "community"
+        stale_team.save()
+
+        new_limits = {
+            "stripe_subscription_id": "sub_new_456",
+            "stripe_customer_id": "cus_test_123",
+            "subscription_status": "active",
+            "cancel_at_period_end": False,
+            "next_billing_date": "2030-01-01T00:00:00+00:00",
+        }
+        Team.objects.filter(pk=stale_team.pk).update(billing_plan_limits=new_limits)
+
+        mock_stripe_subscription.status = "canceled"
+        mock_stripe_subscription.cancel_at_period_end = False
+        mock_cache.return_value = mock_stripe_subscription
+
+        assert sync_subscription_from_stripe(stale_team) is True
+
+        stale_team.refresh_from_db()
+        assert stale_team.billing_plan_limits == new_limits
