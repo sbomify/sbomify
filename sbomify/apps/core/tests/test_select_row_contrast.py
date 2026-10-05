@@ -125,27 +125,28 @@ def badge_recipe(variant: str) -> tuple[str, str, float]:
     return ink.group(1), tint.group(1), int(tint.group(2)) / 100
 
 
-def greyed_pairs(theme: dict[str, tuple[int, int, int]]) -> dict[str, tuple[tuple, tuple]]:
-    """Every foreground the row greys, against what it is greyed against.
+def row_foregrounds(theme: dict[str, tuple[int, int, int]]) -> dict[str, tuple[tuple, tuple | None, float]]:
+    """Every foreground the row greys, and the tint (if any) it sits on.
 
     A plan-restricted plugin row is the production case: the title, the
-    description explaining the restriction, the badge naming the plan required
-    and the button that resolves it. The CTA and the title both paint
-    ``--color-text``.
-    """
-    surface = theme["surface"]
+    description explaining the restriction, the badges, and the button that
+    resolves it. The CTA and the title both paint ``--color-text``.
 
-    def badge(variant: str) -> tuple[tuple, tuple]:
-        """A badge's own ink over its own tint, composited on the row surface."""
+    Returned as ``(ink, tint, alpha)`` rather than as a finished pair, because
+    the filter changes *where* the compositing happens and the two tests below
+    need to build the pair differently -- see ``pair_for``.
+    """
+
+    def badge(variant: str) -> tuple[tuple, tuple, float]:
         ink, tint_token, strength = badge_recipe(variant)
-        return theme[ink], over(theme[tint_token], surface, strength)
+        return theme[ink], theme[tint_token], strength
 
     return {
         # The plan-required badge. `c-badges.warning` is warning ink over a
         # warning tint.
         "plan-required badge on its own tint": badge("warning"),
-        "restriction description": (theme["text-muted"], surface),
-        "row title and upgrade CTA": (theme["text"], surface),
+        "restriction description": (theme["text-muted"], None, 0.0),
+        "row title and upgrade CTA": (theme["text"], None, 0.0),
         # Muted ink over a border tint, not text-secondary over the surface:
         # the version, artifact-type and count badges all render this.
         "secondary badge on its own tint": badge("secondary"),
@@ -155,11 +156,50 @@ def greyed_pairs(theme: dict[str, tuple[int, int, int]]) -> dict[str, tuple[tupl
     }
 
 
+def pair_for(
+    ink: tuple,
+    tint: tuple | None,
+    alpha: float,
+    surface: tuple,
+    *,
+    filtered: bool,
+) -> tuple[tuple, tuple]:
+    """The foreground/background pair a browser actually renders.
+
+    The compositing order is the whole point here, and getting it wrong is
+    what this function exists to stop.
+
+    ``filter`` rasterises the row's subtree and *then* composites the result
+    onto what is behind it. The disabled row carries
+    ``has-[input:disabled]:grayscale`` and no opaque background of its own --
+    its only ``bg-`` rules are hover/checked tints, and the disabled variant
+    sets ``hover:bg-transparent`` -- so the ancestor ``--color-surface``
+    belongs to the card, outside the filtered element, and is **never**
+    greyed.
+
+    So, for a badge: grey the translucent tint, then composite that onto the
+    unfiltered surface -- ``over(greyed(tint), surface, alpha)``, not
+    ``greyed(over(tint, surface, alpha))``. For plain text there is no tint,
+    and the background is the surface exactly as it is painted.
+
+    The two differ by little on today's palette, which is why this went
+    unnoticed; they do not differ by little once a surface token moves, and a
+    guard that reports the wrong ratio then is worse than none.
+    """
+    foreground = greyed(ink) if filtered else ink
+    if tint is None:
+        return foreground, surface
+    layer = greyed(tint) if filtered else tint
+    return foreground, over(layer, surface, alpha)
+
+
 @pytest.mark.parametrize("theme_name", ["light", "dark"])
 def test_a_greyed_row_keeps_every_foreground_above_aa(request, theme_name: str) -> None:
     theme = request.getfixturevalue(theme_name)
-    for label, (foreground, background) in greyed_pairs(theme).items():
-        ratio = contrast(greyed(foreground), greyed(background))
+    surface = theme["surface"]
+    for label, (ink, tint, alpha) in row_foregrounds(theme).items():
+        foreground, background = pair_for(ink, tint, alpha, surface, filtered=True)
+        ratio = contrast(foreground, background)
         assert ratio >= SMALL_TEXT, f"{theme_name}: {label} is {ratio:.2f}:1 once greyed, under {SMALL_TEXT}:1"
 
 
@@ -167,14 +207,76 @@ def test_a_greyed_row_keeps_every_foreground_above_aa(request, theme_name: str) 
 def test_greying_is_not_what_makes_the_row_readable(request, theme_name: str) -> None:
     """The row must be readable before the filter too.
 
-    Greying can lift a ratio -- the warning badge gains about 0.35 in light -- so a
-    palette that only passes *because* it was greyed would hide a failure from
-    every undisabled row painting the same tokens.
+    Greying can lift a ratio, so a palette that only passes *because* it was
+    greyed would hide a failure from every undisabled row painting the same
+    tokens.
     """
     theme = request.getfixturevalue(theme_name)
-    for label, (foreground, background) in greyed_pairs(theme).items():
+    surface = theme["surface"]
+    for label, (ink, tint, alpha) in row_foregrounds(theme).items():
+        foreground, background = pair_for(ink, tint, alpha, surface, filtered=False)
         ratio = contrast(foreground, background)
         assert ratio >= SMALL_TEXT, f"{theme_name}: {label} is {ratio:.2f}:1 unfiltered, under {SMALL_TEXT}:1"
+
+
+def test_the_surface_behind_the_row_is_not_greyed() -> None:
+    """The compositing order, pinned as itself.
+
+    Both orders agree whenever the surface is achromatic, because ``greyed``
+    and ``over`` are both linear in the channels: greying a mix of a tint and
+    a *grey* surface is the same as mixing the greyed tint into it. The light
+    surface is pure white, so nothing in the light theme can tell them apart
+    -- which is exactly why the wrong order went unnoticed.
+
+    The dark surface is not achromatic, so this uses a hued surface to assert
+    the thing that actually differs.
+    """
+    surface = (30, 33, 50)  # the dark theme's --color-surface: navy, not grey
+    tint = (200, 120, 20)
+    ink = (240, 200, 120)
+    alpha = 0.12
+
+    _, correct = pair_for(ink, tint, alpha, surface, filtered=True)
+    wrong = greyed(over(tint, surface, alpha))
+
+    # What a browser does: grey the translucent tint inside the filter, then
+    # lay it over the surface the filter never touched.
+    expected = tuple(alpha * greyed(tint)[index] + (1 - alpha) * surface[index] for index in range(3))
+    assert all(abs(got - want) < 1e-9 for got, want in zip(correct, expected))
+
+    # The wrong order flattens the surface's hue into grey, so the rendered
+    # background keeps a blue cast that the old model did not.
+    assert len(set(round(channel, 6) for channel in correct)) > 1, correct
+    assert len(set(round(channel, 6) for channel in wrong)) == 1, wrong
+    assert correct != wrong
+
+
+def test_an_achromatic_surface_hides_the_difference() -> None:
+    """Why this was invisible: on white, the two orders are identical.
+
+    Kept as a test rather than a comment so the reasoning cannot quietly stop
+    being true -- if ``greyed`` ever stops being linear, this fails and the
+    test above stops being the only place the order matters.
+    """
+    tint = (200, 120, 20)
+    ink = (120, 70, 10)
+    alpha = 0.12
+
+    for surface in ((255, 255, 255), (0, 0, 0), (128, 128, 128)):
+        _, correct = pair_for(ink, tint, alpha, surface, filtered=True)
+        wrong = greyed(over(tint, surface, alpha))
+        assert all(abs(a - b) < 1e-9 for a, b in zip(correct, wrong)), surface
+
+
+def test_plain_text_is_measured_against_the_unfiltered_surface() -> None:
+    """No tint means no compositing: the background is the surface as painted."""
+    surface = (30, 33, 50)
+    ink = (200, 200, 210)
+
+    foreground, background = pair_for(ink, None, 0.0, surface, filtered=True)
+
+    assert background == surface, "the ancestor surface must not be greyed"
+    assert foreground == greyed(ink), "the text itself is inside the filter"
 
 
 def test_the_row_greys_and_never_fades() -> None:
