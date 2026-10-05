@@ -11,6 +11,7 @@ from datetime import timedelta
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.sessions.middleware import SessionMiddleware
+from django.http import HttpRequest
 from django.test import RequestFactory
 from django.utils import timezone
 
@@ -21,7 +22,7 @@ from sbomify.apps.teams.models import Invitation, Member, Team
 User = get_user_model()
 
 
-def _request() -> RequestFactory:
+def _request() -> HttpRequest:
     request = RequestFactory().get("/")
     SessionMiddleware(lambda req: None).process_request(request)
     return request
