@@ -22,11 +22,19 @@ unguarded.
 import re
 from pathlib import Path
 
+import pytest
 from django.conf import settings
 
 TRUST_CENTER_CSS = Path(settings.BASE_DIR) / "sbomify" / "static" / "css" / "trust-center.css"
 
 HEX = re.compile(r"#([0-9a-fA-F]{3,8})\b")
+
+# Bare words, for the named-colour check. Matched anywhere on the line rather
+# than only in a colour position: a name is only reported if Pillow knows it
+# as a colour *and* it has a hue, so `display` or `flex` cannot trip it, and
+# scanning the whole line means a colour in a shorthand or a custom property
+# is covered too.
+IDENTIFIER = re.compile(r"(?<![\w-])[a-zA-Z]{3,}(?![\w-])")
 
 # Both separators CSS Color 4 allows. The legacy form is comma-separated,
 # `rgb(22, 120, 80)`; the modern one is space-separated with an optional
@@ -46,6 +54,67 @@ def _rgb_channel(value: str) -> int:
     if value.endswith("%"):
         return round(float(value[:-1]) * 255 / 100)
     return round(float(value))
+
+
+# Colour functions that can carry a hue. Checked by name rather than by
+# parsing each one's arguments: the point of this guard is that a hue belongs
+# in a token, so the honest rule is that none of these may appear at all. A
+# genuinely achromatic value has a plain hex or rgb() spelling, which the two
+# checks above already allow.
+#
+# This list is what the old guard was missing: it knew #hex and rgb() only, so
+# `hsl(120 100% 25%)` and `oklch(0.6 0.2 150)` -- both perfectly valid, both a
+# hue -- went straight past it.
+HUE_FUNCTIONS = ("hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color-mix", "color")
+HUE_FUNCTION = re.compile(r"\b(" + "|".join(HUE_FUNCTIONS) + r")\(", re.IGNORECASE)
+
+# Keywords that are legal in a colour position and name no hue of their own.
+# ``color-mix`` is handled above and deliberately not here: the sheet's mixes
+# are all ``var(--token)``-based, and one written against a literal should be
+# caught.
+COLOURLESS_KEYWORDS = frozenset(
+    {"transparent", "currentcolor", "inherit", "initial", "unset", "revert", "revert-layer", "none"}
+)
+
+
+def _named_colour_channels(name: str) -> tuple[int, int, int] | None:
+    """The RGB of a CSS named colour, or None if ``name`` is not one.
+
+    Read from Pillow's table rather than restated here: it is already a
+    dependency and carries all 148 CSS names, so `tomato` cannot be missed
+    because nobody thought of it.
+    """
+    from PIL import ImageColor
+
+    digits = ImageColor.colormap.get(name.lower())
+    if not isinstance(digits, str) or not digits.startswith("#"):
+        return None
+    return _hex_channels(digits[1:])
+
+
+def without_comments(css: str) -> str:
+    """The sheet with every ``/* ... */`` blanked, line numbering preserved.
+
+    The comments in this sheet explain the colour decisions, so they are full
+    of the words the checks below look for -- "green where it resolved", "the
+    app's violet". Scanning them reports prose as a literal. Newlines are kept
+    so a real offender still reports the line it is on.
+    """
+    out: list[str] = []
+    rest = css
+    while True:
+        start = rest.find("/*")
+        if start == -1:
+            out.append(rest)
+            break
+        out.append(rest[:start])
+        end = rest.find("*/", start + 2)
+        if end == -1:
+            out.append("\n" * rest[start:].count("\n"))
+            break
+        out.append("\n" * rest[start:end].count("\n"))
+        rest = rest[end + 2 :]
+    return "".join(out)
 
 
 def _hex_channels(digits: str) -> tuple[int, int, int] | None:
@@ -70,7 +139,7 @@ def test_the_sheet_this_guard_covers_still_exists() -> None:
 
 def test_no_colour_is_written_as_a_literal() -> None:
     """Every hue in the sheet comes from a token, so the ramps cannot fork again."""
-    css = TRUST_CENTER_CSS.read_text()
+    css = without_comments(TRUST_CENTER_CSS.read_text())
     offenders: list[str] = []
 
     for number, line in enumerate(css.splitlines(), 1):
@@ -82,6 +151,18 @@ def test_no_colour_is_written_as_a_literal() -> None:
             channels = (_rgb_channel(match[0]), _rgb_channel(match[1]), _rgb_channel(match[2]))
             if _has_hue(channels):
                 offenders.append(f"{number}: rgb{channels}")
+        for function in HUE_FUNCTION.findall(line):
+            # color-mix is how the sheet composes tokens, so only a mix that
+            # names no token is an offender.
+            if function.lower() == "color-mix" and "var(--" in line:
+                continue
+            offenders.append(f"{number}: {function}()")
+        for word in IDENTIFIER.findall(line):
+            if word.lower() in COLOURLESS_KEYWORDS:
+                continue
+            channels = _named_colour_channels(word)
+            if channels and _has_hue(channels):
+                offenders.append(f"{number}: {word}")
 
     assert not offenders, (
         f"colour literals in trust-center.css; use a var(--color-*) token from tailwind.src.css instead: {offenders}"
@@ -97,38 +178,118 @@ def test_the_severity_ramp_is_only_referenced_here_never_redefined() -> None:
     )
 
 
-# The guard's own coverage. The sheet is clean, so a hole in the pattern looks
-# exactly like a passing test: these pin that each syntax is actually seen.
-def _hues_in(css: str) -> list[tuple[int, int, int]]:
-    """Every numeric rgb() with a hue that the guard's pattern finds in ``css``."""
-    found = []
-    for match in NUMERIC_RGB.findall(css):
-        channels = (_rgb_channel(match[0]), _rgb_channel(match[1]), _rgb_channel(match[2]))
-        if _has_hue(channels):
-            found.append(channels)
+# The guard's own coverage. The sheet is clean, so a hole in the checks looks
+# exactly like a passing test: these feed declarations through the same scan
+# the real test runs and assert what it does and does not report.
+def _offenders_in(css: str) -> list[str]:
+    """Every literal the guard reports in ``css``, by the real code path."""
+    body = without_comments(css)
+    found: list[str] = []
+    for line in body.splitlines():
+        for digits in HEX.findall(line):
+            channels = _hex_channels(digits)
+            if channels and _has_hue(channels):
+                found.append(f"#{digits}")
+        for match in NUMERIC_RGB.findall(line):
+            channels = (_rgb_channel(match[0]), _rgb_channel(match[1]), _rgb_channel(match[2]))
+            if _has_hue(channels):
+                found.append("rgb()")
+        for function in HUE_FUNCTION.findall(line):
+            if function.lower() == "color-mix" and "var(--" in line:
+                continue
+            found.append(f"{function}()")
+        for word in IDENTIFIER.findall(line):
+            if word.lower() in COLOURLESS_KEYWORDS:
+                continue
+            channels = _named_colour_channels(word)
+            if channels and _has_hue(channels):
+                found.append(word)
     return found
 
 
-def test_the_guard_sees_a_hue_in_every_rgb_syntax() -> None:
-    """Legacy commas, modern spaces, a slash alpha, and percentage channels."""
-    for declaration in (
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        # Legacy and modern rgb(), the original gap.
         "color: rgb(22, 120, 80);",
         "color: rgba(22, 120, 80, 0.5);",
         "color: rgb(22 120 80);",
         "color: rgb(22 120 80 / 0.5);",
         "color: rgba(22 120 80 / 50%);",
         "color: rgb(10% 50% 30%);",
-    ):
-        assert _hues_in(declaration), f"the guard does not see the hue in {declaration!r}"
+        "color: #178050;",
+        "color: #1785;",
+        # The colour functions the guard did not know at all.
+        "color: hsl(120 100% 25%);",
+        "color: hsl(120, 100%, 25%);",
+        "color: hsla(120 100% 25% / 0.5);",
+        "color: oklch(0.6 0.2 150);",
+        "color: oklab(0.6 -0.1 0.1);",
+        "color: lch(50% 40 150);",
+        "color: lab(50% -40 30);",
+        "color: hwb(120 10% 20%);",
+        "color: color(display-p3 0.1 0.5 0.3);",
+        "background: color-mix(in oklab, #178050 20%, transparent);",
+        # Named colours, which it also did not know.
+        "color: red;",
+        "color: tomato;",
+        "border-color: rebeccapurple;",
+        "background: MidnightBlue;",
+    ],
+)
+def test_the_guard_reports_every_way_a_hue_can_be_written(declaration: str) -> None:
+    assert _offenders_in(declaration), f"the guard does not see the hue in {declaration!r}"
 
 
-def test_the_guard_leaves_neutrals_and_token_references_alone() -> None:
-    """What the sheet is allowed to say, in both syntaxes."""
-    for declaration in (
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        # Neutrals: the sheet is allowed to say these.
         "box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);",
         "color: rgb(255, 255, 255);",
         "color: rgb(0% 0% 0%);",
+        "color: #ffffff;",
+        "color: #000;",
+        "color: white;",
+        "color: black;",
+        "color: transparent;",
+        "fill: currentColor;",
+        "color: inherit;",
+        # Token references, which are the whole point of the sheet.
         "background: rgba(var(--accent-color-rgb), 0.1);",
         "background: rgb(var(--brand-color-rgb) / 0.2);",
-    ):
-        assert not _hues_in(declaration), f"the guard wrongly flags {declaration!r}"
+        "color: var(--color-severity-high);",
+        "background: color-mix(in oklab, var(--color-success) 12%, transparent);",
+        # Words that are not colours, and property names that merely look it.
+        "display: flex;",
+        "align-items: center;",
+        "transition: color 150ms ease;",
+        "font-family: Inter, system-ui, sans-serif;",
+    ],
+)
+def test_the_guard_leaves_neutrals_and_tokens_alone(declaration: str) -> None:
+    assert _offenders_in(declaration) == [], f"the guard wrongly flags {declaration!r}"
+
+
+def test_prose_in_a_comment_is_not_a_literal() -> None:
+    """The sheet's comments explain its colour decisions, in those words.
+
+    Three of them name "green" and "violet", so scanning comments reported
+    prose as drift -- which is how a guard gets switched off.
+    """
+    css = """
+    /* The dot is green where it resolved, violet for fix_in_progress,
+       and #ff0000 would be wrong here. */
+    .tc-dot-success { --tone: var(--color-success); }
+    """
+
+    assert _offenders_in(css) == []
+
+
+def test_a_literal_after_a_comment_still_reports_its_line() -> None:
+    """Blanking comments must not shift the line numbers in the message."""
+    css = "/* a\nmulti-line\ncomment */\ncolor: #178050;\n"
+
+    body = without_comments(css)
+
+    assert body.splitlines()[3].strip() == "color: #178050;"
