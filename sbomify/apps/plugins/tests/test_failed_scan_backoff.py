@@ -78,6 +78,7 @@ def _run_at_age(
     hours_ago: float,
     status: str,
     settled_hours_ago: float | object | None = None,
+    error_message: str | None = None,
 ) -> AssessmentRun:
     """One settled DT run, backdated. ``created_at`` is ``auto_now_add``, so the
     age has to be written back after the insert.
@@ -94,7 +95,9 @@ def _run_at_age(
         plugin_name="dependency-track",
         category=AssessmentCategory.SECURITY.value,
         status=status,
-        error_message="server closed the connection unexpectedly" if status == RunStatus.FAILED.value else "",
+        error_message=error_message
+        if error_message is not None
+        else ("server closed the connection unexpectedly" if status == RunStatus.FAILED.value else ""),
     )
     now = timezone.now()
     fields: dict = {"created_at": now - timedelta(hours=hours_ago)}
@@ -418,3 +421,54 @@ class TestTheSweepStaysCheapAsTheTableGrows:
         _failures(scannable_sbom, [float(hours) for hours in range(60, 20, -1)])
 
         assert _sweep(monkeypatch) == []
+
+
+@pytest.mark.django_db
+class TestAFailureStoredAsACompletedRun:
+    """The shape most Dependency Track failures actually take.
+
+    A plugin that cannot reach or poll its server turns the exception into an
+    error *finding* and the run is marked COMPLETED; `finalize_retry_exhausted`
+    does the same for a run that burnt through its RetryLaterError budget.
+    Both are deliberate -- a settled run is what the compliance gates and the
+    SBOM page need, rather than one stuck in PENDING -- and both mean the
+    backoff cannot key on ``status=failed`` alone, or it misses the case it
+    exists for and keeps re-enqueueing the scan every hour.
+    """
+
+    @staticmethod
+    def _completed_with_error(sbom: SBOM, ages: list[float]) -> None:
+        for age in ages:
+            _run_at_age(
+                sbom,
+                hours_ago=age,
+                status=RunStatus.COMPLETED.value,
+                error_message="Retry budget exhausted: Dependency Track never answered",
+            )
+
+    def test_a_streak_of_them_backs_off(self, scannable_sbom, monkeypatch) -> None:
+        self._completed_with_error(scannable_sbom, [5.0, 4.0, 3.0, 2.0, 1.0])
+
+        assert _sweep(monkeypatch) == []
+
+    def test_a_clean_completed_run_is_still_a_success(self, scannable_sbom, monkeypatch) -> None:
+        """The discriminator must not turn every completed run into a failure."""
+        _failures(scannable_sbom, [9.0, 8.0, 7.0, 6.0])
+        _run_at_age(scannable_sbom, hours_ago=1.0, status=RunStatus.COMPLETED.value, error_message="")
+
+        assert len(_sweep(monkeypatch)) == 1
+
+    def test_the_two_shapes_count_as_one_streak(self, scannable_sbom, monkeypatch) -> None:
+        """A run of failures does not reset because the storage shape changed."""
+        _failures(scannable_sbom, [5.0, 4.0])
+        self._completed_with_error(scannable_sbom, [3.0, 2.0, 1.0])
+
+        assert _sweep(monkeypatch) == []
+
+    def test_the_classifier_reads_both_and_only_those(self) -> None:
+        from sbomify.apps.plugins.tasks import _run_failed
+
+        assert _run_failed(RunStatus.FAILED.value, "") is True
+        assert _run_failed(RunStatus.FAILED.value, "boom") is True
+        assert _run_failed(RunStatus.COMPLETED.value, "boom") is True
+        assert _run_failed(RunStatus.COMPLETED.value, "") is False

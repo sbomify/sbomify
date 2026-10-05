@@ -242,8 +242,8 @@ class AssessmentRun(models.Model):
             models.Index(fields=["status", "-created_at"]),
             # The failure-backoff sweep reads terminal runs for one plugin by
             # when they *settled*, which is Coalesce(completed_at, created_at)
-            # -- see tasks._backed_off_after_repeated_failures for why the
-            # creation time is the wrong clock there. That is an expression,
+            # -- see tasks._failure_backed_off_sbom_ids for why the creation
+            # time is the wrong clock there. That is an expression,
             # so none of the indexes above can serve its range scan or its
             # ordering, and an hourly sweep would seq-scan a table that only
             # grows. A functional index gives it both.

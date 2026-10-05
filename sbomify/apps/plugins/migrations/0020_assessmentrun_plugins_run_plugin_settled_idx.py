@@ -2,10 +2,18 @@
 
 import django.db.models.functions.comparison
 from django.conf import settings
+from django.contrib.postgres.operations import AddIndexConcurrently
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    # CONCURRENTLY, so building this does not hold a lock against the table it
+    # is for. A plain CREATE INDEX takes a SHARE lock that blocks writes for
+    # the whole build, and assessment runs are written continuously by the
+    # scan workers -- on the large table this index exists to serve, that is a
+    # stall, not a pause. Concurrent builds cannot run inside a transaction,
+    # hence atomic = False.
+    atomic = False
 
     dependencies = [
         ("access_tokens", "0012_store_token_hash"),
@@ -19,7 +27,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddIndex(
+        AddIndexConcurrently(
             model_name="assessmentrun",
             index=models.Index(
                 models.F("plugin_name"),

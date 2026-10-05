@@ -92,6 +92,30 @@ FAILURE_BACKOFF_HOURS = (0, 2, 4, 8, 24)
 FAILURE_HISTORY_HOURS = 24 * 7
 
 
+def _run_failed(status: str, error_message: str) -> bool:
+    """Whether a terminal run is a failure, by either of the two ways it is stored.
+
+    ``status=failed`` is the obvious one, written by
+    ``orchestrator._mark_failed``. But the Dependency Track failures this
+    backoff exists for mostly do not land there: a plugin that cannot reach or
+    poll its server turns the exception into an error *finding* and the run is
+    marked COMPLETED, and ``finalize_retry_exhausted`` does the same for a run
+    that burnt through its RetryLaterError budget -- deliberately, so the
+    compliance gates and the SBOM page see a settled run rather than one stuck
+    in PENDING.
+
+    Counting only ``status=failed`` therefore missed the common case, and the
+    sweep kept re-enqueueing the scan it was supposed to back off.
+
+    ``error_message`` rather than the ``result`` blob: both paths write it, and
+    it is a small column, so this keeps the promise that the fat payload is
+    never fetched here.
+    """
+    if status == RunStatus.FAILED.value:
+        return True
+    return status == RunStatus.COMPLETED.value and bool(error_message)
+
+
 def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any) -> set[str]:
     """SBOMs whose latest run failed, recently enough that retrying now would
     just fail again.
@@ -155,7 +179,7 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
         )
         .filter(position__lte=len(FAILURE_BACKOFF_HOURS))
         .order_by("sbom_id", "-settled_at", "-id")
-        .values_list("sbom_id", "status", "settled_at")
+        .values_list("sbom_id", "status", "error_message", "settled_at")
     )
 
     # Newest first within each SBOM, so the streak is the leading run of failures
@@ -166,11 +190,11 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
     streak: dict[str, int] = {}
     newest_failure_at: dict[str, Any] = {}
     settled: set[str] = set()
-    for sbom_id, status, run_settled_at in rows:
+    for sbom_id, status, error_message, run_settled_at in rows:
         key = str(sbom_id)
         if key in settled:
             continue
-        if status != RunStatus.FAILED.value:
+        if not _run_failed(status, error_message):
             settled.add(key)
             continue
         streak[key] = streak.get(key, 0) + 1
