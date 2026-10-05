@@ -20,7 +20,11 @@ import requests
 from allauth.socialaccount.providers.openid_connect.views import OpenIDConnectOAuth2Adapter
 from django.core.cache import cache
 
-from sbomify.apps.core.adapters import OIDC_CONFIG_REFRESH_AFTER, cached_openid_config
+from sbomify.apps.core.adapters import (
+    OIDC_CONFIG_REFRESH_AFTER,
+    OIDC_CONFIG_RETRY_AFTER_FAILURE,
+    cached_openid_config,
+)
 
 SERVER_URL = "https://kc.example.test/realms/sbomify/.well-known/openid-configuration"
 DOCUMENT = {
@@ -118,6 +122,69 @@ class TestALoginSurvivesAnUnreachableProvider:
         monkeypatch.setattr("sbomify.apps.core.adapters._fetch_openid_config", _fail)
 
         assert cached_openid_config(_Adapter()) == DOCUMENT
+
+    def test_the_failure_is_not_re_attempted_on_every_login(
+        self, fetches: list[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A stale entry plus a dead provider must not cost every login a timeout.
+
+        Serving the cached copy without recording anything left ``fetched_at``
+        untouched, so the entry stayed stale and the next sign-in made the same
+        request and waited out the same timeout. The 500 was gone; the delay
+        was not, and it was now one request per sign-in against a provider
+        already in trouble.
+        """
+        cached_openid_config(_Adapter())
+        assert fetches == [SERVER_URL]
+
+        def _fail(server_url: str) -> dict[str, Any]:
+            fetches.append(server_url)
+            raise requests.ReadTimeout("Read timed out. (read timeout=5)")
+
+        stale = __import__("time").time() + OIDC_CONFIG_REFRESH_AFTER + 1
+        monkeypatch.setattr("sbomify.apps.core.adapters.time.time", lambda: stale)
+        monkeypatch.setattr("sbomify.apps.core.adapters._fetch_openid_config", _fail)
+
+        # The login that discovers the outage pays for one attempt.
+        assert cached_openid_config(_Adapter()) == DOCUMENT
+        assert len(fetches) == 2
+
+        # Every login during the backoff is served from the cache, untouched.
+        for _ in range(5):
+            assert cached_openid_config(_Adapter()) == DOCUMENT
+        assert len(fetches) == 2, "a login inside the backoff window re-attempted the fetch"
+
+    def test_the_refresh_resumes_once_the_backoff_lapses(
+        self, fetches: list[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The backoff rides out a blip; it must not stop noticing a recovery."""
+        cached_openid_config(_Adapter())
+
+        def _fail(server_url: str) -> dict[str, Any]:
+            fetches.append(server_url)
+            raise requests.ReadTimeout("Read timed out. (read timeout=5)")
+
+        stale = __import__("time").time() + OIDC_CONFIG_REFRESH_AFTER + 1
+        monkeypatch.setattr("sbomify.apps.core.adapters.time.time", lambda: stale)
+        monkeypatch.setattr("sbomify.apps.core.adapters._fetch_openid_config", _fail)
+        cached_openid_config(_Adapter())
+        assert len(fetches) == 2
+
+        # Past the retry deadline, and the provider is back.
+        recovered = dict(DOCUMENT, token_endpoint="https://kc.example.test/new/token")
+
+        def _succeed(server_url: str) -> dict[str, Any]:
+            fetches.append(server_url)
+            return recovered
+
+        monkeypatch.setattr(
+            "sbomify.apps.core.adapters.time.time",
+            lambda: stale + OIDC_CONFIG_RETRY_AFTER_FAILURE + 1,
+        )
+        monkeypatch.setattr("sbomify.apps.core.adapters._fetch_openid_config", _succeed)
+
+        assert cached_openid_config(_Adapter()) == recovered
+        assert len(fetches) == 3
 
     def test_a_cold_cache_still_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """With nothing cached there is no endpoint to send anyone to."""

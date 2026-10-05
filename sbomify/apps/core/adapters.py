@@ -82,6 +82,15 @@ OIDC_CONFIG_REFRESH_AFTER = 60 * 60
 # Keycloak is the thing that is down.
 OIDC_CONFIG_CACHE_TTL = 30 * 24 * 60 * 60
 
+# How long to stop asking after a refresh fails. Without this, a stale entry
+# plus an unreachable provider means every single login re-attempts the same
+# request and waits out its timeout before falling back to the copy it already
+# held -- the cache removed the 500 but not the delay, and turned one slow
+# login into a request per sign-in against a provider that is already
+# struggling. Short, because the point is to ride out a blip rather than to
+# stop noticing a reconfiguration: the refresh resumes a minute later.
+OIDC_CONFIG_RETRY_AFTER_FAILURE = 60
+
 # Without these allauth cannot build an authorize or token URL, so a 200
 # carrying anything less is not a document worth remembering.
 _REQUIRED_OIDC_ENDPOINTS = ("authorization_endpoint", "token_endpoint")
@@ -140,22 +149,43 @@ def cached_openid_config(adapter: Any) -> dict[str, Any]:
     now = time.time()
 
     config: dict[str, Any]
-    if isinstance(entry, dict) and now - entry.get("fetched_at", 0) < OIDC_CONFIG_REFRESH_AFTER:
-        config = entry["config"]
+    cached = entry if isinstance(entry, dict) else None
+    # Two reasons to serve what we hold without asking again: it is still
+    # fresh, or a refresh just failed and we agreed to wait before retrying.
+    # The second is what keeps a provider outage from costing every login a
+    # timeout -- see OIDC_CONFIG_RETRY_AFTER_FAILURE.
+    serve_cached = cached is not None and (
+        now - cached.get("fetched_at", 0) < OIDC_CONFIG_REFRESH_AFTER or now < cached.get("retry_after", 0)
+    )
+
+    if cached is not None and serve_cached:
+        config = cached["config"]
     else:
         try:
             config = _fetch_openid_config(server_url)
         except Exception as exc:
             # Only a copy we already hold can rescue the login; with nothing
             # cached there is no endpoint to send the user to.
-            if not isinstance(entry, dict):
+            if cached is None:
                 raise
             logger.warning(
                 "OpenID Connect discovery at %s failed (%s); serving the cached copy instead",
                 server_url,
                 exc,
             )
-            config = entry["config"]
+            # Hold off the next attempt, without extending how long this copy
+            # survives in total: the remaining TTL is measured from the last
+            # successful fetch, so a long outage still lets the entry expire
+            # on its original schedule rather than pinning a stale document
+            # in the cache for as long as the provider stays down.
+            remaining = OIDC_CONFIG_CACHE_TTL - (now - cached.get("fetched_at", 0))
+            if remaining > 0:
+                cache.set(
+                    key,
+                    {**cached, "retry_after": now + OIDC_CONFIG_RETRY_AFTER_FAILURE},
+                    remaining,
+                )
+            config = cached["config"]
         else:
             cache.set(key, {"config": config, "fetched_at": now}, OIDC_CONFIG_CACHE_TTL)
 
