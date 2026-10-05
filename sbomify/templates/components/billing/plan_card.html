@@ -87,8 +87,14 @@ size themselves naturally on smaller screens.
             {% endfor %}
         </ul>
         <c-feedback.alert variant="warning" x-show="getDowngradeWarning('{{ plan.key|escapejs }}')" x-cloak><span x-text="getDowngradeWarning('{{ plan.key|escapejs }}')"></span></c-feedback.alert>
-        {% if plan.downgrade %}
+        {% if plan.downgrade and plan.key == "community" %}
             {% comment %}
+                Community only: it is the one downgrade that cancels, because
+                plan-selection.ts sends every other plan to the portal's
+                subscription_update flow and only this one to subscription_cancel.
+                A downgrade from Enterprise to Business would read this sentence and
+                be told its subscription ends, which is not what that button does.
+
                 The button leaves for the Stripe portal's cancel flow, so this is the
                 last place we can say what moving here does. Hidden when the card is
                 already blocked, so a plan never carries two alerts at once.
