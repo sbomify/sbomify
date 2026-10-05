@@ -241,15 +241,22 @@ class TestAgainstTheRealMiddlewareChain:
             worker.start()
             try:
                 failing.send()
-                # Both joins, in this order, and before stop().
+                # Both joins, and before stop().
                 #
-                # Worker.join waits for the work and delay queues to drain, not
-                # for the threads to exit, so it returns on its own and the
-                # finally below runs after it. The delay queues are the reason
-                # it is here at all: a retry is scheduled onto one, and
-                # Broker.join alone can return with attempts still pending,
-                # which would let these count events mid-outage. Stopping first
-                # would end the worker before the retries had run.
+                # `Worker.join` joins the work and delay *queues*, not the
+                # worker threads -- it returns once they drain, so the
+                # `finally` below runs after it and nothing deadlocks. It is
+                # the delay queues it is here for: a retry is scheduled onto
+                # one, and this asserts on a count of events, so returning
+                # mid-outage would undercount.
+                #
+                # Measured, on this broker: `broker.join(fail_fast=False)`
+                # already waits for the retries, so dropping this line keeps
+                # the tests green even at a 60ms backoff, and stopping before
+                # joining keeps them green too. It stays because the counts
+                # these tests make their assertions from are only meaningful
+                # once every attempt has run, and that should not rest on
+                # StubBroker's draining happening to cover the delay queue.
                 broker.join(failing.queue_name, fail_fast=False)
                 worker.join()
             finally:
