@@ -241,6 +241,15 @@ class TestAgainstTheRealMiddlewareChain:
             worker.start()
             try:
                 failing.send()
+                # Both joins, in this order, and before stop().
+                #
+                # Worker.join waits for the work and delay queues to drain, not
+                # for the threads to exit, so it returns on its own and the
+                # finally below runs after it. The delay queues are the reason
+                # it is here at all: a retry is scheduled onto one, and
+                # Broker.join alone can return with attempts still pending,
+                # which would let these count events mid-outage. Stopping first
+                # would end the worker before the retries had run.
                 broker.join(failing.queue_name, fail_fast=False)
                 worker.join()
             finally:
