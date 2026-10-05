@@ -95,7 +95,12 @@ def test_exposure_explains_a_mismatch_only_when_there_is_one() -> None:
     assert "less than the workspace total" in omitted
 
     both = exposure_text(rows, product_count=1, shares_components=True, omits_components=True)
-    assert "do not match the workspace total" in both
+    # Hedged, like the two single-flag cases above. The flags describe
+    # membership, not arithmetic: shared components with no findings, or an
+    # over-count and an under-count that happen to cancel, both leave the two
+    # totals equal, and a footer asserting they differ would be false.
+    assert "can differ from the workspace total" in both
+    assert "do not match the workspace total" not in both
 
 
 def test_exposure_says_how_many_products_it_left_out() -> None:

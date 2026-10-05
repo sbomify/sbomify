@@ -54,7 +54,7 @@ to the workspace total, and telling that reader otherwise is simply wrong.
                 Showing {{ products|length|intcomma }} of {{ product_count|intcomma }} products.
             {% endif %}
             {% if shares_components and omits_components %}
-                These count a shared component under every product that has it, and leave out a component in no product, so they do not match the workspace total.
+                These count a shared component under every product that has it, and leave out a component in no product, so they can differ from the workspace total in either direction.
             {% elif shares_components %}
                 These count a shared component under every product that has it, so they can add up to more than the workspace total.
             {% elif omits_components %}
