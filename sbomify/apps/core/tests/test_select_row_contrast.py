@@ -125,40 +125,77 @@ def badge_recipe(variant: str) -> tuple[str, str, float]:
     return ink.group(1), tint.group(1), int(tint.group(2)) / 100
 
 
-def row_foregrounds(theme: dict[str, tuple[int, int, int]]) -> dict[str, tuple[tuple, tuple | None, float]]:
-    """Every foreground the row greys, and the tint (if any) it sits on.
+def secondary_button_recipe() -> tuple[str, str, str]:
+    """``c-buttons.secondary``: its ink, and its opaque background at rest and on hover.
+
+    Read out of the component for the same reason ``badge_recipe`` is. This
+    one matters more than it looks: the button paints an **opaque**
+    background, unlike the badges' translucent tints and unlike the row
+    itself, and it does so *inside* the filtered subtree -- so its background
+    is greyed along with its text, which is a third compositing case.
+    """
+    body = (COMPONENTS / "buttons" / "secondary.html").read_text(encoding="utf-8")
+
+    ink = re.search(r"\btext-(?!\[)([a-z0-9-]+)", body)
+    rest = re.search(r"(?<!hover:)\bbg-(?!\[)([a-z0-9-]+)", body)
+    hover = re.search(r"\bhover:bg-(?!\[)([a-z0-9-]+)", body)
+    assert ink and rest and hover, "c-buttons.secondary no longer names ink and both backgrounds"
+
+    return ink.group(1), rest.group(1), hover.group(1)
+
+
+#: How an element's background is produced, which decides what the filter does
+#: to it. Three cases, and the row has all three.
+TRANSPARENT = "transparent"  # no background: the unfiltered card surface shows through
+TINT = "tint"  # a translucent layer inside the filter, over that surface
+OPAQUE = "opaque"  # the element's own solid background, inside the filter
+
+
+def row_foregrounds(
+    theme: dict[str, tuple[int, int, int]],
+) -> dict[str, tuple[tuple, str, tuple | None, float]]:
+    """Every foreground the row greys, and how its background is produced.
 
     A plan-restricted plugin row is the production case: the title, the
     description explaining the restriction, the badges, and the button that
-    resolves it. The CTA and the title both paint ``--color-text``.
+    resolves it.
 
-    Returned as ``(ink, tint, alpha)`` rather than as a finished pair, because
-    the filter changes *where* the compositing happens and the two tests below
-    need to build the pair differently -- see ``pair_for``.
+    Returned as a spec rather than a finished pair, because the filter changes
+    *where* the compositing happens and the tests below need to build the pair
+    differently -- see ``pair_for``.
     """
 
-    def badge(variant: str) -> tuple[tuple, tuple, float]:
+    def badge(variant: str) -> tuple[tuple, str, tuple, float]:
         ink, tint_token, strength = badge_recipe(variant)
-        return theme[ink], theme[tint_token], strength
+        return theme[ink], TINT, theme[tint_token], strength
+
+    cta_ink, cta_rest, cta_hover = secondary_button_recipe()
 
     return {
         # The plan-required badge. `c-badges.warning` is warning ink over a
         # warning tint.
         "plan-required badge on its own tint": badge("warning"),
-        "restriction description": (theme["text-muted"], None, 0.0),
-        "row title and upgrade CTA": (theme["text"], None, 0.0),
         # Muted ink over a border tint, not text-secondary over the surface:
         # the version, artifact-type and count badges all render this.
         "secondary badge on its own tint": badge("secondary"),
-        # The Beta badge, which the gated Dependency Track row renders and this
-        # file previously omitted: info ink over an info tint.
+        # The Beta badge, which the gated Dependency Track row renders.
         "beta badge on its own tint": badge("info"),
+        # Text directly on the row, which paints nothing of its own.
+        "restriction description": (theme["text-muted"], TRANSPARENT, None, 0.0),
+        "row title": (theme["text"], TRANSPARENT, None, 0.0),
+        # The CTA is not text on the row: `c-buttons.secondary` paints an
+        # opaque background, inside the filtered subtree, so that background
+        # is greyed too. Both of its states are checked -- a hover token can
+        # move on its own.
+        "upgrade CTA at rest": (theme[cta_ink], OPAQUE, theme[cta_rest], 0.0),
+        "upgrade CTA on hover": (theme[cta_ink], OPAQUE, theme[cta_hover], 0.0),
     }
 
 
 def pair_for(
     ink: tuple,
-    tint: tuple | None,
+    kind: str,
+    layer: tuple | None,
     alpha: float,
     surface: tuple,
     *,
@@ -167,38 +204,52 @@ def pair_for(
     """The foreground/background pair a browser actually renders.
 
     The compositing order is the whole point here, and getting it wrong is
-    what this function exists to stop.
+    what this function exists to stop. ``filter`` rasterises the row's subtree
+    and *then* composites the result onto what is behind it, so what the
+    filter touches depends on which side of that boundary the background is:
 
-    ``filter`` rasterises the row's subtree and *then* composites the result
-    onto what is behind it. The disabled row carries
-    ``has-[input:disabled]:grayscale`` and no opaque background of its own --
-    its only ``bg-`` rules are hover/checked tints, and the disabled variant
-    sets ``hover:bg-transparent`` -- so the ancestor ``--color-surface``
-    belongs to the card, outside the filtered element, and is **never**
-    greyed.
+    ``TRANSPARENT`` -- the row paints no background of its own. Its only
+    ``bg-`` rules are hover/checked tints and the disabled variant sets
+    ``hover:bg-transparent``, so the card's ``--color-surface`` is an
+    *ancestor*, outside the filtered element, and is never greyed.
 
-    So, for a badge: grey the translucent tint, then composite that onto the
-    unfiltered surface -- ``over(greyed(tint), surface, alpha)``, not
-    ``greyed(over(tint, surface, alpha))``. For plain text there is no tint,
-    and the background is the surface exactly as it is painted.
+    ``TINT`` -- a badge's translucent layer is inside the filter, and
+    composites onto that unfiltered surface: ``over(greyed(tint), surface,
+    alpha)``, not ``greyed(over(tint, surface, alpha))``.
 
-    The two differ by little on today's palette, which is why this went
-    unnoticed; they do not differ by little once a surface token moves, and a
-    guard that reports the wrong ratio then is worse than none.
+    ``OPAQUE`` -- the CTA paints its own solid ``bg-surface`` inside the
+    filter, so nothing shows through and the background is simply
+    ``greyed(own_background)``. Treating it as text on the row compared
+    filtered ink against an unfiltered surface, which is neither of the two
+    things on screen.
+
+    The three differ by little on today's palette, which is why this went
+    unnoticed; they do not differ by little once a surface or hover token
+    moves, and a guard that reports the wrong ratio then is worse than none.
     """
     foreground = greyed(ink) if filtered else ink
-    if tint is None:
+
+    if kind == TRANSPARENT:
         return foreground, surface
-    layer = greyed(tint) if filtered else tint
-    return foreground, over(layer, surface, alpha)
+
+    assert layer is not None, f"{kind} needs a background colour"
+
+    if kind == OPAQUE:
+        return foreground, (greyed(layer) if filtered else layer)
+
+    if kind == TINT:
+        painted = greyed(layer) if filtered else layer
+        return foreground, over(painted, surface, alpha)
+
+    raise AssertionError(f"unknown background kind {kind!r}")
 
 
 @pytest.mark.parametrize("theme_name", ["light", "dark"])
 def test_a_greyed_row_keeps_every_foreground_above_aa(request, theme_name: str) -> None:
     theme = request.getfixturevalue(theme_name)
     surface = theme["surface"]
-    for label, (ink, tint, alpha) in row_foregrounds(theme).items():
-        foreground, background = pair_for(ink, tint, alpha, surface, filtered=True)
+    for label, (ink, kind, layer, alpha) in row_foregrounds(theme).items():
+        foreground, background = pair_for(ink, kind, layer, alpha, surface, filtered=True)
         ratio = contrast(foreground, background)
         assert ratio >= SMALL_TEXT, f"{theme_name}: {label} is {ratio:.2f}:1 once greyed, under {SMALL_TEXT}:1"
 
@@ -213,8 +264,8 @@ def test_greying_is_not_what_makes_the_row_readable(request, theme_name: str) ->
     """
     theme = request.getfixturevalue(theme_name)
     surface = theme["surface"]
-    for label, (ink, tint, alpha) in row_foregrounds(theme).items():
-        foreground, background = pair_for(ink, tint, alpha, surface, filtered=False)
+    for label, (ink, kind, layer, alpha) in row_foregrounds(theme).items():
+        foreground, background = pair_for(ink, kind, layer, alpha, surface, filtered=False)
         ratio = contrast(foreground, background)
         assert ratio >= SMALL_TEXT, f"{theme_name}: {label} is {ratio:.2f}:1 unfiltered, under {SMALL_TEXT}:1"
 
@@ -236,7 +287,7 @@ def test_the_surface_behind_the_row_is_not_greyed() -> None:
     ink = (240, 200, 120)
     alpha = 0.12
 
-    _, correct = pair_for(ink, tint, alpha, surface, filtered=True)
+    _, correct = pair_for(ink, TINT, tint, alpha, surface, filtered=True)
     wrong = greyed(over(tint, surface, alpha))
 
     # What a browser does: grey the translucent tint inside the filter, then
@@ -263,7 +314,7 @@ def test_an_achromatic_surface_hides_the_difference() -> None:
     alpha = 0.12
 
     for surface in ((255, 255, 255), (0, 0, 0), (128, 128, 128)):
-        _, correct = pair_for(ink, tint, alpha, surface, filtered=True)
+        _, correct = pair_for(ink, TINT, tint, alpha, surface, filtered=True)
         wrong = greyed(over(tint, surface, alpha))
         assert all(abs(a - b) < 1e-9 for a, b in zip(correct, wrong)), surface
 
@@ -273,10 +324,40 @@ def test_plain_text_is_measured_against_the_unfiltered_surface() -> None:
     surface = (30, 33, 50)
     ink = (200, 200, 210)
 
-    foreground, background = pair_for(ink, None, 0.0, surface, filtered=True)
+    foreground, background = pair_for(ink, TRANSPARENT, None, 0.0, surface, filtered=True)
 
     assert background == surface, "the ancestor surface must not be greyed"
     assert foreground == greyed(ink), "the text itself is inside the filter"
+
+
+def test_an_opaque_background_inside_the_filter_is_greyed() -> None:
+    """The CTA case: nothing shows through, so the filter owns the background.
+
+    Comparing filtered ink against the unfiltered card surface -- which is
+    what treating it as text on the row did -- measures neither of the two
+    colours actually on screen.
+    """
+    surface = (30, 33, 50)
+    own_background = (37, 41, 63)
+    ink = (255, 255, 255)
+
+    _, background = pair_for(ink, OPAQUE, own_background, 0.0, surface, filtered=True)
+
+    assert background == greyed(own_background)
+    assert background != own_background, "an opaque background inside the filter is greyed"
+    assert background != surface, "and it is not the card surface either"
+
+
+def test_both_cta_states_are_covered() -> None:
+    """A hover token can move without the rest token moving."""
+    ink, rest, hover = secondary_button_recipe()
+
+    assert (ink, rest, hover) == ("text", "surface", "surface-elevated")
+
+    labels = row_foregrounds(_declarations(STYLESHEET.read_text(encoding="utf-8"), "@theme"))
+    assert "upgrade CTA at rest" in labels
+    assert "upgrade CTA on hover" in labels
+    assert all(labels[label][1] == OPAQUE for label in labels if "CTA" in label)
 
 
 def test_the_row_greys_and_never_fades() -> None:
