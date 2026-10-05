@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
-from django.http import HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
+from django.views import View
 
 from sbomify.apps.core.domain.exceptions import DomainError
+
+
+class HtmxFragmentMixin(View):
+    """A fragment is not a page: a GET that htmx did not send is a 404, not bare markup."""
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if request.method in ("GET", "HEAD") and request.headers.get("HX-Request") != "true":
+            raise Http404
+        return cast(HttpResponse, super().dispatch(request, *args, **kwargs))
 
 
 def htmx_response(

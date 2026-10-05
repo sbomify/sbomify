@@ -25,7 +25,7 @@ class TestTeamTokensView:
 
     def test_get_requires_authentication(self, client: Client):
         """Test that GET requires authentication."""
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": "test"}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": "test"}), HTTP_HX_REQUEST="true")
         assert response.status_code == 302
 
     def test_get_requires_team_membership(self, client: Client, sample_user: AbstractBaseUser):
@@ -43,7 +43,7 @@ class TestTeamTokensView:
             del session["current_team"]
         session.save()
 
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code in (403, 404)
 
     def test_get_renders_template(self, client: Client, sample_team_with_owner_member):
@@ -52,7 +52,7 @@ class TestTeamTokensView:
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
 
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert b"Generate token" in response.content
         assert b"Your tokens" in response.content
@@ -70,7 +70,7 @@ class TestTeamTokensView:
             team=team,
         )
 
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert b"Scoped Token" in response.content
 
@@ -95,7 +95,7 @@ class TestTeamTokensView:
             last_used_at=None,
         )
 
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         body = response.content.decode()
         assert response.status_code == 200
         assert "Last used" in body
@@ -203,7 +203,7 @@ class TestTeamTokensView:
         AccessToken.objects.create(user=user, description="Token B", encoded_token="token_b", team=team_b)
 
         setup_authenticated_client_session(client, team_a, user)
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team_a.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team_a.key}), HTTP_HX_REQUEST="true")
         content = response.content.decode()
 
         assert "Token A" in content
@@ -220,7 +220,7 @@ class TestTeamTokensView:
         # Create an unscoped token
         AccessToken.objects.create(user=user, description="Legacy Token", encoded_token="legacy_token", team=None)
 
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         content = response.content.decode()
 
         assert response.status_code == 200
@@ -237,7 +237,7 @@ class TestTeamTokensView:
 
         AccessToken.objects.create(user=user, description="Legacy Token", encoded_token="legacy_token", team=None)
 
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         content = response.content.decode()
 
         assert "deprecated" not in content.lower()
@@ -265,7 +265,7 @@ class TestTeamTokensView:
 
         setup_authenticated_client_session(client, team, member_user)
 
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
     def test_guest_cannot_manage_tokens(self, client: Client, sample_team_with_owner_member):
@@ -280,7 +280,7 @@ class TestTeamTokensView:
 
         setup_authenticated_client_session(client, team, guest)
 
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 403
 
     def test_admin_role_can_access(self, client: Client, sample_team_with_owner_member):
@@ -295,7 +295,7 @@ class TestTeamTokensView:
 
         setup_authenticated_client_session(client, team, admin_user)
 
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
     def test_guest_role_cannot_access(self, client: Client, sample_team_with_owner_member):
@@ -310,7 +310,7 @@ class TestTeamTokensView:
 
         setup_authenticated_client_session(client, team, guest_user)
 
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 403
 
 
@@ -500,7 +500,9 @@ class TestTeamTokenExpiry:
             expires_at=timezone.now() + timedelta(days=30),
         )
 
-        content = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key})).content.decode()
+        content = client.get(
+            reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true"
+        ).content.decode()
         assert "Expires" in content
 
     def test_listing_shows_never_for_unset_expiry(self, client: Client, sample_team_with_owner_member):
@@ -511,7 +513,9 @@ class TestTeamTokenExpiry:
             user=user, description="Forever Token", encoded_token="forever_tok", team=team, expires_at=None
         )
 
-        content = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key})).content.decode()
+        content = client.get(
+            reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true"
+        ).content.decode()
         assert "Never expires" in content
 
     def test_listing_flags_expired_token(self, client: Client, sample_team_with_owner_member):
@@ -526,7 +530,9 @@ class TestTeamTokenExpiry:
             expires_at=timezone.now() - timedelta(days=1),
         )
 
-        content = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key})).content.decode()
+        content = client.get(
+            reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true"
+        ).content.decode()
         assert "Expired" in content
 
 
