@@ -11,19 +11,27 @@ from sbomify.apps.billing.plan_features import PLAN_FEATURES, features_lost_movi
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.queries import get_team_user_counts
 
 
 def build_plan_selection_context(
     request: HttpRequest, workspace: Team, stripe_pricing_data: dict[str, dict[str, Any]]
 ) -> ServiceResult[dict[str, Any]]:
     order = {BillingPlan.KEY_COMMUNITY: 0, BillingPlan.KEY_BUSINESS: 1, BillingPlan.KEY_ENTERPRISE: 2}
+    # The same count ``can_add_user_to_team`` enforces: human members, bots
+    # excluded, plus the invitations already holding a seat. Counting members
+    # alone would block a workspace over its bot publishers and wave through one
+    # whose remaining room is already spoken for.
+    members, pending_invites, seats = get_team_user_counts(workspace.id)
     usage = {
-        "members": workspace.members.count(),
+        "members": seats,
         "products": Product.objects.filter(team=workspace).count(),
         "components": Component.objects.filter(team=workspace).count(),
     }
+    seat_label = "members and pending invitations" if pending_invites else "members"
     billing_limits = workspace.billing_plan_limits or {}
     current_plan = workspace.billing_plan or BillingPlan.KEY_COMMUNITY
+    is_subscribed = billing_limits.get("subscription_status") in ("active", "trialing")
     plans: list[dict[str, Any]] = []
     downgrade_limits: dict[str, Any] = {}
     annual_savings_percent = None
@@ -35,13 +43,13 @@ def build_plan_selection_context(
         is_downgrade = order.get(key, 99) < order.get(current_plan, 99)
         exceeded = []
         if is_downgrade:
-            for resource, limit in (
-                ("members", plan.max_users),
-                ("products", plan.max_products),
-                ("components", plan.max_components),
+            for resource, label, limit in (
+                ("members", seat_label, plan.max_users),
+                ("products", "products", plan.max_products),
+                ("components", "components", plan.max_components),
             ):
                 if limit is not None and usage[resource] > limit:
-                    exceeded.append(f"{usage[resource]} {resource} (limit: {limit})")
+                    exceeded.append(f"{usage[resource]} {label} (limit: {limit})")
         downgrade_limits[key] = {"exceeds": bool(exceeded), "resources": exceeded}
         prices = []
         if key == BillingPlan.KEY_BUSINESS:
@@ -68,6 +76,11 @@ def build_plan_selection_context(
                 "features": PLAN_FEATURES.get(key, ()),
                 "current": key == current_plan,
                 "downgrade": is_downgrade,
+                # Only leaving a live subscription for the free plan runs to the
+                # end of the billing period. An Enterprise-to-Business move is a
+                # subscription update, and a workspace with nothing to cancel
+                # changes over straight away.
+                "ends_subscription": is_downgrade and key == BillingPlan.KEY_COMMUNITY and is_subscribed,
                 "lost_features": features_lost_moving_to(current_plan, key) if is_downgrade else [],
                 "prices": prices,
                 "limits": [

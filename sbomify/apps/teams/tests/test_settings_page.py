@@ -11,7 +11,7 @@ from django.urls import reverse
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.models import User
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Member, default_patch_sla_days
+from sbomify.apps.teams.models import ContactProfile, Member, default_patch_sla_days
 
 pytestmark = pytest.mark.django_db
 
@@ -157,3 +157,23 @@ def test_admin_can_open_access_request_dialogs(client: Client, sample_team_with_
     assert "required" in elements.by_id("company_nda_file")
     assert "disabled" not in elements.by_id("company_nda_file")
     assert not any("x-html" in element for element in elements.elements)
+
+
+def test_a_party_renders_its_last_updated_date(client: Client, sample_team_with_owner_member: Member) -> None:
+    """The schema carries updated_at as an ISO string.
+
+    The date filter answers "" for anything that is not a date, so handing it
+    the string straight through blanked every cell on the tab while the page
+    still looked fine.
+    """
+    workspace = sample_team_with_owner_member.team
+    ContactProfile.objects.create(team=workspace, name="Product contacts", is_default=True)
+    setup_authenticated_client_session(client, workspace, sample_team_with_owner_member.user)
+
+    response = client.get(reverse("teams:team_settings_tab", args=[workspace.key, "contact-profiles"]))
+    payload = response.content.decode()
+    profiles = json.loads(payload[payload.index('id="profiles-data"') :].split(">", 1)[1].split("</script>")[0])
+
+    assert profiles
+    assert all(profile["updated_display"] for profile in profiles)
+    assert all(profile["updated_display"] != profile["updated_at"] for profile in profiles)

@@ -116,6 +116,52 @@ def test_severity_level_prop_picks_the_band_accent(rendered: str, label: str, to
     assert f"border-[color-mix(in_oklab,{token}_20%,transparent)]" in badge
 
 
+@pytest.mark.parametrize(
+    ("label", "token"),
+    [
+        ("Owner role", "var(--color-primary)"),
+        ("Admin role", "var(--color-warning)"),
+    ],
+)
+def test_role_prop_gives_the_privileged_tiers_their_own_tone(rendered: str, label: str, token: str) -> None:
+    """The role column is scanned rather than read, so the tiers must differ."""
+    badge = _badge(rendered, label)
+    assert f"data-[role={label.split()[0].lower()}]:text-[color:{token}]" in badge
+    assert f"data-[role={label.split()[0].lower()}]:bg-[color-mix(in_oklab,{token}_12%,transparent)]" in badge
+    assert f"data-[role={label.split()[0].lower()}]:border-[color-mix(in_oklab,{token}_20%,transparent)]" in badge
+
+
+@pytest.mark.parametrize("label", ["Member role", "Guest role", "Default role"])
+def test_role_keeps_every_other_tier_neutral(rendered: str, label: str) -> None:
+    badge = _badge(rendered, label)
+    assert "text-text-muted" in badge
+    assert "bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]" in badge
+
+
+def test_role_defaults_to_member(rendered: str) -> None:
+    assert 'data-role="member"' in _badge(rendered, "Default role")
+
+
+def test_role_dynamic_binds_the_attribute_not_a_class(rendered: str) -> None:
+    """A page never hands the library a computed class name: Tailwind would
+    never have compiled it."""
+    badge = _badge(rendered, "Runtime role")
+    assert ':data-role="row.role"' in badge
+    assert "data-[role=owner]:text-[color:var(--color-primary)]" in badge
+    assert "data-[role=admin]:text-[color:var(--color-warning)]" in badge
+
+
+def test_role_shares_the_badge_shell(rendered: str) -> None:
+    owner = _badge(rendered, "Owner role")
+    assert "inline-flex items-center font-semibold" in owner
+    assert "rounded-full" in owner
+    assert "uppercase" not in owner
+
+
+def test_pill_leaves_the_role_shape_rounded(rendered: str) -> None:
+    assert "rounded-full" in _badge(rendered, "Rounded owner")
+
+
 def test_severity_shape_segment_replaces_the_badge_shape(rendered: str) -> None:
     critical = _badge(rendered, "Critical")
     assert "px-2 py-1 text-xs leading-[1.5] uppercase tracking-[0.04em]" in critical

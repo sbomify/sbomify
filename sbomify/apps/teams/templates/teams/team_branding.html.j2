@@ -23,11 +23,9 @@
             <input type="hidden"
                    name="branding_enabled"
                    :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
-            {% if not branding_info.branding_enabled %}
-                <c-feedback.alert variant="warning" class="mt-4" x-show="!localBrandingInfo.branding_enabled">
-                Custom branding is off, so customers still see the default sbomify look. Your colors and logo below stay saved either way.
-                </c-feedback.alert>
-            {% endif %}
+            <c-feedback.alert variant="warning" class="mt-4" x-show="!localBrandingInfo.branding_enabled" x-cloak>
+            Custom branding is off, so customers still see the default sbomify look. Your colors and logo below stay saved either way.
+            </c-feedback.alert>
             </c-cards.card>
             <c-cards.card flush>
             <c-cards.header compact title="Colors"><c-buttons.ghost size="sm" @click="setDefaultColors">Reset</c-buttons.ghost></c-cards.header>

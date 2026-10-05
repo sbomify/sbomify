@@ -52,6 +52,9 @@
     <c-forms.field horizontal label="Theme"><c-chrome.theme-picker standalone /></c-forms.field>
     <c-forms.field horizontal label="Email" hint="A value set elsewhere reads as text, not as a read-only input."><c-forms.static>member@example.com</c-forms.static></c-forms.field>
     <c-forms.field horizontal label="Member"><c-overview.record title="Example member" detail="member@example.com" /></c-forms.field>
+    <c-forms.field horizontal wide label="Public URL" for="ds-settings-url" hint="wide gives the control column the room, for a row whose value is the point: an address you hand a customer, a long message. Without it every control takes the same narrow column whatever it holds.">
+    <c-copy-field value="https://trust.example.com/public/workspace/abc123" label="public URL" id="ds-settings-url" />
+    </c-forms.field>
     </c-cards.card>
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-5"
          x-data="teamBranding('{}')">

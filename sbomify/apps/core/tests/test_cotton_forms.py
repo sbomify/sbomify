@@ -113,6 +113,52 @@ def test_field_without_a_for_labels_the_group_and_holds_several_controls(rendere
     assert field.count('name="probe-format"') == 2
 
 
+CONTROL_COLUMN = '<div class="flex min-w-0 w-full flex-col'
+
+
+def _row(rendered: str, probe: str) -> str:
+    """A horizontal field's row attributes, through its control column's tag.
+
+    The two recipes under test sit on different elements: the column split is on
+    the row, the cap is on the control column. _chunk stops at the label
+    column's closing tag, before either.
+    """
+    start = rendered.index(f'data-probe="{probe}"')
+    control = rendered.index(CONTROL_COLUMN, start)
+    return rendered[start : rendered.index(">", control) + 1]
+
+
+def test_horizontal_field_puts_the_label_beside_the_control(rendered: str) -> None:
+    row = _open_tag(rendered, "div", 'data-probe="field-horizontal"')
+    assert "md:grid-cols-[minmax(0,1fr)_minmax(0,44%)]" in row
+    assert "space-y-1.5" not in row
+
+
+def test_wide_widens_the_control_column_and_drops_its_cap(rendered: str) -> None:
+    """Without it every control took the same narrow column whatever it held,
+    and a public address rendered clipped with the label column empty beside
+    it."""
+    assert "md:grid-cols-[minmax(0,1fr)_minmax(0,60%)]" in _open_tag(rendered, "div", 'data-probe="field-wide"')
+    row = _row(rendered, "field-wide")
+    assert "md:max-w-none" in row
+    assert "md:max-w-[340px]" not in row
+
+
+def test_a_horizontal_field_resolves_one_column_recipe_and_one_cap(rendered: str) -> None:
+    """Two utilities for one property resolve by stylesheet order, not by which
+    is "on", so each must render as a single branch."""
+    for probe, columns, cap in (
+        ("field-horizontal", "44%", "md:max-w-[340px]"),
+        ("field-wide", "60%", "md:max-w-none"),
+    ):
+        opening = _open_tag(rendered, "div", f'data-probe="{probe}"')
+        assert opening.count("md:grid-cols-[minmax(0,1fr)_minmax(0,") == 1
+        assert f"minmax(0,{columns})]" in opening
+        row = _row(rendered, probe)
+        assert row.count("md:max-w-") == 1
+        assert cap in row
+
+
 def test_field_passes_required_to_its_label(rendered: str) -> None:
     assert '<span class="text-danger">*</span>' in _chunk(rendered, "label", 'for="probe-error"')
     assert "text-danger" not in _chunk(rendered, "label", 'for="probe-text"')

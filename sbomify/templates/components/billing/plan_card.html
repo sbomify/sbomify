@@ -86,9 +86,11 @@ size themselves naturally on smaller screens.
                 </li>
             {% endfor %}
         </ul>
-        {% if plan.downgrade %}
+        {% if plan.downgrade and plan.lost_features or plan.ends_subscription %}
             <c-feedback.alert variant="warning" title="Moving here costs you">
-            <p class="m-0">Your subscription ends at the end of the billing period.</p>
+            {% if plan.ends_subscription %}
+                <p class="m-0">Your subscription ends at the end of the billing period.</p>
+            {% endif %}
             {% if plan.lost_features %}
                 <ul class="mt-2 mb-0 flex list-none flex-col gap-1 p-0">
                     {% for feature in plan.lost_features %}

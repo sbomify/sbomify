@@ -26,6 +26,15 @@ and assert on the output; it is not routed anywhere.
 <c-badges.severity level="critical">Runtime critical</c-badges.severity>
 <c-badges.severity>Runtime unknown</c-badges.severity>
 <c-badges.severity level="low" class="shrink-0" ::data-level="f.severity" x-text="f.severity">Runtime low</c-badges.severity>
+{# The workspace roles. Owner and admin carry their own tone; everyone else is neutral. #}
+<c-badges.role role="owner">Owner role</c-badges.role>
+<c-badges.role role="admin">Admin role</c-badges.role>
+<c-badges.role role="member">Member role</c-badges.role>
+<c-badges.role role="guest">Guest role</c-badges.role>
+<c-badges.role>Default role</c-badges.role>
+<c-badges.role role="owner" pill>Rounded owner</c-badges.role>
+{# The runtime twin: the role arrives as a data attribute on an Alpine row. #}
+<c-badges.role role="member" class="shrink-0" ::data-role="row.role" x-text="row.role">Runtime role</c-badges.role>
 <c-badges.format format="cyclonedx">CycloneDX</c-badges.format>
 <c-badges.format format="spdx">SPDX</c-badges.format>
 <c-badges.format format="swid">SWID</c-badges.format>

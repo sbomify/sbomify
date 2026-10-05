@@ -1,5 +1,6 @@
 """Shared settings context for initial pages and HTMX refreshes."""
 
+from datetime import datetime
 from typing import Any, cast
 
 from django.core.cache import cache
@@ -46,6 +47,18 @@ def general_context(request: HttpRequest, workspace_key: str) -> ServiceResult[d
 def _as_field_value(value: Any) -> str:
     """A form field's value as the browser will report it: a string, blank when unset."""
     return "" if value is None else str(value)
+
+
+def _format_iso_date(value: Any) -> str:
+    """An ISO timestamp in the settings date format, or "" if it is not one."""
+    if isinstance(value, datetime):
+        return date_filter(value, "j M Y") or ""
+    if not isinstance(value, str) or not value:
+        return ""
+    try:
+        return date_filter(datetime.fromisoformat(value), "j M Y") or ""
+    except ValueError:
+        return ""
 
 
 def tokens_context(request: HttpRequest, workspace_key: str) -> ServiceResult[dict[str, Any]]:
@@ -110,7 +123,9 @@ def profiles_context(profiles: Any) -> dict[str, Any]:
         profile["supplier"] = next((entity for entity in entities if entity.get("is_supplier")), None)
         # Formatted here rather than in the browser: the rest of settings renders
         # dates through the date filter, and toLocaleDateString put a second
-        # format on the same page for anyone outside en-GB.
-        profile["updated_display"] = date_filter(profile.get("updated_at"), "j M Y") or ""
+        # format on the same page for anyone outside en-GB. The schema carries
+        # this as an ISO string, and the date filter answers "" for anything that
+        # is not a date, so it is parsed rather than handed over as text.
+        profile["updated_display"] = _format_iso_date(profile.get("updated_at"))
         rows.append(profile)
     return {"profiles": rows, "form": ContactProfileForm()}

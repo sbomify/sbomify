@@ -1,4 +1,8 @@
-{{ patch_sla_fields|json_script:"patch-sla-fields" }}
+{% comment %}
+The starting values live inside the form because #patch-sla-wrapper refreshes by
+selecting #patch-sla-form alone: a script outside it would be swapped away on the
+first save, leaving the next render with nothing to compare against.
+{% endcomment %}
 <form id="patch-sla-form"
       method="post"
       hx-post="{% url 'teams:team_general' team.key %}"
@@ -6,6 +10,7 @@
       hx-swap="none"
       x-data="dirtySettingsForm(window.parseJsonScript('patch-sla-fields'))"
       class="flex flex-col gap-4">
+    {{ patch_sla_fields|json_script:"patch-sla-fields" }}
     {% csrf_token %}
     <input type="hidden" name="action" value="update_patch_sla">
     <c-cards.card flush>
