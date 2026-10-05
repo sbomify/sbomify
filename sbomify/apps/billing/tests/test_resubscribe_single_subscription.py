@@ -196,8 +196,9 @@ def test_checkout_webhook_retries_when_the_cancel_fails(failing, stripe_client, 
     assert team_with_business_plan.billing_plan_limits["stripe_subscription_id"] == "sub_old"
 
 
-def test_event_for_a_replaced_subscription_leaves_the_workspace_alone(stripe_client, team_with_business_plan):
-    """It emails no one and reports nothing to analytics about the old subscription."""
+@pytest.mark.parametrize("handler", ["handle_subscription_updated", "handle_subscription_deleted"])
+def test_event_for_a_replaced_subscription_leaves_the_workspace_alone(handler, stripe_client, team_with_business_plan):
+    """It emails no one, reports nothing to analytics and does not report the workspace as gone."""
     _set_limits(team_with_business_plan, stripe_subscription_id="sub_new", subscription_status="active")
 
     with (
@@ -205,9 +206,7 @@ def test_event_for_a_replaced_subscription_leaves_the_workspace_alone(stripe_cli
         patch("sbomify.apps.core.posthog_service.capture") as capture,
         patch("sbomify.apps.core.posthog_service.group_identify") as group_identify,
     ):
-        billing_processing.handle_subscription_updated(
-            _subscription("sub_old", "canceled"), event=_event("evt_old_canceled")
-        )
+        getattr(billing_processing, handler)(_subscription("sub_old", "canceled"), event=_event("evt_old_canceled"))
 
     team_with_business_plan.refresh_from_db()
     assert team_with_business_plan.billing_plan_limits["stripe_subscription_id"] == "sub_new"
@@ -227,7 +226,7 @@ def test_event_for_the_replacement_applies_when_the_stored_subscription_ended(st
     assert team_with_business_plan.billing_plan_limits["subscription_status"] == "active"
 
 
-@pytest.mark.parametrize("status", ["unpaid", "paused"])
+@pytest.mark.parametrize("status", ["not_a_status"])
 def test_an_unknown_subscription_status_is_refused(status, stripe_client, team_with_business_plan):
     _set_limits(team_with_business_plan, stripe_subscription_id="sub_live", subscription_status="active")
 
@@ -254,7 +253,7 @@ def test_the_downgrade_rolls_back_when_the_visibility_change_fails(team_with_bus
 
     with (
         patch(
-            "sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility",
+            "sbomify.apps.billing.billing_processing.apply_community_downgrade",
             side_effect=DatabaseError,
         ),
         pytest.raises(BillingRetryableError),

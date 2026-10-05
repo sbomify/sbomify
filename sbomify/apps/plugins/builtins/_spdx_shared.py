@@ -82,6 +82,42 @@ def spdx2_reference_type(ref: Any) -> str:
     return value.rsplit("/", 1)[-1]
 
 
+def spdx2_yocto_source_downloads(data: dict[str, Any]) -> frozenset[str]:
+    """SPDXIDs of the source downloads in a Yocto recipe document.
+
+    Beside every recipe package, Yocto's ``create-spdx`` class emits one
+    package per fetched source: SPDXID ``SPDXRef-Download-<recipe>-<n>``,
+    name ``<recipe>-source-<n>``, a URL ``downloadLocation`` (a release
+    tarball, or ``git+https`` for a git fetch) and, for tarballs, a SHA256. It
+    names where the recipe's source came from, has no purl, CPE or SWID, and
+    no producer can give it one. So it is exempt from the per-package
+    identifier check, as ``type=file`` components are on the CycloneDX side.
+
+    All three must hold, so an ordinary package is never exempted: the
+    document is written by OpenEmbedded's ``create-spdx``, the SPDXID has the
+    ``SPDXRef-Download-`` prefix, and ``downloadLocation`` names a location.
+    Empty for any other document.
+    """
+    creation_info = data.get("creationInfo")
+    creators = creation_info.get("creators") if isinstance(creation_info, dict) else None
+    if not isinstance(creators, list) or not any(
+        isinstance(c, str) and c.startswith("Tool: OpenEmbedded Core create-spdx") for c in creators
+    ):
+        return frozenset()
+    packages = data.get("packages")
+    if not isinstance(packages, list):
+        return frozenset()
+    return frozenset(
+        p["SPDXID"]
+        for p in packages
+        if isinstance(p, dict)
+        and isinstance(p.get("SPDXID"), str)
+        and p["SPDXID"].startswith("SPDXRef-Download-")
+        and isinstance(p.get("downloadLocation"), str)
+        and p["downloadLocation"].strip().upper() not in ("", "NOASSERTION", "NONE")
+    )
+
+
 def spdx2_root_spdxid(data: dict[str, Any]) -> str | None:
     """Return the SPDXID of the BOM subject for an SPDX 2.x document.
 

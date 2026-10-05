@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import hash_token
 from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
@@ -182,7 +183,9 @@ class TestTeamTokensView:
         assert response.status_code == 200
         token = AccessToken.objects.filter(user=user, description="New Token").first()
         assert token is not None
-        assert token.encoded_token in response.content.decode()
+        shown = response.context["new_encoded_access_token"]
+        assert shown in response.content.decode()
+        assert hash_token(shown) == token.token_hash
 
     def test_token_listing_filtered_by_team(self, client: Client, sample_team_with_owner_member):
         """Create tokens for 2 teams, verify GET only shows current team's tokens."""

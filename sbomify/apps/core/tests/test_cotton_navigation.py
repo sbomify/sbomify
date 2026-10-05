@@ -94,7 +94,10 @@ def test_tab_row_carries_the_arrow_home_and_end_keys(rendered: str) -> None:
 
 def test_pills_variant_swaps_the_recipe_and_marks_the_row(rendered: str) -> None:
     row = _open_tag(rendered, "div", 'data-probe="pills"')
-    assert "flex w-max min-w-full items-center gap-0.5 rounded-lg border border-solid border-border bg-surface-hover p-0.5" in row
+    assert (
+        "flex w-max min-w-full items-center gap-0.5 rounded-lg border border-solid border-border bg-surface-hover p-0.5"
+        in row
+    )
     assert "data-tabs-pills" in row
     assert "border-b " not in row
     assert "gap-1" not in row
@@ -295,7 +298,7 @@ def test_standalone_page_link_forwards_attrs(rendered: str) -> None:
         ("Scope", "bg-[linear-gradient(135deg,var(--color-success)_0%,var(--color-success-dark)_100%)] text-white"),
         (
             "Assessment",
-            "bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)] text-white "
+            "bg-[linear-gradient(135deg,var(--color-primary-fill)_0%,var(--color-primary-fill-end)_100%)] text-white "
             "shadow-[0_0_0_4px_color-mix(in_oklab,var(--color-primary)_20%,transparent)]",
         ),
         ("Declaration", "bg-border text-text-muted"),
@@ -310,7 +313,8 @@ def test_step_circle_states(rendered: str, marker: str, recipe_bit: str) -> None
 def test_only_the_active_step_brightens_its_label(rendered: str) -> None:
     label = "ml-3 text-sm font-medium transition-colors duration-200"
     assert f'<span class="{label} text-text">Assessment</span>' in rendered
-    assert f'<span class="{label} text-text-muted">Scope</span>' in rendered
+    # A completed step says so in text as well as in its fill.
+    assert f'<span class="{label} text-text-muted">Scope<span class="sr-only"> (completed)</span></span>' in rendered
 
 
 def test_step_takes_class_and_attrs(rendered: str) -> None:
@@ -552,3 +556,13 @@ def test_segment_is_never_taken_out_of_the_tab_order(rendered: str) -> None:
     seg = _nav_probe(rendered, "segment")
     assert "tabindex" not in seg
     assert "aria-selected" not in seg
+
+
+def test_link_tab_can_bind_selection_while_a_panel_loads(rendered: str) -> None:
+    link = unescape(_chunk(rendered, "a", 'data-probe="live-link"'))
+    assert 'href="/products/?view=components"' in link
+    assert ":aria-current=\"(kind === 'components') ? 'page' : null\"" in link
+    assert ":data-active=\"kind === 'components'\"" in link
+    assert "data-[active=true]:bg-surface-hover" in link
+    assert "data-[active=true]:text-text" in link
+    assert 'role="tab"' not in link

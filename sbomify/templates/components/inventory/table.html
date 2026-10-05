@@ -16,7 +16,6 @@ results_only keeps the filters mounted and requires a results fragment response.
       hx-sync="#{{ inventory.content_id }}:replace"
       hx-trigger="submit, change target:select:not([name=product]), input changed delay:350ms target:input[type=search]"
       {{ attrs }}>
-    <input type="hidden" name="view" value="{{ inventory.kind }}">
     {% if not results_only %}
         <input type="hidden" name="sort" value="{{ inventory.params.sort }}">
         <input type="hidden"

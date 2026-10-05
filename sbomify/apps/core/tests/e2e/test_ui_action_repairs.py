@@ -41,7 +41,7 @@ def test_product_form_errors_preserve_editor(
     page = authenticated_page
     product = product_factory("Form validation product")
     identifiers = kind == "identifier"
-    heading = "Product identifiers" if identifiers else "Product links"
+    heading = "Identifiers" if identifiers else "Links"
     add_label = "Add Identifier" if identifiers else "Add link"
     action_label = "Identifier actions" if identifiers else "Link actions"
     value_field = "value" if identifiers else "title"
@@ -51,7 +51,7 @@ def test_product_form_errors_preserve_editor(
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(reverse("core:product_details", args=[product.pk]))
-    page.locator("summary").filter(has_text=heading).click()
+    page.get_by_role("tab", name=heading, exact=True).click()
     page.get_by_role("button", name=add_label, exact=True).click()
     dialog = page.get_by_role("dialog")
     page.locator(f"#add-{kind}-type").select_option("purl" if identifiers else "website")
@@ -99,7 +99,7 @@ def test_product_form_errors_preserve_editor(
     else:
         model.objects.create(product=product, link_type="website", title=valid, url="https://example.com")
     page.reload()
-    page.locator("summary").filter(has_text=heading).click()
+    page.get_by_role("tab", name=heading, exact=True).click()
     card.get_by_role("button", name=action_label, exact=True).click()
     page.get_by_role("menuitem", name="Delete", exact=True).click()
     model.objects.filter(product=product).delete()
@@ -148,7 +148,11 @@ def test_component_sharing_does_not_require_visibility_permission(
 
 @pytest.mark.parametrize("component_type", ["bom", "document"])
 def test_upload_menu_and_deep_links(
-    authenticated_page: Page, component_factory: Callable[..., Component], component_type: str, snapshot: Any, settings: Any
+    authenticated_page: Page,
+    component_factory: Callable[..., Component],
+    component_type: str,
+    snapshot: Any,
+    settings: Any,
 ) -> None:
     settings.ARTIFACT_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
     component = component_factory("Upload destination", component_type)
@@ -183,18 +187,23 @@ def test_upload_menu_and_deep_links(
 
 def test_cra_parties_link_opens_complete_settings(authenticated_page: Page, cra_assessment: Any) -> None:
     page = authenticated_page
-    page.goto(reverse("compliance:cra_step", args=[cra_assessment.pk, 1]))
-    page.get_by_role("link", name="Edit in team settings", exact=True).click()
-    expect(page.locator("#settings-content")).to_be_visible()
+    wizard_url = reverse("compliance:cra_step", args=[cra_assessment.pk, 1])
+    page.goto(wizard_url)
+    page.get_by_label("Description", exact=True).fill("Unsaved product details")
+    with page.expect_popup() as popup:
+        page.get_by_role("link", name="Edit manufacturer in Parties (opens in a new tab)", exact=True).click()
+    settings = popup.value
+    expect(settings.locator("#settings-content")).to_be_visible()
     expect(
-        page.get_by_role("navigation", name="Settings sections").get_by_role("link", name="Parties", exact=True)
+        settings.get_by_role("navigation", name="Settings sections").get_by_role("link", name="Parties", exact=True)
     ).to_have_attribute("aria-current", "page")
-    expect(page.locator('#contact-profiles-content > [x-data="contactProfileList"]')).to_be_visible()
-    page.get_by_role("button", name="Add profile", exact=True).click()
-    page.get_by_role("button", name="Back to profiles", exact=True).click()
-    expect(page.locator("#contact-profiles-content")).to_be_visible()
-    page.go_back()
-    expect(page).to_have_url(re.compile(re.escape(reverse("compliance:cra_step", args=[cra_assessment.pk, 1])) + "$"))
+    expect(settings.locator('#contact-profiles-content > [x-data="contactProfileList"]')).to_be_visible()
+    settings.get_by_role("button", name="Add profile", exact=True).click()
+    settings.get_by_role("button", name="Back to profiles", exact=True).click()
+    expect(settings.locator("#contact-profiles-content")).to_be_visible()
+    settings.close()
+    expect(page).to_have_url(re.compile(re.escape(wizard_url) + "$"))
+    expect(page.get_by_label("Description", exact=True)).to_have_value("Unsaved product details")
 
 
 def test_controls_navigation_and_product_overrides(
@@ -220,7 +229,7 @@ def test_controls_navigation_and_product_overrides(
 
     product = product_factory("Overrides product")
     page.goto(reverse("core:product_details", args=[product.pk]))
-    page.locator("summary").filter(has_text="Compliance controls").click()
+    page.get_by_role("tab", name="Compliance", exact=True).click()
     table.get_by_role("button", name="Access (1)", exact=True).click()
     expect(table).to_contain_text("Workspace default")
     expect(table.get_by_label("Status for AUD-1", exact=True)).to_have_value("compliant")
@@ -281,7 +290,7 @@ def test_unchanged_lifecycle_keeps_the_editor(
     page = authenticated_page
     product = product_factory("Lifecycle product")
     page.goto(reverse("core:product_details", args=[product.pk]))
-    page.locator("summary").filter(has_text="Lifecycle").click()
+    page.get_by_role("tab", name="Lifecycle", exact=True).click()
     page.get_by_role("button", name="Set dates", exact=True).click()
     card = page.locator("#product-lifecycle-card")
     card.get_by_role("button", name="Save", exact=True).click()
@@ -291,8 +300,7 @@ def test_unchanged_lifecycle_keeps_the_editor(
     card.get_by_role("button", name="Cancel", exact=True).click()
     expect(card.get_by_role("button", name="Set dates", exact=True)).to_be_visible()
     card.get_by_role("button", name="Set dates", exact=True).click()
-    card.get_by_role("textbox").first.click()
-    page.get_by_role("button", name="Today", exact=True).click()
+    card.get_by_label("Release date", exact=True).fill("2026-01-15")
     card.get_by_role("button", name="Save", exact=True).click()
     expect(card.get_by_role("button", name="Edit", exact=True)).to_be_visible()
     product.refresh_from_db()

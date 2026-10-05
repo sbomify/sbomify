@@ -10,7 +10,8 @@ from django.core.cache import cache
 
 from sbomify.logging import getLogger
 
-from .stripe_client import StripeError, get_stripe_client
+from .billing_helpers import parse_cancel_at
+from .stripe_client import TERMINAL_SUBSCRIPTION_STATUSES, StripeError, get_stripe_client
 
 logger = getLogger(__name__)
 
@@ -82,21 +83,31 @@ def invalidate_subscription_cache(subscription_id: str, team_key: str | None = N
 
 def get_subscription_cancel_at_period_end(subscription_id: str, team_key: str, fallback_value: bool = False) -> bool:
     """
-    Get cancel_at_period_end status from Stripe (with caching and error handling).
+    Report whether the subscription has a pending cancel (with caching and error handling).
+
+    A cancel is pending when cancel_at_period_end is set or when Stripe has a
+    cancel_at date, so a scheduled cancel_at counts the same as a period-end cancel.
 
     Args:
         subscription_id: Stripe subscription ID
         team_key: Team key for cache key generation
-        fallback_value: Value to return if Stripe fetch fails
+        fallback_value: Value to return if Stripe fetch fails or the subscription is canceled or incomplete_expired
 
     Returns:
-        cancel_at_period_end boolean value, or fallback_value on error
+        True if a cancel is pending, or fallback_value on error or for a canceled or incomplete_expired subscription
     """
     if not subscription_id:
         return fallback_value
 
     subscription = get_cached_subscription(subscription_id, team_key)
     if subscription:
+        # A canceled or incomplete_expired subscription keeps no pending cancel to reverse, so what the
+        # workspace stored stands until the deleted event settles it.
+        if getattr(subscription, "status", None) in TERMINAL_SUBSCRIPTION_STATUSES:
+            return fallback_value
+        # A cancel set through cancel_at is as pending as one set at period end.
+        if parse_cancel_at(getattr(subscription, "cancel_at", None)) is not None:
+            return True
         return bool(getattr(subscription, "cancel_at_period_end", fallback_value))
 
     # Fallback to cached database value on error

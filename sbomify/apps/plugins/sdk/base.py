@@ -114,6 +114,13 @@ class AssessmentPlugin(ABC):
     - context: Optional SBOMContext with pre-computed metadata (sha256_hash, etc.)
     - config: Optional plugin-specific configuration via __init__
 
+    Bump ``VERSION`` whenever a change could alter a verdict: a check added,
+    removed or loosened, a field read differently, a new identifier spelling
+    accepted. Every stored run records the version that produced it, and the
+    artifact page marks a result from an older version as out of date and
+    offers a re-run. A scoring change shipped under the same version leaves
+    every existing result looking current.
+
     Example:
         >>> class MyPlugin(AssessmentPlugin):
         ...     VERSION = "1.0.0"

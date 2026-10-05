@@ -101,6 +101,14 @@
   --color-primary-dark: rgb(66 99 235);    /* Brand Blue #4263EB */
   --color-primary-light: rgb(163 174 255); /* #A3AEFF - for subtle states */
   --color-primary-lighter: rgb(199 205 255); /* #C7CDFF - for backgrounds */
+  /* Fill behind white text on filled controls (primary button, active step).
+     --color-primary is an accent for text and edges on dark surfaces, so white
+     on it measures 3.0:1; these keep every point of the gradient and its hover
+     at 4.5:1 or better (4.98 to 6.74, hover 4.6 to 5.6). */
+  --color-primary-fill: rgb(66 99 235);
+  --color-primary-fill-end: rgb(52 78 205);
+  --color-primary-fill-hover: rgb(74 104 237);
+  --color-primary-fill-hover-end: rgb(60 90 225);
   --color-background: rgb(21 23 36);       /* Deep Navy #151724 - darkest layer */
   --color-surface: rgb(30 33 50);          /* Navy Surface #1E2132 - cards & panels */
   --color-surface-elevated: rgb(37 41 63); /* Brand Navy #25293F - modals, dropdowns */
@@ -242,6 +250,10 @@
   /* Primary — brand navy ink (buttons, links, focus) */
   --color-primary: rgb(37 41 63);          /* Brand Navy #25293F */
   --color-primary-dark: rgb(26 29 46);     /* #1A1D2E - hover/pressed */
+  --color-primary-fill: rgb(37 41 63);     /* 14.3:1 under white */
+  --color-primary-fill-end: rgb(26 29 46);
+  --color-primary-fill-hover: rgb(81 84 107); /* 7.4:1 under white */
+  --color-primary-fill-hover-end: rgb(37 41 63);
   --color-primary-light: rgb(81 84 107);   /* Navy-80 #51546B */
   --color-primary-lighter: rgb(211 212 217); /* Navy-20 #D3D4D9 */
 
@@ -263,20 +275,23 @@
   --color-text-disabled: rgb(168 169 178); /* Navy-40 #A8A9B2 */
 
   /* Status Colors */
-  --color-success: rgb(31 169 113);        /* Brand Green #1FA971 */
-  --color-success-dark: rgb(23 138 91);    /* #178A5B */
+  /* Status colours double as text, so they are the measured ink rather than the
+     brand swatch: each reads at 4.5:1 or better on white and on its own 12%
+     badge tint (the brand values measured 1.9 to 4.2 on the tint). */
+  --color-success: rgb(22 120 80);         /* 5.47 on white, 4.64 on tint (brand #1FA971) */
+  --color-success-dark: rgb(17 98 65);
   --color-success-light: rgb(231 246 239); /* Tint #E7F6EF */
 
-  --color-warning: rgb(245 166 35);        /* Brand Amber #F5A623 */
-  --color-warning-dark: rgb(216 140 15);   /* #D88C0F */
+  --color-warning: rgb(142 96 20);         /* 5.48, 4.66 (brand #F5A623) */
+  --color-warning-dark: rgb(118 79 16);
   --color-warning-light: rgb(253 243 225); /* Tint #FDF3E1 */
 
-  --color-danger: rgb(229 72 77);          /* Brand Red #E5484D */
-  --color-danger-dark: rgb(197 52 57);     /* #C53439 */
+  --color-danger: rgb(185 58 62);          /* 5.62, 4.70 (brand #E5484D) */
+  --color-danger-dark: rgb(158 46 50);
   --color-danger-light: rgb(252 234 235);  /* Tint #FCEAEB */
 
-  --color-info: rgb(66 99 235);            /* Brand Blue #4263EB */
-  --color-info-dark: rgb(52 80 196);       /* #3450C4 */
+  --color-info: rgb(62 93 221);            /* 5.51, 4.67 (brand #4263EB) */
+  --color-info-dark: rgb(50 74 180);
   --color-info-light: rgb(234 238 253);    /* Tint #EAEEFD */
 
   /* Accent Colors */
@@ -384,6 +399,163 @@ header {
 html.no-transitions,
 html.no-transitions * {
   transition: none !important;
+}
+
+/* ============================================
+   Stacked tables
+   ============================================ */
+/* Below sm a c-tables.table (table[data-stack]) lays each row out as a block of
+   labelled values, so status, counts and the row's action stay on screen
+   instead of behind a sideways scroll. Each cell's label is its column header,
+   written into data-label by core/js/table-stack.ts.
+
+   Unlayered on purpose: these must beat the cells' utility padding and
+   borders, and the `hidden md:table-cell` a caller uses to drop a column on a
+   narrow table, since a stacked row has room for every value. Inline display
+   from Alpine's x-show still wins, so rows and details it hides stay hidden. */
+@media (max-width: 639.98px) {
+  table[data-stack] {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* The header row's labels move onto the cells, but its sort controls must
+     stay usable: sortable headers become a "Sort by" bar above the rows and the
+     rest step aside. A table with nothing to sort hides the row visually. */
+  table[data-stack] > thead {
+    display: block;
+  }
+
+  table[data-stack] > thead:not(:has([data-table-sort])) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  table[data-stack] > thead > tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-background);
+  }
+
+  table[data-stack] > thead:has([data-table-sort]) > tr::before {
+    content: "Sort by";
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  table[data-stack] > thead > tr > th {
+    display: none;
+    position: static;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  table[data-stack] > thead > tr > th:has([data-table-sort]) {
+    display: block;
+  }
+
+  table[data-stack] > tbody {
+    display: block;
+  }
+
+  /* One column: a half-width value squeezed badge groups into a tall stack and
+     broke long names, so every value gets the row's full width. */
+  table[data-stack] > tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
+  }
+
+  table[data-stack] > tbody:last-child > tr:last-child {
+    border-bottom: 0;
+  }
+
+  /* Widths and pinning belong to the side-by-side table: a stacked cell spans
+     the row, which is also what lets the actions cell reach the right edge. */
+  table[data-stack] > tbody > tr > td {
+    display: block;
+    position: static;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  table[data-stack] > tbody > tr > td[data-cell-end] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  table[data-stack] > tbody > tr > td:empty {
+    display: none;
+  }
+
+  /* The label sits in a left gutter beside its value, not above it, which
+     halves a row's height. It is positioned rather than a flex or grid item so
+     a value made of several nodes (a name, a version and a badge) keeps its
+     own flow. The row's first cell is its subject and needs no label. */
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]) {
+    position: relative;
+    padding-left: 7.5rem;
+    min-height: 1.25rem;
+  }
+
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end])::before {
+    content: attr(data-label);
+    position: absolute;
+    top: 0.125rem;
+    left: 0;
+    width: 6.75rem;
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ============================================
+   Surface corners
+   ============================================ */
+/* Surfaces (cards, table shells, collapsibles, dropdown panels) are rounded-xl
+   and do not clip, because a menu inside one must be free to overflow it. So
+   whatever paints into their corners takes the curve itself: the first child
+   the top corners, the last child the bottom, at the surface radius less the
+   1px border it sits inside. A table's scroll box is such a child, and it
+   clips its header band to that curve, so header cells never round
+   themselves. Zero specificity: a child that states its own radius wins. */
+@layer base {
+  :where([data-surface]) > :where(:first-child) {
+    border-top-left-radius: calc(var(--radius-xl) - 1px);
+    border-top-right-radius: calc(var(--radius-xl) - 1px);
+  }
+
+  :where([data-surface]) > :where(:last-child) {
+    border-bottom-left-radius: calc(var(--radius-xl) - 1px);
+    border-bottom-right-radius: calc(var(--radius-xl) - 1px);
+  }
 }
 
 /* ============================================

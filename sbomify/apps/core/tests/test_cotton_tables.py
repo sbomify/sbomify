@@ -137,10 +137,13 @@ def test_header_cell_band_recipe(rendered: str) -> None:
         "text-text-muted bg-background",
         "border-b border-solid border-border",
         "sticky top-0 z-[1]",
-        "first:rounded-tl-lg last:rounded-tr-lg",
         "first:pl-4 last:pr-4 max-sm:px-2",
     ):
         assert bit in cell
+    # The surface it sits in owns the corners. A cell that rounds itself cuts a
+    # notch wherever the table is not at the top of its card, and a smaller
+    # curve than the card's where it is.
+    assert "rounded" not in cell
 
 
 def test_header_cell_alignment_segments_never_conflict(rendered: str) -> None:

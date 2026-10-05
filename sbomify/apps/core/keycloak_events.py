@@ -37,8 +37,8 @@ class KeycloakEventPoller:
             admin_client = self.keycloak_manager.admin_client
 
             # Get events from Keycloak
-            events = admin_client.get_events(  # type: ignore[call-arg]
-                query_params={
+            events = admin_client.get_events(
+                query={
                     "dateFrom": from_time,
                     "type": ["LOGIN", "LOGOUT", "REGISTER", "DELETE_ACCOUNT", "UPDATE_PROFILE"],
                 }

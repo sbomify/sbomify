@@ -75,7 +75,7 @@ keeps app test directories represented in CI. Security checks also live in the
 | --- | --- |
 | Shared component markup, variants, state and accessibility | `test_cotton_*.py` in [Core tests](../sbomify/apps/core/tests/), [gallery view tests](../sbomify/apps/core/tests/test_design_system_view.py) and [gallery template](../sbomify/apps/core/templates/core/design_system.html.j2). |
 | Server-rendered pages, permissions and HTMX fragments | Each affected app's `tests/` directory in the CI matrix. Trace includes across Core, SBOMs, Plugins, Teams and other consumers instead of selecting tests by the edited file's directory alone. |
-| Client behavior, filters, keyboard handling, themes and chart lifetime | `*.spec.ts` beside the TypeScript source. Examples: [pagination](../sbomify/apps/core/js/components/pagination-controls.spec.ts), [themes](../sbomify/apps/core/js/theme-manager.spec.ts) and [charts](../sbomify/apps/vulnerability_scanning/js/vulnerability-chart.spec.ts). |
+| Client behavior, filters, keyboard handling, themes and chart lifetime | `*.spec.ts` beside the TypeScript source. Examples: [table paging](../sbomify/apps/sboms/js/sboms-table.spec.ts), [themes](../sbomify/apps/core/js/theme-manager.spec.ts) and [charts](../sbomify/apps/vulnerability_scanning/js/vulnerability-chart.spec.ts). |
 | User journeys and responsive layout | [E2E tests](../sbomify/apps/core/tests/e2e/), especially [headers](../sbomify/apps/core/tests/e2e/test_page_headers.py), [mobile](../sbomify/apps/core/tests/e2e/test_mobile_layout.py), [loading](../sbomify/apps/core/tests/e2e/test_loading_states.py), [actions](../sbomify/apps/core/tests/e2e/test_ui_action_repairs.py) and the changed page's snapshot tests. |
 
 ## Validation before committing UI changes

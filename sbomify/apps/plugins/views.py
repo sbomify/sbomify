@@ -237,5 +237,8 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "findings_url": base_url,
                 "findings_query": query_string(query, page=1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
                 "panel": found.panel,
+                # A short check list reads whole; search and paging only earn
+                # their place once it runs past one page.
+                "show_toolbar": found.is_security or found.panel["unfiltered_total"] > PAGE_SIZE,
             },
         )

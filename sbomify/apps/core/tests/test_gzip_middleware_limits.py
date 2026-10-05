@@ -9,6 +9,7 @@ from __future__ import annotations
 import gzip
 import json
 import time
+import tracemalloc
 from types import SimpleNamespace
 
 import jwt
@@ -141,3 +142,21 @@ def test_a_compressed_body_with_an_in_date_oidc_token_is_inflated():
 
 def test_a_compressed_body_inflates_no_further_than_an_uncompressed_body_may_weigh():
     assert settings.GZIP_REQUEST_MAX_SIZE <= settings.DATA_UPLOAD_MAX_MEMORY_SIZE
+
+
+def test_an_inflated_body_is_held_in_memory_once():
+    inflated = 8 * 1024 * 1024
+    payload = bytes(inflated)
+    request = _compressed_request(f"Bearer {create_personal_access_token(SimpleNamespace(pk=1))}")
+    request._body = gzip.compress(payload)
+
+    tracemalloc.start()
+    try:
+        response, reached = _run(request)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert response.status_code == 200
+    assert reached[0].read() == payload
+    assert peak < inflated * 3 // 2

@@ -11,7 +11,7 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
-from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST, can
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -101,6 +101,9 @@ def create_access_request(
         except Team.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
+        if not can(request, "access_request:submit", team):
+            return 403, {"detail": "Forbidden"}
+
         user = cast(User, request.user)
 
         # Check if user already has access
@@ -154,20 +157,7 @@ def create_access_request(
             if existing_request:
                 # If request is REVOKED or REJECTED, update it to PENDING
                 if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
-                    # Note: Old NDA signature remains linked to the old document version.
-                    # It will be replaced (not archived) when user signs the current NDA version
-                    # due to OneToOneField constraint. For full audit history, consider
-                    # changing the model to allow multiple signatures per access_request.
-
-                    # Update existing request to PENDING status
-                    existing_request.status = AccessRequest.Status.PENDING
-                    existing_request.requested_at = timezone.now()
-                    existing_request.decided_at = None
-                    existing_request.decided_by = None
-                    existing_request.revoked_at = None
-                    existing_request.revoked_by = None
-                    existing_request.notes = ""
-                    existing_request.save()
+                    existing_request.reopen()
                     access_request = existing_request
                     request_state_changed = True
                 elif existing_request.status == AccessRequest.Status.PENDING:
@@ -288,13 +278,9 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
             return 404, {"detail": "Access request not found"}
 
         # Only the requester, or an owner or admin of the workspace, reads the NDA
-        if access_request.user != request.user:
-            try:
-                member = Member.objects.get(team=team, user=cast(User, request.user))
-                if member.role not in ADMINISTER:
-                    return 403, {"detail": "Forbidden"}
-            except Member.DoesNotExist:
-                return 403, {"detail": "Forbidden"}
+        action = "access_request:submit" if access_request.user == request.user else "access_request:read"
+        if not can(request, action, team):
+            return 403, {"detail": "Forbidden"}
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
@@ -355,7 +341,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
             return 404, {"detail": "Access request not found"}
 
         # Only the requester signs, for themselves
-        if access_request.user != request.user:
+        if access_request.user != request.user or not can(request, "access_request:submit", team):
             return 403, {"detail": "Forbidden"}
 
         # Get company-wide NDA
@@ -451,9 +437,11 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
         return 403, {"detail": "Authentication required"}
 
     # Get teams where user is owner or admin
-    member_teams = Member.objects.filter(user=request.user, role__in=("owner", "admin")).values_list(
-        "team_id", flat=True
-    )
+    member_teams = [
+        member.team_id
+        for member in Member.objects.filter(user=request.user, role__in=ADMINISTER).select_related("team")
+        if can(request, "access_request:read", member.team)
+    ]
 
     if not member_teams:
         return 403, {"detail": "Access denied"}
@@ -534,12 +522,7 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking
@@ -618,12 +601,7 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking
@@ -691,12 +669,7 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking

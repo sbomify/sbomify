@@ -32,3 +32,11 @@ def test_no_api_call_changes_the_licence_catalogue(authenticated_api_client):
     assert response.status_code == 404
     assert loader.load_custom_licenses() == before
     assert "MIT" not in loader.CUSTOM_SYMBOLS
+
+
+def test_the_api_docs_offer_no_custom_licence_management():
+    from sbomify.apis import api
+
+    tags = {tag["name"]: tag["description"] for tag in api.get_openapi_schema()["tags"]}
+
+    assert "custom licen" not in tags["Licensing"].lower()

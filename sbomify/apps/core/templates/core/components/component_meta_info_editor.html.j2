@@ -107,23 +107,11 @@
                         <div class="space-y-3"
                              x-data="{ prevRelease: metadata.release_date, prevEos: metadata.end_of_support, prevEol: metadata.end_of_life }"
                              x-effect=" if (prevRelease !== metadata.release_date) { hasUnsavedChanges = true; prevRelease = metadata.release_date; } if (prevEos !== metadata.end_of_support) { hasUnsavedChanges = true; prevEos = metadata.end_of_support; } if (prevEol !== metadata.end_of_life) { hasUnsavedChanges = true; prevEol = metadata.end_of_life; } ">
-                            <c-forms.label>Key Dates</c-forms.label>
+                            <c-forms.label>Key dates</c-forms.label>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <!-- Release Date -->
-                                <div class="p-3 rounded-lg bg-border/10 border border-border/30">
-                                    <div class="text-xs font-medium text-text-muted mb-2">Release Date</div>
-                                    {% include 'components/date_picker.html.j2' with value_binding='metadata.release_date' placeholder='Set date...' %}
-                                </div>
-                                <!-- End of Support -->
-                                <div class="p-3 rounded-lg bg-border/10 border border-border/30">
-                                    <div class="text-xs font-medium text-text-muted mb-2">End of Support</div>
-                                    {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_support' placeholder='Set date...' %}
-                                </div>
-                                <!-- End of Life -->
-                                <div class="p-3 rounded-lg bg-border/10 border border-border/30">
-                                    <div class="text-xs font-medium text-text-muted mb-2">End of Life</div>
-                                    {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_life' placeholder='Set date...' %}
-                                </div>
+                                {% include 'components/date_picker.html.j2' with value_binding='metadata.release_date' label='Release date' %}
+                                {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_support' label='End of support' %}
+                                {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_life' label='End of life' %}
                             </div>
                         </div>
                     </div>

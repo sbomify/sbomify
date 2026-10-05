@@ -112,7 +112,9 @@ class ComponentVulnerabilitiesContext:
     version: str | None = None
 
 
-def build_component_vulnerabilities(component_id: str, query: FindingQuery) -> ComponentVulnerabilitiesContext:
+def build_component_vulnerabilities(
+    component_id: str, query: FindingQuery, *, triage_identity: tuple[str, str, str, str] | None = None
+) -> ComponentVulnerabilitiesContext:
     """The newest SBOM's findings, summarised whole and paged for display.
 
     Rows are derived on every request rather than cached. The derivation is the
@@ -182,6 +184,15 @@ def build_component_vulnerabilities(component_id: str, query: FindingQuery) -> C
             (extract_severity_counts(result) for result in provider_results),
             key=lambda counts: counts["total"],
         )
+
+    if triage_identity is not None:
+        advisory, package, version, ecosystem = triage_identity
+        rows = [
+            row
+            for row in rows
+            if advisory in (row["id"], *row["aliases"])
+            and (row["package"], row["version"], row["ecosystem"]) == (package, version, ecosystem)
+        ]
 
     return ComponentVulnerabilitiesContext(
         summary=summary,

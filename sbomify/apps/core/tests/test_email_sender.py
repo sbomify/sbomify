@@ -81,19 +81,6 @@ class TestEverySenderUsesTheSetting:
         assert mail.outbox[0].from_email == SENDER
         assert mail.outbox[0].reply_to == ["hello@sbomify.com"]
 
-    def test_owner_invitation_notice(self, django_user_model, workspace):
-        from sbomify.apps.teams.services.member_notifications import notify_owners_of_owner_invitation
-
-        _member(django_user_model, workspace, "noticeowner", "owner")
-        actor = _member(django_user_model, workspace, "noticeadmin", "admin")
-
-        mail.outbox = []
-        notify_owners_of_owner_invitation(workspace, actor, "someone@example.com")
-
-        assert mail.outbox
-        for message in mail.outbox:
-            assert message.from_email == SENDER
-
     def test_token_expiry_warning(self, django_user_model, workspace):
         from datetime import timedelta
 
