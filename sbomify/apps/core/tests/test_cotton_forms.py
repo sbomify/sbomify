@@ -335,7 +335,7 @@ def test_toggle_track_and_knob_are_the_input_and_its_pseudo_element(rendered: st
     toggle = _open_tag(rendered, "input", 'id="probe-toggle"')
     assert "relative w-12 h-6.5 shrink-0 appearance-none cursor-pointer bg-border rounded-full" in toggle
     assert "before:content-[''] before:absolute before:top-0.75 before:left-0.75 before:w-5 before:h-5" in toggle
-    assert "checked:bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)]" in toggle
+    assert "checked:bg-[linear-gradient(135deg,var(--color-primary-fill)_0%,var(--color-primary-fill-end)_100%)]" in toggle
     assert "checked:before:translate-x-[1.375rem]" in toggle
     assert '@change="publish()"' in toggle
 

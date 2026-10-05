@@ -183,18 +183,23 @@ def test_upload_menu_and_deep_links(
 
 def test_cra_parties_link_opens_complete_settings(authenticated_page: Page, cra_assessment: Any) -> None:
     page = authenticated_page
-    page.goto(reverse("compliance:cra_step", args=[cra_assessment.pk, 1]))
-    page.get_by_role("link", name="Edit in team settings", exact=True).click()
-    expect(page.locator("#settings-content")).to_be_visible()
+    wizard_url = reverse("compliance:cra_step", args=[cra_assessment.pk, 1])
+    page.goto(wizard_url)
+    page.get_by_label("Description", exact=True).fill("Unsaved product details")
+    with page.expect_popup() as popup:
+        page.get_by_role("link", name="Edit manufacturer in Parties (opens in a new tab)", exact=True).click()
+    settings = popup.value
+    expect(settings.locator("#settings-content")).to_be_visible()
     expect(
-        page.get_by_role("navigation", name="Settings sections").get_by_role("link", name="Parties", exact=True)
+        settings.get_by_role("navigation", name="Settings sections").get_by_role("link", name="Parties", exact=True)
     ).to_have_attribute("aria-current", "page")
-    expect(page.locator('#contact-profiles-content > [x-data="contactProfileList"]')).to_be_visible()
-    page.get_by_role("button", name="Add party", exact=True).click()
-    page.get_by_role("button", name="Back to parties", exact=True).click()
-    expect(page.locator("#contact-profiles-content")).to_be_visible()
-    page.go_back()
-    expect(page).to_have_url(re.compile(re.escape(reverse("compliance:cra_step", args=[cra_assessment.pk, 1])) + "$"))
+    expect(settings.locator('#contact-profiles-content > [x-data="contactProfileList"]')).to_be_visible()
+    settings.get_by_role("button", name="Add party", exact=True).click()
+    settings.get_by_role("button", name="Back to parties", exact=True).click()
+    expect(settings.locator("#contact-profiles-content")).to_be_visible()
+    settings.close()
+    expect(page).to_have_url(re.compile(re.escape(wizard_url) + "$"))
+    expect(page.get_by_label("Description", exact=True)).to_have_value("Unsaved product details")
 
 
 def test_controls_navigation_and_product_overrides(
@@ -291,8 +296,7 @@ def test_unchanged_lifecycle_keeps_the_editor(
     card.get_by_role("button", name="Cancel", exact=True).click()
     expect(card.get_by_role("button", name="Set dates", exact=True)).to_be_visible()
     card.get_by_role("button", name="Set dates", exact=True).click()
-    card.get_by_role("textbox").first.click()
-    page.get_by_role("button", name="Today", exact=True).click()
+    card.get_by_label("Release date", exact=True).fill("2026-01-15")
     card.get_by_role("button", name="Save", exact=True).click()
     expect(card.get_by_role("button", name="Edit", exact=True)).to_be_visible()
     product.refresh_from_db()

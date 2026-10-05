@@ -3297,6 +3297,7 @@ def test_delete_sbom_api(
     sample_access_token: AccessToken,  # noqa: F811
     sample_sbom: SBOM,  # noqa: F811
     mocker: MockerFixture,  # noqa: F811
+    django_capture_on_commit_callbacks,
 ):
     """Test SBOM deletion via API endpoint."""
     mocker.patch("boto3.resource")
@@ -3310,10 +3311,11 @@ def test_delete_sbom_api(
     assert response.status_code == 401
 
     # Test with valid token and permissions
-    response = client.delete(
-        url,
-        **get_api_headers(sample_access_token),
-    )
+    with django_capture_on_commit_callbacks(execute=True):
+        response = client.delete(
+            url,
+            **get_api_headers(sample_access_token),
+        )
 
     assert response.status_code == 204
     assert SBOM.objects.filter(id=sample_sbom.id).count() == 0

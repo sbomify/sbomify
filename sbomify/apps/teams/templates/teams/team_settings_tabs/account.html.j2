@@ -4,10 +4,10 @@
     <c-cards.card flush>
     <c-cards.header compact title="You" />
     <c-forms.field horizontal label="Name" hint="Your name comes from your sign-in provider.">
-    <c-forms.input size="sm" readonly aria-label="Name" value="{{ request.user.get_full_name|default:request.user.username }}" />
+    <c-forms.static>{{ request.user.get_full_name|default:request.user.username }}</c-forms.static>
     </c-forms.field>
     <c-forms.field horizontal label="Email" hint="Used to sign in and receive notifications.">
-    <c-forms.input size="sm" readonly aria-label="Email" value="{{ request.user.email }}" />
+    <c-forms.static>{{ request.user.email }}</c-forms.static>
     </c-forms.field>
     <c-forms.field horizontal label="Sign-in" hint="Manage your password and two-factor authentication with your sign-in provider.">
     <c-forms.hint>Managed by your identity provider</c-forms.hint>

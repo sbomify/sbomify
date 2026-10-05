@@ -7,6 +7,7 @@ import stripe
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
 from django.urls import reverse
+from pytest_mock import MockerFixture
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
@@ -143,6 +144,68 @@ def test_get_usage_token_scope_gate(
     full = tok(None)
     response = client.get(url, HTTP_AUTHORIZATION=f"Bearer {full}")
     assert response.status_code == 200, response.content
+
+
+@pytest.mark.django_db
+def test_change_plan_token_scope_gate(
+    client: Client,
+    mocker: MockerFixture,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811
+):
+    """change_plan is gated by can("billing:manage", team), the only check that applies a token's scopes.
+
+    sample_user owns the workspace, so an owner/admin role check would let the
+    publish-only token through, and a downgrade to Community makes the
+    workspace's private components public.
+    """
+    team = team_with_business_plan
+    # No subscription on file, so the billing:manage token below can start a checkout.
+    team.billing_plan_limits = {"max_products": 10, "max_components": 100}
+    team.save()
+    component = Component.objects.create(name="Private", team=team, visibility=Component.Visibility.PRIVATE)
+    limits = team.billing_plan_limits
+    stripe = mocker.MagicMock()
+    stripe.create_checkout_session.return_value.url = "https://checkout.stripe.com/test"
+    # Stripe has no subscription either, so a downgrade past the gate would make the component public at once.
+    stripe.list_subscriptions.return_value.data = []
+    mocker.patch("sbomify.apps.billing.apis.get_stripe_client", return_value=stripe)
+
+    def tok(scopes: list[str] | None) -> str:
+        token_str = create_personal_access_token(sample_user)
+        AccessToken.objects.create(
+            user=sample_user,
+            encoded_token=token_str,
+            team=team,
+            scopes=scopes,
+            description="scope-gate test token",
+        )
+        return token_str
+
+    def change_plan(token: str, plan: str):
+        return client.post(
+            reverse("api-1:change_plan"),
+            json.dumps({"team_key": team.key, "plan": plan, "billing_period": "monthly"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+    publish = tok(SCOPE_PRESETS["publish"])
+    for plan in ("business", "community"):
+        response = change_plan(publish, plan)
+        assert response.status_code == 403, response.content
+
+    assert stripe.method_calls == []
+    team.refresh_from_db()
+    component.refresh_from_db()
+    assert team.billing_plan == "business"
+    assert team.billing_plan_limits == limits
+    assert component.visibility == Component.Visibility.PRIVATE
+
+    response = change_plan(tok(["billing:manage"]), "business")
+    assert response.status_code == 200, response.content
+    stripe.create_checkout_session.assert_called_once()
 
 
 @pytest.mark.django_db

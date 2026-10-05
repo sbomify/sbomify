@@ -2,8 +2,8 @@
 
 The product and release CBOM downloads answer anonymous callers when the product
 is public. Such a caller gets the crypto assets of PUBLIC components only, the
-same rule the release SBOM and VEX downloads apply, and a member's full document
-never reaches them through the cache.
+same rule the release SBOM and VEX downloads apply, and neither a member's full
+document nor a component's earlier visibility reaches them through the cache.
 """
 
 from __future__ import annotations
@@ -16,7 +16,9 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.teams.models import Member, Team
 
 PUBLIC_REF = "crypto/public"
 GATED_REF = "crypto/gated"
@@ -48,6 +50,11 @@ def _refs(response) -> set[str]:
     return {component["bom-ref"] for component in json.loads(response.content)["components"]}
 
 
+def _set_visibility(component: Component, visibility: str) -> None:
+    component.visibility = visibility
+    component.save()
+
+
 @pytest.fixture
 def mixed_components(team_with_business_plan, mocker):
     """A public product holding one PUBLIC, one GATED and one PRIVATE component, each with a CBOM."""
@@ -77,6 +84,20 @@ def mixed_release(mixed_components):
     for sbom in SBOM.objects.filter(component__products=mixed_components, bom_type=SBOM.BomType.CBOM):
         ReleaseArtifact.objects.create(release=release, sbom=sbom)
     return release
+
+
+@pytest.fixture(params=["approved guest", "other workspace owner"])
+def signed_in_outsider(request, mixed_components, guest_user):
+    """A signed-in caller without release read access: an approved guest, or the owner of another workspace."""
+    if request.param == "approved guest":
+        team = mixed_components.team
+        Member.objects.create(team=team, user=guest_user, role="guest")
+        AccessRequest.objects.create(team=team, user=guest_user, status=AccessRequest.Status.APPROVED)
+    else:
+        Member.objects.create(team=Team.objects.create(name="Elsewhere"), user=guest_user, role="owner")
+    client = Client()
+    client.force_login(guest_user)
+    return client
 
 
 def _release_url(release: Release) -> str:
@@ -129,6 +150,22 @@ def test_member_product_cbom_holds_every_component(mixed_components, authenticat
 
 
 @pytest.mark.django_db
+def test_signed_in_outsider_release_cbom_holds_public_components_only(mixed_release, signed_in_outsider):
+    response = signed_in_outsider.get(_release_url(mixed_release))
+
+    assert response.status_code == 200
+    assert _refs(response) == {PUBLIC_REF}
+
+
+@pytest.mark.django_db
+def test_signed_in_outsider_product_cbom_holds_public_components_only(mixed_components, signed_in_outsider):
+    response = signed_in_outsider.get(_product_url(mixed_components))
+
+    assert response.status_code == 200
+    assert _refs(response) == {PUBLIC_REF}
+
+
+@pytest.mark.django_db
 def test_anonymous_release_cbom_is_absent_when_only_private_components_carry_one(team_with_business_plan, mocker):
     team = team_with_business_plan
     product = Product.objects.create(name="Private crypto", team=team, is_public=True)
@@ -142,3 +179,47 @@ def test_anonymous_release_cbom_is_absent_when_only_private_components_carry_one
     response = Client().get(_release_url(release))
 
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_anonymous_release_cbom_drops_a_component_made_private(mixed_release):
+    assert _refs(Client().get(_release_url(mixed_release))) == {PUBLIC_REF}
+    _set_visibility(Component.objects.get(name="pub"), Component.Visibility.PRIVATE)
+
+    response = Client().get(_release_url(mixed_release))
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_anonymous_product_cbom_drops_a_component_made_private(mixed_components):
+    assert _refs(Client().get(_product_url(mixed_components))) == {PUBLIC_REF}
+    _set_visibility(Component.objects.get(name="pub"), Component.Visibility.PRIVATE)
+
+    response = Client().get(_product_url(mixed_components))
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_anonymous_release_cbom_follows_a_visibility_swap(team_with_business_plan, mocker):
+    """One component leaves the public view as another joins it: same count, same newest CBOM."""
+    team = team_with_business_plan
+    product = Product.objects.create(name="Swap", team=team, is_public=True)
+    release = Release.objects.create(product=product, name="v1")
+    leaving = Component.objects.create(name="leaving", team=team, visibility=Component.Visibility.PUBLIC)
+    joining = Component.objects.create(name="joining", team=team, visibility=Component.Visibility.PRIVATE)
+    steady = Component.objects.create(name="steady", team=team, visibility=Component.Visibility.PUBLIC)
+    # steady's CBOM is created last, so it is the newest public one on both sides of the swap.
+    for component in (leaving, joining, steady):
+        ReleaseArtifact.objects.create(release=release, sbom=_cbom(component, component.name))
+    storage = mocker.patch("sbomify.apps.core.object_store.StorageClient")
+    storage.return_value.get_sbom_data.side_effect = _doc
+    cache.clear()
+    assert _refs(Client().get(_release_url(release))) == {"leaving", "steady"}
+
+    _set_visibility(leaving, Component.Visibility.PRIVATE)
+    _set_visibility(joining, Component.Visibility.PUBLIC)
+    response = Client().get(_release_url(release))
+
+    assert _refs(response) == {"joining", "steady"}

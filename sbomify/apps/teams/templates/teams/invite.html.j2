@@ -36,14 +36,11 @@
                 </c-forms.select>
                 {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
             {% endwith %}
-            <ul class="mt-4 space-y-2 text-sm text-text-muted">
-                <li>
-                    <strong class="text-text">Owner</strong> has full control including removing the workspace and inviting other users.
-                </li>
-                <li>
-                    <strong class="text-text">Admin</strong> can create products and components, upload/manage SBOMs.
-                </li>
-            </ul>
+            <div class="mt-4 space-y-3">
+                {% for role_key, role_label, role_description in role_descriptions %}
+                    <c-overview.record title="{{ role_label }}" detail="{{ role_description }}" />
+                {% endfor %}
+            </div>
         </div>
         <div class="flex justify-end">
             <c-buttons.primary type="submit">Invite to workspace</c-buttons.primary>

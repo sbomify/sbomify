@@ -20,6 +20,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "icon-chips", "label": "Icon chips", "group": "Foundations"},
     {"id": "metric-chips", "label": "Metric chips", "group": "Foundations"},
     {"id": "assessment-pills", "label": "Assessment pills", "group": "Foundations"},
+    {"id": "assessment-list", "label": "Assessment list", "group": "Foundations"},
     {"id": "page-header", "label": "Page & section headers", "group": "Foundations"},
     {"id": "buttons", "label": "Buttons", "group": "Controls"},
     {"id": "forms", "label": "Form controls", "group": "Controls"},
@@ -137,6 +138,15 @@ class DesignSystemView(LoginRequiredMixin, View):
             "overview_demo_sla": {"label": "3 days over", "overdue": True},
             "overview_demo_evidence": {"component_count": 3, "stale": 1, "missing_sboms": 1},
             "overview_demo_empty": {"is_first_visit": True, "metrics": {"open": 0}},
+            "scorecard_demo": {
+                "issues": [{"tone": "success", "count": 6}, {"tone": "warning", "count": 1}],
+                "scan": [
+                    {"tone": "critical", "count": 1},
+                    {"tone": "high", "count": 1},
+                    {"tone": "medium", "count": 2},
+                ],
+                "passed": [{"tone": "success", "count": 3}],
+            },
             "team": request.session.get("current_team", {}),
             "sections": GALLERY_SECTIONS,
             # One row per brand, chosen to show the ink switching rather than to

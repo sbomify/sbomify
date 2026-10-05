@@ -74,7 +74,7 @@ def test_modal_size_segments_never_stack(rendered: str) -> None:
 def test_modal_show_prop_drives_every_alpine_hook(rendered: str) -> None:
     root = _probe(rendered, "modal-lg")
     assert 'x-show="showPanel"' in root
-    assert '@keydown.escape="showPanel = false"' in root
+    assert '@keydown.escape.window="if (showPanel) { showPanel = false }"' in root
     large = _section(rendered, "modal-lg")
     dialog = large[: large.index("</template>")]
     assert 'x-trap.noscroll="showPanel"' in dialog
@@ -93,7 +93,7 @@ def test_modal_any_outside_click_closes(rendered: str) -> None:
 
 def test_close_prop_replaces_the_show_assignment_everywhere(rendered: str) -> None:
     root = _probe(rendered, "modal-close")
-    assert '@keydown.escape="removeTarget = null"' in root
+    assert '@keydown.escape.window="if (removeTarget) { removeTarget = null }"' in root
     section = _section(rendered, "modal-close")
     dialog = section[: section.index("</template>")]
     # Backdrop and close button run the same expression as escape does.

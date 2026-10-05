@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 from django.conf import settings
-from django.db import transaction
+from django.db import connection, transaction
 from django.http import HttpRequest
 
 from sbomify.apps.core.authz import can
@@ -40,6 +42,68 @@ def schedule_vex_reapply(component_id: str) -> None:
     transaction.on_commit(_send)
 
 
+def _lock_sbom_file(key: str) -> None:
+    """Hold ``key``'s lock until the current transaction ends.
+
+    Upload and delete of one stored file serialise on it, so a delete never
+    counts references while an upload of the same bytes is between its put
+    and its commit.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", [f"sbom-file:{key}"])
+
+
+def upload_sbom_file(s3: StorageClient, data: bytes) -> str:
+    """Store SBOM bytes and return their key. The caller saves the SBOM row in this same transaction.
+
+    Identical bytes share one key across every workspace, so the lock taken here
+    keeps a concurrent ``deleting_sbom_files`` from removing the object before
+    the new row that uses it commits.
+    """
+    if transaction.get_autocommit():
+        raise RuntimeError("upload_sbom_file must run inside the transaction that saves the SBOM row")
+    _lock_sbom_file(StorageClient.sbom_object_name(data))
+    return s3.upload_sbom(data)
+
+
+@contextmanager
+def deleting_sbom_files(keys: Iterable[str]) -> Iterator[None]:
+    """Delete SBOM rows in the body, then the stored files no remaining row uses.
+
+    Identical uploads share one stored file, in any workspace, so a file is only
+    removed once no SBOM row references it. The locks are taken before the body
+    deletes anything, in key order, and held to commit. The files are removed
+    only once the outermost transaction commits, so a rollback keeps them.
+    """
+    keys = sorted({key for key in keys if key})
+    with transaction.atomic():
+        for key in keys:
+            _lock_sbom_file(key)
+        yield
+        if keys:
+            transaction.on_commit(lambda: _delete_unused_sbom_files(keys))
+
+
+def _delete_unused_sbom_files(keys: list[str]) -> None:
+    """Remove the stored files in ``keys`` that no SBOM row references.
+
+    Runs after the delete has committed, so it takes the locks again: an upload
+    of the same bytes may have started since, and its row must be counted.
+    """
+    with transaction.atomic():
+        for key in keys:
+            _lock_sbom_file(key)
+        still_used = set(SBOM.objects.filter(sbom_filename__in=keys).values_list("sbom_filename", flat=True))
+        unused = [key for key in keys if key not in still_used]
+        if unused:
+            s3 = StorageClient("SBOMS")
+            for key in unused:
+                try:
+                    s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, key)
+                except Exception as exc:
+                    log.warning("Failed to delete S3 object %s: %s", key, exc)
+
+
 def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None]:
     try:
         sbom = SBOM.objects.select_related("component__team").get(pk=sbom_id)
@@ -57,14 +121,23 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
     bom_type = sbom.bom_type
     source = sbom.source or ""
 
-    s3 = StorageClient("SBOMS")
-    for blob_key in filter(None, [sbom.sbom_filename, sbom.signature_blob_key, sbom.provenance_blob_key]):
-        try:
-            s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, blob_key)
-        except Exception as exc:
-            log.warning("Failed to delete S3 object %s: %s", blob_key, exc)
+    with deleting_sbom_files([sbom.sbom_filename]):
+        sbom.delete()
 
-    sbom.delete()
+    # Signature and provenance keys carry the SBOM id, so no other row uses them.
+    # They go after commit too, so a rolled-back delete keeps them.
+    blob_keys = [key for key in (sbom.signature_blob_key, sbom.provenance_blob_key) if key]
+
+    def _delete_blobs() -> None:
+        s3 = StorageClient("SBOMS")
+        for blob_key in blob_keys:
+            try:
+                s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, blob_key)
+            except Exception as exc:
+                log.warning("Failed to delete S3 object %s: %s", blob_key, exc)
+
+    if blob_keys:
+        transaction.on_commit(_delete_blobs)
 
     from sbomify.apps.core.analytics import events
     from sbomify.apps.core.posthog_service import capture_for_request

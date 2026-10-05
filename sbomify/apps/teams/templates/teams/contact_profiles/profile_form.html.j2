@@ -36,7 +36,6 @@
             {# Profile Details Section #}
             <div class="flex flex-col gap-4">
                 <c-layout.section-header icon="fas fa-id-card" title="Party details" subtitle="Basic information about this party" />
-                <c-cards.card>
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <div class="lg:col-span-8">
                         <c-forms.label for="{{ form.name.id_for_label }}" required>Party name</c-forms.label>
@@ -49,20 +48,19 @@
                         <c-forms.checkbox name="{{ form.is_default.html_name }}" :checked="form.is_default.value">Set as default</c-forms.checkbox>
                     </div>
                 </div>
-                </c-cards.card>
             </div>
             {# Entities Section #}
             <div class="flex flex-col gap-4">
                 <c-layout.section-header icon="fas fa-building" accent="success" title="Entities" subtitle="Organizations (Manufacturer, Supplier, Author)">
                 <c-slot name="actions">
                 <c-buttons.primary size="sm" @click="addEntity" ::disabled="manufacturerCount >= 1 && supplierCount >= 1" ::title="manufacturerCount >= 1 && supplierCount >= 1 ? 'Both manufacturer and supplier roles are filled' : 'Add a new entity'">
-                <i class="fas fa-plus mr-1.5"></i>Add Entity
+                <i class="fas fa-plus mr-1.5" aria-hidden="true"></i>Add entity
                 </c-buttons.primary>
                 </c-slot>
                 </c-layout.section-header>
                 {# Info banner #}
                 <c-feedback.alert>
-                Each profile can have <strong>one manufacturer</strong> and <strong>one supplier</strong>.
+                Each party can have <strong>one manufacturer</strong> and <strong>one supplier</strong>.
                 A single entity can fulfill both roles.
                 </c-feedback.alert>
                 {{ entities_formset.management_form }}
@@ -76,7 +74,7 @@
                 {# Empty State for Entities #}
                 <c-feedback.empty-state compact icon="fas fa-building" icon_size="sm" icon_variant="neutral" title="No entities added" message="Add an entity to define the manufacturer, supplier, or author information." x-show="visibleEntitiesCount === 0" x-transition>
                 <c-buttons.secondary size="sm" @click="addEntity">
-                <i class="fas fa-plus mr-1.5"></i>Add Entity
+                <i class="fas fa-plus mr-1.5" aria-hidden="true"></i>Add entity
                 </c-buttons.secondary>
                 </c-feedback.empty-state>
             </div>
@@ -86,12 +84,12 @@
             <c-buttons.secondary hx-get="{% url 'teams:contact_profiles_list' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML">
             Cancel
             </c-buttons.secondary>
-            <c-buttons.primary type="submit" ::disabled="hasErrors">
-            <i class="fas fa-check mr-2"></i>
+            <c-buttons.primary type="submit" ::disabled="hasErrors || visibleEntitiesCount === 0">
+            <i class="fas fa-check mr-2" aria-hidden="true"></i>
             {% if is_create %}
-                Create Profile
+                Create party
             {% else %}
-                Save Changes
+                Save party
             {% endif %}
             </c-buttons.primary>
         </div>

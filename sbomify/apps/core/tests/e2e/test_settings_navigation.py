@@ -126,7 +126,7 @@ def test_settings_controls_and_navigation(
                 const notice = list.parentElement.querySelector('[role="alert"]');
                 return list.nextElementSibling.getBoundingClientRect().top - notice.getBoundingClientRect().bottom;
             }""") == pytest.approx(16)
-            page.get_by_role("button", name="Add Entity", exact=True).first.click()
+            page.get_by_role("button", name="Add entity", exact=True).first.click()
             expect(entities).to_be_visible()
             page.get_by_role("button", name="Back to parties", exact=True).click()
             expect(page.get_by_text("Product contacts", exact=True)).to_be_visible()

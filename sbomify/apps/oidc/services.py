@@ -37,7 +37,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, create_personal_access_token
+from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, create_personal_access_token, hash_token
 from sbomify.apps.core.models import User
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.oidc.github_api import GitHubResolveError, resolve_repository
@@ -125,7 +125,8 @@ def _bot_username(binding_id: str) -> str:
 
 
 def _bot_email(binding_id: str) -> str:
-    return f"{BOT_USERNAME_PREFIX}{binding_id}@{_BOT_EMAIL_DOMAIN}"
+    # Lower case, as User.save() stores every address.
+    return f"{BOT_USERNAME_PREFIX}{binding_id}@{_BOT_EMAIL_DOMAIN}".lower()
 
 
 def is_synthetic_bot_user(user: Any) -> bool:
@@ -555,7 +556,8 @@ def exchange_github_oidc_token(*, component_id: str, oidc_token: str) -> Service
     )
     with transaction.atomic():
         AccessToken.objects.create(
-            encoded_token=sbomify_jwt,
+            token_hash=hash_token(sbomify_jwt),
+            token_type=TOKEN_TYPE_OIDC,
             description=f"oidc:github:{binding.id}",
             user=binding.bot_user,
             team=binding.component.team,
