@@ -602,3 +602,46 @@ def test_no_view_gates_on_the_cached_session_role():
         "core.context_processors.team_context (is_owner / can_administer / can_manage / "
         f"can_delete) so the UI agrees with what the handler enforces: {offenders}"
     )
+
+
+@pytest.mark.django_db
+class TestTheOperatorCanReachWhatItMayDo:
+    """A capability nothing in the UI can get to is not a capability.
+
+    ``operator`` reads internal state and holds one write,
+    ``artifact:publish_vex``. Both of the screens that write is for gated
+    their *view* on a MANAGE-tier action, so an operator fell through to the
+    public component page and got a 403 from the scan report -- and its
+    triage right was unreachable from anywhere.
+    """
+
+    def test_viewing_the_security_picture_is_a_read(self) -> None:
+        from sbomify.apps.core import authz
+
+        # The action viewer_rights asks, and the one the scan report asks.
+        assert authz.ROLE_OPERATOR in authz._ROLE_ACTIONS["component:read_internal"]
+        assert authz.ROLE_OPERATOR in authz._ROLE_ACTIONS["sbom:read"]
+
+    def test_the_view_gates_use_those_read_actions(self) -> None:
+        """Pinned against the source, because this is the mistake that was made."""
+        import inspect
+
+        from sbomify.apps.core.services import component_security
+        from sbomify.apps.sboms.services import vulnerability_report
+
+        rights = inspect.getsource(component_security.viewer_rights)
+        assert '"component:read_internal"' in rights
+        assert '"component:manage"' not in rights
+
+        report = inspect.getsource(vulnerability_report.build_sbom_vulnerabilities)
+        assert '"sbom:read"' in report
+        assert 'can(request, "sbom:manage"' not in report
+
+    def test_recording_a_decision_is_still_a_separate_write(self) -> None:
+        """Widening the read must not widen the write."""
+        from sbomify.apps.core import authz
+
+        assert authz.ROLE_OPERATOR in authz._ROLE_ACTIONS["artifact:publish_vex"]
+        assert authz.ROLE_OPERATOR not in authz._ROLE_ACTIONS["component:manage"]
+        assert authz.ROLE_OPERATOR not in authz._ROLE_ACTIONS["sbom:manage"]
+        assert authz.ROLE_OPERATOR not in authz._ROLE_ACTIONS["artifact:publish"]

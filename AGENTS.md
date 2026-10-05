@@ -472,7 +472,9 @@ Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"me
 1. **The ladder stays linear** — `guest ⊂ operator ⊂ member ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
 2. **Granularity is added as a tier, never as a per-user permission bundle or per-resource ACL.**
 
-Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` (+ member) ⊂ `PUBLISH` (+ bot); and on the read/triage side `READ_INTERNAL` (owner + admin + member + operator) ⊂ `READ_INTERNAL_OR_BOT` ⊂ `TRIAGE`.
+Tiers, on the write side: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` (+ member). On the read/triage side: `READ_INTERNAL` (owner + admin + member + operator).
+
+`PUBLISH` (`MANAGE` + bot), `READ_INTERNAL_OR_BOT` (`READ_INTERNAL` + bot) and `TRIAGE` (`READ_INTERNAL` + bot) each add the synthetic `bot` to one of those. They are **not** further rungs on the ladder: `bot` is an orthogonal CI identity, not a more-privileged role, so reading these as a linear chain says a bot outranks an owner. `READ_INTERNAL_OR_BOT` and `TRIAGE` are the **same tuple** today — they are named separately because they answer different questions (may this identity read internal state, may it record a triage decision), and a future change to one should not silently move the other. `test_role_ladder_is_upward_closed` is what enforces the ladder; nothing enforces a relationship between these three, because there is none to enforce.
 
 `member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities.
 

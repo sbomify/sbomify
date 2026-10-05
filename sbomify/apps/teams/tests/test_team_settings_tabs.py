@@ -288,6 +288,28 @@ class TestOperatorSettingsTabs:
 
         assert "operator" in TABS_BY_KEY["tokens"].roles
 
+    def test_the_routes_let_an_operator_reach_the_tab_the_registry_offers(self, sample_team_with_owner_member: Member):  # noqa: F811
+        """The registry offering a tab is not enough; the route has to agree.
+
+        Both routes guarded on MANAGE, so an operator got a 403 before
+        ``visible_tabs`` ran -- including for the API tokens tab, and a token
+        is how the triage API is reached at all.
+        """
+        from sbomify.apps.teams.views.team_settings import TeamSettingsView
+        from sbomify.apps.teams.views.team_tokens import TeamTokensView
+
+        assert "operator" in TeamSettingsView.allowed_roles
+        assert "operator" in TeamTokensView.allowed_roles
+
+    def test_an_operator_is_still_kept_out_of_workspace_configuration(self):
+        """Widening the route must not widen the sections behind it."""
+        from sbomify.apps.teams.settings_tabs import visible_tabs
+
+        keys = {tab.key for tab in visible_tabs("operator", billing_enabled=True)}
+        assert "general" not in keys
+        assert "members" not in keys
+        assert "billing" not in keys
+
 
 @pytest.mark.django_db
 class TestTrustCenterDescription:

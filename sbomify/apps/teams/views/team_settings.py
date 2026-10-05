@@ -16,7 +16,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
-from sbomify.apps.core.authz import ADMINISTER, MANAGE, ROLE_DESCRIPTIONS
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_DESCRIPTIONS
 from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
@@ -39,10 +39,15 @@ logger = getLogger(__name__)
 
 @method_decorator(never_cache, name="dispatch")
 class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    # MANAGE so members can reach the tabs they are allowed (API tokens, Account).
+    # READ_INTERNAL, not MANAGE: this route only has to let a role reach the
+    # page, and which sections it then sees is decided per-tab by
+    # visible_tabs(). Gating the route at MANAGE meant an operator got a 403
+    # before the tab filter ran, including for the API tokens tab the registry
+    # offers it -- and a token is how the triage API is reached at all. The
+    # individual workspace-setting actions stay where they were.
     # Which sections they actually see is decided per-tab by visible_tabs(), and
     # every POST sub-action re-checks ADMINISTER for itself.
-    allowed_roles = list(MANAGE)
+    allowed_roles = list(READ_INTERNAL)
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Take ``tab`` off the URL and hold it, rather than pass it to a handler.
