@@ -68,7 +68,7 @@
       "url_name": "plugins:plugins_page",
       "section": "navigate",
       "icon": "fa-plug",
-      "keywords": ["scanners", "integrations", "osv", "dependency track", "assessments"],
+      "keywords": ["scanners", "integrations", "osv", "dependency track", "assessments", "assessment summary", "plugin results", "checks overview"],
       "roles": ["owner", "admin"]
     },
     {
@@ -95,14 +95,6 @@
       "icon": "fa-chart-line",
       "keywords": ["trends", "over time", "history", "vulnerability chart", "graph", "metrics"],
       "roles": ["owner", "admin", "member"]
-    },
-    {
-      "title": "Plugin summary",
-      "url_name": "plugins:plugins_summary",
-      "section": "navigate",
-      "icon": "fa-list-check",
-      "keywords": ["assessment summary", "plugin results", "checks overview"],
-      "roles": ["owner", "admin"]
     },
     {
       "title": "Access requests",
