@@ -377,6 +377,37 @@ def test_the_other_badges_stay_spans(rendered: str) -> None:
     assert "<button" not in _badge(rendered, "Secondary")
 
 
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Bare",
+        "Primary",
+        "Secondary",
+        "Success",
+        "Warning",
+        "Danger",
+        "Info",
+        "Accent",
+        "Violet",
+        "KEV",
+        "Compact",
+        "Pilled",
+        "Critical",
+        "High",
+        "Medium",
+        "Low",
+        "Unknown",
+        "Runtime critical",
+        # The members table is where a wrapped label was first noticed, so the
+        # role badge belongs in this guard too.
+        "Owner role",
+        "Off ladder role",
+    ],
+)
+def test_badge_labels_never_wrap(rendered: str, label: str) -> None:
+    assert "whitespace-nowrap" in _badge(rendered, label)
+
+
 ROLE_NEUTRAL = (
     "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] "
     "border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]"
