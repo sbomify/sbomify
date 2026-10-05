@@ -227,9 +227,25 @@ def _dramatiq_will_retry(event: Any) -> bool:
     if max_retries is None:
         return False
 
+    # The count has to be explicitly there. Defaulting a missing key to 0 made
+    # "we cannot tell" indistinguishable from "this is the first attempt", and
+    # 0 <= max_retries drops the event -- so if the Retries middleware were
+    # absent, or Sentry stopped serializing this key, every event for a listed
+    # actor would be suppressed including the terminal one, which is the only
+    # one worth reading. Every other unreadable field here reports; this one
+    # has to as well.
+    #
+    # 0 is not a value that occurs anyway: Retries does
+    # ``setdefault("retries", 0)`` and then increments, both before this
+    # middleware captures, so a real count is always 1 or more. Defaulting to
+    # it was picking an impossible value that happened to mean "drop".
     options = message.get("options")
-    retries = options.get("retries", 0) if isinstance(options, dict) else 0
-    if not isinstance(retries, int):
+    if not isinstance(options, dict) or "retries" not in options:
+        return False
+
+    retries = options["retries"]
+    # bool is an int in Python, and a True here would compare as 1.
+    if not isinstance(retries, int) or isinstance(retries, bool):
         return False
 
     return retries <= max_retries

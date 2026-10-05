@@ -34,8 +34,14 @@ def _event(actor_name: str = ACTOR, retries: int | None = None, mechanism: str =
     """The shape DramatiqIntegration captures.
 
     ``contexts.dramatiq.data`` is ``message.asdict()``, so ``options`` carries
-    whatever the middleware chain has written by then. ``retries`` is absent on
-    the very first enqueue, which is why None is a case.
+    whatever the middleware chain has written by then.
+
+    ``retries=None`` leaves the key out altogether. That is not a state the
+    real chain produces -- Retries does ``setdefault("retries", 0)`` and then
+    increments, both before this middleware captures, so a real count is
+    always 1 or more -- which is exactly why it has to report rather than be
+    read as a first attempt. See
+    ``test_a_missing_retry_count_reports_rather_than_being_read_as_zero``.
     """
     options: dict[str, Any] = {}
     if retries is not None:
@@ -100,6 +106,33 @@ class TestNothingElseIsSwallowed:
         event: dict[str, Any] = {
             "exception": {"values": [{"mechanism": {"type": "dramatiq"}}]},
         }
+
+        assert throttle_self_healing_notices(event, {}) is event
+
+    def test_a_missing_retry_count_reports_rather_than_being_read_as_zero(self, _max_retries: None) -> None:
+        """Fail open, like every other unreadable field in this filter.
+
+        A missing key used to default to 0, and ``0 <= max_retries`` drops the
+        event. So if the Retries middleware were absent, or Sentry stopped
+        serializing this key, every event for a listed actor would be
+        suppressed -- the terminal one included, which is the only one worth
+        reading.
+        """
+        event = _event(retries=None)
+        assert "retries" not in event["contexts"]["dramatiq"]["data"]["options"]
+
+        assert throttle_self_healing_notices(event, {}) is event
+
+    def test_a_missing_options_dict_reports(self, _max_retries: None) -> None:
+        event = _event(retries=1)
+        del event["contexts"]["dramatiq"]["data"]["options"]
+
+        assert throttle_self_healing_notices(event, {}) is event
+
+    def test_a_boolean_retry_count_reports(self, _max_retries: None) -> None:
+        """``bool`` is an ``int`` in Python, so True would have compared as 1."""
+        event = _event(retries=None)
+        event["contexts"]["dramatiq"]["data"]["options"] = {"retries": True}
 
         assert throttle_self_healing_notices(event, {}) is event
 
