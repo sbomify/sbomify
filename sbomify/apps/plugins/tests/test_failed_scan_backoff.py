@@ -66,9 +66,27 @@ def scannable_sbom(sample_team_with_owner_member):
     return sbom
 
 
-def _run_at_age(sbom: SBOM, *, hours_ago: float, status: str) -> AssessmentRun:
+#: Sentinel for a run row written before ``completed_at`` was recorded.
+LEGACY_NO_COMPLETED_AT = object()
+
+
+def _run_at_age(
+    sbom: SBOM,
+    *,
+    hours_ago: float,
+    status: str,
+    settled_hours_ago: float | object | None = None,
+) -> AssessmentRun:
     """One settled DT run, backdated. ``created_at`` is ``auto_now_add``, so the
-    age has to be written back after the insert."""
+    age has to be written back after the insert.
+
+    ``settled_hours_ago`` is when the run reached its verdict, which is what the
+    backoff measures. It defaults to ``hours_ago`` -- a run that was picked up
+    as soon as it was queued -- and the cases that matter are the ones where it
+    does not, because the queue was backed up. Pass
+    ``LEGACY_NO_COMPLETED_AT`` for a row written before the orchestrator
+    recorded a completion time.
+    """
     run = AssessmentRun.objects.create(
         sbom=sbom,
         plugin_name="dependency-track",
@@ -76,7 +94,14 @@ def _run_at_age(sbom: SBOM, *, hours_ago: float, status: str) -> AssessmentRun:
         status=status,
         error_message="server closed the connection unexpectedly" if status == RunStatus.FAILED.value else "",
     )
-    AssessmentRun.objects.filter(pk=run.pk).update(created_at=timezone.now() - timedelta(hours=hours_ago))
+    now = timezone.now()
+    fields: dict = {"created_at": now - timedelta(hours=hours_ago)}
+    if settled_hours_ago is LEGACY_NO_COMPLETED_AT:
+        fields["completed_at"] = None
+    else:
+        settled = hours_ago if settled_hours_ago is None else settled_hours_ago
+        fields["completed_at"] = now - timedelta(hours=settled)  # type: ignore[arg-type]
+    AssessmentRun.objects.filter(pk=run.pk).update(**fields)
     return run
 
 
@@ -166,8 +191,13 @@ class TestAStreakBacksOff:
 
         # Age the whole streak by 6 hours. The newest failure is now 26 hours
         # old, and the SBOM is scanned again — the wait was the ceiling, not a
-        # function of how long the streak is.
-        AssessmentRun.objects.filter(sbom=scannable_sbom).update(created_at=F("created_at") - timedelta(hours=6))
+        # function of how long the streak is. Both timestamps move: the backoff
+        # measures from the verdict, so ageing the row alone would not age the
+        # failure.
+        AssessmentRun.objects.filter(sbom=scannable_sbom).update(
+            created_at=F("created_at") - timedelta(hours=6),
+            completed_at=F("completed_at") - timedelta(hours=6),
+        )
 
         assert len(_sweep(monkeypatch)) == 1
 
@@ -232,3 +262,74 @@ class TestItDoesNotReadTheFatBlobToCountFailures:
 
         assert backed_off == {str(scannable_sbom.id)}
         assert [q["sql"] for q in captured.captured_queries if '."result"' in q["sql"]] == []
+
+
+@pytest.mark.django_db
+class TestTheWaitRunsFromTheFailureNotTheEnqueue:
+    """Scheduled enqueueing writes the PENDING row; the worker settles it later.
+
+    Those two times differ by however long the queue is backed up, and the
+    backoff is about how long ago the scan *failed*. Measuring from
+    ``created_at`` meant a run could fail seconds ago while its row was already
+    older than the 24-hour ceiling, so the next sweep retried it at once -- the
+    backoff was defeated by exactly the queue delay that makes a failing scan
+    expensive to keep retrying.
+    """
+
+    def test_a_streak_settled_just_now_is_held_back(self, scannable_sbom, monkeypatch) -> None:
+        # Rows queued days ago, every one of them failing in the last minutes.
+        for age in (96.0, 95.0, 94.0, 93.0, 92.0):
+            _run_at_age(
+                scannable_sbom,
+                hours_ago=age,
+                status=RunStatus.FAILED.value,
+                settled_hours_ago=0.05,
+            )
+
+        assert _sweep(monkeypatch) == []
+
+    def test_the_same_rows_are_retried_once_the_failure_itself_ages_out(self, scannable_sbom, monkeypatch) -> None:
+        """The mirror of the above: old rows *and* an old verdict do get retried."""
+        for age in (96.0, 95.0, 94.0, 93.0, 92.0):
+            _run_at_age(
+                scannable_sbom,
+                hours_ago=age,
+                status=RunStatus.FAILED.value,
+                settled_hours_ago=age,
+            )
+
+        assert len(_sweep(monkeypatch)) == 1
+
+    def test_a_success_settled_after_an_earlier_failure_clears_the_streak(self, scannable_sbom, monkeypatch) -> None:
+        """Ordering follows the verdict too, not the row.
+
+        A success queued *before* a failure but settled *after* it clears the
+        streak; ordering on ``created_at`` would have read it as the older run
+        and left the SBOM backed off.
+        """
+        for age in (9.0, 8.0, 7.0, 6.0, 5.0):
+            _run_at_age(scannable_sbom, hours_ago=age, status=RunStatus.FAILED.value, settled_hours_ago=4.0)
+        _run_at_age(
+            scannable_sbom,
+            hours_ago=10.0,
+            status=RunStatus.COMPLETED.value,
+            settled_hours_ago=0.5,
+        )
+
+        assert len(_sweep(monkeypatch)) == 1
+
+    def test_a_legacy_row_without_a_completion_time_falls_back_to_creation(self, scannable_sbom, monkeypatch) -> None:
+        """Rows written before the orchestrator recorded ``completed_at``.
+
+        They must keep behaving as they did rather than being read as
+        infinitely old, which would exempt them from the backoff entirely.
+        """
+        for age in (0.5, 0.4, 0.3, 0.2, 0.1):
+            _run_at_age(
+                scannable_sbom,
+                hours_ago=age,
+                status=RunStatus.FAILED.value,
+                settled_hours_ago=LEGACY_NO_COMPLETED_AT,
+            )
+
+        assert _sweep(monkeypatch) == []

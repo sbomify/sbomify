@@ -13,6 +13,7 @@ from typing import Any, TypedDict
 
 import dramatiq
 from django.db import connection, transaction
+from django.db.models.functions import Coalesce
 from django.db.utils import DatabaseError, OperationalError
 from django.utils import timezone
 from tenacity import (
@@ -114,15 +115,30 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
     """
     from ..models import AssessmentRun
 
+    # ``settled_at``: when the run reached a verdict, not when its row was
+    # created. Scheduled enqueueing writes the PENDING row and the worker picks
+    # it up later, so the two differ by however long the queue is backed up.
+    # Keying the wait on ``created_at`` meant a run could fail *now* while its
+    # creation timestamp was already past the 24-hour ceiling, and the next
+    # sweep retried it immediately -- the backoff was defeated by exactly the
+    # queue delay that makes a failing scan expensive.
+    #
+    # ``completed_at`` is written by ``_mark_failed`` and by the success path,
+    # so every terminal row this query can see has one, apart from rows written
+    # before that was true; ``Coalesce`` falls back to ``created_at`` for those
+    # rather than treating them as infinitely old.
+    settled_at = Coalesce("completed_at", "created_at")
+
     rows = (
         AssessmentRun.objects.filter(
             plugin_name=plugin_name,
-            created_at__gte=now - timedelta(hours=FAILURE_HISTORY_HOURS),
             sbom__component__team_id__in=team_ids,
         )
         .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
-        .order_by("sbom_id", "-created_at", "-id")
-        .values_list("sbom_id", "status", "created_at")
+        .annotate(settled_at=settled_at)
+        .filter(settled_at__gte=now - timedelta(hours=FAILURE_HISTORY_HOURS))
+        .order_by("sbom_id", "-settled_at", "-id")
+        .values_list("sbom_id", "status", "settled_at")
     )
 
     # Newest first within each SBOM, so the streak is the leading run of failures
@@ -133,7 +149,7 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
     streak: dict[str, int] = {}
     newest_failure_at: dict[str, Any] = {}
     settled: set[str] = set()
-    for sbom_id, status, created_at in rows:
+    for sbom_id, status, run_settled_at in rows:
         key = str(sbom_id)
         if key in settled:
             continue
@@ -141,7 +157,7 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
             settled.add(key)
             continue
         streak[key] = streak.get(key, 0) + 1
-        newest_failure_at.setdefault(key, created_at)
+        newest_failure_at.setdefault(key, run_settled_at)
 
     backed_off: set[str] = set()
     for key, count in streak.items():
