@@ -45,7 +45,6 @@ from sbomify.apps.core.views.component_vulnerabilities import (
 )
 from sbomify.apps.core.views.components_dashboard import ComponentCreateView as ComponentCreateView
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView as ComponentsDashboardView
-from sbomify.apps.core.views.components_dashboard import ComponentsTableView as ComponentsTableView
 from sbomify.apps.core.views.dashboard import DashboardView as DashboardView
 from sbomify.apps.core.views.design_system import DesignSystemView as DesignSystemView
 from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView as ProductDetailsPrivateView
@@ -58,12 +57,10 @@ from sbomify.apps.core.views.product_releases_private import ProductReleasesPriv
 from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView as ProductReleasesPublicView
 from sbomify.apps.core.views.products_dashboard import ProductCreateView as ProductCreateView
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
-from sbomify.apps.core.views.products_dashboard import ProductsTableView as ProductsTableView
 from sbomify.apps.core.views.release_create import ReleaseCreateView as ReleaseCreateView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
-from sbomify.apps.core.views.releases_dashboard import ReleasesTableView as ReleasesTableView
 from sbomify.apps.core.views.search import SearchView as SearchView
 from sbomify.apps.core.views.security_advisories import (
     SecurityAdvisoriesDashboardView as SecurityAdvisoriesDashboardView,
