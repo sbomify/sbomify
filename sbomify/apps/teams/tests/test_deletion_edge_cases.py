@@ -30,7 +30,9 @@ def other_team(db):
 
 @pytest.fixture
 def user_with_one_team(db, django_user_model, team):
-    u = django_user_model.objects.create_user(username="user1", email="user1@test.com", password="password")
+    u = django_user_model.objects.create_user(
+        username="user1", email="user1@test.com", password="password", email_verified=True
+    )
     Member.objects.create(user=u, team=team, role="admin", is_default_team=True)
     return u
 

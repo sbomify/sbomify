@@ -1,6 +1,6 @@
 import pytest
 from django.utils import timezone
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.security_advisories.models import SecurityAdvisory
@@ -66,6 +66,26 @@ class TestSecurityAdvisoriesListSnapshot:
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [375, 1920])
+def test_empty_advisory_search_can_clear_filters(authenticated_page: Page, advisories: list, width: int) -> None:
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto("/security-advisories/")
+    search = page.get_by_role("searchbox", name="Search advisories")
+    search.fill("no-advisory-has-this-title")
+    panel = page.locator("[data-empty-state]").filter(has=page.get_by_role("heading", name="No matching advisories"))
+    expect(panel.get_by_role("heading", name="No matching advisories")).to_be_visible()
+    expect(page.get_by_role("table", name="Security advisories")).to_be_hidden()
+    bounds = panel.bounding_box()
+    assert bounds is not None
+    assert bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= width
+    panel.get_by_role("button", name="Clear filters").click()
+    expect(search).to_have_value("")
+    expect(panel).to_be_hidden()
+    expect(page.get_by_role("table", name="Security advisories")).to_be_visible()
 
 
 @pytest.fixture

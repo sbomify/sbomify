@@ -2,17 +2,20 @@
 Tests for signed URL functionality for private component SBOMs and documents.
 """
 
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.test import Client
 
+from sbomify.apps.access_tokens.utils import token_fingerprint
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import (
+    SIGNED_URL_MAX_AGE,
     generate_signed_download_url,
     get_download_url_for_document,
     get_download_url_for_sbom,
@@ -20,6 +23,7 @@ from sbomify.apps.sboms.utils import (
     make_download_token,
     should_use_signed_url,
     should_use_signed_url_for_document,
+    verify_download_token,
 )
 
 
@@ -449,6 +453,34 @@ class TestSignedURLs:
                 team=self.team, user=guest_user, status=AccessRequest.Status.REVOKED
             )
             assert self.client.get(url, {"token": token}).status_code == 403
+
+
+def test_expired_download_token_is_reported_as_expired():
+    token = make_download_token("sbom-id", "user-id")
+
+    after_expiry = time.time() + SIGNED_URL_MAX_AGE + 1
+    with (
+        patch("django.core.signing.time.time", return_value=after_expiry),
+        patch("sbomify.apps.sboms.utils.log") as log,
+    ):
+        assert verify_download_token(token) is None
+
+    log.warning.assert_called_once()
+    message = log.warning.call_args.args[0]
+    assert message == f"Expired download token (fingerprint {token_fingerprint(token)})"
+    assert token not in message
+
+
+def test_tampered_download_token_is_reported_as_invalid():
+    token = make_download_token("sbom-id", "user-id") + "x"
+
+    with patch("sbomify.apps.sboms.utils.log") as log:
+        assert verify_download_token(token) is None
+
+    log.warning.assert_called_once()
+    message = log.warning.call_args.args[0]
+    assert message == f"Invalid signature in download token (fingerprint {token_fingerprint(token)})"
+    assert token not in message
 
 
 @pytest.mark.django_db

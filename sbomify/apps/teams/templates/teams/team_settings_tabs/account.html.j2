@@ -4,10 +4,10 @@
     <c-cards.card flush>
     <c-cards.header compact title="You" />
     <c-forms.field horizontal label="Name" hint="Your name comes from your sign-in provider.">
-    <c-forms.input size="sm" readonly aria-label="Name" value="{{ request.user.get_full_name|default:request.user.username }}" />
+    <c-forms.static>{{ request.user.get_full_name|default:request.user.username }}</c-forms.static>
     </c-forms.field>
     <c-forms.field horizontal label="Email" hint="Used to sign in and receive notifications.">
-    <c-forms.input size="sm" readonly aria-label="Email" value="{{ request.user.email }}" />
+    <c-forms.static>{{ request.user.email }}</c-forms.static>
     </c-forms.field>
     <c-forms.field horizontal label="Sign-in" hint="Manage your password and two-factor authentication with your sign-in provider.">
     <c-forms.hint>Managed by your identity provider</c-forms.hint>
@@ -30,7 +30,7 @@
     Your account will be deactivated immediately and permanently deleted after <strong>14 days</strong>.
     </c-forms.hint>
     <c-feedback.alert variant="warning" icon="fas fa-key" class="mb-4" x-show="tokenCount > 0" x-cloak>
-    You have <strong x-text="tokenCount"></strong> active API token(s) that will be <strong>immediately revoked</strong>. Any CI/CD pipelines using these tokens will stop working.
+    You have <strong x-text="$number(tokenCount)"></strong> active API token(s) that will be <strong>immediately revoked</strong>. Any CI/CD pipelines using these tokens will stop working.
     </c-feedback.alert>
     <c-feedback.alert variant="info" title="Immediate effects" class="mb-4">
     <ul class="pl-4 space-y-1">
