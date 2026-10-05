@@ -7,9 +7,19 @@ interface InventoryRequest {
     successful?: boolean;
 }
 
+interface InventoryHeading {
+    heading: string;
+    subtitle: string;
+    title: string;
+}
+
 interface InventoryTabs {
     selectedKind: string;
     loadedKind: string;
+    heading: string;
+    headingSubtitle: string;
+    headings: Record<string, InventoryHeading>;
+    applyHeading(kind: string, retitle: boolean): void;
     loading: boolean;
     showSkeleton: boolean;
     loadingTimer: ReturnType<typeof setTimeout> | undefined;
@@ -27,6 +37,9 @@ export function inventoryTabs(): AlpineComponent<InventoryTabs> {
     return {
         selectedKind: 'products',
         loadedKind: 'products',
+        heading: '',
+        headingSubtitle: '',
+        headings: {},
         loading: false,
         showSkeleton: false,
         loadingTimer: undefined,
@@ -34,9 +47,30 @@ export function inventoryTabs(): AlpineComponent<InventoryTabs> {
         request: null,
 
         init() {
+            // The tabs carry the words each kind gives the page, so a switch can
+            // retitle the page from what is already in the document.
+            this.$el.querySelectorAll<HTMLElement>('[data-inventory-tab]').forEach((tab) => {
+                const kind = tab.dataset.inventoryTab;
+                if (!kind) return;
+                this.headings[kind] = {
+                    heading: tab.dataset.inventoryHeading || '',
+                    subtitle: tab.dataset.inventorySubtitle || '',
+                    title: tab.dataset.inventoryTitle || '',
+                };
+            });
             // History may restore a later panel inside the original frame.
             this.loadedKind = this.$el.querySelector<HTMLElement>('#inventory-panel')?.dataset.inventoryKind || 'products';
             this.selectedKind = this.loadedKind;
+            // The server already rendered this page's title and heading.
+            this.applyHeading(this.loadedKind, false);
+        },
+
+        applyHeading(kind, retitle) {
+            const words = this.headings[kind];
+            if (!words) return;
+            this.heading = words.heading;
+            this.headingSubtitle = words.subtitle;
+            if (retitle && words.title) document.title = words.title;
         },
 
         confirm(event) {
@@ -51,6 +85,7 @@ export function inventoryTabs(): AlpineComponent<InventoryTabs> {
             if (!kind) return;
             this.request = xhr;
             this.selectedKind = kind;
+            this.applyHeading(kind, true);
             this.failed = false;
             this.loading = true;
             clearTimeout(this.loadingTimer);
@@ -77,6 +112,7 @@ export function inventoryTabs(): AlpineComponent<InventoryTabs> {
             // A successful panel swap already cleared request in swapped().
             // If it is still pending, even a 204 delivered no usable panel.
             this.selectedKind = this.loadedKind;
+            this.applyHeading(this.loadedKind, true);
             this.clearLoading();
             this.failed = true;
             this.request = null;
@@ -89,6 +125,7 @@ export function inventoryTabs(): AlpineComponent<InventoryTabs> {
             if (!panel?.dataset.inventoryKind) return;
             this.loadedKind = panel.dataset.inventoryKind;
             this.selectedKind = this.loadedKind;
+            this.applyHeading(this.loadedKind, true);
             this.clearLoading();
             this.failed = false;
             this.request = null;

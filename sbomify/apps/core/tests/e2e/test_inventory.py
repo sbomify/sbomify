@@ -99,7 +99,9 @@ def test_inventory_navigation_and_filters(
     expect(release_tab).to_have_attribute("href", re.compile(f"product={product.id}"))
     page.get_by_label("Filter by product").select_option("unassigned")
     expect(components).to_contain_text("Unassigned")
-    expect(release_tab).to_have_attribute("href", "/releases/")
+    # Unassigned is not a product scope, so the link drops it; the ordering the
+    # reader chose is a cross-kind question and travels with them.
+    expect(release_tab).to_have_attribute("href", "/releases/?sort=name&direction=desc")
     page.get_by_role("navigation", name="Product inventory").get_by_role("link", name=re.compile("^Releases")).click()
     expect(page.get_by_role("table", name="Releases", exact=True)).to_be_visible()
     page.get_by_role("link", name="Create release", exact=True).click()
@@ -125,12 +127,15 @@ def test_inventory_result_swaps_keep_sort_refresh_and_history(
     table = page.get_by_role("table", name=kind.title(), exact=True)
     search = page.get_by_role("searchbox", name=f"Search {kind}", exact=True)
     search_element = search.element_handle()
+    # A catalogue opens on its first column, so the first click reverses it. A
+    # release list opens on its newest, so the same click sorts by name instead.
+    direction, order = ("asc", "ascending") if kind == "releases" else ("desc", "descending")
     table.locator("thead a").first.click()
-    expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
+    expect(table.locator("th").first).to_have_attribute("aria-sort", order)
     search.fill("Test")
     expect(page).to_have_url(re.compile("search=Test"))
-    expect(page).to_have_url(re.compile("direction=desc"))
-    expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
+    expect(page).to_have_url(re.compile(f"direction={direction}"))
+    expect(table.locator("th").first).to_have_attribute("aria-sort", order)
     assert search_element and search_element.evaluate("el => el.isConnected")
     expect(search).to_be_focused()
     filtered_url = page.url
@@ -139,13 +144,13 @@ def test_inventory_result_swaps_keep_sort_refresh_and_history(
         page.evaluate("document.body.dispatchEvent(new Event('refresh-inventory'))")
     expect(page.locator("#inventory-content")).not_to_have_class(re.compile("htmx-settling"))
     expect(search).to_have_value("Test")
-    expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
+    expect(table.locator("th").first).to_have_attribute("aria-sort", order)
     page.go_back()
     expect(search).to_have_value("")
-    expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
+    expect(table.locator("th").first).to_have_attribute("aria-sort", order)
     page.go_forward()
     expect(search).to_have_value("Test")
-    expect(table.locator("th").first).to_have_attribute("aria-sort", "descending")
+    expect(table.locator("th").first).to_have_attribute("aria-sort", order)
     expect(page.locator("#sidebar")).to_have_count(1)
 
 
