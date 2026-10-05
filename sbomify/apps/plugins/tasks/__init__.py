@@ -13,7 +13,8 @@ from typing import Any, TypedDict
 
 import dramatiq
 from django.db import connection, transaction
-from django.db.models.functions import Coalesce
+from django.db.models import F, Window
+from django.db.models.functions import Coalesce, RowNumber
 from django.db.utils import DatabaseError, OperationalError
 from django.utils import timezone
 from tenacity import (
@@ -129,6 +130,14 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
     # rather than treating them as infinitely old.
     settled_at = Coalesce("completed_at", "created_at")
 
+    # Only the leading few runs of each SBOM can change the answer, so only
+    # those are read. The wait is FAILURE_BACKOFF_HOURS[min(count, len) - 1],
+    # which means every streak at or past the ladder's length gets the same
+    # ceiling -- so a sixth consecutive failure is indistinguishable from the
+    # fifth, and the newest failure (the one the wait is measured from) is
+    # always inside the first few rows. Without this the sweep read every
+    # terminal run in a seven-day window and walked them in Python, which
+    # grows with the table rather than with the number of SBOMs.
     rows = (
         AssessmentRun.objects.filter(
             plugin_name=plugin_name,
@@ -137,6 +146,14 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
         .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
         .annotate(settled_at=settled_at)
         .filter(settled_at__gte=now - timedelta(hours=FAILURE_HISTORY_HOURS))
+        .annotate(
+            position=Window(
+                expression=RowNumber(),
+                partition_by=[F("sbom_id")],
+                order_by=[F("settled_at").desc(), F("id").desc()],
+            )
+        )
+        .filter(position__lte=len(FAILURE_BACKOFF_HOURS))
         .order_by("sbom_id", "-settled_at", "-id")
         .values_list("sbom_id", "status", "settled_at")
     )

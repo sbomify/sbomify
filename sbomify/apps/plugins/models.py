@@ -9,6 +9,7 @@ from typing import Any
 
 from django.apps import apps
 from django.db import models
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
@@ -239,6 +240,18 @@ class AssessmentRun(models.Model):
             models.Index(fields=["sbom", "plugin_name", "plugin_config_hash", "-created_at"]),
             models.Index(fields=["category", "-created_at"]),
             models.Index(fields=["status", "-created_at"]),
+            # The failure-backoff sweep reads terminal runs for one plugin by
+            # when they *settled*, which is Coalesce(completed_at, created_at)
+            # -- see tasks._backed_off_after_repeated_failures for why the
+            # creation time is the wrong clock there. That is an expression,
+            # so none of the indexes above can serve its range scan or its
+            # ordering, and an hourly sweep would seq-scan a table that only
+            # grows. A functional index gives it both.
+            models.Index(
+                "plugin_name",
+                Coalesce("completed_at", "created_at").desc(),
+                name="plugins_run_plugin_settled_idx",
+            ),
         ]
         ordering = ["-created_at"]
 

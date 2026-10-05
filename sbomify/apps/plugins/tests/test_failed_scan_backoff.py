@@ -22,6 +22,8 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from django.db.models import F, Window
+from django.db.models.functions import Coalesce, RowNumber
 from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
@@ -331,5 +333,88 @@ class TestTheWaitRunsFromTheFailureNotTheEnqueue:
                 status=RunStatus.FAILED.value,
                 settled_hours_ago=LEGACY_NO_COMPLETED_AT,
             )
+
+        assert _sweep(monkeypatch) == []
+
+
+@pytest.mark.django_db
+class TestTheSweepStaysCheapAsTheTableGrows:
+    """The sweep runs hourly, so what it costs per run is part of the feature.
+
+    Two things keep it bounded, and both are invisible from the behaviour
+    tests above: the settled-at predicate has an index that matches it, and
+    only the leading few runs of each SBOM are read.
+    """
+
+    def test_the_settled_at_predicate_has_an_index_that_matches_it(self) -> None:
+        """``Coalesce(completed_at, created_at)`` is an expression.
+
+        None of the plain-column indexes can serve its range scan, so without
+        a functional index the hourly sweep sequentially scans a table that
+        only grows. ``enable_seqscan = off`` asks the planner whether the
+        index is *usable* for the predicate, which is the question here -- on
+        a small table it would prefer a sequential scan whatever exists.
+        """
+        from django.db import connection
+
+        if connection.vendor != "postgresql":
+            pytest.skip("EXPLAIN plans and functional indexes are Postgres-specific here")
+
+        from sbomify.apps.plugins.tasks import FAILURE_HISTORY_HOURS
+
+        now = timezone.now()
+        settled_at = Coalesce("completed_at", "created_at")
+        queryset = (
+            AssessmentRun.objects.filter(plugin_name="dependency-track")
+            .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
+            .annotate(settled_at=settled_at)
+            .filter(settled_at__gte=now - timedelta(hours=FAILURE_HISTORY_HOURS))
+        )
+        sql, params = queryset.query.sql_with_params()
+
+        with connection.cursor() as cursor:
+            cursor.execute("SET enable_seqscan = off")
+            cursor.execute("EXPLAIN " + sql, params)
+            plan = "\n".join(row[0] for row in cursor.fetchall())
+            cursor.execute("SET enable_seqscan = on")
+
+        assert "plugins_run_plugin_settled_idx" in plan, plan
+
+    def test_only_the_leading_runs_of_each_sbom_are_read(self, scannable_sbom) -> None:
+        """A long history must not mean a long scan.
+
+        The wait is ``FAILURE_BACKOFF_HOURS[min(count, len) - 1]``, so every
+        streak at or past the ladder's length gets the same ceiling: a sixth
+        consecutive failure cannot change the answer the fifth already gave.
+        That is what makes the row cap safe, and what it buys is a scan
+        bounded by the number of SBOMs rather than by the size of the table.
+        """
+        from sbomify.apps.plugins.tasks import FAILURE_BACKOFF_HOURS, FAILURE_HISTORY_HOURS
+
+        # Far more history than the ladder is long.
+        _failures(scannable_sbom, [float(hours) for hours in range(60, 20, -1)])
+        assert AssessmentRun.objects.filter(sbom=scannable_sbom).count() == 40
+
+        now = timezone.now()
+        rows = (
+            AssessmentRun.objects.filter(plugin_name="dependency-track")
+            .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
+            .annotate(settled_at=Coalesce("completed_at", "created_at"))
+            .filter(settled_at__gte=now - timedelta(hours=FAILURE_HISTORY_HOURS))
+            .annotate(
+                position=Window(
+                    expression=RowNumber(),
+                    partition_by=[F("sbom_id")],
+                    order_by=[F("settled_at").desc(), F("id").desc()],
+                )
+            )
+            .filter(position__lte=len(FAILURE_BACKOFF_HOURS))
+        )
+
+        assert rows.count() == len(FAILURE_BACKOFF_HOURS)
+
+    def test_capping_the_scan_does_not_change_the_verdict(self, scannable_sbom, monkeypatch) -> None:
+        """A streak longer than the ladder still backs off, at the ceiling."""
+        _failures(scannable_sbom, [float(hours) for hours in range(60, 20, -1)])
 
         assert _sweep(monkeypatch) == []
