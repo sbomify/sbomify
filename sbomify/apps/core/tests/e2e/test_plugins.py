@@ -129,3 +129,81 @@ def test_plugins_empty_state(authenticated_page: Page) -> None:
     expect(page.get_by_text("No plugins available", exact=True)).to_be_visible()
     expect(page.get_by_role("button", name="Save changes", exact=True)).to_have_count(0)
     expect(page.locator("#plugins-summary dl").filter(has_text="Available plugins").locator("dd")).to_have_text("0")
+
+
+def _ancestor_compositing(locator) -> list[dict]:
+    """Every opacity and filter between an element and the page, nearest first.
+
+    A plan-restricted row explains the restriction and offers the fix, so its
+    text has to stay readable. opacity and filter both apply to the whole
+    subtree and neither can be cancelled by a descendant, so the only way to
+    keep that text at its designed contrast is for no ancestor to fade it.
+    """
+    return locator.evaluate(
+        """el => {
+            const out = [];
+            for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+                const s = getComputedStyle(n);
+                out.push({
+                    tag: n.tagName.toLowerCase(),
+                    cls: n.className ? String(n.className).slice(0, 120) : '',
+                    opacity: parseFloat(s.opacity),
+                    filter: s.filter,
+                });
+            }
+            return out;
+        }"""
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_a_plan_restricted_row_never_fades_the_reason_it_is_restricted(
+    authenticated_page: Page, team_with_business_plan: Team, theme: str
+) -> None:
+    """The restriction notice and its CTA must keep the contrast they were designed with.
+
+    The row used to carry ``opacity-50 grayscale``. opacity composites the whole
+    subtree against the page, which took the plan-required badge to 1.4:1 and the
+    description to 2.0:1 against a 4.5:1 AA floor -- the sentence telling a
+    customer what to buy became the least readable text on the page.
+
+    grayscale is kept: the filter matrix is the luminance matrix, so it drains
+    the hue without moving relative luminance, and every pair in the row keeps
+    its contrast. This pins the distinction rather than the pixels, because the
+    token contrast is already pinned in ``test_severity_contrast`` and reading it
+    back out of an anti-aliased screenshot only adds noise.
+    """
+    team_with_business_plan.billing_plan = "community"
+    team_with_business_plan.save(update_fields=["billing_plan"])
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+
+    with patch("sbomify.apps.billing.config.is_billing_enabled", return_value=True):
+        page.goto("/plugins/")
+        control = page.get_by_role("checkbox", name="Enable Dependency Track", exact=True)
+        expect(control).to_be_disabled()
+        row = control.locator("..")
+
+        targets = {
+            "plan-required badge": row.get_by_text("Business plan required", exact=True),
+            "restriction description": row.locator("p").first,
+            "plugin title": row.get_by_text("Dependency Track", exact=True),
+            "upgrade CTA": row.get_by_role("link", name="View plans", exact=True),
+        }
+        for label, target in targets.items():
+            expect(target).to_be_visible()
+            for ancestor in _ancestor_compositing(target):
+                assert ancestor["opacity"] == 1.0, (
+                    f"{label} is faded to {ancestor['opacity']} by "
+                    f"<{ancestor['tag']} class={ancestor['cls']!r}>; opacity on an "
+                    "ancestor cannot be undone, so the text loses contrast"
+                )
+                assert ancestor["filter"] in ("none", "grayscale(1)"), (
+                    f"{label} sits under filter {ancestor['filter']!r} on "
+                    f"<{ancestor['tag']} class={ancestor['cls']!r}>; only grayscale "
+                    "is luminance-preserving, anything else moves contrast"
+                )
+
+        # The row is still visibly inert: the control blocks it and the colour is drained.
+        assert "grayscale(1)" in row.evaluate("el => getComputedStyle(el).filter")

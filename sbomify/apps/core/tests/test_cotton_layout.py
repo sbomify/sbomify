@@ -460,11 +460,24 @@ def test_toggle_ref_points_the_row_click_at_its_own_switch(rendered: str) -> Non
     assert 'x-data="{ enabled: false }"' in opening
 
 
-def test_disabled_dims_the_row_while_the_control_blocks_it(rendered: str) -> None:
-    assert "opacity-50 grayscale" in _classes(rendered, SELECT_ROW, "Dependency Track")
+def test_disabled_drains_the_row_while_the_control_blocks_it(rendered: str) -> None:
+    classes = _classes(rendered, SELECT_ROW, "Dependency Track")
+    assert "grayscale" in classes
     row = rendered[rendered.index("Dependency Track") :]
     assert 'id="probe-row-2"' in row.split("</div>")[0]
     assert "disabled" in row.split("</div>")[0]
+
+
+def test_a_disabled_row_never_fades_its_own_explanation(rendered: str) -> None:
+    """A row carrying the reason it is unavailable must keep that reason readable.
+
+    opacity on the row composites every descendant against the page and no
+    descendant can opt out, so a plan-required badge and its description land
+    far under the 4.5:1 AA floor. grayscale is the luminance matrix, so it
+    moves hue without moving contrast.
+    """
+    classes = _classes(rendered, SELECT_ROW, "Dependency Track").split()
+    assert not [c for c in classes if c.startswith("opacity-")], classes
 
 
 def test_the_control_and_the_body_stay_in_the_slot(rendered: str) -> None:

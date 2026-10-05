@@ -17,15 +17,25 @@ otherwise toggle the first of those rather than the row's own switch. Without
 it the row clicks the first input it contains, which is right whenever the
 control is the only one.
 
-disabled dims the row. What actually blocks it is the control's own disabled
-attribute, which is what :has(input:disabled) reads, so the two can never
-disagree.
+disabled drains the colour from the row. What actually blocks it is the
+control's own disabled attribute, which is what :has(input:disabled) reads, so
+the two can never disagree.
+
+It desaturates and does not fade. opacity on the row composites every
+descendant against the page, text included, and a row that explains why it is
+unavailable needs that explanation readable: at opacity-50 the plan-required
+badge measured 1.4:1 and the description 2.0:1 against a 4.5:1 AA floor.
+grayscale carries the same "inert" read for free, because the filter matrix is
+the luminance matrix -- it moves hue, not relative luminance, so every pair in
+the row keeps the contrast it was designed with. Neither opacity nor filter can
+be cancelled by a descendant, so anything the row must keep legible has to be
+something the row never dimmed in the first place.
 
 divided gives a list of rows a shared hairline separator, leaving the last
 row open so it can sit directly inside a card without another bordered box.
 {% endcomment %}
 <c-vars x_data toggle_ref disabled divided class />
-<div class="flex items-start gap-4 p-4 cursor-pointer transition-colors duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_6%,transparent)] has-[:checked]:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)] has-[:checked]:hover:bg-[color-mix(in_oklab,var(--color-primary)_9%,transparent)] has-[:focus-visible]:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] has-[input:disabled]:cursor-not-allowed has-[input:disabled]:hover:bg-transparent{% if divided %} border-b border-solid border-border last:border-b-0{% endif %}{% if disabled %} opacity-50 grayscale{% endif %}{% if class %} {{ class }}{% endif %}"
+<div class="flex items-start gap-4 p-4 cursor-pointer transition-colors duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_6%,transparent)] has-[:checked]:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)] has-[:checked]:hover:bg-[color-mix(in_oklab,var(--color-primary)_9%,transparent)] has-[:focus-visible]:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] has-[input:disabled]:cursor-not-allowed has-[input:disabled]:hover:bg-transparent{% if divided %} border-b border-solid border-border last:border-b-0{% endif %}{% if disabled %} grayscale{% endif %}{% if class %} {{ class }}{% endif %}"
      {% if x_data %}x-data="{{ x_data }}"{% else %}x-data{% endif %}
      {% if toggle_ref %}@click="if (!$event.target.closest('a, button, select, input, textarea, label')) $refs.{{ toggle_ref }}.click()"{% else %}@click="if (!$event.target.closest('a, button, select, input, textarea, label')) $el.querySelector('input')?.click()"{% endif %}
      {{ attrs }}>{{ slot }}
