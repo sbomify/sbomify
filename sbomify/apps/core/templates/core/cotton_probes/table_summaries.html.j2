@@ -1,0 +1,9 @@
+<div data-probe="server">
+    <c-vulnerabilities.summary :counts="counts" />
+</div>
+<div data-probe="bound">
+    <c-vulnerabilities.summary bind="item.vuln" />
+</div>
+<div data-probe="assessments">
+    <c-assessments.summary bind="item.assessments" />
+</div>

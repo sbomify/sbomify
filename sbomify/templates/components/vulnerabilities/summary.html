@@ -1,0 +1,78 @@
+{% load humanize utils %}
+{% comment %}
+One table cell's vulnerability count: a proportional severity bar, the total,
+and a written breakdown under it ("3 critical, 13 high"). It replaces a row of
+severity badges: the bar reads at a glance, the caption is exact, and neither
+needs four pills fighting for one column.
+
+Server rows pass counts, a dict with critical, high, medium, low and total.
+Rows that Alpine builds pass bind, the expression for that dict on the row
+("item.vuln"); the same markup then binds instead of rendering. Unknown
+severities are whatever total holds beyond the four named ones. They get a
+neutral segment and their own phrase, so the parts always add up to the total.
+
+The caller decides what an empty or unscanned row says; this renders counts.
+{% endcomment %}
+<c-vars counts bind />
+{% if bind %}
+    <span class="inline-flex flex-col gap-1"
+          x-data="{ get counts() { return {{ bind }} || {} }, get unknown() { return Math.max(0, (this.counts.total || 0) - ['critical', 'high', 'medium', 'low'].reduce((sum, level) => sum + (this.counts[level] || 0), 0)) } }"
+          {{ attrs }}>
+        <span class="inline-flex items-center gap-2">
+            <span class="flex h-1.5 w-16 gap-0.5 overflow-hidden rounded-full bg-surface-hover"
+                  aria-hidden="true">
+                <span class="basis-0 rounded-full bg-severity-critical"
+                      x-show="counts.critical > 0"
+                      :style="{ flexGrow: counts.critical }"></span>
+                <span class="basis-0 rounded-full bg-severity-high"
+                      x-show="counts.high > 0"
+                      :style="{ flexGrow: counts.high }"></span>
+                <span class="basis-0 rounded-full bg-severity-medium"
+                      x-show="counts.medium > 0"
+                      :style="{ flexGrow: counts.medium }"></span>
+                <span class="basis-0 rounded-full bg-severity-low"
+                      x-show="counts.low > 0"
+                      :style="{ flexGrow: counts.low }"></span>
+                <span class="basis-0 rounded-full bg-text-muted/50"
+                      x-show="unknown > 0"
+                      :style="{ flexGrow: unknown }"></span>
+            </span>
+            <span class="text-sm font-semibold tabular-nums text-text"
+                  x-text="$number(counts.total || 0)"></span>
+        </span>
+        <span class="text-xs text-text-muted whitespace-nowrap"
+              x-text="[...['critical', 'high', 'medium', 'low'].filter(level => counts[level] > 0).map(level => $number(counts[level]) + ' ' + level), ...(unknown > 0 ? [$number(unknown) + ' unknown'] : [])].join(', ')"></span>
+    </span>
+{% else %}
+    {% with unknown=counts|severity_unknown %}
+        <span class="inline-flex flex-col gap-1" {{ attrs }}>
+            <span class="inline-flex items-center gap-2">
+                <span class="flex h-1.5 w-16 gap-0.5 overflow-hidden rounded-full bg-surface-hover"
+                      aria-hidden="true">
+                    {% if counts.critical %}
+                        <span class="basis-0 rounded-full bg-severity-critical"
+                              style="flex-grow: {{ counts.critical }}"></span>
+                    {% endif %}
+                    {% if counts.high %}
+                        <span class="basis-0 rounded-full bg-severity-high"
+                              style="flex-grow: {{ counts.high }}"></span>
+                    {% endif %}
+                    {% if counts.medium %}
+                        <span class="basis-0 rounded-full bg-severity-medium"
+                              style="flex-grow: {{ counts.medium }}"></span>
+                    {% endif %}
+                    {% if counts.low %}
+                        <span class="basis-0 rounded-full bg-severity-low"
+                              style="flex-grow: {{ counts.low }}"></span>
+                    {% endif %}
+                    {% if unknown %}
+                        <span class="basis-0 rounded-full bg-text-muted/50"
+                              style="flex-grow: {{ unknown }}"></span>
+                    {% endif %}
+                </span>
+                <span class="text-sm font-semibold tabular-nums text-text">{{ counts.total|default:0|intcomma }}</span>
+            </span>
+            <span class="text-xs text-text-muted whitespace-nowrap">{{ counts|severity_breakdown }}</span>
+        </span>
+    {% endwith %}
+{% endif %}

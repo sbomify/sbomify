@@ -115,7 +115,7 @@ def test_inventory_sorting_preserves_columns_and_position(
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("width", [1280, 375])
-def test_artifact_columns_contain_long_values_and_keep_badges_readable(
+def test_artifact_columns_contain_long_values_and_keep_the_vulnerability_summary_readable(
     authenticated_page: Page, sbom_component_details: Component, width: int
 ) -> None:
     page = authenticated_page
@@ -128,10 +128,17 @@ def test_artifact_columns_contain_long_values_and_keep_badges_readable(
     original = geometry(table)
     for column in ("name", "created_at"):
         sort_with_keyboard(table, column, original)
-    badges = table.locator("tbody [data-level]")
-    expect(badges).to_have_count(4)
-    rows = badges.evaluate_all("elements => new Set(elements.map(el => el.getBoundingClientRect().top)).size")
-    assert rows <= 2, "Severity badges should not stack into a tall single column"
+    breakdown = table.locator("tbody").get_by_text(re.compile(r"^\d[\d,]* critical, "))
+    expect(breakdown).to_have_count(1)
+    lines = breakdown.evaluate(
+        """el => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const rects = Array.from(range.getClientRects()).filter(r => r.width > 0);
+            return new Set(rects.map(r => Math.round(r.top))).size;
+        }"""
+    )
+    assert lines == 1, "The severity breakdown should read as one line, not stack into a tall column"
     if width >= 768:
         cell = table.locator("tbody tr").first.locator("td").nth(2)
         expect(cell.locator("span")).to_have_attribute("title", version)

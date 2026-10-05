@@ -1254,6 +1254,24 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-code-inline>level</c-code-inline>.
     </p>
     </c-cards.card>
+    <h2 id="table-summaries" class="text-xl font-semibold text-text">Table summaries</h2>
+    <c-cards.card>
+    {% comment %}One cell per aggregate instead of a row of badges. Server rows pass counts; Alpine rows pass bind, the expression for the same data on the row.{% endcomment %}
+    <div class="flex flex-col gap-6"
+         x-data="{ vuln: { total: 29, critical: 3, high: 13, medium: 11, low: 0 }, assessments: { plugins: [{ display_name: 'NTIA Minimum Elements (2021)', status: 'pass' }, { display_name: 'BSI TR-03183-2', status: 'fail' }, { display_name: 'FDA Medical Device (2025)', status: 'fail' }, { display_name: 'Dependency Track', status: 'skipped' }, { display_name: 'SBOM Verification', status: 'pass' }, { display_name: 'GitHub Attestation', status: 'pending' }] }, passing: { plugins: [{ display_name: 'NTIA Minimum Elements (2021)', status: 'pass' }, { display_name: 'SBOM Verification', status: 'pass' }] } }">
+        <div class="flex flex-wrap items-start gap-10">
+            <c-vulnerabilities.summary :counts="table_summary_demo" />
+            <c-vulnerabilities.summary bind="vuln" />
+            <c-feedback.status tone="success" label="No vulnerabilities" />
+            <c-feedback.status tone="warning" label="Nothing scanned" />
+        </div>
+        <div class="flex flex-wrap items-start gap-10">
+            <c-assessments.summary bind="assessments" />
+            <c-assessments.summary bind="passing" />
+            <c-feedback.status label="Checking" />
+        </div>
+    </div>
+    </c-cards.card>
     <h2 id="progress" class="text-xl font-semibold text-text">Progress</h2>
     <c-cards.card>
     {% comment %}

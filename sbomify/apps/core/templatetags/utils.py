@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from django import template
+from django.contrib.humanize.templatetags.humanize import intcomma
 
 register = template.Library()
 
@@ -86,3 +87,25 @@ def add_utm(url: Any, campaign: Any = "trust_center") -> Any:
     except Exception:
         # If anything goes wrong, return the original URL
         return url
+
+
+SEVERITY_LEVELS = ("critical", "high", "medium", "low")
+
+
+@register.filter
+def severity_unknown(counts: dict[str, Any] | None) -> int:
+    """The part of a severity total that none of the named levels account for."""
+    if not counts:
+        return 0
+    named = sum(counts.get(level) or 0 for level in SEVERITY_LEVELS)
+    return max(0, (counts.get("total") or 0) - named)
+
+
+@register.filter
+def severity_breakdown(counts: dict[str, Any] | None) -> str:
+    """Written severity counts, worst first: "3 critical, 13 high, 2 unknown"."""
+    if not counts:
+        return ""
+    parts = [(counts.get(level) or 0, level) for level in SEVERITY_LEVELS]
+    parts.append((severity_unknown(counts), "unknown"))
+    return ", ".join(f"{intcomma(count)} {label}" for count, label in parts if count)

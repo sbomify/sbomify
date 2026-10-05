@@ -1,0 +1,50 @@
+{% comment %}
+One artifact's assessments as a single table cell: a proportional bar of the
+runs' outcomes, how many passed, and a written line of everything else ("6
+failed, 1 skipped"). It replaces a run of truncated per-plugin pills, whose
+failure icon read as a remove button and whose "+N" hid the very runs that
+failed. The plugins that did not pass are named in the tooltip and to a screen
+reader, so nothing is lost by folding them into one cell.
+
+Rows are built by Alpine, so the caller passes bind, the expression for the
+row's assessment data ("item.assessments"), whose plugins list carries one
+{display_name, status} per run. status is pass, fail, error, pending or
+skipped. A skipped run neither passed nor failed, so it stays out of the
+passed fraction and is only reported.
+
+The caller decides what a row with no runs says; this renders runs.
+{% endcomment %}
+<c-vars bind />
+<span class="inline-flex flex-col gap-1"
+      x-data="{ get runs() { return (({{ bind }}) || {}).plugins || [] }, count(status) { return this.runs.filter(run => run.status === status).length }, get rated() { return this.runs.length - this.count('skipped') }, get unresolved() { return this.runs.filter(run => run.status !== 'pass' && run.status !== 'skipped') }, get notes() { return [[this.count('fail'), 'failed'], [this.count('error'), 'could not run'], [this.count('pending'), 'running'], [this.count('skipped'), 'skipped']].filter(([n]) => n > 0).map(([n, label]) => $number(n) + ' ' + label).join(', ') } }"
+      :title="unresolved.length ? 'Not passed: ' + unresolved.map(run => run.display_name).join(', ') : ''"
+      {{ attrs }}>
+    <span class="inline-flex items-center gap-2">
+        <span class="flex h-1.5 w-16 gap-0.5 overflow-hidden rounded-full bg-surface-hover"
+              aria-hidden="true">
+            <span class="basis-0 rounded-full bg-success"
+                  x-show="count('pass') > 0"
+                  :style="{ flexGrow: count('pass') }"></span>
+            <span class="basis-0 rounded-full bg-warning"
+                  x-show="count('fail') > 0"
+                  :style="{ flexGrow: count('fail') }"></span>
+            <span class="basis-0 rounded-full bg-danger"
+                  x-show="count('error') > 0"
+                  :style="{ flexGrow: count('error') }"></span>
+            <span class="basis-0 rounded-full bg-info"
+                  x-show="count('pending') > 0"
+                  :style="{ flexGrow: count('pending') }"></span>
+            <span class="basis-0 rounded-full bg-text-muted/50"
+                  x-show="count('skipped') > 0"
+                  :style="{ flexGrow: count('skipped') }"></span>
+        </span>
+        <span class="text-sm font-semibold tabular-nums text-text whitespace-nowrap"
+              x-text="!rated ? 'Not rated' : count('pass') === rated ? (rated === 1 ? 'Passed' : 'All ' + $number(rated) + ' passed') : $number(count('pass')) + ' of ' + $number(rated) + ' passed'"></span>
+    </span>
+    <span class="text-xs text-text-muted whitespace-nowrap"
+          x-show="notes"
+          x-text="notes"></span>
+    <span class="sr-only"
+          x-show="unresolved.length"
+          x-text="'Not passed: ' + unresolved.map(run => run.display_name).join(', ')"></span>
+</span>
