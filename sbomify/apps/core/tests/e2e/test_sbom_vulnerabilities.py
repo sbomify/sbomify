@@ -431,3 +431,141 @@ def test_report_previews_and_uploads_vex(authenticated_page, sbom_with_findings,
     assert upload.call_args.args[0] == document
     sbom.refresh_from_db()
     assert sbom.sbom_filename == original_filename
+
+
+@pytest.fixture
+def triage_lands_immediately(mocker):
+    """Triage writes a VEX that can be read back, and re-annotates inline.
+
+    Both halves matter. The decision is stored as a VEX artifact, so a panel
+    that re-renders without being able to read it back would show the old state
+    for a reason that has nothing to do with the refresh. And the re-annotation
+    of the stored scan results runs on the queue in production, which a browser
+    test has no worker for; running it inline keeps these tests about whether
+    the page asks for the new rows, not about queue latency.
+    """
+    store: dict[str, bytes] = {}
+
+    def upload(payload, *args, **kwargs):
+        store["triage.json"] = payload if isinstance(payload, bytes) else str(payload).encode()
+        return "triage.json"
+
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_sbom", side_effect=upload)
+    mocker.patch(
+        "sbomify.apps.core.object_store.StorageClient.get_sbom_data",
+        side_effect=lambda filename, *args, **kwargs: store.get(filename),
+    )
+
+    from sbomify.apps.vulnerability_scanning.tasks import reapply_vex_to_component_scans
+
+    mocker.patch(
+        "sbomify.apps.sboms.services.sboms.schedule_vex_reapply",
+        side_effect=lambda component_id: reapply_vex_to_component_scans.fn(component_id),
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("view", ["component", "report", "plugin"])
+def test_a_saved_triage_shows_where_it_was_made(authenticated_page, sbom_with_findings, triage_lands_immediately, view):
+    """A decision has to appear in the rows it was made from, without a reload.
+
+    The modal closes on a toast that says the findings re-annotate in the
+    background. If nothing then re-renders the panel, the row the reader just
+    triaged keeps its old state until they reload the page by hand, and the
+    decision reads as though it did not take.
+
+    The reader's place is the other half: the refresh carries the filters and
+    the page they are on, so answering one finding does not cost them the list
+    they were working through.
+    """
+    from copy import deepcopy
+
+    from django.urls import reverse
+    from playwright.sync_api import expect
+
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    sbom = sbom_with_findings
+    run = AssessmentRun.objects.get(sbom=sbom, plugin_name="dependency_track")
+    findings = run.result["findings"]
+    for index in range(4, 16):
+        finding = deepcopy(findings[-1])
+        finding["id"] = f"CVE-2024-{index:04d}"
+        findings.append(finding)
+    run.save(update_fields=["result"])
+
+    page = authenticated_page
+    page.set_viewport_size({"width": 1280, "height": 900})
+    if view == "component":
+        page.goto(reverse("core:component_details", args=[sbom.component_id]))
+        panel = page.locator("#component-vulnerabilities-table")
+    elif view == "report":
+        page.goto(reverse("sboms:sbom_vulnerabilities", args=[sbom.id]))
+        panel = page.locator("#scan-vulnerabilities")
+    else:
+        page.goto(reverse("core:component_item", args=[sbom.component_id, "sboms", sbom.id]))
+        page.wait_for_load_state("networkidle")
+        page.locator(f"#run-trigger-{run.id}").click()
+        panel = page.locator(f"#findings-{run.id}")
+
+    # Somewhere a reload would not return them to: five to a page, on page two.
+    expect(panel.get_by_role("combobox", name="Rows per page")).to_be_visible()
+    panel.get_by_role("combobox", name="Rows per page").select_option("5")
+    expect(panel.get_by_text("Showing 1 to 5 of 15 vulnerabilities", exact=True)).to_be_visible()
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
+    panel.get_by_role("link", name="Next page", exact=True).click()
+    expect(panel.get_by_text("Showing 6 to 10 of 15 vulnerabilities", exact=True)).to_be_visible()
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
+    expect(panel.locator("tbody").get_by_text("Not affected", exact=False)).to_have_count(0)
+
+    panel.get_by_role("button", name="Triage", exact=True).first.click()
+    modal = page.locator("#triage-modal")
+    expect(modal).to_be_visible()
+    modal.locator("#triage-state").select_option("not_affected")
+    with page.expect_response(
+        lambda response: response.url.endswith("/triage") and response.request.method == "POST"
+    ) as response:
+        modal.get_by_role("button", name="Save decision", exact=True).click()
+    assert response.value.status == 200
+
+    # The decision, in the rows it was made from, with no reload in between.
+    expect(panel.locator("tbody").get_by_text("Not affected", exact=False)).to_have_count(1)
+    # And still five to a page, still on page two. The total is deliberately not
+    # asserted: a not_affected decision suppresses the finding, and whether a
+    # suppressed row stays listed is each panel's own filter default.
+    expect(panel.locator('[aria-current="page"]')).to_have_text("2")
+    expect(panel.get_by_role("combobox", name="Rows per page")).to_have_value("5")
+
+
+@pytest.mark.django_db
+def test_a_refresh_leaves_an_unopened_findings_panel_unfetched(authenticated_page, sbom_with_findings):
+    """The refresh trigger must not undo the lazy load.
+
+    A scanner reporting thousands of findings is why the panel is not built
+    with the page. Putting the refresh on the placeholder rather than on the
+    loaded panel would fetch every card on the artifact page the first time
+    anything dispatched the event, which is the cost the lazy load exists to
+    avoid.
+    """
+    from django.urls import reverse
+
+    sbom = sbom_with_findings
+    page = authenticated_page
+    page.goto(reverse("core:component_item", args=[sbom.component_id, "sboms", sbom.id]))
+    page.wait_for_load_state("networkidle")
+
+    fetched: list[str] = []
+    page.on("request", lambda request: fetched.append(request.url) if "/findings" in request.url else None)
+
+    page.evaluate(
+        """() => {
+            window.__refreshSettled = false;
+            document.body.addEventListener(
+                'htmx:afterSettle', () => { window.__refreshSettled = true }, { once: true }
+            );
+            document.body.dispatchEvent(new CustomEvent('refresh-assessments'));
+        }"""
+    )
+    page.wait_for_function("window.__refreshSettled === true")
+
+    assert fetched == []
