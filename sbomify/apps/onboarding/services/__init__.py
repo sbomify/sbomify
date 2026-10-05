@@ -163,7 +163,16 @@ class OnboardingEmailService:
             user: User instance
 
         Returns:
-            True if email was sent successfully, False otherwise
+            True if the email was sent or had already been sent, False if it
+            failed for a reason another attempt cannot fix: a refused address,
+            a template that will not render, a recipient we must not mail.
+
+        Raises:
+            TransientEmailError: the attempt failed for a reason that may not
+                recur, so the caller's retry budget should be spent on it. A
+                caller that reads every failure as ``False`` will acknowledge
+                the message and drop the email instead; the sending actors
+                deliberately let this one out.
         """
         if not _is_mailable(user):
             return False
@@ -236,6 +245,10 @@ class OnboardingEmailService:
         Generic helper to send an onboarding sequence email.
 
         Checks deduplication, eligibility, and handles record creation/failure tracking.
+
+        Returns and raises as :meth:`send_welcome_email` does: ``False`` for a
+        failure another attempt cannot fix, ``TransientEmailError`` for one it
+        might.
         """
         if not _is_mailable(user):
             return False
