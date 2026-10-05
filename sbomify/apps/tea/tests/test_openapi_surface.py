@@ -60,7 +60,19 @@ def test_the_openapi_surface_is_reachable_under_a_workspace_key(client: Client, 
 
 
 def test_the_workspace_schema_points_back_at_the_workspace_mount(client: Client):
-    """The prefix has to carry the workspace key, or every documented path is wrong."""
-    schema = client.get(f"{WORKSPACE_BASE}openapi.json").json()
+    """The prefix has to carry the workspace key, or every documented path is wrong.
 
-    assert any(path.startswith(WORKSPACE_BASE) for path in schema["paths"])
+    Every path, not merely one of them. The bug this covers is a reversal
+    against the wrong ``urls_namespace``, and nothing makes that failure
+    all-or-nothing -- a schema mixing correctly and incorrectly prefixed paths
+    is exactly what a partial regression would look like, and it is still a
+    schema a client cannot use.
+    """
+    schema = client.get(f"{WORKSPACE_BASE}openapi.json").json()
+    paths = schema["paths"]
+
+    # A schema that documents nothing would satisfy the assertion below.
+    assert paths, "the workspace mount documented no paths at all"
+
+    wrong = [path for path in paths if not path.startswith(WORKSPACE_BASE)]
+    assert not wrong, f"paths not on the workspace mount: {wrong}"
