@@ -26,9 +26,16 @@ def _report_send_failure(log_prefix: str, task_name: str, user_id: int, exc: Exc
     of the four attempts before the retry that fixes it. That covers more than
     the classified sends: the eligibility check re-raises database errors and
     the context build queries before anything is rendered, so a database that
-    goes away arrives here as itself rather than wrapped. The attempt that runs
-    out of retries still reports: the exception leaves the actor unhandled and
-    dramatiq's integration sends it once, which is the one worth reading.
+    goes away arrives here as itself rather than wrapped.
+
+    The log level is only half of it. These actors leave by ``raise``, because
+    that is how the Retries middleware is told to try again, and
+    ``DramatiqIntegration`` captures the exception every time an actor raises
+    -- so dropping to warning here removed the logging event and left a
+    dramatiq event per attempt. ``REPORT_ON_RETRY_EXHAUSTION_ONLY`` in
+    ``sbomify.sentry_config`` names these actors and drops the intermediate
+    attempts in ``before_send``, leaving the attempt that runs out of retries
+    as the one issue, which is the one worth reading.
     """
     if is_retryable_failure(exc):
         # "Retryable", not "will retry": the attempt that exhausts the budget

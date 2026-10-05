@@ -154,13 +154,98 @@ def _open_window(key: str) -> tuple[bool, bool]:
     return True, previous is not None and now - previous < _EPISODE_CONTINUES_WITHIN_SECONDS
 
 
+#: Dramatiq actors that should raise a Sentry issue only once their retry
+#: budget is gone, not on every attempt along the way.
+#:
+#: Each of these retries a transient failure -- an SMTP 4xx, a database that
+#: went away -- and the retry is expected to fix it. Lowering the *log* level
+#: for those attempts removes the LoggingIntegration event but not
+#: DramatiqIntegration's: that one captures the exception every time the actor
+#: raises, which is every attempt, because leaving by ``raise`` is how the
+#: Retries middleware is told to try again. So four attempts meant four issues
+#: for one delivery that then succeeded.
+#:
+#: Named explicitly rather than applied to every actor. Suppressing the first
+#: failure of anything that happens to be retryable is a much wider change
+#: than these senders, and for an actor whose retries are not expected to
+#: succeed the per-attempt event is the signal.
+REPORT_ON_RETRY_EXHAUSTION_ONLY = frozenset(
+    {
+        "send_welcome_email_task",
+        "send_quick_start_email_task",
+        "send_first_component_email_task",
+        "send_first_sbom_email_task",
+        "send_collaboration_email_task",
+    }
+)
+
+#: What dramatiq's own default is when an actor names no ``max_retries``.
+_DRAMATIQ_DEFAULT_MAX_RETRIES = 20
+
+
+def _actor_max_retries(actor_name: str) -> int | None:
+    """``max_retries`` for ``actor_name``, or None if it cannot be determined."""
+    try:
+        import dramatiq
+
+        actor = dramatiq.get_broker().get_actor(actor_name)
+    except Exception:
+        # No broker in this process, or an actor this process never declared.
+        # Either way there is nothing to decide with, so report the event.
+        return None
+    configured = actor.options.get("max_retries", _DRAMATIQ_DEFAULT_MAX_RETRIES)
+    return configured if isinstance(configured, int) else None
+
+
+def _dramatiq_will_retry(event: Any) -> bool:
+    """Whether dramatiq is going to try this message again.
+
+    Read off the message state the event already carries, because by the time
+    this runs the verdict has been reached. ``Broker.emit_after`` walks
+    middleware in *reverse*, and DramatiqIntegration inserts itself at index
+    0, so its ``after_process_message`` -- the thing that captured this event
+    -- runs after the Retries middleware has decided.
+
+    Retries increments ``options["retries"]`` unconditionally and then gives
+    up when the pre-increment count has reached ``max_retries``. So the count
+    on the event is one higher than the number Retries compared, and
+    "it gave up" is ``retries > max_retries``.
+    """
+    exceptions = ((event or {}).get("exception") or {}).get("values") or []
+    if not any((value.get("mechanism") or {}).get("type") == "dramatiq" for value in exceptions):
+        return False
+
+    message = (((event or {}).get("contexts") or {}).get("dramatiq") or {}).get("data")
+    if not isinstance(message, dict):
+        return False
+
+    actor_name = message.get("actor_name")
+    if actor_name not in REPORT_ON_RETRY_EXHAUSTION_ONLY:
+        return False
+
+    max_retries = _actor_max_retries(actor_name)
+    if max_retries is None:
+        return False
+
+    options = message.get("options")
+    retries = options.get("retries", 0) if isinstance(options, dict) else 0
+    if not isinstance(retries, int):
+        return False
+
+    return retries <= max_retries
+
+
 def throttle_self_healing_notices(event: Any, hint: Any) -> Any:
     """``before_send`` hook: report a recovering outage once, not once a second.
 
     Returns the event to send it, or ``None`` to drop it. Only the notices
-    listed above are ever throttled; everything else is returned untouched, so
-    this cannot quietly swallow a real error.
+    listed above and the retry attempts of the actors in
+    ``REPORT_ON_RETRY_EXHAUSTION_ONLY`` are ever dropped; everything else is
+    returned untouched, so this cannot quietly swallow a real error.
     """
+    if _dramatiq_will_retry(event):
+        return None
+
     record = (hint or {}).get("log_record")
     if not isinstance(record, logging.LogRecord):
         return event
