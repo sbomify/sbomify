@@ -318,4 +318,4 @@ LEGAL_DOCUMENT_TYPES: tuple[str, ...] = (
 
 # Import access models to ensure they are discovered by Django when using --nomigrations
 # These imports are required for test database setup with --nomigrations flag
-from .access_models import AccessRequest, NDASignature  # noqa: F401, E402
+from .access_models import AccessRequest, AccessRequestDecision, NDASignature  # noqa: F401, E402

@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.validators import MaxLengthValidator
-from django.db import models
+from django.db import models, transaction
+from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.teams.models import Team
@@ -85,6 +86,75 @@ class AccessRequest(models.Model):
             live = [s for s in cache["nda_signatures"] if s.superseded_at is None]
             return max(live, key=lambda s: s.signed_at) if live else None
         return self.nda_signatures.live().order_by("-signed_at").first()
+
+    def reopen(self) -> None:
+        """Ask again after a rejection or revocation.
+
+        The closed decision is copied to ``past_decisions`` before its fields
+        are cleared, so who decided, when and why outlives the new request.
+        Any live signature is superseded so the new request must sign again.
+        """
+        if self.status not in (self.Status.REJECTED, self.Status.REVOKED):
+            raise ValueError(f"Only a rejected or revoked access request can be reopened, not {self.status}")
+        now = timezone.now()
+        with transaction.atomic():
+            AccessRequestDecision.objects.create(
+                access_request=self,
+                status=self.status,
+                requested_at=self.requested_at,
+                decided_at=self.decided_at,
+                decided_by=self.decided_by,
+                revoked_at=self.revoked_at,
+                revoked_by=self.revoked_by,
+                notes=self.notes,
+            )
+            self.nda_signatures.live().update(superseded_at=now)
+            self.status = self.Status.PENDING
+            self.requested_at = now
+            self.decided_at = None
+            self.decided_by = None
+            self.revoked_at = None
+            self.revoked_by = None
+            self.notes = ""
+            self.save()
+
+
+class AccessRequestDecision(models.Model):
+    """A closed decision on an access request, kept when the requester asks again.
+
+    An access request is one row per (workspace, user) that cycles back to
+    pending on a re-request. Each rejection or revocation it held is copied
+    here first, so the audit trail survives the cycle.
+    """
+
+    class Meta:
+        db_table = "documents_access_request_decisions"
+        ordering = ["-archived_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=(AccessRequest.Status.REJECTED, AccessRequest.Status.REVOKED)),
+                name="access_request_decision_is_closed",
+            )
+        ]
+
+    CLOSED_STATUSES = [
+        (AccessRequest.Status.REJECTED.value, AccessRequest.Status.REJECTED.label),
+        (AccessRequest.Status.REVOKED.value, AccessRequest.Status.REVOKED.label),
+    ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    access_request = models.ForeignKey(AccessRequest, on_delete=models.CASCADE, related_name="past_decisions")
+    status = models.CharField(max_length=20, choices=CLOSED_STATUSES)
+    requested_at = models.DateTimeField()
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    notes = models.TextField(blank=True)
+    archived_at = models.DateTimeField(auto_now_add=True, help_text="When the requester asked again")
+
+    def __str__(self) -> str:
+        return f"AccessRequestDecision {self.id} - {self.access_request_id} - {self.status}"
 
 
 class NDASignatureQuerySet(models.QuerySet["NDASignature"]):

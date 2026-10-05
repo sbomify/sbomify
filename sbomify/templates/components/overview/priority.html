@@ -1,7 +1,7 @@
 {% comment %}
 The priority panel composes shared table primitives. SLA, decisions and product
-membership come from the workspace service. Review opens the existing
-component controls; no triage state is held in the browser.
+membership come from the workspace service. Each row links to its component
+and opens the shared triage modal for that advisory and package.
 {% endcomment %}
 {% load humanize %}
 <c-vars dashboard workspace_key />
@@ -13,28 +13,30 @@ trailing it, so a narrow column wraps the sentence instead of orphaning the
 number. It appears only when there is more than fits, and it counts findings
 rather than occurrences: a summary-only scanner reports occurrences with
 nothing itemised to rank, and the alert above this panel accounts for those.
+
+The hint stays on one line: a multi-line {% if %} inside an attribute renders
+the value with a leading newline.
 {% endcomment %}
-{% if dashboard.needs_attention_total > dashboard.needs_attention|length %}
-    <c-cards.header compact title="What to fix first" hint="Top {{ dashboard.needs_attention|length|intcomma }} of {{ dashboard.needs_attention_total|intcomma }}, ranked by exploitation and patch SLA" />
-{% else %}
-    <c-cards.header compact title="What to fix first" hint="Ranked by exploitation and patch SLA" />
+{# djlint:off #}
+<c-cards.header compact title="What to fix first" hint="{% if dashboard.needs_attention_total > dashboard.needs_attention|length %}Top {{ dashboard.needs_attention|length|intcomma }} of {{ dashboard.needs_attention_total|intcomma }}, ranked by exploitation and patch SLA{% else %}Ranked by exploitation and patch SLA{% endif %}">
+{# djlint:on #}
+{% if workspace_key %}
+    <c-buttons.ghost size="sm" href="{% url 'vulnerability_scanning:vulnerability_scans' workspace_key %}">View vulnerability scans<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
 {% endif %}
-{% if dashboard.needs_attention %}
+</c-cards.header>{% if dashboard.needs_attention %}
     <c-overview.table aria-label="Priority vulnerabilities">
     <c-tables.head>
-    <tr>
-        <c-tables.header-cell>Vulnerability</c-tables.header-cell>
-        <c-tables.header-cell>Severity</c-tables.header-cell>
-        <c-tables.header-cell nowrap>Patch SLA</c-tables.header-cell>
-        <c-tables.header-cell>Decision</c-tables.header-cell>
-        <c-tables.header-cell>Where</c-tables.header-cell>
-        <c-tables.header-cell end>Action</c-tables.header-cell>
-    </tr>
+    <c-tables.header-cell>Vulnerability</c-tables.header-cell>
+    <c-tables.header-cell>Severity</c-tables.header-cell>
+    <c-tables.header-cell nowrap>Patch SLA</c-tables.header-cell>
+    <c-tables.header-cell>Decision</c-tables.header-cell>
+    <c-tables.header-cell>Where</c-tables.header-cell>
+    <c-tables.header-cell end>Action</c-tables.header-cell>
     </c-tables.head>
     <tbody>
         {% for finding in dashboard.needs_attention %}
             <c-tables.row>
-            <c-tables.cell><c-overview.record href="{% url 'core:component_details' finding.component_id %}" title="{{ finding.id }}" detail="{{ finding.package }} {{ finding.version }}" mono /></c-tables.cell>
+            <c-tables.cell><c-overview.record href="{% url 'core:component_details' finding.component_id %}?vuln_search={{ finding.id|urlencode }}#component-vulnerabilities" title="{{ finding.id }}" detail="{{ finding.package }} {{ finding.version }}" mono /></c-tables.cell>
             <c-tables.cell>
             <div class="flex flex-wrap gap-1">
                 <c-badges.severity level="{{ finding.severity }}">{{ finding.severity|capfirst }}</c-badges.severity>
@@ -45,7 +47,7 @@ nothing itemised to rank, and the alert above this panel accounts for those.
             <c-tables.cell date><c-overview.sla :sla="finding.sla" /></c-tables.cell>
             <c-tables.cell muted>{{ finding.decision }}</c-tables.cell>
             <c-tables.cell><c-overview.record href="{% url 'core:component_details' finding.component_id %}" title="{{ finding.component_name }}" detail="{{ finding.products|join:', ' }}" /></c-tables.cell>
-            <c-tables.cell end><c-buttons.ghost size="sm" href="{% url 'core:component_details' finding.component_id %}">Review</c-buttons.ghost></c-tables.cell>
+            <c-tables.actions-cell><c-overview.priority-actions :finding="finding" /></c-tables.actions-cell>
             </c-tables.row>
         {% endfor %}
     </tbody>
@@ -56,8 +58,5 @@ nothing itemised to rank, and the alert above this panel accounts for those.
     <c-feedback.empty-state compact icon_size="sm" icon="fas fa-shield-halved" title="Waiting for security scans" message="Upload an SBOM and complete a scan to see what needs attention." />
 {% else %}
     <c-feedback.empty-state compact icon_size="sm" icon="fas fa-check" title="No open vulnerabilities to review" message="Completed scans have no unsuppressed vulnerabilities to show." />
-{% endif %}
-{% if workspace_key %}
-    <c-cards.footer><c-buttons.ghost size="sm" href="{% url 'vulnerability_scanning:vulnerability_scans' workspace_key %}">View vulnerability scans<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost></c-cards.footer>
 {% endif %}
 </c-cards.card>

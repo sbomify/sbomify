@@ -249,6 +249,7 @@ extension = "j2"
 mypy_path = "."
 plugins = ["mypy_django_plugin.main"]
 strict = true
+enable_error_code = ["possibly-undefined"]
 exclude = [
     "migrations/",
     "manage\\.py",

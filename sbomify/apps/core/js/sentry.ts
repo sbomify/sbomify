@@ -19,7 +19,11 @@ export function initSentry(): void {
   Sentry.init({
     dsn: config.dsn,
     release: config.release || undefined,
-    sendDefaultPii: true,
+    // v11 replaced `sendDefaultPii` with per-category `dataCollection`. Every
+    // category defaults to permissive when `dataCollection` is supplied, so
+    // this reproduces `sendDefaultPii: true` while naming the one that matters
+    // in the browser.
+    dataCollection: { userInfo: true },
   });
 }
 

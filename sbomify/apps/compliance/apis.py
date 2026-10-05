@@ -540,7 +540,7 @@ def save_doc_signature(request: HttpRequest, assessment_id: str, payload: Signat
       ``mark_safe`` rendering path (worst case).
 
     Saving the signature bumps any existing DoC ``CRAGeneratedDocument``
-    to ``is_stale=True`` so the wizard's "Refresh Stale Documents"
+    to ``is_stale=True`` so the wizard's "Refresh stale documents"
     button picks it up — the operator must regenerate before the
     public reader will surface the updated declaration. We do not
     auto-regenerate here because a signature change is a deliberate

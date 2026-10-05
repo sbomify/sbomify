@@ -8,14 +8,6 @@ mock.module('alpinejs', () => ({
     }
 }))
 
-mock.module('../../core/js/components/pagination-controls', () => ({
-    createPaginationData: mock().mockReturnValue({
-        currentPage: 1,
-        pageSize: 10,
-        totalItems: 0
-    })
-}))
-
 interface Document {
     id: string
     name: string

@@ -658,7 +658,7 @@ class TestATrialRunsItsFullLength:
     def test_a_trial_with_hours_left_has_not_expired(self, mocker, sample_team_with_owner_member):
         from sbomify.apps.billing import billing_processing
 
-        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")
+        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.apply_community_downgrade")
         mocker.patch("sbomify.apps.billing.billing_processing.notify_billing_managers")
         team = sample_team_with_owner_member.team
 
@@ -671,7 +671,7 @@ class TestATrialRunsItsFullLength:
     def test_a_trial_past_its_end_expires(self, mocker, sample_team_with_owner_member):
         from sbomify.apps.billing import billing_processing
 
-        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")
+        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.apply_community_downgrade")
         mocker.patch("sbomify.apps.billing.billing_processing.notify_billing_managers")
         team = sample_team_with_owner_member.team
 
@@ -680,3 +680,24 @@ class TestATrialRunsItsFullLength:
         team.refresh_from_db()
         downgrade.assert_called_once()
         assert team.billing_plan == "community"
+
+    def test_a_plan_restored_after_the_claim_keeps_its_settings(self, mocker, sample_team_with_owner_member):
+        from sbomify.apps.billing import billing_processing
+        from sbomify.apps.teams.models import Team
+
+        downgrade = mocker.patch("sbomify.apps.billing.billing_processing.apply_community_downgrade")
+        mocker.patch("sbomify.apps.billing.billing_processing.notify_billing_managers")
+        team = sample_team_with_owner_member.team
+        real_save = Team.save
+
+        def save_then_restore(self, *args, **kwargs):
+            real_save(self, *args, **kwargs)
+            if self.billing_plan == "community":
+                # A payment recovers and restores the paid plan right after the claim commits.
+                Team.objects.filter(pk=self.pk).update(billing_plan="business")
+
+        mocker.patch.object(Team, "save", save_then_restore)
+
+        billing_processing.handle_trial_period(self._subscription(-1), team)
+
+        downgrade.assert_not_called()
