@@ -1779,6 +1779,27 @@ class TestTransientSendFailuresRetry:
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
         assert record.status == OnboardingEmail.EmailStatus.FAILED, "the outcome was recorded, not lost"
 
+    def test_a_database_outage_while_stamping_the_handoff_retries(self) -> None:
+        """The stamp is written inside the send's try, so its failures land there.
+
+        Recording one as a send failure returns ``False``, the actor
+        acknowledges the message, and the email is dropped -- even though the
+        task boundary treats database transport errors as retryable.
+        """
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("stampoutage")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            with patch.object(
+                OnboardingEmail, "mark_handed_to_mailer", side_effect=OperationalError("connection lost")
+            ):
+                with pytest.raises(TransientEmailError):
+                    OnboardingEmailService.send_welcome_email(user)
+            mock_email_cls.return_value.send.assert_not_called()
+
     def test_a_stamped_row_is_never_reclaimed_however_old(self) -> None:
         """The abandonment lease must not reach a row that was handed over.
 

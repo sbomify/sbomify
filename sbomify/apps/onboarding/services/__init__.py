@@ -510,7 +510,12 @@ class OnboardingEmailService:
                 lambda: email_record.mark_failed(failure),
                 f"a failed send for user {user.id}",
             )
-            if _is_transient_send_error(e):
+            # The database errors as well as the SMTP ones. The handoff stamp
+            # is written inside this try, so a connection that goes away there
+            # arrives here looking like a send failure; recording it as one
+            # drops the email, because the task acknowledges a ``False`` return
+            # and nothing retries it.
+            if _is_transient_send_error(e) or isinstance(e, TRANSIENT_DB_ERRORS):
                 logger.warning("Transient failure sending welcome email to user %s: %s", user.id, e)
                 raise TransientEmailError(f"welcome email to user {user.id}") from e
             logger.error("Failed to send welcome email to user %s: %s", user.id, e, exc_info=True)
@@ -651,7 +656,9 @@ class OnboardingEmailService:
                 lambda: email_record.mark_failed(failure),
                 f"a failed send for user {user.id}",
             )
-            if _is_transient_send_error(e):
+            # See the welcome path: a database error while stamping the handoff
+            # is not a send failure, and recording it as one drops the email.
+            if _is_transient_send_error(e) or isinstance(e, TRANSIENT_DB_ERRORS):
                 logger.warning("Transient failure sending %s email to user %s: %s", email_type, user.id, e)
                 raise TransientEmailError(f"{email_type} email to user {user.id}") from e
             logger.error("Failed to send %s email to user %s: %s", email_type, user.id, e, exc_info=True)
