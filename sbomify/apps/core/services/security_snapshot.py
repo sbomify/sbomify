@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as _SEVERITY_RANK
+from sbomify.apps.vulnerability_scanning.utils import state_label
 
 
 def build_component_security_picture(
@@ -121,7 +122,9 @@ def build_component_security_picture(
                 }
             )
     _attach_patch_sla(findings, component_ids, sla_matrix)
-    # Active exploitation leads, followed by a breached SLA and severity.
+    # Active exploitation leads, followed by a breached SLA and severity. The
+    # trailing identity makes the order total: without it, ties kept the query's
+    # order, which follows random SBOM ids, and a paged list could repeat a row.
     findings.sort(
         key=lambda r: (
             not r["malicious"],
@@ -131,6 +134,11 @@ def build_component_security_picture(
             r["sla"]["remaining_seconds"] if r["sla"]["remaining_seconds"] is not None else float("inf"),
             -(r["scanned_at"].timestamp() if r["scanned_at"] else 0.0),
             -(r.get("cvss_score") or 0),
+            r["id"].casefold(),
+            r["component_name"].casefold(),
+            r["component_id"],
+            (r.get("package") or "").casefold(),
+            r.get("version") or "",
         )
     )
     return {
@@ -186,11 +194,6 @@ def _attach_patch_sla(findings: list[dict[str, Any]], component_ids: list[str], 
             count = ceil(seconds / 86400)
             label = f"{count} day{'s' if count != 1 else ''} left"
         finding["sla"] = {"label": label, "overdue": overdue, "remaining_seconds": seconds}
-        finding["decision"] = {
-            "exploitable": "Exploitable",
-            "in_triage": "In triage",
-            "false_positive": "False positive",
-            "not_affected": "Not affected",
-            "resolved": "Resolved",
-            "resolved_with_pedigree": "Resolved",
-        }.get(finding["vex_state"], "Not reviewed")
+        # One wording for an analysis state across the product; a finding nobody
+        # has triaged carries no state at all, which is its own answer.
+        finding["decision"] = state_label(finding["vex_state"]) or "Not reviewed"
