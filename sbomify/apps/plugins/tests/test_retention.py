@@ -152,6 +152,25 @@ class TestCost:
         assert len(queries) == 1
         assert "ROW_NUMBER()" in queries[0]["sql"]
 
+    def test_a_pruned_runs_findings_go_with_it(self, sample_sbom):
+        """Loading only the id must not cost the cascade: a run's finding rows
+        point at it, and an orphaned row would keep counting in the overview."""
+        from sbomify.apps.vulnerability_scanning.models import Finding
+
+        for age in range(100, 106):
+            Finding.objects.create(
+                run=_run(sample_sbom, "osv", days_ago=age),
+                sbom=sample_sbom,
+                component_id=sample_sbom.component_id,
+                advisory_id="CVE-2026-0001",
+                severity="high",
+                severity_rank=1,
+            )
+
+        prune_assessment_runs(keep_per_plugin=3, min_age_days=30)
+
+        assert Finding.objects.count() == 3
+
     def test_runs_sharing_a_timestamp_still_rank_by_id(self, sample_sbom):
         """Runs created in one transaction can share ``created_at``; the id
         breaks the tie, so the quota keeps exactly ``keep_per_plugin`` of them."""
