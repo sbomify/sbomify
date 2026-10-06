@@ -570,6 +570,23 @@ def apply_db_resilience(config: dict[str, Any]) -> dict[str, Any]:
     options.setdefault("keepalives_idle", 30)
     options.setdefault("keepalives_interval", 10)
     options.setdefault("keepalives_count", 3)
+
+    # Ceilings on how long Postgres works for one connection, in seconds. Without
+    # them a query keeps running after gunicorn kills its request, and a
+    # transaction left open keeps its locks. Off unless set: the web, the workers
+    # and ``migrate`` share this module, and a ceiling that suits a request would
+    # kill a long index build, so each process sets its own.
+    ceilings = [
+        f"-c {setting}={seconds}s"
+        for env, setting in (
+            ("DATABASE_STATEMENT_TIMEOUT", "statement_timeout"),
+            ("DATABASE_LOCK_TIMEOUT", "lock_timeout"),
+            ("DATABASE_IDLE_IN_TRANSACTION_TIMEOUT", "idle_in_transaction_session_timeout"),
+        )
+        if (seconds := int(os.environ.get(env) or 0))
+    ]
+    if ceilings:
+        options["options"] = " ".join(filter(None, [options.get("options"), *ceilings]))
     config["OPTIONS"] = options
     return config
 

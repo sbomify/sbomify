@@ -165,6 +165,49 @@ def test_libpq_options_are_not_forced_on_other_backends(engine: str) -> None:
     assert "CONN_MAX_AGE" in config
 
 
+# Environment variable, and the Postgres setting it caps, in seconds.
+_TIMEOUTS = {
+    "DATABASE_STATEMENT_TIMEOUT": "statement_timeout",
+    "DATABASE_LOCK_TIMEOUT": "lock_timeout",
+    "DATABASE_IDLE_IN_TRANSACTION_TIMEOUT": "idle_in_transaction_session_timeout",
+}
+
+
+def test_each_process_can_cap_how_long_postgres_works_for_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a ceiling, a query outlives the request that asked for it.
+
+    gunicorn kills a request after 120 s, but Postgres keeps running its query,
+    and a transaction left open keeps its locks. One settings module serves the
+    web, the workers and ``migrate``, so each process brings its own ceiling.
+    """
+    for seconds, env in enumerate(_TIMEOUTS, start=1):
+        monkeypatch.setenv(env, str(seconds * 10))
+
+    options = apply_db_resilience({"ENGINE": "django.db.backends.postgresql"})["OPTIONS"]["options"]
+
+    for seconds, setting in enumerate(_TIMEOUTS.values(), start=1):
+        assert f"-c {setting}={seconds * 10}s" in options
+
+
+def test_no_timeout_is_set_unless_the_environment_asks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Off by default: a ceiling that suits a request would kill a long index build in ``migrate``."""
+    for env in _TIMEOUTS:
+        monkeypatch.delenv(env, raising=False)
+
+    assert "options" not in apply_db_resilience({"ENGINE": "django.db.backends.postgresql"})["OPTIONS"]
+
+
+def test_a_timeout_keeps_the_options_the_url_already_carried(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``DATABASE_URL`` can carry its own ``options``; the ceiling is added, not swapped in."""
+    monkeypatch.setenv("DATABASE_STATEMENT_TIMEOUT", "60")
+
+    config = apply_db_resilience(
+        {"ENGINE": "django.db.backends.postgresql", "OPTIONS": {"options": "-c search_path=app"}}
+    )
+
+    assert config["OPTIONS"]["options"] == "-c search_path=app -c statement_timeout=60s"
+
+
 class _Record(logging.LogRecord):
     """A log record with a name, a message and optionally the exception.
 
