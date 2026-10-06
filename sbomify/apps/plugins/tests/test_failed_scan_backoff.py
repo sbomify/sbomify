@@ -416,6 +416,12 @@ class TestTheSweepStaysCheapAsTheTableGrows:
         assert "Limit" in plan, plan
         # And not a window computed over everything and then thrown away.
         assert "WindowAgg" not in plan, plan
+        # The index is partial on the same terminal-status predicate the query
+        # filters by, and Postgres proves one from the other -- so the plan
+        # carries no Filter at all and every row the descent reads is a row the
+        # LIMIT counts. Without that the probe reads past whatever in-flight
+        # runs sit above the newest settled one and the bound is approximate.
+        assert "Filter:" not in plan, plan
 
     def test_a_long_history_is_not_a_long_read(self, scannable_sbom) -> None:
         """Forty runs on one SBOM, five rows back.

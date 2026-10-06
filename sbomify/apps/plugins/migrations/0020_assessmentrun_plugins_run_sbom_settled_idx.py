@@ -39,6 +39,7 @@ class Migration(migrations.Migration):
                     descending=True,
                 ),
                 models.OrderBy(models.F("id"), descending=True),
+                condition=models.Q(("status__in", ["pending", "running"]), _negated=True),
                 name="plugins_run_sbom_settled_idx",
             ),
         ),

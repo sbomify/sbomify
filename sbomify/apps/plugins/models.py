@@ -257,12 +257,20 @@ class AssessmentRun(models.Model):
             # ``id`` closes the ordering so the probe never needs a sort to
             # break a tie: runs written in one transaction can share a settled
             # time, and the streak has to read them in a stable order.
+            #
+            # Partial on the same terminal-status predicate the probe filters
+            # by, which is what makes its LIMIT exact rather than approximate:
+            # without it the descent walks past whatever in-flight rows sit
+            # above the newest settled one before it has its few. It also keeps
+            # the index off rows that are about to be rewritten anyway -- a
+            # PENDING run is updated twice on its way to a verdict.
             models.Index(
                 "plugin_name",
                 "sbom_id",
                 Coalesce("completed_at", "created_at").desc(),
                 models.F("id").desc(),
                 name="plugins_run_sbom_settled_idx",
+                condition=~models.Q(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value]),
             ),
         ]
         ordering = ["-created_at"]
