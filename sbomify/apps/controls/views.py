@@ -8,7 +8,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
-from sbomify.apps.controls.models import Control
+from sbomify.apps.controls.models import Control, ControlStatus
 from sbomify.apps.controls.services.catalog_service import (
     activate_builtin_catalog,
     deactivate_catalog,
@@ -250,7 +250,10 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if not result.ok:
             messages.error(request, result.error or "Bulk update failed")
         else:
-            messages.success(request, f"Set {result.value} controls in {category} to {status}.")
+            # The stored status is a code; the message quotes it back at the
+            # user, so it goes out as the label the dropdown offered.
+            status_label = ControlStatus.Status(status).label if status in ControlStatus.Status.values else status
+            messages.success(request, f"Set {result.value} controls in {category} to {status_label}.")
 
         if request.headers.get("HX-Request"):
             control = controls_qs.select_related("catalog__team").first()

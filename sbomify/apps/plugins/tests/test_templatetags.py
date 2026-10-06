@@ -6,6 +6,7 @@ from sbomify.apps.plugins.templatetags.plugins_extras import (
     format_run_reason,
     has_compliance_failures,
 )
+from sbomify.apps.plugins.sdk.enums import RunReason
 
 
 class TestFormatRunReason:
@@ -26,8 +27,18 @@ class TestFormatRunReason:
     def test_migration(self) -> None:
         assert format_run_reason("migration") == "Migration"
 
-    def test_unknown_returns_original(self) -> None:
-        assert format_run_reason("unknown_reason") == "unknown_reason"
+    def test_every_sdk_reason_is_worded(self) -> None:
+        """No RunReason the SDK defines may reach a page as its code."""
+        for reason in RunReason:
+            rendered = format_run_reason(reason.value)
+            assert "_" not in rendered, reason.value
+            assert rendered[0].isupper()
+
+    def test_unknown_is_humanized_not_printed_raw(self) -> None:
+        assert format_run_reason("unknown_reason") == "Unknown Reason"
+
+    def test_empty_stays_empty(self) -> None:
+        assert format_run_reason("") == ""
 
 
 class TestFormatFindingDescription:
