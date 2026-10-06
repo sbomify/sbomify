@@ -28,7 +28,7 @@ def test_delete_empty_or_incomplete_profile(
 
     page = authenticated_page
     page.goto(reverse("teams:team_settings_tab", args=[team_with_business_plan.key, "contact-profiles"]))
-    page.get_by_role("button", name="Profile actions").click()
+    page.get_by_role("button", name="Party actions").click()
     page.get_by_role("menuitem", name="Delete profile", exact=True).click()
     page.get_by_role("button", name="Delete profile", exact=True).click()
 

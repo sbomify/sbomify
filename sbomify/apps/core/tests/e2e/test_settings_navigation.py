@@ -112,11 +112,11 @@ def test_settings_controls_and_navigation(
             expect(page.locator("#company_nda_file")).to_have_attribute("required", "")
         if label == "Parties":
             expect(page.get_by_text("Product contacts", exact=True)).to_be_visible()
-            search = page.get_by_role("searchbox", name="Search contact profiles")
+            search = page.get_by_role("searchbox", name="Search parties")
             search.fill("No matching profile")
             expect(page.get_by_text("No matches found", exact=True)).to_be_visible()
             search.fill("")
-            page.get_by_role("button", name="Profile actions", exact=True).click()
+            page.get_by_role("button", name="Party actions", exact=True).click()
             page.get_by_role("menuitem", name="Edit profile", exact=True).click()
             expect(page.get_by_role("textbox", name=re.compile("Profile name"))).to_have_value("Product contacts")
             entities = page.locator("#entities-container")
