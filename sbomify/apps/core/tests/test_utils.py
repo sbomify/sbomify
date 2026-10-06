@@ -10,6 +10,7 @@ from sbomify.apps.billing.stripe_pricing_service import StripePricingService
 from sbomify.apps.core.utils import (
     generate_id,
     get_client_ip,
+    humanize_token,
     number_to_random_token,
     token_to_number,
 )
@@ -22,6 +23,28 @@ def test_id_token_conversion():
         assert isinstance(tok, str)
         assert len(tok) > 6
         assert num == token_to_number(tok)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("on_upload", "On Upload"),
+        ("release-notes", "Release Notes"),
+        ("manual", "Manual"),
+        ("resolved_with_pedigree", "Resolved With Pedigree"),
+        # An acronym the codes already carry in caps survives as one.
+        ("NDA-report", "NDA Report"),
+        ("  padded_value  ", "Padded Value"),
+    ],
+)
+def test_humanize_token_words_a_machine_code(value, expected):
+    assert humanize_token(value) == expected
+
+
+@pytest.mark.parametrize("value", ["", "   ", "___", None, 7])
+def test_humanize_token_falls_back_when_there_is_no_word(value):
+    assert humanize_token(value) == ""
+    assert humanize_token(value, default="Unknown") == "Unknown"
 
 
 def test_generate_id():
