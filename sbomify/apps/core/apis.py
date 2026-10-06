@@ -4822,6 +4822,7 @@ def list_component_sboms(
 
         # Import assessment helpers
         from sbomify.apps.plugins.apis import _compute_status_summary, _is_run_failing, _is_run_skipped
+        from sbomify.apps.plugins.latest import latest_run_ids
         from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
         from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
@@ -4892,34 +4893,16 @@ def list_component_sboms(
             log.warning(f"Database error fetching release artifacts for component {component_id}: {db_err}")
 
         # 4. Latest AssessmentRun per (sbom_id, plugin_name) across ALL SBOMs.
-        # ``DISTINCT ON`` is Postgres-specific but the project standardises on
-        # Postgres 17 (see CLAUDE.md). The same index that backed the prior
-        # per-SBOM subquery — ``(sbom, plugin_name, -created_at)`` — covers
-        # this batched form too.
         runs_by_sbom: dict[str, list[AssessmentRun]] = defaultdict(list)
         plugin_names_seen: set[str] = set()
         try:
             # Two-phase on purpose: the summary annotations extract JSON keys
-            # from ``result``, and computing them on the DISTINCT ON input made
+            # from ``result``, and computing them across the run history made
             # Postgres de-TOAST every historical run's multi-MB blob only to
-            # discard the losers — >100s for a component with hundreds of SBOM
-            # versions. Phase 1 picks the winning run ids touching no JSON;
-            # phase 2 annotates just those winners.
-            #
-            # The ids are materialised deliberately: passed lazily to ``id__in``,
-            # Django strips the subquery's ORDER BY, and DISTINCT ON without its
-            # ORDER BY returns an arbitrary row per group instead of the latest.
-            # The list is bounded by (sboms x plugins), the same magnitude as the
-            # ``sbom_ids`` IN-list already used above.
-            winner_ids = list(
-                AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-                # -id breaks created_at ties deterministically (newest row wins),
-                # matching vulnerability_trends so both surfaces agree on which
-                # run is "latest" when two share a timestamp.
-                .order_by("sbom_id", "plugin_name", "-created_at", "-id")
-                .distinct("sbom_id", "plugin_name")
-                .values_list("id", flat=True)
-            )
+            # discard the losers, >100s for a component with hundreds of SBOM
+            # versions. Phase 1 picks the winning run ids, one probe per pair,
+            # touching no JSON; phase 2 annotates just those winners.
+            winner_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
             latest_runs = list(
                 AssessmentRun.objects.filter(id__in=winner_ids)
                 .defer("result")

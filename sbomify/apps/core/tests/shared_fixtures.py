@@ -180,6 +180,20 @@ def team_with_enterprise_plan(sample_user: AbstractBaseUser) -> Generator[Team, 
         team.delete()
 
 
+def register_plugin(name: str, category: str = "security") -> None:
+    """Put ``name`` in the plugin registry, where every run's plugin is in production.
+
+    Readers pick the newest run per registered plugin, so a run made up under a
+    name the registry has never held does not show.
+    """
+    from sbomify.apps.plugins.models import RegisteredPlugin
+
+    RegisteredPlugin.objects.get_or_create(
+        name=name,
+        defaults={"display_name": name, "category": category, "version": "1.0.0", "plugin_class_path": f"tests.{name}"},
+    )
+
+
 # ============================================================================
 # Web Client Session Setup Utilities
 # ============================================================================

@@ -16,6 +16,7 @@ def build_component_security_picture(
     component_ids: list[str], component_names: dict[str, str], sla_matrix: dict[str, Any]
 ) -> dict[str, Any]:
     """Worst non-suppressed findings across the given components."""
+    from sbomify.apps.plugins.latest import latest_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.models import Finding
@@ -34,10 +35,10 @@ def build_component_security_picture(
         .values("id", "component_id", "version", "created_at")
     )
     sbom_meta = {str(row["id"]): row for row in latest_sboms}
+    latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), sbom_meta.keys())
     runs = (
-        AssessmentRun.objects.filter(sbom_id__in=sbom_meta.keys(), category="security", status="completed")
-        .order_by("sbom_id", "plugin_name", "-created_at", "-id")
-        .distinct("sbom_id", "plugin_name")
+        AssessmentRun.objects.filter(id__in=latest_ids)
+        .order_by("sbom_id", "plugin_name")
         .values("id", "sbom_id", "result_summary", "result_skipped", "created_at")
     )
     results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
