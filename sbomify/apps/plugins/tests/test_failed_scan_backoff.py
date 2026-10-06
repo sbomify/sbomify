@@ -33,7 +33,7 @@ from sbomify.apps.plugins.models import (
     RunStatus,
     TeamPluginSettings,
 )
-from sbomify.apps.plugins.sdk.enums import AssessmentCategory
+from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason
 from sbomify.apps.sboms.models import SBOM
 
 
@@ -98,7 +98,10 @@ def _run_at_age(
     run = AssessmentRun.objects.create(
         sbom=sbom,
         plugin_name="dependency-track",
+        plugin_version="1.0.0",
+        plugin_config_hash="0" * 64,
         category=AssessmentCategory.SECURITY.value,
+        run_reason=RunReason.SCHEDULED_REFRESH.value,
         status=status,
         result=result,
         error_message=error_message
@@ -245,7 +248,10 @@ class TestTheBackoffIsScopedToItsPlugin:
             run = AssessmentRun.objects.create(
                 sbom=scannable_sbom,
                 plugin_name="osv",
+                plugin_version="1.0.0",
+                plugin_config_hash="0" * 64,
                 category=AssessmentCategory.SECURITY.value,
+                run_reason=RunReason.SCHEDULED_REFRESH.value,
                 status=RunStatus.FAILED.value,
             )
             AssessmentRun.objects.filter(pk=run.pk).update(created_at=timezone.now() - timedelta(hours=age))
@@ -521,9 +527,7 @@ class TestTheFailureTheScannerStoresAsAnErrorFinding:
                 result=self._error_result(),
             )
 
-    def test_the_orchestrator_really_does_store_it_with_no_error_message(
-        self, scannable_sbom, monkeypatch
-    ) -> None:
+    def test_the_orchestrator_really_does_store_it_with_no_error_message(self, scannable_sbom, monkeypatch) -> None:
         """The production path, driven end to end rather than described.
 
         This is what makes the rest of the class more than an assertion about a
@@ -533,7 +537,6 @@ class TestTheFailureTheScannerStoresAsAnErrorFinding:
         """
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
         from sbomify.apps.plugins.orchestrator import PluginOrchestrator
-        from sbomify.apps.plugins.sdk.enums import RunReason
 
         monkeypatch.setattr(
             "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
