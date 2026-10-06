@@ -113,7 +113,7 @@ class TestDocumentsReachingTheLenientReader:
 def test_upload_file_accepts_a_legacy_document_with_a_mistyped_package(
     sample_component: Component,  # noqa: F811
     mocker: MockerFixture,  # noqa: F811
-):
+) -> None:
     """End to end: the path that answered 400 "Invalid request" and reported itself."""
     mocker.patch("boto3.resource")
     mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_data_as_file")
