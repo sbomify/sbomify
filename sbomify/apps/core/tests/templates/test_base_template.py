@@ -89,4 +89,4 @@ class TestBaseTemplate:
 
         # Test other navigation items present
         assert ">Products</span>" in content
-        assert ">Vulnerability scans</span>" in content
+        assert ">Vulnerabilities</span>" in content
