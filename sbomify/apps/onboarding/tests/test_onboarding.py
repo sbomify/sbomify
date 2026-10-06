@@ -1680,6 +1680,38 @@ class TestTransientSendFailuresRetry:
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
         assert record.status == OnboardingEmail.EmailStatus.FAILED
 
+    @staticmethod
+    def _age_handoff(record: Any) -> None:
+        """Push a handoff stamp past the lease, so nothing is still in flight."""
+        from sbomify.apps.onboarding.services import HANDOFF_SETTLES_AFTER
+
+        OnboardingEmail.objects.filter(pk=record.pk).update(
+            handed_to_mailer_at=timezone.now() - HANDOFF_SETTLES_AFTER - timedelta(minutes=1)
+        )
+
+    def test_a_send_in_flight_elsewhere_is_neither_settled_nor_repeated(self) -> None:
+        """A stamp is written before SMTP is called, so a fresh one may be live.
+
+        Settling it on sight would skip a delivery that is seconds away, which
+        is the one way this mechanism could lose the mail it exists to protect.
+        The row has to be left exactly as it is.
+        """
+        user = self._user("inflight")
+        record = OnboardingEmail.create_email(
+            user=user, email_type=OnboardingEmail.EmailType.WELCOME, subject="Welcome"
+        )
+        record.mark_handed_to_mailer()
+
+        mail.outbox = []
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            assert OnboardingEmailService.send_welcome_email(user) is False
+            mock_email_cls.assert_not_called()
+
+        assert mail.outbox == []
+        record.refresh_from_db()
+        assert record.status == OnboardingEmail.EmailStatus.PENDING, "left for its own worker to finish"
+        assert OnboardingStatus.objects.get(user=user).welcome_email_sent is False
+
     def test_a_send_whose_outcome_was_never_recorded_is_not_repeated(self) -> None:
         """SMTP accepted it and the database went away before mark_sent().
 
@@ -1701,7 +1733,15 @@ class TestTransientSendFailuresRetry:
         assert record.status == OnboardingEmail.EmailStatus.PENDING
         assert record.handed_to_mailer_at is not None
 
-        # The next attempt must settle it, not send again.
+        # Still inside the lease it is treated as a live send, not an orphan.
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            assert OnboardingEmailService.send_welcome_email(user) is False
+            mock_email_cls.assert_not_called()
+        assert OnboardingEmail.objects.get(pk=record.pk).status == OnboardingEmail.EmailStatus.PENDING
+
+        self._age_handoff(record)
+
+        # Past it, nothing is coming back for it, so settle rather than resend.
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
             assert OnboardingEmailService.send_welcome_email(user) is True
             mock_email_cls.assert_not_called()
@@ -1726,6 +1766,7 @@ class TestTransientSendFailuresRetry:
         OnboardingEmail.objects.filter(pk=record.pk).update(
             created_at=timezone.now() - ABANDONED_PENDING_AFTER - timedelta(hours=2)
         )
+        self._age_handoff(record)
 
         mail.outbox = []
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
@@ -1747,6 +1788,8 @@ class TestTransientSendFailuresRetry:
             with patch.object(OnboardingEmail, "mark_sent", side_effect=OperationalError("connection lost")):
                 with pytest.raises(OperationalError):
                     OnboardingEmailService.send_quick_start_email(user)
+
+        self._age_handoff(OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START))
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
             assert OnboardingEmailService.send_quick_start_email(user) is True

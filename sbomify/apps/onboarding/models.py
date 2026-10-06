@@ -358,13 +358,15 @@ class OnboardingEmail(models.Model):
         self.save(update_fields=["status", "sent_at"])
 
     @property
-    def outcome_unknown(self) -> bool:
-        """Whether this row was handed to the mailer and never resolved.
+    def handoff_unresolved(self) -> bool:
+        """Whether this row is between the mailer handoff and its outcome.
 
-        The safe reading is "the recipient may already have it". Every path
-        that finishes a send moves the row off ``PENDING`` -- sent, failed,
-        undeliverable -- so a stamped row still pending is one where nothing
-        got to run after the handoff.
+        Every path that finishes a send moves the row off ``PENDING`` -- sent,
+        failed, undeliverable -- so a stamped row still pending is one where
+        nothing has got to run after the handoff *yet*. "Yet" is the whole of
+        the difference between a live send and an orphaned one, and this
+        property does not know which: see ``HANDOFF_SETTLES_AFTER`` in the
+        services module, which is what tells them apart.
         """
         return self.status == self.EmailStatus.PENDING and self.handed_to_mailer_at is not None
 

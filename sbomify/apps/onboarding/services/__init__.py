@@ -160,18 +160,46 @@ def _is_abandoned(record: OnboardingEmail) -> bool:
 
     A row that was handed to the mailer is never abandoned, however old it is.
     Its worker died after SMTP may have accepted the message, so reclaiming it
-    would re-send something the recipient already has; ``outcome_unknown`` is
-    resolved by :func:`_settle_unknown_outcome` instead.
+    would re-send something the recipient already has; an unresolved
+    handoff is settled by :func:`_settle_unknown_outcome` instead, once it is
+    old enough that nothing is coming back for it.
     """
     return (
         record.status == OnboardingEmail.EmailStatus.PENDING
-        and not record.outcome_unknown
+        and not record.handoff_unresolved
         and timezone.now() - record.created_at > ABANDONED_PENDING_AFTER
     )
 
 
+#: How long a handoff may go unresolved before nobody is coming back for it.
+#:
+#: The sending actors declare ``time_limit=60000`` -- one minute -- so a send
+#: still unresolved a quarter of an hour later is not in flight. Generous on
+#: purpose: inside this window the right answer is "another worker has it", and
+#: guessing early would settle a message that is seconds from being sent
+#: properly, which is the one way this mechanism could lose the mail it exists
+#: to protect.
+HANDOFF_SETTLES_AFTER = timedelta(minutes=15)
+
+
+def _handoff_is_stale(record: OnboardingEmail) -> bool:
+    """Whether a handoff has gone unresolved long enough to be nobody's.
+
+    A stamped row inside the window is a live send in another worker, not an
+    orphan. The pre-send window -- stamp written, SMTP not yet called -- lives
+    inside it too, so a crash there is not settled on the next pass either; it
+    waits for the lease like any other unresolved handoff.
+    """
+    if not record.handoff_unresolved or record.handed_to_mailer_at is None:
+        return False
+    return timezone.now() - record.handed_to_mailer_at > HANDOFF_SETTLES_AFTER
+
+
 def _settle_unknown_outcome(record: OnboardingEmail) -> None:
     """Resolve a row that was handed to the mailer and never finished.
+
+    Only ever called for a handoff past ``HANDOFF_SETTLES_AFTER``, so the send
+    it belonged to is not in flight and nothing else is coming to finish it.
 
     Recorded as sent, because that is the only reading that cannot make things
     worse. The message was given to SMTP; whether it was accepted is no longer
@@ -344,8 +372,11 @@ class OnboardingEmailService:
         # before the repair, leaving the sweep re-queueing a delivered email
         # and the drip blocked behind it.
         existing = OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.WELCOME).first()
-        if existing and existing.outcome_unknown:
-            # Handed over and never resolved. Settle it rather than send again.
+        if existing and existing.handoff_unresolved:
+            if not _handoff_is_stale(existing):
+                # Another worker is mid-send. Not ours to settle or to repeat.
+                logger.info("Welcome email for user %s is already in flight, leaving it", user.id)
+                return False
             _settle_unknown_outcome(existing)
         if existing and existing.status == OnboardingEmail.EmailStatus.SENT:
             logger.info("Welcome email record already sent for user %s", user.id)
@@ -458,7 +489,10 @@ class OnboardingEmailService:
 
         # Dedup check — only skip if successfully sent
         existing = OnboardingEmail.objects.filter(user=user, email_type=email_type).first()
-        if existing and existing.outcome_unknown:
+        if existing and existing.handoff_unresolved:
+            if not _handoff_is_stale(existing):
+                logger.info("%s email for user %s is already in flight, leaving it", email_type, user.id)
+                return False
             _settle_unknown_outcome(existing)
         if existing and existing.status == OnboardingEmail.EmailStatus.SENT:
             logger.info("%s email already sent to user %s", email_type, user.id)
