@@ -281,3 +281,201 @@ class TestDashboardStats:
         
         # Cleanup
         new_team.delete()
+
+
+@pytest.mark.django_db
+class TestPayingWorkspaceDefinition:
+    """The free community plan must never be counted as revenue.
+
+    ``_setup_community_plan`` writes ``subscription_status="active"`` onto
+    every community workspace, so a bare status filter reported the whole
+    install as paying. The fixtures above could not catch it: their community
+    workspaces carry ``billing_plan_limits=None``, which production never
+    writes.
+    """
+
+    def test_community_workspace_is_not_paying(self, db):
+        from sbomify.apps.billing.services.workspace_status import paying_workspaces
+
+        team = Team.objects.create(
+            name="Community As Production Writes It",
+            billing_plan="community",
+            billing_plan_limits={
+                "max_products": 1,
+                "max_components": 5,
+                "subscription_status": "active",
+                "last_updated": timezone.now().isoformat(),
+            },
+        )
+
+        assert paying_workspaces().count() == 0
+
+        team.delete()
+
+    def test_business_workspace_with_live_subscription_is_paying(self, db):
+        from sbomify.apps.billing.services.workspace_status import paying_workspaces
+
+        team = Team.objects.create(
+            name="Real Customer",
+            billing_plan="business",
+            billing_plan_limits={
+                "subscription_status": "active",
+                "stripe_subscription_id": "sub_real_123",
+                "stripe_customer_id": "cus_real_123",
+            },
+        )
+
+        assert paying_workspaces().count() == 1
+
+        team.delete()
+
+    def test_enterprise_without_stripe_ids_is_still_paying(self, db):
+        """Enterprise is sales-led, so it may be billed outside Stripe."""
+        from sbomify.apps.billing.services.workspace_status import paying_workspaces
+
+        team = Team.objects.create(
+            name="Contract Customer",
+            billing_plan="enterprise",
+            billing_plan_limits={"subscription_status": "active"},
+        )
+
+        assert paying_workspaces().count() == 1
+
+        team.delete()
+
+    def test_dashboard_excludes_community_from_paying_count(self, db, dashboard_stats_teams):
+        """The headline card, end to end, with a production-shaped community row."""
+        from django.core.cache import cache
+
+        community = Team.objects.create(
+            name="Another Community Workspace",
+            billing_plan="community",
+            billing_plan_limits={
+                "subscription_status": "active",
+                "max_products": 1,
+                "max_components": 5,
+            },
+        )
+
+        cache.delete("admin_dashboard_stats")
+        stats = admin_site.get_dashboard_stats()
+
+        # Six workspaces exist, only the business one with an active
+        # subscription pays.
+        assert stats["teams"] == 6
+        assert stats["teams_active"] == 1
+
+        community.delete()
+
+
+@pytest.mark.django_db
+class TestUsersPerWorkspace:
+    """The chart claims to show the largest workspaces, so it must be ordered."""
+
+    def test_workspaces_are_ordered_by_member_count(self, db, django_user_model):
+        from django.core.cache import cache
+
+        from sbomify.apps.teams.models import Member
+
+        small = Team.objects.create(name="Small Workspace")
+        large = Team.objects.create(name="Large Workspace")
+
+        for index in range(3):
+            user = django_user_model.objects.create_user(
+                username=f"ordering-user-{index}",
+                email=f"ordering-user-{index}@example.com",
+                password="x",
+            )
+            Member.objects.create(team=large, user=user, role="member")
+
+        solo = django_user_model.objects.create_user(
+            username="ordering-solo",
+            email="ordering-solo@example.com",
+            password="x",
+        )
+        Member.objects.create(team=small, user=solo, role="member")
+
+        cache.delete("admin_dashboard_stats")
+        stats = admin_site.get_dashboard_stats()
+
+        counts = {row["name"]: row["user_count"] for row in stats["users_per_team"]}
+        assert counts["Large Workspace"] == 3
+        assert counts["Small Workspace"] == 1
+
+        names = [row["name"] for row in stats["users_per_team"]]
+        assert names.index("Large Workspace") < names.index("Small Workspace")
+
+        small.delete()
+        large.delete()
+
+    def test_bot_members_are_not_counted_as_users(self, db, django_user_model):
+        """``role="bot"`` is a trusted-publisher identity, not a person.
+
+        One such membership exists per OIDC binding, so without the exclusion
+        the chart inflates every workspace that publishes from CI, and does so
+        in proportion to how much it uses the product.
+        """
+        from django.core.cache import cache
+
+        from sbomify.apps.teams.models import Member
+
+        workspace = Team.objects.create(name="Workspace With Publishers")
+
+        human = django_user_model.objects.create_user(
+            username="bot-exclusion-human",
+            email="bot-exclusion-human@example.com",
+            password="x",
+        )
+        Member.objects.create(team=workspace, user=human, role="member")
+
+        for index in range(2):
+            _add_oidc_bot_member(workspace, django_user_model, index)
+
+        cache.delete("admin_dashboard_stats")
+        stats = admin_site.get_dashboard_stats()
+
+        counts = {row["name"]: row["user_count"] for row in stats["users_per_team"]}
+        assert counts["Workspace With Publishers"] == 1
+
+        workspace.delete()
+
+    def test_workspace_of_only_bots_reports_zero_rather_than_vanishing(self, db, django_user_model):
+        """Excluding bots must not drop the workspace from the chart.
+
+        ``Count(filter=...)`` returns 0 for a workspace whose only memberships
+        are bots, where filtering the rows away instead would hide it.
+        """
+        from django.core.cache import cache
+
+        workspace = Team.objects.create(name="Workspace Of Publishers Only")
+        _add_oidc_bot_member(workspace, django_user_model, 0)
+
+        cache.delete("admin_dashboard_stats")
+        stats = admin_site.get_dashboard_stats()
+
+        counts = {row["name"]: row["user_count"] for row in stats["users_per_team"]}
+        assert counts["Workspace Of Publishers Only"] == 0
+
+        workspace.delete()
+
+
+def _add_oidc_bot_member(team, django_user_model, index):
+    """Build a ``role="bot"`` membership the way OIDC provisioning does.
+
+    ``oidc.signals.forbid_manual_bot_role`` rejects the role for a user with no
+    binding; provisioning attaches the binding after the membership, so it sets
+    ``_is_oidc_bot_provisioning`` to opt out. Same opt-out here, so the fixture
+    is the shape production writes rather than one the signal would refuse.
+    """
+    from sbomify.apps.teams.models import Member
+
+    bot_user = django_user_model.objects.create_user(
+        username=f"oidc-bot-{team.pk}-{index}",
+        email=f"oidc-bot-{team.pk}-{index}@example.com",
+        first_name="OIDC",
+        last_name="Bot",
+    )
+    member = Member(user=bot_user, team=team, role="bot")
+    member._is_oidc_bot_provisioning = True
+    member.save()
+    return member
