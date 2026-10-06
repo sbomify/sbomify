@@ -10,8 +10,9 @@ from typing import Any
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
-from django.db import IntegrityError, OperationalError
+from django.db import IntegrityError, InterfaceError, OperationalError
 from django.db.models import F, Q, QuerySet
+from django.template import TemplateDoesNotExist, TemplateSyntaxError
 from django.utils import timezone
 
 from sbomify.logging import getLogger
@@ -38,6 +39,26 @@ class TransientEmailError(Exception):
     """
 
 
+#: Database failures that are the connection rather than the query: a restart,
+#: a failover, a connection the pooler closed under us. The ORM is reached all
+#: over a send — the eligibility check, the context build, every record write —
+#: so these arrive from places no single ``try`` here covers.
+TRANSIENT_DB_ERRORS = (OperationalError, InterfaceError)
+
+
+def is_retryable_failure(exc: BaseException) -> bool:
+    """Whether a failure out of this module deserves another attempt.
+
+    The sending tasks ask this to decide how loudly to report, so it has to
+    cover what the send paths classify *and* what simply escapes them. A
+    ``TransientEmailError`` has already been judged; a bare database transport
+    error has not, because it comes from an ORM call rather than from the
+    mailer, and wrapping every one of those at its call site would be a lot of
+    ``try`` for one bit of information.
+    """
+    return isinstance(exc, (TransientEmailError, *TRANSIENT_DB_ERRORS))
+
+
 def _is_temporary_smtp_code(code: object) -> bool:
     """Whether an SMTP reply code is a 4xx, which means "not now" rather than "no".
 
@@ -61,11 +82,13 @@ def _is_transient_send_error(exc: BaseException) -> bool:
     """
     if isinstance(exc, smtplib.SMTPRecipientsRefused):
         # The one response error that carries no ``smtp_code``: the codes are
-        # per recipient. One recipient here, but the rule generalises — a retry
-        # sends the whole message again, so it only helps if nothing was
-        # permanently refused.
+        # per recipient. smtplib raises this only when the message reached none
+        # of them, so a retry cannot duplicate anything — and a mixed 450/550
+        # set is exactly when it is worth making: the 550 address refuses again
+        # and the 450 address may accept. Requiring every code to be temporary
+        # would drop the recipients that were only asked to wait.
         refusals = (exc.recipients or {}).values()
-        return bool(refusals) and all(_is_temporary_smtp_code(code) for code, _ in refusals)
+        return any(_is_temporary_smtp_code(code) for code, _ in refusals)
     if isinstance(exc, smtplib.SMTPNotSupportedError):
         # The server does not speak something we asked for. It will not have
         # learned it by the next attempt, and it carries no code to read.
@@ -153,32 +176,53 @@ def _is_refused_address(exc: BaseException) -> bool:
     A 5xx against the recipient is the one that says the address will not exist
     on the next attempt either, so it is the only one worth remembering.
 
-    Any 5xx, not all of them: this is the exact complement of the all-4xx rule
-    in :func:`_is_transient_send_error`. A mix of a greylisted 450 and a
-    permanent 550 is not retryable — another attempt is refused by the same
-    recipient — and reading it as all-5xx too would leave it in neither branch,
-    marked ``FAILED`` and re-sent by the batch forever.
+    Every code 5xx, which is the exact complement of
+    :func:`_is_transient_send_error`'s any-4xx rule, so a refusal lands in one
+    branch or the other and never both.
+
+    An earlier version of this asked for *any* 5xx. That overlapped the
+    transient rule on a mixed 450/550 set and won, so a recipient the server
+    had only asked us to wait for was recorded as permanently undeliverable.
+    These messages carry a single recipient, where any and all agree -- but
+    the overlap was real, and the retry is the right answer when the two
+    disagree: smtplib raises ``SMTPRecipientsRefused`` only when no recipient
+    accepted, so another attempt cannot duplicate a delivery.
     """
     if not isinstance(exc, smtplib.SMTPRecipientsRefused):
         return False
-    refusals = (exc.recipients or {}).values()
-    return any(isinstance(code, int) and 500 <= code < 600 for code, _ in refusals)
+    refusals = [code for code, _ in (exc.recipients or {}).values()]
+    return bool(refusals) and all(isinstance(code, int) and 500 <= code < 600 for code in refusals)
 
 
 def _render_or_report(template_name: str, context: dict[str, Any], user_id: Any) -> tuple[str, str] | None:
-    """Render a message, or report the failure and answer ``None``.
+    """Render a message, or report a broken template and answer ``None``.
 
     Rendering sits outside the send block, so without this a missing or broken
     template left the service as an ordinary exception, and the task re-raised
     it into dramatiq's retry budget. Three more attempts run the same template
     against the same context and fail the same way: a template is not a
     transport, and no amount of waiting repairs one.
+
+    Only the two failures that say *the template itself is wrong* are caught.
+    Rendering also touches things that break for a while and then stop — a
+    loader reading from disk, a tag that queries — and swallowing those would
+    acknowledge the message and spend none of the retry budget this exists to
+    protect. Anything else leaves here and reaches the actor, which is what
+    gets another attempt.
     """
     try:
         return render_email_templates(template_name, context)
-    except Exception as e:
+    except (TemplateDoesNotExist, TemplateSyntaxError) as e:
         logger.error("Failed to render %s email for user %s: %s", template_name, user_id, e, exc_info=True)
         return None
+    except (OSError, *TRANSIENT_DB_ERRORS) as e:
+        # Classified here rather than left to the task: the answer to "is this
+        # worth retrying" belongs on the exception, so one place decides it.
+        # Letting these reach the actor unlabelled retried them, but wrote an
+        # error-level line — and so a Sentry issue — on every attempt, which is
+        # the reporting this change exists to stop.
+        logger.warning("Transient failure rendering %s email for user %s: %s", template_name, user_id, e)
+        raise TransientEmailError(f"{template_name} template for user {user_id}") from e
 
 
 def _is_mailable(user: Any) -> bool:
@@ -243,7 +287,16 @@ class OnboardingEmailService:
             user: User instance
 
         Returns:
-            True if email was sent successfully, False otherwise
+            True if the email was sent or had already been sent, False if it
+            failed for a reason another attempt cannot fix: a refused address,
+            a template that will not render, a recipient we must not mail.
+
+        Raises:
+            TransientEmailError: the attempt failed for a reason that may not
+                recur, so the caller's retry budget should be spent on it. A
+                caller that reads every failure as ``False`` will acknowledge
+                the message and drop the email instead; the sending actors
+                deliberately let this one out.
         """
         if not _is_mailable(user):
             return False
@@ -350,6 +403,10 @@ class OnboardingEmailService:
         Generic helper to send an onboarding sequence email.
 
         Checks deduplication, eligibility, and handles record creation/failure tracking.
+
+        Returns and raises as :meth:`send_welcome_email` does: ``False`` for a
+        failure another attempt cannot fix, ``TransientEmailError`` for one it
+        might.
         """
         if not _is_mailable(user):
             return False
@@ -372,7 +429,11 @@ class OnboardingEmailService:
         if eligible_check is not None:
             try:
                 is_eligible = eligible_check()
-            except OperationalError:
+            except TRANSIENT_DB_ERRORS:
+                # The whole transport, not just OperationalError: an
+                # InterfaceError is the same connection going away, and the
+                # broad handler below would have read it as "not eligible" and
+                # dropped the mail.
                 raise
             except Exception as e:
                 logger.error("%s eligibility check failed for user %s: %s", email_type, user.id, e, exc_info=True)

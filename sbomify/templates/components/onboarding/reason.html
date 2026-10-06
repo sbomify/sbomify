@@ -1,0 +1,13 @@
+{% comment %}An explanatory setup tile. The icon and number identify a step without suggesting it is already completed. Tiles stack their text beside the mark on narrow screens and become vertical within a desktop grid.{% endcomment %}
+<c-vars number title description icon="fas fa-circle-info" />
+<div class="grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-[0.625rem] border border-solid border-border bg-[color-mix(in_oklab,var(--color-info)_2%,var(--color-surface))] px-4 py-4 lg:flex lg:flex-col lg:gap-3">
+    <div class="row-span-2 flex flex-col items-center gap-2 lg:flex-row lg:justify-between lg:gap-3">
+        <c-chips.icon-chip size="sm" accent="info" aria-hidden="true"><i class="{{ icon }}"></i></c-chips.icon-chip>
+        <span class="text-xs font-medium tabular-nums text-text-muted" aria-hidden="true">{{ number }}</span>
+    </div>
+    <div class="flex min-w-0 flex-col gap-1.5">
+        <h3 class="m-0 text-sm font-semibold text-text">{{ title }}</h3>
+        <c-typography.description size="sm">{{ description }}</c-typography.description>
+        {{ slot }}
+    </div>
+</div>

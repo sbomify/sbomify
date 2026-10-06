@@ -156,7 +156,7 @@ class TestTheReportedIncident:
 
         assert response.context["vuln_summary"]["total"] == 2390
         assert response.context["vuln_panel"]["page_count"] == 478
-        assert "Showing 1 to 5 of 2390" in response.content.decode()
+        assert "Showing 1 to 5 of 2,390" in response.content.decode()
 
     @pytest.mark.slow
     def test_the_last_finding_is_still_reachable(self, sample_team_with_owner_member, sample_user):
@@ -239,9 +239,7 @@ class TestPublishedComponentsAreNotOpen:
         return client
 
     @pytest.mark.parametrize("visibility", ["public", "gated", "private"])
-    def test_the_panel_endpoint_tells_an_outsider_nothing(
-        self, sample_team_with_owner_member, outsider, visibility
-    ):
+    def test_the_panel_endpoint_tells_an_outsider_nothing(self, sample_team_with_owner_member, outsider, visibility):
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=8, name=f"published-{visibility}")
         Component.objects.filter(pk=component.id).update(visibility=visibility)
@@ -255,9 +253,7 @@ class TestPublishedComponentsAreNotOpen:
         assert "CVE-2026-0000" not in response.content.decode()
 
     @pytest.mark.parametrize("visibility", ["public", "gated", "private"])
-    def test_the_component_page_tells_an_outsider_nothing(
-        self, sample_team_with_owner_member, outsider, visibility
-    ):
+    def test_the_component_page_tells_an_outsider_nothing(self, sample_team_with_owner_member, outsider, visibility):
         """The page has the same hole as the endpoint, so it takes the same fix."""
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=8, name=f"page-{visibility}")
@@ -305,9 +301,7 @@ class TestTheFiltersSurviveALeaveAndAReturn:
 
         assert 'hx-push-url="true"' in body
 
-    def test_what_it_pushes_is_something_a_plain_request_can_serve(
-        self, sample_team_with_owner_member, sample_user
-    ):
+    def test_what_it_pushes_is_something_a_plain_request_can_serve(self, sample_team_with_owner_member, sample_user):
         """Pushing a URL that only htmx can render would break the refresh it exists to fix."""
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=12)
@@ -319,9 +313,7 @@ class TestTheFiltersSurviveALeaveAndAReturn:
             params,
             headers={"hx-request": "true"},
         )
-        page = client.get(
-            reverse("core:component_details", kwargs={"component_id": component.id}), params
-        )
+        page = client.get(reverse("core:component_details", kwargs={"component_id": component.id}), params)
 
         assert panel.status_code == 200
         assert page.status_code == 200
@@ -358,7 +350,8 @@ class TestThePanelEndpoint:
 
         assert "CVE-2026-0005" in body
         assert "CVE-2026-0004" not in body
-        assert "Page 2 / 3" in body
+        assert 'aria-current="page"' in body
+        assert "Showing 6 to 10 of 12" in body
 
     def test_it_filters_before_it_slices(self, sample_team_with_owner_member, sample_user):
         """Searching for row 30 of 40 has to find it, though it is not rendered."""
@@ -488,22 +481,56 @@ class TestTheKevControlIsOfferedOnlyWhenItCanMatch:
         assert "vuln_kev" in body
         assert "Known exploited (1)" in body
 
-    def test_the_three_views_say_the_same_thing(self) -> None:
-        """Three templates offer this filter. They drifted into two spellings,
-        and "KEV" is the catalog's acronym rather than a word a reader has.
-
-        Resolved from BASE_DIR rather than the working directory, so this holds
-        wherever pytest is started from.
-        """
+    def test_the_three_views_share_the_filter_component(self) -> None:
         from django.conf import settings
 
         roots = [
             "core/templates/core/components/component_vulnerabilities_table.html.j2",
             "plugins/templates/plugins/components/_assessment_run_findings.html.j2",
-            "sboms/templates/sboms/sbom_vulnerabilities.html.j2",
+            "sboms/templates/sboms/components/scan_vulnerabilities.html.j2",
         ]
         for relative in roots:
             path = settings.BASE_DIR / "sbomify" / "apps" / relative
-            text = path.read_text(encoding="utf-8")
-            assert "KEV only" not in text, f"{relative} still says KEV only"
-            assert "Known exploited (" in text, f"{relative} lost the label"
+            assert "<c-vulnerabilities.filters" in path.read_text(encoding="utf-8")
+
+
+class TestTriageModal:
+    def test_loads_exact_package_and_saved_decision(self, sample_team_with_owner_member, sample_user):
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(
+            member.team,
+            count=40,
+            analysis_state="in_triage",
+            analysis_detail="Checking exposure",
+        )
+        response = _client(member.team, sample_user).get(
+            reverse("core:component_triage_modal", args=[component.id]),
+            {"advisory": "CVE-2026-0030", "package": "pkg-0030", "version": "1.0", "ecosystem": "deb"},
+        )
+        assert response.status_code == 200
+        assert response.context["triage_payload"]["id"] == "CVE-2026-0030"
+        assert response.context["triage_payload"]["state"] == "in_triage"
+        assert response.context["triage_payload"]["detail"] == "Checking exposure"
+        assert response.context["component_id"] == component.id
+
+    def test_rejects_another_workspace(self, sample_team_with_owner_member, sample_user):
+        from sbomify.apps.teams.models import Team
+
+        other_workspace = Team.objects.create(name="Other workspace")
+        component, _ = _component_with_findings(other_workspace, count=1)
+        response = _client(sample_team_with_owner_member.team, sample_user).get(
+            reverse("core:component_triage_modal", args=[component.id]),
+            {"advisory": "CVE-2026-0000", "package": "pkg-0000", "version": "1.0", "ecosystem": "deb"},
+        )
+        assert response.headers["HX-Reswap"] == "none"
+        assert "triage-modal" not in response.content.decode()
+
+    def test_does_not_fall_back_to_a_different_package(self, sample_team_with_owner_member, sample_user):
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(member.team, count=1)
+        response = _client(member.team, sample_user).get(
+            reverse("core:component_triage_modal", args=[component.id]),
+            {"advisory": "CVE-2026-0000", "package": "missing", "version": "1.0", "ecosystem": "deb"},
+        )
+        assert response.headers["HX-Reswap"] == "none"
+        assert "triage-modal" not in response.content.decode()

@@ -159,6 +159,11 @@ def _auto_fill_from_product(assessment: CRAAssessment) -> None:
     product = assessment.product
     if not assessment.support_period_end and product.end_of_support:
         assessment.support_period_end = product.end_of_support
+    elif not assessment.support_period_end and assessment.team.default_support_period_years:
+        reference_date = product.release_date or datetime.date.today()
+        year = reference_date.year + assessment.team.default_support_period_years
+        day = min(reference_date.day, calendar.monthrange(year, reference_date.month)[1])
+        assessment.support_period_end = reference_date.replace(year=year, day=day)
 
 
 def get_or_create_assessment(
@@ -1396,6 +1401,14 @@ def get_assessment_list_for_team(team_id: int | str) -> ServiceResult[list[dict[
             for a in assessments
         ]
     )
+
+
+def get_products_without_cra_assessment(team_id: int | str) -> ServiceResult[list[dict[str, Any]]]:
+    """Products available to start screening, excluding existing assessments."""
+    from sbomify.apps.core.models import Product
+
+    products = Product.objects.filter(team_id=team_id, cra_assessment__isnull=True).order_by("name", "id")
+    return ServiceResult.success([{"id": product.id, "name": product.name} for product in products.only("id", "name")])
 
 
 _SCOPE_TEXT_CAP = 4_000

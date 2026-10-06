@@ -7,6 +7,7 @@
         The panel is a full-bleed table, so it takes the clipped wrapper the
         card's body would have given it and none of the padding.
     {% endcomment %}
+    <c-cards.collapsible-header>
     <c-cards.collapsible-trigger state="open" @click="open = !open">
     <span class="text-lg">
         CBOM issues
@@ -15,17 +16,23 @@
         {% endif %}
     </span>
     </c-cards.collapsible-trigger>
+    <c-slot name="actions">
+    {% if latest_cbom_id %}
+        <c-buttons.ghost size="sm" href="{% url 'core:component_item' component_id=component.id item_type=latest_cbom_item_type|default:'cbom' item_id=latest_cbom_id %}">View CBOM details<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
+    {% endif %}
+    </c-slot>
+    </c-cards.collapsible-header>
     <div class="overflow-hidden" x-show="open" x-collapse>
         <c-tables.shell nested>
         {# Search + severity filter toolbar #}
         <c-tables.toolbar>
-        <c-tables.search id="cbom-issue-search" label="Search CBOM issues" placeholder="Search CBOM issues..." class="max-w-xs" x-model="search" />
-        <c-tables.select id="cbom-issue-sev-filter" label="Filter by severity" x-model="sevFilter">
+        <c-forms.search-input size="sm" id="cbom-issue-search" label="Search CBOM issues" placeholder="Search CBOM issues..." class="max-w-xs" x-model="search" />
+        <c-forms.select size="md" id="cbom-issue-sev-filter" label="Filter by severity" x-model="sevFilter">
         <option value="all">All Severities</option>
         <template x-for="v in sevOptions" :key="v">
             <option :value="v" x-text="v.charAt(0).toUpperCase() + v.slice(1)"></option>
         </template>
-        </c-tables.select>
+        </c-forms.select>
         </c-tables.toolbar>
         <c-tables.table x-cloak>
         <c-tables.head>
@@ -69,18 +76,12 @@
             </tr>
         </tbody>
         </c-tables.table>
-        {# Footer: row count + CBOM detail link on the left, pagination on the right #}
+        {# Footer: row count on the left, pagination on the right #}
         <c-tables.footer>
         <div class="flex flex-wrap items-center gap-4">
             <c-tables.info>
-            Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+            Showing <span x-text="$number(startIdx)"></span> to <span x-text="$number(endIdx)"></span> of <span x-text="$number(total)"></span>
             </c-tables.info>
-            {% if latest_cbom_id %}
-                <a href="{% url 'core:component_item' component_id=component.id item_type=latest_cbom_item_type|default:'cbom' item_id=latest_cbom_id %}"
-                   class="text-sm text-primary hover:underline no-underline inline-flex items-center gap-1">
-                    View CBOM details<i class="fas fa-arrow-right text-xs"></i>
-                </a>
-            {% endif %}
         </div>
         <div x-show="totalPages > 1">
             <c-tables.pager />

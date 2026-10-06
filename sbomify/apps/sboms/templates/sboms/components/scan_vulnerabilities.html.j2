@@ -1,0 +1,7 @@
+<div id="scan-vulnerabilities" hx-target="this" hx-swap="outerHTML">
+    <c-tables.shell nested>
+    <c-vulnerabilities.filters :panel="scan_panel" url="{% url 'sboms:sbom_vulnerabilities' sbom.id %}" target="scan-vulnerabilities" id="scan" prefix="scan_" push_url="true" />
+    <c-vulnerabilities.table :rows="scan_panel.rows" :can_triage="can_triage" />
+    <c-vulnerabilities.footer :panel="scan_panel" url="{% url 'sboms:sbom_vulnerabilities' sbom.id %}" query="{{ scan_query_string }}" prefix="scan_" />
+    </c-tables.shell>
+</div>

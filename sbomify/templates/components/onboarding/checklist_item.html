@@ -1,0 +1,11 @@
+{% comment %}A setup outcome, never a claim that an artifact passed an assessment. Saved state comes from the server; active state can follow the form's current step.{% endcomment %}
+<c-vars title description complete active />
+<div class="flex items-start gap-3 border-b border-solid border-border px-5 py-3 first:rounded-t-xl last:rounded-b-xl last:border-b-0 data-[active=true]:bg-surface-hover" data-active="{{ active|yesno:'true,false' }}" {{ attrs }}>
+    <span class="mt-1 flex h-4 w-4 shrink-0 items-center justify-center text-xs {% if complete %}text-success{% else %}text-text-muted{% endif %}">
+        {% if complete %}<i class="fas fa-check" aria-hidden="true"></i><span class="sr-only">Saved:</span>{% else %}<i class="far fa-circle" aria-hidden="true"></i>{% endif %}
+    </span>
+    <div class="flex min-w-0 flex-col gap-1">
+        <p class="m-0 text-sm font-medium text-text">{{ title }}</p>
+        <p class="m-0 text-xs leading-5 text-text-muted">{{ description }}</p>
+    </div>
+</div>

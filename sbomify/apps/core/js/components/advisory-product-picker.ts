@@ -1,3 +1,4 @@
+import { formatNumber } from '../number-format';
 export interface PickerRelease {
     id: string;
     label: string;
@@ -270,7 +271,7 @@ export function advisoryProductPicker(products: PickerProduct[] = [], preselecte
             if (product.releases.length === 0) return '';
             const count = this.selectedReleasesFor(product).length;
             if (count === 0) return 'All versions';
-            return `${count} of ${product.releases.length} versions`;
+            return `${formatNumber(count)} of ${formatNumber(product.releases.length)} versions`;
         },
 
         /**
@@ -290,7 +291,7 @@ export function advisoryProductPicker(products: PickerProduct[] = [], preselecte
                 .map((product) => {
                     const count = this.selectedReleasesFor(product).length;
                     if (count === 0) return `${product.name}: every version, now and in future`;
-                    return `${product.name}: ${count} version${count === 1 ? '' : 's'}`;
+                    return `${product.name}: ${formatNumber(count)} version${count === 1 ? '' : 's'}`;
                 })
                 .join(' · ');
         },

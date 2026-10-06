@@ -1,15 +1,14 @@
 {% comment %}
-An inline notice, in plain Tailwind utilities. The four alerts differ only by
-their accent colour, which the CSS carried as --alert-accent, so variant is a
-prop, not four files: one conditional segment sets that custom property and
-every tinted utility below reads it. The message is the slot; title is a prop.
-dismissible keeps its Alpine hook, retargeted at the data-alert root now that
-the alert no longer carries a tw-* class.
+An inline notice with a quiet, solid tint and neutral text. One accent property
+colours the surface, border and mark for all four variants. The message is the
+slot; title is a prop. A 24px line box centres the glyph without a manual offset.
+Titled notices align the mark with the heading; plain notices centre it beside
+the message, including when that message wraps.
 
-The named action slot is the control that resolves the notice: it sits after
-the message as the row's last item, where a status alert wants its "Set up" or
-"Manage" link. It is a slot, not a prop, so the control is a real button
-component; give it shrink-0 so a long message cannot squeeze it.
+The named action slot holds a real button component in its own grid column.
+When the alert is narrow, it moves below the message with the same left edge.
+Dismissible notices reserve room for the shared icon button and keep the
+Alpine hook on the data-alert root.
 
 The named body slot replaces that paragraph for a notice that explains itself
 at length: several paragraphs, a preformatted scanner error, a refresh button.
@@ -21,32 +20,34 @@ a scan still running takes the brand loader, which is an include and not a
 Font Awesome class. Also one branch, so an alert never carries two marks.
 {% endcomment %}
 <c-vars variant="info" title icon dismissible class />
-<div class="flex items-start gap-3.5 py-4 rounded-xl text-sm leading-normal animate-[fadeInUp_0.3s_ease-out] border border-solid bg-[linear-gradient(135deg,color-mix(in_oklab,var(--alert-accent)_10%,transparent)_0%,color-mix(in_oklab,var(--alert-accent)_5%,transparent)_100%)] border-[color-mix(in_oklab,var(--alert-accent)_20%,transparent)] text-[color-mix(in_oklab,var(--alert-accent)_60%,var(--color-text))] {% if dismissible %}relative pl-5 pr-12{% else %}px-5{% endif %} {% if variant == 'success' %}[--alert-accent:var(--color-success)]{% elif variant == 'warning' %}[--alert-accent:var(--color-warning)]{% elif variant == 'danger' %}[--alert-accent:var(--color-danger)]{% else %}[--alert-accent:var(--color-primary)]{% endif %}{% if class %} {{ class }}{% endif %}"
+<div class="@container/alert grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3 py-3.5 rounded-xl text-sm leading-6 border border-solid bg-[color-mix(in_oklab,var(--alert-accent)_6%,var(--color-surface))] border-[color-mix(in_oklab,var(--alert-accent)_20%,transparent)] text-text {% if dismissible %}relative pl-4 pr-14{% else %}px-4{% endif %} {% if variant == 'success' %}[--alert-accent:var(--color-success)]{% elif variant == 'warning' %}[--alert-accent:var(--color-warning)]{% elif variant == 'danger' %}[--alert-accent:var(--color-danger)]{% else %}[--alert-accent:var(--color-primary)]{% endif %}{% if class %} {{ class }}{% endif %}"
      role="alert"
      data-alert
      {{ attrs }}>
-    {% if mark %}
-        <span class="shrink-0 w-5 h-5 mt-0.5 text-[var(--alert-accent,currentColor)]"
-              aria-hidden="true">{{ mark }}</span>
-    {% else %}
-        <i class="{% if icon %}{{ icon }}{% elif variant == 'success' %}fas fa-check-circle{% elif variant == 'warning' %}fas fa-exclamation-triangle{% elif variant == 'danger' %}fas fa-times-circle{% else %}fas fa-info-circle{% endif %} shrink-0 w-5 h-5 mt-0.5 text-[var(--alert-accent,currentColor)]"
-           aria-hidden="true"></i>
-    {% endif %}
-    <div class="flex-1 min-w-0">
-        {% if title %}<p class="font-semibold mb-1">{{ title }}</p>{% endif %}
+    <span class="flex items-center justify-center w-5 h-6 text-base leading-none text-[var(--alert-accent,currentColor)] {% if title or body %}self-start{% else %}self-center{% endif %}"
+          aria-hidden="true">
+        {% if mark %}
+            {{ mark }}
+        {% else %}
+            <i class="{% if icon %}{{ icon }}{% elif variant == 'success' %}fas fa-check-circle{% elif variant == 'warning' %}fas fa-exclamation-triangle{% elif variant == 'danger' %}fas fa-times-circle{% else %}fas fa-info-circle{% endif %}"></i>
+        {% endif %}
+    </span>
+    <div class="min-w-0 break-words{% if not title and not body %} self-center{% endif %}">
+        {% if title %}<p class="font-semibold leading-6 mt-0 mb-1">{{ title }}</p>{% endif %}
         {% if body %}
             {{ body }}
         {% else %}
-            <p class="text-sm m-0">{{ slot }}</p>
+            <p class="text-sm leading-6 m-0">{{ slot }}</p>
         {% endif %}
     </div>
-    {% if action %}{{ action }}{% endif %}
+    {% if action %}
+        <div class="col-start-2 min-w-0 @min-[28rem]/alert:col-start-3 @min-[28rem]/alert:row-start-1 @min-[28rem]/alert:self-center">
+            {{ action }}
+        </div>
+    {% endif %}
     {% if dismissible %}
-        <button type="button"
-                class="absolute top-4 right-4 flex items-center justify-center w-6 h-6 rounded-md opacity-60 transition-all duration-150 hover:opacity-100 hover:bg-current hover:text-surface focus-visible:outline-none focus-visible:opacity-100 focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
-                @click="$el.closest('[data-alert]')?.remove()"
-                aria-label="Dismiss">
-            <i class="fas fa-times" aria-hidden="true"></i>
-        </button>
+        <c-buttons.icon size="sm" label="Dismiss" class="absolute top-2 right-2.5" @click="$el.closest('[data-alert]')?.remove()">
+        <i class="fas fa-times" aria-hidden="true"></i>
+        </c-buttons.icon>
     {% endif %}
 </div>

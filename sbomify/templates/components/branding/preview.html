@@ -1,0 +1,81 @@
+{% comment %}
+A live Trust Center preview, built from the public component library. name,
+accent and address are server data. The surrounding teamBranding Alpine state
+supplies previewBrand and previewBrandImage; it owns editing and saving.
+The frame is inert and its illustrative records are never workspace data.
+{% endcomment %}
+{% load static %}
+{% static 'img/sbomify.svg' as default_logo %}
+<c-vars name accent address />
+{# The browser frame. The preview inside is a mock, so it is inert. #}
+<div inert
+     aria-hidden="true"
+     class="rounded-xl border border-solid border-border bg-surface shadow-[var(--shadow-sm)] overflow-clip">
+    <div class="flex items-center gap-3 px-4 py-2.5 border-b border-solid border-border">
+        <div class="flex items-center gap-1.5" aria-hidden="true">
+            <span class="w-2.5 h-2.5 rounded-full bg-border"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-border"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-border"></span>
+        </div>
+        <div class="flex-1 flex justify-center min-w-0">
+            <span class="inline-flex items-center gap-1.5 max-w-full truncate rounded-md bg-background px-3 py-1 text-xs text-text-muted">
+                <i class="fas fa-lock text-[10px]" aria-hidden="true"></i>
+                <span class="truncate">{{ address }}</span>
+            </span>
+        </div>
+    </div>
+    <c-branded.theme brand="{{ accent }}" class="pointer-events-none select-none bg-background" ::style="previewBrand()" aria-hidden="true">
+    {# The brand header, as the public page draws it: the logo on the left, sign-in on the right. #}
+    <div class="flex items-center justify-between gap-4 px-6 py-4 bg-surface">
+        {# The platform fallback inverts in dark like the app's other logo marks; an uploaded brand asset is left alone. #}
+        <img :src="previewBrandImage() || '{{ default_logo }}'"
+             src="{{ default_logo }}"
+             alt=""
+             width="128"
+             height="32"
+             class="h-8 w-auto max-w-[12rem] object-contain object-left"
+             :class="previewBrandImage() ? '' : 'dark:brightness-0 dark:invert'">
+        <span class="inline-flex items-center gap-2 text-xs font-medium text-text-muted">
+            <i class="fas fa-sign-in-alt" aria-hidden="true"></i>Sign in
+        </span>
+    </div>
+    {# The nav band, current page underlined in the brand. #}
+    <div class="px-6 bg-surface border-b border-solid border-border">
+        <c-branded.nav flush>
+        <c-branded.nav-item href="#" icon="fas fa-house" current>Overview</c-branded.nav-item>
+        <c-branded.nav-item href="#" icon="fas fa-shield-halved">Security advisories</c-branded.nav-item>
+        </c-branded.nav>
+    </div>
+    <div class="px-6 py-6 flex flex-col gap-6">
+        <c-branded.page-header title="{{ name }}">
+        <c-slot name="eyebrow">
+        <c-branded.badge brand>Trust Center</c-branded.badge>
+        </c-slot>
+        <c-branded.stats>
+        <c-branded.stat label="Advisories">12</c-branded.stat>
+        <c-branded.stat label="Products">4</c-branded.stat>
+        <c-branded.stat label="Compliance artifacts">6</c-branded.stat>
+        </c-branded.stats>
+        </c-branded.page-header>
+        <div class="flex flex-col gap-3">
+            <c-branded.section-header title="Security advisories" subtitle="Vulnerabilities we have disclosed, what they affect, and where the fix is." />
+            <c-branded.surface flush>
+            <c-branded.list-row level="high">
+            <c-slot name="eyebrow">ADV-1042</c-slot>
+            <c-slot name="heading">Session token written to debug logs</c-slot>
+            <c-slot name="side">
+            <c-branded.badge tone="high">High</c-branded.badge>
+            </c-slot>
+            </c-branded.list-row>
+            <c-branded.list-row level="low">
+            <c-slot name="eyebrow">ADV-1041</c-slot>
+            <c-slot name="heading">Old TLS ciphers offered by the build image</c-slot>
+            <c-slot name="side">
+            <c-branded.badge tone="low">Low</c-branded.badge>
+            </c-slot>
+            </c-branded.list-row>
+            </c-branded.surface>
+        </div>
+    </div>
+    </c-branded.theme>
+</div>

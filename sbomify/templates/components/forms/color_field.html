@@ -1,5 +1,5 @@
 {% comment %}
-A colour, as a field. The label sits above and the hint below, through
+A colour, as a field. size="sm" matches compact text inputs. The label sits above and the hint below, through
 c-forms.field, so it reads as one of the form's fields rather than a decorative
 block beside them.
 
@@ -16,7 +16,7 @@ c-forms.input paints on itself, so a keyboard user sees the whole field light
 up wherever they landed inside it.
 
 Both inputs are plain HTML, so their Alpine bindings are written with a single
-colon. The double-colon escape is only for a <c-*> tag, where cotton would
+colon. The double-colon escape is only for a <c -*> tag, where cotton would
 otherwise read the leading colon as its own dynamic-prop prefix.
 
 The Alpine expressions are props, not attrs, because they belong on different
@@ -27,7 +27,7 @@ colour has to be a real hex rather than a display string: it is now the value of
 an input the user edits, so a friendly "Not set" would be both un-typeable and
 wrong the moment they started typing. The empty case is the placeholder's job.
 {% endcomment %}
-<c-vars name id label hint colour on_input submit_value required class />
+<c-vars size name id label hint colour on_input submit_value required class />
 <c-forms.field label="{{ label }}" for="{{ id }}" hint="{{ hint }}" :required="required" class="{{ class }}">
 <div class="flex items-stretch overflow-hidden rounded-lg border-[1.5px] border-solid border-border bg-surface transition-all duration-200 hover:not-focus-within:border-border-light focus-within:border-primary focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent),var(--shadow-xs)]"
      {{ attrs }}>
@@ -45,7 +45,7 @@ wrong the moment they started typing. The empty case is the placeholder's job.
     </div>
     <input type="text"
            id="{{ id }}"
-           class="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-sm leading-[1.5] text-text placeholder:text-text-muted focus:outline-none"
+           class="min-w-0 flex-1 bg-transparent px-3 {% if size == 'sm' %}py-1.5{% else %}py-3{% endif %} font-mono text-sm leading-[1.5] text-text placeholder:text-text-muted focus:outline-none"
            placeholder="#000000"
            maxlength="7"
            spellcheck="false"

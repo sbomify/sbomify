@@ -1506,13 +1506,17 @@ class TestTransientSendFailuresRetry:
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
-    def test_one_permanent_refusal_among_temporary_ones_does_not_retry(self) -> None:
-        """A retry re-sends the whole message, so all-4xx is the rule, not any.
+    def test_a_mixed_refusal_retries_for_the_recipient_that_can_still_accept(self) -> None:
+        """smtplib raises this only when the message reached nobody.
 
-        With a mix, another attempt would redeliver to the greylisted recipient
-        and be refused again by the one that does not exist.
+        So a retry cannot duplicate anything, and a mixed 450/550 set is
+        exactly when it is worth making: the 550 address refuses again, and the
+        450 address may accept. Requiring every code to be temporary would drop
+        the recipients that were only asked to wait.
         """
         import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
 
         user = self._user("mixedrefusal")
 
@@ -1523,14 +1527,8 @@ class TestTransientSendFailuresRetry:
                     "gone@example.com": (550, b"No such user here"),
                 }
             )
-            assert OnboardingEmailService.send_welcome_email(user) is False
-
-        # And it is remembered rather than left FAILED: the 550 recipient will
-        # refuse the next attempt too, so the batch must stop re-sending. This
-        # is why the refusal rule is "any 5xx" while the retry rule is
-        # "all 4xx" — anything else leaves a mix in neither branch.
-        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
-        assert record.status == OnboardingEmail.EmailStatus.UNDELIVERABLE
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
 
     def test_a_dropped_connection_retries(self) -> None:
         """No server answer at all, so there is no code to read — transport."""
@@ -1865,6 +1863,140 @@ class TestTransientSendFailuresRetry:
         assert len(mail.outbox) == 1
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
         assert record.status == OnboardingEmail.EmailStatus.SENT
+
+    def test_a_transient_failure_while_rendering_still_retries(self) -> None:
+        """Rendering touches things that break for a while and then stop.
+
+        A loader reading from disk, a tag that queries. Catching those as if
+        the template were wrong would acknowledge the message and spend none of
+        the retry budget this whole change exists to protect.
+        """
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("rendertransient")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_loader_io_error_while_rendering_still_retries(self) -> None:
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("renderio")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=OSError(113, "No route to host"),
+        ):
+            # TransientEmailError specifically, not "either of these": a bare
+            # OSError would also reach the actor and be retried, but the task
+            # would report it at error level on every attempt. The wrapping is
+            # what this is here to hold.
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_render_failure_reaching_the_task_is_not_acknowledged(self) -> None:
+        """The actor has to see it, or dramatiq never schedules another go.
+
+        And it has to arrive classified, or the task writes an error-level line
+        — and so a Sentry issue — on each of the four attempts, which is the
+        reporting this change exists to stop.
+        """
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("rendertask")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(TransientEmailError):
+                    send_welcome_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_a_database_outage_before_rendering_is_reported_as_retryable(self) -> None:
+        """The ORM is reached all over a send, not only inside the classifier.
+
+        The context build queries before anything is rendered, so a database
+        that goes away arrives at the task as itself rather than wrapped. It is
+        retried either way; reporting it at error level would raise a Sentry
+        issue on each of the four attempts, which is the thing this reporting
+        path exists to stop.
+        """
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+
+        user = self._user("dbbeforerender")
+
+        with patch(
+            "sbomify.apps.onboarding.services.get_email_context",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(OperationalError):
+                    send_welcome_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_an_eligibility_database_error_is_reported_as_retryable(self) -> None:
+        """``_send_onboarding_email`` re-raises OperationalError on purpose."""
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+
+        user = self._user("dbeligibility")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch.object(
+            OnboardingStatus,
+            "should_receive_quick_start",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(OperationalError):
+                    send_quick_start_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_an_eligibility_interface_error_is_not_swallowed(self) -> None:
+        """An InterfaceError is the same connection going away as the one above.
+
+        The broad handler around the eligibility check would otherwise read it
+        as "not eligible" and drop the mail without spending a retry.
+        """
+        from django.db import InterfaceError
+
+        user = self._user("eligibilityiface")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch.object(
+            OnboardingStatus,
+            "should_receive_quick_start",
+            side_effect=InterfaceError("connection already closed"),
+        ):
+            with pytest.raises(InterfaceError):
+                OnboardingEmailService.send_quick_start_email(user)
+
 
 
 @pytest.mark.django_db

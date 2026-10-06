@@ -1,0 +1,10 @@
+<c-forms.field horizontal label="{{ label }}" for="{{ control_id }}" hint="{{ hint }}">
+<form method="post" action="{% url 'teams:team_settings' team.key %}">
+    {% csrf_token %}
+    <input type="hidden" name="{{ action_name }}" value="update">
+    <input type="hidden" name="{{ field_name }}" value="false">
+    <input type="hidden" name="active_tab" value="trust-center">
+    <c-forms.toggle id="{{ control_id }}" name="{{ field_name }}" value="true" aria-label="{{ control_label }}" :checked="enabled" disabled="{{ can_administer|yesno:',1' }}" onchange="this.form.submit()" />
+    <button type="submit" class="sr-only">{{ save_label }}</button>
+</form>
+</c-forms.field>

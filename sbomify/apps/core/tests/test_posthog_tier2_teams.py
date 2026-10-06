@@ -58,7 +58,9 @@ def test_accept_invite_captures_team_member_invitation_accepted(
     from django.contrib.auth import get_user_model
 
     UserModel = get_user_model()
-    invitee = UserModel.objects.create_user(username="invitee", email="invitee@example.com", password="pw")
+    invitee = UserModel.objects.create_user(
+        username="invitee", email="invitee@example.com", password="pw", email_verified=True
+    )
 
     # Pre-existing membership skips the auto-accept signal path.
     other_team = Team.objects.create(name="Other Workspace", billing_plan="business")
@@ -74,7 +76,7 @@ def test_accept_invite_captures_team_member_invitation_accepted(
     client = Client()
     client.force_login(invitee)
 
-    response = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
 
     assert response.status_code == 302, f"Unexpected status {response.status_code}: {response.content!r}"
     assert Member.objects.filter(team=team_with_business_plan, user=invitee).exists()
@@ -96,7 +98,9 @@ def test_auto_accept_invitation_captures_team_member_invitation_accepted(
     from django.contrib.auth import get_user_model
 
     UserModel = get_user_model()
-    invitee = UserModel.objects.create_user(username="newcomer", email="newcomer@example.com", password="pw")
+    invitee = UserModel.objects.create_user(
+        username="newcomer", email="newcomer@example.com", password="pw", email_verified=True
+    )
     assert not Member.objects.filter(user=invitee).exists()
 
     Invitation.objects.create(

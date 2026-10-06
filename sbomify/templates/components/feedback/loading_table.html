@@ -1,0 +1,27 @@
+{% comment %}An artifact or results table waiting on content. Reuses the table shell; nested is the shell's existing modifier for tables inside a card. No fake table cells are exposed to assistive technology.{% endcomment %}
+<c-vars message="Loading results..." rows="4" nested class="" />
+<c-feedback.loading message="{{ message }}" variant_class="min-w-0" class="{{ class }}" :attrs="attrs">
+<c-tables.shell :nested="nested">
+<div class="flex items-center justify-between gap-6 px-5 py-5">
+    <c-feedback.skeleton type="title" width="12rem" />
+    <c-feedback.skeleton type="button" width="6rem" height="2rem" />
+</div>
+<div class="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-6 border-y border-border bg-surface-elevated px-5 py-3">
+    <c-feedback.skeleton width="40%" height="0.625rem" />
+    <c-feedback.skeleton width="60%" height="0.625rem" />
+    <c-feedback.skeleton width="50%" height="0.625rem" />
+</div>
+<div class="divide-y divide-border">
+    {% for row in "123456"|make_list|slice:rows %}
+        <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-6 px-5 py-4">
+            <div class="flex min-w-0 flex-col gap-2">
+                <c-feedback.skeleton width="70%" />
+                <c-feedback.skeleton width="45%" height="0.625rem" />
+            </div>
+            <c-feedback.skeleton width="65%" />
+            <c-feedback.skeleton width="50%" />
+        </div>
+    {% endfor %}
+</div>
+</c-tables.shell>
+</c-feedback.loading>

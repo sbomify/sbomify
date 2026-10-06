@@ -193,5 +193,5 @@ class TestTheNdaUploadFollowsTheConfiguredCeiling:
             reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "trust-center"})
         ).content.decode()
 
-        assert "Max 100MB." in body
-        assert "Max 50MB." not in body
+        assert "PDF only, up to 100 MB." in body
+        assert "PDF only, up to 50 MB." not in body

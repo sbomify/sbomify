@@ -1,49 +1,20 @@
 {% extends "core/base.html.j2" %}
 {% block title %}Support Request Sent - sbomify{% endblock %}
 {% block content %}
-    <div class="container mx-auto px-4 py-8">
-        <div class="flex justify-center">
-            <div class="w-full max-w-3xl">
-                <div class="text-center">
-                    <!-- Success Icon -->
-                    <div class="mb-6">
-                        <div class="w-20 h-20 bg-success text-white rounded-full inline-flex items-center justify-center">
-                            <i class="fas fa-check text-3xl"></i>
-                        </div>
-                    </div>
-                    <!-- Success Message -->
-                    <h1 class="text-4xl font-bold text-success mb-4">Thank You!</h1>
-                    <h2 class="text-xl text-text-muted mb-6">Your support request has been sent successfully</h2>
-                    <c-cards.card class="mb-8">
-                    <div class="text-center">
-                        <h5 class="font-semibold text-text mb-4">What happens next?</h5>
-                        <ul class="list-none p-0 m-0 space-y-3">
-                            <li class="flex items-center justify-center gap-2 text-text">
-                                <i class="fas fa-clock text-primary"></i>
-                                <span>We typically respond within 1-2 business days</span>
-                            </li>
-                            <li class="flex items-center justify-center gap-2 text-text">
-                                <i class="fas fa-envelope text-primary"></i>
-                                <span>You'll receive a confirmation email shortly</span>
-                            </li>
-                            <li class="flex items-center justify-center gap-2 text-text">
-                                <i class="fas fa-user-headset text-primary"></i>
-                                <span>Our support team will review your request</span>
-                            </li>
-                        </ul>
-                    </div>
-                    </c-cards.card>
-                    <!-- Action Buttons -->
-                    <div class="flex flex-col md:flex-row justify-center gap-4">
-                        <c-buttons.primary href="{% url 'core:dashboard' %}" size="lg">
-                        <i class="fas fa-tachometer-alt mr-2"></i>Back to Dashboard
-                        </c-buttons.primary>
-                        <c-buttons.secondary href="{% url 'core:support_contact' %}" size="lg">
-                        <i class="fas fa-plus mr-2"></i>Submit Another Request
-                        </c-buttons.secondary>
-                    </div>
-                </div>
+    <main id="main-content" class="max-w-4xl mx-auto px-4 py-8">
+        <c-layout.frame>
+        <c-layout.page-header title="Support request sent" subtitle="Thank you for getting in touch." />
+        <c-cards.card>
+        <div class="flex flex-col gap-5">
+            <c-feedback.alert variant="success">Your support request has been sent successfully.</c-feedback.alert>
+            <c-layout.section-header level="2" title="What happens next?" />
+            <c-typography.description>You'll receive a confirmation email shortly. Our support team will review your request and usually respond within 1-2 business days.</c-typography.description>
+            <div class="flex flex-wrap gap-3">
+                <c-buttons.primary href="{% url 'core:dashboard' %}">Back to dashboard</c-buttons.primary>
+                <c-buttons.secondary href="{% url 'core:support_contact' %}">Submit another request</c-buttons.secondary>
             </div>
         </div>
-    </div>
+        </c-cards.card>
+        </c-layout.frame>
+    </main>
 {% endblock %}

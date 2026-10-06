@@ -1,0 +1,13 @@
+{% comment %}A short list waiting on content, including search, notifications and assignment panels. rows controls density, not data. The base owns announcements.{% endcomment %}
+<c-vars message="Loading items..." rows="3" class="" />
+<c-feedback.loading message="{{ message }}" variant_class="flex min-w-0 flex-col gap-5 px-4 py-4" class="{{ class }}" :attrs="attrs">
+{% for row in "123456"|make_list|slice:rows %}
+    <div class="flex min-w-0 items-center gap-3">
+        <c-feedback.skeleton type="avatar" width="2rem" height="2rem" />
+        <div class="flex min-w-0 flex-1 flex-col gap-2">
+            <c-feedback.skeleton width="70%" />
+            <c-feedback.skeleton width="45%" height="0.625rem" />
+        </div>
+    </div>
+{% endfor %}
+</c-feedback.loading>

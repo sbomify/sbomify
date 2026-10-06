@@ -1,32 +1,32 @@
 {# The shell sits inside the settings card, so it draws no frame of its own. #}
-<c-tables.shell nested x-cloak x-data="contactProfileList" x-init="init()">
+<c-tables.shell nested x-cloak x-data="contactProfileList">
 {{ profiles|json_script:"profiles-data" }}
 {% if profiles %}
     <c-tables.toolbar>
-    <c-tables.search id="search-input" label="Search contact profiles" placeholder="Search profiles..." x-model="searchQuery" @input="filterProfiles()" />
+    <c-forms.search-input size="sm" id="search-input" label="Search contact profiles" placeholder="Search profiles..." x-model="searchQuery" @input="filterProfiles()" />
     </c-tables.toolbar>
 {% endif %}
 {% if not profiles %}
     <c-feedback.empty-state icon="fas fa-address-book" title="No contact profiles yet" message="Create a profile to reuse supplier information across components.">
     <c-buttons.primary hx-get="{% url 'teams:contact_profiles_form' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML">
-    <i class="fas fa-plus mr-2"></i>Create Profile
+    <i class="fas fa-plus mr-2"></i>Create profile
     </c-buttons.primary>
     </c-feedback.empty-state>
 {% else %}
-    <c-tables.table>
+    <c-tables.table sized variant_class="min-w-128" aria-label="Contact profiles">
     <c-tables.head>
     <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
     <c-tables.header-cell class="w-[120px]">Status</c-tables.header-cell>
-    <c-tables.header-cell sort="updated_at" date class="w-[150px]">Last Modified</c-tables.header-cell>
+    <c-tables.header-cell sort="updated_at" date class="w-40">Last updated</c-tables.header-cell>
     <c-tables.actions-cell as="th" />
     </c-tables.head>
     <tbody>
         <template x-for="profile in filteredProfiles" :key="profile.id">
-            <c-tables.row x-show="!profile.hidden" x-transition>
+            <c-tables.row x-show="!profile.hidden">
             <c-tables.cell nowrap>
             <div class="flex items-center gap-3">
                 <c-avatar size="sm" />
-                <span class="font-medium text-text" x-text="profile.name"></span>
+                <c-overview.record x-text="profile.name" />
             </div>
             </c-tables.cell>
             <c-tables.cell>
@@ -34,9 +34,8 @@
             <i class="fas fa-star mr-1"></i>Default
             </c-badges.success>
             </c-tables.cell>
-            <c-tables.cell date>
-            <span class="text-text-muted text-sm"
-                  x-text="formatDate(profile.updated_at)"></span>
+            <c-tables.cell date muted>
+            <span x-text="formatDate(profile.updated_at)"></span>
             </c-tables.cell>
             <c-tables.actions-cell>
             <c-actions-menu label="Profile actions" width="w-56">
@@ -50,31 +49,13 @@
             </c-actions-menu>
             </c-tables.actions-cell>
             </c-tables.row>
-            {# Collapsible Preview Row #}
-            <tr x-show="expandedProfiles.includes(profile.id)"
-                x-transition:enter="transition ease-out duration-200"
-                x-transition:enter-start="opacity-0"
-                x-transition:enter-end="opacity-100"
-                x-transition:leave="transition ease-in duration-150"
-                x-transition:leave-start="opacity-100"
-                x-transition:leave-end="opacity-0">
-                <td colspan="4" class="bg-background/50 p-4">
-                    {% include "teams/contact_profiles/partials/profile_details.html.j2" %}
-                </td>
-            </tr>
         </template>
     </tbody>
     </c-tables.table>
-    <template x-if="filteredProfiles.length === 0 && profiles.length > 0">
+    <template x-if="filteredProfiles.every(profile => profile.hidden) && profiles.length > 0">
         <c-feedback.empty-state compact icon="fas fa-search" icon_variant="neutral" title="No matches found" message="No profiles match your search criteria" />
     </template>
 {% endif %}
 </c-tables.shell>
-{% comment %}The delete modal posts to the list endpoint by name, not to
-request.path. This template is rendered by two views: the list itself, and the
-form view after a create or an update. Taking the action from the request meant a
-profile deleted straight after being created posted to the form endpoint, which
-validated the create form and answered "name: This field is required" to a
-request that was not creating anything.{% endcomment %}
 {% url 'teams:contact_profiles_list' team.key as delete_url %}
-{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=delete_url form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}
+{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete contact profile" message_text="Are you sure you want to delete" warning_text="This cannot be undone." form_action=delete_url form=form submit_text="Delete profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}

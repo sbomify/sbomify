@@ -215,14 +215,18 @@ class TestCriticalPaths:
 
         # Test sboms pages
         response = client.get(reverse("core:components_dashboard"))
-        assert "sbomify Components" in response.content.decode()
+        assert "<title> Products · sbomify </title>" in " ".join(response.content.decode().split())
 
         response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
         assert f"sbomify Component: {component.name}" in response.content.decode()
 
         # Test teams pages
-        response = client.get(reverse("teams:team_details", kwargs={"team_key": team.key}), follow=True)
-        assert f"sbomify Workspace Settings: {team.name}" in response.content.decode()
-
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": team.key}))
-        assert f"sbomify Workspace Settings: {team.name}" in response.content.decode()
+        # The workspace name is passed through workspace_display, which appends its
+        # own suffix; assert the convention and the name, not the filter's output.
+        for url in (
+            reverse("teams:team_details", kwargs={"team_key": team.key}),
+            reverse("teams:team_settings", kwargs={"team_key": team.key}),
+        ):
+            title = " ".join(client.get(url, follow=True).content.decode().split())
+            assert f"<title> Settings · {team.name}" in title
+            assert "· sbomify </title>" in title

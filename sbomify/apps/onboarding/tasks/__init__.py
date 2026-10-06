@@ -13,7 +13,7 @@ from django.contrib.auth import get_user_model
 from sbomify.logging import getLogger
 from sbomify.task_utils import record_task_breadcrumb
 
-from ..services import OnboardingEmailService, TransientEmailError
+from ..services import OnboardingEmailService, TransientEmailError, is_retryable_failure
 
 User = get_user_model()
 logger = getLogger(__name__)
@@ -24,15 +24,26 @@ def _report_send_failure(log_prefix: str, task_name: str, user_id: int, exc: Exc
 
     Sentry's logging integration is wired with ``event_level=ERROR``, so a
     transient failure logged at error here would raise an issue on every one
-    of the four attempts before the retry that fixes it. The attempt that runs
-    out of retries still reports: the exception leaves the actor unhandled and
-    dramatiq's integration sends it once, which is the one worth reading.
+    of the four attempts before the retry that fixes it. That covers more than
+    the classified sends: the eligibility check re-raises database errors and
+    the context build queries before anything is rendered, so a database that
+    goes away arrives here as itself rather than wrapped.
+
+    The log level is only half of it. These actors leave by ``raise``, because
+    that is how the Retries middleware is told to try again, and
+    ``DramatiqIntegration`` captures the exception every time an actor raises
+    -- so dropping to warning here removed the logging event and left a
+    dramatiq event per attempt. ``REPORT_ON_RETRY_EXHAUSTION_ONLY`` in
+    ``sbomify.sentry_config`` names these actors and drops the intermediate
+    attempts in ``before_send``, leaving the attempt that runs out of retries
+    as the one issue, which is the one worth reading.
     """
-    if isinstance(exc, TransientEmailError):
+    if is_retryable_failure(exc):
         # "Retryable", not "will retry": the attempt that exhausts the budget
         # reaches this line too, and a log promising another try when there is
         # none sends whoever reads it looking for a delivery that never comes.
-        logger.warning("%s Retryable failure for user %s: %s", log_prefix, user_id, exc.__cause__ or exc)
+        reported = exc.__cause__ if isinstance(exc, TransientEmailError) and exc.__cause__ else exc
+        logger.warning("%s Retryable failure for user %s: %s", log_prefix, user_id, reported)
         record_task_breadcrumb(task_name, "retryable_error", level="warning", data={"user_id": user_id})
     else:
         logger.error("%s Error for user %s: %s", log_prefix, user_id, exc)
