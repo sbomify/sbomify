@@ -37,16 +37,21 @@ class CRAProductListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 {"assessments": [], "has_cra_access": False, "current_team": current_team},
             )
 
-        from sbomify.apps.compliance.services.wizard_service import get_assessment_list_for_team
+        from sbomify.apps.compliance.services.wizard_service import (
+            get_assessment_list_for_team,
+            get_products_without_cra_assessment,
+        )
 
         assert team_id is not None  # guaranteed by TeamRoleRequiredMixin
         result = get_assessment_list_for_team(team_id)
+        products = get_products_without_cra_assessment(team_id)
 
         return render(
             request,
             "compliance/cra_product_list.html.j2",
             {
                 "assessments": result.value if result.ok else [],
+                "available_products": products.value if products.ok else [],
                 "has_cra_access": has_access,
                 "current_team": current_team,
             },

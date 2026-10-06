@@ -3,11 +3,11 @@ apiVersion: v2
 name: sbomify
 description: sbomify, Your Security Artifact Hub. Generate, manage and share SBOMs and compliance documents.
 type: application
-version: 0.1.0
+version: 0.1.1
 # The application version this chart packages. Released images are tagged with
-# a "v" prefix (ghcr.io/sbomify/sbomify:v26.7.1), which is why the default image
+# a "v" prefix (ghcr.io/sbomify/sbomify:v26.9.0), which is why the default image
 # tag prepends it.
-appVersion: "26.7.1"
+appVersion: "26.9.0"
 # Floor set by the newest APIs used here:
 #   - Job .spec.podReplacementPolicy   (beta, on by default, 1.29)
 #   - lifecycle.preStop.sleep          (beta, on by default, 1.30)

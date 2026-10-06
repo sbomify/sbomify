@@ -4,3 +4,4 @@
      :inert="loading">
     <c-inventory.table :inventory="inventory" results_only />
 </div>
+{% if inventory_navigation_oob %}<c-chrome.inventory-nav kind="{{ inventory.kind }}" oob />{% endif %}

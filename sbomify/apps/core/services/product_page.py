@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.db import transaction
+from django.db.models.functions import Coalesce
 from django.http import HttpRequest
 from django.urls import reverse
 from pydantic import ValidationError
@@ -13,11 +14,18 @@ from sbomify.apps.compliance.models import CRAAssessment
 from sbomify.apps.compliance.permissions import check_cra_access
 from sbomify.apps.core.apis import get_product, patch_product
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.models import Component, Product
+from sbomify.apps.core.models import Component, Product, Release
 from sbomify.apps.core.schemas import ProductPatchSchema
-from sbomify.apps.core.services.inventory_page import COLUMNS, build_inventory_snapshot, build_inventory_table
+from sbomify.apps.core.services.inventory_page import (
+    COLUMNS,
+    build_inventory_page,
+    build_inventory_snapshot,
+    build_inventory_table,
+)
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.tea.mappers import get_product_tei_urn
+
+RELEASE_PREVIEW_SIZE = 5
 
 
 def build_product_page_context(request: HttpRequest, product_id: str) -> ServiceResult[dict[str, Any]]:
@@ -45,9 +53,17 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
         return table
     if request.headers.get("HX-Target") == "product-components":
         return ServiceResult.success({**(table.value or {}), "product": product})
-    releases = build_inventory_snapshot(workspace, "releases", product_id=product_id)
+    # The page previews five releases. A product released on every commit has
+    # thousands, and a posture reads each one's scan results in full, so pick
+    # the five by metadata first and compute postures for those alone.
+    release_query = Release.objects.filter(product_id=product_id, product__team=workspace)
+    preview_ids = list(
+        release_query.order_by("-is_latest", Coalesce("released_at", "created_at").desc(), "id").values_list(
+            "id", flat=True
+        )[:RELEASE_PREVIEW_SIZE]
+    )
     release_rows = sorted(
-        releases["rows"],
+        build_inventory_snapshot(workspace, "releases", product_id=product_id, row_ids=preview_ids)["rows"],
         key=lambda row: (
             row["release_type"] != "Rolling latest",
             -(row["released_at"] or row["created_at"]).timestamp(),
@@ -97,8 +113,8 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
                 "kind": "releases",
                 "singular": "release",
                 "scope_product": product_id,
-                "rows": release_rows[:5],
-                "total": len(release_rows),
+                "rows": release_rows,
+                "total": release_query.count(),
                 "headers": [{"label": label} for _, label in COLUMNS["releases"]],
             },
             "available_components": list(
@@ -167,10 +183,10 @@ def build_product_releases_context(request: HttpRequest, product_id: str) -> Ser
     if status != 200:
         return ServiceResult.failure(product.get("detail", "Product not found"), status_code=status)
     product.pop("components", None)
-    snapshot = build_inventory_snapshot(instance.team, "releases", product_id=product_id)
-    result = build_inventory_table(
+    # Postures are computed for the current page only; see build_inventory_page.
+    result = build_inventory_page(
         request,
-        snapshot,
+        instance.team,
         kind="releases",
         product_id=product_id,
         base_url=reverse("core:product_releases", args=[product_id]),
@@ -182,7 +198,7 @@ def build_product_releases_context(request: HttpRequest, product_id: str) -> Ser
         {
             **(result.value or {}),
             "product": product,
-            "release_editor_data": snapshot["rows"],
+            "release_editor_data": (result.value or {})["inventory"]["rows"],
             "breadcrumb_items": [
                 {"label": product["name"], "url": reverse("core:product_details", args=[product_id])},
                 {"label": "Releases"},
