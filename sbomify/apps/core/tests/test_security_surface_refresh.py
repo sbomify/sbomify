@@ -77,8 +77,10 @@ class TestScanProcessingState:
         assert "setTimeout" not in source
         assert "location.reload" not in source
 
-    def test_the_fallback_poll_refreshes_the_results_region(self) -> None:
-        source = _source("apps/sboms/templates/sboms/sbom_vulnerabilities.html.j2")
-
-        assert 'hx-select="#scan-results-card"' in source
-        assert "every 60s" in source
+    # There was a test here for the 60s fallback poll refreshing
+    # #scan-results-card. It is gone because the thing it asserted is gone:
+    # the processing branch it lived in was unreachable, and #1781 removed the
+    # branch and its poll together. Nothing on this page now renders a
+    # processing state, so there is no interval to fall back to -- a finished
+    # scan renders the results table instead. The sibling test above still
+    # pins the part that matters, that no timer reloads the page.
