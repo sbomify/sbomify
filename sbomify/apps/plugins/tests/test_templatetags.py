@@ -1,12 +1,13 @@
 """Tests for plugins template tags and filters."""
 
+from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.plugins.templatetags.plugins_extras import (
+    RUN_REASONS,
     advisory_prose,
     format_finding_description,
     format_run_reason,
     has_compliance_failures,
 )
-from sbomify.apps.plugins.sdk.enums import RunReason
 
 
 class TestFormatRunReason:
@@ -27,12 +28,16 @@ class TestFormatRunReason:
     def test_migration(self) -> None:
         assert format_run_reason("migration") == "Migration"
 
-    def test_every_sdk_reason_is_worded(self) -> None:
-        """No RunReason the SDK defines may reach a page as its code."""
-        for reason in RunReason:
-            rendered = format_run_reason(reason.value)
-            assert "_" not in rendered, reason.value
-            assert rendered[0].isupper()
+    def test_every_sdk_reason_has_an_explicit_label(self) -> None:
+        """A RunReason the SDK defines must be worded here, not left to the fallback.
+
+        Asserted against the map rather than against the rendered string:
+        humanize_token would de-underscore an unmapped reason too, so a
+        rendering check alone would pass for a reason nobody wrote wording
+        for, and "On Release Association" is not what that trigger is called.
+        """
+        missing = [reason.value for reason in RunReason if reason.value not in RUN_REASONS]
+        assert not missing, f"RunReason values with no label: {missing}"
 
     def test_unknown_is_humanized_not_printed_raw(self) -> None:
         assert format_run_reason("unknown_reason") == "Unknown Reason"
