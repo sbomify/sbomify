@@ -3,6 +3,7 @@ import '../../../assets/css/tailwind.src.css';
 
 import '../../vulnerability_scanning/js/vulnerability-chart';
 import './layout-interactions';
+import './table-stack';
 import './alerts-global';
 import './clipboard-global';
 
@@ -12,7 +13,7 @@ import { registerHtmxConfig } from './htmx-config';
 import { initializeAlpine } from './alpine-init';
 import { initDjangoMessages } from './django-messages';
 
-// Register HTMX config
+// Register HTMX config, including the morph swap that honours hx-preserve.
 registerHtmxConfig();
 
 // Initialize HTMX lifecycle handler

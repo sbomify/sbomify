@@ -118,7 +118,7 @@ def test_settings_controls_and_navigation(
             search.fill("")
             page.get_by_role("button", name="Profile actions", exact=True).click()
             page.get_by_role("menuitem", name="Edit profile", exact=True).click()
-            expect(page.get_by_role("textbox", name=re.compile("Profile Name"))).to_have_value("Product contacts")
+            expect(page.get_by_role("textbox", name=re.compile("Profile name"))).to_have_value("Product contacts")
             entities = page.locator("#entities-container")
             expect(entities).to_be_hidden()
             # An empty list cannot create a second gap before the empty state.
@@ -126,7 +126,7 @@ def test_settings_controls_and_navigation(
                 const notice = list.parentElement.querySelector('[role="alert"]');
                 return list.nextElementSibling.getBoundingClientRect().top - notice.getBoundingClientRect().bottom;
             }""") == pytest.approx(16)
-            page.get_by_role("button", name="Add Entity", exact=True).first.click()
+            page.get_by_role("button", name="Add entity", exact=True).first.click()
             expect(entities).to_be_visible()
             page.get_by_role("button", name="Back to profiles", exact=True).click()
             expect(page.get_by_text("Product contacts", exact=True)).to_be_visible()

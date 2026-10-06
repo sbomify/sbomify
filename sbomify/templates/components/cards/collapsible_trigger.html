@@ -12,10 +12,13 @@ A header that is a plugin's name plus its status chips and a muted finding
 count builds its own line, and the bold ink belongs to the name inside it, not
 to everything standing beside it. The two branches differ only in that wrapper
 and must stay in lockstep.
+
+The gap and the chevron's shrink-0 keep the chevron clear when a bare row
+fills the width: the row gives way, the chevron never does.
 {% endcomment %}
 <c-vars state bare class />
 <button type="button"
-        class="flex w-full items-center justify-between px-6 py-5 text-left cursor-pointer select-none transition-colors duration-200 hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]{% if class %} {{ class }}{% endif %}"
+        class="flex w-full items-center justify-between gap-3 px-6 py-5 text-left cursor-pointer select-none transition-colors duration-200 hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]{% if class %} {{ class }}{% endif %}"
         {% if state %}:aria-expanded="{{ state }}"{% endif %}
         {{ attrs }}>
     {% if bare %}
@@ -23,7 +26,7 @@ and must stay in lockstep.
     {% else %}
         <span class="flex items-center gap-3 font-semibold text-text">{{ slot }}</span>
     {% endif %}
-    <i class="fas fa-chevron-down text-text-muted transition-transform duration-300"
+    <i class="fas fa-chevron-down shrink-0 text-text-muted transition-transform duration-300"
        {% if state %}:class="{{ state }} ? 'rotate-180' : ''"{% endif %}
        aria-hidden="true"></i>
 </button>

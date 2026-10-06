@@ -70,9 +70,12 @@ class Command(BaseCommand):
 
         # Get users to migrate
         if specific_email:
-            users = User.objects.filter(email=specific_email)
-            if not users.exists():
+            users = User.objects.filter(email__iexact=specific_email)
+            ids = sorted(users.values_list("id", flat=True))
+            if not ids:
                 raise CommandError(f"User with email {specific_email} not found")
+            if len(ids) > 1:
+                raise CommandError(f"Accounts {ids} share the email {specific_email}; resolve them first")
         else:
             users = User.objects.all()
 

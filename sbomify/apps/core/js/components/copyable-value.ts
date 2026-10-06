@@ -30,6 +30,16 @@ export function registerCopyableValue() {
                     ? document.getElementById(this.copyFrom)?.innerText || ''
                     : this.value;
 
+                // A selector or id that resolves to nothing would otherwise
+                // reach writeText(''), which succeeds: the chip would go green
+                // while quietly clearing the clipboard. That is the same false
+                // success this component exists to avoid, so an empty value is
+                // a failure, exactly as clipboard.ts already treats it.
+                if (!valueToCopy) {
+                    this.reportFailure(new Error('Nothing to copy'));
+                    return;
+                }
+
                 try {
                     await navigator.clipboard.writeText(valueToCopy);
                     // Success is confirmed by the chip itself, not a toast — these
@@ -41,16 +51,20 @@ export function registerCopyableValue() {
                         this.copied = false;
                     }, COPIED_RESET_MS);
                 } catch (err) {
-                    // A failure is worth interrupting for: the value is not on the
-                    // clipboard and the user has no other way to tell.
-                    console.error('Failed to copy:', err);
-                    this.$dispatch('messages', {
-                        value: [{
-                            type: 'error',
-                            message: 'Failed to copy to clipboard'
-                        }]
-                    });
+                    this.reportFailure(err);
                 }
+            },
+
+            // A failure is worth interrupting for: the value is not on the
+            // clipboard and the user has no other way to tell.
+            reportFailure(err: unknown) {
+                console.error('Failed to copy:', err);
+                this.$dispatch('messages', {
+                    value: [{
+                        type: 'error',
+                        message: 'Failed to copy to clipboard'
+                    }]
+                });
             },
 
             destroy() {

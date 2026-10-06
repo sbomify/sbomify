@@ -18,6 +18,14 @@ from .utils import STRIPE_API_LIMIT
 
 logger = getLogger(__name__)
 
+# Statuses in which a workspace's stored subscription is still the one it pays
+# through. While it is, an event for a different subscription of the same
+# customer describes one the workspace has replaced.
+LIVE_SUBSCRIPTION_STATUSES = frozenset({"active", "trialing", "past_due", "incomplete"})
+
+# Statuses Stripe never moves a subscription out of.
+TERMINAL_SUBSCRIPTION_STATUSES = frozenset({"canceled", "incomplete_expired"})
+
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -59,6 +67,16 @@ class BillingRetryableError(StripeError):
     succeed on a later attempt: transient DB/Stripe outages, a checkout race
     where the team↔subscription mapping is not yet written, or a billing plan
     that is momentarily unresolvable.
+    """
+
+    pass
+
+
+class BillingEventTooEarlyError(BillingRetryableError):
+    """The event arrived before the one it depends on, so Stripe should redeliver it.
+
+    Retryable like its parent, but an expected ordering rather than a fault, so the
+    webhook view reports it as a warning without a traceback.
     """
 
     pass
