@@ -335,18 +335,13 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 vex_suppression_states = [r["state"] for r in vex_suppressions]
             # Get latest vulnerability scan for this SBOM from AssessmentRun
             component_id_from_item = item.get("component_id") or component_id  # type: ignore[union-attr]
-            latest_scan = (
-                AssessmentRun.objects.filter(
-                    sbom_id=item_id,
-                    sbom__component_id=component_id_from_item,
-                    category="security",
-                    status="completed",
-                )
-                .select_related("sbom__component")
-                .order_by("-created_at")
-                .first()
-            )
-            if latest_scan:
+            has_scan = AssessmentRun.objects.filter(
+                sbom_id=item_id,
+                sbom__component_id=component_id_from_item,
+                category="security",
+                status="completed",
+            ).exists()
+            if has_scan:
                 # Actionable counts from every provider's latest run, merged by
                 # alias and filtered through the component's VEX — the same math
                 # as the component page badge, so the numbers agree everywhere.
@@ -408,7 +403,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     )
                 if provider_runs:
                     # Dated from the runs the card is actually reporting. Taking
-                    # latest_scan here would stamp a provider that scanned with
+                    # the newest run here would stamp a provider that scanned with
                     # the time a later provider declined, so the card would read
                     # as "scanned then, found nothing" for a moment when nothing
                     # was scanned.

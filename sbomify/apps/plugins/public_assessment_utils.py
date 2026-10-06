@@ -237,6 +237,27 @@ def _collect_details(details_by_plugin: dict[str, PassingAssessment], assessment
             details_by_plugin[assessment.plugin_name] = assessment
 
 
+def _status_runs(latest_ids: Any, order_by: str) -> list[Any]:
+    """The runs with only what the passing helpers read.
+
+    ``result`` is rebuilt from its ``summary`` and ``metadata`` slices, so the
+    findings list, up to a few MB per run, never leaves the database.
+    """
+    runs = list(
+        AssessmentRun.objects.filter(id__in=latest_ids)
+        .only("id", "sbom_id", "plugin_name", "category", "status", "completed_at")
+        .annotate(summary_slice=F("result__summary"), metadata_slice=F("result__metadata"))
+        .order_by(order_by)
+    )
+    for run in runs:
+        run.result = {
+            key: value
+            for key, value in (("summary", run.summary_slice), ("metadata", run.metadata_slice))
+            if value is not None
+        }
+    return runs
+
+
 def _get_passing_assessments_by_sbom(
     sbom_ids: list[str], plugin_info: dict[str, tuple[str, str]]
 ) -> dict[str, list[PassingAssessment]]:
@@ -249,23 +270,9 @@ def _get_passing_assessments_by_sbom(
     SBOM versions would otherwise pull every one of them into memory.
     """
 
-    def read_runs(latest_ids: Any) -> list[Any]:
-        return list(
-            AssessmentRun.objects.filter(id__in=latest_ids)
-            .only("id", "sbom_id", "plugin_name", "category", "status", "completed_at")
-            .annotate(summary_slice=F("result__summary"), metadata_slice=F("result__metadata"))
-            .order_by("plugin_name")
-        )
-
-    runs = read_runs(latest_run_ids(AssessmentRun.objects.all(), sbom_ids))
+    runs = _status_runs(latest_run_ids(AssessmentRun.objects.all(), sbom_ids), "plugin_name")
     passing_by_sbom: dict[str, list[PassingAssessment]] = {sbom_id: [] for sbom_id in sbom_ids}
     for run in runs:
-        # The two helpers read nothing else from ``result``.
-        run.result = {
-            key: value
-            for key, value in (("summary", run.summary_slice), ("metadata", run.metadata_slice))
-            if value is not None
-        }
         if _is_run_passing(run):
             passing_by_sbom[str(run.sbom_id)].append(_passing_assessment_from_run(run, plugin_info))
     return passing_by_sbom
@@ -574,7 +581,7 @@ def get_products_latest_sbom_assessments_batch(
     # Step 3: Get all assessment runs for these SBOMs (batch query)
     latest_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
 
-    all_runs = list(AssessmentRun.objects.filter(id__in=latest_ids).select_related())
+    all_runs = _status_runs(latest_ids, "-created_at")
 
     # Step 4: Compute passing assessments per SBOM
     plugin_info = _get_plugin_display_names()
@@ -674,7 +681,7 @@ def get_components_latest_sbom_assessments_batch(
     # Step 2: Get all assessment runs for these SBOMs (batch query)
     latest_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
 
-    all_runs = list(AssessmentRun.objects.filter(id__in=latest_ids).select_related())
+    all_runs = _status_runs(latest_ids, "-created_at")
 
     # Step 3: Compute passing assessments per SBOM
     plugin_info = _get_plugin_display_names()
