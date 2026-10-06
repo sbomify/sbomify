@@ -240,17 +240,29 @@ class AssessmentRun(models.Model):
             models.Index(fields=["sbom", "plugin_name", "plugin_config_hash", "-created_at"]),
             models.Index(fields=["category", "-created_at"]),
             models.Index(fields=["status", "-created_at"]),
-            # The failure-backoff sweep reads terminal runs for one plugin by
-            # when they *settled*, which is Coalesce(completed_at, created_at)
-            # -- see tasks._failure_backed_off_sbom_ids for why the creation
-            # time is the wrong clock there. That is an expression,
-            # so none of the indexes above can serve its range scan or its
-            # ordering, and an hourly sweep would seq-scan a table that only
-            # grows. A functional index gives it both.
+            # Serves the failure-backoff sweep's per-SBOM probe: for one
+            # plugin and one SBOM, the newest few terminal runs by when they
+            # *settled* -- Coalesce(completed_at, created_at), see
+            # tasks._failure_backed_off_sbom_ids for why the creation time is
+            # the wrong clock there.
+            #
+            # The settled time is an expression, so none of the indexes above
+            # can serve either the range or the ordering, and the sweep would
+            # fall back to reading every run of every SBOM once an hour. With
+            # sbom_id leading the ordered columns, each probe descends
+            # straight to one SBOM's newest run and walks backwards until the
+            # LIMIT, so the sweep's cost follows the number of SBOMs it is
+            # about to enqueue rather than the size of the table.
+            #
+            # ``id`` closes the ordering so the probe never needs a sort to
+            # break a tie: runs written in one transaction can share a settled
+            # time, and the streak has to read them in a stable order.
             models.Index(
                 "plugin_name",
+                "sbom_id",
                 Coalesce("completed_at", "created_at").desc(),
-                name="plugins_run_plugin_settled_idx",
+                models.F("id").desc(),
+                name="plugins_run_sbom_settled_idx",
             ),
         ]
         ordering = ["-created_at"]

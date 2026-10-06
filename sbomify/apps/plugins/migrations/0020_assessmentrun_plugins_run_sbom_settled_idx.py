@@ -31,13 +31,15 @@ class Migration(migrations.Migration):
             model_name="assessmentrun",
             index=models.Index(
                 models.F("plugin_name"),
+                models.F("sbom_id"),
                 models.OrderBy(
                     django.db.models.functions.comparison.Coalesce(
                         "completed_at", "created_at"
                     ),
                     descending=True,
                 ),
-                name="plugins_run_plugin_settled_idx",
+                models.OrderBy(models.F("id"), descending=True),
+                name="plugins_run_sbom_settled_idx",
             ),
         ),
     ]

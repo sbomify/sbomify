@@ -6,15 +6,15 @@ in the background using Dramatiq workers.
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import timedelta
+from itertools import batched
 from typing import Any, TypedDict
 
 import dramatiq
 from django.db import connection, transaction
-from django.db.models import F, Window
-from django.db.models.functions import Coalesce, RowNumber
 from django.db.utils import DatabaseError, OperationalError
 from django.utils import timezone
 from tenacity import (
@@ -87,8 +87,9 @@ FAILURE_BACKOFF_HOURS = (0, 2, 4, 8, 24)
 
 # How far back the consecutive-failure count is read. Comfortably past the
 # ceiling above, so a run of failures is counted whole rather than truncated, and
-# bounded so the query stays indexed rather than walking the table. Truncating
-# would only shorten a backoff, never lengthen one.
+# bounded so each probe's index descent has somewhere to stop even for an SBOM
+# with years of history. Truncating would only shorten a backoff, never lengthen
+# one.
 #
 # A week is sized for the sweep this backoff is for, the hourly one, where a
 # five-deep streak spans a day or two even once the waits are stretching it. A
@@ -99,6 +100,45 @@ FAILURE_BACKOFF_HOURS = (0, 2, 4, 8, 24)
 # excludes. If the ceiling ever grows past a sweep's ``skip_hours``, this
 # horizon has to grow with it.
 FAILURE_HISTORY_HOURS = 24 * 7
+
+
+_FAILURE_STREAK_SQL = """
+    SELECT driver.sbom_id, run.id, run.status, run.error_message, run.result_summary, run.settled_at
+    FROM unnest(%s::text[]) AS driver(sbom_id)
+    CROSS JOIN LATERAL (
+        SELECT candidate.id,
+               candidate.status,
+               candidate.error_message,
+               candidate.result_summary,
+               COALESCE(candidate.completed_at, candidate.created_at) AS settled_at
+        FROM {table} candidate
+        WHERE candidate.plugin_name = %s
+          AND candidate.sbom_id = driver.sbom_id
+          AND candidate.status NOT IN ('pending', 'running')
+          AND COALESCE(candidate.completed_at, candidate.created_at) >= %s
+        ORDER BY COALESCE(candidate.completed_at, candidate.created_at) DESC, candidate.id DESC
+        LIMIT %s
+    ) run
+    ORDER BY driver.sbom_id, run.settled_at DESC, run.id DESC
+"""
+
+
+def _decoded_summary(value: Any) -> Any:
+    """``result_summary`` as a dict, however the driver handed it over.
+
+    Django registers its own jsonb loader so that ``JSONField`` controls
+    decoding, which means a column read through a plain cursor arrives as the
+    undecoded string rather than as the dict the ORM would have given. Raw SQL
+    is what buys the per-SBOM bound here (see ``_FAILURE_STREAK_SQL``), so this
+    does the decoding the ORM would have done. Anything unparseable is left
+    alone for ``_run_failed`` to read as unknown.
+    """
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except ValueError:
+            return None
+    return value
 
 
 def _run_failed(status: str, error_message: str, result_summary: Any) -> bool:
@@ -149,12 +189,12 @@ def _run_failed(status: str, error_message: str, result_summary: Any) -> bool:
     return isinstance(error_count, int) and not isinstance(error_count, bool) and error_count > 0
 
 
-def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any) -> set[str]:
-    """SBOMs whose latest run failed, recently enough that retrying now would
-    just fail again.
+def _failure_backed_off_sbom_ids(plugin_name: str, sbom_ids: Sequence[str], now: Any) -> set[str]:
+    """Which of ``sbom_ids`` have failed recently enough, and often enough in a
+    row, that retrying now would just fail again.
 
-    Keyed on the *latest* run and on the length of the failure streak ending
-    there, so the two cases the sweep has to tell apart stay apart:
+    Keyed on each SBOM's *latest* run and on the length of the failure streak
+    ending there, so the two cases the sweep has to tell apart stay apart:
 
     * One failure, or a failure followed by a success — nothing is held back.
       ``FAILURE_BACKOFF_HOURS`` starts at zero precisely so the common transient
@@ -169,10 +209,14 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
     failure it would extend it before the attempt had a verdict. The sweep's own
     skip window already covers in-flight work.
 
-    Only small columns are selected, so the fat ``result`` blob is never fetched
-    -- ``result_summary`` is the denormalised copy that exists for exactly this.
+    Takes the SBOMs to ask about rather than a team filter, so the caller can
+    hand it the batch it is about to enqueue and the cost stays proportional to
+    that. See ``_FAILURE_STREAK_SQL`` for how the per-SBOM bound is enforced.
     """
     from ..models import AssessmentRun
+
+    if not sbom_ids:
+        return set()
 
     # ``settled_at``: when the run reached a verdict, not when its row was
     # created. Scheduled enqueueing writes the PENDING row and the worker picks
@@ -184,45 +228,19 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
     #
     # ``completed_at`` is written by ``_mark_failed`` and by the success path,
     # so every terminal row this query can see has one, apart from rows written
-    # before that was true; ``Coalesce`` falls back to ``created_at`` for those
+    # before that was true; ``COALESCE`` falls back to ``created_at`` for those
     # rather than treating them as infinitely old.
-    settled_at = Coalesce("completed_at", "created_at")
-
-    # Only the leading few runs of each SBOM can change the answer, so only
-    # those are read. The wait is FAILURE_BACKOFF_HOURS[min(count, len) - 1],
-    # which means every streak at or past the ladder's length gets the same
-    # ceiling -- so a sixth consecutive failure is indistinguishable from the
-    # fifth, and the newest failure (the one the wait is measured from) is
-    # always inside the first few rows.
-    #
-    # What the two halves below actually bound, since it is easy to credit one
-    # with the other's work: the functional index bounds the *scan* to this
-    # plugin's terminal runs inside the history window, and ``position__lte``
-    # bounds what crosses into Python to a few rows per SBOM. It does not bound
-    # the window function -- Postgres computes row_number() over the whole
-    # partition and filters afterwards, so the sort is still over the windowed
-    # set. That half is cheap and indexed. The half that hurt was dragging every
-    # one of those rows back over the wire and walking them here, which grew
-    # with the table while the answer never did.
-    rows = (
-        AssessmentRun.objects.filter(
-            plugin_name=plugin_name,
-            sbom__component__team_id__in=team_ids,
+    with connection.cursor() as cursor:
+        cursor.execute(
+            _FAILURE_STREAK_SQL.format(table=AssessmentRun._meta.db_table),
+            [
+                list(sbom_ids),
+                plugin_name,
+                now - timedelta(hours=FAILURE_HISTORY_HOURS),
+                len(FAILURE_BACKOFF_HOURS),
+            ],
         )
-        .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
-        .annotate(settled_at=settled_at)
-        .filter(settled_at__gte=now - timedelta(hours=FAILURE_HISTORY_HOURS))
-        .annotate(
-            position=Window(
-                expression=RowNumber(),
-                partition_by=[F("sbom_id")],
-                order_by=[F("settled_at").desc(), F("id").desc()],
-            )
-        )
-        .filter(position__lte=len(FAILURE_BACKOFF_HOURS))
-        .order_by("sbom_id", "-settled_at", "-id")
-        .values_list("sbom_id", "status", "error_message", "result_summary", "settled_at")
-    )
+        rows = cursor.fetchall()
 
     # Newest first within each SBOM, so the streak is the leading run of failures
     # and the first non-failure settles that SBOM for good. Ties break on id, for
@@ -232,11 +250,11 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
     streak: dict[str, int] = {}
     newest_failure_at: dict[str, Any] = {}
     settled: set[str] = set()
-    for sbom_id, status, error_message, result_summary, run_settled_at in rows:
+    for sbom_id, _run_id, status, error_message, result_summary, run_settled_at in rows:
         key = str(sbom_id)
         if key in settled:
             continue
-        if not _run_failed(status, error_message, result_summary):
+        if not _run_failed(status, error_message or "", _decoded_summary(result_summary)):
             settled.add(key)
             continue
         streak[key] = streak.get(key, 0) + 1
@@ -1462,13 +1480,6 @@ def _run_scheduled_security_scans(
         if incapable_cutoff < cutoff:
             recent_sbom_ids.update(_backed_off_sbom_ids(plugin_name, team_ids, incapable_cutoff))
 
-        # The same shape for the other way a sweep can spin: a run that failed
-        # does not fill the window above, so an SBOM that fails every time is
-        # re-enqueued every time. One failure still retries on the next tick; a
-        # streak backs off. Only ever adds to the skip set, so no cadence gets
-        # shorter than it is today.
-        recent_sbom_ids.update(_failure_backed_off_sbom_ids(plugin_name, team_ids, now))
-
         # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
         # with at least one ReleaseArtifact link is eligible — the scan will
         # cover all of its current releases via the M2M populated at run
@@ -1503,24 +1514,44 @@ def _run_scheduled_security_scans(
         if only_cyclonedx:
             sbom_qs = sbom_qs.filter(format="cyclonedx")
 
-        for sbom_row in sbom_qs.iterator(chunk_size=500):
-            stats["sboms_found"] += 1
-            sbom_id_str = str(sbom_row["id"])
+        # The failure backoff is applied per batch rather than precomputed over
+        # the whole table, and only to what has already survived the skip window
+        # above. That ordering is the point: the SBOMs reaching it are the ones
+        # this sweep would otherwise enqueue, which on a healthy fleet is a
+        # small fraction of the rows an up-front sweep would have read. Asking
+        # about them by name is also what lets the query be one indexed probe
+        # per SBOM instead of a scan over everyone's history.
+        for sbom_batch in batched(sbom_qs.iterator(chunk_size=500), 500):
+            stats["sboms_found"] += len(sbom_batch)
 
-            if sbom_id_str in recent_sbom_ids:
-                stats["skipped_recent"] += 1
+            candidates = [row for row in sbom_batch if str(row["id"]) not in recent_sbom_ids]
+            stats["skipped_recent"] += len(sbom_batch) - len(candidates)
+            if not candidates:
                 continue
 
-            team_id = sbom_row["component__team_id"]
-            plugin_config = team_configs.get(team_id) or None
+            # A run that failed does not fill the skip window above, so without
+            # this an SBOM that fails every time is re-enqueued every time. One
+            # failure still retries on the next tick; a streak backs off. Only
+            # ever removes candidates, so no cadence gets shorter than today's.
+            backed_off = _failure_backed_off_sbom_ids(plugin_name, [str(row["id"]) for row in candidates], now)
 
-            enqueue_assessment(
-                sbom_id=sbom_id_str,
-                plugin_name=plugin_name,
-                run_reason=RunReason.SCHEDULED_REFRESH,
-                config=plugin_config,
-            )
-            stats["assessments_enqueued"] += 1
+            for sbom_row in candidates:
+                sbom_id_str = str(sbom_row["id"])
+
+                if sbom_id_str in backed_off:
+                    stats["skipped_recent"] += 1
+                    continue
+
+                team_id = sbom_row["component__team_id"]
+                plugin_config = team_configs.get(team_id) or None
+
+                enqueue_assessment(
+                    sbom_id=sbom_id_str,
+                    plugin_name=plugin_name,
+                    run_reason=RunReason.SCHEDULED_REFRESH,
+                    config=plugin_config,
+                )
+                stats["assessments_enqueued"] += 1
 
         logger.info(
             "[TASK_%s] Completed: %d %s assessments enqueued across %d teams, %d skipped (recent)",

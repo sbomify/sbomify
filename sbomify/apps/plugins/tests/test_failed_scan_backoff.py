@@ -19,11 +19,11 @@ failure would be a regression and one that never escalates would be a no-op.
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 
 import pytest
-from django.db.models import F, Window
-from django.db.models.functions import Coalesce, RowNumber
+from django.db.models import F
 from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
@@ -196,7 +196,6 @@ class TestAStreakBacksOff:
         """A streak far past the ladder's length still waits a day, not a week:
         an SBOM must not become permanently unscannable because it failed often
         enough at some point."""
-        from django.db.models import F
 
         # 61 failures in a row, the newest 20 hours ago: inside the ceiling.
         _failures(scannable_sbom, [float(hours) for hours in range(80, 19, -1)])
@@ -272,13 +271,15 @@ class TestItDoesNotReadTheFatBlobToCountFailures:
         from sbomify.apps.plugins.tasks import _failure_backed_off_sbom_ids
 
         _failures(scannable_sbom, [6, 5, 4, 3, 1.5])
-        team_ids = {scannable_sbom.component.team_id}
 
         with CaptureQueriesContext(connection) as captured:
-            backed_off = _failure_backed_off_sbom_ids("dependency-track", team_ids, timezone.now())
+            backed_off = _failure_backed_off_sbom_ids("dependency-track", [str(scannable_sbom.id)], timezone.now())
 
         assert backed_off == {str(scannable_sbom.id)}
-        assert [q["sql"] for q in captured.captured_queries if '."result"' in q["sql"]] == []
+        # ``result``, not ``result_summary``: the small denormalised column is
+        # exactly what this query is supposed to read instead of the blob.
+        projects_the_blob = re.compile(r"\bresult\b(?!_)")
+        assert [q["sql"] for q in captured.captured_queries if projects_the_blob.search(q["sql"])] == []
 
 
 @pytest.mark.django_db
@@ -356,80 +357,105 @@ class TestTheWaitRunsFromTheFailureNotTheEnqueue:
 class TestTheSweepStaysCheapAsTheTableGrows:
     """The sweep runs hourly, so what it costs per run is part of the feature.
 
-    Two things keep it bounded, and both are invisible from the behaviour
-    tests above: the settled-at predicate has an index that matches it, and
-    only the leading few runs of each SBOM are read.
+    The cost has to be bounded by the plan, not by a filter applied after the
+    database has already done the work. ``row_number() <= N`` over a window
+    reads like a cap and is not one: Postgres computes the window across the
+    whole partitioned set and discards afterwards, so the sort covered every
+    terminal run of every SBOM in the history window and only the discarding
+    was bounded. These pin the LATERAL that replaced it.
     """
 
-    def test_the_settled_at_predicate_has_an_index_that_matches_it(self) -> None:
-        """``Coalesce(completed_at, created_at)`` is an expression.
+    @staticmethod
+    def _streak_sql_and_params(sbom_ids: list[str]) -> tuple[str, list]:
+        from sbomify.apps.plugins.tasks import (
+            _FAILURE_STREAK_SQL,
+            FAILURE_BACKOFF_HOURS,
+            FAILURE_HISTORY_HOURS,
+        )
 
-        None of the plain-column indexes can serve its range scan, so without
-        a functional index the hourly sweep sequentially scans a table that
-        only grows. ``enable_seqscan = off`` asks the planner whether the
-        index is *usable* for the predicate, which is the question here -- on
-        a small table it would prefer a sequential scan whatever exists.
+        return (
+            _FAILURE_STREAK_SQL.format(table=AssessmentRun._meta.db_table),
+            [
+                sbom_ids,
+                "dependency-track",
+                timezone.now() - timedelta(hours=FAILURE_HISTORY_HOURS),
+                len(FAILURE_BACKOFF_HOURS),
+            ],
+        )
+
+    def test_each_sbom_is_one_bounded_index_probe(self, scannable_sbom) -> None:
+        """What the plan must say: an index descent per SBOM, stopped by LIMIT.
+
+        ``enable_seqscan = off`` asks the planner whether the index is *usable*
+        here, which is the question -- on a small test table it would prefer a
+        sequential scan whatever exists.
         """
         from django.db import connection
 
         if connection.vendor != "postgresql":
             pytest.skip("EXPLAIN plans and functional indexes are Postgres-specific here")
 
-        from sbomify.apps.plugins.tasks import FAILURE_HISTORY_HOURS
-
-        now = timezone.now()
-        settled_at = Coalesce("completed_at", "created_at")
-        queryset = (
-            AssessmentRun.objects.filter(plugin_name="dependency-track")
-            .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
-            .annotate(settled_at=settled_at)
-            .filter(settled_at__gte=now - timedelta(hours=FAILURE_HISTORY_HOURS))
-        )
-        sql, params = queryset.query.sql_with_params()
+        # Enough history that the ordered index actually beats a bare sbom_id
+        # scan plus a sort -- which is the whole reason it exists. With five
+        # rows in the table the planner is right that it makes no difference.
+        _failures(scannable_sbom, [float(hours) for hours in range(60, 20, -1)])
+        sql, params = self._streak_sql_and_params([str(scannable_sbom.id)])
 
         with connection.cursor() as cursor:
+            cursor.execute("ANALYZE plugins_assessment_runs")
             cursor.execute("SET enable_seqscan = off")
             cursor.execute("EXPLAIN " + sql, params)
             plan = "\n".join(row[0] for row in cursor.fetchall())
             cursor.execute("SET enable_seqscan = on")
 
-        assert "plugins_run_plugin_settled_idx" in plan, plan
+        # The functional index: Coalesce(completed_at, created_at) is an
+        # expression, so none of the plain-column indexes can serve either the
+        # range or the ordering.
+        assert "plugins_run_sbom_settled_idx" in plan, plan
+        # The bound is the plan's.
+        assert "Limit" in plan, plan
+        # And not a window computed over everything and then thrown away.
+        assert "WindowAgg" not in plan, plan
 
-    def test_only_the_leading_runs_of_each_sbom_are_read(self, scannable_sbom) -> None:
-        """A long history must not mean a long result set.
+    def test_a_long_history_is_not_a_long_read(self, scannable_sbom) -> None:
+        """Forty runs on one SBOM, five rows back.
 
         The wait is ``FAILURE_BACKOFF_HOURS[min(count, len) - 1]``, so every
         streak at or past the ladder's length gets the same ceiling: a sixth
         consecutive failure cannot change the answer the fifth already gave.
-        That is what makes the row cap safe, and what it buys is rows returned
-        bounded by the number of SBOMs rather than by the size of the table.
-        The scan itself is bounded by the index, which the test above pins --
-        ``position__lte`` filters after the window function, so it caps what
-        comes back here, not what Postgres sorts.
+        That is what makes the cap safe to push into the query.
         """
-        from sbomify.apps.plugins.tasks import FAILURE_BACKOFF_HOURS, FAILURE_HISTORY_HOURS
+        from django.db import connection
 
-        # Far more history than the ladder is long.
+        from sbomify.apps.plugins.tasks import FAILURE_BACKOFF_HOURS
+
         _failures(scannable_sbom, [float(hours) for hours in range(60, 20, -1)])
         assert AssessmentRun.objects.filter(sbom=scannable_sbom).count() == 40
 
-        now = timezone.now()
-        rows = (
-            AssessmentRun.objects.filter(plugin_name="dependency-track")
-            .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
-            .annotate(settled_at=Coalesce("completed_at", "created_at"))
-            .filter(settled_at__gte=now - timedelta(hours=FAILURE_HISTORY_HOURS))
-            .annotate(
-                position=Window(
-                    expression=RowNumber(),
-                    partition_by=[F("sbom_id")],
-                    order_by=[F("settled_at").desc(), F("id").desc()],
-                )
-            )
-            .filter(position__lte=len(FAILURE_BACKOFF_HOURS))
-        )
+        sql, params = self._streak_sql_and_params([str(scannable_sbom.id)])
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
 
-        assert rows.count() == len(FAILURE_BACKOFF_HOURS)
+        assert len(rows) == len(FAILURE_BACKOFF_HOURS)
+
+    def test_the_streak_is_only_asked_about_sboms_the_sweep_would_enqueue(self, scannable_sbom, monkeypatch) -> None:
+        """The skip window runs first, and the probe never sees what it caught.
+
+        This is what keeps the per-SBOM cost from being charged for every SBOM
+        in the workspace: on a healthy fleet nearly everything is inside the
+        ordinary skip window, and those never reach the backoff at all.
+        """
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        # Scanned ten minutes ago, so the ordinary skip window holds it.
+        _run_at_age(scannable_sbom, hours_ago=0.16, status=RunStatus.COMPLETED.value)
+
+        with CaptureQueriesContext(connection) as captured:
+            assert _sweep(monkeypatch) == []
+
+        assert [q["sql"] for q in captured.captured_queries if "CROSS JOIN LATERAL" in q["sql"]] == []
 
     def test_capping_the_scan_does_not_change_the_verdict(self, scannable_sbom, monkeypatch) -> None:
         """A streak longer than the ladder still backs off, at the ceiling."""
