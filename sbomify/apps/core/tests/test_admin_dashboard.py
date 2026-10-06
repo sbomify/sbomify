@@ -407,3 +407,75 @@ class TestUsersPerWorkspace:
 
         small.delete()
         large.delete()
+
+    def test_bot_members_are_not_counted_as_users(self, db, django_user_model):
+        """``role="bot"`` is a trusted-publisher identity, not a person.
+
+        One such membership exists per OIDC binding, so without the exclusion
+        the chart inflates every workspace that publishes from CI, and does so
+        in proportion to how much it uses the product.
+        """
+        from django.core.cache import cache
+
+        from sbomify.apps.teams.models import Member
+
+        workspace = Team.objects.create(name="Workspace With Publishers")
+
+        human = django_user_model.objects.create_user(
+            username="bot-exclusion-human",
+            email="bot-exclusion-human@example.com",
+            password="x",
+        )
+        Member.objects.create(team=workspace, user=human, role="member")
+
+        for index in range(2):
+            _add_oidc_bot_member(workspace, django_user_model, index)
+
+        cache.delete("admin_dashboard_stats")
+        stats = admin_site.get_dashboard_stats()
+
+        counts = {row["name"]: row["user_count"] for row in stats["users_per_team"]}
+        assert counts["Workspace With Publishers"] == 1
+
+        workspace.delete()
+
+    def test_workspace_of_only_bots_reports_zero_rather_than_vanishing(self, db, django_user_model):
+        """Excluding bots must not drop the workspace from the chart.
+
+        ``Count(filter=...)`` returns 0 for a workspace whose only memberships
+        are bots, where filtering the rows away instead would hide it.
+        """
+        from django.core.cache import cache
+
+        workspace = Team.objects.create(name="Workspace Of Publishers Only")
+        _add_oidc_bot_member(workspace, django_user_model, 0)
+
+        cache.delete("admin_dashboard_stats")
+        stats = admin_site.get_dashboard_stats()
+
+        counts = {row["name"]: row["user_count"] for row in stats["users_per_team"]}
+        assert counts["Workspace Of Publishers Only"] == 0
+
+        workspace.delete()
+
+
+def _add_oidc_bot_member(team, django_user_model, index):
+    """Build a ``role="bot"`` membership the way OIDC provisioning does.
+
+    ``oidc.signals.forbid_manual_bot_role`` rejects the role for a user with no
+    binding; provisioning attaches the binding after the membership, so it sets
+    ``_is_oidc_bot_provisioning`` to opt out. Same opt-out here, so the fixture
+    is the shape production writes rather than one the signal would refuse.
+    """
+    from sbomify.apps.teams.models import Member
+
+    bot_user = django_user_model.objects.create_user(
+        username=f"oidc-bot-{team.pk}-{index}",
+        email=f"oidc-bot-{team.pk}-{index}@example.com",
+        first_name="OIDC",
+        last_name="Bot",
+    )
+    member = Member(user=bot_user, team=team, role="bot")
+    member._is_oidc_bot_provisioning = True
+    member.save()
+    return member
