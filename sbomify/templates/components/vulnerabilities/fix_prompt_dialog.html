@@ -1,0 +1,18 @@
+{% comment %}
+The one dialog a page hosts for fix prompts. A row's Fix prompt button
+dispatches open-fix-prompt with the prompt url and a title; this shows a
+loading state and fetches the prompt into #fix-prompt-body.
+It lives outside any region HTMX replaces, so paging the table keeps it.
+{% endcomment %}
+<div x-data="{ fixPromptOpen: false, fixPromptTitle: '' }"
+     @open-fix-prompt.window="fixPromptTitle = $event.detail.title; fixPromptOpen = true; document.getElementById('fix-prompt-body').replaceChildren(document.getElementById('fix-prompt-loading').content.cloneNode(true)); htmx.ajax('GET', $event.detail.url, { target: '#fix-prompt-body', swap: 'innerHTML' })">
+    <template id="fix-prompt-loading">
+        <c-cards.body>
+        <c-feedback.loading message="Writing the fix prompt..." />
+        </c-cards.body>
+    </template>
+    <c-modal id="fix-prompt-dialog" show="fixPromptOpen" title="Fix prompt" icon="fas fa-wand-magic-sparkles" size="lg">
+    <p class="sr-only" x-text="fixPromptTitle"></p>
+    <div id="fix-prompt-body" aria-live="polite"></div>
+    </c-modal>
+</div>

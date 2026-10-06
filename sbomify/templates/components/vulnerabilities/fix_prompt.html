@@ -1,0 +1,53 @@
+{% comment %}
+The body of the fix prompt dialog: what is being fixed, then the prompt to
+paste into a coding agent and the copy action. fix comes from
+services/fix_prompt.py. error replaces everything when the occurrence is no
+longer in the latest scan.
+{% endcomment %}
+<c-vars fix error />
+{% if error %}
+    <c-cards.body>
+    <c-feedback.alert variant="warning">{{ error }}</c-feedback.alert>
+    </c-cards.body>
+{% else %}
+    <c-cards.body density="compact">
+    <div class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+            {% if fix.severity == 'critical' or fix.severity == 'high' or fix.severity == 'medium' or fix.severity == 'low' %}
+                <c-badges.severity level="{{ fix.severity }}">{{ fix.severity|capfirst }}</c-badges.severity>
+            {% else %}
+                <c-badges.severity level="unknown">{{ fix.severity|capfirst }}</c-badges.severity>
+            {% endif %}
+            <span class="font-semibold text-text">{{ fix.advisory }}</span>
+            {% if fix.malicious %}<c-badges.solid-danger size="sm">Malicious</c-badges.solid-danger>{% endif %}
+            {% if fix.kev %}<c-badges.solid-danger size="sm">KEV</c-badges.solid-danger>{% endif %}
+        </div>
+        <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt class="text-text-muted">Component</dt>
+            <dd class="text-text">
+                {{ fix.component }}
+                {% if fix.sbom_version %}<span class="text-text-muted">SBOM {{ fix.sbom_version }}</span>{% endif %}
+            </dd>
+            <dt class="text-text-muted">Package</dt>
+            <dd class="text-text break-all">
+                {{ fix.package }} {{ fix.version }}
+            </dd>
+            <dt class="text-text-muted">Fixed in</dt>
+            <dd class="{% if fix.fixed %}font-mono text-success{% else %}text-text-muted{% endif %}">
+                {% if fix.malicious %}
+                    Remove the package
+                {% elif fix.fixed %}
+                    {{ fix.fixed }}
+                {% else %}
+                    Not reported
+                {% endif %}
+            </dd>
+        </dl>
+        <c-typography.description size="sm">Paste this into Claude Code, Cursor or another coding agent in the repository that builds {{ fix.component }}. It asks for this one fix and nothing else.</c-typography.description>
+    </div>
+    </c-cards.body>
+    <c-code-prompt code="{{ fix.prompt }}" code_id="fix-prompt-text" max_height="20rem" />
+    <c-cards.body density="compact">
+    <c-copy-button-primary copy_from="fix-prompt-text" label="Copy prompt" />
+    </c-cards.body>
+{% endif %}

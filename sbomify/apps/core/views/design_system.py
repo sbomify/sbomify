@@ -62,6 +62,89 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
 ]
 
 
+def _fix_prompt_demo() -> dict[str, object]:
+    from sbomify.apps.vulnerability_scanning.services.fix_prompt import render_fix_prompt
+
+    fix: dict[str, object] = {
+        "advisory": "CVE-2026-10001",
+        "aliases": ["GHSA-demo-0001-0001"],
+        "severity": "high",
+        "cvss_score": 7.5,
+        "kev": True,
+        "malicious": False,
+        "title": "Request parser vulnerability",
+        "details": "",
+        "package": "example-parser",
+        "version": "1.0.0",
+        "ecosystem": "pypi",
+        "purl": "pkg:pypi/example-parser@1.0.0",
+        "fixed": "1.0.4",
+        "references": [],
+        "component": "api-gateway",
+        "sbom_version": "2.4.1",
+    }
+    fix["prompt"] = render_fix_prompt(fix)
+    return fix
+
+
+def _workspace_vulnerability_demo() -> dict[str, object]:
+    from django.core.paginator import Paginator
+
+    from sbomify.apps.vulnerability_scanning.services.workspace_vulnerabilities import (
+        COLUMNS,
+        PER_PAGE_CHOICES,
+        VulnerabilityQuery,
+    )
+
+    rows = [
+        {
+            "id": "CVE-2026-10001",
+            "aliases": ["GHSA-demo-0001-0001"],
+            "severity": "high",
+            "cvss_score": 7.5,
+            "kev": True,
+            "malicious": False,
+            "package": "example-parser",
+            "version": "1.0.0",
+            "ecosystem": "pypi",
+            "component_name": "api-gateway",
+            "component_url": "#vulnerability-browser",
+            "sbom_version": "2.4.1",
+            "product_names": "Acme Cloud",
+            "other_components": 2,
+            "sla": {"label": "3 days over", "overdue": True},
+            "decision": "Not reviewed",
+            "fix_prompt_url": "#vulnerability-browser",
+        }
+    ]
+    page = Paginator(rows, 25).get_page(1)
+    return {
+        "query": VulnerabilityQuery(),
+        "summary": {
+            "vulnerabilities": 1,
+            "critical_high": 1,
+            "exploited": 1,
+            "overdue": 1,
+            "occurrences": 3,
+            "components": 3,
+        },
+        "unassessed_components": 0,
+        "scoped_components": 3,
+        "rows": rows,
+        "page": page,
+        "total": 1,
+        "page_range": [1],
+        "headers": [
+            {"key": key, "label": label, "href": "#vulnerability-browser", "order": "none"} for key, label, _ in COLUMNS
+        ],
+        "products": [{"id": "demo", "name": "Acme Cloud"}],
+        "components": [{"id": "demo", "name": "api-gateway"}],
+        "base_url": "#vulnerability-browser",
+        "query_string": "",
+        "per_page_choices": PER_PAGE_CHOICES,
+    }
+
+
 class DesignSystemView(LoginRequiredMixin, View):
     """Local-development-only gallery showing every design-system component in a single view.
 
@@ -93,6 +176,8 @@ class DesignSystemView(LoginRequiredMixin, View):
         )
         context = {
             "vulnerability_demo": vulnerability_demo,
+            "workspace_vulnerability_demo": _workspace_vulnerability_demo(),
+            "fix_prompt_demo": _fix_prompt_demo(),
             "plan_card_demos": [
                 {
                     "key": "community",

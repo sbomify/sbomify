@@ -1,0 +1,118 @@
+{% load humanize advisory_tags %}
+{% comment %}
+The page of workspace vulnerabilities and its pager. One row is one
+vulnerability in one component. Only the requested page reaches the template,
+so rendering cost follows the page size, not the workspace.
+
+Fix prompt asks the page's c-vulnerabilities.fix-prompt-dialog to load the
+prompt for that row. The dialog fetches it, not the button: the button sits
+inside the filter form and would inherit its hx-target and hx-push-url. The prompt is built on request because it reads
+the scanner's full result, which the page itself never loads.
+{% endcomment %}
+<c-vars data results_target="vulnerabilities-results" />
+<div id="{{ results_target }}">
+    <c-tables.shell>
+    {% if data.rows %}
+        {# djlint:off #}
+        <c-tables.table sized variant_class="min-w-240" aria-label="Open vulnerabilities">
+        {# djlint:on #}
+        <thead>
+            <tr>
+                {% for header in data.headers %}
+                    {# djlint:off #}
+                    <c-tables.header-cell compact nowrap href="{{ header.href }}" order="{{ header.order }}" sort="{{ header.key }}"
+                        class="{% if header.key == 'vulnerability' %}{% elif header.key == 'severity' %}w-28{% elif header.key == 'sla' %}w-32{% else %}w-44{% endif %}">{{ header.label }}</c-tables.header-cell>
+                    {# djlint:on #}
+                {% endfor %}
+                <c-tables.header-cell compact end class="w-36"><span class="sr-only">Fix prompt</span></c-tables.header-cell>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in data.rows %}
+                <c-tables.row>
+                <c-tables.cell compact nowrap>
+                {% if row.severity == 'critical' or row.severity == 'high' or row.severity == 'medium' or row.severity == 'low' %}
+                    <c-badges.severity level="{{ row.severity }}">{{ row.severity|capfirst }}</c-badges.severity>
+                {% else %}
+                    <c-badges.severity level="unknown">{{ row.severity|capfirst }}</c-badges.severity>
+                {% endif %}
+                {% if row.cvss_score != None %}<div class="text-xs text-text-muted pt-1">CVSS {{ row.cvss_score }}</div>{% endif %}
+                </c-tables.cell>
+                <c-tables.cell compact>
+                <div class="flex flex-wrap items-center gap-1.5">
+                    {% with advisory=row.id|advisory_url %}
+                        {% if advisory %}
+                            <a href="{{ advisory }}"
+                               target="_blank"
+                               rel="noopener"
+                               class="font-medium text-primary hover:underline inline-flex items-center gap-1">{{ row.id }}<i class="fas fa-external-link-alt text-[0.65rem]" aria-hidden="true"></i></a>
+                        {% else %}
+                            <span class="font-medium text-text">{{ row.id }}</span>
+                        {% endif %}
+                    {% endwith %}
+                    {% if row.malicious %}
+                        <c-badges.solid-danger size="sm" title="Malicious package: remove it rather than upgrade">Malicious</c-badges.solid-danger>
+                    {% endif %}
+                    {% if row.kev %}
+                        <c-badges.solid-danger size="sm" title="In CISA's Known Exploited Vulnerabilities catalog">KEV</c-badges.solid-danger>
+                    {% endif %}
+                </div>
+                {% if row.aliases %}<div class="text-xs text-text-muted mt-1">Also {{ row.aliases|join:", " }}</div>{% endif %}
+                {% if row.other_components %}
+                    <div class="text-xs text-text-muted mt-1">
+                        Also in {{ row.other_components|intcomma }} other component{{ row.other_components|pluralize }}
+                    </div>
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell compact>
+                <a href="{{ row.component_url }}"
+                   class="font-medium text-text hover:text-primary hover:underline">{{ row.component_name }}</a>
+                {% if row.sbom_version %}<div class="text-xs text-text-muted mt-1">SBOM {{ row.sbom_version }}</div>{% endif %}
+                {% if row.product_names %}<div class="text-xs text-text-muted mt-1">{{ row.product_names }}</div>{% endif %}
+                </c-tables.cell>
+                <c-tables.cell compact>
+                <span class="font-medium text-text break-all">{{ row.package }}</span>
+                {% if row.version %}<span class="text-text-muted">{{ row.version }}</span>{% endif %}
+                {% if row.ecosystem %}<div class="mt-1"><c-badges.secondary>{{ row.ecosystem }}</c-badges.secondary></div>{% endif %}
+                </c-tables.cell>
+                <c-tables.cell compact nowrap>
+                <c-overview.sla :sla="row.sla" />
+                <div class="text-xs text-text-muted mt-1">{{ row.decision }}</div>
+                </c-tables.cell>
+                <c-tables.cell compact end nowrap>
+                <c-buttons.secondary size="sm" @click="$dispatch('open-fix-prompt', { url: '{{ row.fix_prompt_url|escapejs }}', title: '{{ row.id|escapejs }} in {{ row.component_name|escapejs }}' })">
+                <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>Fix prompt
+                </c-buttons.secondary>
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+    {% elif data.query.is_filtered %}
+        <c-feedback.empty-state icon="fas fa-filter" title="No matching vulnerabilities" message="Try another search or clear the filters.">
+        <c-buttons.secondary href="{{ data.base_url }}">Clear filters</c-buttons.secondary>
+        </c-feedback.empty-state>
+    {% else %}
+        <c-feedback.empty-state icon="fas fa-shield-halved" title="No open vulnerabilities" message="Nothing open in the latest scan of any component." />
+    {% endif %}
+    {% if data.total %}
+        <c-tables.footer>
+        <c-tables.info role="status">
+        Showing {{ data.page.start_index|intcomma }} to {{ data.page.end_index|intcomma }} of {{ data.total|intcomma }}
+        </c-tables.info>
+        <div class="flex flex-wrap items-center gap-4">
+            <div class="flex items-center gap-2">
+                <label for="vulnerabilities-page-size" class="text-xs text-text-muted">Rows</label>
+                <c-forms.select size="sm" name="per_page" id="vulnerabilities-page-size">
+                {% for size in data.per_page_choices %}
+                    <option value="{{ size }}"
+                            {% if size == data.query.per_page %}selected{% endif %}>{{ size }}</option>
+                {% endfor %}
+                </c-forms.select>
+            </div>
+            <c-navigation.pagination :current="data.page.number" :total="data.page.paginator.num_pages" :page_range="data.page_range" base_url="{{ data.base_url }}" query="{{ data.query_string }}" label="Vulnerabilities pagination" hx-boost="true" hx-target="#{{ results_target }}" hx-swap="outerHTML show:none" />
+        </div>
+        </c-tables.footer>
+    {% endif %}
+    </c-tables.shell>
+</div>
