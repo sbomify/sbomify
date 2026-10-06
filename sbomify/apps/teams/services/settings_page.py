@@ -9,6 +9,7 @@ from django.http import HttpRequest
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.models import User
+from sbomify.apps.core.services.dashboard_page import dashboard_cache_key
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.apis import get_team_branding
@@ -71,7 +72,7 @@ def update_patch_sla(workspace_key: str, targets: dict[str, int | None]) -> Serv
             return ServiceResult.failure("Workspace not found", status_code=404)
         workspace.patch_sla_days = targets
         workspace.save(update_fields=["patch_sla_days"])
-        transaction.on_commit(lambda: cache.delete(f"dashboard-page:v3:{workspace.pk}"))
+        transaction.on_commit(lambda: cache.delete(dashboard_cache_key(workspace.pk)))
     return ServiceResult.success()
 
 
