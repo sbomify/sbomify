@@ -10,7 +10,6 @@ from sbomify.apps.teams.models import Team
 
 from sbomify.apps.core.models import LATEST_RELEASE_NAME, Component, Product, Release
 from sbomify.apps.core.tests.e2e.factories import *  # noqa: F403
-from sbomify.apps.core.tests.shared_fixtures import register_plugin
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 
@@ -59,9 +58,11 @@ def dashboard(
 
     scan_results = []
     start_date = timezone.now() - timedelta(days=29)
-    providers = ["osv", "dependency_track"]
-    for provider in providers:
-        register_plugin(provider)
+    # The names the plugins actually register under. "dependency_track" is not
+    # one of them, and spelling it that way sent every page that labels a
+    # provider down its unmapped-name branch, so the snapshots were guarding a
+    # rendering production never reaches.
+    providers = ["osv", "dependency-track"]
 
     for day_offset in range(30):
         created_at = start_date + timedelta(days=day_offset)
