@@ -4859,6 +4859,9 @@ def list_component_sboms(
                     status="completed",
                     created_at__gte=recent_threshold,
                 )
+                # Unsorted, or the default -created_at joins the DISTINCT and
+                # every scan of the last day comes back, not one row per SBOM.
+                .order_by()
                 .values_list("sbom_id", flat=True)
                 .distinct()
             )
