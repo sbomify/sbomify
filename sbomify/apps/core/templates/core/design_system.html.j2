@@ -1210,14 +1210,8 @@ first-of-type rule that drops the leading hairline reads the section's position
     </div>
     <p class="tw-data-label mb-3">With a note, for a figure that needs a caveat</p>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-        <c-layout.stat-card icon="fas fa-box-open"
-                            label="Components"
-                            value="128"
-                            note="From the latest release of each product." />
-        <c-layout.stat-card accent="warning"
-                            icon="fas fa-clock"
-                            label="Awaiting a scan"
-                            value="6">
+        <c-layout.stat-card icon="fas fa-box-open" label="Components" value="128" note="From the latest release of each product." />
+        <c-layout.stat-card accent="warning" icon="fas fa-clock" label="Awaiting a scan" value="6">
         <c-slot name="note">Queued behind {{ running_jobs|default:2 }} running jobs.</c-slot>
         </c-layout.stat-card>
     </div>
