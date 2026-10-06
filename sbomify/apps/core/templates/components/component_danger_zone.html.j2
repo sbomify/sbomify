@@ -23,7 +23,7 @@
                 <div class="w-48">
                     <c-forms.select id="team_key" name="team_key">
                     <option value="" disabled selected>Choose workspace...</option>
-                    {% for key, workspace in request.session.user_teams.items %}
+                    {% for key, workspace in request.session.user_workspaces.items %}
                         <option value="{{ key }}">{{ workspace.name }}</option>
                     {% endfor %}
                     </c-forms.select>

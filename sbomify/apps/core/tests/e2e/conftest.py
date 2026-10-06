@@ -103,7 +103,7 @@ def setup_browser_session(
     setup_authenticated_client_session(django_client, team_with_business_plan, sample_user)
 
     session = django_client.session
-    session["current_team"]["has_completed_wizard"] = True
+    session["current_workspace"]["has_completed_wizard"] = True
     session.save()
 
     return {

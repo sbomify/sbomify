@@ -31,11 +31,11 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     notifications = []
 
     # Check if user has an active team in session
-    if "current_team" not in request.session:
+    if "current_workspace" not in request.session:
         return []
 
     try:
-        team_key = request.session["current_team"]["key"]
+        team_key = request.session["current_workspace"]["key"]
         team = Team.objects.get(key=team_key)
     except (Team.DoesNotExist, KeyError, TypeError):
         return []

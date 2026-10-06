@@ -431,7 +431,7 @@ def _refresh_workspace_list_session(request: HttpRequest) -> None:
     # is the unloaded cookie value, so a token client sending a stale sessionid
     # would pass that check and then get a fresh session minted on write. Reading
     # a key loads the store, and a dead key loads as empty.
-    if "user_teams" not in session:
+    if "user_workspaces" not in session:
         return
 
     update_user_teams_session(request, user)

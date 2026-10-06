@@ -169,7 +169,7 @@ class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Return the summary bar partial."""
-        team_data = request.session.get("current_team", {})
+        team_data = request.session.get("current_workspace", {})
         team_key = team_data.get("key", "")
 
         context: dict[str, Any] = {}
