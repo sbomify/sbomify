@@ -122,7 +122,9 @@ def build_component_security_picture(
                 }
             )
     _attach_patch_sla(findings, component_ids, sla_matrix)
-    # Active exploitation leads, followed by a breached SLA and severity.
+    # Active exploitation leads, followed by a breached SLA and severity. The
+    # trailing identity makes the order total: without it, ties kept the query's
+    # order, which follows random SBOM ids, and a paged list could repeat a row.
     findings.sort(
         key=lambda r: (
             not r["malicious"],
@@ -132,6 +134,11 @@ def build_component_security_picture(
             r["sla"]["remaining_seconds"] if r["sla"]["remaining_seconds"] is not None else float("inf"),
             -(r["scanned_at"].timestamp() if r["scanned_at"] else 0.0),
             -(r.get("cvss_score") or 0),
+            r["id"].casefold(),
+            r["component_name"].casefold(),
+            r["component_id"],
+            (r.get("package") or "").casefold(),
+            r.get("version") or "",
         )
     )
     return {

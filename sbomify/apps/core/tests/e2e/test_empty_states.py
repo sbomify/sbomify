@@ -10,7 +10,6 @@ from sbomify.apps.core.tests.e2e.utils import (
     take_screenshot,
 )
 
-
 pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
 
 
@@ -28,7 +27,7 @@ def test_empty_lists_share_layout(
     for path, title in [
         ("/products/", "No products yet"),
         ("/security-advisories/", "No advisories yet"),
-        (f"/workspaces/{team_with_business_plan.key}/vulnerability-scans/", "No scans found"),
+        (f"/workspaces/{team_with_business_plan.key}/vulnerability-scans/", "No open vulnerabilities"),
     ]:
         page.goto(path)
         page.wait_for_load_state("networkidle")

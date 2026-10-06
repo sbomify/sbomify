@@ -1,0 +1,92 @@
+{% load humanize %}
+{% comment %}
+Every open vulnerability in a workspace, from the service in
+vulnerability_scanning/services/workspace_vulnerabilities.py. The totals count
+each vulnerability once, however many components or scanners report it; rows
+are one vulnerability in one component, because that is where a fix happens.
+
+Product and component change the scope, so they replace the whole browser and
+the totals follow. Every other control replaces only the results, which keeps
+the search box focused while typing. browser_target and results_target are the
+two HTMX roots the view answers.
+{% endcomment %}
+<c-vars data browser_target="vulnerabilities-browser" results_target="vulnerabilities-results" />
+<div id="{{ browser_target }}" class="flex flex-col gap-4">
+    <div class="grid grid-cols-1 min-[480px]:grid-cols-2 2xl:grid-cols-4 gap-4">
+        {% if data.scoped_components and data.unassessed_components == data.scoped_components %}
+            <c-layout.stat-card icon="fas fa-bug" label="Open vulnerabilities" unmeasured unmeasured_label="No scans yet" />
+        {% else %}
+            <c-layout.stat-card icon="fas fa-bug" :value="data.summary.vulnerabilities" label="Open vulnerabilities" />
+        {% endif %}
+        <c-layout.stat-card icon="fas fa-triangle-exclamation" accent="danger" :value="data.summary.critical_high" label="Critical or high" />
+        <c-layout.stat-card icon="fas fa-fire" accent="danger" :value="data.summary.exploited" label="Known exploited" />
+        <c-layout.stat-card icon="fas fa-clock" accent="warning" :value="data.summary.overdue" label="Past fix deadline" />
+    </div>
+    <c-typography.description size="sm">
+    {% if data.summary.vulnerabilities %}
+        {{ data.summary.occurrences|intcomma }} occurrence{{ data.summary.occurrences|pluralize }} across {{ data.summary.components|intcomma }} component{{ data.summary.components|pluralize }}, from each component's latest SBOM. A vulnerability reported by several scanners or found in several components is counted once.
+    {% else %}
+        Vulnerabilities from each component's latest SBOM appear here once it is scanned.
+    {% endif %}
+    {% if data.unassessed_components %}
+        {{ data.unassessed_components|intcomma }} component{{ data.unassessed_components|pluralize }} not scanned yet.
+    {% endif %}
+    </c-typography.description>
+    <form method="get"
+          action="{{ data.base_url }}"
+          class="flex flex-col gap-4"
+          hx-get="{{ data.base_url }}"
+          hx-target="#{{ results_target }}"
+         
+          hx-swap="outerHTML show:none"
+          hx-push-url="true"
+          hx-sync="this:replace"
+          hx-trigger="submit, change target:select:not([data-scope]), input changed delay:350ms target:input[type=search]">
+        <input type="hidden" name="sort" value="{{ data.query.sort }}">
+        <input type="hidden" name="direction" value="{{ data.query.direction }}">
+        <c-tables.toolbar flush>
+        <c-forms.search-input size="sm" name="search" id="vulnerabilities-search" label="Search vulnerabilities" placeholder="Search by ID, package or component" value="{{ data.query.search }}" />
+        <c-forms.select size="md" name="product" id="vulnerabilities-product" label="Filter by product" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not component,page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">
+        <option value="">All products</option>
+        {% for product in data.products %}
+            <option value="{{ product.id }}"
+                    {% if product.id == data.query.product %}selected{% endif %}>{{ product.name }}</option>
+        {% endfor %}
+        </c-forms.select>
+        <c-forms.select size="md" name="component" id="vulnerabilities-component" label="Filter by component" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">
+        <option value="">All components</option>
+        {% for component in data.components %}
+            <option value="{{ component.id }}"
+                    {% if component.id == data.query.component %}selected{% endif %}>{{ component.name }}</option>
+        {% endfor %}
+        </c-forms.select>
+        <c-forms.select size="md" name="severity" id="vulnerabilities-severity" label="Filter by severity">
+        <option value="">All severities</option>
+        <option value="critical"
+                {% if data.query.severity == 'critical' %}selected{% endif %}>Critical</option>
+        <option value="high" {% if data.query.severity == 'high' %}selected{% endif %}>High</option>
+        <option value="medium"
+                {% if data.query.severity == 'medium' %}selected{% endif %}>Medium</option>
+        <option value="low" {% if data.query.severity == 'low' %}selected{% endif %}>Low</option>
+        <option value="other"
+                {% if data.query.severity == 'other' %}selected{% endif %}>Other</option>
+        </c-forms.select>
+        <c-forms.select size="md" name="exposure" id="vulnerabilities-exposure" label="Filter by urgency">
+        <option value="">Any urgency</option>
+        <option value="exploited"
+                {% if data.query.exposure == 'exploited' %}selected{% endif %}>Known exploited</option>
+        <option value="overdue"
+                {% if data.query.exposure == 'overdue' %}selected{% endif %}>Past fix deadline</option>
+        </c-forms.select>
+        <c-slot name="right">
+        <noscript>
+            <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
+        </noscript>
+        {% if data.query.is_filtered %}
+            <c-buttons.ghost size="sm" href="{{ data.base_url }}" hx-get="{{ data.base_url }}" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">Clear filters</c-buttons.ghost>
+        {% endif %}
+        </c-slot>
+        </c-tables.toolbar>
+        <c-vulnerabilities.workspace-results :data="data" results_target="{{ results_target }}" />
+    </form>
+</div>

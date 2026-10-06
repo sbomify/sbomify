@@ -195,6 +195,15 @@ def test_select_small_segment_never_conflicts_with_the_default(rendered: str) ->
         assert bit not in classes
 
 
+def test_select_compact_size_is_capped_and_the_default_fills(rendered: str) -> None:
+    small = _classes(rendered, "select", 'id="probe-select-sm"')
+    default = _classes(rendered, "select", 'id="probe-select"')
+    assert "max-w-[min(100%,12rem)]" in small
+    assert "truncate" in small
+    assert not any(bit.startswith("max-w-") for bit in default)
+    assert "truncate" not in default
+
+
 @pytest.mark.parametrize("accent", ["success", "warning", "danger"])
 def test_select_accent_tints_border_fill_and_ink_together(rendered: str, accent: str) -> None:
     select = _open_tag(rendered, "select", f'id="probe-select-{accent}"')

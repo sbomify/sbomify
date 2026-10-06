@@ -274,11 +274,11 @@
       "roles": ["owner", "admin"]
     },
     {
-      "title": "Vulnerability scans",
+      "title": "Vulnerabilities",
       "url_name": "vulnerability_scanning:vulnerability_scans",
       "section": "navigate",
       "icon": "fa-bug",
-      "keywords": ["scan results", "findings", "cves", "vulnerabilities", "security scan"],
+      "keywords": ["scan results", "findings", "cves", "vulnerability scans", "security scan", "open vulnerabilities", "fix prompt", "known exploited", "kev", "scan history"],
       "args": ["team_key"],
       "roles": ["owner", "admin", "member"]
     },
