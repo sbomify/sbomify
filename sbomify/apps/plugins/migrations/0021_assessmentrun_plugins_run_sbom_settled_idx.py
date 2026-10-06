@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ("access_tokens", "0012_store_token_hash"),
         ("core", "0030_user_email_case_insensitive_unique"),
-        ("plugins", "0019_drop_cra_compliance_from_team_settings"),
+        ("plugins", "0020_assessmentrun_scan_history_index"),
         (
             "sboms",
             "0068_rename_sboms_compo_team_id_fe2066_idx_sboms_compo_workspa_3edbe9_idx_and_more",
