@@ -103,6 +103,19 @@ def test_the_badge_reads_no_findings(scanned, sample_team_with_owner_member):
     assert not _whole_result_reads(queries)
 
 
+def test_the_badge_counts_runs_saved_before_the_summary_columns(scanned, sample_team_with_owner_member):
+    """Runs saved before migration 0015 hold their summary only inside
+    ``result`` until ``backfill_result_summaries`` runs, so the badge reads the
+    slice of ``result`` and not the stored column."""
+    AssessmentRun.objects.filter(sbom=scanned).update(result_summary=None, result_skipped=None)
+    request = RequestFactory().get(f"/api/v1/plugins/assessments/{scanned.id}/badge")
+    request.user = sample_team_with_owner_member.user
+
+    badge = get_sbom_assessment_badge(request, str(scanned.id))
+
+    assert (badge.failing_count, badge.passing_count) == (1, 1)
+
+
 def test_trust_center_batches_read_no_findings(scanned):
     component = scanned.component
     product = Product.objects.create(name="p", team=component.team, is_public=True)

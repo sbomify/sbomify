@@ -18,7 +18,7 @@ from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
 
-from .latest import latest_run_ids
+from .latest import latest_run_ids, status_runs
 from .models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
 from .schemas import (
     AssessmentBadgeData,
@@ -428,15 +428,9 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
             skipped_count=0,
             plugins=[],
         )
-    from sbomify.apps.vulnerability_scanning.utils import reconstruct_result_summary
-
     # The latest run per plugin_name, without its findings: the status helpers
-    # read only the summary and the skipped flag, which the stored columns hold.
-    latest_runs = list(
-        AssessmentRun.objects.filter(id__in=latest_run_ids(AssessmentRun.objects.all(), [sbom_id])).defer("result")
-    )
-    for run in latest_runs:
-        run.result = reconstruct_result_summary(run)
+    # read only its summary and metadata.
+    latest_runs = status_runs(latest_run_ids(AssessmentRun.objects.all(), [sbom_id]), "-created_at")
     status_summary = _compute_status_summary(latest_runs)
 
     # Prefetch display names once — avoids N+1 in the per-plugin loop below.

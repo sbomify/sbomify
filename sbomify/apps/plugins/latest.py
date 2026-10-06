@@ -37,3 +37,30 @@ def latest_run_ids(runs: QuerySet[Any], sbom_ids: Any) -> list[Any]:
         return []
     rows = SBOM.objects.filter(pk__in=sbom_ids).order_by("pk").annotate(**probes).values_list(*probes)
     return [run_id for row in rows for run_id in row if run_id is not None]
+
+
+def status_runs(run_ids: Any, order_by: str) -> list[Any]:
+    """The runs with only what status readers use, so no findings list leaves the database.
+
+    ``result`` is rebuilt from its ``summary`` and ``metadata`` slices. They are
+    read from ``result`` itself rather than from the stored ``result_summary``
+    and ``result_skipped`` columns: a run saved before those columns existed
+    keeps its summary only in ``result`` until ``backfill_result_summaries`` runs.
+    """
+    from django.db.models import F
+
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    runs = list(
+        AssessmentRun.objects.filter(id__in=run_ids)
+        .only("id", "sbom_id", "plugin_name", "category", "status", "completed_at")
+        .annotate(summary_slice=F("result__summary"), metadata_slice=F("result__metadata"))
+        .order_by(order_by)
+    )
+    for run in runs:
+        run.result = {
+            key: value
+            for key, value in (("summary", run.summary_slice), ("metadata", run.metadata_slice))
+            if value is not None
+        }
+    return runs
