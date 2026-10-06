@@ -92,28 +92,52 @@ FAILURE_BACKOFF_HOURS = (0, 2, 4, 8, 24)
 FAILURE_HISTORY_HOURS = 24 * 7
 
 
-def _run_failed(status: str, error_message: str) -> bool:
-    """Whether a terminal run is a failure, by either of the two ways it is stored.
+def _run_failed(status: str, error_message: str, result_summary: Any) -> bool:
+    """Whether a terminal run is a failure, by any of the ways one is stored.
 
     ``status=failed`` is the obvious one, written by
-    ``orchestrator._mark_failed``. But the Dependency Track failures this
-    backoff exists for mostly do not land there: a plugin that cannot reach or
-    poll its server turns the exception into an error *finding* and the run is
-    marked COMPLETED, and ``finalize_retry_exhausted`` does the same for a run
-    that burnt through its RetryLaterError budget -- deliberately, so the
-    compliance gates and the SBOM page see a settled run rather than one stuck
-    in PENDING.
+    ``orchestrator._mark_failed``. The Dependency Track failures this backoff
+    exists for mostly do not land there, and they do not all land in the same
+    place as each other either:
 
-    Counting only ``status=failed`` therefore missed the common case, and the
-    sweep kept re-enqueueing the scan it was supposed to back off.
+    * ``finalize_retry_exhausted`` and ``finalize_stranded`` write a COMPLETED
+      row with ``error_message`` set. That is deliberate -- the compliance gates
+      and the SBOM page need a settled run rather than one stuck in PENDING.
+    * A plugin that cannot reach, upload to or poll its server returns
+      ``_create_error_result``: an ordinary result carrying one ``error``
+      finding. The orchestrator stores that on its *success* path, which writes
+      ``status``, ``completed_at`` and ``result`` and nothing else -- so these
+      rows, which are the common case and the reason this backoff exists, have
+      an empty ``error_message``. Keying on that column alone classified them as
+      successes and the sweep kept re-enqueueing them every hour, which is
+      exactly the defect being fixed.
 
-    ``error_message`` rather than the ``result`` blob: both paths write it, and
-    it is a small column, so this keeps the promise that the fat payload is
+      Their marker is ``summary.error_count``. The scanners' success paths leave
+      it at zero (only ``build_single_finding_result`` raises it), and
+      ``orchestrator._is_passing`` already treats a non-zero count as a failing
+      run, so reading it here agrees with the rest of the codebase rather than
+      inventing a second notion of failure.
+
+    Both markers are small columns. ``result_summary`` is the denormalised copy
+    of ``result.summary`` that exists precisely so readers like this one never
+    de-TOAST the multi-MB blob, which keeps the promise that the fat payload is
     never fetched here.
     """
     if status == RunStatus.FAILED.value:
         return True
-    return status == RunStatus.COMPLETED.value and bool(error_message)
+    if status != RunStatus.COMPLETED.value:
+        return False
+    if error_message:
+        return True
+    if not isinstance(result_summary, dict):
+        # Rows written before the column existed read as "unknown" rather than
+        # as a failure (``backfill_result_summaries`` fills them in). Unknown
+        # can only ever shorten a backoff, never lengthen one.
+        return False
+    error_count = result_summary.get("error_count")
+    # ``bool`` is an ``int`` subclass, and a junk ``true`` in the blob should not
+    # read as one error.
+    return isinstance(error_count, int) and not isinstance(error_count, bool) and error_count > 0
 
 
 def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any) -> set[str]:
@@ -136,7 +160,8 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
     failure it would extend it before the attempt had a verdict. The sweep's own
     skip window already covers in-flight work.
 
-    Only small columns are selected, so the fat ``result`` blob is never fetched.
+    Only small columns are selected, so the fat ``result`` blob is never fetched
+    -- ``result_summary`` is the denormalised copy that exists for exactly this.
     """
     from ..models import AssessmentRun
 
@@ -179,7 +204,7 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
         )
         .filter(position__lte=len(FAILURE_BACKOFF_HOURS))
         .order_by("sbom_id", "-settled_at", "-id")
-        .values_list("sbom_id", "status", "error_message", "settled_at")
+        .values_list("sbom_id", "status", "error_message", "result_summary", "settled_at")
     )
 
     # Newest first within each SBOM, so the streak is the leading run of failures
@@ -190,11 +215,11 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
     streak: dict[str, int] = {}
     newest_failure_at: dict[str, Any] = {}
     settled: set[str] = set()
-    for sbom_id, status, error_message, run_settled_at in rows:
+    for sbom_id, status, error_message, result_summary, run_settled_at in rows:
         key = str(sbom_id)
         if key in settled:
             continue
-        if not _run_failed(status, error_message):
+        if not _run_failed(status, error_message, result_summary):
             settled.add(key)
             continue
         streak[key] = streak.get(key, 0) + 1

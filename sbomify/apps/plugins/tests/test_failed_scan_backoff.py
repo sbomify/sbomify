@@ -79,6 +79,7 @@ def _run_at_age(
     status: str,
     settled_hours_ago: float | object | None = None,
     error_message: str | None = None,
+    result: dict | None = None,
 ) -> AssessmentRun:
     """One settled DT run, backdated. ``created_at`` is ``auto_now_add``, so the
     age has to be written back after the insert.
@@ -89,12 +90,17 @@ def _run_at_age(
     does not, because the queue was backed up. Pass
     ``LEGACY_NO_COMPLETED_AT`` for a row written before the orchestrator
     recorded a completion time.
+
+    ``result`` goes through ``save`` rather than a bulk update, so the
+    denormalised ``result_summary`` column is populated the same way every
+    production write populates it.
     """
     run = AssessmentRun.objects.create(
         sbom=sbom,
         plugin_name="dependency-track",
         category=AssessmentCategory.SECURITY.value,
         status=status,
+        result=result,
         error_message=error_message
         if error_message is not None
         else ("server closed the connection unexpectedly" if status == RunStatus.FAILED.value else ""),
@@ -425,15 +431,17 @@ class TestTheSweepStaysCheapAsTheTableGrows:
 
 @pytest.mark.django_db
 class TestAFailureStoredAsACompletedRun:
-    """The shape most Dependency Track failures actually take.
+    """A failure settled as a COMPLETED run carrying an error message.
 
-    A plugin that cannot reach or poll its server turns the exception into an
-    error *finding* and the run is marked COMPLETED; `finalize_retry_exhausted`
-    does the same for a run that burnt through its RetryLaterError budget.
-    Both are deliberate -- a settled run is what the compliance gates and the
-    SBOM page need, rather than one stuck in PENDING -- and both mean the
-    backoff cannot key on ``status=failed`` alone, or it misses the case it
-    exists for and keeps re-enqueueing the scan every hour.
+    ``finalize_retry_exhausted`` writes this for a run that burnt through its
+    RetryLaterError budget, and ``finalize_stranded`` for one nothing will come
+    back for. Both are deliberate -- a settled run is what the compliance gates
+    and the SBOM page need, rather than one stuck in PENDING -- so the backoff
+    cannot key on ``status=failed`` alone.
+
+    The *other* completed-but-failed shape, the one the scanner stores as an
+    error finding with no error message at all, is in
+    ``TestTheFailureTheScannerStoresAsAnErrorFinding`` below.
     """
 
     @staticmethod
@@ -465,10 +473,149 @@ class TestAFailureStoredAsACompletedRun:
 
         assert _sweep(monkeypatch) == []
 
-    def test_the_classifier_reads_both_and_only_those(self) -> None:
+    def test_the_classifier_reads_every_marker_and_only_those(self) -> None:
         from sbomify.apps.plugins.tasks import _run_failed
 
-        assert _run_failed(RunStatus.FAILED.value, "") is True
-        assert _run_failed(RunStatus.FAILED.value, "boom") is True
-        assert _run_failed(RunStatus.COMPLETED.value, "boom") is True
-        assert _run_failed(RunStatus.COMPLETED.value, "") is False
+        assert _run_failed(RunStatus.FAILED.value, "", None) is True
+        assert _run_failed(RunStatus.FAILED.value, "boom", None) is True
+        assert _run_failed(RunStatus.COMPLETED.value, "boom", None) is True
+        assert _run_failed(RunStatus.COMPLETED.value, "", {"error_count": 1}) is True
+        assert _run_failed(RunStatus.COMPLETED.value, "", {"error_count": 0}) is False
+        assert _run_failed(RunStatus.COMPLETED.value, "", {"total_findings": 7}) is False
+        assert _run_failed(RunStatus.COMPLETED.value, "", None) is False
+        # ``bool`` is an ``int`` subclass; junk in the blob is not one error.
+        assert _run_failed(RunStatus.COMPLETED.value, "", {"error_count": True}) is False
+        assert _run_failed(RunStatus.COMPLETED.value, "", {"error_count": "1"}) is False
+
+
+@pytest.mark.django_db
+class TestTheFailureTheScannerStoresAsAnErrorFinding:
+    """The shape the Dependency Track failures this backoff exists for actually take.
+
+    A plugin that cannot reach, upload to or poll its server returns
+    ``_create_error_result`` -- an ordinary result carrying one ``error``
+    finding -- and the orchestrator stores it on its *success* path, writing
+    ``status``, ``completed_at`` and ``result`` and nothing else. So the row has
+    ``COMPLETED`` and an **empty** ``error_message``, and a classifier keyed on
+    that column read the common case as a success and kept re-enqueueing it
+    every hour.
+
+    ``summary.error_count`` is the marker that is actually there, read off the
+    denormalised ``result_summary`` column rather than the blob.
+    """
+
+    @staticmethod
+    def _error_result() -> dict:
+        """A real plugin-emitted error result, not a hand-written stand-in."""
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+
+        return DependencyTrackPlugin()._create_error_result("DT upload failed: connection refused").to_dict()
+
+    def _errored_runs(self, sbom: SBOM, ages: list[float]) -> None:
+        for age in ages:
+            _run_at_age(
+                sbom,
+                hours_ago=age,
+                status=RunStatus.COMPLETED.value,
+                error_message="",
+                result=self._error_result(),
+            )
+
+    def test_the_orchestrator_really_does_store_it_with_no_error_message(
+        self, scannable_sbom, monkeypatch
+    ) -> None:
+        """The production path, driven end to end rather than described.
+
+        This is what makes the rest of the class more than an assertion about a
+        fixture: the team has Dependency Track enabled but no server to send
+        the SBOM to, so the real plugin takes a real error path and the real
+        orchestrator stores the result.
+        """
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.plugins.orchestrator import PluginOrchestrator
+        from sbomify.apps.plugins.sdk.enums import RunReason
+
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
+            lambda sbom_id: (
+                scannable_sbom,
+                b'{"bomFormat": "CycloneDX", "specVersion": "1.6", "version": 1, "components": []}',
+            ),
+        )
+
+        run = PluginOrchestrator().run_assessment(
+            sbom_id=str(scannable_sbom.id),
+            plugin=DependencyTrackPlugin(),
+            run_reason=RunReason.SCHEDULED_REFRESH,
+        )
+        run.refresh_from_db()
+
+        # The gap this fix closes: settled, failed, and silent in the column a
+        # failure was being looked for in.
+        assert run.status == RunStatus.COMPLETED.value
+        assert not run.error_message
+        assert run.result["findings"][0]["status"] == "error"
+        # And the marker that is there, in the small column, without the blob.
+        assert run.result_summary["error_count"] == 1
+
+        from sbomify.apps.plugins.tasks import _run_failed
+
+        assert _run_failed(run.status, run.error_message, run.result_summary) is True
+
+    def test_a_streak_of_them_backs_off(self, scannable_sbom, monkeypatch) -> None:
+        """The defect Copilot caught: before the error-count marker was read,
+        five of these in a row still queued a sixth."""
+        self._errored_runs(scannable_sbom, [5.0, 4.0, 3.0, 2.0, 1.5])
+
+        assert _sweep(monkeypatch) == []
+
+    def test_a_scan_that_found_vulnerabilities_is_still_a_success(self, scannable_sbom, monkeypatch) -> None:
+        """A result with findings but no errors must clear the streak.
+
+        The scanners' success paths leave ``error_count`` at its default, so a
+        busy SBOM with hundreds of CVEs is not mistaken for a broken one.
+        """
+        self._errored_runs(scannable_sbom, [9.0, 8.0, 7.0, 6.0])
+        _run_at_age(
+            scannable_sbom,
+            hours_ago=1.0,
+            status=RunStatus.COMPLETED.value,
+            error_message="",
+            result={
+                "schema_version": "1.0",
+                "summary": {"total_findings": 3, "error_count": 0, "by_severity": {"high": 3}},
+                "findings": [],
+            },
+        )
+
+        assert len(_sweep(monkeypatch)) == 1
+
+    def test_the_three_shapes_count_as_one_streak(self, scannable_sbom, monkeypatch) -> None:
+        """A run of failures does not reset because the storage shape changed.
+
+        ``status=failed``, a settled COMPLETED row with ``error_message``, and a
+        stored error result are the same event told three ways.
+        """
+        _failures(scannable_sbom, [5.0])
+        _run_at_age(
+            scannable_sbom,
+            hours_ago=4.0,
+            status=RunStatus.COMPLETED.value,
+            error_message="Retry budget exhausted: Dependency Track never answered",
+        )
+        self._errored_runs(scannable_sbom, [3.0, 2.0, 1.5])
+
+        assert _sweep(monkeypatch) == []
+
+    def test_a_legacy_row_without_the_denormalised_column_is_not_read_as_a_failure(
+        self, scannable_sbom, monkeypatch
+    ) -> None:
+        """Rows that predate ``result_summary`` read as unknown, not as failures.
+
+        ``backfill_result_summaries`` fills them in; until it has, an unknown
+        can only shorten a backoff, which is the safe direction.
+        """
+        self._errored_runs(scannable_sbom, [9.0, 8.0, 7.0, 6.0, 1.5])
+        AssessmentRun.objects.filter(sbom=scannable_sbom).update(result_summary=None)
+
+        assert len(_sweep(monkeypatch)) == 1
