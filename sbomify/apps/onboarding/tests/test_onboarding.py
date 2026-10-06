@@ -3,6 +3,7 @@ Tests for onboarding functionality using pytest and existing fixtures.
 """
 
 from datetime import timedelta
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -201,6 +202,7 @@ class TestOnboardingStatusModel:
         status.drip_started_at = timezone.now() - timedelta(days=10)
         status.save()
         assert status.should_receive_collaboration()
+
 
 @pytest.mark.django_db
 class TestOnboardingEmailModel:
@@ -1349,3 +1351,452 @@ class TestEdgeCasesAndErrorHandling:
         # user2 should still be eligible for quick_start despite user1's error
         quick_start_ids = [u.id for u in result[OnboardingEmail.EmailType.QUICK_START]]
         assert user2.id in quick_start_ids
+
+
+@pytest.mark.django_db
+class TestTransientSendFailuresRetry:
+    """A mail outage must not cost a user their email.
+
+    The sending actors declare ``max_retries=3``, and that budget is only
+    reachable if something raises. Every send path used to report a failure as
+    a ``False`` return, so the actor saw a clean return, acknowledged the
+    message, and nothing ever tried again — a welcome email lost to a brief
+    unreachable mail host was lost permanently.
+    """
+
+    @staticmethod
+    def _user(name: str) -> Any:
+        user = User.objects.create_user(username=name, email=f"{name}@example.com", password="test123")
+        team = Team.objects.create(name=f"{name} Team", key=f"{name}-team")
+        Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
+        return user
+
+    def test_unreachable_mail_host_raises_so_the_actor_retries(self) -> None:
+        """This is the failure Sentry recorded: OSError 113, no route to host."""
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("transient")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.FAILED
+
+    def test_smtp_connect_failure_raises(self) -> None:
+        import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("smtpdown")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPConnectError(421, "try later")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_permanently_refused_recipient_does_not_retry(self) -> None:
+        """550 is the server saying no, not "not now"."""
+        import smtplib
+
+        user = self._user("refused")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {"refused@example.com": (550, b"No such user here")}
+            )
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+    def test_a_greylisted_recipient_does_retry(self) -> None:
+        """450 is the server asking us to come back, so dropping it loses mail.
+
+        smtplib raises ``SMTPRecipientsRefused`` for both, so the class alone
+        cannot tell a greylist from a nonexistent mailbox — only the code can.
+        """
+        import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("greylisted")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {"greylisted@example.com": (450, b"Greylisted, try again later")}
+            )
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_mailbox_over_quota_does_retry(self) -> None:
+        import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("overquota")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {"full@example.com": (452, b"Insufficient system storage")}
+            )
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_sender_refused_is_read_by_its_code(self) -> None:
+        """421 is the server shutting the channel, 550 is a rejected sender."""
+        import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        transient_user = self._user("sender421")
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPSenderRefused(
+                421, b"Service not available", "us@example.com"
+            )
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(transient_user)
+
+        permanent_user = self._user("sender550")
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPSenderRefused(
+                550, b"Sender rejected", "us@example.com"
+            )
+            assert OnboardingEmailService.send_welcome_email(permanent_user) is False
+
+    def test_an_unsupported_extension_does_not_retry(self) -> None:
+        """The server will not have learned it by the next attempt."""
+        import smtplib
+
+        user = self._user("unsupported")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPNotSupportedError("no SMTPUTF8")
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+    def test_a_permanent_response_error_does_not_burn_the_budget(self) -> None:
+        """A 5xx the server answered will answer the same way four times.
+
+        These are the ones a class check gets wrong in the expensive direction:
+        both subclass SMTPResponseException and would otherwise fall through to
+        the OSError transport rule and retry.
+        """
+        import smtplib
+
+        over_quota = self._user("quota552")
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPDataError(552, b"Message size exceeds limit")
+            assert OnboardingEmailService.send_welcome_email(over_quota) is False
+
+        bad_credential = self._user("auth535")
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPAuthenticationError(
+                535, b"authentication failed"
+            )
+            assert OnboardingEmailService.send_welcome_email(bad_credential) is False
+
+    def test_a_temporary_response_error_still_retries(self) -> None:
+        import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("data451")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPDataError(451, b"Local error, try again")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_mixed_refusal_retries_for_the_recipient_that_can_still_accept(self) -> None:
+        """smtplib raises this only when the message reached nobody.
+
+        So a retry cannot duplicate anything, and a mixed 450/550 set is
+        exactly when it is worth making: the 550 address refuses again, and the
+        450 address may accept. Requiring every code to be temporary would drop
+        the recipients that were only asked to wait.
+        """
+        import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("mixedrefusal")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
+                {
+                    "greylisted@example.com": (450, b"Greylisted, try again later"),
+                    "gone@example.com": (550, b"No such user here"),
+                }
+            )
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_dropped_connection_retries(self) -> None:
+        """No server answer at all, so there is no code to read — transport."""
+        import smtplib
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("disconnected")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPServerDisconnected("connection lost")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_transient_failure_while_rendering_still_retries(self) -> None:
+        """Rendering touches things that break for a while and then stop.
+
+        A loader reading from disk, a tag that queries. Catching those as if
+        the template were wrong would acknowledge the message and spend none of
+        the retry budget this whole change exists to protect.
+        """
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("rendertransient")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_loader_io_error_while_rendering_still_retries(self) -> None:
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("renderio")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=OSError(113, "No route to host"),
+        ):
+            # TransientEmailError specifically, not "either of these": a bare
+            # OSError would also reach the actor and be retried, but the task
+            # would report it at error level on every attempt. The wrapping is
+            # what this is here to hold.
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_render_failure_reaching_the_task_is_not_acknowledged(self) -> None:
+        """The actor has to see it, or dramatiq never schedules another go.
+
+        And it has to arrive classified, or the task writes an error-level line
+        — and so a Sentry issue — on each of the four attempts, which is the
+        reporting this change exists to stop.
+        """
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("rendertask")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(TransientEmailError):
+                    send_welcome_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_a_database_outage_before_rendering_is_reported_as_retryable(self) -> None:
+        """The ORM is reached all over a send, not only inside the classifier.
+
+        The context build queries before anything is rendered, so a database
+        that goes away arrives at the task as itself rather than wrapped. It is
+        retried either way; reporting it at error level would raise a Sentry
+        issue on each of the four attempts, which is the thing this reporting
+        path exists to stop.
+        """
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+
+        user = self._user("dbbeforerender")
+
+        with patch(
+            "sbomify.apps.onboarding.services.get_email_context",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(OperationalError):
+                    send_welcome_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_an_eligibility_database_error_is_reported_as_retryable(self) -> None:
+        """``_send_onboarding_email`` re-raises OperationalError on purpose."""
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+
+        user = self._user("dbeligibility")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch.object(
+            OnboardingStatus,
+            "should_receive_quick_start",
+            side_effect=OperationalError("server closed the connection unexpectedly"),
+        ):
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(OperationalError):
+                    send_quick_start_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_an_eligibility_interface_error_is_not_swallowed(self) -> None:
+        """An InterfaceError is the same connection going away as the one above.
+
+        The broad handler around the eligibility check would otherwise read it
+        as "not eligible" and drop the mail without spending a retry.
+        """
+        from django.db import InterfaceError
+
+        user = self._user("eligibilityiface")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch.object(
+            OnboardingStatus,
+            "should_receive_quick_start",
+            side_effect=InterfaceError("connection already closed"),
+        ):
+            with pytest.raises(InterfaceError):
+                OnboardingEmailService.send_quick_start_email(user)
+
+    def test_a_broken_template_is_reported_as_permanent(self) -> None:
+        """Rendering happens before the send block, so it needs its own answer.
+
+        Left to escape, the task re-raises it and dramatiq runs the same
+        template against the same context three more times. A template is not a
+        transport; waiting does not repair one.
+        """
+        from django.template import TemplateDoesNotExist
+
+        user = self._user("brokentemplate")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=TemplateDoesNotExist("welcome.html"),
+        ):
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+    def test_a_broken_template_does_not_raise_out_of_the_task(self) -> None:
+        from django.template import TemplateDoesNotExist
+
+        user = self._user("brokentemplatetask")
+
+        with patch(
+            "sbomify.apps.onboarding.services.render_email_templates",
+            side_effect=TemplateDoesNotExist("welcome.html"),
+        ):
+            # No pytest.raises: an exception here is dramatiq being handed a
+            # retry it cannot use.
+            send_welcome_email_task(user.id)
+
+    def test_a_template_error_does_not_retry(self) -> None:
+        """Not a transport failure — retrying runs the same broken render."""
+        user = self._user("template")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = ValueError("bad template")
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+    def test_the_sequence_emails_retry_too(self) -> None:
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("seqtransient")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_quick_start_email(user)
+
+    def test_the_task_lets_a_transient_failure_out_so_dramatiq_sees_it(self) -> None:
+        """The actor has to receive the exception, or the retry never happens."""
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("tasktransient")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+            with pytest.raises(TransientEmailError):
+                send_welcome_email_task(user.id)
+
+    def test_a_transient_failure_is_not_logged_at_error_on_every_attempt(self) -> None:
+        """event_level=ERROR means an error line here is a Sentry issue.
+
+        Four attempts would be four issues for one outage. The attempt that
+        exhausts the retries still reports, via the unhandled exception.
+        """
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("quiettransient")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+            with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
+                with pytest.raises(TransientEmailError):
+                    send_welcome_email_task(user.id)
+
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_a_permanent_failure_still_reports_and_does_not_raise(self) -> None:
+        """Unchanged behaviour: the service reports it, the actor stops.
+
+        The error-level record — the one that becomes the Sentry issue — comes
+        from the service, which is where the failure is understood. The task
+        sees a ``False`` return, says so at warning level, and does not raise,
+        because retrying a broken render just runs it again.
+        """
+        from sbomify.apps.onboarding import services as onboarding_services
+        from sbomify.apps.onboarding import tasks as onboarding_tasks
+
+        user = self._user("permanentloud")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = ValueError("bad template")
+            with (
+                patch.object(onboarding_services, "logger", MagicMock()) as service_logger,
+                patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger,
+            ):
+                send_welcome_email_task(user.id)
+
+        assert service_logger.error.call_count == 1
+        assert task_logger.error.call_count == 0
+        assert task_logger.warning.call_count == 1
+
+    def test_a_retry_after_a_transient_failure_delivers(self) -> None:
+        """The FAILED record must not block the attempt that succeeds."""
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("eventually")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+        mail.outbox = []
+        assert OnboardingEmailService.send_welcome_email(user) is True
+        assert len(mail.outbox) == 1
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.SENT
