@@ -1680,6 +1680,78 @@ class TestTransientSendFailuresRetry:
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
         assert record.status == OnboardingEmail.EmailStatus.FAILED
 
+    def test_a_send_whose_outcome_was_never_recorded_is_not_repeated(self) -> None:
+        """SMTP accepted it and the database went away before mark_sent().
+
+        The row stays PENDING, so without a handoff stamp it is
+        indistinguishable from a worker that died *before* sending, and the
+        abandonment sweep re-sends a message the recipient already has.
+        """
+        from django.db import OperationalError
+
+        user = self._user("outcomeunknown")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            with patch.object(OnboardingEmail, "mark_sent", side_effect=OperationalError("connection lost")):
+                with pytest.raises(OperationalError):
+                    OnboardingEmailService.send_welcome_email(user)
+            assert mock_email_cls.return_value.send.call_count == 1, "it did reach the mailer"
+
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.PENDING
+        assert record.handed_to_mailer_at is not None
+
+        # The next attempt must settle it, not send again.
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            assert OnboardingEmailService.send_welcome_email(user) is True
+            mock_email_cls.assert_not_called()
+
+        record.refresh_from_db()
+        assert record.status == OnboardingEmail.EmailStatus.SENT
+        assert OnboardingStatus.objects.get(user=user).welcome_email_sent is True
+
+    def test_a_stamped_row_is_never_reclaimed_however_old(self) -> None:
+        """The abandonment lease must not reach a row that was handed over.
+
+        An hour passing does not make it safe to send again; it only makes it
+        certain nobody is going to record the outcome.
+        """
+        from sbomify.apps.onboarding.services import ABANDONED_PENDING_AFTER
+
+        user = self._user("stampedold")
+        record = OnboardingEmail.create_email(
+            user=user, email_type=OnboardingEmail.EmailType.WELCOME, subject="Welcome"
+        )
+        record.mark_handed_to_mailer()
+        OnboardingEmail.objects.filter(pk=record.pk).update(
+            created_at=timezone.now() - ABANDONED_PENDING_AFTER - timedelta(hours=2)
+        )
+
+        mail.outbox = []
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            assert OnboardingEmailService.send_welcome_email(user) is True
+            mock_email_cls.assert_not_called()
+        assert mail.outbox == []
+        assert OnboardingEmail.objects.get(pk=record.pk).status == OnboardingEmail.EmailStatus.SENT
+
+    def test_a_sequence_send_whose_outcome_is_unknown_is_not_repeated(self) -> None:
+        from django.db import OperationalError
+
+        user = self._user("seqoutcome")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"):
+            with patch.object(OnboardingEmail, "mark_sent", side_effect=OperationalError("connection lost")):
+                with pytest.raises(OperationalError):
+                    OnboardingEmailService.send_quick_start_email(user)
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            assert OnboardingEmailService.send_quick_start_email(user) is True
+            mock_email_cls.assert_not_called()
+
     def test_an_abandoned_pending_row_is_reclaimed(self) -> None:
         """A worker that died between create_email() and the send strands a row.
 
@@ -1996,7 +2068,6 @@ class TestTransientSendFailuresRetry:
         ):
             with pytest.raises(InterfaceError):
                 OnboardingEmailService.send_quick_start_email(user)
-
 
 
 @pytest.mark.django_db

@@ -318,6 +318,13 @@ class OnboardingEmail(models.Model):
     #: Keycloak; without this the guard would go on suppressing onboarding for
     #: an address that is no longer theirs and that nobody ever refused.
     attempted_address = models.CharField(max_length=254, blank=True, default="")
+    #: Stamped immediately before the message is handed to the mailer, and
+    #: never cleared. A ``PENDING`` row carrying this is one whose outcome was
+    #: never recorded: SMTP may well have accepted it and the process then died
+    #: before ``mark_sent`` could run. Without it such a row is
+    #: indistinguishable from one whose worker died *before* sending, and the
+    #: abandonment sweep re-sends a message the recipient already has.
+    handed_to_mailer_at = models.DateTimeField(null=True, blank=True)
     retry_count = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -334,11 +341,32 @@ class OnboardingEmail(models.Model):
         """Create a new onboarding email record."""
         return cls.objects.create(user=user, email_type=email_type, subject=subject)
 
+    def mark_handed_to_mailer(self) -> None:
+        """Record that the message is about to be given to the mailer.
+
+        Written before the send rather than after it, which is the whole point:
+        the gap this closes is the one where SMTP accepts a message and the
+        process dies before anything records that it did.
+        """
+        self.handed_to_mailer_at = timezone.now()
+        self.save(update_fields=["handed_to_mailer_at"])
+
     def mark_sent(self) -> None:
         """Mark email as successfully sent."""
         self.status = self.EmailStatus.SENT
         self.sent_at = timezone.now()
         self.save(update_fields=["status", "sent_at"])
+
+    @property
+    def outcome_unknown(self) -> bool:
+        """Whether this row was handed to the mailer and never resolved.
+
+        The safe reading is "the recipient may already have it". Every path
+        that finishes a send moves the row off ``PENDING`` -- sent, failed,
+        undeliverable -- so a stamped row still pending is one where nothing
+        got to run after the handoff.
+        """
+        return self.status == self.EmailStatus.PENDING and self.handed_to_mailer_at is not None
 
     def mark_failed(self, error_message: str = "") -> None:
         """Mark email as failed with optional error message."""

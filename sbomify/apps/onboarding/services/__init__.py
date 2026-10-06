@@ -157,11 +157,41 @@ def _is_abandoned(record: OnboardingEmail) -> bool:
     worker and answers ``False``, and the recovery sweep can never get the
     signup back. Nothing else clears it, because nothing else knows the worker
     that created it is gone.
+
+    A row that was handed to the mailer is never abandoned, however old it is.
+    Its worker died after SMTP may have accepted the message, so reclaiming it
+    would re-send something the recipient already has; ``outcome_unknown`` is
+    resolved by :func:`_settle_unknown_outcome` instead.
     """
     return (
         record.status == OnboardingEmail.EmailStatus.PENDING
+        and not record.outcome_unknown
         and timezone.now() - record.created_at > ABANDONED_PENDING_AFTER
     )
+
+
+def _settle_unknown_outcome(record: OnboardingEmail) -> None:
+    """Resolve a row that was handed to the mailer and never finished.
+
+    Recorded as sent, because that is the only reading that cannot make things
+    worse. The message was given to SMTP; whether it was accepted is no longer
+    knowable from here, and the two mistakes are not equal. Calling it failed
+    re-sends a message the recipient may already have, every pass, for as long
+    as they stay eligible. Calling it sent risks one welcome that never
+    arrived, for a user whose signup coincided with the database going away
+    between the handoff and the next statement.
+
+    Logged at error because it is a real loss of certainty, and rare enough
+    that a human should see each one.
+    """
+    logger.error(
+        "Email %s for user %s was handed to the mailer at %s and never resolved; "
+        "recording it as sent rather than risking a duplicate",
+        record.email_type,
+        record.user_id,
+        record.handed_to_mailer_at,
+    )
+    record.mark_sent()
 
 
 def _is_refused_address(exc: BaseException) -> bool:
@@ -314,6 +344,9 @@ class OnboardingEmailService:
         # before the repair, leaving the sweep re-queueing a delivered email
         # and the drip blocked behind it.
         existing = OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.WELCOME).first()
+        if existing and existing.outcome_unknown:
+            # Handed over and never resolved. Settle it rather than send again.
+            _settle_unknown_outcome(existing)
         if existing and existing.status == OnboardingEmail.EmailStatus.SENT:
             logger.info("Welcome email record already sent for user %s", user.id)
             _reconcile_welcome_flag(onboarding_status, user)
@@ -372,6 +405,10 @@ class OnboardingEmailService:
                 headers=_unsubscribe_headers(context.get("unsubscribe_url")),
             )
             email.attach_alternative(html_content, "text/html")
+            # Stamped before the handoff, not after: everything past this line
+            # may fail to record what SMTP did with the message, and a row that
+            # says nothing is one a later pass will send again.
+            email_record.mark_handed_to_mailer()
             email.send(fail_silently=False)
         except Exception as e:
             if _is_refused_address(e):
@@ -421,6 +458,8 @@ class OnboardingEmailService:
 
         # Dedup check — only skip if successfully sent
         existing = OnboardingEmail.objects.filter(user=user, email_type=email_type).first()
+        if existing and existing.outcome_unknown:
+            _settle_unknown_outcome(existing)
         if existing and existing.status == OnboardingEmail.EmailStatus.SENT:
             logger.info("%s email already sent to user %s", email_type, user.id)
             return True
@@ -489,6 +528,10 @@ class OnboardingEmailService:
                 headers=_unsubscribe_headers(context.get("unsubscribe_url")),
             )
             email.attach_alternative(html_content, "text/html")
+            # Stamped before the handoff, not after: everything past this line
+            # may fail to record what SMTP did with the message, and a row that
+            # says nothing is one a later pass will send again.
+            email_record.mark_handed_to_mailer()
             email.send(fail_silently=False)
         except Exception as e:
             if _is_refused_address(e):
