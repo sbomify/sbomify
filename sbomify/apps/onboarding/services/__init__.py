@@ -5,6 +5,7 @@ Onboarding email services.
 from __future__ import annotations
 
 import smtplib
+from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
@@ -180,6 +181,58 @@ def _is_abandoned(record: OnboardingEmail) -> bool:
 #: properly, which is the one way this mechanism could lose the mail it exists
 #: to protect.
 HANDOFF_SETTLES_AFTER = timedelta(minutes=15)
+
+
+#: How many times a write recording a send's outcome is attempted.
+#:
+#: The write that records what SMTP did is the one write that must not be lost:
+#: a row left stamped and pending is eventually settled as sent, so a failure
+#: nobody could record becomes a success nobody can see. A dropped connection
+#: is the common case and it clears on the next attempt once Django is made to
+#: open a fresh one.
+OUTCOME_WRITE_ATTEMPTS = 3
+
+
+def _persist_outcome(write: Callable[[], None], description: str) -> bool:
+    """Record a send's outcome, surviving a connection that went away.
+
+    Returns whether it landed. A caller that gets ``False`` has a row still
+    stamped and pending, which the stale-handoff path will settle later -- so
+    this failing is logged at error, because it is the step that turns a known
+    outcome into an unknown one.
+
+    ``connection.close()`` between attempts because a Django connection that
+    has seen ``OperationalError`` stays broken; the next query opens a new one
+    only if the old is closed first.
+    """
+    from django.db import connection
+
+    for attempt in range(1, OUTCOME_WRITE_ATTEMPTS + 1):
+        try:
+            write()
+            return True
+        except TRANSIENT_DB_ERRORS as e:
+            if attempt == OUTCOME_WRITE_ATTEMPTS:
+                logger.error(
+                    "Could not record %s after %d attempts; the row stays pending and will be "
+                    "settled as unresolved: %s",
+                    description,
+                    attempt,
+                    e,
+                )
+                return False
+            logger.warning("Retrying the write recording %s (attempt %d): %s", description, attempt, e)
+            # Only outside a transaction. A connection that has seen
+            # OperationalError stays broken until it is closed, and the sends
+            # run in autocommit so closing is the recovery. Inside an atomic
+            # block it would abort the transaction instead, which is a worse
+            # outcome than the one being recovered from.
+            if not connection.in_atomic_block:
+                try:
+                    connection.close()
+                except Exception:  # noqa: BLE001 - a failed close is not worth losing the outcome over
+                    pass
+    return False
 
 
 def _handoff_is_stale(record: OnboardingEmail) -> bool:
@@ -443,10 +496,20 @@ class OnboardingEmailService:
             email.send(fail_silently=False)
         except Exception as e:
             if _is_refused_address(e):
-                email_record.mark_undeliverable(user.email, f"Address refused: {type(e).__name__}")
+                # Bound out of the lambda: ``except ... as e`` unbinds ``e``
+                # at the end of the block, and the write may run after that.
+                refusal = f"Address refused: {type(e).__name__}"
+                _persist_outcome(
+                    lambda: email_record.mark_undeliverable(user.email, refusal),
+                    f"a refused address for user {user.id}",
+                )
                 logger.error("Welcome email address refused for user %s: %s", user.id, e)
                 return False
-            email_record.mark_failed(f"SMTP send failure: {type(e).__name__}")
+            failure = f"SMTP send failure: {type(e).__name__}"
+            _persist_outcome(
+                lambda: email_record.mark_failed(failure),
+                f"a failed send for user {user.id}",
+            )
             if _is_transient_send_error(e):
                 logger.warning("Transient failure sending welcome email to user %s: %s", user.id, e)
                 raise TransientEmailError(f"welcome email to user {user.id}") from e
@@ -458,8 +521,13 @@ class OnboardingEmailService:
         # second copy instead of letting _reconcile_welcome_flag repair the
         # flag. If the bookkeeping itself fails, the row is already SENT and
         # the next attempt reconciles.
-        email_record.mark_sent()
-        onboarding_status.mark_welcome_email_sent()
+        # The flag only once the row says sent. Setting it against a row still
+        # pending would leave the two disagreeing, and the flag is what the
+        # recovery sweep reads: it would stop looking while the row said the
+        # outcome was never recorded. If the record write landed and this one
+        # does not, the next pass repairs it through _reconcile_welcome_flag.
+        if _persist_outcome(email_record.mark_sent, f"a successful send for user {user.id}"):
+            _persist_outcome(onboarding_status.mark_welcome_email_sent, f"the welcome flag for user {user.id}")
         logger.info("Welcome email sent successfully to user %s", user.id)
         return True
 
@@ -569,10 +637,20 @@ class OnboardingEmailService:
             email.send(fail_silently=False)
         except Exception as e:
             if _is_refused_address(e):
-                email_record.mark_undeliverable(user.email, f"Address refused: {type(e).__name__}")
+                # Bound out of the lambda: ``except ... as e`` unbinds ``e``
+                # at the end of the block, and the write may run after that.
+                refusal = f"Address refused: {type(e).__name__}"
+                _persist_outcome(
+                    lambda: email_record.mark_undeliverable(user.email, refusal),
+                    f"a refused address for user {user.id}",
+                )
                 logger.error("%s email address refused for user %s: %s", email_type, user.id, e)
                 return False
-            email_record.mark_failed(f"SMTP send failure: {type(e).__name__}")
+            failure = f"SMTP send failure: {type(e).__name__}"
+            _persist_outcome(
+                lambda: email_record.mark_failed(failure),
+                f"a failed send for user {user.id}",
+            )
             if _is_transient_send_error(e):
                 logger.warning("Transient failure sending %s email to user %s: %s", email_type, user.id, e)
                 raise TransientEmailError(f"{email_type} email to user {user.id}") from e
@@ -581,7 +659,7 @@ class OnboardingEmailService:
 
         # See the welcome path: the record must not go back to FAILED once the
         # message has left.
-        email_record.mark_sent()
+        _persist_outcome(email_record.mark_sent, f"a successful send for user {user.id}")
         logger.info("%s email sent successfully to user %s", email_type, user.id)
         return True
 

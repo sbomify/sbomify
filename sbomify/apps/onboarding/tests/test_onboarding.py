@@ -1725,8 +1725,10 @@ class TestTransientSendFailuresRetry:
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
             with patch.object(OnboardingEmail, "mark_sent", side_effect=OperationalError("connection lost")):
-                with pytest.raises(OperationalError):
-                    OnboardingEmailService.send_welcome_email(user)
+                # The message went out, so the caller is told so; the write that
+                # should have recorded it is what failed, and _persist_outcome
+                # has already retried it.
+                assert OnboardingEmailService.send_welcome_email(user) is True
             assert mock_email_cls.return_value.send.call_count == 1, "it did reach the mailer"
 
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
@@ -1749,6 +1751,33 @@ class TestTransientSendFailuresRetry:
         record.refresh_from_db()
         assert record.status == OnboardingEmail.EmailStatus.SENT
         assert OnboardingStatus.objects.get(user=user).welcome_email_sent is True
+
+    def test_the_write_recording_an_outcome_is_retried(self) -> None:
+        """A dropped connection must not turn a known outcome into an unknown one.
+
+        A row left stamped and pending is settled as sent later, so losing the
+        write that records a *failure* would quietly convert it into a success.
+        """
+        from django.db import OperationalError
+
+        user = self._user("outcomeretry")
+        calls = {"n": 0}
+        real = OnboardingEmail.mark_failed
+
+        def flaky(self_: Any, *args: Any, **kwargs: Any) -> None:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OperationalError("server closed the connection unexpectedly")
+            real(self_, *args, **kwargs)
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = ValueError("permanent")
+            with patch.object(OnboardingEmail, "mark_failed", flaky):
+                assert OnboardingEmailService.send_welcome_email(user) is False
+
+        assert calls["n"] == 2, "the first write failed and the second one landed"
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.FAILED, "the outcome was recorded, not lost"
 
     def test_a_stamped_row_is_never_reclaimed_however_old(self) -> None:
         """The abandonment lease must not reach a row that was handed over.
@@ -1786,8 +1815,7 @@ class TestTransientSendFailuresRetry:
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"):
             with patch.object(OnboardingEmail, "mark_sent", side_effect=OperationalError("connection lost")):
-                with pytest.raises(OperationalError):
-                    OnboardingEmailService.send_quick_start_email(user)
+                assert OnboardingEmailService.send_quick_start_email(user) is True
 
         self._age_handoff(OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START))
 
