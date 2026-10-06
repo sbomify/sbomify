@@ -211,7 +211,7 @@ def setup_authenticated_client_session(client: Client, team: Team, user: Abstrac
 
     # Set up session data with team context
     session = client.session
-    session["user_teams"] = {
+    session["user_workspaces"] = {
         team.key: {
             "role": member.role,
             "name": team.name,
@@ -219,7 +219,7 @@ def setup_authenticated_client_session(client: Client, team: Team, user: Abstrac
             "team_id": team.id,
         }
     }
-    session["current_team"] = {
+    session["current_workspace"] = {
         "key": team.key,
         "role": member.role,
         "name": team.name,

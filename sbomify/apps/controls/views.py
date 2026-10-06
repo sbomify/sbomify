@@ -25,7 +25,7 @@ from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequ
 
 def _check_team_key_matches_session(request: HttpRequest, team_key: str) -> bool:
     """Return True if the session's current_team key matches the URL team_key."""
-    current_team_key: str = request.session.get("current_team", {}).get("key", "")
+    current_team_key: str = request.session.get("current_workspace", {}).get("key", "")
     return current_team_key == team_key
 
 

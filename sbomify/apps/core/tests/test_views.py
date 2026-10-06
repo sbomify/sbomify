@@ -14,8 +14,8 @@ from sbomify.apps.access_tokens.models import AccessToken
 def _clear_current_team(client: Client) -> None:
     """Clear current_team from session to prevent redirect to team tokens page."""
     session = client.session
-    if "current_team" in session:
-        del session["current_team"]
+    if "current_workspace" in session:
+        del session["current_workspace"]
     session.save()
 
 
@@ -36,8 +36,8 @@ def test_dashboard_is_only_accessible_when_logged_in(sample_user: AbstractBaseUs
 
     # New users are redirected to onboarding wizard - set has_completed_wizard=True to skip
     session = client.session
-    if "current_team" in session:
-        session["current_team"]["has_completed_wizard"] = True
+    if "current_workspace" in session:
+        session["current_workspace"]["has_completed_wizard"] = True
         session.save()
 
     # Mark plan as selected so the plan selection redirect is skipped

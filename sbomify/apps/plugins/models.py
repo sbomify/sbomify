@@ -272,6 +272,13 @@ class AssessmentRun(models.Model):
                 name="plugins_run_sbom_settled_idx",
                 condition=~models.Q(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value]),
             ),
+            # Scan history counts every security run in its window, a million
+            # rows with hourly rescans: per SBOM, from the index, not the heap.
+            models.Index(
+                fields=["sbom", "created_at"],
+                condition=models.Q(category="security", status="completed"),
+                name="plugins_scan_history_idx",
+            ),
         ]
         ordering = ["-created_at"]
 
