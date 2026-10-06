@@ -396,13 +396,16 @@ class TestTheSweepStaysCheapAsTheTableGrows:
         assert "plugins_run_plugin_settled_idx" in plan, plan
 
     def test_only_the_leading_runs_of_each_sbom_are_read(self, scannable_sbom) -> None:
-        """A long history must not mean a long scan.
+        """A long history must not mean a long result set.
 
         The wait is ``FAILURE_BACKOFF_HOURS[min(count, len) - 1]``, so every
         streak at or past the ladder's length gets the same ceiling: a sixth
         consecutive failure cannot change the answer the fifth already gave.
-        That is what makes the row cap safe, and what it buys is a scan
+        That is what makes the row cap safe, and what it buys is rows returned
         bounded by the number of SBOMs rather than by the size of the table.
+        The scan itself is bounded by the index, which the test above pins --
+        ``position__lte`` filters after the window function, so it caps what
+        comes back here, not what Postgres sorts.
         """
         from sbomify.apps.plugins.tasks import FAILURE_BACKOFF_HOURS, FAILURE_HISTORY_HOURS
 

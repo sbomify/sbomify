@@ -89,6 +89,15 @@ FAILURE_BACKOFF_HOURS = (0, 2, 4, 8, 24)
 # ceiling above, so a run of failures is counted whole rather than truncated, and
 # bounded so the query stays indexed rather than walking the table. Truncating
 # would only shorten a backoff, never lengthen one.
+#
+# A week is sized for the sweep this backoff is for, the hourly one, where a
+# five-deep streak spans a day or two even once the waits are stretching it. A
+# slower sweep puts its failures further apart, but it is also the sweep this
+# backoff cannot affect: the ladder tops out at 24 hours and
+# ``weekly_osv_scan_task`` already skips anything scanned in the last 168, so
+# whatever this returned for it would be a subset of what its own window
+# excludes. If the ceiling ever grows past a sweep's ``skip_hours``, this
+# horizon has to grow with it.
 FAILURE_HISTORY_HOURS = 24 * 7
 
 
@@ -184,9 +193,17 @@ def _failure_backed_off_sbom_ids(plugin_name: str, team_ids: set[int], now: Any)
     # which means every streak at or past the ladder's length gets the same
     # ceiling -- so a sixth consecutive failure is indistinguishable from the
     # fifth, and the newest failure (the one the wait is measured from) is
-    # always inside the first few rows. Without this the sweep read every
-    # terminal run in a seven-day window and walked them in Python, which
-    # grows with the table rather than with the number of SBOMs.
+    # always inside the first few rows.
+    #
+    # What the two halves below actually bound, since it is easy to credit one
+    # with the other's work: the functional index bounds the *scan* to this
+    # plugin's terminal runs inside the history window, and ``position__lte``
+    # bounds what crosses into Python to a few rows per SBOM. It does not bound
+    # the window function -- Postgres computes row_number() over the whole
+    # partition and filters afterwards, so the sort is still over the windowed
+    # set. That half is cheap and indexed. The half that hurt was dragging every
+    # one of those rows back over the wire and walking them here, which grew
+    # with the table while the answer never did.
     rows = (
         AssessmentRun.objects.filter(
             plugin_name=plugin_name,
