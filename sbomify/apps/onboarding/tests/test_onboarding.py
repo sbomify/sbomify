@@ -1800,6 +1800,26 @@ class TestTransientSendFailuresRetry:
                     OnboardingEmailService.send_welcome_email(user)
             mock_email_cls.return_value.send.assert_not_called()
 
+    def test_an_unrecorded_failure_is_not_acknowledged(self) -> None:
+        """A known failure nobody could write down must not end the attempt.
+
+        Returning normally would acknowledge the message and leave a stamped
+        row for the stale-handoff path to settle as sent, so a failure would
+        read as a delivery. Raising keeps the retry, which runs while the
+        database may still come back.
+        """
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("unrecordedfailure")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = ValueError("permanent")
+            with patch.object(OnboardingEmail, "mark_failed", side_effect=OperationalError("connection lost")):
+                with pytest.raises(TransientEmailError):
+                    OnboardingEmailService.send_welcome_email(user)
+
     def test_a_stamped_row_is_never_reclaimed_however_old(self) -> None:
         """The abandonment lease must not reach a row that was handed over.
 

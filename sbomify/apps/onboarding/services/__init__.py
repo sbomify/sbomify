@@ -499,17 +499,25 @@ class OnboardingEmailService:
                 # Bound out of the lambda: ``except ... as e`` unbinds ``e``
                 # at the end of the block, and the write may run after that.
                 refusal = f"Address refused: {type(e).__name__}"
-                _persist_outcome(
+                if not _persist_outcome(
                     lambda: email_record.mark_undeliverable(user.email, refusal),
                     f"a refused address for user {user.id}",
-                )
+                ):
+                    # The refusal is known and unrecorded. Returning here would
+                    # acknowledge the message and leave a stamped row for the
+                    # stale-handoff path to settle as sent, so a known refusal
+                    # would read as a delivery. Raise instead: the retry runs
+                    # while the database may still come back.
+                    raise TransientEmailError(f"recording a refusal for user {user.id}") from e
                 logger.error("Welcome email address refused for user %s: %s", user.id, e)
                 return False
             failure = f"SMTP send failure: {type(e).__name__}"
-            _persist_outcome(
+            if not _persist_outcome(
                 lambda: email_record.mark_failed(failure),
                 f"a failed send for user {user.id}",
-            )
+            ):
+                # See above: an unrecorded failure must not be acknowledged.
+                raise TransientEmailError(f"recording a failed send for user {user.id}") from e
             # The database errors as well as the SMTP ones. The handoff stamp
             # is written inside this try, so a connection that goes away there
             # arrives here looking like a send failure; recording it as one
@@ -645,17 +653,25 @@ class OnboardingEmailService:
                 # Bound out of the lambda: ``except ... as e`` unbinds ``e``
                 # at the end of the block, and the write may run after that.
                 refusal = f"Address refused: {type(e).__name__}"
-                _persist_outcome(
+                if not _persist_outcome(
                     lambda: email_record.mark_undeliverable(user.email, refusal),
                     f"a refused address for user {user.id}",
-                )
+                ):
+                    # The refusal is known and unrecorded. Returning here would
+                    # acknowledge the message and leave a stamped row for the
+                    # stale-handoff path to settle as sent, so a known refusal
+                    # would read as a delivery. Raise instead: the retry runs
+                    # while the database may still come back.
+                    raise TransientEmailError(f"recording a refusal for user {user.id}") from e
                 logger.error("%s email address refused for user %s: %s", email_type, user.id, e)
                 return False
             failure = f"SMTP send failure: {type(e).__name__}"
-            _persist_outcome(
+            if not _persist_outcome(
                 lambda: email_record.mark_failed(failure),
                 f"a failed send for user {user.id}",
-            )
+            ):
+                # See above: an unrecorded failure must not be acknowledged.
+                raise TransientEmailError(f"recording a failed send for user {user.id}") from e
             # See the welcome path: a database error while stamping the handoff
             # is not a send failure, and recording it as one drops the email.
             if _is_transient_send_error(e) or isinstance(e, TRANSIENT_DB_ERRORS):
