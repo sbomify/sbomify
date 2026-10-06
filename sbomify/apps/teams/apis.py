@@ -20,14 +20,14 @@ from pydantic import BaseModel
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.access_tokens.throttling import OnDemandTLSRateThrottle
-from sbomify.apps.core.authz import can
+from sbomify.apps.core.authz import ROLE_OWNER, can
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Invitation, Member, Team
 from sbomify.apps.teams.schemas import (
     AuthorContactSchema,
     BrandingInfo,
@@ -39,8 +39,10 @@ from sbomify.apps.teams.schemas import (
     ContactProfileCreateSchema,
     ContactProfileSchema,
     ContactProfileUpdateSchema,
+    InvitationCreateSchema,
     InvitationSchema,
     MemberSchema,
+    PendingInvitationSchema,
     SupplierCreateSchema,
     SupplierSchema,
     SupplierUpdateSchema,
@@ -51,6 +53,7 @@ from sbomify.apps.teams.schemas import (
     UpdateTeamBrandingSchema,
     UserSchema,
 )
+from sbomify.apps.teams.services.invitations import invite_member, list_invitations, revoke_invitation
 from sbomify.apps.teams.services.suppliers import (
     create_supplier,
     delete_supplier,
@@ -1672,9 +1675,9 @@ def _resolve_on_demand_tls(domain_normalized: str) -> int:
 
 
 def _supplier_team(request: HttpRequest, team_key: str, action: str) -> tuple[int, Any]:
-    """Resolve the workspace for a supplier call, or the error to return.
+    """Resolve the workspace for a supplier or invitation call, or the error to return.
 
-    Every supplier endpoint needs the same three answers — does the workspace
+    Every such endpoint needs the same three answers — does the workspace
     exist, is the caller a non-guest member, does the action clear ``can()`` —
     and getting one of them wrong on one endpoint is how a scoping hole opens.
     """
@@ -1768,6 +1771,75 @@ def delete_workspace_supplier(request: HttpRequest, team_key: str, supplier_id: 
         return status_code, team
 
     result = delete_supplier(team, supplier_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error}
+    return 204, None
+
+
+def _invitation_payload(invitation: Invitation) -> dict[str, Any]:
+    return {
+        "id": invitation.id,
+        "email": invitation.email,
+        "role": invitation.granted_role,
+        "created_at": invitation.created_at,
+        "expires_at": invitation.expires_at,
+    }
+
+
+@router.get(
+    "/{team_key}/invitations",
+    response={200: list[PendingInvitationSchema], 403: ErrorResponse, 404: ErrorResponse},
+)
+def list_workspace_invitations(request: HttpRequest, team_key: str) -> tuple[int, Any]:
+    """List the invitations to this workspace that nobody has accepted yet."""
+    status_code, team = _supplier_team(request, team_key, "member:manage")
+    if status_code != 200:
+        return status_code, team
+
+    return 200, [_invitation_payload(invitation) for invitation in list_invitations(team).value or []]
+
+
+@router.post(
+    "/{team_key}/invitations",
+    response={
+        201: PendingInvitationSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+)
+def create_workspace_invitation(
+    request: HttpRequest, team_key: str, payload: InvitationCreateSchema
+) -> tuple[int, Any]:
+    """Invite someone to this workspace by email. They join when they accept the invitation."""
+    status_code, team = _supplier_team(request, team_key, "member:manage")
+    if status_code != 200:
+        return status_code, team
+    if payload.role == ROLE_OWNER and not can(request, "member:grant_owner", team):
+        return 403, {"detail": "Only an owner can invite someone as owner", "error_code": ErrorCode.FORBIDDEN}
+
+    result = invite_member(request, team, payload.email, payload.role)
+    if not result.ok or result.value is None:
+        error: dict[str, Any] = {"detail": result.error}
+        # The service refuses with 403 only when the plan has no seat left.
+        if result.status_code == 403:
+            error["error_code"] = ErrorCode.BILLING_LIMIT_EXCEEDED
+        return result.status_code or 400, error
+    return 201, _invitation_payload(result.value)
+
+
+@router.delete(
+    "/{team_key}/invitations/{invitation_id}",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+)
+def delete_workspace_invitation(request: HttpRequest, team_key: str, invitation_id: int) -> tuple[int, Any]:
+    """Withdraw an invitation, so its link stops working."""
+    status_code, team = _supplier_team(request, team_key, "member:manage")
+    if status_code != 200:
+        return status_code, team
+
+    result = revoke_invitation(team, invitation_id)
     if not result.ok:
         return result.status_code or 400, {"detail": result.error}
     return 204, None
