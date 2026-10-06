@@ -277,7 +277,7 @@ def build_inventory_snapshot(
 
 def build_inventory_context(request: HttpRequest, *, kind: str | None = None) -> ServiceResult[dict[str, Any]]:
     """Authorise the live membership before reading or filtering any inventory."""
-    workspace_key = (request.session.get("current_team") or {}).get("key")
+    workspace_key = (request.session.get("current_workspace") or {}).get("key")
     workspace = Team.objects.filter(key=workspace_key).first() if workspace_key else None
     if workspace is None or not can(request, "workspace:read", workspace):
         return ServiceResult.failure("Workspace not found", status_code=404)

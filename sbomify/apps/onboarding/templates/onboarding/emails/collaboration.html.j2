@@ -15,7 +15,7 @@
     {% comment %}
     Straight to the members tab when we know the workspace. The bare
     /workspaces/settings/ redirect this used to point at reads
-    request.session["current_team"], which an email click cannot rely on.
+    request.session["current_workspace"], which an email click cannot rely on.
     {% endcomment %}
     <p style="text-align: center; margin: 32px 0;">
         {% if workspace_key %}

@@ -7,7 +7,7 @@ drawer no longer closes the drawer with it.
 {% endcomment %}
 {% load teams %}
 {% user_workspaces as available_workspaces %}
-{% with workspace=request.session.current_team %}
+{% with workspace=request.session.current_workspace %}
     {% if workspace %}
         <div class="relative"
              x-data="{ open: false, close() { this.open = false; this.$refs.trigger.focus(); }, first() { this.open = true; this.$nextTick(() => setTimeout(() => { if (this.open) this.$refs.menu.querySelector('[role=menuitem]')?.focus({ preventScroll: true }); })); } }"
