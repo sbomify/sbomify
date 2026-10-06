@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.compliance.models import CRAScopeScreening
+from sbomify.apps.compliance.models import CRAAssessment, CRAScopeScreening
 from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+from sbomify.apps.teams.models import Member, Team
 
 pytestmark = pytest.mark.django_db
 
@@ -453,3 +456,44 @@ class TestBillingGateViews:
         url = reverse("compliance:cra_step", kwargs={"assessment_id": result.value.id, "step": 1})
         response = client.get(url)
         assert response.status_code == 403
+
+
+class TestCRAStartPicker:
+    def test_lists_only_unassessed_workspace_products(self, web_client: Client, assessment: CRAAssessment) -> None:
+        available = Product.objects.create(name="Available product", team=assessment.team)
+        other = Product.objects.create(name="Other workspace product", team=Team.objects.create(name="Other workspace"))
+        response = web_client.get(reverse("compliance:cra_product_list"))
+        assert response.context["available_products"] == [{"id": available.id, "name": available.name}]
+        html = response.content.decode()
+        assert reverse("compliance:cra_scope_screening", args=[available.id]) in html
+        assert reverse("compliance:cra_scope_screening", args=[other.id]) not in html
+        assert reverse("compliance:cra_wizard_shell", args=[assessment.id]) in html
+
+    def test_no_products_offers_creation(self, web_client: Client) -> None:
+        response = web_client.get(reverse("compliance:cra_product_list"))
+        assert b"Create a product first" in response.content
+        assert b"Start assessment" in response.content
+        assert reverse("core:product_new").encode() in response.content
+
+    def test_all_assessed_products_keep_continue(self, web_client: Client, assessment: CRAAssessment) -> None:
+        response = web_client.get(reverse("compliance:cra_product_list"))
+        assert response.context["available_products"] == []
+        assert b"All products have assessments" in response.content
+        assert reverse("compliance:cra_wizard_shell", args=[assessment.id]).encode() in response.content
+
+    def test_member_cannot_open_picker(self, web_client: Client, sample_team_with_owner_member: Member) -> None:
+        sample_team_with_owner_member.role = "member"
+        sample_team_with_owner_member.save(update_fields=["role"])
+        response = web_client.get(reverse("compliance:cra_product_list"))
+        assert response.status_code == 403
+        assert b"cra-product-picker" not in response.content
+
+    def test_billing_gate_hides_picker(self, web_client: Client, settings: Any) -> None:
+        settings.BILLING = True
+        session = web_client.session
+        session["current_team"]["billing_plan"] = "community"
+        session.save()
+        response = web_client.get(reverse("compliance:cra_product_list"))
+        assert response.status_code == 200
+        assert b"Start assessment" not in response.content
+        assert b"cra-product-picker" not in response.content

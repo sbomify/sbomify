@@ -8,7 +8,7 @@
 {% load public_url_tags %}
 <!DOCTYPE html>
 <html lang="en">
-    <script>
+    <script data-cfasync="false">
         {% comment %}
             Public pages are light only for now. The workspace's brand is the
             only colour that varies here, and a second axis of light and dark
@@ -17,7 +17,8 @@
 
             Still set inline: the stylesheets below key off data-theme, and the
             critical variables beat selector rules without !important, so the
-            page paints its final colours before they resolve.
+            page paints its final colours before they resolve. data-cfasync="false"
+            keeps Cloudflare Rocket Loader from deferring it past first paint.
 {% endcomment %}
         (function(){
             var html=document.documentElement;

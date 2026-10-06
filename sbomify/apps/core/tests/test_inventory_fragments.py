@@ -20,8 +20,8 @@ def test_result_request_returns_only_results(
     setup_authenticated_client_session(client, member.team, member.user)
     mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
     response = client.get(
-        reverse("core:products_dashboard"),
-        {"view": kind, "search": "example", "sort": "name", "direction": "desc"},
+        reverse(f"core:{kind}_dashboard"),
+        {"search": "example", "sort": "name", "direction": "desc"},
         HTTP_HX_REQUEST="true",
         HTTP_HX_TARGET="inventory-content-results",
     )
@@ -42,9 +42,10 @@ def test_tab_request_returns_panel_without_replacing_navigation(
     member = sample_team_with_owner_member
     setup_authenticated_client_session(client, member.team, member.user)
     mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
+    # Each tab is its own URL; a legacy ?view= link redirects instead (see
+    # test_legacy_inventory_links_redirect_with_filters).
     response = client.get(
-        reverse("core:products_dashboard"),
-        {"view": kind},
+        reverse(f"core:{kind}_dashboard"),
         HTTP_HX_REQUEST="true",
         HTTP_HX_TARGET="inventory-panel",
     )

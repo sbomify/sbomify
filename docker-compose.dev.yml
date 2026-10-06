@@ -1,4 +1,14 @@
 ---
+# Same reason as the base file: json-file keeps everything forever by default.
+# Services this overlay redefines inherit the base file's setting; the anchor is
+# repeated here because YAML anchors do not cross files, and it covers the
+# services that exist only in development.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-10m}
+    max-file: "${LOG_MAX_FILE:-3}"
+
 # Development-specific environment variable anchors
 x-keycloak-env: &keycloak-env
   KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
@@ -22,6 +32,7 @@ x-dev-env: &dev-env
 
 services:
   keycloak:
+    logging: *default-logging
     image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.4.7}
     restart: ${KEYCLOAK_RESTART_POLICY:-always}
     environment:
@@ -36,6 +47,7 @@ services:
     command: start-dev
 
   keycloak-bootstrap:
+    logging: *default-logging
     image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.4.7}
     depends_on:
       - keycloak
@@ -52,6 +64,7 @@ services:
   # bootstrap sidecar is needed. Credentials live in bin/seaweedfs-s3.json and
   # must match the AWS_*_ACCESS_KEY_ID / AWS_*_SECRET_ACCESS_KEY defaults.
   sbomify-s3:
+    logging: *default-logging
     image: ${S3_IMAGE:-chrislusf/seaweedfs:4.42}
     restart: always
     networks:
@@ -89,6 +102,7 @@ services:
       retries: 12
 
   sbomify-backend:
+    logging: *default-logging
     pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       # context is inherited from docker-compose.yml
@@ -111,6 +125,7 @@ services:
         condition: service_started
 
   sbomify-migrations:
+    logging: *default-logging
     pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       target: ${BUILD_TARGET:-python-app-dev}
@@ -122,6 +137,7 @@ services:
       <<: *dev-env
 
   sbomify-worker:
+    logging: *default-logging
     pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       target: ${BUILD_TARGET:-python-app-dev}
@@ -135,6 +151,7 @@ services:
       <<: *dev-env
 
   sbomify-scheduler:
+    logging: *default-logging
     pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       target: ${BUILD_TARGET:-python-app-dev}
@@ -147,6 +164,7 @@ services:
 
   # sbomify-frontend is a new service specific to development
   sbomify-frontend:
+    logging: *default-logging
     pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       context: . # Must be defined as it's a new service
@@ -169,6 +187,7 @@ services:
     restart: ${FRONTEND_RESTART_POLICY:-unless-stopped}
 
   mailpit:
+    logging: *default-logging
     image: axllent/mailpit:latest
     expose:
       - 1025
@@ -183,6 +202,7 @@ services:
 
   # Use Caddyfile.dev for development
   sbomify-caddy:
+    logging: *default-logging
     volumes:
       - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
 
