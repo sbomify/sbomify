@@ -130,8 +130,9 @@ def _decoded_summary(value: Any) -> Any:
     decoding, which means a column read through a plain cursor arrives as the
     undecoded string rather than as the dict the ORM would have given. Raw SQL
     is what buys the per-SBOM bound here (see ``_FAILURE_STREAK_SQL``), so this
-    does the decoding the ORM would have done. Anything unparseable is left
-    alone for ``_run_failed`` to read as unknown.
+    does the decoding the ORM would have done. Anything unparseable comes back as
+    ``None``, which ``_run_failed`` reads as unknown -- and unknown can only
+    shorten a backoff, never lengthen one.
     """
     if isinstance(value, str):
         try:
@@ -215,7 +216,12 @@ def _failure_backed_off_sbom_ids(plugin_name: str, sbom_ids: Sequence[str], now:
     """
     from ..models import AssessmentRun
 
-    if not sbom_ids:
+    # dict.fromkeys rather than a set: one probe per SBOM is what the LATERAL
+    # promises, and a duplicate in the driver array would quietly buy a second
+    # one. The caller passes distinct ids today; this keeps the promise true
+    # without depending on that.
+    driver_ids = list(dict.fromkeys(str(sbom_id) for sbom_id in sbom_ids))
+    if not driver_ids:
         return set()
 
     # ``settled_at``: when the run reached a verdict, not when its row was
@@ -234,7 +240,7 @@ def _failure_backed_off_sbom_ids(plugin_name: str, sbom_ids: Sequence[str], now:
         cursor.execute(
             _FAILURE_STREAK_SQL.format(table=AssessmentRun._meta.db_table),
             [
-                list(sbom_ids),
+                driver_ids,
                 plugin_name,
                 now - timedelta(hours=FAILURE_HISTORY_HOURS),
                 len(FAILURE_BACKOFF_HOURS),
@@ -1432,6 +1438,13 @@ def _run_scheduled_security_scans(
         "sboms_found": 0,
         "assessments_enqueued": 0,
         "skipped_recent": 0,
+        # Counted apart from skipped_recent rather than folded into it. The two
+        # mean different things to whoever reads the logs: "recent" is the
+        # cadence working as designed, while a backoff hold says a scanner has
+        # been failing this artifact repeatedly. A rising number here is the
+        # signal that something upstream is wrong, and it is invisible if it is
+        # summed with the ordinary skips.
+        "skipped_failure_backoff": 0,
     }
 
     try:
@@ -1539,7 +1552,7 @@ def _run_scheduled_security_scans(
                 sbom_id_str = str(sbom_row["id"])
 
                 if sbom_id_str in backed_off:
-                    stats["skipped_recent"] += 1
+                    stats["skipped_failure_backoff"] += 1
                     continue
 
                 team_id = sbom_row["component__team_id"]
@@ -1554,12 +1567,14 @@ def _run_scheduled_security_scans(
                 stats["assessments_enqueued"] += 1
 
         logger.info(
-            "[TASK_%s] Completed: %d %s assessments enqueued across %d teams, %d skipped (recent)",
+            "[TASK_%s] Completed: %d %s assessments enqueued across %d teams, "
+            "%d skipped (recent), %d skipped (failing)",
             task_name,
             stats["assessments_enqueued"],
             plugin_name,
             stats["teams_scanned"],
             stats["skipped_recent"],
+            stats["skipped_failure_backoff"],
         )
         return stats
 

@@ -124,8 +124,9 @@ def _failures(sbom: SBOM, ages_in_hours: list[float]) -> None:
         _run_at_age(sbom, hours_ago=age, status=RunStatus.FAILED.value)
 
 
-def _sweep(monkeypatch) -> list[dict]:
-    """Run the hourly sweep, capturing what it would have enqueued."""
+def _sweep_with_stats(monkeypatch) -> tuple[list[dict], dict]:
+    """Run the hourly sweep, capturing what it would have enqueued and the
+    stats it reports."""
     from sbomify.apps.plugins.tasks import _is_paid_team, _run_scheduled_security_scans
 
     captured: list[dict] = []
@@ -133,14 +134,19 @@ def _sweep(monkeypatch) -> list[dict]:
         "sbomify.apps.plugins.tasks.enqueue_assessment",
         lambda **kwargs: captured.append(kwargs),
     )
-    _run_scheduled_security_scans(
+    stats = _run_scheduled_security_scans(
         plugin_name="dependency-track",
         plan_filter=_is_paid_team,
         skip_hours=1,
         task_name="test_hourly_dt_scan",
         only_cyclonedx=True,
     )
-    return captured
+    return captured, stats
+
+
+def _sweep(monkeypatch) -> list[dict]:
+    """Run the hourly sweep, capturing what it would have enqueued."""
+    return _sweep_with_stats(monkeypatch)[0]
 
 
 @pytest.mark.django_db
@@ -236,6 +242,34 @@ class TestInFlightRunsDoNotDecideTheStreak:
         _run_at_age(scannable_sbom, hours_ago=3, status=RunStatus.PENDING.value)
 
         assert len(_sweep(monkeypatch)) == 1
+
+
+@pytest.mark.django_db
+class TestTheTwoKindsOfSkipAreReportedApart:
+    """A held-back scan and an up-to-date one are not the same event.
+
+    "Recent" is the cadence working as designed. A backoff hold says a scanner
+    has failed this artifact several times running, which is the number worth
+    alerting on -- and it is invisible if it is summed into the ordinary skips.
+    """
+
+    def test_a_backed_off_sbom_is_not_counted_as_recently_scanned(self, scannable_sbom, monkeypatch) -> None:
+        _failures(scannable_sbom, [6, 5, 4, 3, 1.5])
+
+        captured, stats = _sweep_with_stats(monkeypatch)
+
+        assert captured == []
+        assert stats["skipped_failure_backoff"] == 1
+        assert stats["skipped_recent"] == 0
+
+    def test_a_recently_scanned_sbom_is_not_counted_as_failing(self, scannable_sbom, monkeypatch) -> None:
+        _run_at_age(scannable_sbom, hours_ago=0.16, status=RunStatus.COMPLETED.value)
+
+        captured, stats = _sweep_with_stats(monkeypatch)
+
+        assert captured == []
+        assert stats["skipped_recent"] == 1
+        assert stats["skipped_failure_backoff"] == 0
 
 
 @pytest.mark.django_db
@@ -402,7 +436,7 @@ class TestTheSweepStaysCheapAsTheTableGrows:
         sql, params = self._streak_sql_and_params([str(scannable_sbom.id)])
 
         with connection.cursor() as cursor:
-            cursor.execute("ANALYZE plugins_assessment_runs")
+            cursor.execute(f"ANALYZE {AssessmentRun._meta.db_table}")  # noqa: S608
             cursor.execute("SET enable_seqscan = off")
             cursor.execute("EXPLAIN " + sql, params)
             plan = "\n".join(row[0] for row in cursor.fetchall())
