@@ -145,6 +145,48 @@ def test_one_package_under_two_ecosystem_spellings_is_one_row(sample_sbom: SBOM)
 
 
 @pytest.mark.django_db
+def test_the_row_keeps_a_purl_whichever_scanner_ran_last(sample_sbom: SBOM):
+    """The newest run's findings are folded first. When OSV, which reports no
+    purl, ran after Dependency Track, the row still carries Dependency Track's
+    purl, so triage from it can target the package rather than the component."""
+    _run(
+        sample_sbom,
+        "dependency-track",
+        [
+            {
+                "id": "CVE-1",
+                "severity": "high",
+                "component": {
+                    "name": "golang.org/x/net",
+                    "version": "0.1.0",
+                    "ecosystem": "golang",
+                    "purl": "pkg:golang/golang.org/x/net@0.1.0",
+                },
+            }
+        ],
+    )
+    _run(
+        sample_sbom,
+        "osv",
+        [
+            {
+                "id": "GHSA-x",
+                "aliases": ["CVE-1"],
+                "severity": "high",
+                "component": {"name": "golang.org/x/net", "version": "0.1.0", "ecosystem": "Go"},
+            }
+        ],
+    )
+    client = Client()
+    team = sample_sbom.component.team
+    setup_test_session(client, team, team.members.first())
+
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
+
+    assert [(row["id"], row["purl"]) for row in _rows(response)] == [("CVE-1", "pkg:golang/golang.org/x/net@0.1.0")]
+
+
+@pytest.mark.django_db
 def test_a_row_keeps_the_ecosystem_spelling_its_scanner_used(sample_sbom: SBOM):
     """The newest scanner opens the package. Rows from the other still read as that scanner wrote them."""
     _run(
