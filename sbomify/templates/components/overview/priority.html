@@ -56,6 +56,14 @@ the value with a leading newline.
     <c-feedback.empty-state compact icon_size="sm" title="Vulnerability details unavailable" message="Open a scan to review the available results. Some scanners report totals only." />
 {% elif dashboard.is_first_visit or dashboard.unassessed %}
     <c-feedback.empty-state compact icon_size="sm" icon="fas fa-shield-halved" title="Waiting for security scans" message="Upload an SBOM and complete a scan to see what needs attention." />
+{% elif not dashboard.has_scannable_components %}
+    {% comment %}
+    A workspace holding documents alone has no BOM component to scan, so it
+    reaches neither branch above: nothing is unassessed because nothing is
+    assessable. Without this branch it falls through to the all-clear below
+    and is told its completed scans found nothing, having run none.
+    {% endcomment %}
+    <c-feedback.empty-state compact icon_size="sm" icon="fas fa-shield-halved" title="Nothing to scan yet" message="Add a BOM component and upload an SBOM to see vulnerabilities here." />
 {% else %}
     <c-feedback.empty-state compact icon_size="sm" icon="fas fa-check" title="No open vulnerabilities to review" message="Completed scans have no unsuppressed vulnerabilities to show." />
 {% endif %}

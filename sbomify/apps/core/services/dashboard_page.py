@@ -22,14 +22,14 @@ _CACHE_TTL_SECONDS = 60
 _DIGEST_LIMIT = 4
 _PRODUCT_LIMIT = 8
 
-# The cached context's shape. v6 adds needs_attention_total, which the digest
+# The cached context's shape. v7 adds needs_attention_total, which the digest
 # panel compares against the rows it shows to decide whether to state the
 # slice, and the two product-membership flags the exposure footer uses to say
-# why its rows do not sum. v5 added medium_low, v4 the unmeasured flags. An
-# entry written by an earlier release lacks the newer keys, and each missing
-# value reads as false, so the panel silently drops the sentence it exists to
-# show.
-_CACHE_VERSION = "v6"
+# why its rows do not sum. v6 added has_scannable_components, v5 medium_low,
+# v4 the unmeasured flags. An entry written by an earlier release lacks the
+# newer keys, and each missing value reads as false, so the panel silently
+# drops the sentence it exists to show.
+_CACHE_VERSION = "v7"
 
 
 def dashboard_cache_key(team_id: int) -> str:
@@ -195,6 +195,12 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
             "unmeasured_known_exploited": known_exploited == 0 and unassessed > 0,
         },
         "unassessed": unassessed,
+        # Whether anything in this workspace could carry a vulnerability at all.
+        # The security picture is built from BOM components only, so a workspace
+        # holding documents alone has nothing to scan — which is not the same
+        # thing as having been scanned and found clean, and the panels below the
+        # cards must not confuse the two.
+        "has_scannable_components": bool(components),
         "products": products[:_PRODUCT_LIMIT],
         "product_count": len(products),
         "shares_components": shares_components,
