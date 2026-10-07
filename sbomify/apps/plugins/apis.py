@@ -258,7 +258,7 @@ def _run_to_schema(
         if not all((err.get("loc") or (None,))[0] == "result" for err in e.errors()):
             raise
         logger.warning(
-            "AssessmentRun %s (plugin %s) has a result that fails schema validation; serialising without it",
+            "AssessmentRun %s (plugin %s) has a result that fails schema validation; serializing without it",
             run.id,
             run.plugin_name,
         )

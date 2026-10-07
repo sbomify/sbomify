@@ -76,7 +76,7 @@ def normalise_unrecognised_roles(apps, schema_editor):
         # per row. One log line per member would be unbounded on a large install
         # and adds nothing the ids do not.
         logger.warning(
-            "Migration 0041: normalised %s Member row(s) with unrecognised roles %s to 'guest'. First %s ids: %s",
+            "Migration 0041: normalized %s Member row(s) with unrecognized roles %s to 'guest'. First %s ids: %s",
             updated,
             stale_roles,
             len(stale_sample),
@@ -89,7 +89,7 @@ def normalise_unrecognised_roles(apps, schema_editor):
     updated = stale_invites.update(role="guest")
     if updated:
         logger.warning(
-            "Migration 0041: normalised %s Invitation row(s) with unrecognised roles %s to 'guest'. First %s ids: %s",
+            "Migration 0041: normalized %s Invitation row(s) with unrecognized roles %s to 'guest'. First %s ids: %s",
             updated,
             invite_roles,
             len(invite_sample),
