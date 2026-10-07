@@ -4,7 +4,7 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, QueryDict
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
@@ -12,12 +12,33 @@ from django.views import View
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
 
+# The Trends filters a shared link may carry. The chart view rides in the URL
+# too, but only the browser reads that one, so it never reaches the fragment.
+TRENDS_URL_FILTERS = ("product_id", "release_id", "days")
+
+
+def trends_query(request: HttpRequest) -> str:
+    """The query the Trends page fetches its fragment with.
+
+    The page fetches its own content, so a filter in the address bar has to
+    travel with that fetch or a bookmark opens on the defaults instead. Only
+    the known filters travel; the fragment validates each one for itself. The
+    whole string is built here rather than joined in the template, so the one
+    attribute the template writes has one value and no punctuation of its own.
+    """
+    params = QueryDict(mutable=True)
+    params["show_product_filter"] = "true"
+    for name in TRENDS_URL_FILTERS:
+        if name in request.GET:
+            params[name] = request.GET[name]
+    return params.urlencode()
+
 
 class ValidateWorkspaceMixin:
     """Mixin that validates the user is still a member of their current workspace."""
 
     def dispatch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
-        current_team = request.session.get("current_team", {})
+        current_team = request.session.get("current_workspace", {})
         team_key = current_team.get("key")
 
         if team_key:
@@ -38,7 +59,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
     show_setup: bool = False
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        current_team = request.session.get("current_team", {})
+        current_team = request.session.get("current_workspace", {})
 
         if not current_team.get("has_completed_wizard", True):
             return redirect("teams:onboarding_wizard")
@@ -55,7 +76,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
             return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
 
         if self.show_trends:
-            return render(request, "core/dashboard_trends.html.j2")
+            return render(request, "core/dashboard_trends.html.j2", {"trends_query": trends_query(request)})
 
         from sbomify.apps.core.services.dashboard_page import build_dashboard_context, get_first_component
 

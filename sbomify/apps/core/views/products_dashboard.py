@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.vary import vary_on_headers
@@ -32,16 +33,35 @@ def _create_product(request: HttpRequest) -> HttpResponse:
 class InventoryView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     inventory_kind: str | None = None
 
-    @method_decorator(vary_on_headers("HX-Target"))
+    @method_decorator(vary_on_headers("HX-Target", "HX-Request"))
     def get(self, request: HttpRequest) -> HttpResponse:
+        if "view" in request.GET:
+            params = request.GET.copy()
+            legacy_kind = params.pop("view")[-1]
+            kind = self.inventory_kind or (legacy_kind if legacy_kind in ("releases", "components") else "products")
+            query = params.urlencode()
+            destination = reverse(f"core:{kind}_dashboard") + (f"?{query}" if query else "")
+            if request.headers.get("HX-Request") == "true":
+                return HttpResponse(headers={"HX-Redirect": destination})
+            return redirect(destination)
         result = build_inventory_context(request, kind=self.inventory_kind)
         if not result.ok:
             return HttpResponse(result.error, status=result.status_code or 400)
         template = {
             "inventory-content": "core/products_inventory.html.j2",
+            "inventory-panel": "core/products_inventory_panel.html.j2",
             "inventory-content-results": "core/products_inventory_results.html.j2",
         }.get(request.headers.get("HX-Target", ""), "core/products_dashboard.html.j2")
-        return render(request, template, result.value)
+        return render(
+            request,
+            template,
+            {
+                **(result.value or {}),
+                # A tab swaps only the panel, so the sidebar rides along out of band.
+                "inventory_navigation_oob": request.headers.get("HX-Target")
+                in ("inventory-content", "inventory-panel"),
+            },
+        )
 
 
 class ProductsDashboardView(InventoryView):
@@ -55,7 +75,7 @@ class ProductCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """The New Product form, as a page, matching the New Advisory flow."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        current_team = request.session.get("current_team") or {}
+        current_team = request.session.get("current_workspace") or {}
         if get_member_role_by_key(request.user, current_team.get("key")) not in MANAGE:
             raise Http404("Workspace not found")
 
@@ -72,4 +92,6 @@ class ProductsTableView(InventoryView):
         result = build_inventory_context(request, kind=self.inventory_kind)
         if not result.ok:
             return HttpResponse(result.error, status=result.status_code or 400)
-        return render(request, "core/products_inventory.html.j2", result.value)
+        return render(
+            request, "core/products_inventory.html.j2", {**(result.value or {}), "inventory_navigation_oob": True}
+        )

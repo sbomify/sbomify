@@ -76,9 +76,9 @@
         <input type="hidden" name="end_of_support" :value="endOfSupport">
         <input type="hidden" name="end_of_life" :value="endOfLife">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            {% include 'components/date_picker.html.j2' with value_binding='releaseDate' label='Release Date' format_fn='formatDisplayDate' %}
-            {% include 'components/date_picker.html.j2' with value_binding='endOfSupport' label='End of Support' format_fn='formatDisplayDate' %}
-            {% include 'components/date_picker.html.j2' with value_binding='endOfLife' label='End of Life' format_fn='formatDisplayDate' %}
+            {% include 'components/date_picker.html.j2' with value_binding='releaseDate' label='Release date' format_fn='formatDisplayDate' %}
+            {% include 'components/date_picker.html.j2' with value_binding='endOfSupport' label='End of support' format_fn='formatDisplayDate' %}
+            {% include 'components/date_picker.html.j2' with value_binding='endOfLife' label='End of life' format_fn='formatDisplayDate' %}
         </div>
         <p class="text-text-muted text-sm mb-4">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</p>
         <div class="flex gap-2">

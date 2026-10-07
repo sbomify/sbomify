@@ -2,17 +2,15 @@
 {% comment %}Product exposure uses the same occurrence snapshot as the metrics. Evidence distinguishes absent SBOMs from old ones.{% endcomment %}
 <c-vars products />
 <c-cards.card flush>
-<c-cards.header compact title="Exposure by product"><c-overview.severity-legend /></c-cards.header>
+<c-cards.header compact title="Exposure by product"><c-buttons.ghost size="sm" href="{% url 'core:products_dashboard' %}">View products<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost></c-cards.header>
 {% if products %}
     <c-overview.table aria-label="Product exposure">
     <c-tables.head>
-    <tr>
-        <c-tables.header-cell>Product</c-tables.header-cell>
-        <c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
-        <c-tables.header-cell nowrap>Past SLA</c-tables.header-cell>
-        <c-tables.header-cell>Evidence</c-tables.header-cell>
-        <c-tables.header-cell end>Action</c-tables.header-cell>
-    </tr>
+    <c-tables.header-cell>Product</c-tables.header-cell>
+    <c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
+    <c-tables.header-cell nowrap>Past SLA</c-tables.header-cell>
+    <c-tables.header-cell>Evidence</c-tables.header-cell>
+    <c-tables.header-cell end>Action</c-tables.header-cell>
     </c-tables.head>
     <tbody>
         {% for product in products %}
@@ -43,5 +41,4 @@
 {% else %}
     <c-feedback.empty-state compact icon_size="sm" icon="fas fa-cube" title="No products yet" message="Add a product to group your components and see their exposure together." />
 {% endif %}
-<c-cards.footer><c-buttons.ghost size="sm" href="{% url 'core:products_dashboard' %}">View products<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost></c-cards.footer>
 </c-cards.card>

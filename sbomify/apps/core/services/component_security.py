@@ -33,6 +33,7 @@ class CbomIssuesContext:
 
 
 def build_latest_cbom_issues(component_id: str) -> CbomIssuesContext:
+    from sbomify.apps.plugins.latest import latest_run_ids
     from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
     from sbomify.apps.sboms.models import SBOM
 
@@ -47,11 +48,11 @@ def build_latest_cbom_issues(component_id: str) -> CbomIssuesContext:
         return CbomIssuesContext()
     item_type = "cbom" if artifact["bom_type"] == SBOM.BomType.CBOM else "sboms"
 
+    latest_ids = latest_run_ids(
+        AssessmentRun.objects.filter(category="compliance", status="completed"), [artifact["id"]]
+    )
     results = list(
-        AssessmentRun.objects.filter(sbom_id=artifact["id"], category="compliance", status="completed")
-        .order_by("plugin_name", "-created_at")
-        .distinct("plugin_name")
-        .values_list("plugin_name", "result")
+        AssessmentRun.objects.filter(id__in=latest_ids).order_by("plugin_name").values_list("plugin_name", "result")
     )
     if not results:
         return CbomIssuesContext(
@@ -112,7 +113,9 @@ class ComponentVulnerabilitiesContext:
     version: str | None = None
 
 
-def build_component_vulnerabilities(component_id: str, query: FindingQuery) -> ComponentVulnerabilitiesContext:
+def build_component_vulnerabilities(
+    component_id: str, query: FindingQuery, *, triage_identity: tuple[str, str, str, str] | None = None
+) -> ComponentVulnerabilitiesContext:
     """The newest SBOM's findings, summarised whole and paged for display.
 
     Rows are derived on every request rather than cached. The derivation is the
@@ -121,6 +124,7 @@ def build_component_vulnerabilities(component_id: str, query: FindingQuery) -> C
     across requests. What made the page time out was handing the template 2,390
     rows to show five of, and that is what paging removes.
     """
+    from sbomify.apps.plugins.latest import latest_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.sboms.models import SBOM
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
@@ -142,14 +146,12 @@ def build_component_vulnerabilities(component_id: str, query: FindingQuery) -> C
         return ComponentVulnerabilitiesContext()
 
     sbom_id = latest_sbom["id"]
-    # One query, ordered so the newest run of each provider comes first, and the
-    # blob is only pulled for those. The first row also answers "did anything
-    # scan this at all", which is what the summary fallback needs.
+    # The newest run of each provider, and the blob only for those. An empty
+    # list also answers "did anything scan this at all", which is what the
+    # summary fallback needs.
+    latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), [sbom_id])
     provider_results = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id, category="security", status="completed")
-        .order_by("plugin_name", "-created_at")
-        .distinct("plugin_name")
-        .values_list("result", flat=True)
+        AssessmentRun.objects.filter(id__in=latest_ids).order_by("plugin_name").values_list("result", flat=True)
     )
     if not provider_results:
         return ComponentVulnerabilitiesContext(sbom_id=sbom_id, version=latest_sbom["version"])
@@ -182,6 +184,15 @@ def build_component_vulnerabilities(component_id: str, query: FindingQuery) -> C
             (extract_severity_counts(result) for result in provider_results),
             key=lambda counts: counts["total"],
         )
+
+    if triage_identity is not None:
+        advisory, package, version, ecosystem = triage_identity
+        rows = [
+            row
+            for row in rows
+            if advisory in (row["id"], *row["aliases"])
+            and (row["package"], row["version"], row["ecosystem"]) == (package, version, ecosystem)
+        ]
 
     return ComponentVulnerabilitiesContext(
         summary=summary,

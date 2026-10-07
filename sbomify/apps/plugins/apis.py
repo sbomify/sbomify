@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from typing import Any
 
-from django.db.models import OuterRef, Subquery
 from django.http import HttpRequest
 from ninja import Router
 from ninja.decorators import decorate_view
@@ -19,6 +18,7 @@ from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
 
+from .latest import latest_run_ids, status_runs
 from .models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
 from .schemas import (
     AssessmentBadgeData,
@@ -27,6 +27,7 @@ from .schemas import (
     SBOMAssessmentsResponse,
 )
 from .sdk.enums import RunReason, RunStatus
+from .services.access import plugin_plan_requirement, team_has_plugin_access
 from .tasks import run_assessment_task
 
 logger = getLogger(__name__)
@@ -381,9 +382,14 @@ def get_sbom_assessments(
             all_runs=[],
         )
 
-    # Get all runs for this SBOM, ordered newest-first. Prefetch the
-    # ``releases`` M2M so per-run serialization doesn't trigger N+1.
-    all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).prefetch_related("releases").order_by("-created_at"))
+    # Runs newest-first, with the ``releases`` M2M prefetched so per-run
+    # serialization doesn't trigger N+1. Without history only each plugin's
+    # newest run is read: an SBOM rescanned hourly has hundreds, each carrying
+    # its whole findings list.
+    runs = AssessmentRun.objects.filter(sbom_id=sbom_id)
+    if not include_history:
+        runs = AssessmentRun.objects.filter(id__in=latest_run_ids(AssessmentRun.objects.all(), [sbom_id]))
+    all_runs = list(runs.prefetch_related("releases").order_by("-created_at"))
 
     # Latest-per-plugin selection: under the scan-once-per-SBOM model, each
     # plugin produces at most one current run for an SBOM, so a single pass
@@ -441,27 +447,9 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
             skipped_count=0,
             plugins=[],
         )
-    # Fetch only the latest run per plugin_name via Subquery/OuterRef —
-    # bounded to ``enabled plugins per SBOM`` rather than the full run
-    # history. Under the scan-once-per-SBOM model there's one run per
-    # plugin per SBOM so this lookup is a simple group-by-plugin.
-    latest_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .values("plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(
-                    sbom_id=sbom_id,
-                    plugin_name=OuterRef("plugin_name"),
-                )
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
-    )
-    latest_ids = [pk for pk in latest_ids if pk is not None]
-    latest_runs = list(AssessmentRun.objects.filter(id__in=latest_ids))
+    # The latest run per plugin_name, without its findings: the status helpers
+    # read only its summary and metadata.
+    latest_runs = status_runs(latest_run_ids(AssessmentRun.objects.all(), [sbom_id]), "-created_at")
     status_summary = _compute_status_summary(latest_runs)
 
     # Prefetch display names once — avoids N+1 in the per-plugin loop below.
@@ -592,44 +580,6 @@ def _plugin_supported_bom_types(plugin_class_path: str) -> tuple[str, ...]:
     return result
 
 
-def _get_plugin_plan_requirement(plugin_name: str) -> str | None:
-    """Get the required plan feature for a plugin.
-
-    Returns the plan feature name or None if available to all plans.
-    """
-    # Map plugin names to their required plan features
-    plan_requirements = {
-        "ntia-minimum-elements-2021": "has_ntia_compliance",
-        "fda-medical-device-2025": "has_fda_compliance",
-        "dependency-track": "has_dependency_track_access",
-        # Future plugins can be added here
-    }
-    return plan_requirements.get(plugin_name)
-
-
-def _check_team_has_plugin_access(team: Team, plugin_name: str) -> bool:
-    """Check if a team's billing plan allows access to a plugin."""
-    from sbomify.apps.billing.config import is_billing_enabled
-    from sbomify.apps.billing.models import BillingPlan
-
-    # If billing is disabled, grant access to all plugins
-    if not is_billing_enabled():
-        return True
-
-    required_feature = _get_plugin_plan_requirement(plugin_name)
-    if required_feature is None:
-        return True  # No plan requirement
-
-    if not team.billing_plan:
-        return False  # No billing plan means community (free) tier
-
-    try:
-        plan = BillingPlan.objects.get(key=team.billing_plan)
-        return getattr(plan, required_feature, False)
-    except BillingPlan.DoesNotExist:
-        return False
-
-
 def _resolve_dt_servers(team: Team | None = None) -> list[dict[str, Any]]:
     """Resolve available Dependency Track servers for select field.
 
@@ -726,8 +676,8 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
     # Get all available plugins with plan availability info
     available_plugins = []
     for p in RegisteredPlugin.objects.filter(is_enabled=True):
-        has_access = _check_team_has_plugin_access(team, p.name)
-        required_feature = _get_plugin_plan_requirement(p.name)
+        has_access = team_has_plugin_access(team, p.name)
+        required_feature = plugin_plan_requirement(p.name)
 
         available_plugins.append(
             {
@@ -798,9 +748,7 @@ def update_team_plugin_settings(
         return 400, {"detail": f"Invalid plugins: {', '.join(invalid_plugins)}"}
 
     # Validate that team has access to all enabled plugins based on billing plan
-    inaccessible_plugins = [
-        plugin for plugin in payload.enabled_plugins if not _check_team_has_plugin_access(team, plugin)
-    ]
+    inaccessible_plugins = [plugin for plugin in payload.enabled_plugins if not team_has_plugin_access(team, plugin)]
     if inaccessible_plugins:
         return 403, {
             "detail": f"Your plan does not include access to: {', '.join(inaccessible_plugins)}. "
@@ -871,7 +819,7 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
     if not can(request, "component:manage", sbom.component):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-    registered = RegisteredPlugin.objects.filter(name=plugin_name).only("name", "is_enabled").first()
+    registered = RegisteredPlugin.objects.filter(name=plugin_name).only("name", "display_name", "is_enabled").first()
     if registered is None:
         return 404, {"detail": f"Plugin '{plugin_name}' is not registered", "error_code": ErrorCode.NOT_FOUND}
     if not registered.is_enabled:
@@ -891,6 +839,14 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
         return 400, {
             "detail": f"Plugin '{plugin_name}' is not enabled for this workspace",
             "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    # A downgrade leaves the plugin in the enabled list, so the plan is checked
+    # here too, by the same rule that decides what the settings page offers.
+    if not team_has_plugin_access(sbom.component.team, plugin_name):
+        return 403, {
+            "detail": f"Your plan does not include {registered.display_name or plugin_name}.",
+            "error_code": ErrorCode.FORBIDDEN,
         }
 
     user = getattr(request, "user", None)

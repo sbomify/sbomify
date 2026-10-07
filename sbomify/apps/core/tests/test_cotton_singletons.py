@@ -74,7 +74,7 @@ def test_modal_size_segments_never_stack(rendered: str) -> None:
 def test_modal_show_prop_drives_every_alpine_hook(rendered: str) -> None:
     root = _probe(rendered, "modal-lg")
     assert 'x-show="showPanel"' in root
-    assert '@keydown.escape="showPanel = false"' in root
+    assert '@keydown.escape.window="if (showPanel) { showPanel = false }"' in root
     large = _section(rendered, "modal-lg")
     dialog = large[: large.index("</template>")]
     assert 'x-trap.noscroll="showPanel"' in dialog
@@ -93,7 +93,7 @@ def test_modal_any_outside_click_closes(rendered: str) -> None:
 
 def test_close_prop_replaces_the_show_assignment_everywhere(rendered: str) -> None:
     root = _probe(rendered, "modal-close")
-    assert '@keydown.escape="removeTarget = null"' in root
+    assert '@keydown.escape.window="if (removeTarget) { removeTarget = null }"' in root
     section = _section(rendered, "modal-close")
     dialog = section[: section.index("</template>")]
     # Backdrop and close button run the same expression as escape does.
@@ -361,21 +361,27 @@ def test_token_display_value_is_monospace_and_selectable(rendered: str) -> None:
 
 
 def test_token_display_masked_blurs_the_value_and_adds_the_reveal_toggle(rendered: str) -> None:
-    assert 'x-data="{ copied: false, masked: true }"' in _probe(rendered, "token-masked")
+    assert 'x-data="{ masked: true }"' in _probe(rendered, "token-masked")
     section = _section(rendered, "token-masked")
     assert ":class=\"masked ? 'blur-[4px] select-none' : ''\"" in section
     assert ":aria-label=\"masked ? 'Show token' : 'Hide token'\"" in section
 
 
 def test_token_display_unmasked_starts_revealed_and_has_no_toggle(rendered: str) -> None:
-    assert 'x-data="{ copied: false, masked: false }"' in _probe(rendered, "token-plain")
+    assert 'x-data="{ masked: false }"' in _probe(rendered, "token-plain")
     assert "Show token" not in _section(rendered, "token-plain")
 
 
-def test_token_display_copy_reads_the_value_by_ref(rendered: str) -> None:
+def test_token_display_copy_goes_through_the_shared_component(rendered: str) -> None:
+    """The button used to call navigator.clipboard.writeText() without awaiting
+    it, so it turned green on a write that had not happened. This value is shown
+    once, so a false confirmation costs the user the token."""
     section = _section(rendered, "token-masked")
-    assert 'x-ref="token"' in section
-    assert "$refs.token.textContent.trim()" in section
+    assert "data-copy-container" in _probe(rendered, "token-masked")
+    assert "data-token-value" in section
+    assert "copyableValue({ value: '', copySelector: '[data-token-value]' })" in section
+    assert '@click="copyToClipboard()"' in section
+    assert "navigator.clipboard" not in section
     assert ":class=\"copied ? 'bg-success text-white' : 'bg-transparent text-text-muted" in section
 
 
@@ -387,7 +393,10 @@ def test_token_display_label_row(rendered: str) -> None:
 
 def test_token_display_with_nothing_to_do_drops_the_action_rail(rendered: str) -> None:
     section = _section(rendered, "token-nocopy")
-    assert "$refs.token" not in section
+    # This component's own copy control, by the label only it renders. A probe
+    # section runs past its probe into the next one, so a marker shared with any
+    # neighbour would make this assertion answer about the wrong element.
+    assert "Copy token" not in section
     assert "border-l border-solid" not in section
 
 

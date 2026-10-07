@@ -239,6 +239,13 @@ class AssessmentRun(models.Model):
             models.Index(fields=["sbom", "plugin_name", "plugin_config_hash", "-created_at"]),
             models.Index(fields=["category", "-created_at"]),
             models.Index(fields=["status", "-created_at"]),
+            # Scan history counts every security run in its window, a million
+            # rows with hourly rescans: per SBOM, from the index, not the heap.
+            models.Index(
+                fields=["sbom", "created_at"],
+                condition=models.Q(category="security", status="completed"),
+                name="plugins_scan_history_idx",
+            ),
         ]
         ordering = ["-created_at"]
 
