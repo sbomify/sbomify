@@ -44,6 +44,26 @@
                             aria-label="Daily signups over the last 30 days"
                             role="img"></canvas>
                 </div>
+                {# The chart's numbers, for screen readers #}
+                <div class="sr-only">
+                    <table>
+                        <caption>Signups per day</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Day</th>
+                                <th scope="col">Signups</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for point in overview.signups %}
+                                <tr>
+                                    <th scope="row">{{ point.day|date:"M j" }}</th>
+                                    <td>{{ point.count|intcomma }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
                 </c-cards.card>
                 {# Plans #}
                 <c-cards.card title="Workspaces by plan" subtitle="Every workspace, paid or not.">
@@ -54,6 +74,26 @@
                             data-values="{{ charts.plan_counts }}"
                             aria-label="Workspaces by billing plan"
                             role="img"></canvas>
+                </div>
+                {# The chart's numbers, for screen readers #}
+                <div class="sr-only">
+                    <table>
+                        <caption>Workspaces per plan</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Plan</th>
+                                <th scope="col">Workspaces</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for plan in overview.plans %}
+                                <tr>
+                                    <th scope="row">{{ plan.plan }}</th>
+                                    <td>{{ plan.count|intcomma }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
                 </c-cards.card>
             </div>

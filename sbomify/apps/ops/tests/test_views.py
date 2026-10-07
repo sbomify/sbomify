@@ -176,6 +176,32 @@ class TestRendering:
         for raw in series:
             assert isinstance(json.loads(html.unescape(raw)), list)
 
+    def test_each_chart_has_a_table_of_the_numbers_it_draws(self, client: Client, staff_user):
+        """A canvas is a picture: a screen reader gets its name and none of what
+        it plots. Each chart is followed by a table of its series, built from
+        the same overview the chart reads."""
+        from django.contrib.humanize.templatetags.humanize import intcomma
+        from django.test.html import parse_html
+        from django.utils.dateformat import format as date_format
+
+        from sbomify.apps.teams.models import Team
+
+        Team.objects.create(name="Customer", billing_plan="business")
+        client.force_login(staff_user)
+
+        response = client.get(reverse("ops:overview"))
+        overview = response.context["overview"]
+        page = parse_html(response.content.decode())
+
+        assert parse_html("<caption>Signups per day</caption>") in page
+        assert parse_html("<caption>Workspaces per plan</caption>") in page
+        assert overview.signups and overview.plans
+        for point in overview.signups:
+            day = date_format(point.day, "M j")
+            assert parse_html(f'<tr><th scope="row">{day}</th><td>{intcomma(point.count)}</td></tr>') in page
+        for plan in overview.plans:
+            assert parse_html(f'<tr><th scope="row">{plan.plan}</th><td>{intcomma(plan.count)}</td></tr>') in page
+
     def test_the_paying_card_leaves_out_the_free_plan(self, client: Client, staff_user):
         """Production writes subscription_status "active" onto every community
         workspace, so counting by status alone reports the whole install as
