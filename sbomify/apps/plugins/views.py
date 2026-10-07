@@ -3,7 +3,7 @@
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
@@ -208,7 +208,7 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
         result = build_run_findings_page(request, run_id, request.GET)
         if not result.ok or result.value is None:
-            return HttpResponseNotFound(result.error or "Assessment run not found")
+            return HttpResponse(result.error or "Assessment run not found", status=result.status_code or 404)
         found = result.value
 
         # The header rather than django-htmx's request.htmx, the same reading the

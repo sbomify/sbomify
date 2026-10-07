@@ -24,6 +24,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+from django.db import transaction
 from django.utils import timezone
 
 from sbomify.logging import getLogger
@@ -113,16 +114,26 @@ def prune_assessment_runs(
     removed = 0
     for start in range(0, len(doomed), batch_size):
         batch = doomed[start : start + batch_size]
-        # A run whose payload was offloaded is the only pointer to its objects,
-        # so they go once the row has: never a row pointing at a deleted object.
-        offloaded = list(
-            AssessmentRun.objects.filter(id__in=batch).exclude(result_object_key="").values_list("id", flat=True)
-        )
-        # Count what the delete actually removed, not what was asked for: a
-        # concurrent sweep may already have taken some of these rows. Only the
-        # id is loaded: the collector would otherwise read every doomed run
-        # whole, findings blob included, just to delete it.
-        _, per_model = AssessmentRun.objects.filter(id__in=batch).only("id").delete()
+        with transaction.atomic():
+            # A run whose payload was offloaded is the only pointer to its
+            # objects, so they go once the row has: never a row pointing at a
+            # deleted object. Every row of the batch is locked while its key is
+            # read and the row deleted, not only rows already offloaded: an
+            # offload holds the same lock from reading the payload to committing
+            # its key, so one landing mid-batch is either seen here or never
+            # starts on a row this batch deletes.
+            offloaded = [
+                run_id
+                for run_id, key in AssessmentRun.objects.select_for_update()
+                .filter(id__in=batch)
+                .values_list("id", "result_object_key")
+                if key
+            ]
+            # Count what the delete actually removed, not what was asked for: a
+            # concurrent sweep may already have taken some of these rows. Only
+            # the id is loaded: the collector would otherwise read every doomed
+            # run whole, findings blob included, just to delete it.
+            _, per_model = AssessmentRun.objects.filter(id__in=batch).only("id").delete()
         removed += per_model.get("plugins.AssessmentRun", 0)
         for run_id in offloaded:
             delete_result_objects(run_id)

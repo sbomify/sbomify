@@ -454,3 +454,151 @@ class TestRetentionReclaimsTheStoredPayload:
 
         assert not AssessmentRun.objects.filter(pk=superseded.pk).exists()
         assert [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{superseded.id}/")] == []
+
+    @pytest.mark.django_db(transaction=True)
+    def test_an_offload_landing_mid_prune_still_has_its_objects_deleted(self, sbom, bucket):
+        """An offload that commits its key after the batch read which rows hold
+        one, but before the delete, would leave its object behind for good.
+        Here it holds its row lock while the prune starts, as the sweep does
+        from reading the payload to committing the key."""
+        import threading
+
+        from django.db import connection, transaction
+
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        late_key = f"{RESULT_PREFIX}{superseded.id}/late.json"
+        locked = threading.Event()
+
+        def offload_commits_late() -> None:
+            try:
+                with transaction.atomic():
+                    AssessmentRun.objects.filter(pk=superseded.pk).update(result=None, result_object_key=late_key)
+                    bucket.objects[late_key] = b"{}"
+                    locked.set()
+                    # Held long enough for the prune to have read its batch.
+                    threading.Event().wait(1)
+            finally:
+                connection.close()
+
+        worker = threading.Thread(target=offload_commits_late)
+        worker.start()
+        assert locked.wait(5)
+
+        assert prune_assessment_runs(keep_per_plugin=1, min_age_days=0) == 1
+        worker.join(5)
+
+        assert not AssessmentRun.objects.filter(pk=superseded.pk).exists()
+        assert late_key not in bucket.objects
+
+
+@pytest.mark.django_db
+class TestTheRunFindingsCardReadsStorage:
+    """The card on the artifact page pages one run's findings out of ``result``
+    in SQL. An offloaded run holds nothing there, so read the old way its card
+    would list no findings at all, the one answer an unreachable payload must
+    never give."""
+
+    def _page(self, run, sbom, rf, monkeypatch):
+        from sbomify.apps.plugins.services.run_findings import build_run_findings_page
+
+        monkeypatch.setattr("sbomify.apps.plugins.apis._readable_sbom", lambda request, sbom_id: sbom)
+        return build_run_findings_page(rf.get("/"), str(run.id))
+
+    def test_an_offloaded_run_pages_the_same_findings(self, sbom, bucket, rf, monkeypatch):
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        before = self._page(superseded, sbom, rf, monkeypatch)
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+
+        after = self._page(superseded, sbom, rf, monkeypatch)
+
+        assert before.ok and len(before.value.findings) == 2
+        assert after.ok and after.value.panel == before.value.panel
+
+    def test_an_unreadable_payload_is_an_error_not_an_empty_page(self, sbom, bucket, rf, monkeypatch):
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+        bucket.objects.clear()
+
+        page = self._page(superseded, sbom, rf, monkeypatch)
+
+        assert not page.ok and page.status_code == 503
+
+
+@pytest.mark.django_db
+class TestVexReachesAnOffloadedRun:
+    """A VEX uploaded after a scan is re-applied to the component's completed
+    runs. Read from the column, an offloaded run's payload is not there, so the
+    run would be skipped and keep a disposition the new VEX changed."""
+
+    def test_the_rewrite_lands_as_a_new_revision(self, sbom, bucket, monkeypatch):
+        from sbomify.apps.vulnerability_scanning import vex
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
+        from sbomify.apps.vulnerability_scanning.models import Finding
+
+        payload = _result()
+        for finding in payload["findings"]:
+            finding["component"]["ecosystem"] = "pypi"
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800, result=payload)
+        sync_findings(superseded, [])
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+        first_key = superseded.result_object_key
+
+        statement = {
+            "ids": {"cve-2026-0"},
+            "packages": {("pypi", "foo", "1")},
+            "state": "not_affected",
+            "justification": "code_not_reachable",
+            "product_scoped": False,
+            "source": "manual",
+        }
+        monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids: [statement])
+        monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
+
+        vex.reannotate_component_runs(sbom.component_id)
+
+        superseded.refresh_from_db()
+        assert superseded.result is None
+        assert superseded.result_object_key not in ("", first_key)
+        # Content-addressed: the earlier revision stays where it was.
+        assert first_key in bucket.objects
+        assert Finding.objects.get(run=superseded, advisory_id="CVE-2026-0").vex_suppressed is True
+        assert Finding.objects.get(run=superseded, advisory_id="CVE-2026-1").vex_suppressed is False
+
+    def test_an_unreadable_payload_does_not_stop_the_rest(self, sbom, bucket, monkeypatch):
+        from sbomify.apps.vulnerability_scanning import vex
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        assert offload_assessment_results() == 1
+        bucket.objects.clear()
+        monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids: [])
+        monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
+
+        vex.reannotate_component_runs(sbom.component_id)
+
+        superseded.refresh_from_db()
+        assert superseded.result is None and superseded.result_object_key
+
+    def test_a_rewrite_for_a_run_retention_took_leaves_no_object(self, sbom, bucket):
+        """The rewrite is stored before the row moves to it. If retention took
+        the row in between, nothing points at the prefix, so nothing may stay."""
+        from sbomify.apps.plugins.result_store import save_result
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+        AssessmentRun.objects.filter(pk=superseded.pk).delete()
+
+        save_result(superseded, _result(total=1))
+
+        assert [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{superseded.id}/")] == []
