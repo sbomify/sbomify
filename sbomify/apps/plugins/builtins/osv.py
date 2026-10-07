@@ -760,8 +760,8 @@ class OSVPlugin(AssessmentPlugin):
                 "None of the packages in this SBOM could be matched against an advisory "
                 "source, so it was not scanned. OSV matches on package URL (purl). SBOMs "
                 "from embedded builds such as Yocto identify their packages by CPE instead, "
-                "and OSV cannot look those up. No vulnerability result can be inferred from "
-                "this scan."
+                "and OSV cannot look those up. Dependency Track matches packages by CPE and "
+                "can scan them. No vulnerability result can be inferred from this scan."
             ),
             status="warning",
             severity="info",

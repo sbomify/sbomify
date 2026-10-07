@@ -8,7 +8,7 @@
 {% load public_url_tags %}
 <!DOCTYPE html>
 <html lang="en">
-    <script>
+    <script data-cfasync="false">
         {% comment %}
             Public pages are light only for now. The workspace's brand is the
             only colour that varies here, and a second axis of light and dark
@@ -17,7 +17,8 @@
 
             Still set inline: the stylesheets below key off data-theme, and the
             critical variables beat selector rules without !important, so the
-            page paints its final colours before they resolve.
+            page paints its final colours before they resolve. data-cfasync="false"
+            keeps Cloudflare Rocket Loader from deferring it past first paint.
 {% endcomment %}
         (function(){
             var html=document.documentElement;
@@ -1047,8 +1048,8 @@
                                             :aria-expanded="open"
                                             title="Switch workspace">
                                         <i class="fas fa-briefcase"></i>
-                                        {% if request.session.current_team %}
-                                            <span class="workspace-name-desktop">{{ request.session.current_team.name|workspace_display }}</span>
+                                        {% if request.session.current_workspace %}
+                                            <span class="workspace-name-desktop">{{ request.session.current_workspace.name|workspace_display }}</span>
                                             <span class="workspace-name-mobile">Workspace</span>
                                         {% else %}
                                             <span>Switch Workspace</span>
@@ -1066,13 +1067,13 @@
                                          x-cloak>
                                         <div class="workspace-dropdown-header">Switch Workspace</div>
                                         {% for t_key, t_info in available_workspaces.items %}
-                                            <a class="workspace-dropdown-item {% if request.session.current_team.key == t_key %}active{% endif %}"
+                                            <a class="workspace-dropdown-item {% if request.session.current_workspace.key == t_key %}active{% endif %}"
                                                href="{% url 'teams:switch_team' t_key %}">
                                                 <span class="item-content">
                                                     <i class="fas fa-folder"></i>
                                                     {{ t_info.name|workspace_display }}
                                                 </span>
-                                                {% if request.session.current_team.key == t_key %}<i class="fas fa-check check-icon"></i>{% endif %}
+                                                {% if request.session.current_workspace.key == t_key %}<i class="fas fa-check check-icon"></i>{% endif %}
                                             </a>
                                         {% endfor %}
                                     </div>
