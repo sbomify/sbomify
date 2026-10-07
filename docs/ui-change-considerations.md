@@ -67,8 +67,9 @@ tests, code quality and a production Docker build. The backend suite is one job
 running every app's tests under `pytest -n auto`, so a failure that only appears
 on a particular worker is reproduced with the same `-n auto --dist loadscope`
 invocation, not by selecting a single app. The browser suite is split across six
-matrix groups by [`pytest-split`](../.github/e2e-test-durations.json); to rerun a
-failing group locally, pass the same `--splits 6 --group N`.
+matrix groups by pytest-split, weighted by
+[measured durations](../.github/e2e-test-durations.json); to rerun a failing
+group locally, pass the same `--splits 6 --group N`.
 [The matrix check](../bin/check_ci_test_matrix.py) keeps those two jobs between
 them running every test exactly once. Security checks also live in the
 [CodeQL](../.github/workflows/codeql.yml) and [OpenGrep](../.github/workflows/opengrep.yaml) workflows.
