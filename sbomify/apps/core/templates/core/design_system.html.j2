@@ -1157,6 +1157,35 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-cards.header title="Vulnerability reports" />
     {% include "core/components/vulnerability_demo.html.j2" %}
     </c-cards.card>
+    <p class="text-sm text-text-muted">
+        A chart drawn on a canvas is a picture, so a screen reader gets its name and none of its numbers.
+        Follow the chart with a <c-code-inline>screen-reader-table</c-code-inline> built from the data the
+        chart draws. It renders nothing on screen: the card below holds one with three rows.
+    </p>
+    <c-cards.card title="Signups" subtitle="Last 3 days.">
+    <c-tables.screen-reader-table caption="Signups per day">
+    <thead>
+        <tr>
+            <th scope="col">Day</th>
+            <th scope="col">Signups</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <th scope="row">Oct 5</th>
+            <td>2</td>
+        </tr>
+        <tr>
+            <th scope="row">Oct 6</th>
+            <td>0</td>
+        </tr>
+        <tr>
+            <th scope="row">Oct 7</th>
+            <td>5</td>
+        </tr>
+    </tbody>
+    </c-tables.screen-reader-table>
+    </c-cards.card>
     <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
     <c-cards.card>
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />
