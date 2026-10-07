@@ -7,7 +7,8 @@ nothing about whether the palette works.
 
 This measures instead. It walks the gallery in both themes, computes the WCAG
 2.1 contrast of every visible piece of text against the surface actually behind
-it, and fails on anything below the AA threshold for its size.
+it, every stop of a gradient included, and fails on anything below the AA
+threshold for its size.
 """
 
 import pytest
@@ -48,25 +49,28 @@ MEASURE_JS = r"""
   };
   const over = (fg, bg) => [0, 1, 2].map((i) => fg[i] * fg[3] + bg[i] * (1 - fg[3]));
 
-  // The surface a caller actually reads the text on: composite every
-  // translucent layer between the element and the first opaque one.
-  const backdrop = (el) => {
-    const layers = [];
-    let node = el;
-    let gradient = false;
-    while (node) {
+  // The surfaces a caller actually reads the text on: composite every
+  // translucent layer between the element and the first opaque one. A gradient
+  // adds each of its colour stops as an alternative surface, and the check
+  // keeps the worst, so text over a tinted gradient is measured, not skipped.
+  const stopsOf = (image) => (!image || image === 'none') ? [] : [
+    ...image.matchAll(/(?:rgba?|hsla?|oklab|oklch|lab|lch|color)\([^()]*\)/g),
+  ].map((m) => parse(m[0])).filter(Boolean);
+  const backdrops = (el) => {
+    const chain = [];
+    for (let node = el; node; node = node.parentElement) {
       const style = getComputedStyle(node);
-      if (style.backgroundImage && style.backgroundImage !== 'none') gradient = true;
       const colour = parse(style.backgroundColor);
-      if (colour && colour[3] > 0) {
-        layers.push(colour);
-        if (colour[3] === 1) break;
-      }
-      node = node.parentElement;
+      chain.push({ colour: colour && colour[3] > 0 ? colour : null, stops: stopsOf(style.backgroundImage) });
+      if (colour && colour[3] === 1) break;
     }
-    let base = [255, 255, 255];
-    for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i], base);
-    return { rgb: base, gradient };
+    let surfaces = [[255, 255, 255]];
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const { colour, stops } = chain[i];
+      if (colour) surfaces = surfaces.map((base) => over(colour, base));
+      if (stops.length) surfaces = stops.flatMap((stop) => surfaces.map((base) => over(stop, base)));
+    }
+    return surfaces;
   };
 
   const hidden = (el) => {
@@ -92,22 +96,23 @@ MEASURE_JS = r"""
     const style = getComputedStyle(el);
     const ink = parse(style.color);
     if (!ink) continue;
-    const behind = backdrop(el);
-    // A gradient backdrop is sampled as its solid layers only, so the measured
-    // ratio is an estimate; skip rather than report a number we cannot stand by.
-    if (behind.gradient) continue;
     const size = parseFloat(style.fontSize);
     const weight = Number(style.fontWeight) || 400;
     const large = size >= 24 || (size >= 18.66 && weight >= 700);
     const required = large ? 3.0 : 4.5;
-    const measured = ratio(over(ink, behind.rgb), behind.rgb);
+    let measured = Infinity;
+    let behind = null;
+    for (const surface of backdrops(el)) {
+      const r = ratio(over(ink, surface), surface);
+      if (r < measured) [measured, behind] = [r, surface];
+    }
     if (measured >= required) continue;
     findings.push({
       text: own.slice(0, 40),
       ratio: Number(measured.toFixed(2)),
       required,
       ink: style.color,
-      behind: 'rgb(' + behind.rgb.map(Math.round).join(' ') + ')',
+      behind: 'rgb(' + behind.map(Math.round).join(' ') + ')',
       size: Number(size.toFixed(1)),
     });
   }
@@ -116,10 +121,12 @@ MEASURE_JS = r"""
 """
 
 # The status and severity carriers: every component that renders a state as text
-# over a tint of that state. These are the recipes the ink tokens exist for.
+# over a tint of that state. These are the recipes the ink tokens exist for, so
+# anything painting an ink is in scope too: the fixed badges and tags, the stat
+# card's value and the metric chip carry no data attribute to select them by.
 STATUS_SCOPE = (
-    "[data-level], [data-status], [data-format], [data-variant], "
-    "[data-level] *, [data-status] *, [data-format] *, [data-variant] *"
+    "[data-level], [data-status], [data-format], [data-variant], [class*='-ink'], "
+    "[data-level] *, [data-status] *, [data-format] *, [data-variant] *, [class*='-ink'] *"
 )
 
 

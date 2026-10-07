@@ -341,14 +341,15 @@
   --color-severity-medium: rgb(133 100 3);      /* 4.54, 5.50 */
   --color-severity-low: rgb(11 115 136);        /* 4.51, 5.49 */
 
-  /* Status ink, light theme, measured the same way. The brand fill above is
-     unchanged: only the ink darkens, and only here, where the tint is pale
-     enough that the brand value reads at 1.86 to 4.24 on it. */
-  --color-success-ink: rgb(0 119 67);           /* 4.61 on a 14% tint, 5.65 on white */
-  --color-warning-ink: rgb(159 85 0);           /* 4.57, 5.56 */
-  --color-danger-ink: rgb(197 37 51);           /* 4.55, 5.70 */
-  --color-info-ink: rgb(59 90 225);             /* 4.61, 5.62 */
-  --color-accent-ink: rgb(112 83 201);          /* 4.59, 5.57 */
+  /* Status ink, light theme, for a status read as text on a tint of itself.
+     Each clears 4.5:1 on the darkest such surface in use: its own 12% tint
+     over a selected row's 4% primary tint, which is darker than the 14% a
+     branded badge paints on white. */
+  --color-success-ink: rgb(0 115 65);           /* 4.70 on a 12% tint over a selected row, 5.95 on white */
+  --color-warning-ink: rgb(154 82 0);           /* 4.65, 5.86 */
+  --color-danger-ink: rgb(191 36 49);           /* 4.67, 5.98 */
+  --color-info-ink: rgb(57 87 218);             /* 4.67, 5.92 */
+  --color-accent-ink: rgb(112 83 201);          /* 4.61, 5.57 */
 
   /* Alert backgrounds (same across themes) */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */

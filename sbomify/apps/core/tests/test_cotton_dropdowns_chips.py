@@ -297,14 +297,20 @@ def test_metric_chip_accent_segments_tint_fill_border_and_text(rendered: str, ac
     assert f"bg-[color-mix(in_oklab,var(--color-{accent})_10%,transparent)]" in chip
     assert f"border-[color-mix(in_oklab,var(--color-{accent})_30%,transparent)]" in chip
     assert f"text-[color:var(--color-{accent})]" in chip
+    assert f"[--metric-ink:var(--color-{accent}-ink)]" in chip
+    assert "[--metric-label:var(--color-text)]" in chip
     assert "bg-surface" not in chip
 
 
-def test_metric_chip_parts_keep_the_label_muted_and_the_value_tabular(rendered: str) -> None:
-    assert _classes(rendered, "text-text-muted", "Components") == "text-text-muted"
-    assert _classes(rendered, "font-semibold tabular-nums", "12</span>") == "font-semibold tabular-nums"
-    # The label stays muted under an accent, so only the value takes the chip's colour.
-    assert _classes(rendered, "text-text-muted", "Critical") == "text-text-muted"
+def test_metric_chip_parts_read_the_chips_text_colours(rendered: str) -> None:
+    # Muted label and inherited value on a plain chip; on a tinted one the chip's
+    # segment sets both properties, so the same parts render the label as full
+    # text and the value in the accent's ink.
+    label = "text-[color:var(--metric-label,var(--color-text-muted))]"
+    value = "font-semibold tabular-nums text-[color:var(--metric-ink,currentColor)]"
+    assert _classes(rendered, label, "Components") == label
+    assert _classes(rendered, "font-semibold tabular-nums", "12</span>") == value
+    assert _classes(rendered, label, "Critical") == label
 
 
 def test_metric_chip_slot_keeps_the_callers_order(rendered: str) -> None:
