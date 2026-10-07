@@ -109,39 +109,22 @@ jobs:
           echo "## Migration Consistency" >> $GITHUB_STEP_SUMMARY
           echo "All models are in sync with migrations." >> $GITHUB_STEP_SUMMARY
 
-  # Everything except the Playwright suite. One job, parallelised in-process with
-  # pytest-xdist: the 11k non-e2e tests take ~160 s across 4 workers, which is
-  # less than the per-job setup the previous 16-way matrix paid sixteen times
-  # over. Postgres and Redis come from service containers rather than
-  # docker-compose, so the `tests` image (a ~35 s `uv sync` with no build cache)
-  # is never rebuilt here — the host venv restores from the setup-uv cache in ~4 s.
+  # Everything except the Playwright suite, in one job parallelised with
+  # pytest-xdist. The previous 16-way matrix executed 685 s of tests inside
+  # 2371 s of job time: each shard rebuilt the test image, booted a Chromium it
+  # never used, and ran pytest three times. Collapsing to one job pays that
+  # setup once instead of sixteen times, which is where the saving is.
+  #
+  # It stays inside the compose container rather than running on the host.
+  # Running it on the runner directly is ~35 s faster, but WeasyPrint binds
+  # native libraries at import and the runner's are not the image's: on the
+  # host, test_pdf_service silently stopped embedding the signature PNG. The
+  # image is the environment production uses, and for one job the rebuild is
+  # not worth drifting from it.
   tests:
     name: Run Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: sbomify_test
-          POSTGRES_PASSWORD: sbomify_test
-          POSTGRES_DB: sbomify_test
-        options: >-
-          --health-cmd "pg_isready -U sbomify_test"
-          --health-interval 2s
-          --health-timeout 2s
-          --health-retries 10
-        ports:
-          - 5432:5432
-      redis:
-        image: redis:8-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 2s
-          --health-timeout 2s
-          --health-retries 10
-        ports:
-          - 6379:6379
+    timeout-minutes: 30
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
@@ -150,41 +133,11 @@ jobs:
       STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
       STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'
       DJANGO_TEST: 'true'
-      TEST_DATABASE_HOST: localhost
-      TEST_DATABASE_PORT: 5432
-      TEST_DATABASE_USER: sbomify_test
-      TEST_DATABASE_PASSWORD: sbomify_test
-      TEST_DATABASE_NAME: sbomify_test
-      REDIS_URL: redis://localhost:6379
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.14"
-
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "**/uv.lock"
-
-      # Mirrors the python-common-code stage of the Dockerfile. WeasyPrint binds
-      # these at import time, and sbomify.apps.compliance.services.pdf_service
-      # imports it, so without them the compliance tests fail on an OSError that
-      # has nothing to do with the change under test. The runner image happens to
-      # carry most of them today; naming them keeps that from being load-bearing.
-      - name: Install WeasyPrint system libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
-            libjpeg-dev libopenjp2-7-dev libffi-dev
-
-      - name: Install Python dependencies
-        run: uv sync --locked
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
@@ -196,9 +149,20 @@ jobs:
       - name: Build JS assets
         run: bun run build
 
+      - name: Start Docker Compose for tests
+        run: |
+          docker compose -f docker-compose.tests.yml up -d
+
       # `shell: bash` plus pipefail: the default shell is `bash -e` without
       # pipefail, so `pytest | tee` would report tee's status and a failing
       # suite would pass silently (same trap as the Frontend Tests job).
+      #
+      # One invocation, not three. The old job counted tests with a throwaway
+      # --collect-only pass and then split the run on the `anyio` marker; only
+      # 8 tests in the repo carry it, so fifteen of the sixteen shards booted
+      # Django a third time to run nothing. Nor is pytest's exit code 5
+      # ("collected nothing") mapped to success any more — that is a real
+      # failure now that the paths are not an allowlist.
       #
       # `--dist loadscope` keeps a class/module on one worker, so fixtures with
       # class or module scope are built once rather than once per worker.
@@ -206,10 +170,12 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          uv run pytest --tb=short \
-            -n auto --dist loadscope \
-            --ignore=sbomify/apps/core/tests/e2e \
-            sbomify | tee test_results.txt
+          docker compose -f docker-compose.tests.yml exec -T tests sh -c "
+            uv run pytest --tb=short \
+              -n auto --dist loadscope \
+              --ignore=sbomify/apps/core/tests/e2e \
+              sbomify
+          " | tee test_results.txt
 
       - name: Test summary
         if: always()
