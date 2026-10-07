@@ -9,6 +9,7 @@
         <c-feedback.loading-stats compact count="{{ catalogue_shape.stat_cards }}" message="Loading plugin summary..." />
     </div>
     <c-layout.frame id="plugins-page-content" hx-get="{% url 'plugins:team_plugin_settings' team.key %}" hx-trigger="load" hx-swap="innerHTML">
-    <c-feedback.loading-page heading sublines="3" :sections="catalogue_shape.section_rows" message="Loading plugins..." />
+    {# The heading only when a section will arrive: an empty catalogue loads as an empty state, with no heading or save. #}
+    <c-feedback.loading-page :heading="catalogue_shape.section_rows" sublines="3" :sections="catalogue_shape.section_rows" message="Loading plugins..." />
     </c-layout.frame>
 {% endblock dashboard_content %}

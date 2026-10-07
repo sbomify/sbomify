@@ -70,3 +70,26 @@ def test_an_empty_catalogue_asks_for_no_cards() -> None:
 
     assert shape.value["section_rows"] == []
     assert shape.value["stat_cards"] == 2
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("registered", "heading_drawn"), [(True, True), (False, False)])
+def test_the_frame_draws_the_list_heading_only_when_sections_arrive(
+    client, sample_team_with_owner_member, registered: bool, heading_drawn: bool
+) -> None:
+    """An empty catalogue loads as "No plugins available", with no section heading
+    or save action, so its placeholder must not draw a heading that never arrives."""
+    from django.urls import reverse
+
+    from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+    RegisteredPlugin.objects.all().delete()
+    if registered:
+        _plugin("ntia", "compliance")
+    member = sample_team_with_owner_member
+    setup_authenticated_client_session(client, member.team, member.user)
+
+    html = client.get(reverse("plugins:plugins_page")).content.decode()
+
+    # The heading's title skeleton is the only 12rem-wide one on the page.
+    assert ("width: 12rem" in html) is heading_drawn
