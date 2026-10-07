@@ -6,6 +6,12 @@ from sbomify.apps.core.services.results import ServiceResult
 
 from ..models import RegisteredPlugin
 
+# The order the settings page groups its category sections in. The skeleton has
+# to draw its cards in the same order or each placeholder gets another card's
+# height, which is the jump it exists to prevent. Anything unlisted sorts last,
+# by name, exactly as the view's own tiebreaker does.
+CATEGORY_ORDER = {"compliance": 0, "license": 1, "security": 2, "attestation": 3}
+
 
 def get_catalogue_shape() -> ServiceResult[dict[str, int | list[int]]]:
     """Describe the plugins page before its content arrives.
@@ -19,11 +25,15 @@ def get_catalogue_shape() -> ServiceResult[dict[str, int | list[int]]]:
 
     ``stat_cards`` is the summary bar: the two fixed totals plus one card per
     category. ``section_rows`` is the list below it, one entry per category card
-    holding that category's plugin count, so the placeholder draws the cards and
-    rows that actually arrive rather than a generic two.
+    holding that category's plugin count, in the order the page renders those
+    cards, so the placeholder draws the cards and rows that actually arrive
+    rather than a generic two.
     """
     categories = RegisteredPlugin.objects.filter(is_enabled=True).values("category").annotate(total=Count("id"))
-    section_rows = sorted((row["total"] for row in categories), reverse=True)
+    section_rows = [
+        row["total"]
+        for row in sorted(categories, key=lambda row: (CATEGORY_ORDER.get(row["category"], 99), row["category"]))
+    ]
     return ServiceResult.success(
         {
             "stat_cards": 2 + len(section_rows),

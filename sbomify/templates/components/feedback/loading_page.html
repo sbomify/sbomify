@@ -7,6 +7,9 @@ sections is the shape of what is coming: a list with one entry per card, each
 entry the number of rows that card will hold. A caller that knows its own
 catalogue passes it and the placeholder draws the cards that actually arrive.
 Left off, it falls back to two cards of two rows, which is the generic body.
+An empty list is an answer, not an omission: a caller whose catalogue is empty
+gets no cards, rather than two that never arrive. That is why the branch below
+tests for the prop being absent and not for it being falsy.
 
 heading adds the section title and action the body carries above its cards, for
 a page whose list is introduced rather than starting at the top of the frame.
@@ -26,7 +29,7 @@ height of the rows that replace it.
         <c-feedback.skeleton type="button" width="7rem" height="2.25rem" />
     </div>
 {% endif %}
-{% if sections %}
+{% if sections is not None %}
     {% for section_rows in sections %}
         <c-cards.card flush>
         <c-feedback.loading />

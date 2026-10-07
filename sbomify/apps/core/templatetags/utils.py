@@ -100,3 +100,18 @@ def humanize_token(value: Any) -> str:
     from sbomify.apps.core.utils import humanize_token as _humanize_token
 
     return _humanize_token(value)
+
+
+@register.filter
+def repeat(count: Any) -> range:
+    """``count`` as something to loop over, for a node drawn once per row.
+
+    Skeletons size themselves from a real count, so slicing a literal string
+    silently caps them at however long that string happened to be. Anything
+    that will not read as a whole number draws nothing, which is the same
+    answer a zero gives.
+    """
+    try:
+        return range(max(0, int(count)))
+    except (TypeError, ValueError):
+        return range(0)

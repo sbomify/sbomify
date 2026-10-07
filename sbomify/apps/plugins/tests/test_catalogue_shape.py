@@ -36,6 +36,21 @@ def test_shape_counts_one_card_per_category_and_one_row_per_plugin() -> None:
 
 
 @pytest.mark.django_db
+def test_rows_follow_the_order_the_page_renders_its_categories() -> None:
+    # Compliance leads the settings page whatever its size, so a bigger security
+    # section must not hand the compliance card the taller placeholder.
+    RegisteredPlugin.objects.all().delete()
+    _plugin("ntia", "compliance")
+    _plugin("osv", "security")
+    _plugin("grype", "security")
+    _plugin("trivy", "security")
+
+    shape = get_catalogue_shape()
+
+    assert shape.value["section_rows"] == [1, 3]
+
+
+@pytest.mark.django_db
 def test_a_disabled_plugin_is_not_a_row_the_page_will_draw() -> None:
     RegisteredPlugin.objects.all().delete()
     _plugin("ntia", "compliance")
