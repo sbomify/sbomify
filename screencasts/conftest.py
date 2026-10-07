@@ -1476,8 +1476,8 @@ def setup_browser_session(
     setup_authenticated_client_session(django_client, team, sample_user)
 
     session = django_client.session
-    session["current_team"]["has_completed_wizard"] = True
-    session["current_team"]["billing_plan"] = team.billing_plan
+    session["current_workspace"]["has_completed_wizard"] = True
+    session["current_workspace"]["billing_plan"] = team.billing_plan
     session.save()
 
     return {

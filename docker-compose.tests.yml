@@ -68,6 +68,12 @@ services:
       - ./sbomify/apps/core/tests/e2e/__diffs__:/code/sbomify/apps/core/tests/e2e/__diffs__
       - ./sbomify/apps/core/tests/e2e/__snapshots__:/code/sbomify/apps/core/tests/e2e/__snapshots__
       - ./screencasts:/code/screencasts
+      # .dockerignore keeps .github out of the image (the Docker Build job
+      # asserts it stays out), so the pytest-split weights the e2e matrix
+      # reads have to be mounted in rather than baked. Writable, like the
+      # snapshot baselines above and for the same reason: `--store-durations`
+      # regenerates this file from inside the container.
+      - ./.github/e2e-test-durations.json:/code/.github/e2e-test-durations.json
     depends_on:
       chromium:
         condition: service_healthy

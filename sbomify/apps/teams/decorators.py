@@ -71,14 +71,14 @@ def validate_role_in_current_team(allowed_roles: list[str]) -> Callable[..., Any
                 return error_response(request, HttpResponseForbidden("Not logged in"))
 
             # Get current team from session
-            current_team = request.session.get("current_team", {})
+            current_team = request.session.get("current_workspace", {})
             team_key = current_team.get("key", None)
 
             if team_key is None:
                 return error_response(request, HttpResponseForbidden("No current workspace selected"))
 
             # Get user teams from session
-            user_teams = request.session.get("user_teams", {})
+            user_teams = request.session.get("user_workspaces", {})
 
             if team_key not in user_teams:
                 return error_response(request, HttpResponseForbidden("Unknown workspace"))

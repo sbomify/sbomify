@@ -153,8 +153,8 @@ class TestErrorResponseConsistency:
 
         # Clear any team session data
         session = client.session
-        session.pop("current_team", None)
-        session.pop("user_teams", None)
+        session.pop("current_workspace", None)
+        session.pop("user_workspaces", None)
         session.save()
 
         endpoints = [
