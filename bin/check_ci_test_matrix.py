@@ -93,8 +93,11 @@ def main() -> int:
         )
     if sorted(groups) != list(range(1, len(groups) + 1)):
         problems.append(f"  e2e-tests: matrix groups must be 1..{len(groups)}, got {groups}")
-    if E2E_DIR not in e2e:
-        problems.append(f"  e2e-tests: does not run {E2E_DIR}")
+    # Substring-matching E2E_DIR here would accept a narrowed target: a single
+    # file under it, say, contains the directory as a prefix, and five of the six
+    # groups would then collect nothing. Require it to be the whole target.
+    if not re.search(rf"^\s*{re.escape(E2E_DIR)}/?\s*$", e2e, re.MULTILINE):
+        problems.append(f"  e2e-tests: the pytest target is not exactly {E2E_DIR}, so part of the suite would not run")
 
     durations = re.search(r"--durations-path\s+(\S+)", e2e)
     if not durations:
