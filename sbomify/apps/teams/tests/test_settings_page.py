@@ -108,6 +108,27 @@ def test_patch_targets_require_workspace_administration(
         assert workspace.patch_sla_days == before
 
 
+def test_saving_the_support_period_refreshes_that_form_alone(
+    client: Client, sample_team_with_owner_member: Member
+) -> None:
+    """The saved value becomes the form's new starting point, and only that form
+    re-renders: refreshing the whole tab would throw away an unsaved name or
+    freshness edit in the card above."""
+    workspace = sample_team_with_owner_member.team
+    setup_authenticated_client_session(client, workspace, sample_team_with_owner_member.user)
+    url = reverse("teams:team_general", args=[workspace.key])
+
+    response = client.post(url, {"action": "update_support_period", "default_support_period_years": "7"})
+
+    trigger = json.loads(response.headers["HX-Trigger"])
+    assert "refreshSupportPeriod" in trigger
+    assert "refreshTeamGeneral" not in trigger
+    # The refresh selects the form alone, so its starting values must be inside it.
+    html = client.get(url, HTTP_HX_REQUEST="true").content.decode()
+    form = html[html.index('id="support-period-form"') :]
+    assert 'id="support-period-fields"' in form[: form.index("</form>")]
+
+
 @pytest.mark.parametrize("value", ["-1", "3651", "1.5", "invalid"])
 def test_invalid_patch_targets_do_not_change_saved_policy(
     client: Client, sample_team_with_owner_member: Member, value: str

@@ -68,10 +68,11 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             result = update_support_period(team_key, support_form.cleaned_data["default_support_period_years"])
             if not result.ok:
                 return htmx_error_response(result.error or "Unable to save support period")
-            # Re-render the tab so this form compares against what was saved.
+            # Re-render this form alone so it compares against what was saved.
             # Without it Save and Discard stay live and Discard restores the
-            # pre-save value over the one the server already holds.
-            return htmx_success_response("Default support period updated", triggers={"refreshTeamGeneral": True})
+            # pre-save value over the one the server already holds; refreshing
+            # the whole tab instead would drop an unsaved edit in the card above.
+            return htmx_success_response("Default support period updated", triggers={"refreshSupportPeriod": True})
 
         if action == "update_patch_sla":
             form = PatchSLAForm(request.POST)
