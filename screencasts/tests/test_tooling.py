@@ -11,6 +11,7 @@ import signal
 import subprocess
 from pathlib import Path
 
+import backfill_timings
 import httpx
 import mux_narration
 import narrator
@@ -148,3 +149,14 @@ def test_each_speech_request_sends_the_configured_key(call: str, monkeypatch: py
         narrator.synthesize("hello") if call == "synthesize" else narrator.transcribe(b"audio")
 
     assert headers["Authorization"] == "Bearer not-a-real-key"
+
+
+def test_backfill_without_a_cache_says_so_rather_than_raising(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(backfill_timings, "INDEX_PATH", tmp_path / "index.json")
+    monkeypatch.setattr(backfill_timings.sys, "argv", ["backfill_timings.py"])
+
+    backfill_timings.main()
+
+    assert "no narration cache" in capsys.readouterr().out

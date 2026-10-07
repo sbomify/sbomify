@@ -5,7 +5,7 @@ before ``char_times`` was stored stays a cache hit forever and never acquires
 them — which meant the subtitle fix silently applied to exactly the one beat
 whose copy had changed, while the other thirty-two kept the old proportional
 split.  Re-requesting produces the same audio from the same inputs; only the
-timings are new, so the committed ``.opus`` files are left untouched.
+timings are new, so the cached ``.opus`` files are left untouched.
 
     python screencasts/backfill_timings.py                     # every entry
     python screencasts/backfill_timings.py marketplace_walkthrough
@@ -32,6 +32,9 @@ def wanted_texts(names: list[str]) -> set[tuple[str, str, float]] | None:
 
 
 def main() -> None:
+    if not INDEX_PATH.exists():
+        print(f"[backfill] no narration cache at {INDEX_PATH}; warm a recording first, there is nothing to backfill")
+        return
     index = json.loads(INDEX_PATH.read_text())
     replace = load_pronunciations()
     targets = wanted_texts(sys.argv[1:])
