@@ -47,6 +47,6 @@ beats:
       This is Pied Piper's compression engine. Four components under one
       product.  When somebody asks whether you're affected by something,
       this structure is what makes the answer take seconds rather than a week.
-      You aren't searching build logs or asking around the team — you're
+      You aren't searching build logs or asking around the team. You're
       reading a list you already maintain, that already knows which repository
       each piece came from.

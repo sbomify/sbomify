@@ -23,11 +23,12 @@ git-ignored):
 
 ```text
 output/
-  marketplace_walkthrough.webm            # the ~3.5 min hero video
+  marketplace_walkthrough.webm            # the ~7 min hero video
   walkthrough_chapters_supply_chain.webm  # the same chapters, as short clips
   walkthrough_chapters_inventory.webm
   walkthrough_chapters_vulnerabilities.webm
   walkthrough_chapters_trust_center.webm
+  walkthrough_chapters_advisories.webm
   screenshots/<recording>/
     hero/01-dashboard.png                 # curated, publishable stills
     hero/02-products-list.png
@@ -85,7 +86,7 @@ from the timing manifest.
 ## The marketplace walkthrough
 
 `walkthrough_chapters.py` is the source of truth: it holds the Pied Piper seed,
-the four `chapter_*` step functions, and a parametrized recording that renders
+the five `chapter_*` step functions, and a parametrized recording that renders
 each chapter as its own clip. `marketplace_walkthrough.py` imports the same
 step functions and plays them back-to-back with title cards, so the long cut
 and the short cuts cannot drift apart.
@@ -95,8 +96,10 @@ narrative order and stay stable across re-records, so an embedded
 `hero/13-vex-preview.png` keeps working after the next run. The timer frames
 alongside them are incidental — a frame every 3s, wherever the cadence lands.
 
-Captions are burned into the video but hidden for the stills, on the assumption
-that the video plays muted and the listing writes its own captions.
+A narrated recording shows no on-screen captions: the voice carries the
+explanation, and `mux_narration.py` writes a WebVTT file beside each video,
+`<name>.vtt`, for anyone watching muted. Publish the two together. The `hero/`
+stills hide the caption either way.
 
 ### Run the steps in order, and stop if one fails
 

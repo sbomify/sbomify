@@ -132,5 +132,5 @@ beats:
     text: >-
       And that's the structure. Components underneath, a product on top, and
       the metadata that lets the outside world make sense of both. [pause]
-      Everything after this — uploading SBOMs, cutting releases, publishing a
-      trust center — hangs off the shape you just built.
+      Everything after this hangs off the shape you just built: uploading
+      SBOMs, cutting releases, publishing a trust center.

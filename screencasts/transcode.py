@@ -26,7 +26,6 @@ than one encode allowed to sprawl.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
@@ -44,9 +43,6 @@ _PLAYWRIGHT_TEMP = re.compile(r"[0-9a-f]{32}")
 _SIDECARS = (".dry", ".scored", ".scoring", ".narrated")
 
 CRF = 24
-# Idempotence marker, so a re-run after a partial failure does not re-encode
-# something already converted (which would compound generation loss).
-MARKER_SUFFIX = ".transcoded.json"
 
 # Pinned rather than left to libvpx, which sizes its pool from the whole
 # machine and would then have every concurrent encode contending for it.
@@ -61,13 +57,37 @@ def _jobs() -> int:
     return max(1, (os.cpu_count() or THREADS_PER_JOB) // THREADS_PER_JOB)
 
 
+def _codec(path: Path) -> str:
+    """The codec of the file's first video stream, as ffprobe names it."""
+    return subprocess.run(  # nosec B607 - ffprobe by name from PATH, fixed argv, shell=False
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
 def transcode(name: str) -> None:
     source = OUTPUT_DIR / f"{name}.webm"
-    marker = OUTPUT_DIR / f"{name}{MARKER_SUFFIX}"
     if not source.exists():
         print(f"[transcode] {name}: no recording, skipped")
         return
-    if marker.exists():
+    # Idempotent, so a re-run after a partial failure does not re-encode what is
+    # already converted (which would compound generation loss). Asked of the
+    # file itself: a marker beside it outlived the recording it described, and
+    # a take recorded again over the same name shipped as VP8.
+    if _codec(source) == "vp9":
         print(f"[transcode] {name}: already VP9, skipped")
         return
 
@@ -103,7 +123,6 @@ def transcode(name: str) -> None:
         check=True,
     )
     destination.replace(source)
-    marker.write_text(json.dumps({"codec": "vp9", "crf": CRF}) + "\n")
     print(f"[transcode] {name}: VP9 crf {CRF}, timestamps untouched", flush=True)
 
 

@@ -68,7 +68,7 @@ beats:
   vuln_not_exploitable:
     text: >-
       There it is. Critical, in the compression core. [long-pause] But it isn't
-      reachable the way Pied Piper actually uses libwebp — the decode path
+      reachable the way Pied Piper actually uses libwebp. The decode path
       never runs in a shipped build. [long-pause] That's a real answer, and VEX
       is how you say it in a form a machine can read.
 
@@ -127,4 +127,4 @@ beats:
     text: >-
       Nothing was deleted, and nothing is hidden away.  The finding sits
       right next to your answer to it, which is exactly what an auditor wants
-      to see — not a shorter list, but a justified one.
+      to see. Not a shorter list, but a justified one.
