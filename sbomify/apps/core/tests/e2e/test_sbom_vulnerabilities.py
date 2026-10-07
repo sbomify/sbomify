@@ -309,15 +309,18 @@ def test_a_refresh_keeps_an_open_findings_panel_and_its_filters(authenticated_pa
     expect(panel.get_by_role("combobox", name="Rows per page")).to_be_visible()
     panel.get_by_role("combobox", name="Rows per page").select_option("5")
     expect(panel.get_by_text("Showing 1 to 5 of 15 vulnerabilities", exact=True)).to_be_visible()
+    page.evaluate("(id) => { document.getElementById('findings-host-' + id).__readers = true }", str(run.id))
 
     # Observable readiness, not a delay: dispatch and wait for htmx to settle
-    # the region, or the assertions below race the swap.
+    # the region, or the assertions below race the swap. The region's own
+    # settle: the open panel refreshes itself on the same event, and its
+    # smaller response usually settles first.
     page.evaluate(
         """() => {
             window.__refreshSettled = false;
-            document.body.addEventListener(
-                'htmx:afterSettle', () => { window.__refreshSettled = true }, { once: true }
-            );
+            document.body.addEventListener('htmx:afterSettle', (event) => {
+                if (event.target.id === 'artifact-content') window.__refreshSettled = true;
+            });
             document.body.dispatchEvent(new CustomEvent('refresh-assessments'));
         }"""
     )
@@ -327,6 +330,15 @@ def test_a_refresh_keeps_an_open_findings_panel_and_its_filters(authenticated_pa
     expect(panel.get_by_role("combobox", name="Rows per page")).to_be_visible()
     expect(panel.get_by_text("Showing 1 to 5 of 15 vulnerabilities", exact=True)).to_be_visible()
     expect(panel.get_by_text("Loading assessment results...")).to_have_count(0)
+    # Morphed in place, not nested: a second region would answer the next
+    # refresh too, and its late swap takes the panel off the page.
+    expect(page.locator('[id="artifact-content"]')).to_have_count(1)
+    # The reader's own node, not a copy rebuilt from markup. A copy drops the
+    # panel's listeners and state, and a refresh it had in flight lands on the
+    # node that left the page.
+    assert page.evaluate("(id) => document.getElementById('findings-host-' + id).__readers === true", str(run.id)), (
+        "the refresh replaced the open panel's host with a copy"
+    )
 
 
 @pytest.mark.django_db
@@ -357,13 +369,15 @@ def test_a_refresh_keeps_a_half_written_triage_justification(authenticated_page,
     detail.fill("Not reachable from any entry point")
 
     # Observable readiness, not a delay: dispatch and wait for htmx to settle
-    # the region, or the assertions below race the swap.
+    # the region, or the assertions below race the swap. The region's own
+    # settle: the open panel refreshes itself on the same event, and its
+    # smaller response usually settles first.
     page.evaluate(
         """() => {
             window.__refreshSettled = false;
-            document.body.addEventListener(
-                'htmx:afterSettle', () => { window.__refreshSettled = true }, { once: true }
-            );
+            document.body.addEventListener('htmx:afterSettle', (event) => {
+                if (event.target.id === 'artifact-content') window.__refreshSettled = true;
+            });
             document.body.dispatchEvent(new CustomEvent('refresh-assessments'));
         }"""
     )
@@ -576,29 +590,7 @@ def test_a_saved_triage_shows_where_it_was_made(authenticated_page, sbom_with_fi
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize(
-    "view",
-    [
-        "component",
-        "report",
-        pytest.param(
-            "plugin",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "An open findings panel is emptied by this broadcast. The artifact page "
-                    "bridges vex_reapplied on #artifact-content and morphs the whole frame, so "
-                    "the lazy findings region comes back as its unopened placeholder: after the "
-                    "broadcast the panel has no rows, no pagination and no filters, not merely a "
-                    "different page. The immediate refresh from the save keeps them, so this is "
-                    "specific to the later broadcast. Fixing it is a choice between bridging on "
-                    "the panel instead of the frame and teaching morph-preserve about an opened "
-                    "panel, which is more than this test should decide."
-                ),
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("view", ["component", "report", "plugin"])
 def test_the_broadcast_refreshes_the_panel_without_losing_the_readers_place(
     authenticated_page, sbom_with_findings, triage_reapply_stays_queued, view
 ):
