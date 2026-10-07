@@ -18,9 +18,12 @@ from __future__ import annotations
 import json
 
 import pytest
-from django.test import Client
+from django.contrib.auth.models import AnonymousUser
+from django.test import Client, RequestFactory
 from django.urls import reverse
 
+from sbomify.apps.core.apis import list_component_sboms
+from sbomify.apps.core.models import Component
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.plugins.models import RegisteredPlugin, TeamPluginSettings
 from sbomify.apps.teams.models import Team
@@ -189,3 +192,27 @@ class TestTheSettingsPage:
 
         assert "Paused by your plan" not in body
         assert "Business plan required" in body
+
+
+class TestTheComponentSbomList:
+    def test_an_sbom_reads_no_plugins_enabled_while_the_plan_pauses_every_plugin(
+        self, ensure_billing_plans, sample_sbom
+    ):
+        # Dependency Track is on file, but the plan excludes it and nothing else is
+        # enabled, so no assessment is coming: "no assessments yet" would promise one.
+        component = sample_sbom.component
+        component.team.billing_plan = "community"
+        component.team.save(update_fields=["billing_plan"])
+        _enable(component.team, DT)
+        component.visibility = Component.Visibility.PUBLIC
+        component.save(update_fields=["visibility"])
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+
+        # Called the way the SBOMs table calls it: the HTTP schema drops ``assessments``.
+        status_code, body = list_component_sboms(
+            request, str(component.id), page=1, page_size=-1, include_all_types=True
+        )
+
+        assert status_code == 200
+        assert [item["assessments"]["overall_status"] for item in body["items"]] == ["no_plugins_enabled"]
