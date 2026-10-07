@@ -102,6 +102,7 @@ def prune_assessment_runs(
     original #1120 migration unrunnable on staging.
     """
     from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.plugins.result_store import delete_result_objects
 
     doomed = prunable_run_ids(keep_per_plugin=keep_per_plugin, min_age_days=min_age_days)
     if dry_run:
@@ -112,12 +113,19 @@ def prune_assessment_runs(
     removed = 0
     for start in range(0, len(doomed), batch_size):
         batch = doomed[start : start + batch_size]
+        # A run whose payload was offloaded is the only pointer to its objects,
+        # so they go once the row has: never a row pointing at a deleted object.
+        offloaded = list(
+            AssessmentRun.objects.filter(id__in=batch).exclude(result_object_key="").values_list("id", flat=True)
+        )
         # Count what the delete actually removed, not what was asked for: a
         # concurrent sweep may already have taken some of these rows. Only the
         # id is loaded: the collector would otherwise read every doomed run
         # whole, findings blob included, just to delete it.
         _, per_model = AssessmentRun.objects.filter(id__in=batch).only("id").delete()
         removed += per_model.get("plugins.AssessmentRun", 0)
+        for run_id in offloaded:
+            delete_result_objects(run_id)
     if removed:
         logger.info(f"[RETENTION] pruned {removed} assessment runs")
     return removed

@@ -436,3 +436,21 @@ class TestFindingRowsOutliveTheMove:
             sync_findings(superseded, [])
 
         assert Finding.objects.filter(run=superseded).count() == 2
+
+
+@pytest.mark.django_db
+class TestRetentionReclaimsTheStoredPayload:
+    def test_pruning_an_offloaded_run_deletes_its_objects(self, sbom, bucket):
+        """Retention prunes runs beyond the per-plugin quota. The row is the only
+        pointer to an offloaded payload, so deleting it must take the objects too
+        or they stay in the bucket for good."""
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        assert offload_assessment_results() == 1
+
+        assert prune_assessment_runs(keep_per_plugin=1, min_age_days=0) == 1
+
+        assert not AssessmentRun.objects.filter(pk=superseded.pk).exists()
+        assert [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{superseded.id}/")] == []
