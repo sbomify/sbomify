@@ -326,8 +326,8 @@ def narrate(page: Page, key: str) -> None:
             "url": _short_url(page.url),
         }
     )
-    # The line occupies clip.duration of *finished* video, so the recording
-    # has to sit on it for that much wall clock times the slowdown.
+    # The line plays for clip.duration, so the recording holds on it that long,
+    # plus the breath before the next line.
     _narration_state["busy_until"] = time.monotonic() + clip.duration + _INTER_BEAT_GAP_MS / 1000
     _narration_state["open_beat"] = {"entry": _narration_state["beats"][-1], "started": time.monotonic()}
 
@@ -1461,7 +1461,7 @@ def setup_browser_session(
         team.save(update_fields=["has_selected_billing_plan"])
 
     # Same reasoning, and it has to be on the *model*, not just the session
-    # copy below.  ``request.session["current_team"]`` is a cache with a 300s
+    # copy below.  The session's copy of the workspace is a cache with a 300s
     # TTL: patching it only holds for the first five minutes of a recording,
     # after which it is rebuilt from the database.  The long tour runs longer
     # than that, so the refresh landed mid-recording and every authenticated page from that point on

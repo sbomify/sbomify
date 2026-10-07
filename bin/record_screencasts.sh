@@ -136,8 +136,8 @@ Narration (spoken voiceover + .vtt subtitles):
   verify                Audit every entry in the pronunciation map
   proof <name>          Transcribe a screencast's real audio back, line by line
 
-Synthesis needs XAI_API_KEY exported, but only for lines that are not already
-in screencasts/narration/audio/, which is committed.
+Synthesis needs XAI_API_KEY exported, but only for lines not already in
+screencasts/narration/audio/, a local cache git ignores; warm-all rebuilds it.
 
 Examples:
   $0 all
