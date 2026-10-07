@@ -88,6 +88,7 @@ size themselves naturally on smaller screens.
         </ul>
         {% if plan.downgrade and plan.lost_features or plan.ends_subscription %}
             <c-feedback.alert variant="warning" title="Moving here costs you">
+            <c-slot name="body">
             {% if plan.ends_subscription %}
                 <p class="m-0">Your subscription ends at the end of the billing period.</p>
             {% endif %}
@@ -101,6 +102,7 @@ size themselves naturally on smaller screens.
                     {% endfor %}
                 </ul>
             {% endif %}
+            </c-slot>
             </c-feedback.alert>
         {% endif %}
         <c-feedback.alert variant="warning" x-show="getDowngradeWarning('{{ plan.key|escapejs }}')" x-cloak><span x-text="getDowngradeWarning('{{ plan.key|escapejs }}')"></span></c-feedback.alert>

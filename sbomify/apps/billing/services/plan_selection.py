@@ -13,22 +13,58 @@ from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.queries import get_team_user_counts
 
+_ORDER = {BillingPlan.KEY_COMMUNITY: 0, BillingPlan.KEY_BUSINESS: 1, BillingPlan.KEY_ENTERPRISE: 2}
 
-def build_plan_selection_context(
-    request: HttpRequest, workspace: Team, stripe_pricing_data: dict[str, dict[str, Any]]
-) -> ServiceResult[dict[str, Any]]:
-    order = {BillingPlan.KEY_COMMUNITY: 0, BillingPlan.KEY_BUSINESS: 1, BillingPlan.KEY_ENTERPRISE: 2}
-    # The same count ``can_add_user_to_team`` enforces: human members, bots
-    # excluded, plus the invitations already holding a seat. Counting members
-    # alone would block a workspace over its bot publishers and wave through one
-    # whose remaining room is already spoken for.
-    members, pending_invites, seats = get_team_user_counts(workspace.id)
+
+def _usage(workspace: Team) -> tuple[dict[str, int], str]:
+    """What a plan's limits are checked against, and the name for the seat count.
+
+    The seat count is the one ``can_add_user_to_team`` enforces: human members,
+    bots excluded, plus the invitations already holding a seat. Counting members
+    alone would block a workspace over its bot publishers and wave through one
+    whose remaining room is already spoken for.
+    """
+    _, pending_invites, seats = get_team_user_counts(workspace.id)
     usage = {
         "members": seats,
         "products": Product.objects.filter(team=workspace).count(),
         "components": Component.objects.filter(team=workspace).count(),
     }
-    seat_label = "members and pending invitations" if pending_invites else "members"
+    return usage, "members and pending invitations" if pending_invites else "members"
+
+
+def _exceeded(usage: dict[str, int], seat_label: str, plan: BillingPlan) -> list[str]:
+    return [
+        f"{usage[resource]} {label} (limit: {limit})"
+        for resource, label, limit in (
+            ("members", seat_label, plan.max_users),
+            ("products", "products", plan.max_products),
+            ("components", "components", plan.max_components),
+        )
+        if limit is not None and usage[resource] > limit
+    ]
+
+
+def check_downgrade(workspace: Team, plan: BillingPlan) -> ServiceResult[None]:
+    """Refuse a move down to ``plan`` that ``workspace`` has outgrown.
+
+    The plan cards disable that choice through ``downgradeLimits``. This is the
+    same check for the request itself, which nothing on the page controls.
+    """
+    current = workspace.billing_plan or BillingPlan.KEY_COMMUNITY
+    if _ORDER.get(plan.key or "", 99) >= _ORDER.get(current, 99):
+        return ServiceResult.success()
+    exceeded = _exceeded(*_usage(workspace), plan)
+    if exceeded:
+        return ServiceResult.failure(f"Reduce usage to choose {plan.name}: {', '.join(exceeded)}.", status_code=409)
+    return ServiceResult.success()
+
+
+def build_plan_selection_context(
+    request: HttpRequest, workspace: Team, stripe_pricing_data: dict[str, dict[str, Any]]
+) -> ServiceResult[dict[str, Any]]:
+    order = _ORDER
+    usage, seat_label = _usage(workspace)
     billing_limits = workspace.billing_plan_limits or {}
     current_plan = workspace.billing_plan or BillingPlan.KEY_COMMUNITY
     is_subscribed = billing_limits.get("subscription_status") in ("active", "trialing")
@@ -41,15 +77,7 @@ def build_plan_selection_context(
         pricing = dict(stripe_pricing_data.get(key, {}))
         pricing.setdefault("promo_message", plan.promo_message)
         is_downgrade = order.get(key, 99) < order.get(current_plan, 99)
-        exceeded = []
-        if is_downgrade:
-            for resource, label, limit in (
-                ("members", seat_label, plan.max_users),
-                ("products", "products", plan.max_products),
-                ("components", "components", plan.max_components),
-            ):
-                if limit is not None and usage[resource] > limit:
-                    exceeded.append(f"{usage[resource]} {label} (limit: {limit})")
+        exceeded = _exceeded(usage, seat_label, plan) if is_downgrade else []
         downgrade_limits[key] = {"exceeds": bool(exceeded), "resources": exceeded}
         prices = []
         if key == BillingPlan.KEY_BUSINESS:
@@ -97,6 +125,7 @@ def build_plan_selection_context(
             "team_key": workspace.key,
             "team": workspace,
             "usage": usage,
+            "seat_label": seat_label,
             "annual_savings_percent": annual_savings_percent,
             "plan_selection_data": {
                 "currentPlan": current_plan,

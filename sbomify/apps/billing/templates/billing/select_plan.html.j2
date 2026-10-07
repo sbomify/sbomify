@@ -16,7 +16,7 @@
     <section class="flex flex-col gap-3" aria-label="Current usage">
         <c-layout.section-header title="Current usage" subtitle="Resources in this workspace." level="2" />
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <c-layout.stat-card compact value="{{ usage.members }}" label="Members" accent="muted" />
+            <c-layout.stat-card compact value="{{ usage.members }}" label="{{ seat_label|capfirst }}" accent="muted" />
             <c-layout.stat-card compact value="{{ usage.products }}" label="Products" accent="muted" />
             <c-layout.stat-card compact value="{{ usage.components }}" label="Components" accent="muted" />
         </div>

@@ -315,6 +315,7 @@ class SelectPlanView(LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from .billing_helpers import check_rate_limit
+        from .services.plan_selection import check_downgrade
 
         if check_rate_limit(f"select_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
             messages.error(request, "Too many requests. Please try again later.")
@@ -351,6 +352,11 @@ class SelectPlanView(LoginRequiredMixin, View):
 
         sync_subscription_from_stripe(team, force_refresh=True)
         team.refresh_from_db()
+
+        downgrade = check_downgrade(team, plan)
+        if not downgrade.ok:
+            messages.error(request, downgrade.error or "Reduce usage to choose this plan.")
+            return redirect("billing:select_plan", team_key=team_key)
 
         billing_limits = team.billing_plan_limits or {}
         stripe_sub_id = billing_limits.get("stripe_subscription_id")
