@@ -11,7 +11,16 @@
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to SBOM
     </c-buttons.secondary>
     </c-layout.page-header>
-    <div class="space-y-6">
+    {% comment %}The report refreshes itself when a scan of this SBOM finishes, rather than
+    reloading on a timer. The bridge sits on this always-rendered region: the
+    results panel exists only once there are results, which is exactly when a
+    report opened before its scan has none. The refresh asks for the address
+    bar's URL, which the filter form keeps current, and takes this region from
+    the page it gets back. One message comes per plugin, so it is debounced.{% endcomment %}
+    <div id="scan-report"
+         class="space-y-6"
+         x-data="{ refreshTimer: null }"
+         @ws:message.window=" if ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ sbom.id }}') { const region = $el; clearTimeout(refreshTimer); refreshTimer = setTimeout(() => htmx.ajax('GET', location.pathname + location.search, { target: region, select: '#scan-report', swap: 'outerHTML' }), 500); } ">
         {# Stats Badges #}
         <div class="flex flex-wrap gap-2">
             {% if sbom_version_info %}

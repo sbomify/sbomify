@@ -13,6 +13,7 @@ These tests hold each surface to refreshing its own region instead.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -129,6 +130,36 @@ class TestATriagePanelRefreshesWhereTheReaderIs:
         assert f"'{component.id}'" in root["@ws:message.window"]
 
 
+@pytest.mark.django_db
+def test_a_report_with_no_scan_yet_waits_for_its_own_scan(sample_team_with_owner_member, sample_user) -> None:
+    """The report no longer reloads itself on a timer, so a finished scan has to reach it.
+
+    The bridge sits on a region the page always renders: the results panel only
+    exists once there are results, which is exactly when a report opened before
+    its scan has none.
+    """
+    from django.test import Client
+    from django.urls import reverse
+
+    from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+    from sbomify.apps.core.tests.test_panel_triage_and_page_size import _component_with_findings
+    from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.sboms.models import SBOM
+
+    team = sample_team_with_owner_member.team
+    sbom = SBOM.objects.get(component=_component_with_findings(team))
+    AssessmentRun.objects.filter(sbom=sbom).delete()
+    client = Client()
+    setup_authenticated_client_session(client, team, sample_user)
+
+    html = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sbom.id})).content.decode()
+
+    assert "No Scan Data Available" in html
+    region = _root_attributes(html, "scan-report")
+    assert "'assessment_complete'" in region["@ws:message.window"]
+    assert f"'{sbom.id}'" in region["@ws:message.window"]
+
+
 @pytest.mark.parametrize("template", TRIAGE_PANELS)
 def test_a_refresh_keeps_the_reader_in_place(template: str) -> None:
     """morph preserves scroll position and focus; outerHTML does not."""
@@ -143,11 +174,17 @@ def test_a_refresh_keeps_the_reader_in_place(template: str) -> None:
 
 class TestScanProcessingState:
     def test_it_no_longer_reloads_on_a_timer(self) -> None:
-        """A 300 second reload fired whether or not anything had changed."""
+        """A 300 second reload fired whether or not anything had changed.
+
+        A short debounce after a scan's completion message is not that: it waits
+        for something that did change. What must not come back is a refresh
+        nothing asked for, whether a reload, an interval or an htmx poll.
+        """
         source = _source("apps/sboms/templates/sboms/sbom_vulnerabilities.html.j2")
 
-        assert "setTimeout" not in source
         assert "location.reload" not in source
+        assert "setInterval" not in source
+        assert not re.search(r'hx-trigger="[^"]*\bevery\b', source)
 
     # There was a test here for the 60s fallback poll refreshing
     # #scan-results-card. It is gone because the thing it asserted is gone:
