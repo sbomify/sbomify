@@ -223,7 +223,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         "component_version": "Component Version",
         "filename": "Component Filename",
         "dependencies": "Dependencies with Completeness",
-        "distribution_licences": "Distribution Licences",
+        "distribution_licences": "Distribution Licenses",
         "hash_value": "Hash Value (SHA-512)",
         "executable_property": "Executable Property",
         "archive_property": "Archive Property",
@@ -232,7 +232,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         "source_code_uri": "Source Code URI",
         "uri_deployable_form": "URI of Deployable Form",
         "unique_identifiers": "Unique Identifiers",
-        "original_licences": "Original Licences",
+        "original_licences": "Original Licenses",
         "no_vulnerabilities": "No Embedded Vulnerabilities",
         "attestation_check": "Digital Signature Attestation",
     }
@@ -263,7 +263,7 @@ class BSICompliancePlugin(AssessmentPlugin):
             "(complete/incomplete/unknown) (BSI TR-03183-2 §5.2.2 Table 3)"
         ),
         "distribution_licences": (
-            "Distribution licence(s) using SPDX identifiers or expressions (BSI TR-03183-2 §5.2.2 Table 3, §6.1)"
+            "Distribution license(s) using SPDX identifiers or expressions (BSI TR-03183-2 §5.2.2 Table 3, §6.1)"
         ),
         "hash_value": (
             "Cryptographically secure SHA-512 hash of the deployable component (BSI TR-03183-2 §5.2.2 Table 3)"
@@ -279,7 +279,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         ),
         "sbom_uri": (
             "Uniform Resource Identifier of this SBOM — MUST be provided if it exists and "
-            "fulfils the requirements of the SBOM format specification (BSI TR-03183-2 §5.2.3 Table 4)"
+            "fulfills the requirements of the SBOM format specification (BSI TR-03183-2 §5.2.3 Table 4)"
         ),
         "source_code_uri": (
             "URI of the source code of the component — MUST be provided if it exists (BSI TR-03183-2 §5.2.4 Table 5)"
@@ -293,8 +293,8 @@ class BSICompliancePlugin(AssessmentPlugin):
             "(BSI TR-03183-2 §5.2.4 Table 5)"
         ),
         "original_licences": (
-            "Original licence(s) assigned by the component creator (distinct from distribution "
-            "licences) — MUST be provided if they exist (BSI TR-03183-2 §5.2.4 Table 5, §6.1)"
+            "Original license(s) assigned by the component creator (distinct from distribution "
+            "licenses) — MUST be provided if they exist (BSI TR-03183-2 §5.2.4 Table 5, §6.1)"
         ),
         "no_vulnerabilities": (
             "SBOM MUST NOT contain vulnerability information. Use CSAF or VEX documents instead "
@@ -863,7 +863,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                 ),
                 remediation=(
                     'Add externalReferences with type="distribution" or type="distribution-intake" '
-                    "so consumers can fetch the deployable artefact. Per BSI TR-03183-2 §5.2.4, "
+                    "so consumers can fetch the deployable artifact. Per BSI TR-03183-2 §5.2.4, "
                     "this MUST be provided if it exists for the component."
                 ),
             )
@@ -877,13 +877,13 @@ class BSICompliancePlugin(AssessmentPlugin):
                 details=(
                     self._format_failure_details(original_licences_warnings)
                     if original_licences_warnings
-                    else "All components expose original licence information"
+                    else "All components expose original license information"
                 ),
                 remediation=(
-                    'Mark the component\'s original licence with licenses[].acknowledgement = "declared" '
+                    'Mark the component\'s original license with licenses[].acknowledgement = "declared" '
                     "(CycloneDX 1.5+) or add the bsi:component:associatedLicences / "
                     "bsi:component:effectiveLicence BSI property. Per BSI TR-03183-2 §5.2.4, original "
-                    "licences MUST be provided if they exist for the component."
+                    "licenses MUST be provided if they exist for the component."
                 ),
             )
         )
@@ -1232,7 +1232,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                 details=self._format_failure_details(uri_deployable_form_warnings)
                 if uri_deployable_form_warnings
                 else None,
-                remediation="Set software_downloadLocation to the deployable artefact URL on each package.",
+                remediation="Set software_downloadLocation to the deployable artifact URL on each package.",
             )
         )
 
@@ -1462,7 +1462,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                 status="pass" if not deployable_warnings else "warning",
                 details=self._format_failure_details(deployable_warnings) if deployable_warnings else None,
                 remediation=(
-                    'Set downloadLocation to the URL of the deployable artefact on each package (not "NOASSERTION").'
+                    'Set downloadLocation to the URL of the deployable artifact on each package (not "NOASSERTION").'
                 ),
             )
         )
@@ -1473,7 +1473,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                 status="pass" if not original_licence_warnings else "warning",
                 details=self._format_failure_details(original_licence_warnings) if original_licence_warnings else None,
                 remediation=(
-                    "Populate licenseDeclared on each package — this is the licence originally "
+                    "Populate licenseDeclared on each package — this is the license originally "
                     "assigned by the component creator (distinct from licenseConcluded)."
                 ),
             )

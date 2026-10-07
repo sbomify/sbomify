@@ -134,7 +134,7 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
             {
                 "name": "Products",
                 "description": "Structure your software inventory with products that group components and "
-                "are organised by releases.",
+                "are organized by releases.",
             },
             {
                 "name": "Releases",

@@ -57,7 +57,7 @@
          x-data="teamBranding('{}')">
         <c-cards.card>
         <div class="space-y-4">
-            <c-forms.color-field size="sm" id="ds-settings-color" label="Accent color" colour="uiColors.accent_color" on_input="updateColor('accent_color', $event.target.value)" />
+            <c-forms.color-field size="sm" id="ds-settings-color" label="Accent color" color="uiColors.accent_color" on_input="updateColor('accent_color', $event.target.value)" />
             <c-forms.file-upload size="sm" name="ds-settings-logo" input_ref="previewFile" accept="image/*" preview="''" required disabled hint="Disabled input, with state on the real control.">Choose a logo</c-forms.file-upload>
         </div>
         </c-cards.card>
@@ -90,7 +90,7 @@
         Zero values stay neutral. The component owns its spacing and type at every width.
     </p>
     <c-overview.quick-actions>
-    <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:product_new' %}" title="Add product" description="Organise components and artifacts" icon="fas fa-cube" />
+    <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:product_new' %}" title="Add product" description="Organize components and artifacts" icon="fas fa-cube" />
     <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" title="Add release" description="Bring a version's artifacts together" icon="fas fa-tag" href="{% url 'core:release_new' %}" />
     <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:component_new' %}" title="Add component" description="Store SBOMs and documents" icon="fas fa-puzzle-piece" />
     <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:security_advisory_new' %}" title="Add advisory" description="Create a draft security advisory" icon="fas fa-shield-halved" />
@@ -141,11 +141,11 @@
     </div>
     </c-layout.frame>
     {# ── Foundations ───────────────────────────────────────────────────────── #}
-    <h2 id="colors" class="text-xl font-semibold text-text">Colour tokens</h2>
+    <h2 id="colors" class="text-xl font-semibold text-text">Color tokens</h2>
     <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         Text and icons use these tokens directly. Backgrounds, borders and focus rings can use
-        transparent tints. Do not blend foreground colours with text or add local colour values.
+        transparent tints. Do not blend foreground colors with text or add local color values.
         Swatches read the custom properties directly in both themes.
     </p>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -174,7 +174,7 @@
     <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         The accent carrier of the design language: a flat 12% tint with the accent as foreground.
-        Every "icon beside a heading" is one of these. Never a gradient chip, never a coloured side-border.
+        Every "icon beside a heading" is one of these. Never a gradient chip, never a colored side-border.
     </p>
     <p class="tw-data-label mb-2">Sizes</p>
     <div class="flex flex-wrap items-center gap-4 mb-5">
@@ -311,7 +311,7 @@
             <c-assessments.row state="open" @click="open = !open" name="NTIA Minimum Elements (2021)" tone="warning" label="1 issue" caption="6 of 7 checks passed" :segments="scorecard_demo.issues" bar_label="6 passed, 1 failed">
             <c-slot name="details">
             <ul class="m-0 px-4 py-1">
-                <c-assessments.check status="fail" title="SBOM Author" remediation="Add the person or organisation that assembled this SBOM.">
+                <c-assessments.check status="fail" title="SBOM Author" remediation="Add the person or organization that assembled this SBOM.">
                 No author is recorded for this SBOM.
                 </c-assessments.check>
                 <c-assessments.check status="warning" title="Declared licenses need review">
@@ -514,7 +514,7 @@ first-of-type rule that drops the leading hairline reads the section's position
             bare fill and it takes the radius of whatever tile holds it.
             c-forms.color-field below is the whole field built on it.
         {% endcomment %}
-        <c-forms.field label="Colour" for="ds-color" hint="Sized by its container, not by the browser.">
+        <c-forms.field label="Color" for="ds-color" hint="Sized by its container, not by the browser.">
         <c-forms.input name="ds-color" type="color" value="#7C8CFF" class="h-11 rounded-lg overflow-hidden" />
         </c-forms.field>
         <c-forms.field label="Select" for="ds-select" hint="Pick an artifact type.">
@@ -523,12 +523,12 @@ first-of-type rule that drops the leading hairline reads the section's position
     </div>
     <div class="mt-5" x-data="{ swatch: '#7C8CFF' }">
         <p class="text-sm text-text-muted mb-3">
-            <code class="tw-code-inline">c-forms.color-field</code> is a colour as a field, shaped like
+            <code class="tw-code-inline">c-forms.color-field</code> is a color as a field, shaped like
             every other one: label above, hint below. The swatch and the hex are two halves of one control
-            bound to the same value, so a brand colour can be typed or pasted as well as picked, and the
+            bound to the same value, so a brand color can be typed or pasted as well as picked, and the
             ring is drawn on the pair rather than on whichever half has focus.
         </p>
-        <c-forms.color-field id="ds-color-field" label="Primary brand color" hint="Headers, navigation, primary elements" colour="swatch" on_input="swatch = $event.target.value" />
+        <c-forms.color-field id="ds-color-field" label="Primary brand color" hint="Headers, navigation, primary elements" color="swatch" on_input="swatch = $event.target.value" />
     </div>
     <div class="mt-5">
         <c-forms.field label="Textarea" for="ds-textarea">
@@ -570,7 +570,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     c-forms.field's, so a group of tiles reads like every other field.
     {% endcomment %}
     <p class="text-sm text-text-muted mb-4">
-        Radios as tiles, for a short set of values that carry an icon and a colour elsewhere. Each option wears the
+        Radios as tiles, for a short set of values that carry an icon and a color elsewhere. Each option wears the
         accent its badge wears, so choosing one looks like the badge it produces. Selection is painted with
         <code class="tw-code-inline">:has(:checked)</code>, so the highlight cannot drift from what submits.
         Longer or free-form lists stay in <code class="tw-code-inline">select</code>.
@@ -870,7 +870,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     <p class="text-sm text-text-muted">
         One bordered container of divided collapsible sections. The compact density
         (<code class="tw-code-inline">density="sm"</code>) is for category lists inside a card, like the
-        controls catalogue.
+        controls catalog.
     </p>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <c-navigation.accordion x-data="{ open: 'a-org' }">
@@ -927,7 +927,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-buttons.secondary @click="wide = true">Open large modal</c-buttons.secondary>
         <c-buttons.secondary @click="removeTarget = { name: 'acme-gateway-core' }">Open row dialog</c-buttons.secondary>
         <c-modal id="ds-modal" title="Assign a component">
-        <c-forms.field label="Component name" for="ds-modal-name" hint="Pick a name your team will recognise.">
+        <c-forms.field label="Component name" for="ds-modal-name" hint="Pick a name your team will recognize.">
         <c-forms.input name="ds-modal-name" placeholder="acme-gateway-core" />
         </c-forms.field>
         <c-slot name="footer">
@@ -1093,7 +1093,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         The shell holds the toolbar, the table and the footer. A wide table scrolls inside the table
         component, never on the page body. Inside a card, pass <code class="tw-code-inline">nested</code> and
         the shell drops its own frame. <c-code-inline>fixed</c-code-inline> gives every
-        column an equal share and centres the middle ones; <c-code-inline>sized</c-code-inline> fixes the
+        column an equal share and centers the middle ones; <c-code-inline>sized</c-code-inline> fixes the
         layout and leaves alignment alone. Use it for sortable tables: give the supporting columns widths
         and leave the name column to fill the remaining space. Sorting then changes rows without moving columns.
         The header uses the same sort control for Alpine buttons (<c-code-inline>sort</c-code-inline>)
@@ -1217,7 +1217,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-layout.stat-card compact accent="danger" value="0" label="Unscanned" />
     </div>
     <p class="text-sm text-text-muted">
-        Compact changes spacing and type size. Accents include semantic colours and severity levels.
+        Compact changes spacing and type size. Accents include semantic colors and severity levels.
         Zero values stay neutral. For client state, x_value binds the value and its zero state together.
     </p>
     <div x-data="{ count: 0 }" class="flex flex-wrap items-center gap-4">
@@ -1229,7 +1229,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     <p class="text-sm text-text-muted mb-4">
         One component for the whole scale: pass the band as <code class="tw-code-inline">level</code>, so pages
         never write a five-branch <code class="tw-code-inline">if/elif</code> chain. Squarer and uppercase so the
-        shape carries the "this is a severity" signal, not just the colour.
+        shape carries the "this is a severity" signal, not just the color.
     </p>
     {% comment %}
     This section renders through the cotton component library
@@ -1687,14 +1687,14 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-navigation.stepper class="mt-6" role="list" aria-label="Compact setup progress">
     <c-navigation.stepper-step compact state="completed" label="Why" role="listitem" />
     <c-navigation.stepper-connector compact />
-    <c-navigation.stepper-step compact state="active" label="Organisation" role="listitem" aria-current="step" />
+    <c-navigation.stepper-step compact state="active" label="Organization" role="listitem" aria-current="step" />
     <c-navigation.stepper-connector compact />
     <c-navigation.stepper-step compact label="Security" role="listitem" />
     </c-navigation.stepper>
     <div class="grid gap-6 mt-6 lg:grid-cols-2">
-        <c-onboarding.reason number="01" title="Who you are" description="Record the organisation and person responsible for your artifacts." />
+        <c-onboarding.reason number="01" title="Who you are" description="Record the organization and person responsible for your artifacts." />
         <c-cards.card flush>
-        <c-onboarding.checklist-item complete title="Organisation identity" description="Your default contact profile is saved." />
+        <c-onboarding.checklist-item complete title="Organization identity" description="Your default contact profile is saved." />
         <c-onboarding.checklist-item active title="Security contact" description="Where researchers can report vulnerabilities." />
         </c-cards.card>
     </div>
@@ -1840,18 +1840,18 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         <code class="tw-code-inline">c-branded.*</code> is a second, smaller library for pages we render on
-        behalf of a workspace, for their customers to read: the trust centre first, and anything else
+        behalf of a workspace, for their customers to read: the trust center first, and anything else
         shared outwards later. It is the same cotton conventions as everything above, with one rule added.
-        A workspace picks one colour. It reaches the page only through
+        A workspace picks one color. It reaches the page only through
         <code class="tw-code-inline">c-branded.theme</code>, which publishes
         <code class="tw-code-inline">--brand</code> and <code class="tw-code-inline">--brand-ink</code>,
-        and nothing else is brandable. Colour goes on what a reader acts on, never on the ground they read
-        against, so no brand colour can produce a page that is hard to read.
+        and nothing else is brandable. Color goes on what a reader acts on, never on the ground they read
+        against, so no brand color can produce a page that is hard to read.
     </p>
     <p class="text-sm text-text-muted mb-4">
         The ink is measured, not chosen: <code class="tw-code-inline">is_dark_color</code> compares the
         brand's WCAG relative luminance against the point where white and black text contrast equally, so
-        each row below picks its own label colour. The pale amber gets dark text and the navy gets white
+        each row below picks its own label color. The pale amber gets dark text and the navy gets white
         without either being told to.
     </p>
     <div class="flex flex-col gap-4">

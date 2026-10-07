@@ -95,7 +95,7 @@ def test_notify_subscription_cancelled(team):
         mock_send.assert_called_once_with(
             team,
             member,
-            "Your sbomify subscription has been cancelled",
+            "Your sbomify subscription has been canceled",
             "subscription_cancelled",
             {},
         )

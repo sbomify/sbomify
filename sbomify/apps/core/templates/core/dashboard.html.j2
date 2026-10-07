@@ -27,7 +27,7 @@
         </div>
         {% if can_manage %}
             <c-overview.quick-actions>
-            <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:product_new' %}" icon="fas fa-cube" title="Add product" description="Organise components and artifacts" />
+            <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:product_new' %}" icon="fas fa-cube" title="Add product" description="Organize components and artifacts" />
             <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" icon="fas fa-tag" title="Add release" description="Bring a version's artifacts together" href="{% url 'core:release_new' %}" />
             <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:component_new' %}" icon="fas fa-puzzle-piece" title="Add component" description="Store SBOMs and documents" />
             <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:security_advisory_new' %}" icon="fas fa-shield-halved" title="Add advisory" description="Create a draft security advisory" />

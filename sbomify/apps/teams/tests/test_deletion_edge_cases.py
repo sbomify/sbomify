@@ -279,7 +279,7 @@ def test_a_customer_only_cleanup_does_not_claim_a_cancellation(mocker, settings)
 
     said = log.warning.call_args[0][0]
     assert "no subscription" in said
-    assert "was cancelled" not in said
+    assert "was canceled" not in said
 
 
 def test_stripe_is_left_alone_when_billing_is_disabled(settings, mocker):

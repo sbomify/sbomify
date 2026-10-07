@@ -160,13 +160,13 @@ _BSI_HUMAN_SUMMARY: dict[str, str] = {
         "or SPDX 'relationships')."
     ),
     "bsi-tr03183:distribution-licences": (
-        "Distribution licences are missing on some components. Licence "
-        "data often requires a dedicated licence-scanning tool upstream "
+        "Distribution licenses are missing on some components. License "
+        "data often requires a dedicated license-scanning tool upstream "
         "of SBOM generation."
     ),
     "bsi-tr03183:original-licences": (
-        "Original licences are missing on some components. Same remediation "
-        "as distribution licences — use a licence scanner upstream."
+        "Original licenses are missing on some components. Same remediation "
+        "as distribution licenses — use a license scanner upstream."
     ),
     "bsi-tr03183:sbom-uri": (
         "The SBOM carries no canonical URI. Configure your generator to "

@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
             name="harmonised_standard_applied",
             field=models.BooleanField(
                 default=False,
-                help_text="Whether a harmonised standard has been applied (CRA Art 32(2)); required for Class I + Module A",
+                help_text="Whether a harmonized standard has been applied (CRA Art 32(2)); required for Class I + Module A",
             ),
         ),
         migrations.AddField(
@@ -113,7 +113,7 @@ class Migration(migrations.Migration):
                     "is_dual_use",
                     models.BooleanField(
                         default=False,
-                        help_text="Is this a dual-use product with both civilian and defence applications? (FAQ 1.8, CRA Art 2(2))",
+                        help_text="Is this a dual-use product with both civilian and defense applications? (FAQ 1.8, CRA Art 2(2))",
                     ),
                 ),
                 ("screening_notes", models.TextField(blank=True, default="")),

@@ -85,7 +85,7 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         label="Parties",
         icon="fa-address-book",
         template="contact_profiles",
-        description="The people and organisations named on your artifacts.",
+        description="The people and organizations named on your artifacts.",
     ),
     SettingsTab(
         key="trust-center",

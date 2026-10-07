@@ -24,7 +24,7 @@ interface ManufacturerInfo {
 const PROCEDURE_INFO: Record<string, { label: string; note: string }> = {
   module_a: {
     label: 'Module A — Internal production control (self-assessment)',
-    note: 'CRA Art 32(1). For Class I: only if harmonised standard applied (Art 32(2)).',
+    note: 'CRA Art 32(1). For Class I: only if harmonized standard applied (Art 32(2)).',
   },
   module_b_c: {
     label: 'Module B+C — EU-type examination (notified body)',

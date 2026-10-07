@@ -51,7 +51,7 @@ Credentials remain an explicit admin action; no token is stored in the browser.
         </c-cards.split>
     </div>
     <c-cards.footer-success>
-        <c-layout.section-header density="compact" title="Use an authorised setup token" icon="fas fa-key" accent="success" subtitle="Setup can create products and components, update contact profiles, set visibility and configure trusted publishers. Review the changes, then revoke the token in Settings. It expires after seven days.">
+        <c-layout.section-header density="compact" title="Use an authorized setup token" icon="fas fa-key" accent="success" subtitle="Setup can create products and components, update contact profiles, set visibility and configure trusted publishers. Review the changes, then revoke the token in Settings. It expires after seven days.">
             <c-typography.description size="sm" x-show="token" x-cloak>Expires <span x-text="expiresAt"></span>. Resetting revokes this token.</c-typography.description>
             {% if not can_administer %}<c-typography.description size="sm">Ask a workspace owner or admin to connect the repository.</c-typography.description>{% endif %}
             {% if can_administer %}

@@ -88,7 +88,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
 
         context = {
             "current_team": current_team,
-            "page_subtitle": "Prioritise vulnerabilities and keep your product evidence current.",
+            "page_subtitle": "Prioritize vulnerabilities and keep your product evidence current.",
             "dashboard": dashboard,
             "show_repository_setup": show_repository_setup,
         }

@@ -27,7 +27,7 @@
 {% endif %}
 
 {% if authorized_rep_name %}
-## 2a. Authorised Representative
+## 2a. Authorized Representative
 
 {% if authorized_rep_required %}Appointed under CRA Art. 22 because the manufacturer is not established in the Union.{% else %}Appointed by the manufacturer. This assessment does not record an Art. 22 obligation, which arises only for manufacturers established outside the Union.{% endif %}
 
@@ -45,19 +45,19 @@
 - **Mandate reference:** {{ authorized_rep_mandate_reference }}
 {% endif %}
 
-The Authorised Representative holds a copy of this declaration and of the technical documentation, and is empowered to act on the manufacturer's behalf before market surveillance authorities.
+The Authorized Representative holds a copy of this declaration and of the technical documentation, and is empowered to act on the manufacturer's behalf before market surveillance authorities.
 {% elif authorized_rep_required %}
-## 2a. Authorised Representative
+## 2a. Authorized Representative
 
 > ⚠️  The manufacturer is recorded as not established in the Union, so CRA
-> Art. 22 requires an Authorised Representative to be appointed before this
+> Art. 22 requires an Authorized Representative to be appointed before this
 > product is placed on the market. No representative has been recorded —
 > this declaration MUST NOT be signed until one is.
 {% elif eu_establishment_unanswered %}
-## 2a. Authorised Representative
+## 2a. Authorized Representative
 
 > ⚠️  It has not been recorded whether the manufacturer is established in the
-> Union, so whether CRA Art. 22 requires an Authorised Representative is
+> Union, so whether CRA Art. 22 requires an Authorized Representative is
 > unknown. Answer the establishment question in Step 1 and regenerate this
 > document. Silence here is not a statement that no representative is needed.
 {% endif %}
@@ -78,7 +78,7 @@ The object of the declaration described above is in conformity with Regulation (
 
 ## 6. Standards & Specifications Applied
 {% for standard in applied_standards %}
-- **{{ standard.citation }}**{% if standard.url %}  [ref]({{ standard.url }}){% endif %}{% if standard.harmonised %}  (harmonised standard — presumption of conformity){% endif %}
+- **{{ standard.citation }}**{% if standard.url %}  [ref]({{ standard.url }}){% endif %}{% if standard.harmonised %}  (harmonized standard — presumption of conformity){% endif %}
 {% for covered in standard.cra_requirements_covered %}
     - {{ covered.cra_reference }}{% if covered.clause %} — *{{ covered.clause }}*{% endif %}{% if covered.summary %}: {{ covered.summary }}{% endif %}
 {% endfor %}
@@ -100,7 +100,7 @@ The object of the declaration described above is in conformity with Regulation (
 
 ## 8. Supporting Documentation (Annex VII)
 
-The following artefacts accompanying this declaration demonstrate conformity:
+The following artifacts accompanying this declaration demonstrate conformity:
 
 - `sboms/*.cdx.json` — Software Bill of Materials in CycloneDX format (_Annex I Part II(1)_)
 - `documents/vulnerability-disclosure-policy.md` — Coordinated Vulnerability Disclosure policy (_Annex I Part II(5)-(6)_)
