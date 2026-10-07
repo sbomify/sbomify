@@ -35,7 +35,7 @@ repos:
         pass_filenames: false
 
       - id: ci-test-matrix
-        name: CI runs every app's tests
+        name: CI runs every test exactly once
         entry: uv run python bin/check_ci_test_matrix.py
         language: system
         pass_filenames: false

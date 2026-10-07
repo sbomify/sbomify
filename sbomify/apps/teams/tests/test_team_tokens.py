@@ -39,8 +39,8 @@ class TestTeamTokensView:
 
         # Ensure no current_team in session that would allow access
         session = client.session
-        if "current_team" in session:
-            del session["current_team"]
+        if "current_workspace" in session:
+            del session["current_workspace"]
         session.save()
 
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
