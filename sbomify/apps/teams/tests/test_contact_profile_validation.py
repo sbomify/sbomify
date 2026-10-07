@@ -228,3 +228,37 @@ def test_api_update_with_empty_entities_list_keeps_existing_entities(
     profile = ContactProfile.objects.get(pk=profile_id)
     assert profile.name == "Renamed"
     assert [entity.name for entity in profile.entities.all()] == ["Keep Corp"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("render_source", ["create", "update"])
+def test_the_list_a_save_returns_shows_when_each_party_changed(
+    authenticated_web_client: Client, team_with_business_plan: Team, render_source: str
+) -> None:
+    """A create or update answers with the list, rendered by the same formatter as
+    a plain load, so its Last updated cells are filled rather than blank."""
+    workspace = team_with_business_plan
+    client = authenticated_web_client
+    data = profile_form_data()
+    response = client.post(reverse("teams:contact_profiles_form", args=[workspace.key]), data, HTTP_HX_REQUEST="true")
+    if render_source == "update":
+        profile = ContactProfile.objects.get(team=workspace, name=data["name"])
+        entity = profile.entities.get()
+        contact = entity.contacts.get()
+        data.update(
+            {
+                "entities-INITIAL_FORMS": "1",
+                "entities-0-id": entity.pk,
+                "entities-0-contacts-INITIAL_FORMS": "1",
+                "entities-0-contacts-0-id": contact.pk,
+            }
+        )
+        response = client.post(
+            reverse("teams:contact_profiles_detail_form", args=[workspace.key, profile.pk]),
+            data,
+            HTTP_HX_REQUEST="true",
+        )
+
+    assert response.status_code == 200
+    displays = [profile.get("updated_display") for profile in response.context["profiles"]]
+    assert displays and all(displays), displays

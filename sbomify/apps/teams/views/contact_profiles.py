@@ -61,9 +61,7 @@ def _format_formset_errors(formset: Any) -> str:
                     # Check for unique constraint violation using error code (more robust than string matching)
                     error_code = error_list[idx].code if idx < len(error_list) else None
                     if error_code in ("unique", "unique_together"):
-                        messages.append(
-                            "Duplicate entity name. Each entity must have a unique name within the profile."
-                        )
+                        messages.append("Duplicate entity name. Each entity must have a unique name within the party.")
                     else:
                         messages.append(str(error))
                 else:
@@ -82,7 +80,7 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, profiles = list_contact_profiles(request, team_key)
         if status_code != 200:
-            return htmx_error_response(profiles.get("detail", "Failed to load contact profiles"))
+            return htmx_error_response(profiles.get("detail", "Failed to load parties"))
 
         return render(
             request,
@@ -108,9 +106,9 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, result = delete_contact_profile(request, team_key, form.cleaned_data["profile_id"])
         if status_code != 204:
-            return htmx_error_response(result.get("detail", "Failed to delete profile"))
+            return htmx_error_response(result.get("detail", "Failed to delete party"))
 
-        return htmx_success_response("Contact profile deleted successfully", triggers={"refreshProfileList": True})
+        return htmx_success_response("Party deleted", triggers={"refreshProfileList": True})
 
     def _patch(self, request: HttpRequest, team_key: str) -> HttpResponse:
         form = ContactProfileForm(request.POST)
@@ -119,16 +117,18 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, profile = get_contact_profile(request, team_key, form.cleaned_data["profile_id"])
         if status_code != 200:
-            return htmx_error_response(profile.get("detail", "Failed to load contact profile"))
+            return htmx_error_response(profile.get("detail", "Failed to load party"))
 
         if not profile.is_default:
             payload = ContactProfileUpdateSchema(is_default=True)
 
             status_code, result = update_contact_profile(request, team_key, profile.id, payload)
             if status_code != 200:
-                return htmx_error_response(result.get("detail", "Failed to set default profile"))
+                return htmx_error_response(result.get("detail", "Failed to set the default party"))
 
-        return htmx_success_response(f"'{profile.name}' set as default profile", triggers={"refreshProfileList": True})
+        return htmx_success_response(
+            f"'{profile.name}' set as the default party", triggers={"refreshProfileList": True}
+        )
 
 
 class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -143,7 +143,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if profile_id:
             status_code, profile = get_contact_profile(request, team_key, profile_id, return_instance=True)
             if status_code != 200:
-                return htmx_error_response(profile.get("detail", "Failed to load contact profile"))
+                return htmx_error_response(profile.get("detail", "Failed to load party"))
 
         entities_formset = ContactEntityFormSet(instance=profile, prefix="entities")
 
@@ -327,11 +327,11 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             if is_manufacturer:
                 manufacturer_count += 1
                 if manufacturer_count > 1:
-                    raise ValidationError("A profile can have only one manufacturer entity (CycloneDX requirement).")
+                    raise ValidationError("A party can have only one manufacturer entity (CycloneDX requirement).")
             if is_supplier:
                 supplier_count += 1
                 if supplier_count > 1:
-                    raise ValidationError("A profile can have only one supplier entity (CycloneDX requirement).")
+                    raise ValidationError("A party can have only one supplier entity (CycloneDX requirement).")
 
             # Check if author-only (no org info needed)
             is_author_only = is_author and not is_manufacturer and not is_supplier
@@ -376,14 +376,14 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, result = create_contact_profile(request, team_key, payload)
         if status_code != 201:
-            return htmx_error_response(result.get("detail", "Failed to create profile"))
+            return htmx_error_response(result.get("detail", "Failed to create party"))
 
-        return self._render_profile_list_response(request, team_key, "Contact profile created successfully")
+        return self._render_profile_list_response(request, team_key, "Party created")
 
     def _update_profile(self, request: HttpRequest, team_key: str, profile_id: str) -> HttpResponse:
         status_code, profile = get_contact_profile(request, team_key, profile_id, return_instance=True)
         if status_code != 200:
-            return htmx_error_response(profile.get("detail", "Failed to load contact profile"))
+            return htmx_error_response(profile.get("detail", "Failed to load party"))
 
         try:
             form_data, entities = self._validate_form_and_formsets(request, team_key, profile=profile)
@@ -398,9 +398,9 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, result = update_contact_profile(request, team_key, profile_id, payload)
         if status_code != 200:
-            return htmx_error_response(result.get("detail", "Failed to update profile"))
+            return htmx_error_response(result.get("detail", "Failed to update party"))
 
-        return self._render_profile_list_response(request, team_key, "Contact profile updated successfully")
+        return self._render_profile_list_response(request, team_key, "Party updated")
 
     def _render_profile_list_response(self, request: HttpRequest, team_key: str, message: str) -> HttpResponse:
         status_code, team = get_team(request, team_key)
@@ -409,31 +409,12 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, profiles = list_contact_profiles(request, team_key)
         if status_code != 200:
-            return htmx_error_response("Failed to load contact profiles")
-
-        profiles_list = []
-        for profile_schema in profiles:
-            # Convert Pydantic model to dict
-            profile = profile_schema.model_dump()
-            entities = profile.get("entities", [])
-            authors = profile.get("authors", [])
-            profile["entity_count"] = len(entities)
-            profile["author_count"] = len(authors)
-            total_contacts = sum(len(entity.get("contacts", [])) for entity in entities)
-            profile["contact_count"] = total_contacts
-            # Get manufacturer and supplier entities
-            profile["manufacturer"] = next((e for e in entities if e.get("is_manufacturer")), None)
-            profile["supplier"] = next((e for e in entities if e.get("is_supplier")), None)
-            profiles_list.append(profile)
+            return htmx_error_response("Failed to load parties")
 
         response = render(
             request,
             "teams/contact_profiles/profile_list.html.j2",
-            {
-                "team": team,
-                "profiles": profiles_list,
-                "form": ContactProfileForm(),
-            },
+            {"team": team, **profiles_context(profiles)},
         )
 
         # Add success trigger
