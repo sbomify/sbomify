@@ -55,6 +55,19 @@ function shortDate(iso: string): string {
   return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/**
+ * What both charts share. Chart.js animates by default, so a reader who asked
+ * the system for reduced motion gets none, as on the vulnerability charts.
+ */
+function sharedOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? (false as const) : undefined,
+    plugins: { legend: { display: false } },
+  };
+}
+
 function signupsConfig(canvas: HTMLCanvasElement): ChartConfiguration {
   const accent = accentColor();
   return {
@@ -75,9 +88,7 @@ function signupsConfig(canvas: HTMLCanvasElement): ChartConfiguration {
       ],
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      ...sharedOptions(),
       scales: {
         y: { beginAtZero: true, ticks: { precision: 0 } },
       },
@@ -101,10 +112,8 @@ function plansConfig(canvas: HTMLCanvasElement): ChartConfiguration {
       ],
     },
     options: {
+      ...sharedOptions(),
       indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
       scales: {
         x: { beginAtZero: true, ticks: { precision: 0 } },
       },

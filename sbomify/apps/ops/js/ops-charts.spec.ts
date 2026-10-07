@@ -12,6 +12,7 @@ describe('Ops charts', () => {
     const built: any[] = []
     const destroyCalls = { count: 0 }
     let tokenValue = 'rgb(124 140 255)'
+    let reducedMotion = false
 
     // bun runs every spec in one process, so a global set here is a global set
     // for the whole suite. Assigning `window = globalThis` in particular leaves
@@ -40,7 +41,11 @@ describe('Ops charts', () => {
         // The module reads window.Chart and calls getComputedStyle. location is
         // here so anything that peeks at window during this file still finds a
         // browser-shaped object.
-        stub('window', { Chart: FakeChart, location: { href: 'http://localhost/' } })
+        stub('window', {
+            Chart: FakeChart,
+            location: { href: 'http://localhost/' },
+            matchMedia: (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' && reducedMotion }),
+        })
         // accentColor reads the token off document.documentElement.
         stub('document', { documentElement: {}, querySelectorAll: () => [] })
         stub('getComputedStyle', () => ({ getPropertyValue: () => tokenValue }))
@@ -63,6 +68,7 @@ describe('Ops charts', () => {
         built.length = 0
         destroyCalls.count = 0
         tokenValue = 'rgb(124 140 255)'
+        reducedMotion = false
     })
 
      
@@ -144,5 +150,25 @@ describe('Ops charts', () => {
 
         expect(destroyCalls.count).toBe(1)
         expect(built).toHaveLength(2)
+    })
+
+    test('draws both charts without animation for a reader who asked for reduced motion', () => {
+        reducedMotion = true
+
+        initOpsCharts(rootOf(
+            canvasOf({ chart: 'signups', labels: '["2026-09-01"]', values: '[1]' }),
+            canvasOf({ chart: 'plans', labels: '["a"]', values: '[1]' }),
+        ))
+
+        expect(built.map((config) => config.options.animation)).toEqual([false, false])
+    })
+
+    test('leaves Chart.js its default animation otherwise', () => {
+        initOpsCharts(rootOf(
+            canvasOf({ chart: 'signups', labels: '["2026-09-01"]', values: '[1]' }),
+            canvasOf({ chart: 'plans', labels: '["a"]', values: '[1]' }),
+        ))
+
+        expect(built.map((config) => config.options.animation)).toEqual([undefined, undefined])
     })
 })
