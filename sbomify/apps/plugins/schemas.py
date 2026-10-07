@@ -152,7 +152,9 @@ class SBOMAssessmentsResponse(BaseModel):
         description=(
             "Assessment run history, newest first, bounded by the ``history_limit`` "
             "query parameter and a server-side ceiling. Empty when ``include_history`` is "
-            "false. Use ``all_runs_total`` to tell whether it was truncated."
+            "false. Use ``all_runs_total`` to tell whether it was truncated. Each row carries "
+            "the run's status and result summary with an empty findings list; the latest run "
+            "per plugin in ``latest_runs`` carries the findings."
         )
     )
     all_runs_total: int = Field(

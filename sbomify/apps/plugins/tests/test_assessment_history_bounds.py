@@ -16,6 +16,7 @@ shape of a quiet compliance plugin next to a noisy hourly scanner.
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -78,6 +79,12 @@ def scanned_sbom(sample_team_with_owner_member):
     )
 
 
+def _whole_blob_queries(captured: Any) -> list[str]:
+    """Queries that read whole ``result`` blobs. A history row's envelope, the
+    result minus its findings array, does not count."""
+    return [query["sql"] for query in captured.captured_queries if re.search(r'\."result"(?! - )', query["sql"])]
+
+
 def _call(rf, sbom_id: str, **kwargs: Any):
     """Invoke the endpoint function directly, as the component page does."""
     request = rf.get("/")
@@ -108,7 +115,7 @@ class TestTheHistoryIsBounded:
 
         assert response.all_runs[0].id == str(newest.id)
         # Serialised with its findings, not degraded to result=None.
-        assert response.all_runs[0].result.findings[0].id == "CVE-2026-1"
+        assert response.latest_runs[0].result.findings[0].id == "CVE-2026-1"
 
     def test_an_untruncated_history_reports_its_real_size(self, scanned_sbom, rf, monkeypatch):
         """``all_runs_total`` must equal len(all_runs) when nothing was dropped,
@@ -157,6 +164,22 @@ class TestTheHistoryIsBounded:
 
 
 @pytest.mark.django_db
+class TestAHistoryRowIsASummary:
+    def test_history_rows_carry_status_and_summary_but_no_findings(self, scanned_sbom, rf, monkeypatch):
+        """The findings array is what grows with the SBOM. The latest run per
+        plugin carries it; a history row carries the run's status and summary."""
+        monkeypatch.setattr("sbomify.apps.plugins.apis._readable_sbom", lambda request, sbom_id: scanned_sbom)
+        for minute in range(1, 4):
+            _run(scanned_sbom, "osv", minutes_ago=minute)
+
+        response = _call(rf, scanned_sbom.id)
+
+        assert [run.result.findings for run in response.all_runs] == [[], [], []]
+        assert {(run.status, run.result.summary.total_findings) for run in response.all_runs} == {("completed", 1)}
+        assert response.latest_runs[0].result.findings[0].id == "CVE-2026-1"
+
+
+@pytest.mark.django_db
 class TestLatestPerPluginSurvivesTruncation:
     def test_a_quiet_plugin_outside_the_window_is_still_the_latest(self, scanned_sbom, rf, monkeypatch):
         """The regression this endpoint's shape invites: a compliance plugin that
@@ -190,26 +213,25 @@ class TestLatestPerPluginSurvivesTruncation:
 
 @pytest.mark.django_db
 class TestOnlySerialisedRunsAreFetched:
-    """The response carries the blob for the runs it serialises and no others.
-    That is what makes the cost proportional to the request: the identity pass
-    selects over two small columns, so a thousand-run history is a thousand rows
-    of (id, plugin_name) rather than a thousand de-TOASTed findings arrays."""
+    """Whole blobs are read for the latest run per plugin and no others. A
+    history row reads the result without its findings array, so a long history
+    is a bounded number of small envelopes rather than findings arrays."""
 
     def test_no_query_projects_more_blobs_than_the_response_serialises(self, scanned_sbom, rf, monkeypatch):
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
 
         monkeypatch.setattr("sbomify.apps.plugins.apis._readable_sbom", lambda request, sbom_id: scanned_sbom)
-        for minute in range(1, 41):
-            _run(scanned_sbom, "osv", minutes_ago=minute)
+        runs = [_run(scanned_sbom, "osv", minutes_ago=minute) for minute in range(1, 41)]
 
         with CaptureQueriesContext(connection) as captured:
             response = _call(rf, scanned_sbom.id, history_limit=5)
 
-        blob_queries = [query["sql"] for query in captured.captured_queries if '."result"' in query["sql"]]
-        # One query, for the union of latest-per-plugin and the history window,
-        # which here is the same 5 runs the response returns.
-        assert len(blob_queries) == 1
+        # One query reads whole blobs, for the latest run per plugin alone; the
+        # five history rows read only their envelopes.
+        (whole,) = _whole_blob_queries(captured)
+        assert str(runs[0].id) in whole
+        assert not any(str(run.id) in whole for run in runs[1:5])
         assert len(response.all_runs) == 5
 
     def test_the_identity_pass_does_not_read_the_blob(self, scanned_sbom, rf, monkeypatch):
@@ -225,7 +247,6 @@ class TestOnlySerialisedRunsAreFetched:
             response = _call(rf, scanned_sbom.id, include_history=False)
 
         assert response.all_runs_total == 40
-        blob_queries = [query["sql"] for query in captured.captured_queries if '."result"' in query["sql"]]
         # Only the latest run per plugin: one plugin here, so one blob.
-        assert len(blob_queries) == 1
+        assert len(_whole_blob_queries(captured)) == 1
         assert len(response.latest_runs) == 1

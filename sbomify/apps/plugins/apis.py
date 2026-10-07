@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
+from django.db.models import Func, JSONField
 from django.http import HttpRequest
 from ninja import Router
 from ninja.decorators import decorate_view
@@ -341,6 +342,29 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
     )
 
 
+class _ResultWithoutFindings(Func):
+    """``result`` minus its findings array, cut by Postgres in one pass over the blob."""
+
+    template = "(%(expressions)s - 'findings'::text)"
+    output_field = JSONField()
+
+
+def _history_runs(run_ids: list[UUID]) -> list[AssessmentRun]:
+    """The runs for ``run_ids``, in that order, each holding its result without findings."""
+    by_id = {
+        run.id: run
+        for run in AssessmentRun.objects.filter(id__in=run_ids)
+        .defer("result")
+        .annotate(envelope=_ResultWithoutFindings("result"))
+        .prefetch_related("releases")
+    }
+    runs: list[AssessmentRun] = [by_id[run_id] for run_id in run_ids if run_id in by_id]
+    for run in runs:
+        envelope = getattr(run, "envelope", None)
+        run.result = {**envelope, "findings": []} if isinstance(envelope, dict) else None
+    return runs
+
+
 @router.get("/assessments/{sbom_id}", response=SBOMAssessmentsResponse, auth=None)
 @decorate_view(optional_auth)
 def get_sbom_assessments(
@@ -375,10 +399,12 @@ def get_sbom_assessments(
     long the SBOM has existed. ``all_runs_total`` reports the true count so a
     caller can see that it was truncated.
 
-    The blob is fetched for exactly the runs that get serialised. The newest run
-    per plugin is found on its own, so it shows even when it falls outside the
-    history window: deriving it from the truncated history would hide a plugin
-    whose last run predates the newest ``history_limit`` runs.
+    Only the latest runs carry their findings. A history row carries the run's
+    status and its result without the findings array, which is what grows with
+    the SBOM, so ``history_limit`` bounds the response's size as well as its
+    length. The newest run per plugin is found on its own, so it shows even when
+    it falls outside the history window: deriving it from the truncated history
+    would hide a plugin whose last run predates the newest ``history_limit`` runs.
     """
     # Only expose results for an SBOM whose component the caller may read (public, or an
     # authorized member/token). Otherwise return the empty "no assessments" shape so neither
@@ -405,32 +431,26 @@ def get_sbom_assessments(
         else []
     )
 
-    # One fetch for the union, so a run appearing in both lists is loaded and
-    # serialised against the same instance. dict.fromkeys dedupes in order.
-    wanted_ids = list(dict.fromkeys([*latest_ids, *history_ids]))
-    runs_by_id: dict[UUID, AssessmentRun] = {
-        run.id: run for run in AssessmentRun.objects.filter(id__in=wanted_ids).prefetch_related("releases")
-    }
     latest_runs = sorted(
-        (runs_by_id[run_id] for run_id in latest_ids if run_id in runs_by_id),
+        AssessmentRun.objects.filter(id__in=latest_ids).prefetch_related("releases"),
         key=lambda run: (run.created_at, run.id),
         reverse=True,
     )
-    history_runs = [runs_by_id[run_id] for run_id in history_ids if run_id in runs_by_id]
+    history_runs = _history_runs(history_ids)
 
     # Compute status summary from latest runs only
     status_summary = _compute_status_summary(latest_runs)
 
     # Prefetch display names for all plugin_names present in this response
     # in a single query so serialization stays O(n) without per-run lookups.
-    display_names = _get_plugin_display_names_map({run.plugin_name for run in runs_by_id.values()})
+    display_names = _get_plugin_display_names_map({run.plugin_name for run in [*latest_runs, *history_runs]})
 
     from sbomify.apps.vulnerability_scanning.euvd import euvd_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
 
-    # Catalogue lookups exist to stamp the findings being serialised, so they
-    # follow the runs actually in the response rather than the whole history.
-    has_security = any(run.category == "security" for run in runs_by_id.values())
+    # Catalogue lookups exist to stamp the findings being serialised, and only
+    # the latest runs carry findings.
+    has_security = any(run.category == "security" for run in latest_runs)
     kev_ids = kev_ids_for_serialization() if has_security else frozenset()
     euvd_ids = euvd_ids_for_serialization() if has_security else frozenset()
 
