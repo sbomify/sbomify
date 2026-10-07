@@ -39,15 +39,18 @@ def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Team]:
     return ServiceResult.success(workspace)
 
 
+def dashboard_cache_key(team_id: int) -> str:
+    """The overview snapshot's cache key, versioned: an entry cached before the snapshot gained a key would read it as
+    zero, so the version moves with every new key (v5: medium_low)."""
+    return f"dashboard-page:v5:{team_id}"
+
+
 def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     """One workspace snapshot for the overview, without per-product scan reads."""
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.freshness import freshness_state
 
-    # v4 adds the unmeasured flags below. An entry cached by the previous
-    # release has no such key, and a missing flag reads as false in the
-    # template, which is the confident zero this change exists to stop.
-    cache_key = f"dashboard-page:v4:{team_id}"
+    cache_key = dashboard_cache_key(team_id)
     cached = django_cache.get(cache_key)
     if cached is not None:
         return ServiceResult.success(cast("dict[str, Any]", cached))
@@ -139,6 +142,7 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
         "metrics": {
             "open": open_findings,
             "critical_high": sum(count["critical"] + count["high"] for count in counts.values()),
+            "medium_low": sum(count["medium"] + count["low"] for count in counts.values()),
             "past_sla": past_sla,
             "sla_unknown": sum(count["total"] for count in counts.values())
             - len(picture["findings"])

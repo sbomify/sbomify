@@ -63,7 +63,7 @@ def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[
 
         return 200, team
 
-    current_team = request.session.get("current_team") or {}
+    current_team = request.session.get("current_workspace") or {}
     team_id = current_team.get("id") or current_team.get("team_id")  # type: ignore[assignment]
     if not team_id and current_team.get("key"):
         try:
