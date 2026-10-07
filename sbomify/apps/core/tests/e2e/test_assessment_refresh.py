@@ -102,3 +102,47 @@ def test_a_finished_scan_reaches_a_report_opened_before_it(authenticated_page: P
 
     expect(page.get_by_text("No Scan Data Available")).to_have_count(0)
     expect(page.locator("#scan-vulnerabilities")).to_be_visible()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_finished_scan_keeps_the_readers_search(authenticated_page: Page, sbom_with_findings) -> None:  # noqa: F811
+    """The completion refresh patches the region in place, so a search being typed survives it."""
+    import re
+
+    from django.urls import reverse
+
+    sbom = sbom_with_findings
+    page = authenticated_page
+    page.goto(reverse("sboms:sbom_vulnerabilities", args=[sbom.id]))
+    search = page.locator("#scan-search")
+    search.fill("CVE")
+    # The search's own request lands first: it swaps the panel itself, which is
+    # the filter form's business, not the completion refresh under test.
+    expect(page).to_have_url(re.compile(r"scan_search=CVE"))
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
+    search.focus()
+    search.evaluate("(el) => { el.__readers = true; }")
+
+    page.evaluate(
+        """(sbomId) => {
+            window.__reportSettled = false;
+            const settled = (event) => {
+                if (event.target.id !== 'scan-report') return;
+                document.body.removeEventListener('htmx:afterSettle', settled);
+                window.__reportSettled = true;
+            };
+            document.body.addEventListener('htmx:afterSettle', settled);
+            window.dispatchEvent(new CustomEvent('ws:message', {
+                detail: { type: 'assessment_complete', sbom_id: sbomId },
+            }));
+        }""",
+        str(sbom.id),
+    )
+    page.wait_for_function("window.__reportSettled === true")
+
+    kept = (
+        "() => { const box = document.getElementById('scan-search');"
+        " return box.__readers && document.activeElement === box; }"
+    )
+    assert page.evaluate(kept), "the completion refresh replaced the search box the reader was typing in"
+    expect(search).to_have_value("CVE")

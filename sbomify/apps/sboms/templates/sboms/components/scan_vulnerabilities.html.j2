@@ -4,8 +4,11 @@ the reader. The triage modal dispatches refresh-assessments when it saves; the
 re-apply's vex_reapplied arrives on the socket, and the bridge below turns it
 into the same event for this component only, debounced as on the artifact page.
 scan_refresh_query keeps the active filters and page; morph keeps scroll and
-focus.{% endcomment %}
+focus. The key lets the report region's morph, when a scan finishes, find this
+panel by name if the card's children ever change in number, rather than
+replacing it by position.{% endcomment %}
 <div id="scan-vulnerabilities"
+     key="scan-vulnerabilities"
      x-data="{ refreshTimer: null }"
      hx-target="this"
      hx-swap="morph"
