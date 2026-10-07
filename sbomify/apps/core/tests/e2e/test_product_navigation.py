@@ -31,6 +31,11 @@ def test_product_tables_assignments_and_release_editor(
     expect(table.locator("tbody tr")).to_have_count(10)
     page.get_by_role("link", name="Next page", exact=True).click()
     expect(table.locator("tbody tr")).to_have_count(2)
+    # The row count reaches 2 when the swap lands, which is before htmx has
+    # finished settling. Changing the page size on top of a swap still in
+    # flight loses the second request: the table stays on page two's two rows
+    # and never reaches twelve.
+    expect(page.locator("#product-components")).not_to_have_class(re.compile("htmx-settling"))
     page.get_by_label("Rows", exact=True).select_option("25")
     expect(table.locator("tbody tr")).to_have_count(12)
     expect(page.locator("#product-components")).not_to_have_class(re.compile("htmx-settling"))
