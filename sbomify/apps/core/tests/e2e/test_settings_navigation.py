@@ -41,7 +41,7 @@ def test_settings_controls_and_navigation(
     name = page.get_by_role("textbox", name="Workspace name", exact=True)
     expect(name).to_have_value(workspace.name)
     name.fill("Unsaved workspace name")
-    page.get_by_role("button", name="Discard", exact=True).click()
+    page.locator("#team-general-form").get_by_role("button", name="Discard", exact=True).click()
     expect(name).to_have_value(workspace.name)
     name.fill("Draft workspace name")
     page.get_by_label("Patch targets", exact=True).select_option("custom")
@@ -55,8 +55,12 @@ def test_settings_controls_and_navigation(
     expect(name).to_have_value("Draft workspace name")
     page.get_by_label("Freshness window (days)").fill("0")
     page.get_by_role("button", name="Save changes", exact=True).click()
-    expect(page.get_by_text("Workspace settings updated successfully", exact=True)).to_be_visible()
-    expect(page.locator("#team-general-content")).to_have_attribute("data-team-name", "Draft workspace name")
+    expect(page.get_by_text("Workspace settings updated", exact=True)).to_be_visible()
+    # The tab re-renders from the server, so its starting values are the saved ones.
+    page.wait_for_function(
+        "document.getElementById('team-general-fields')?.textContent.includes('Draft workspace name')",
+        timeout=5000,
+    )
     expect(page.get_by_role("button", name="Save changes", exact=True)).to_be_disabled()
     expect(name).to_have_value("Draft workspace name")
     workspace.refresh_from_db()
@@ -117,7 +121,7 @@ def test_settings_controls_and_navigation(
             expect(page.get_by_text("No matches found", exact=True)).to_be_visible()
             search.fill("")
             page.get_by_role("button", name="Party actions", exact=True).click()
-            page.get_by_role("menuitem", name="Edit profile", exact=True).click()
+            page.get_by_role("menuitem", name="Edit party", exact=True).click()
             expect(page.get_by_role("textbox", name=re.compile("Profile name"))).to_have_value("Product contacts")
             entities = page.locator("#entities-container")
             expect(entities).to_be_hidden()
@@ -150,9 +154,9 @@ def test_settings_controls_and_navigation(
     ).to_be_visible()
     expect(page.get_by_text("Copy your token now", exact=True)).to_have_count(0)
     page.get_by_role("button", name="Delete token Browser test token", exact=True).click()
-    dialog = page.get_by_role("alertdialog", name="Delete Token", exact=True)
+    dialog = page.get_by_role("alertdialog", name="Delete token", exact=True)
     expect(dialog).to_be_visible()
-    dialog.get_by_role("button", name="Delete Token", exact=True).click()
+    dialog.get_by_role("button", name="Delete token", exact=True).click()
     expect(
         page.get_by_role("region", name="API tokens settings").get_by_text("Browser test token", exact=True)
     ).to_have_count(0)
