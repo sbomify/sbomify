@@ -153,33 +153,39 @@ def load_result(run: Any) -> dict[str, Any] | None:
 
 
 def save_result(run: Any, result: dict[str, Any]) -> None:
-    """Persist a rewritten result wherever the run's payload lives.
+    """Persist a rewritten result wherever the run's payload lives now.
 
-    Inline, it is the ordinary save, which keeps the summary columns in step.
-    Offloaded, the rewrite is stored as a new object under the run's prefix and
-    the row moves to its key, with the columns recomputed from the rewrite and
-    the payload column left empty, so the run stays offloaded. The instance
-    keeps the rewrite in memory, so a reader holding it, the finding projection,
-    does not fetch it straight back.
+    Where it lives is read from the row under its lock, the lock the offload
+    sweep holds from reading a payload to committing its key, never from the
+    instance, which may predate an offload. Inline, it is the ordinary save,
+    which keeps the summary columns in step. Offloaded, the rewrite is stored as
+    a new object under the run's prefix and the row moves to its key, with the
+    columns recomputed from the rewrite and the payload column emptied. A row
+    that is gone stores nothing. The instance keeps the rewrite in memory, so a
+    reader holding it, the finding projection, does not fetch it straight back.
     """
-    if not getattr(run, "result_object_key", ""):
+    from django.db import transaction
+
+    model = type(run)
+    with transaction.atomic():
+        current_key = (
+            model.objects.select_for_update().filter(pk=run.pk).values_list("result_object_key", flat=True).first()
+        )
+        if current_key is None:
+            return
         run.result = result
-        run.save(update_fields=["result"])
-        return
-    key = put_result(run.id, result)
-    run.result = result
-    run._populate_result_columns()
-    moved = (
-        type(run)
-        .objects.filter(pk=run.pk)
-        .update(result_object_key=key, result_summary=run.result_summary, result_skipped=run.result_skipped)
-    )
-    if not moved:
-        # Retention took the row while the rewrite was being stored. Nothing
-        # points at the prefix any more, so the new object goes with it.
-        delete_result_objects(run.id)
-        return
-    run.result_object_key = key
+        if not current_key:
+            run.save(update_fields=["result"])
+            return
+        key = put_result(run.id, result)
+        run._populate_result_columns()
+        model.objects.filter(pk=run.pk).update(
+            result=None,
+            result_object_key=key,
+            result_summary=run.result_summary,
+            result_skipped=run.result_skipped,
+        )
+        run.result_object_key = key
 
 
 def delete_result_objects(run_id: Any) -> int:

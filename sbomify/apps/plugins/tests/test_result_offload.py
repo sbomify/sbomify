@@ -588,9 +588,9 @@ class TestVexReachesAnOffloadedRun:
         superseded.refresh_from_db()
         assert superseded.result is None and superseded.result_object_key
 
-    def test_a_rewrite_for_a_run_retention_took_leaves_no_object(self, sbom, bucket):
-        """The rewrite is stored before the row moves to it. If retention took
-        the row in between, nothing points at the prefix, so nothing may stay."""
+    def test_a_row_that_is_gone_stores_nothing(self, sbom, bucket):
+        """The row is locked before anything is stored, so a run retention has
+        already taken gets no object nothing would ever point at."""
         from sbomify.apps.plugins.result_store import save_result
 
         _run(sbom, days_ago=400)
@@ -598,7 +598,64 @@ class TestVexReachesAnOffloadedRun:
         assert offload_assessment_results() == 1
         superseded.refresh_from_db()
         AssessmentRun.objects.filter(pk=superseded.pk).delete()
+        puts = bucket.puts
 
         save_result(superseded, _result(total=1))
 
-        assert [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{superseded.id}/")] == []
+        assert bucket.puts == puts
+
+    @pytest.mark.django_db(transaction=True)
+    def test_an_offload_landing_mid_rewrite_does_not_split_the_payload(self, sbom, bucket, monkeypatch):
+        """The re-apply reads a run, then writes it. An offload committing in
+        between, as the sweep does while it holds the row lock, must not leave
+        the rewrite inline beside a key to the payload it replaced: readers
+        would take the inline copy and no later sweep would move it."""
+        import threading
+
+        from django.db import connection, transaction
+
+        from sbomify.apps.plugins.result_store import object_key_for
+        from sbomify.apps.vulnerability_scanning import vex
+
+        payload = _result()
+        for finding in payload["findings"]:
+            finding["component"]["ecosystem"] = "pypi"
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800, result=payload)
+        old_bytes = serialise_result(superseded.result)
+        old_key = object_key_for(superseded.id, old_bytes)
+        statement = {
+            "ids": {"cve-2026-0"},
+            "packages": {("pypi", "foo", "1")},
+            "state": "not_affected",
+            "justification": "code_not_reachable",
+            "product_scoped": False,
+            "source": "manual",
+        }
+        monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids: [statement])
+        monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
+        locked = threading.Event()
+
+        def offload_commits_late() -> None:
+            try:
+                with transaction.atomic():
+                    bucket.objects[old_key] = old_bytes
+                    AssessmentRun.objects.filter(pk=superseded.pk).update(result=None, result_object_key=old_key)
+                    locked.set()
+                    # Held long enough for the re-apply to have read the run.
+                    threading.Event().wait(1)
+            finally:
+                connection.close()
+
+        worker = threading.Thread(target=offload_commits_late)
+        worker.start()
+        assert locked.wait(5)
+
+        vex.reannotate_component_runs(sbom.component_id)
+        worker.join(5)
+
+        superseded.refresh_from_db()
+        assert superseded.result is None
+        assert superseded.result_object_key not in ("", old_key)
+        rewritten = load_result(superseded)
+        assert next(f for f in rewritten["findings"] if f["id"] == "CVE-2026-0").get("analysis_state") == "not_affected"
