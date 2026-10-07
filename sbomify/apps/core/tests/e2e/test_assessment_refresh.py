@@ -42,12 +42,29 @@ class TestAssessmentSectionRefresh:
         assert _section_size(page) > before
 
     def test_a_completing_assessment_re_renders_the_section(self, authenticated_page: Page, sbom_with_findings) -> None:  # noqa: F811
-        """The socket handler dispatches this event; the refresh is what it drives."""
-        page = authenticated_page
-        self._open(page, sbom_with_findings)
+        """The socket's assessment_complete drives a region refresh, which keeps the section.
 
-        page.evaluate("() => document.body.dispatchEvent(new CustomEvent('assessment-complete'))")
-        page.wait_for_timeout(1500)
+        Sent the way the socket store sends it, and waited on through the
+        region's own settle: an event nothing listens for would leave the first
+        render in place and pass without any refresh having run.
+        """
+        page = authenticated_page
+        sbom = sbom_with_findings
+        self._open(page, sbom)
+
+        page.evaluate(
+            """(sbomId) => {
+                window.__regionSettled = false;
+                document.body.addEventListener('htmx:afterSettle', (event) => {
+                    if (event.target.id === 'artifact-content') window.__regionSettled = true;
+                });
+                window.dispatchEvent(new CustomEvent('ws:message', {
+                    detail: { type: 'assessment_complete', sbom_id: sbomId },
+                }));
+            }""",
+            str(sbom.id),
+        )
+        page.wait_for_function("window.__regionSettled === true")
 
         expect(page.locator("#assessment-results")).to_be_visible()
         expect(page.locator("#assessment-results").get_by_text("Assessments", exact=True)).to_be_visible()

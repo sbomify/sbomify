@@ -2,15 +2,19 @@
 outside this region.
 
 A triage decision re-annotates findings in a background task, so the panel
-refreshes twice: once straight away for the decision the reader just made, and
-again when the re-apply broadcast lands. Both carry the active query, so a
-refresh keeps the filters and the page the reader was on, and morph keeps their
-scroll position and focus.{% endcomment %}
+refreshes twice: once straight away, on the refresh-assessments the triage modal
+dispatches when it saves, and again when the re-apply broadcasts vex_reapplied,
+which the bridge below turns into the same event for this component only. The
+debounce matches the artifact page's: one re-apply can broadcast more than once.
+Both refreshes carry vuln_refresh_query, which keeps the filters and the page the
+reader was on, and morph keeps their scroll position and focus.{% endcomment %}
 <div id="component-vulnerabilities-table"
+     x-data
      hx-target="this"
      hx-swap="morph"
-     hx-get="{{ vuln_panel_url }}?{{ vuln_query_string }}"
-     hx-trigger="triage-saved from:body, vex-reapplied from:body">
+     hx-get="{{ vuln_panel_url }}?{{ vuln_refresh_query }}"
+     hx-trigger="refresh-assessments from:body"
+     @ws:message.window=" if ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
     <c-tables.shell nested>
     <c-vulnerabilities.filters :panel="vuln_panel" url="{{ vuln_panel_url }}" target="component-vulnerabilities-table" id="vuln" prefix="vuln_" push_url="true" />
     <c-vulnerabilities.table :rows="vuln_panel.rows" :can_triage="can_triage" />

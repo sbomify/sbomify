@@ -49,12 +49,84 @@ def test_the_surface_never_reloads_the_page(template: str) -> None:
     assert "location.reload" not in _source(template)
 
 
-@pytest.mark.parametrize("template", TRIAGE_PANELS)
-def test_a_triage_panel_refreshes_itself(template: str) -> None:
-    source = _source(template)
+def _root_attributes(html: str, element_id: str) -> dict[str, str]:
+    """The attributes of the element with ``element_id``, as a browser reads them.
 
-    assert "triage-saved from:body" in source
-    assert "vex-reapplied from:body" in source
+    Parsed rather than matched: the socket bridge holds an arrow function, and
+    its ``>`` ends any pattern that stops at the end of the tag.
+    """
+    from html.parser import HTMLParser
+
+    found: dict[str, str] = {}
+
+    class Root(HTMLParser):
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            if not found and dict(attrs).get("id") == element_id:
+                found.update((name, value or "") for name, value in attrs)
+
+    Root().feed(html)
+    return found
+
+
+@pytest.mark.django_db
+class TestATriagePanelRefreshesWhereTheReaderIs:
+    """Each triage panel refreshes on the events this flow emits, on the reader's page.
+
+    The triage modal dispatches ``refresh-assessments`` when a decision is
+    saved, and the background re-apply arrives as a ``ws:message`` of type
+    ``vex_reapplied``. Nothing emits any other event, so a panel listening for
+    one never refreshes. The pager's links reset to page one, so the refresh
+    carries its own query, page included.
+    """
+
+    def test_the_component_panel(self, sample_team_with_owner_member, sample_user) -> None:
+        from django.test import Client
+        from django.urls import reverse
+
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+        from sbomify.apps.core.tests.test_panel_triage_and_page_size import _component_with_findings
+
+        team = sample_team_with_owner_member.team
+        component = _component_with_findings(team)
+        client = Client()
+        setup_authenticated_client_session(client, team, sample_user)
+
+        response = client.get(
+            reverse("core:component_vulnerabilities_panel", args=[component.id]),
+            {"vuln_submitted": "1", "vuln_page": "2"},
+            headers={"hx-request": "true"},
+        )
+
+        root = _root_attributes(response.content.decode(), "component-vulnerabilities-table")
+        assert "vuln_page=2" in root["hx-get"]
+        assert root["hx-trigger"] == "refresh-assessments from:body"
+        assert "'vex_reapplied'" in root["@ws:message.window"]
+        assert f"'{component.id}'" in root["@ws:message.window"]
+
+    def test_the_artifact_report(self, sample_team_with_owner_member, sample_user) -> None:
+        from django.test import Client
+        from django.urls import reverse
+
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+        from sbomify.apps.core.tests.test_panel_triage_and_page_size import _component_with_findings
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = _component_with_findings(team)
+        sbom = SBOM.objects.get(component=component)
+        client = Client()
+        setup_authenticated_client_session(client, team, sample_user)
+
+        response = client.get(
+            reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sbom.id}),
+            {"scan_submitted": "1", "scan_page": "2"},
+        )
+
+        root = _root_attributes(response.content.decode(), "scan-vulnerabilities")
+        assert "scan_page=2" in root["hx-get"]
+        assert root["hx-trigger"] == "refresh-assessments from:body"
+        assert "'vex_reapplied'" in root["@ws:message.window"]
+        assert f"'{component.id}'" in root["@ws:message.window"]
 
 
 @pytest.mark.parametrize("template", TRIAGE_PANELS)
