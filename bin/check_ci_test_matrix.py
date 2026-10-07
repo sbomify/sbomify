@@ -93,6 +93,14 @@ def main() -> int:
         )
     if sorted(groups) != list(range(1, len(groups) + 1)):
         problems.append(f"  e2e-tests: matrix groups must be 1..{len(groups)}, got {groups}")
+    # --group has to come from the matrix. A literal there satisfies every other
+    # check in this file -- the splits still match the group count, the groups
+    # are still 1..N -- while every job in the matrix runs that one group and
+    # the rest of the suite is never collected by anyone.
+    if not re.search(r"--group\s+\$\{\{\s*matrix\.group\s*\}\}", e2e):
+        problems.append(
+            "  e2e-tests: --group is not wired to ${{ matrix.group }}, so every matrix job would run the same group"
+        )
     # Substring-matching E2E_DIR here would accept a narrowed target: a single
     # file under it, say, contains the directory as a prefix, and five of the six
     # groups would then collect nothing. Require it to be the whole target.
