@@ -18,7 +18,7 @@ def setup_client(client: Client, sample_user: User, sample_team_with_owner_membe
     workspace = sample_team_with_owner_member.team
     client.force_login(sample_user)
     session = client.session
-    session["current_team"] = {"key": workspace.key, "role": "owner", "has_completed_wizard": False}
+    session["current_workspace"] = {"key": workspace.key, "role": "owner", "has_completed_wizard": False}
     session.save()
     return client, workspace
 

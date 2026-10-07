@@ -109,48 +109,114 @@ jobs:
           echo "## Migration Consistency" >> $GITHUB_STEP_SUMMARY
           echo "All models are in sync with migrations." >> $GITHUB_STEP_SUMMARY
 
+  # Everything except the Playwright suite, in one job parallelised with
+  # pytest-xdist. The previous 16-way matrix executed 685 s of tests inside
+  # 2371 s of job time: each shard rebuilt the test image, booted a Chromium it
+  # never used, and ran pytest three times. Collapsing to one job pays that
+  # setup once instead of sixteen times, which is where the saving is.
+  #
+  # It stays inside the compose container rather than running on the host.
+  # Running it on the runner directly is ~35 s faster, but WeasyPrint binds
+  # native libraries at import and the runner's are not the image's: on the
+  # host, test_pdf_service silently stopped embedding the signature PNG. The
+  # image is the environment production uses, and for one job the rebuild is
+  # not worth drifting from it.
   tests:
     name: Run Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DJANGO_SETTINGS_MODULE: sbomify.test_settings
+      DEBUG: True
+      STRIPE_SECRET_KEY: 'sk_test_dummy_key_for_ci'
+      STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
+      STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
+      STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'
+      DJANGO_TEST: 'true'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Install JS dependencies
+        run: bun install
+
+      # django-vite reads sbomify/static/dist/manifest.json at template render
+      # time, so the assets have to exist before any view test runs.
+      - name: Build JS assets
+        run: bun run build
+
+      - name: Start Docker Compose for tests
+        run: |
+          docker compose -f docker-compose.tests.yml up -d
+
+      # `shell: bash` plus pipefail: the default shell is `bash -e` without
+      # pipefail, so `pytest | tee` would report tee's status and a failing
+      # suite would pass silently (same trap as the Frontend Tests job).
+      #
+      # One invocation, not three. The old job counted tests with a throwaway
+      # --collect-only pass and then split the run on the `anyio` marker; only
+      # 8 tests in the repo carry it, so fifteen of the sixteen shards booted
+      # Django a third time to run nothing. Nor is pytest's exit code 5
+      # ("collected nothing") mapped to success any more — that is a real
+      # failure now that the paths are not an allowlist.
+      #
+      # `--dist loadscope` keeps a class/module on one worker, so fixtures with
+      # class or module scope are built once rather than once per worker.
+      - name: Run tests
+        shell: bash
+        run: |
+          set -o pipefail
+          docker compose -f docker-compose.tests.yml exec -T tests sh -c "
+            uv run pytest --tb=short \
+              -n auto --dist loadscope \
+              --ignore=sbomify/apps/core/tests/e2e \
+              sbomify
+          " | tee test_results.txt
+
+      - name: Test summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Test Results"
+            echo
+            grep -E "(failed|passed|error)" test_results.txt | tail -1 || echo "Test run completed"
+          } >> $GITHUB_STEP_SUMMARY
+          if grep -q "^FAILED\|^ERROR" test_results.txt; then
+            {
+              echo
+              echo "### Failed Tests:"
+              grep "^FAILED\|^ERROR" test_results.txt
+            } >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # The Playwright suite is the pipeline's critical path: 618 browser tests at
+  # ~2.8 s each is ~29 minutes if run in one job. Split it six ways with
+  # pytest-split, weighted by `.github/e2e-test-durations.json` so the groups
+  # come out even (~290 s each) rather than merely equal in test count.
+  #
+  # Each shard runs its own serial pytest. xdist is deliberately NOT used here:
+  # a handful of snapshot assertions are sensitive to CPU contention and start
+  # diffing when workers compete for the runner, whereas a shard gets a whole
+  # runner to itself and behaves exactly as the single job did.
+  #
+  # Refresh the durations file after a material change to the suite:
+  #   pytest sbomify/apps/core/tests/e2e --store-durations \
+  #     --durations-path .github/e2e-test-durations.json
+  # Tests missing from the file fall back to the average, so a new test is
+  # scheduled sanely without one — it only drifts the balance, never drops.
+  e2e-tests:
+    name: E2E Tests (${{ matrix.group }}/6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        test-group:
-          - name: "Core Tests"
-            path: "sbomify/apps/core/tests/"
-            ignore: "sbomify/apps/core/tests/e2e"
-          - name: "SBOM Tests"
-            path: "sbomify/apps/sboms/tests/"
-          - name: "Plugin Tests"
-            path: "sbomify/apps/plugins/tests/"
-          - name: "Compliance Tests"
-            path: "sbomify/apps/compliance/tests/"
-          - name: "Vulnerability Scanning Tests"
-            path: "sbomify/apps/vulnerability_scanning/tests/"
-          - name: "TEA Tests"
-            path: "sbomify/apps/tea/tests/"
-          - name: "OIDC Tests"
-            path: "sbomify/apps/oidc/tests/"
-          - name: "Controls Tests"
-            path: "sbomify/apps/controls/tests/"
-          - name: "Integrations Tests"
-            path: "sbomify/apps/integrations/tests/"
-          - name: "Team Tests"
-            path: "sbomify/apps/teams/tests/"
-          - name: "Billing Tests"
-            path: "sbomify/apps/billing/tests/"
-          - name: "Document Tests"
-            path: "sbomify/apps/documents/tests/"
-          - name: "Licensing Tests"
-            path: "sbomify/apps/licensing/tests/"
-          - name: "Access Token Tests"
-            path: "sbomify/apps/access_tokens/"
-          - name: "Notification Tests"
-            path: "sbomify/apps/notifications/tests.py"
-          - name: "Onboarding Tests"
-            path: "sbomify/apps/onboarding/tests/"
-          - name: "Security Advisory Tests"
-            path: "sbomify/apps/security_advisories/tests/"
+        group: [1, 2, 3, 4, 5, 6]
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
@@ -165,15 +231,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.14"
-
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "**/uv.lock"
-
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - name: Install JS dependencies
@@ -186,129 +243,35 @@ jobs:
         run: |
           docker compose -f docker-compose.tests.yml up -d
 
-      - name: Run ${{ matrix.test-group.name }}
+      - name: Run E2E Tests (group ${{ matrix.group }}/6)
+        shell: bash
         run: |
-          echo "## ${{ matrix.test-group.name }} Results" >> $GITHUB_STEP_SUMMARY
-          echo "Running tests in: ${{ matrix.test-group.path }}" >> $GITHUB_STEP_SUMMARY
+          set -o pipefail
+          docker compose -f docker-compose.tests.yml exec -T tests sh -c "
+            uv run pytest --tb=short -v \
+              --splits 6 --group ${{ matrix.group }} \
+              --durations-path .github/e2e-test-durations.json \
+              sbomify/apps/core/tests/e2e/
+          " | tee test_results.txt
 
-          # Build ignore flag if specified
-          IGNORE_FLAG=""
-          if [ -n "${{ matrix.test-group.ignore }}" ]; then
-            IGNORE_FLAG="--ignore=${{ matrix.test-group.ignore }}"
-          fi
-
-          # Get test count
-          TEST_COUNT=$(docker compose -f docker-compose.tests.yml exec -T tests sh -c "uv run pytest --collect-only --quiet $IGNORE_FLAG ${{ matrix.test-group.path }}" | grep '::test_' | wc -l || echo "0")
-          echo "Test count: $TEST_COUNT" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Run sync tests
-          docker compose -f docker-compose.tests.yml exec -T tests sh -c "uv run pytest --tb=short -v -m 'not anyio' $IGNORE_FLAG ${{ matrix.test-group.path }}" | tee test_results.txt
-          PYTEST_EXIT_CODE_SYNC=${PIPESTATUS[0]}
-          [[ $PYTEST_EXIT_CODE_SYNC -eq 5 ]] && PYTEST_EXIT_CODE_SYNC=0
-
-          # Run async tests
-          docker compose -f docker-compose.tests.yml exec -T tests sh -c "uv run pytest --tb=short -v -m 'anyio' $IGNORE_FLAG ${{ matrix.test-group.path }}" | tee -a test_results.txt
-          PYTEST_EXIT_CODE_ASYNC=${PIPESTATUS[0]}
-          [[ $PYTEST_EXIT_CODE_ASYNC -eq 5 ]] && PYTEST_EXIT_CODE_ASYNC=0
-
-          PYTEST_EXIT_CODE=$((PYTEST_EXIT_CODE_SYNC || PYTEST_EXIT_CODE_ASYNC))
-
-          # Add summary to GitHub
-          echo "### Test Summary:" >> $GITHUB_STEP_SUMMARY
-          grep -E "(failed|passed|errors|warnings)" test_results.txt | tail -1 >> $GITHUB_STEP_SUMMARY || echo "Test run completed" >> $GITHUB_STEP_SUMMARY
-
-          # Show failed tests if any
-          if grep -q "FAILED" test_results.txt; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Failed Tests:" >> $GITHUB_STEP_SUMMARY
-            grep "FAILED" test_results.txt >> $GITHUB_STEP_SUMMARY || true
-          fi
-
-          # Exit with failure if tests failed (use pytest exit code)
-          if [ $PYTEST_EXIT_CODE -ne 0 ]; then
-            echo "Tests failed in ${{ matrix.test-group.name }}"
-            exit 1
-          fi
-
-  e2e-tests:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    env:
-      DJANGO_SETTINGS_MODULE: sbomify.test_settings
-      DEBUG: True
-      STRIPE_SECRET_KEY: 'sk_test_dummy_key_for_ci'
-      STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
-      STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
-      STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'
-      DJANGO_TEST: 'true'
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.14"
-
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "**/uv.lock"
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-
-      - name: Install JS dependencies
-        run: bun install
-
-      - name: Build JS assets
-        run: bun run build
-
-      - name: Start Docker Compose for tests
+      - name: Test summary
+        if: always()
+        shell: bash
         run: |
-          docker compose -f docker-compose.tests.yml up -d
-
-      - name: Run E2E Tests
-        run: |
-          echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "Running tests in: sbomify/apps/core/tests/e2e/" >> $GITHUB_STEP_SUMMARY
-
-          # Get test count
-          TEST_COUNT=$(docker compose -f docker-compose.tests.yml exec -T tests sh -c "uv run pytest --collect-only --quiet sbomify/apps/core/tests/e2e/" | grep '::test_' | wc -l || echo "0")
-          echo "Test count: $TEST_COUNT" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Run sync tests
-          docker compose -f docker-compose.tests.yml exec -T tests sh -c "uv run pytest --tb=short -v -m 'not anyio' sbomify/apps/core/tests/e2e/" | tee test_results.txt
-          PYTEST_EXIT_CODE_SYNC=${PIPESTATUS[0]}
-          [[ $PYTEST_EXIT_CODE_SYNC -eq 5 ]] && PYTEST_EXIT_CODE_SYNC=0
-
-          # Run async tests
-          docker compose -f docker-compose.tests.yml exec -T tests sh -c "uv run pytest --tb=short -v -m 'anyio' sbomify/apps/core/tests/e2e/" | tee -a test_results.txt
-          PYTEST_EXIT_CODE_ASYNC=${PIPESTATUS[0]}
-          [[ $PYTEST_EXIT_CODE_ASYNC -eq 5 ]] && PYTEST_EXIT_CODE_ASYNC=0
-
-          PYTEST_EXIT_CODE=$((PYTEST_EXIT_CODE_SYNC || PYTEST_EXIT_CODE_ASYNC))
-
-          # Add summary to GitHub
-          echo "### Test Summary:" >> $GITHUB_STEP_SUMMARY
-          grep -E "(failed|passed|errors|warnings)" test_results.txt | tail -1 >> $GITHUB_STEP_SUMMARY || echo "Test run completed" >> $GITHUB_STEP_SUMMARY
-
-          # Show failed tests if any
-          if grep -q "FAILED" test_results.txt; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Failed Tests:" >> $GITHUB_STEP_SUMMARY
-            grep "FAILED" test_results.txt >> $GITHUB_STEP_SUMMARY || true
+          {
+            echo "## E2E Test Results (group ${{ matrix.group }}/6)"
+            echo
+            grep -E "(failed|passed|error)" test_results.txt | tail -1 || echo "Test run completed"
+          } >> $GITHUB_STEP_SUMMARY
+          if grep -q "^FAILED\|^ERROR" test_results.txt; then
+            {
+              echo
+              echo "### Failed Tests:"
+              grep "^FAILED\|^ERROR" test_results.txt
+            } >> $GITHUB_STEP_SUMMARY
           fi
 
-          # Exit with failure if tests failed (use pytest exit code)
-          if [ $PYTEST_EXIT_CODE -ne 0 ]; then
-            echo "E2E Tests failed"
-            exit 1
-          fi
-
-      - name: Upload E2E Test Diffs
+      - name: Take ownership of E2E diffs
         if: failure()
         run: sudo chown -R $USER:$USER sbomify/apps/*/tests/e2e/__diffs__ 2>/dev/null || true
 
@@ -316,7 +279,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-test-diffs
+          name: e2e-test-diffs-group-${{ matrix.group }}
           path: 'sbomify/apps/*/tests/e2e/__diffs__/*.jpg'
           if-no-files-found: ignore
 

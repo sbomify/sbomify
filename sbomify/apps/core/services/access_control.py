@@ -369,7 +369,7 @@ def check_component_access_for_user(
     evaluates LIVE database state only: it builds a stub request carrying
     just the user and an EMPTY session, so the PRIVATE-component path in
     ``verify_item_access`` never short-circuits on a (possibly stale)
-    ``session["user_teams"]`` role cache. Routes through
+    ``session["user_workspaces"]`` role cache. Routes through
     ``check_component_access`` so the rules stay in one place.
     """
     stub = HttpRequest()

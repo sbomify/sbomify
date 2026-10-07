@@ -37,9 +37,9 @@ def cra_billing_session(browser_context) -> None:
 
     for row in Session.objects.all():
         store = SessionStore(session_key=row.session_key)
-        current_team = store.get("current_team") or {}
+        current_team = store.get("current_workspace") or {}
         current_team["billing_plan"] = "business"
-        store["current_team"] = current_team
+        store["current_workspace"] = current_team
         store.save()
 
 

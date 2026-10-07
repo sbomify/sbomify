@@ -141,7 +141,7 @@ class TestCheckComponentAccess:
         request.user = sample_user
         # Mock is_authenticated property
         type(request.user).is_authenticated = PropertyMock(return_value=True)
-        request.session = {"current_team": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
+        request.session = {"current_workspace": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
 
         result = check_component_access(request, private_component)
 
@@ -159,7 +159,7 @@ class TestCheckComponentAccess:
         request.user = guest_user
         # Mock is_authenticated property
         type(request.user).is_authenticated = PropertyMock(return_value=True)
-        request.session = {"current_team": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
+        request.session = {"current_workspace": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
 
         result = check_component_access(request, private_component)
 

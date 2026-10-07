@@ -22,7 +22,7 @@ pytestmark = pytest.mark.django_db
 def inventory(member: Member, **params: str) -> dict:
     request = RequestFactory().get("/products/", params)
     request.user = member.user
-    request.session = {"current_team": {"key": member.team.key, "role": "owner"}}
+    request.session = {"current_workspace": {"key": member.team.key, "role": "owner"}}
     result = build_inventory_context(request)
     assert result.ok, result.error
     assert result.value is not None
@@ -110,7 +110,7 @@ def test_live_membership_required_even_with_cached_owner_role(sample_team_with_o
     member.save(update_fields=["role"])
     request = RequestFactory().get("/products/")
     request.user = member.user
-    request.session = {"current_team": {"key": member.team.key, "role": "owner"}}
+    request.session = {"current_workspace": {"key": member.team.key, "role": "owner"}}
     assert build_inventory_context(request).status_code == 404
 
 
