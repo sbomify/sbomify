@@ -141,6 +141,16 @@ def test_an_operator_has_a_way_to_its_api_keys(items) -> None:
     assert f'href="{tokens}"' in page
 
 
+def test_an_operator_has_a_way_to_the_cryptography_page(items) -> None:
+    """The page admits every internal role, so the rail offers it to all of them."""
+    team = items["team"]
+    crypto = reverse("sboms:workspace_crypto", kwargs={"team_key": team.key})
+
+    page = _client(team, "operator").get(reverse("core:dashboard")).content.decode()
+
+    assert f'href="{crypto}"' in page
+
+
 def test_the_report_offers_vex_upload_only_to_a_role_that_can_upload(items) -> None:
     """Uploading a VEX file needs ``artifact:publish`` as well as the triage right."""
     url = reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": items["sbom_id"]})

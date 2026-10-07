@@ -289,7 +289,7 @@
       "icon": "fa-lock",
       "keywords": ["crypto", "cryptography", "crypto readiness", "quantum", "post-quantum", "pqc", "algorithms", "certificates", "cbom"],
       "args": ["team_key"],
-      "roles": ["owner", "admin", "member"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Public Trust Center page",
