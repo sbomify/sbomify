@@ -1,15 +1,8 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load humanize %}
-{% load static %}
 {% load django_vite %}
 {% load advisory_tags %}
 {% block title %}{{ component.get_component_type_display }}: {{ item.name }}{% endblock %}
-{% block extra_styles %}
-    <link rel="stylesheet"
-          href="{% static 'css/component-detailed-private.css' %}">
-    <link rel="stylesheet"
-          href="{% static 'css/components/vulnerability-trends.css' %}">
-{% endblock %}
 {% block content %}
     {% comment %}The download title names the format and the kind of document. Both are settled here rather than inline in the attribute, which djlint is free to break across lines.{% endcomment %}
     {% if item.format == 'cyclonedx' %}
@@ -188,8 +181,8 @@
                     <c-forms.select size="md" id="vex-status-filter" label="Filter by status" x-model="statusFilter">
                     <option value="all">All Statuses</option>
                     <template x-for="st in statusOptions" :key="st">
-                        <option :value="st"
-                                x-text="st.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())"></option>
+                        {# The states arrive already worded; see vex_suppression_rows. #}
+                        <option :value="st" x-text="st"></option>
                     </template>
                     </c-forms.select>
                     </c-tables.toolbar>
@@ -220,15 +213,7 @@
                             </c-tables.cell>
                             <c-tables.cell>{{ s.package }}</c-tables.cell>
                             <c-tables.cell>
-                            <span class="text-info">
-                                {% if s.state == 'not_affected' %}
-                                    Not affected
-                                {% elif s.state == 'false_positive' %}
-                                    False positive
-                                {% else %}
-                                    {{ s.state|cut:"_"|title }}
-                                {% endif %}
-                            </span>
+                            <span class="text-info">{{ s.state }}</span>
                             </c-tables.cell>
                             {% comment %}The muted ink sits on the value rather than the cell: the cell already states the table's own text colour, and two colour utilities on one element resolve by stylesheet order, not by the order they are written.{% endcomment %}
                             <c-tables.cell>

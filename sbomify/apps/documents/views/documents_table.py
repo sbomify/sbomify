@@ -31,7 +31,7 @@ class DocumentsTableView(View):
 
         # Block guest members from private views
         if request.user.is_authenticated:
-            current_team = request.session.get("current_team", {})
+            current_team = request.session.get("current_workspace", {})
             team_key = current_team.get("key")
             if team_key:
                 from sbomify.apps.teams.models import Member, Team
@@ -60,7 +60,7 @@ class DocumentsTableView(View):
             return htmx_error_response("Authentication required")
 
         # Block guest members from modifying documents (even on public views)
-        current_team = request.session.get("current_team", {})
+        current_team = request.session.get("current_workspace", {})
         team_key = current_team.get("key")
         if team_key:
             from sbomify.apps.teams.models import Member, Team

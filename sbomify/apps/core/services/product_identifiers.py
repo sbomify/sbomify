@@ -45,7 +45,7 @@ def build_identifiers_context(request: HttpRequest, product_id: str) -> ServiceR
     if status_code == 200:
         identifiers = identifiers_response.get("items", [])
 
-    current_team = request.session.get("current_team", {})
+    current_team = request.session.get("current_workspace", {})
     billing_plan = current_team.get("billing_plan", "community")
     is_feature_allowed = billing_plan != "community"
     has_crud_permissions = product.get("has_crud_permissions", False)

@@ -28,7 +28,7 @@
                 <c-cards.card flush>
                 <c-cards.header compact title="Address" />
                 <c-forms.field horizontal label="Subdomain slug" for="slug" hint="3 to 63 lowercase letters, numbers or hyphens. Start and end with a letter or number.">
-                <c-forms.input size="sm" id="slug" name="slug" value="{{ team_obj.slug|default:'' }}" maxlength="63" minlength="3" pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?" placeholder="my-company" disabled="{{ can_administer|yesno:',1' }}" x-model="slug" />
+                <c-forms.input size="sm" id="slug" name="slug" value="{{ team_obj.slug|default:'' }}" maxlength="63" minlength="3" pattern="[a-z0-9]([a-z0-9\-]*[a-z0-9])?" placeholder="my-company" disabled="{{ can_administer|yesno:',1' }}" x-model="slug" />
                 <c-forms.hint><span x-text="slug ? (slug + '.{{ trust_center_domain|escapejs }}') : 'Choose a subdomain'"></span></c-forms.hint>
                 </c-forms.field>
                 </c-cards.card>

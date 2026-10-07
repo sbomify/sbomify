@@ -14,6 +14,7 @@ from sbomify.apps.core.authz import Decision
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
 from sbomify.apps.sboms.models import SBOM, Component, Product, ProductComponent
+from sbomify.apps.sboms.services.sboms import deleting_sbom_files
 from sbomify.apps.teams.models import Team
 
 
@@ -75,21 +76,11 @@ class Command(BaseCommand):
         test_sboms = SBOM.objects.filter(component__in=test_components)
         self.stdout.write(f"Found {test_sboms.count()} test SBOMs to delete")
 
-        # Delete SBOM files from S3
-        for sbom in test_sboms:
-            try:
-                # Check if object exists before trying to delete
-                if self.s3.object_exists(self.sbom_bucket, sbom.sbom_filename):
-                    self.s3.delete_object(self.sbom_bucket, sbom.sbom_filename)
-                    self.stdout.write(f"Deleted SBOM file from S3: {sbom.sbom_filename}")
-                else:
-                    self.stdout.write(f"SBOM file not found in S3: {sbom.sbom_filename}")
-            except Exception as e:
-                self.stdout.write(self.style.WARNING(f"Failed to delete SBOM file {sbom.sbom_filename}: {str(e)}"))
-
-        # Delete all test data in the correct order to handle foreign key constraints
+        # Delete all test data in the correct order to handle foreign key constraints.
+        # A stored file another SBOM still uses, in any workspace, stays.
         if test_sboms.exists():
-            test_sboms.delete()
+            with deleting_sbom_files(test_sboms.values_list("sbom_filename", flat=True)):
+                test_sboms.delete()
             self.stdout.write("Deleted test SBOMs from database")
 
         if test_components.exists():

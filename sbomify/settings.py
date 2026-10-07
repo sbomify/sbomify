@@ -34,7 +34,11 @@ from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
-from sbomify.logging_filters import is_benign_shielded_future_error, is_on_demand_tls_ask_denial
+from sbomify.logging_filters import (
+    is_benign_shielded_future_error,
+    is_on_demand_tls_ask_denial,
+    redact_access_log_secrets,
+)
 from sbomify.sentry_config import (
     is_repeat_self_healing_notice,
     resolve_environment,
@@ -313,6 +317,7 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.GzipRequestDecompressionMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "sbomify.apps.core.middleware.RenamedSessionKeysMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
     "django.middleware.common.CommonMiddleware",
     # Must precede CsrfViewMiddleware so the bearer exemption flag is set before any
@@ -326,6 +331,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "sbomify.apps.core.middleware.ContentSecurityPolicyMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "sbomify.apps.core.middleware.IdentityProviderUnavailableMiddleware",
 ]
 
 # A compressed body inflates no further than an uncompressed one may weigh.
@@ -618,6 +624,25 @@ if REDIS_CA_CERTS and not _redis_is_tls:
     )
 
 
+# How many connections one cache alias may hold open to Redis at once, and how
+# long a caller waits for one of them to come free before giving up.
+#
+# The ceiling has to cover the threads that can be inside a cache command at the
+# same time in one process. Under the ASGI worker that is every thread Django
+# runs a sync view on, plus the channels consumers, plus the explicit
+# ``ThreadPoolExecutor`` fan-outs in the SBOM builder and the compliance
+# service — comfortably more than the 10 this used to allow. A pool is lazy, so
+# this is a ceiling rather than an allocation: a quiet process still opens one
+# connection, and the cost of the headroom is only paid under the load that
+# needs it.
+REDIS_CACHE_MAX_CONNECTIONS = int(os.environ.get("REDIS_CACHE_MAX_CONNECTIONS", "50"))
+
+# Two seconds is roughly a thousand times a healthy cache command, so a wait
+# this long means the pool is genuinely saturated rather than briefly busy, and
+# refusing is then the honest answer.
+REDIS_CACHE_POOL_TIMEOUT = int(os.environ.get("REDIS_CACHE_POOL_TIMEOUT", "2"))
+
+
 # Cache Configuration
 def build_redis_caches(location: str, ca_certs: str = "") -> dict[str, dict[str, Any]]:
     """The two Redis cache aliases, which differ in one option only.
@@ -629,11 +654,34 @@ def build_redis_caches(location: str, ca_certs: str = "") -> dict[str, dict[str,
     Both point at the same Redis. ``default`` swallows connection failures;
     ``throttle`` does not, and nothing else about them may drift apart.
     """
-    pool_kwargs: dict[str, Any] = {"max_connections": 10}
+    pool_kwargs: dict[str, Any] = {
+        "max_connections": REDIS_CACHE_MAX_CONNECTIONS,
+        "timeout": REDIS_CACHE_POOL_TIMEOUT,
+    }
     if ca_certs:
         pool_kwargs["ssl_ca_certs"] = ca_certs
     options: dict[str, Any] = {
         "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        # redis-py's plain ConnectionPool refuses the moment every connection is
+        # checked out: it raises MaxConnectionsError rather than waiting for one
+        # of the in-flight commands to return its connection, which they do in
+        # milliseconds. Neither alias below can tell that refusal apart from
+        # Redis being unreachable, because it arrives wrapped as the same
+        # django-redis ConnectionInterrupted — so a full pool was read as an
+        # outage while Redis was perfectly healthy.
+        #
+        # On ``default`` that cost the request its cache. On ``throttle`` it
+        # cost the user the request: the throttle treats a backend error as
+        # "refuse and retry shortly", and latches that refusal for a few seconds
+        # across the whole process, so one momentary pool exhaustion answered
+        # every throttled API call with a 429 it had not earned.
+        #
+        # BlockingConnectionPool waits for a free connection instead, up to
+        # ``timeout``. A busy pool then costs a caller the milliseconds it takes
+        # for a slot to open, and only a pool that stays full for seconds still
+        # raises — at which point the refusal is a true overload signal and the
+        # throttle shedding load is the right behaviour.
+        "CONNECTION_POOL_CLASS": "redis.BlockingConnectionPool",
         "SOCKET_CONNECT_TIMEOUT": 5,
         "SOCKET_TIMEOUT": 5,
         "RETRY_ON_TIMEOUT": True,
@@ -788,7 +836,7 @@ def build_dramatiq_redis_options(location: str, ca_certs: str = "") -> dict[str,
 
 _dramatiq_redis_options: dict[str, Any] = build_dramatiq_redis_options(REDIS_WORKER_URL, REDIS_CA_CERTS)
 DRAMATIQ_BROKER = {
-    "BROKER": "dramatiq.brokers.redis.RedisBroker",
+    "BROKER": "sbomify.dramatiq_broker.RedisBroker",
     "OPTIONS": _dramatiq_redis_options,
     "MIDDLEWARE": [
         "dramatiq.middleware.Callbacks",
@@ -982,6 +1030,11 @@ LOGGING = {
         # },
     },
 }
+
+# uvicorn (and gunicorn's UvicornWorker) install the access logger's handlers
+# before the app loads. Naming the logger in LOGGING would make dictConfig strip
+# those handlers, so the filter is attached to the logger directly instead.
+logging.getLogger("uvicorn.access").addFilter(redact_access_log_secrets)
 
 
 # Feature flags

@@ -22,13 +22,13 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
     workspace = member.team
     setup_authenticated_client_session(client, workspace, sample_user)
     session = client.session
-    session["current_team"]["has_completed_wizard"] = True
+    session["current_workspace"]["has_completed_wizard"] = True
     session.save()
     mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
 
     owner_page = client.get(reverse("core:dashboard"))
     assert owner_page.status_code == 200
-    assert b'aria-label="Posture"' in owner_page.content
+    assert b'aria-label="Compliance"' in owner_page.content
     assert b'aria-label="Plugins"' in owner_page.content
     assert b"Set up your first repository" in owner_page.content
     assert reverse("core:component_new").encode() in owner_page.content
@@ -42,7 +42,7 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
     member.save(update_fields=["role"])
     contributor_page = client.get(reverse("core:dashboard"))
     assert contributor_page.status_code == 200
-    assert b'aria-label="Posture"' not in contributor_page.content
+    assert b'aria-label="Compliance"' not in contributor_page.content
     assert b'aria-label="Plugins"' not in contributor_page.content
     assert b"Set up your first repository" in contributor_page.content
     assert reverse("core:component_new").encode() in contributor_page.content
@@ -61,6 +61,32 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
     assert guest_page.url != reverse("core:dashboard")
 
 
+@pytest.mark.parametrize(
+    ("path", "label"),
+    [
+        ("/products/", "Products"),
+        ("/components/", "Components"),
+        ("/releases/", "Products"),
+    ],
+)
+@pytest.mark.parametrize("partial", [False, True])
+def test_inventory_navigation_tracks_selected_view(
+    client: Client, sample_user: User, sample_team_with_owner_member: Member, path: str, label: str, partial: bool
+) -> None:
+    setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_user)
+    headers = {"HX-Target": "inventory-content", "HX-Request": "true"} if partial else {}
+    response = client.get(path, headers=headers)
+    assert response.status_code == 200
+    nav = re.search(r'(<div\s+id="inventory-navigation"[^>]*>)(.*?)</div>', response.content.decode(), re.DOTALL)
+    assert nav is not None
+    links = re.findall(r"<a\s[^>]*>", nav[2])
+    assert [re.search(r'aria-label="([^"]+)"', link)[1] for link in links] == ["Products", "Components"]
+    current = [link for link in links if 'aria-current="page"' in link]
+    assert len(current) == 1
+    assert f'aria-label="{label}"' in current[0]
+    assert ('hx-swap-oob="outerHTML"' in nav[1]) is partial
+
+
 def test_cryptography_is_reachable_from_the_rail(
     client: Client, sample_user: User, sample_team_with_owner_member: Member, mocker: MockerFixture
 ) -> None:
@@ -72,7 +98,7 @@ def test_cryptography_is_reachable_from_the_rail(
     workspace = member.team
     setup_authenticated_client_session(client, workspace, sample_user)
     session = client.session
-    session["current_team"]["has_completed_wizard"] = True
+    session["current_workspace"]["has_completed_wizard"] = True
     session.save()
     mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
 
@@ -104,7 +130,7 @@ def test_trends_page_hands_its_filters_to_the_fragment_it_fetches(
     workspace = sample_team_with_owner_member.team
     setup_authenticated_client_session(client, workspace, sample_user)
     session = client.session
-    session["current_team"]["has_completed_wizard"] = True
+    session["current_workspace"]["has_completed_wizard"] = True
     session.save()
     mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
     fragment = reverse("vulnerability_scanning:vulnerability_trends")

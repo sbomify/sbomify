@@ -9,6 +9,7 @@ import re
 import time
 from typing import TYPE_CHECKING, Any, Callable, Protocol
 
+import requests
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import DisallowedHost
@@ -16,6 +17,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonR
 from django.utils.deprecation import MiddlewareMixin
 from django.utils.http import http_date
 
+from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ErrorCode
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.teams.utils import normalize_host
@@ -487,6 +489,32 @@ class RealIPMiddleware(MiddlewareMixin):
             request.META["REMOTE_ADDR"] = client_ip
 
 
+_OIDC_URL_NAMES = frozenset({"openid_connect_login", "openid_connect_callback"})
+
+
+def _provider_unreachable(exception: Exception) -> bool:
+    """A network failure or a 5xx from the provider; bad URLs and 4xx are configuration errors and stay 500s."""
+    if isinstance(exception, requests.HTTPError):
+        return exception.response is not None and exception.response.status_code >= 500
+    return isinstance(exception, (requests.ConnectionError, requests.Timeout))
+
+
+class IdentityProviderUnavailableMiddleware(MiddlewareMixin):
+    """
+    Answer 503 instead of 500 when the identity provider cannot be reached during sign-in.
+
+    allauth fetches the OpenID discovery document on every login and callback without
+    catching network errors, so a provider outage surfaces as an unhandled exception.
+    """
+
+    def process_exception(self, request: HttpRequest, exception: Exception) -> HttpResponse | None:
+        match = request.resolver_match
+        if not _provider_unreachable(exception) or not match or match.url_name not in _OIDC_URL_NAMES:
+            return None
+        logger.warning("Identity provider unreachable during sign-in: %s", exception)
+        return error_response(request, HttpResponse("Sign-in is unavailable. Try again in a minute.", status=503))
+
+
 def _policy_has_report_uri(policy: str) -> bool:
     """True if any ``;``-separated directive in ``policy`` is a report-uri.
 
@@ -779,3 +807,24 @@ class ApiVersionDeprecationMiddleware:
         existing = response.get("Link")
         response["Link"] = f"{existing}, {self._LINK}" if existing else self._LINK
         return response
+
+
+class RenamedSessionKeysMiddleware:
+    """Move session values written under a key's old name to its new one.
+
+    Removable once every session older than this middleware has expired (SESSION_COOKIE_AGE).
+    """
+
+    _RENAMED = {"current_team": "current_workspace", "user_teams": "user_workspaces"}
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        # A request without a session cookie has no session to load or migrate.
+        if settings.SESSION_COOKIE_NAME in request.COOKIES:
+            session = request.session
+            for old, new in self._RENAMED.items():
+                if old in session:
+                    session.setdefault(new, session.pop(old))
+        return self.get_response(request)

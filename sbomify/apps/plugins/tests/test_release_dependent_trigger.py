@@ -99,6 +99,28 @@ class TestDependencyTrackSkippedFinding:
         assert result.summary.error_count == 0
         assert result.summary.warning_count == 1
 
+    def test_dt_not_enabled_is_a_skip_in_workspace_words(self, tmp_path, sample_team_with_owner_member):
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        sbom = SBOM.objects.create(name="lithium", component=component, format="cyclonedx", format_version="1.6")
+        sbom_path = tmp_path / "sbom.json"
+        sbom_path.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6"}')
+
+        with patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=False):
+            result = DependencyTrackPlugin().assess(sbom_id=sbom.id, sbom_path=sbom_path)
+
+        (finding,) = result.findings
+        assert finding.id == "dependency-track:not-enabled"
+        assert "workspace" in finding.description
+        assert team.key not in finding.description
+        assert result.metadata["skipped"] is True
+        assert result.summary.error_count == 0
+        assert result.summary.warning_count == 1
+
     def test_proceeds_when_product_exists_but_no_release_artifact(self, sample_team_with_owner_member, tmp_path):
         """Race case: component has product membership but ReleaseArtifact
         hasn't been committed yet (sbomify-action 2-step upload). Scan must
@@ -177,7 +199,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
         captured = []
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+            lambda **kwargs: captured.append(kwargs["plugin_name"]) or True,
         )
 
         enqueued = enqueue_assessments_for_sbom(
@@ -211,7 +233,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
         captured = []
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+            lambda **kwargs: captured.append(kwargs["plugin_name"]) or True,
         )
 
         enqueued = enqueue_assessments_for_sbom(
@@ -244,7 +266,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
         captured = []
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+            lambda **kwargs: captured.append(kwargs["plugin_name"]) or True,
         )
 
         enqueued = enqueue_assessments_for_sbom(
@@ -302,7 +324,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
         captured: list[str] = []
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+            lambda **kwargs: captured.append(kwargs["plugin_name"]) or True,
         )
 
         enqueued = enqueue_assessments_for_sbom(
@@ -547,7 +569,7 @@ class TestBulkBackfillFiltering:
         captured: list[str] = []
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
-            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+            lambda **kwargs: captured.append(kwargs["plugin_name"]) or True,
         )
 
         result = enqueue_assessments_for_existing_sboms_task(

@@ -375,3 +375,30 @@ def test_the_other_badges_stay_spans(rendered: str) -> None:
     """type is what makes the shell a button; nothing else asks for one."""
     assert _badge(rendered, "Secondary").lstrip().startswith("class=")
     assert "<button" not in _badge(rendered, "Secondary")
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Bare",
+        "Primary",
+        "Secondary",
+        "Success",
+        "Warning",
+        "Danger",
+        "Info",
+        "Accent",
+        "Violet",
+        "KEV",
+        "Compact",
+        "Pilled",
+        "Critical",
+        "High",
+        "Medium",
+        "Low",
+        "Unknown",
+        "Runtime critical",
+    ],
+)
+def test_badge_labels_never_wrap(rendered: str, label: str) -> None:
+    assert "whitespace-nowrap" in _badge(rendered, label)

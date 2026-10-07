@@ -197,11 +197,11 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     """Main notification provider for billing app - handles all billing-related notifications"""
     notifications: list[NotificationSchema] = []
 
-    if "current_team" not in request.session:
+    if "current_workspace" not in request.session:
         logger.debug("No current_team in session, skipping notifications")
         return notifications
 
-    team_key = request.session["current_team"]["key"]
+    team_key = request.session["current_workspace"]["key"]
     logger.debug("get_notifications called for team")
     try:
         team = Team.objects.get(key=team_key)

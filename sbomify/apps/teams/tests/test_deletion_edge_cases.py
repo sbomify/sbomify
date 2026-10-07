@@ -30,7 +30,9 @@ def other_team(db):
 
 @pytest.fixture
 def user_with_one_team(db, django_user_model, team):
-    u = django_user_model.objects.create_user(username="user1", email="user1@test.com", password="password")
+    u = django_user_model.objects.create_user(
+        username="user1", email="user1@test.com", password="password", email_verified=True
+    )
     Member.objects.create(user=u, team=team, role="admin", is_default_team=True)
     return u
 
@@ -45,8 +47,8 @@ def owner(db, django_user_model, team):
 def _setup_session(client, team, role):
     """Helper to set up session data for a user after force_login."""
     session = client.session
-    session["current_team"] = {"key": team.key, "name": team.name, "role": role}
-    session["user_teams"] = {team.key: {"role": role, "name": team.name}}
+    session["current_workspace"] = {"key": team.key, "name": team.name, "role": role}
+    session["user_workspaces"] = {team.key: {"role": role, "name": team.name}}
     session.save()
 
 

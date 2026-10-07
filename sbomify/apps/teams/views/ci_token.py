@@ -20,7 +20,7 @@ from django.utils import timezone
 from django.views import View
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.access_tokens.utils import create_personal_access_token, hash_token
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -57,7 +57,7 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return JsonResponse({"detail": team.get("detail", "Unknown error")}, status=status_code)
 
         # Authorize against the workspace in the URL, which is the one being
-        # minted for. TeamRoleRequiredMixin above reads session["current_team"],
+        # minted for. TeamRoleRequiredMixin above reads session["current_workspace"],
         # so on its own it answers a different question: whether the caller is
         # an owner or admin of whatever workspace they happen to have selected.
         #
@@ -77,7 +77,7 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         expires_at = timezone.now() + timedelta(days=CI_TOKEN_LIFETIME_DAYS)
 
         AccessToken.objects.create(
-            encoded_token=raw_token,
+            token_hash=hash_token(raw_token),
             user=user,
             # Named so it is identifiable in the token list, where revoking it
             # is the one action someone may want and would otherwise be
@@ -90,8 +90,8 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         capture_for_request(request, "api_token:created", team_key=team_key)
 
-        # Returned once and never stored anywhere we can read back — the row
-        # holds the encoded form, same as every other token.
+        # Returned once and never stored anywhere we can read back: the row
+        # holds only its hash, same as every other token.
         response = JsonResponse(
             {
                 "token": raw_token,

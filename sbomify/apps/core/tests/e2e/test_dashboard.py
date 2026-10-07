@@ -10,6 +10,7 @@ from pytest_django.fixtures import SettingsWrapper
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.core.tests.e2e.utils import take_screenshot
+from sbomify.apps.core.tests.shared_fixtures import register_plugin
 
 
 @pytest.mark.django_db
@@ -38,6 +39,7 @@ def overview_dashboard(dashboard: dict[str, Any]) -> dict[str, Any]:
     from sbomify.apps.plugins.models import AssessmentRun, VulnerabilityLifecycle
     from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
+    register_plugin("overview-review")
     run = AssessmentRun.objects.create(
         sbom=dashboard["sboms"][0],
         plugin_name="overview-review",
@@ -48,7 +50,7 @@ def overview_dashboard(dashboard: dict[str, Any]) -> dict[str, Any]:
                 {
                     "id": "CVE-2026-10001",
                     "severity": "critical",
-                    "component": {"name": "libexample", "version": "1.2.3"},
+                    "component": {"name": "libexample", "version": "1.2.3", "purl": "pkg:pypi/libexample@1.2.3"},
                 },
                 {
                     "id": "CVE-2026-10002",
@@ -104,7 +106,11 @@ def test_overview_priority_table_and_mobile_drawer(
     page.keyboard.press("Escape")
     expect(panel).to_be_hidden()
     expect(trigger).to_be_focused()
-    expect(priority.locator("th").filter(has_text="Patch SLA")).to_be_visible()
+    if width < 640:
+        # Stacked: the column survives as a labelled value in each row.
+        expect(priority.locator('td[data-label="Patch SLA"]').first).to_be_visible()
+    else:
+        expect(priority.locator("th").filter(has_text="Patch SLA")).to_be_visible()
     assert page.locator("html").evaluate("el => el.scrollWidth <= window.innerWidth")
     if width < 1024:
         expect(page.locator("#sidebar")).to_be_hidden()
@@ -115,6 +121,57 @@ def test_overview_priority_table_and_mobile_drawer(
     page.get_by_role("link", name="Add release", exact=False).click()
     expect(page.get_by_role("heading", name="New release", exact=True)).to_be_visible()
     expect(page.get_by_role("combobox", name="Product *", exact=True)).to_contain_text("Test Product 0")
+
+
+@pytest.mark.django_db
+def test_priority_link_opens_selected_vulnerability(
+    authenticated_page: Page, overview_dashboard: dict[str, Any]
+) -> None:
+    page = authenticated_page
+    page.goto("/dashboard")
+    priority = page.get_by_role("table", name="Priority vulnerabilities")
+    row = priority.get_by_role("row").filter(has_text="CVE-2026-10001")
+    row.get_by_role("link", name="CVE-2026-10001", exact=True).click()
+
+    panel = page.locator("#component-vulnerabilities")
+    expect(panel).to_be_in_viewport()
+    expect(panel.get_by_role("searchbox", name="Search vulnerabilities")).to_have_value("CVE-2026-10001")
+    table = panel.get_by_role("table", name="Vulnerabilities", exact=True)
+    expect(table).to_contain_text("CVE-2026-10001")
+    expect(table).not_to_contain_text("CVE-2026-10002")
+    expect(table.locator("tbody tr")).to_have_count(1)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1280, 390])
+def test_priority_menu_opens_component_and_triages_finding(
+    authenticated_page: Page, overview_dashboard: dict[str, Any], width: int
+) -> None:
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto("/dashboard")
+    page.get_by_role("button", name="Actions for CVE-2026-10001", exact=True).click()
+    component_id = overview_dashboard["sboms"][0].component_id
+    expect(page.get_by_role("menuitem", name="Go to component", exact=True)).to_have_attribute(
+        "href", f"/component/{component_id}/"
+    )
+    page.get_by_role("menuitem", name="Triage", exact=True).click()
+    modal = page.locator("#triage-modal")
+    expect(modal).to_be_visible()
+    expect(modal).to_contain_text("CVE-2026-10001")
+    expect(modal.locator("#triage-scope")).to_have_value("package")
+    modal.locator("#triage-state").select_option("in_triage")
+    page.route("**/triage", lambda route: route.fulfill(json={"ok": True}))
+    with page.expect_request(lambda request: request.method == "POST" and request.url.endswith("/triage")) as sent:
+        modal.get_by_role("button", name="Save decision", exact=True).click()
+    assert sent.value.url.endswith(f"/components/{component_id}/triage")
+    payload = sent.value.post_data_json
+    assert payload is not None
+    decision = payload["decisions"][0]
+    assert decision["vuln_id"] == "CVE-2026-10001"
+    assert decision["state"] == "in_triage"
+    assert decision["purl"] == "pkg:pypi/libexample@1.2.3"
+    expect(modal).to_be_hidden()
 
 
 @pytest.mark.django_db
@@ -217,6 +274,7 @@ def test_repository_terminal_snapshot(
 @pytest.mark.django_db
 def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, settings: SettingsWrapper) -> None:
     from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import hash_token
 
     settings.APP_BASE_URL = "http://localhost:8000"
     page = authenticated_page
@@ -227,16 +285,19 @@ def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, se
     copy_prompt = page.get_by_role("button", name="Copy prompt", exact=True)
     expect(copy_prompt).to_be_disabled()
     assert not AccessToken.objects.exists()
-    page.get_by_role("button", name="Create setup token", exact=True).click()
+    with page.expect_response(lambda response: "/setup-token/" in response.url) as created:
+        page.get_by_role("button", name="Create setup token", exact=True).click()
     expect(copy_prompt).to_be_enabled()
     original = AccessToken.objects.get()
+    original_token = created.value.json()["token"]
+    assert hash_token(original_token) == original.token_hash
     page.get_by_role("button", name="Public", exact=True).click()
     copy_prompt.click()
     page.wait_for_function("window.setupCopiedText?.includes('Create everything as public.')")
     copied = page.evaluate("window.setupCopiedText")
     assert copied == page.locator("#repository-setup-prompt").text_content()
     assert "YOUR_SETUP_TOKEN" not in copied
-    assert original.encoded_token in copied
+    assert original_token in copied
     page.locator("#panel-setup-agent").get_by_role("button", name="Copy code", exact=True).click()
     assert page.evaluate("window.setupCopiedText") == copied
     agent_tab = page.get_by_role("tab", name="Coding agent", exact=True)
@@ -246,13 +307,16 @@ def test_repository_setup_tabs_copy_and_token_reset(authenticated_page: Page, se
     page.get_by_role("button", name="uv", exact=True).click()
     page.get_by_role("button", name="Copy command", exact=True).click()
     page.wait_for_function("window.setupCopiedText?.includes('uvx sbomify-action wizard')")
-    assert original.encoded_token in page.evaluate("window.setupCopiedText")
-    page.get_by_role("button", name="Reset token", exact=True).click()
+    assert original_token in page.evaluate("window.setupCopiedText")
+    with page.expect_response(lambda response: "/setup-token/" in response.url) as reset:
+        page.get_by_role("button", name="Reset token", exact=True).click()
     expect(page.get_by_role("button", name="Reset token", exact=True)).to_be_enabled()
     assert not AccessToken.objects.filter(pk=original.pk).exists()
     replacement = AccessToken.objects.get()
     assert replacement.pk != original.pk
-    expect(page.locator("#repository-setup-command")).to_contain_text(replacement.encoded_token)
+    replacement_token = reset.value.json()["token"]
+    assert hash_token(replacement_token) == replacement.token_hash
+    expect(page.locator("#repository-setup-command")).to_contain_text(replacement_token)
     page.get_by_role("tab", name="Terminal", exact=True).press("ArrowLeft")
     expect(agent_tab).to_have_attribute("aria-selected", "true")
     expect(page.locator("#repository-setup-prompt")).to_contain_text("Create everything as public.")
