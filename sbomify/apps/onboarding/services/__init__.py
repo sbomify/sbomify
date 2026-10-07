@@ -11,7 +11,7 @@ from typing import Any
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
-from django.db import IntegrityError, InterfaceError, OperationalError
+from django.db import Error, IntegrityError, InterfaceError, OperationalError
 from django.db.models import F, Q, QuerySet
 from django.template import TemplateDoesNotExist, TemplateSyntaxError
 from django.utils import timezone
@@ -230,7 +230,7 @@ def _persist_outcome(write: Callable[[], None], description: str) -> bool:
             if not connection.in_atomic_block:
                 try:
                     connection.close()
-                except Exception:  # noqa: BLE001 - a failed close is not worth losing the outcome over
+                except Error:  # Django drops the connection even when closing fails; the next attempt reconnects
                     pass
     return False
 

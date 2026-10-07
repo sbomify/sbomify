@@ -1779,6 +1779,32 @@ class TestTransientSendFailuresRetry:
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
         assert record.status == OnboardingEmail.EmailStatus.FAILED, "the outcome was recorded, not lost"
 
+    def test_a_close_that_fails_between_attempts_does_not_cost_the_outcome(self) -> None:
+        """Outside a transaction the broken connection is closed before the retry.
+
+        Closing a broken connection can fail too, with ``InterfaceError``, which
+        is not a ``DatabaseError``. Django drops the connection either way, so
+        the next attempt reconnects and the outcome still lands.
+        """
+        from django.db import InterfaceError, OperationalError
+
+        from sbomify.apps.onboarding.services import _persist_outcome
+
+        calls = {"n": 0}
+
+        def write() -> None:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OperationalError("server closed the connection unexpectedly")
+
+        with patch("django.db.connection") as connection:
+            connection.in_atomic_block = False
+            connection.close.side_effect = InterfaceError("connection already closed")
+            assert _persist_outcome(write, "a test outcome") is True
+
+        connection.close.assert_called_once()
+        assert calls["n"] == 2, "the failed close did not end the attempts"
+
     def test_a_database_outage_while_stamping_the_handoff_retries(self) -> None:
         """The stamp is written inside the send's try, so its failures land there.
 
