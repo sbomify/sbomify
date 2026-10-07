@@ -273,7 +273,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
 
     @staticmethod
     def _get_current_team(request: HttpRequest) -> Team | None:
-        team_key = request.session.get("current_team", {}).get("key")
+        team_key = request.session.get("current_workspace", {}).get("key")
         if team_key:
             team = Team.objects.filter(key=team_key).first()
             if team:

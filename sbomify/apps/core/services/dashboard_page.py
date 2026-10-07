@@ -22,13 +22,14 @@ _CACHE_TTL_SECONDS = 60
 _DIGEST_LIMIT = 4
 _PRODUCT_LIMIT = 8
 
-# The cached context's shape. v5 adds needs_attention_total, which the digest
+# The cached context's shape. v6 adds needs_attention_total, which the digest
 # panel compares against the rows it shows to decide whether to state the
 # slice, and the two product-membership flags the exposure footer uses to say
-# why its rows do not sum. v4 added the unmeasured flags. An entry written by
-# the previous release has none of these keys, and each missing value reads as
-# false, so the panel silently drops the sentence it exists to show.
-_CACHE_VERSION = "v5"
+# why its rows do not sum. v5 added medium_low, v4 the unmeasured flags. An
+# entry written by an earlier release lacks the newer keys, and each missing
+# value reads as false, so the panel silently drops the sentence it exists to
+# show.
+_CACHE_VERSION = "v6"
 
 
 def dashboard_cache_key(team_id: int) -> str:
@@ -171,6 +172,7 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
         "metrics": {
             "open": open_findings,
             "critical_high": sum(count["critical"] + count["high"] for count in counts.values()),
+            "medium_low": sum(count["medium"] + count["low"] for count in counts.values()),
             "past_sla": past_sla,
             "sla_unknown": sum(count["total"] for count in counts.values())
             - len(picture["findings"])

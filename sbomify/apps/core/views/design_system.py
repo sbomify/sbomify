@@ -208,7 +208,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 ],
                 "passed": [{"tone": "success", "count": 3}],
             },
-            "team": request.session.get("current_team", {}),
+            "team": request.session.get("current_workspace", {}),
             "sections": GALLERY_SECTIONS,
             # One row per brand, chosen to show the ink switching rather than to
             # look pretty: navy and violet take white text, amber and mint take
