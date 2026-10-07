@@ -1,6 +1,7 @@
 """API endpoints for the plugins framework."""
 
 from collections.abc import Callable
+from itertools import chain
 from typing import Any
 from uuid import UUID
 
@@ -431,10 +432,8 @@ def get_sbom_assessments(
         else []
     )
 
-    latest_runs = sorted(
-        AssessmentRun.objects.filter(id__in=latest_ids).prefetch_related("releases"),
-        key=lambda run: (run.created_at, run.id),
-        reverse=True,
+    latest_runs = list(
+        AssessmentRun.objects.filter(id__in=latest_ids).prefetch_related("releases").order_by("-created_at", "-id")
     )
     history_runs = _history_runs(history_ids)
 
@@ -443,7 +442,7 @@ def get_sbom_assessments(
 
     # Prefetch display names for all plugin_names present in this response
     # in a single query so serialization stays O(n) without per-run lookups.
-    display_names = _get_plugin_display_names_map({run.plugin_name for run in [*latest_runs, *history_runs]})
+    display_names = _get_plugin_display_names_map({run.plugin_name for run in chain(latest_runs, history_runs)})
 
     from sbomify.apps.vulnerability_scanning.euvd import euvd_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
