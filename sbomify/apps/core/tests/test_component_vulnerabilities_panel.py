@@ -156,7 +156,7 @@ class TestTheReportedIncident:
 
         assert response.context["vuln_summary"]["total"] == 2390
         assert response.context["vuln_panel"]["page_count"] == 478
-        assert "Showing 1 to 5 of 2390" in response.content.decode()
+        assert "Showing 1 to 5 of 2,390" in response.content.decode()
 
     @pytest.mark.slow
     def test_the_last_finding_is_still_reachable(self, sample_team_with_owner_member, sample_user):
@@ -492,3 +492,45 @@ class TestTheKevControlIsOfferedOnlyWhenItCanMatch:
         for relative in roots:
             path = settings.BASE_DIR / "sbomify" / "apps" / relative
             assert "<c-vulnerabilities.filters" in path.read_text(encoding="utf-8")
+
+
+class TestTriageModal:
+    def test_loads_exact_package_and_saved_decision(self, sample_team_with_owner_member, sample_user):
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(
+            member.team,
+            count=40,
+            analysis_state="in_triage",
+            analysis_detail="Checking exposure",
+        )
+        response = _client(member.team, sample_user).get(
+            reverse("core:component_triage_modal", args=[component.id]),
+            {"advisory": "CVE-2026-0030", "package": "pkg-0030", "version": "1.0", "ecosystem": "deb"},
+        )
+        assert response.status_code == 200
+        assert response.context["triage_payload"]["id"] == "CVE-2026-0030"
+        assert response.context["triage_payload"]["state"] == "in_triage"
+        assert response.context["triage_payload"]["detail"] == "Checking exposure"
+        assert response.context["component_id"] == component.id
+
+    def test_rejects_another_workspace(self, sample_team_with_owner_member, sample_user):
+        from sbomify.apps.teams.models import Team
+
+        other_workspace = Team.objects.create(name="Other workspace")
+        component, _ = _component_with_findings(other_workspace, count=1)
+        response = _client(sample_team_with_owner_member.team, sample_user).get(
+            reverse("core:component_triage_modal", args=[component.id]),
+            {"advisory": "CVE-2026-0000", "package": "pkg-0000", "version": "1.0", "ecosystem": "deb"},
+        )
+        assert response.headers["HX-Reswap"] == "none"
+        assert "triage-modal" not in response.content.decode()
+
+    def test_does_not_fall_back_to_a_different_package(self, sample_team_with_owner_member, sample_user):
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(member.team, count=1)
+        response = _client(member.team, sample_user).get(
+            reverse("core:component_triage_modal", args=[component.id]),
+            {"advisory": "CVE-2026-0000", "package": "missing", "version": "1.0", "ecosystem": "deb"},
+        )
+        assert response.headers["HX-Reswap"] == "none"
+        assert "triage-modal" not in response.content.decode()

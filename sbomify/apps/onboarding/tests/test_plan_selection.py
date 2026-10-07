@@ -129,7 +129,7 @@ def authed_client(new_user):
     client = Client()
     client.login(username="newuser", password="testpass123")
     session = client.session
-    session["current_team"] = {
+    session["current_workspace"] = {
         "key": team.key,
         "name": team.name,
         "role": "owner",
@@ -154,7 +154,7 @@ class TestOnboardingPlanSelectionGet:
         client = Client()
         client.login(username="existinguser", password="testpass123")
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "name": team.name,
             "role": "owner",
@@ -242,7 +242,7 @@ class TestOnboardingPlanSelectionPost:
         client = Client()
         client.login(username="existinguser", password="testpass123")
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "has_completed_wizard": True,
         }
@@ -335,7 +335,7 @@ class TestTrialExpirationDowngrade:
         mock_sub.metadata = {"plan_key": "business"}
 
         with (
-            patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility"),
+            patch("sbomify.apps.billing.billing_processing.apply_community_downgrade"),
             patch("sbomify.apps.billing.billing_processing.notify_billing_managers"),
         ):
             handle_trial_period(mock_sub, team)
@@ -389,7 +389,7 @@ class TestPlanSelectionRedirects:
         client = Client()
         client.login(username="newuser", password="testpass123")
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "name": team.name,
             "role": "owner",
@@ -408,7 +408,7 @@ class TestPlanSelectionRedirects:
         client = Client()
         client.login(username="newuser", password="testpass123")
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "name": team.name,
             "role": "owner",
@@ -425,7 +425,7 @@ class TestPlanSelectionRedirects:
         client = Client()
         client.login(username="existinguser", password="testpass123")
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "name": team.name,
             "role": "owner",
@@ -448,7 +448,7 @@ class TestPlanSelectionRedirects:
         client = Client()
         client.login(username="existinguser", password="testpass123")
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "name": team.name,
             "role": "owner",

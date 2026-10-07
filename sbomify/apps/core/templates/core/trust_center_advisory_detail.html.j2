@@ -1,4 +1,5 @@
 {% extends "core/public_base.htmx.j2" %}
+{% load humanize %}
 {% load static %}
 {% load django_vite %}
 {% load public_url_tags %}
@@ -235,7 +236,7 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                         {% endfor %}
                         {% if advisory.withheld_product_count %}
                             <span class="tc-fact-value opacity-70 text-xs">
-                                {{ advisory.withheld_product_count }} further product{{ advisory.withheld_product_count|pluralize }}
+                                {{ advisory.withheld_product_count|intcomma }} further product{{ advisory.withheld_product_count|pluralize }}
                                 {{ advisory.withheld_product_count|pluralize:"is,are" }} not shown — you do not have access to
                                 {{ advisory.withheld_product_count|pluralize:"it,them" }}.
                             </span>

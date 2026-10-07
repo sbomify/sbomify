@@ -24,8 +24,8 @@ from django.test import RequestFactory
 def test_the_grace_period_agrees_with_its_count(days, expected):
     """PAYMENT_GRACE_PERIOD_DAYS is configurable, so one day is reachable."""
 
-    # The template reads the workspace out of the session, and only renders
-    # the alert for a past_due subscription seen by someone who can act on it.
+    # The template reads the workspace from the context, and only renders the
+    # alert for a past_due subscription seen by someone who can act on it.
     team = {
         "key": "abc123",
         "is_in_grace_period": True,
@@ -33,11 +33,10 @@ def test_the_grace_period_agrees_with_its_count(days, expected):
     }
     request = RequestFactory().get("/")
     request.user = AnonymousUser()
-    request.session = {"current_team": team}
 
     rendered = render_to_string(
         "core/components/site_notifications.html.j2",
-        {"can_administer": True, "grace_period_days": days},
+        {"team": team, "can_administer": True, "grace_period_days": days},
         request=request,
     )
 
@@ -62,7 +61,11 @@ def test_the_scan_count_agrees_and_uses_the_whole_word(total, expected):
         "result": {"summary": {"by_severity": {"high": total}, "total_findings": total}},
     }
 
-    rendered = render_to_string("plugins/components/_assessment_run_item.html.j2", {"run": run, "loop_index": 1})
+    from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
+
+    rendered = render_to_string(
+        "plugins/components/_assessment_run_item.html.j2", {"run": run, "tile": scorecard_for_run(run)}
+    )
 
     assert expected in " ".join(rendered.split())
     assert "vulns" not in rendered

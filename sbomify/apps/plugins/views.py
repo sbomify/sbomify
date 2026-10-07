@@ -15,6 +15,7 @@ from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequ
 from sbomify.logging import getLogger
 
 from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, update_team_plugin_settings
+from .services.new_plugins import plugins_added_since_last_save
 
 logger = getLogger(__name__)
 
@@ -38,8 +39,12 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         enabled_plugins = plugin_settings.get("enabled_plugins", [])
         plugin_configs = plugin_settings.get("plugin_configs", {})
         plugins = plugin_settings.get("available_plugins", [])
+        new_plugins = plugins_added_since_last_save(team_key).value or set()
         for plugin in plugins:
             plugin["is_enabled"] = plugin["name"] in enabled_plugins and plugin.get("has_access", False)
+            plugin["is_new"] = (
+                plugin["name"] in new_plugins and plugin.get("has_access", False) and not plugin["is_enabled"]
+            )
             schema = plugin.get("config_schema") or []
             for field in schema:
                 field["current_value"] = plugin_configs.get(plugin["name"], {}).get(field.get("key", ""), "")
@@ -164,7 +169,7 @@ class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Return the summary bar partial."""
-        team_data = request.session.get("current_team", {})
+        team_data = request.session.get("current_workspace", {})
         team_key = team_data.get("key", "")
 
         context: dict[str, Any] = {}
@@ -235,5 +240,8 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "findings_url": base_url,
                 "findings_query": query_string(query, page=1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
                 "panel": found.panel,
+                # A short check list reads whole; search and paging only earn
+                # their place once it runs past one page.
+                "show_toolbar": found.is_security or found.panel["unfiltered_total"] > PAGE_SIZE,
             },
         )

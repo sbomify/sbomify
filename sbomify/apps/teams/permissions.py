@@ -53,13 +53,13 @@ def check_member_removal(actor: Any, target: Member) -> MemberRemovalDenial | No
         # Admins can't quietly remove themselves — unless they're leaving for a
         # workspace they've been invited to.
         if target.user_id == getattr(actor, "id", None):
-            from sbomify.apps.teams.queries import has_pending_invitation
+            from sbomify.apps.teams.queries import has_pending_invitation, invitation_email
 
             # Pending means unexpired. The original check was ``exists()`` over
             # every Invitation ever addressed to them — under a variable named
             # has_pending_invites — so an invitation that lapsed months ago
             # still bought a way out of this rule.
-            if not has_pending_invitation(actor.email):
+            if not has_pending_invitation(invitation_email(actor)):
                 return MemberRemovalDenial(
                     "Admins cannot remove their own membership. Only workspace owners can remove members.",
                     forbidden=True,
@@ -85,7 +85,7 @@ class TeamRoleRequiredMixin(AccessMixin):
         if not request.user.is_authenticated:
             return super().dispatch(request, *args, **kwargs)  # type: ignore[misc, no-any-return]
 
-        current_team: dict[str, Any] = request.session.get("current_team", {})
+        current_team: dict[str, Any] = request.session.get("current_workspace", {})
 
         # Authorize the workspace the URL names, not the one in the session.
         # These are not the same thing: the handlers below act on the URL's
@@ -136,7 +136,7 @@ class GuestAccessBlockedMixin(AccessMixin):
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         # Check if user is authenticated and is a guest member
         if request.user.is_authenticated:
-            current_team: dict[str, Any] = request.session.get("current_team", {})
+            current_team: dict[str, Any] = request.session.get("current_workspace", {})
             team_key = current_team.get("key")
             if team_key:
                 try:

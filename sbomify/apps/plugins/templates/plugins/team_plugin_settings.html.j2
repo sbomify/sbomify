@@ -1,3 +1,4 @@
+{% load humanize %}
 <form id="plugin-settings-form"
       class="flex min-w-0 flex-col gap-6"
       hx-post="{% url 'plugins:team_plugin_settings' team.key %}"
@@ -15,7 +16,7 @@
         {% for group in plugin_groups %}
             <c-cards.card flush class="overflow-hidden">
             <c-cards.header compact title="{{ group.grouper|default:'Other'|capfirst }}">
-            <c-badges.secondary>{{ group.list|length }}</c-badges.secondary>
+            <c-badges.secondary>{{ group.list|length|intcomma }}</c-badges.secondary>
             </c-cards.header>
             {% for plugin in group.list %}
                 <c-layout.select-row divided toggle_ref="toggle" :disabled="plugin.requires_upgrade" x_data="{ enabled: {{ plugin.is_enabled|yesno:'true,false' }} }">
@@ -28,6 +29,7 @@
                             {% for bom_type in plugin.supported_bom_types %}
                                 <c-badges.secondary title="Runs on {{ bom_type|upper }} artifacts">{{ bom_type|upper }}</c-badges.secondary>
                             {% endfor %}
+                            {% if plugin.is_new %}<c-badges.success title="Added since this page was last saved">New</c-badges.success>{% endif %}
                             {% if plugin.is_beta %}<c-badges.info>Beta</c-badges.info>{% endif %}
                             {% if plugin.requires_upgrade %}
                                 <c-badges.warning>{{ plugin.required_plan }} plan required</c-badges.warning>

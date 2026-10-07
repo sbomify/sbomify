@@ -16,6 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.cache import cache
+from django.middleware.csrf import get_token
+from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
@@ -26,7 +28,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Member
+from sbomify.apps.teams.models import Invitation, Member
 
 
 @pytest.fixture
@@ -98,7 +100,7 @@ class TestAccessRequestCreation:
         # Switch to guest user
         authenticated_web_client.force_login(guest_user)
         session = authenticated_web_client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": None,  # Not a member yet
             "name": team_with_business_plan.name,
@@ -114,21 +116,23 @@ class TestAccessRequestCreation:
         ).exists()
 
     def test_create_access_request_api(
-        self, authenticated_api_client, team_with_business_plan, guest_user
+        self, team_with_business_plan, guest_user
     ):
         """Test creating an access request via API."""
-        client, access_token = authenticated_api_client
+        # The requester asks for themselves, on their own session, sending its
+        # CSRF token as a browser does.
+        token = get_token(RequestFactory().get("/"))
+        client = Client(enforce_csrf_checks=True, headers={"X-CSRFToken": token})
+        client.cookies["csrftoken"] = token
         client.force_login(guest_user)
         
         # API endpoint is /api/v1/teams/{team_key}/access-request
         url = f"/api/v1/teams/{team_with_business_plan.key}/access-request"
-        headers = get_api_headers(access_token)
         
         response = client.post(
             url,
             {},
             content_type="application/json",
-            **headers,
         )
         
         assert response.status_code in [200, 201]
@@ -180,6 +184,28 @@ class TestAccessRequestCreation:
         # Should update existing request to PENDING
         request.refresh_from_db()
         assert request.status == AccessRequest.Status.PENDING
+
+
+@pytest.mark.django_db
+class TestTrustCenterInvitation:
+    """Test inviting an address to the trust center."""
+
+    def test_inviting_an_existing_account_records_the_admin_as_inviter(
+        self, authenticated_web_client, team_with_business_plan, sample_user, guest_user
+    ):
+        """The invited account's request and the invitation name the admin who sent it."""
+        guest_user.email_verified = True
+        guest_user.save(update_fields=["email_verified"])
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+
+        authenticated_web_client.post(
+            reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key}),
+            {"action": "invite", "email": guest_user.email},
+        )
+
+        invitation = Invitation.objects.get(team=team_with_business_plan, email=guest_user.email)
+        assert AccessRequest.objects.get(team=team_with_business_plan, user=guest_user).decided_by == sample_user
+        assert cache.get(f"invitation_inviter:{invitation.token}") == sample_user.id
 
 
 @pytest.mark.django_db
@@ -881,7 +907,7 @@ class TestNotificationSystem:
         request = factory.get("/")
         request.user = sample_user
         request.session = {}
-        request.session["current_team"] = {
+        request.session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": "owner",
             "name": team_with_business_plan.name,
@@ -963,7 +989,7 @@ class TestGatedComponentAccess:
         client.force_login(guest_user)
         # Set up session for proper access check
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": "guest",
             "name": team_with_business_plan.name,
@@ -1087,7 +1113,7 @@ class TestAccessRequestQueueView:
         """Test that queue view requires admin/owner role."""
         authenticated_web_client.force_login(guest_user)
         session = authenticated_web_client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": "guest",
             "name": team_with_business_plan.name,
@@ -1197,7 +1223,7 @@ class TestAccessRequestNotificationProvider:
         request = factory.get("/")
         request.user = guest_user
         request.session = {
-            "current_team": {
+            "current_workspace": {
                 "key": team_with_business_plan.key,
                 "role": "guest",
                 "name": team_with_business_plan.name,
@@ -1230,7 +1256,7 @@ class TestAccessRequestNotificationProvider:
         request = factory.get("/")
         request.user = sample_user
         request.session = {
-            "current_team": {
+            "current_workspace": {
                 "key": team_with_business_plan.key,
                 "role": "owner",
                 "name": team_with_business_plan.name,
@@ -1271,7 +1297,7 @@ class TestAccessRequestNotificationProvider:
         request.user = sample_user
         notification_id = f"access_request_pending_{team_with_business_plan.key}"
         request.session = {
-            "current_team": {
+            "current_workspace": {
                 "key": team_with_business_plan.key,
                 "role": "owner",
                 "name": team_with_business_plan.name,
