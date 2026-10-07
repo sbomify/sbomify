@@ -78,3 +78,14 @@ def test_the_custom_domain_schema_still_describes_the_bare_prefix(client: Client
     schema = client.get(f"{BASE}openapi.json").json()
 
     assert all(route.startswith(BASE) for route in schema["paths"]), sorted(schema["paths"])[:3]
+
+
+def test_each_mount_keeps_its_own_prefix_whichever_is_asked_first(client: Client):
+    """Both mounts share one NinjaAPI and one docs renderer, so nothing the first
+    request derives may stick to them for the next one. Ask in both orders."""
+    for base in (WORKSPACE_BASE, BASE, WORKSPACE_BASE):
+        paths = client.get(f"{base}openapi.json").json()["paths"]
+        docs = client.get(f"{base}docs").content.decode()
+
+        assert paths and all(route.startswith(base) for route in paths), (base, sorted(paths)[:3])
+        assert f'"url": "{base}openapi.json"' in docs, base
