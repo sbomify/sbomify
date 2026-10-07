@@ -282,6 +282,20 @@ def test_document_only_workspace_is_not_empty(sample_team_with_owner_member: Mem
     assert result.value["is_first_visit"] is False
     assert result.value["metrics"]["open"] == 0
     assert result.value["unassessed"] == 0
+    # Nothing here can carry a vulnerability, so the zeros above are not a
+    # clean bill of health and the panels must not read them as one.
+    assert result.value["has_scannable_components"] is False
+
+
+def test_a_bom_component_makes_the_workspace_scannable(sample_team_with_owner_member: Member) -> None:
+    """Even before an SBOM lands: the component is what makes a scan possible."""
+    workspace = sample_team_with_owner_member.team
+    Component.objects.create(name="api", team=workspace)
+    cache.clear()
+
+    result = build_dashboard_context(workspace.id)
+    assert result.ok and result.value is not None
+    assert result.value["has_scannable_components"] is True
 
 
 def test_overview_and_inventory_agree_on_product_evidence(sample_team_with_owner_member: Member) -> None:
