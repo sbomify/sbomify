@@ -92,6 +92,12 @@ def _results(payload: Any) -> tuple[list[dict[str, Any]], str | None]:
     return items, cursor
 
 
+def _is_list_page(payload: dict[str, Any]) -> bool:
+    """Whether ``payload`` is a list page, empty or not: a ``results`` wrapper holding a ``data`` list."""
+    results = payload.get("results")
+    return isinstance(results, dict) and isinstance(results.get("data"), list)
+
+
 class VantaClient:
     """Read calls against one connected Vanta account."""
 
@@ -134,7 +140,15 @@ class VantaClient:
             if cursor:
                 page_params["pageCursor"] = cursor
 
-            items, cursor = _results(self._get(path, page_params))
+            payload = self._get(path, page_params)
+            # A later page that is not a list page is not the end of the list.
+            # The earlier pages' items are already the sync's, and ending here
+            # would hand it a truncated list to retire frameworks and prune
+            # controls against, recorded as a success. The first page keeps the
+            # tolerant reading: the sync never prunes against an empty list.
+            if cursor and not _is_list_page(payload):
+                raise VantaUnavailable(f"Vanta returned a malformed page partway through {path}")
+            items, cursor = _results(payload)
             yield from items
 
             if not cursor:

@@ -248,7 +248,7 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
     the tier that creates products. The Integrations tab is where someone
     makes that choice.
     """
-    external_id = _external_id(ControlCatalog, framework_id)
+    external_id = _fit_distinct(ControlCatalog, "external_id", framework_id)
     name = _fit(
         ControlCatalog,
         "name",
@@ -274,7 +274,7 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
                 # name and version, almost always the built-in copy of the
                 # same framework. Keep the rename but make it distinguishable
                 # rather than failing the whole sync over a label.
-                catalog.version = _fit(ControlCatalog, "version", framework_id)
+                catalog.version = _fit_distinct(ControlCatalog, "version", framework_id)
                 catalog.save(update_fields=["name", "version", "updated_at"])
         return catalog
 
@@ -305,7 +305,7 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
         return ControlCatalog.objects.create(
             team=integration.team,
             name=name,
-            version=_fit(ControlCatalog, "version", framework_id),
+            version=_fit_distinct(ControlCatalog, "version", framework_id),
             source=ControlCatalog.Source.VANTA,
             external_id=external_id,
             is_published=False,
@@ -326,11 +326,15 @@ def _upsert_control(catalog: ControlCatalog, payload: dict[str, Any], external_i
     # Truncating a code could in principle collide two controls onto one row,
     # since (catalog, control_id) is the key. A framework code is a handful of
     # characters, so this only bites on a custom control with a 50+ character
-    # slug, and merging two of those beats failing the whole sync.
-    control_id = _fit(Control, "control_id", _text(payload.get("externalId")) or external_id)
+    # slug, and merging two of those beats failing the whole sync. Vanta's own
+    # id, the label when there is no code, is kept apart instead: two long ids
+    # sharing a prefix are two controls, and cut alike the second would take
+    # over the first's row.
+    code = _text(payload.get("externalId"))
+    control_id = _fit(Control, "control_id", code) if code else _fit_distinct(Control, "control_id", external_id)
     domains = payload.get("domains")
     group = _text(domains[0]) if isinstance(domains, list) and domains else _UNGROUPED
-    fitted_external_id = _external_id(Control, external_id)
+    fitted_external_id = _fit_distinct(Control, "external_id", external_id)
 
     fields = {
         "group": _fit(Control, "group", group or _UNGROUPED),
@@ -365,7 +369,7 @@ def _upsert_control(catalog: ControlCatalog, payload: dict[str, Any], external_i
     # takes a label of its own for now and the next sync renames it through the
     # branch above, once the code is free.
     if Control.objects.filter(catalog=catalog, control_id=control_id).exists():
-        control_id = _fit(Control, "control_id", fitted_external_id)
+        control_id = _fit_distinct(Control, "control_id", external_id)
 
     control, _created = Control.objects.update_or_create(
         catalog=catalog,
@@ -440,16 +444,19 @@ def _fit(model: type[models.Model], field_name: str, value: str) -> str:
     return value[:max_length] if isinstance(max_length, int) else value
 
 
-def _external_id(model: type[models.Model], upstream_id: str) -> str:
-    """Vanta's id as the ``external_id`` key its row is stored and found under.
+def _fit_distinct(model: type[models.Model], field_name: str, value: str) -> str:
+    """``value`` cut to its column without letting two values become one.
 
-    ``_fit`` is for labels. A key cut the same way would let two ids sharing
-    their first 255 characters become one key, and one row would take both
-    items' controls and statuses. An id that fits is kept as it is; a longer
-    one keeps as much of its start as fits beside a digest of the whole id.
+    ``_fit`` is for labels. A key, or a fallback built from Vanta's id, cut the
+    same way would let two ids sharing their start become one value: one row
+    would take both items' controls and statuses, or the second insert would
+    hit a unique constraint and fail the sync. A value that fits is kept as it
+    is; a longer one keeps as much of its start as fits beside a digest of the
+    whole value. The digest takes at most half the column: all 64 characters in
+    a 255 column, 25 in a 50 one, which still leaves a readable start.
     """
-    max_length = getattr(model._meta.get_field("external_id"), "max_length", None)
-    if not isinstance(max_length, int) or len(upstream_id) <= max_length:
-        return upstream_id
-    digest = hashlib.sha256(upstream_id.encode()).hexdigest()
-    return f"{upstream_id[: max_length - len(digest) - 1]}~{digest}"
+    max_length = getattr(model._meta.get_field(field_name), "max_length", None)
+    if not isinstance(max_length, int) or len(value) <= max_length:
+        return value
+    digest = hashlib.sha256(value.encode()).hexdigest()[: max_length // 2]
+    return f"{value[: max_length - len(digest) - 1]}~{digest}"

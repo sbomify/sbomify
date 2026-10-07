@@ -452,6 +452,48 @@ class TestOversizedProviderStrings:
             "CC1.2": ControlStatus.Status.NOT_IMPLEMENTED,
         }
 
+    def test_two_long_control_ids_without_a_code_stay_two_controls(self, connected_vanta, install_client) -> None:
+        """With no code, each control is labelled by its Vanta id. Cut alike, the
+        second would find the first's label taken and take over its row."""
+        shared = "ctl_" + "9" * 60
+        first, second = shared + "a", shared + "b"
+        install_client(
+            [SOC2],
+            {"fw_soc2": [{"id": first, "name": "One", "domains": []}, {"id": second, "name": "Two", "domains": []}]},
+            {first: {"status": "COMPLETED"}, second: {"status": "NOT_STARTED"}},
+        )
+
+        assert sync(connected_vanta).ok
+
+        controls = Control.objects.filter(catalog__external_id="fw_soc2")
+        assert sorted(controls.values_list("external_id", flat=True)) == [first, second]
+        assert len({control.control_id for control in controls}) == 2
+        assert all(len(control.control_id) <= 50 for control in controls)
+
+    def test_two_long_framework_ids_that_fall_back_to_their_ids_stay_apart(
+        self, connected_vanta, install_client
+    ) -> None:
+        """A name and version the workspace already holds sends each framework to its
+        own id as a version. Cut alike, the second insert would hit the first's
+        name and version and fail the sync."""
+        ControlCatalog.objects.create(
+            team=connected_vanta.team, name="Custom", version="Custom v1", source=ControlCatalog.Source.BUILTIN
+        )
+        shared = "fw_" + "9" * 60
+        first, second = shared + "a", shared + "b"
+        framework = {"displayName": "Custom", "shorthandName": "Custom v1"}
+        install_client([{"id": first, **framework}, {"id": second, **framework}], {first: [], second: []}, {})
+
+        assert sync(connected_vanta).ok
+
+        versions = list(
+            ControlCatalog.objects.filter(team=connected_vanta.team, source=ControlCatalog.Source.VANTA).values_list(
+                "version", flat=True
+            )
+        )
+        assert len(set(versions)) == 2
+        assert all(len(version) <= 50 for version in versions)
+
 
 class TestAFrameworkExistsOnce:
     """One catalog per framework, enforced where a race cannot get past it.

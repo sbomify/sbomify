@@ -70,6 +70,30 @@ class TestPagination:
         with pytest.raises(VantaUnavailable):
             list(client.frameworks())
 
+    @pytest.mark.parametrize(
+        "malformed",
+        [{"unexpected": 1}, {"results": "nope"}, {"results": {"data": None, "pageInfo": {"hasNextPage": False}}}],
+    )
+    def test_a_malformed_page_after_the_first_fails_rather_than_ending_the_list(
+        self, client, monkeypatch, malformed
+    ) -> None:
+        """The first page already yielded items, so this is not an account with none.
+
+        Read as the last page, it would hand the sync a truncated list, and the
+        sync retires every framework and prunes every control it did not reach.
+        """
+        pages = [_page([{"id": "f1"}], next_cursor="cursor-1"), malformed]
+        calls: list[int] = []
+
+        def fake_request(method, url, **kwargs):
+            calls.append(1)
+            return _Response(200, pages[len(calls) - 1])
+
+        monkeypatch.setattr(vanta_module, "request_with_retry", fake_request)
+
+        with pytest.raises(VantaUnavailable):
+            list(client.frameworks())
+
     def test_running_out_of_pages_fails_rather_than_truncating(self, client, monkeypatch) -> None:
         """A short list here would be pruned against by the sync and recorded as a success."""
         endless = _page([{"id": "f"}], next_cursor="always-more")
