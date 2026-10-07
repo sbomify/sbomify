@@ -408,6 +408,23 @@ divergent name is an arbitrary value carrying Tailwind's own measurement:
 `rounded-[var(--radius-sm)]` for `rounded`. `tables/cell.html` is the worked
 example.
 
+Two things that forgiveness does not extend to:
+
+- **A shorthand is only harmless alone.** `.m-0` is `margin: 0 !important`, so
+  on `class="m-0 mt-0.5"` it zeroes the top margin the longhand asked for, even
+  though `m-0` and Tailwind's `m-0` agree. Write the sides you mean
+  (`mb-0 mt-0.5`), not the shorthand plus an exception.
+- **`!important` was doing two jobs.** Dropping a legacy class also drops its
+  win over the *other* unlayered rules on the page. `static/css/base.css` styles
+  `h1..h6` and `trust-center.css` styles `.tc-fact-label`, both unlayered, so a
+  plain utility on those elements loses to them too. Where that happens, the
+  replacement takes Tailwind's own important modifier: `mb-[0.75rem]!`.
+
+**Scope follows `hx-get`, not just `include`.** Half a public page arrives over
+HTMX, naming a URL rather than a template, so the guard walks the resolver to
+the view and takes the templates its module renders. A partial is on a public
+page the moment a public page fetches it.
+
 **Which library a trust-centre control belongs to.** Not everything on a branded
 page is branded. The brand goes on what the page *is*, not on the machinery for
 reading it:

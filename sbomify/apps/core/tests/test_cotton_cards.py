@@ -276,7 +276,9 @@ def test_dangerzone_collapsible_state_prop_renames_every_hook(rendered: str) -> 
 
 def test_inset_is_sunken_not_raised(rendered: str) -> None:
     inset = _open_tag(rendered, "Outer inset")
-    assert "rounded-xl border border-solid border-border p-4" in inset
+    # px-4 py-4 and not p-4: this card is reached from a public page, where the
+    # legacy .p-4 is !important at 1.5rem. tables/cell.html has the long version.
+    assert "rounded-xl border border-solid border-border px-4 py-4" in inset
     assert "bg-[color-mix(in_oklab,var(--color-background)_50%,transparent)]" in inset
     assert "shadow-" not in inset
 

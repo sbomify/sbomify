@@ -9,7 +9,16 @@
         <div class="text-center py-6">
             <div class="mb-6">
                 <i class="fas fa-lock text-5xl text-warning mb-[1rem]"></i>
-                <h2 class="text-2xl font-bold text-text mb-[0.75rem]">Access Denied</h2>
+                {% comment %}
+                    mb-[0.75rem]! and not mb-3: .mb-3 in the legacy
+                    static/css/utilities.css is !important at 1rem, so the plain
+                    utility would not be the measurement that lands here. The !
+                    is for a second rule in the same stack: static/css/base.css
+                    styles h1..h6 unlayered, and an unlayered declaration beats
+                    every layered Tailwind utility, so without it this heading
+                    takes base.css's 0.5rem rather than the app's 0.75rem.
+                {% endcomment %}
+                <h2 class="text-2xl font-bold text-text mb-[0.75rem]!">Access Denied</h2>
                 <p class="text-text-muted mb-6">{{ error_message }}</p>
             </div>
             <div class="flex flex-col sm:flex-row justify-center gap-3">

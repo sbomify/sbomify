@@ -27,11 +27,13 @@ which is what test_only_the_tailwind_entrypoint_declares_the_radius_scale pins.
 """
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
 from django.conf import settings
 from django.template.loader import render_to_string
+from django.urls import URLResolver, get_resolver
 
 from sbomify.apps.teams.branding import DEFAULT_ACCENT_COLOR, DEFAULT_BRAND_COLOR
 
@@ -162,19 +164,48 @@ def _legacy_important_classes() -> set[str]:
     return important
 
 
-def _class_names(template: Path) -> set[str]:
-    """The literal class tokens a template writes.
+def _elements(template: Path) -> list[set[str]]:
+    """The literal class tokens each ``class="…"`` writes, one set per element.
+
+    Per element rather than per file, because whether a collision bites can
+    depend on what else is on the same element: see
+    _exemptions_on. Branches inside one attribute are merged, which can only
+    make the guard stricter.
 
     Variant-prefixed utilities are kept whole on purpose. ``first:pl-4`` puts the
     class ``first:pl-4`` on the element, which the legacy ``.pl-4`` selector
     cannot match, so it is not a collision; ``tables/cell.html`` relies on that.
     Only a bare name can lose.
     """
-    used: set[str] = set()
-    for attr in re.findall(r'class="([^"]*)"', template.read_text(errors="ignore")):
+    return [
         # Drop template tags, then keep the literal utilities around them.
-        used.update(re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", attr, flags=re.S).split())
-    return used
+        set(re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", attr, flags=re.S).split())
+        for attr in re.findall(r'class="([^"]*)"', template.read_text(errors="ignore"))
+    ]
+
+
+def _class_names(template: Path) -> set[str]:
+    """Every literal class token a template writes, element boundaries dropped."""
+    return set().union(*_elements(template)) if _elements(template) else set()
+
+
+def _spacing_utility(name: str) -> tuple[str, bool] | None:
+    """``('m' | 'p', is_shorthand)`` for a spacing utility, else None.
+
+    ``m-0`` is the shorthand, ``mt-0``, ``mx-4`` and ``ms-2`` are not. Variant
+    prefixes are stripped first; a ``:`` inside an arbitrary value is not one.
+    """
+    depth, start = 0, 0
+    for index, character in enumerate(name):
+        depth += (character == "[") - (character == "]")
+        if character == ":" and depth == 0:
+            start = index + 1
+    head = name[start:].lstrip("-").split("-", 1)[0]
+    if head in ("m", "p"):
+        return head, True
+    if len(head) == 2 and head[0] in ("m", "p") and head[1] in "tblrxyse":
+        return head[0], False
+    return None
 
 
 def _rem(length: str) -> float:
@@ -234,6 +265,24 @@ def _collisions_that_cannot_bite() -> set[str]:
     }
 
 
+def _exemptions_on(element: set[str]) -> set[str]:
+    """The exemptions that still hold for one element's class list.
+
+    Matching lengths make an override harmless only while nothing else on the
+    element writes the same property. ``.m-0 { margin: 0 !important }`` is a
+    shorthand: on ``class="m-0 mt-0.5"`` it zeroes the top margin Tailwind's
+    longhand asked for, so the pair renders differently on a public page even
+    though ``m-0`` and Tailwind's ``m-0`` agree in isolation. A shorthand is
+    therefore only forgiven on an element that writes no longhand of its family.
+    """
+    families = {found[0] for token in element if (found := _spacing_utility(token)) is not None and not found[1]}
+    return {
+        name
+        for name in _collisions_that_cannot_bite()
+        if not ((found := _spacing_utility(name)) is not None and found[1] and found[0] in families)
+    }
+
+
 def _resolve(name: str) -> Path | None:
     for directory in TEMPLATE_DIRS:
         candidate = directory / name
@@ -251,10 +300,53 @@ def _component_template(tag: str) -> Path | None:
     return None
 
 
-def _references(template: Path) -> set[Path]:
-    """Every template this one pulls in: extends, include, and cotton tags."""
+def _views_by_url_name() -> dict[str, object]:
+    """Every ``{% url %}`` name in the project mapped to the view behind it."""
+
+    def walk(patterns, prefix: str) -> dict[str, object]:
+        found: dict[str, object] = {}
+        for pattern in patterns:
+            if isinstance(pattern, URLResolver):
+                namespace = f"{prefix}{pattern.namespace}:" if pattern.namespace else prefix
+                found.update(walk(pattern.url_patterns, namespace))
+            elif pattern.name:
+                found[f"{prefix}{pattern.name}"] = pattern.callback
+        return found
+
+    return walk(get_resolver().url_patterns, "")
+
+
+def _htmx_templates(template: Path) -> set[Path]:
+    """Templates a public page fetches over HTMX.
+
+    hx-get names a URL, not a template, so the walk goes through the resolver:
+    the URL name gives the view, and the view's own module names the partial it
+    renders. component_item_public pulls crypto_inventory_card.html.j2 in this
+    way, and nothing reached it from a template, so neither guard saw it.
+
+    Deliberately over-inclusive, taking every template path the view's module
+    mentions rather than tracing which branch renders. A guard that is too wide
+    only asks for care in a file that is already one hx-get from a public page.
+    """
     text = template.read_text(errors="ignore")
+    views = _views_by_url_name()
     out: set[Path] = set()
+    for name in re.findall(r"""hx-(?:get|post|put|patch|delete)="\{%\s*url\s+['"]([^'"]+)['"]""", text):
+        view = views.get(name)
+        module = sys.modules.get(getattr(view, "__module__", "")) if view else None
+        source = getattr(module, "__file__", None)
+        if not source:
+            continue
+        for quoted in re.findall(r"""["']([\w./-]+\.(?:html\.j2|html|j2))["']""", Path(source).read_text()):
+            if found := _resolve(quoted):
+                out.add(found)
+    return out
+
+
+def _references(template: Path) -> set[Path]:
+    """Every template this one pulls in: extends, include, cotton tags, HTMX."""
+    text = template.read_text(errors="ignore")
+    out: set[Path] = _htmx_templates(template)
     for name in re.findall(r'{%\s*(?:extends|include)\s+["\']([^"\']+)["\']', text):
         if found := _resolve(name):
             out.add(found)
@@ -314,6 +406,35 @@ def test_the_spacing_steps_this_guard_forgives_are_the_ones_that_match() -> None
     agree = _spacing_steps_that_cannot_diverge()
     assert {"0", "1", "2"} <= agree, f"the legacy spacing scale moved under the guard: {agree}"
     assert not {"3", "4", "5"} & agree, "the scales converged; retire the arbitrary-value workarounds"
+
+
+def test_a_shorthand_is_only_forgiven_while_no_longhand_competes() -> None:
+    """m-0 and Tailwind's m-0 agree, but .m-0 is !important and is a shorthand.
+
+    Beside mt-0.5 it zeroes the top margin Tailwind asked for, so the pair does
+    not render the way it does in the app even though each name checks out on
+    its own. release_details_public wrote exactly that combination.
+    """
+    assert "m-0" in _exemptions_on({"text-xs", "m-0"})
+    assert "m-0" not in _exemptions_on({"text-xs", "m-0", "mt-0.5"})
+    assert "p-2" not in _exemptions_on({"p-2", "pl-6"})
+    # Only its own family, and only the shorthand.
+    assert "p-0" in _exemptions_on({"p-0", "mt-1"})
+    assert "mb-0" in _exemptions_on({"m-0", "mb-0", "mt-1"})
+
+
+def test_the_scope_follows_an_hx_get_to_the_partial_it_fetches() -> None:
+    """A public page loads half its content over HTMX, which names no template.
+
+    component_item_public reaches crypto_inventory_card through a URL and a
+    view, so a walk over extends, include and cotton tags alone stops at the
+    placeholder div. Its pt-3 and mt-3 took the larger legacy spacing with no
+    guard watching.
+    """
+    reached = {path.relative_to(APP_ROOT).as_posix() for path in _templates_the_legacy_sheets_reach()}
+    assert "apps/sboms/templates/sboms/components/crypto_inventory_card.html.j2" in reached
+    # Fetched by component_details_public_document, and it carries two modals.
+    assert "apps/documents/templates/documents/documents_table.html.j2" in reached
 
 
 def test_no_component_uses_a_class_the_legacy_sheets_override() -> None:
@@ -463,18 +584,22 @@ def test_no_public_template_uses_a_class_the_legacy_sheets_override() -> None:
     a public product page against 16px in the app, and pt-5 at 32px against
     20px, on shipped markup nothing was looking at.
 
-    Scope is computed, not listed, so a new public page cannot land outside it.
-    What is forgiven is also computed: a name whose legacy declaration states
-    the length it overrides renders the same on both sides, and
-    _collisions_that_cannot_bite says which those are and why. Everything else
-    is an offender, with no per-template allowlist to grow.
+    Scope is computed, not listed, so a new public page cannot land outside it,
+    and it follows hx-get through the resolver as well as extends, include and
+    cotton tags. What is forgiven is computed too, per element: a name whose
+    legacy declaration states the length it overrides renders the same on both
+    sides, unless something else on that element writes the same property. See
+    _collisions_that_cannot_bite and _exemptions_on. Everything else is an
+    offender, with no per-template allowlist to grow.
     """
-    legacy = _legacy_important_classes() - _collisions_that_cannot_bite()
-    offenders = {
-        template.relative_to(APP_ROOT).as_posix(): collisions
-        for template in sorted(_templates_the_legacy_sheets_reach())
-        if (collisions := _class_names(template) & legacy)
-    }
+    legacy = _legacy_important_classes()
+    offenders: dict[str, set[str]] = {}
+    for template in sorted(_templates_the_legacy_sheets_reach()):
+        collisions: set[str] = set()
+        for element in _elements(template):
+            collisions |= (element & legacy) - _exemptions_on(element)
+        if collisions:
+            offenders[template.relative_to(APP_ROOT).as_posix()] = collisions
     assert not offenders, (
         "classes the legacy !important sheets would override on a public page: "
         f"{offenders}. Use px-*/py-*/gap-*, an arbitrary value such as mb-[1rem], "
