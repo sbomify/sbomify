@@ -18,7 +18,7 @@ The hint stays on one line: a multi-line {% if %} inside an attribute renders
 the value with a leading newline.
 {% endcomment %}
 {# djlint:off #}
-<c-cards.header compact title="What to fix first" hint="{% if dashboard.needs_attention_total > dashboard.needs_attention|length %}Top {{ dashboard.needs_attention|length|intcomma }} of {{ dashboard.needs_attention_total|intcomma }}, ranked by exploitation and patch SLA{% else %}Ranked by exploitation and patch SLA{% endif %}">
+<c-cards.header compact title="What to fix first" hint="{% if dashboard.needs_attention_total > dashboard.needs_attention|length %}Top {{ dashboard.needs_attention|length|intcomma }} of {{ dashboard.needs_attention_total|intcomma }}, ranked by exploitation and patch SLA{% elif dashboard.needs_attention %}Ranked by exploitation and patch SLA{% endif %}">
 {# djlint:on #}
 {% if workspace_key %}
     <c-buttons.ghost size="sm" href="{% url 'vulnerability_scanning:vulnerability_scans' workspace_key %}">View vulnerability scans<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>

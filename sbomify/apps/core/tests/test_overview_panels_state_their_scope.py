@@ -79,6 +79,11 @@ def test_a_digest_that_is_the_whole_list_says_nothing_about_a_count() -> None:
     assert "of 3" not in whole
 
 
+def test_an_empty_digest_claims_no_ranking() -> None:
+    """Above an empty state the hint would describe rows the panel does not have."""
+    assert "Ranked by" not in priority_text(shown=0, total=0)
+
+
 def test_exposure_explains_a_mismatch_only_when_there_is_one() -> None:
     """A workspace whose components each sit in exactly one product really does
     add up, and a standing disclaimer telling that reader otherwise is wrong."""
