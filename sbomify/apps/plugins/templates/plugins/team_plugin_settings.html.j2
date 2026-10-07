@@ -29,6 +29,7 @@
                             {% for bom_type in plugin.supported_bom_types %}
                                 <c-badges.secondary title="Runs on {{ bom_type|upper }} artifacts">{{ bom_type|upper }}</c-badges.secondary>
                             {% endfor %}
+                            {% if plugin.is_new %}<c-badges.success title="Added since this page was last saved">New</c-badges.success>{% endif %}
                             {% if plugin.is_beta %}<c-badges.info>Beta</c-badges.info>{% endif %}
                             {% if plugin.requires_upgrade %}
                                 <c-badges.warning>{{ plugin.required_plan }} plan required</c-badges.warning>

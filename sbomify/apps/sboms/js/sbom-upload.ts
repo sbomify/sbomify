@@ -10,7 +10,8 @@ interface VexPreview {
     would_suppress: number
     already_suppressed: number
     unmatched_statements: number
-    matched: Array<{ id: string; package: string | null; version: string | null; state: string }>
+    // state is the document's own VEX code; state_label is the wording to show.
+    matched: Array<{ id: string; package: string | null; version: string | null; state: string; state_label: string }>
 }
 
 interface SbomUploadState {
