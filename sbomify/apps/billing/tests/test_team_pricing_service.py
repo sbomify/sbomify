@@ -116,7 +116,9 @@ class TestGetPlanLimits:
 
     def test_reports_usage_against_each_limit(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
         """A limit on its own does not answer "how close am I?"."""
-        limits = {item["label"]: item for item in pricing_service.get_plan_limits(team_with_business_plan, business_plan)}
+        limits = {
+            item["label"]: item for item in pricing_service.get_plan_limits(team_with_business_plan, business_plan)
+        }
 
         assert limits["Members"]["used"] == str(team_with_business_plan.members.count())
         assert limits["Products"]["used"] == "0"
