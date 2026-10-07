@@ -219,3 +219,48 @@ def test_a_party_renders_its_last_updated_date(client: Client, sample_team_with_
     assert profiles
     assert all(profile["updated_display"] for profile in profiles)
     assert all(profile["updated_display"] != profile["updated_at"] for profile in profiles)
+
+
+class _AncestorsOf(HTMLParser):
+    """Records the open elements around the first element whose text is ``needle``."""
+
+    VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+    def __init__(self, needle: str) -> None:
+        super().__init__()
+        self.needle = needle
+        self.stack: list[tuple[str, dict[str, str | None]]] = []
+        self.found: list[tuple[str, dict[str, str | None]]] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag not in self.VOID:
+            self.stack.append((tag, dict(attrs)))
+
+    def handle_endtag(self, tag: str) -> None:
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index][0] == tag:
+                del self.stack[index:]
+                break
+
+    def handle_data(self, data: str) -> None:
+        if self.found is None and data.strip() == self.needle:
+            self.found = list(self.stack)
+
+
+def test_the_nda_card_footer_sits_on_the_card_surface(client: Client, sample_team_with_owner_member: Member) -> None:
+    """The card does not clip, and rounds only its direct last child, so a footer
+    band inside a nested form painted square corners over the card's curve."""
+    workspace = sample_team_with_owner_member.team
+    setup_authenticated_client_session(client, workspace, sample_team_with_owner_member.user)
+
+    response = client.get(reverse("teams:team_settings_tab", args=[workspace.key, "trust-center"]))
+
+    parser = _AncestorsOf("Upload NDA")
+    parser.feed(response.content.decode())
+    assert parser.found is not None
+    footer_at = next(
+        index
+        for index in range(len(parser.found) - 1, -1, -1)
+        if "border-t" in (parser.found[index][1].get("class") or "")
+    )
+    assert "data-surface" in parser.found[footer_at - 1][1]

@@ -78,14 +78,6 @@
             </c-cards.card>
         </form>
         {% include 'teams/components/security_txt_form.html.j2' %}
-        <c-cards.card flush>
-        <c-cards.header compact title="Company NDA" hint="Require an agreement before sharing restricted content." />
-        {% include 'teams/components/nda_guidance.html.j2' %}
-        {% if company_nda_document %}
-            <c-forms.field horizontal label="{{ company_nda_document.name }}" hint="Version {{ company_nda_document.version|default:'1' }}. {{ company_nda_document.file_size|filesizeformat }}.">
-            <c-buttons.secondary size="sm" href="{% url 'documents:document_download' company_nda_document.id %}" target="_blank" rel="noopener">View NDA</c-buttons.secondary>
-            </c-forms.field>
-        {% endif %}
         <form method="post"
               action="{% url 'teams:team_settings' team.key %}"
               enctype="multipart/form-data"
@@ -93,6 +85,14 @@
             {% csrf_token %}
             <input type="hidden" name="company_nda_action" value="upload">
             <input type="hidden" name="active_tab" value="trust-center">
+            <c-cards.card flush>
+            <c-cards.header compact title="Company NDA" hint="Require an agreement before sharing restricted content." />
+            {% include 'teams/components/nda_guidance.html.j2' %}
+            {% if company_nda_document %}
+                <c-forms.field horizontal label="{{ company_nda_document.name }}" hint="Version {{ company_nda_document.version|default:'1' }}. {{ company_nda_document.file_size|filesizeformat }}.">
+                <c-buttons.secondary size="sm" href="{% url 'documents:document_download' company_nda_document.id %}" target="_blank" rel="noopener">View NDA</c-buttons.secondary>
+                </c-forms.field>
+            {% endif %}
             <c-cards.body>
             <div class="space-y-4">
                 <c-forms.file-upload name="company_nda_file" id="company_nda_file" accept=".pdf" required disabled="{{ can_administer|yesno:',1' }}" hint="PDF only, up to {{ max_upload_size_mb }} MB." on_change="fileName = $event.target.files[0]?.name || ''"><span x-text="fileName || 'Choose an NDA file'"></span></c-forms.file-upload>
@@ -101,7 +101,7 @@
                 {% endif %}
             </div>
             </c-cards.body>
-            <c-cards.footer>
+            <c-slot name="footer">
             <div class="flex justify-end">
                 <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">
                 {% if company_nda_document %}
@@ -111,9 +111,9 @@
                 {% endif %}
                 </c-buttons.primary>
             </div>
-            </c-cards.footer>
+            </c-slot>
+            </c-cards.card>
         </form>
-        </c-cards.card>
         <div id="access-requests-wrapper"
              x-data
              hx-get="{% url 'documents:access_request_queue' team.key %}?partial=true"
