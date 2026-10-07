@@ -391,9 +391,10 @@ def test_server_and_client_headers_share_the_sort_control(rendered: str, label: 
     )
 
 
-def test_screen_reader_table_hides_its_wrapper_not_the_table(rendered: str) -> None:
+def test_screen_reader_table_hides_its_wrapper_not_the_table() -> None:
     """overflow does not reliably clip a table box, so the hiding class has to
     sit on a block around it; the caption and the slot's rows stay in the table."""
+    rendered = render_to_string("core/cotton_probes/screen_reader_table.html.j2")
     wrapper = _element_holding(rendered, "div", 'data-probe="screen-reader-table"')
     assert 'class="sr-only"' in wrapper
     table_tag, table = wrapper.split("<table", 1)[1].split(">", 1)
