@@ -366,7 +366,11 @@ class TeamPricingService:
         # dropping it left the tile out and the row half empty.
         limits_dict: dict[str, Any] = {}
         for limit_key in PLAN_LIMITS:
-            if limit_key in billing_plan_limits:
+            # Seats come from the plan, which is all the seat check reads. Not
+            # every downgrade path refreshes the cached seat limit, so a former
+            # Business workspace would otherwise read "of 10" on Community.
+            from_plan = limit_key == "max_users" and billing_plan_obj is not None
+            if limit_key in billing_plan_limits and not from_plan:
                 limits_dict[limit_key] = billing_plan_limits[limit_key]
             elif billing_plan_obj is not None:
                 limits_dict[limit_key] = getattr(billing_plan_obj, limit_key, None)

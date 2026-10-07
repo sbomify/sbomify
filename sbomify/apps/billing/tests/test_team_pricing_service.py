@@ -146,6 +146,26 @@ class TestGetPlanLimits:
         assert values.get("Products") == "50"
         assert values.get("Components") == "500"
 
+    def test_seats_come_from_the_plan_the_seat_check_enforces(
+        self,
+        pricing_service,
+        team_with_business_plan,
+        community_plan,  # noqa: F811
+    ):
+        """The seat check reads the plan model, and not every downgrade path
+        refreshes the cached seat limit, so a former Business workspace kept
+        "max_users": 10 in its cache after moving to Community."""
+        community_plan.max_users = 1
+        community_plan.save()
+        team_with_business_plan.billing_plan = "community"
+        team_with_business_plan.billing_plan_limits = {**team_with_business_plan.billing_plan_limits, "max_users": 10}
+        team_with_business_plan.save()
+
+        limits = pricing_service.get_plan_limits(team_with_business_plan, community_plan)
+
+        values = {item["label"].split(" and ")[0]: item["value"] for item in limits}
+        assert values["Members"] == "1"
+
     def test_fallback_when_no_billing_plan(self, pricing_service, team_with_business_plan):  # noqa: F811
         """Test fallback to billing_plan_limits when BillingPlan doesn't exist."""
         team_with_business_plan.billing_plan = "nonexistent_plan"
