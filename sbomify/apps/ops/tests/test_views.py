@@ -175,3 +175,30 @@ class TestRendering:
         assert series
         for raw in series:
             assert isinstance(json.loads(html.unescape(raw)), list)
+
+    def test_the_paying_card_leaves_out_the_free_plan(self, client: Client, staff_user):
+        """Production writes subscription_status "active" onto every community
+        workspace, so counting by status alone reports the whole install as
+        paying. One customer here, and one free workspace stored the way
+        production stores it."""
+        from sbomify.apps.teams.models import Team
+
+        Team.objects.create(
+            name="Customer",
+            billing_plan="business",
+            billing_plan_limits={
+                "subscription_status": "active",
+                "stripe_subscription_id": "sub_example",
+                "stripe_customer_id": "cus_example",
+            },
+        )
+        Team.objects.create(
+            name="Community",
+            billing_plan="community",
+            billing_plan_limits={"subscription_status": "active", "max_products": 1, "max_components": 5},
+        )
+        client.force_login(staff_user)
+
+        response = client.get(reverse("ops:overview"))
+
+        assert response.context["overview"].paying_workspaces == 1
