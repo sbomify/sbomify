@@ -42,15 +42,22 @@ IDENTIFIER = re.compile(r"(?<![\w-])[a-zA-Z]{3,}(?![\w-])")
 # form -- the syntax tailwind.src.css itself is written in -- free to carry a
 # hue straight past this guard, which is the one thing it exists to stop.
 #
-# A channel may be a number or a percentage, and `rgba(var(--accent-rgb), 0.1)`
-# is deliberately not matched: that is a token reference, which is what the
-# sheet is supposed to use.
-_CHANNEL = r"(\d{1,3}(?:\.\d+)?%?)"
-NUMERIC_RGB = re.compile(r"rgba?\(\s*" + _CHANNEL + r"\s*(?:,\s*|\s+)" + _CHANNEL + r"\s*(?:,\s*|\s+)" + _CHANNEL)
+# A channel is anything CSS reads as one: a <number> in its full grammar, so a
+# sign, a leading dot or an exponent (`rgb(.5 120 80)`, `rgb(1e2 120 80)`), a
+# percentage, or the modern syntax's `none`. The function name is matched in
+# any case, as CSS matches it. `rgba(var(--accent-rgb), 0.1)` is deliberately
+# not matched: that is a token reference, which is what the sheet is supposed
+# to use.
+_CHANNEL = r"([+-]?(?:\d*\.\d+|\d+)(?:e[+-]?\d+)?%?|none)"
+NUMERIC_RGB = re.compile(
+    r"rgba?\(\s*" + _CHANNEL + r"\s*(?:,\s*|\s+)" + _CHANNEL + r"\s*(?:,\s*|\s+)" + _CHANNEL, re.IGNORECASE
+)
 
 
 def _rgb_channel(value: str) -> int:
-    """One rgb() channel as 0-255, whether written as a number or a percentage."""
+    """One rgb() channel as 0-255, whether written as a number, a percentage or ``none``."""
+    if value.lower() == "none":
+        return 0
     if value.endswith("%"):
         return round(float(value[:-1]) * 255 / 100)
     return round(float(value))
@@ -137,12 +144,14 @@ def test_the_sheet_this_guard_covers_still_exists() -> None:
     assert "tc-" in TRUST_CENTER_CSS.read_text(), "trust-center.css no longer holds the tc-* layer"
 
 
-def test_no_colour_is_written_as_a_literal() -> None:
-    """Every hue in the sheet comes from a token, so the ramps cannot fork again."""
-    css = without_comments(TRUST_CENTER_CSS.read_text())
-    offenders: list[str] = []
+def _offenders_in(css: str) -> list[str]:
+    """Every literal the guard reports in ``css``, as ``line: literal``.
 
-    for number, line in enumerate(css.splitlines(), 1):
+    The one scanner: the sheet's test and the guard's own coverage below both
+    call it, so a hole the coverage finds is a hole in the guard itself.
+    """
+    offenders: list[str] = []
+    for number, line in enumerate(without_comments(css).splitlines(), 1):
         for digits in HEX.findall(line):
             channels = _hex_channels(digits)
             if channels and _has_hue(channels):
@@ -163,6 +172,12 @@ def test_no_colour_is_written_as_a_literal() -> None:
             channels = _named_colour_channels(word)
             if channels and _has_hue(channels):
                 offenders.append(f"{number}: {word}")
+    return offenders
+
+
+def test_no_colour_is_written_as_a_literal() -> None:
+    """Every hue in the sheet comes from a token, so the ramps cannot fork again."""
+    offenders = _offenders_in(TRUST_CENTER_CSS.read_text())
 
     assert not offenders, (
         f"colour literals in trust-center.css; use a var(--color-*) token from tailwind.src.css instead: {offenders}"
@@ -181,32 +196,6 @@ def test_the_severity_ramp_is_only_referenced_here_never_redefined() -> None:
 # The guard's own coverage. The sheet is clean, so a hole in the checks looks
 # exactly like a passing test: these feed declarations through the same scan
 # the real test runs and assert what it does and does not report.
-def _offenders_in(css: str) -> list[str]:
-    """Every literal the guard reports in ``css``, by the real code path."""
-    body = without_comments(css)
-    found: list[str] = []
-    for line in body.splitlines():
-        for digits in HEX.findall(line):
-            channels = _hex_channels(digits)
-            if channels and _has_hue(channels):
-                found.append(f"#{digits}")
-        for match in NUMERIC_RGB.findall(line):
-            channels = (_rgb_channel(match[0]), _rgb_channel(match[1]), _rgb_channel(match[2]))
-            if _has_hue(channels):
-                found.append("rgb()")
-        for function in HUE_FUNCTION.findall(line):
-            if function.lower() == "color-mix" and "var(--" in line:
-                continue
-            found.append(f"{function}()")
-        for word in IDENTIFIER.findall(line):
-            if word.lower() in COLOURLESS_KEYWORDS:
-                continue
-            channels = _named_colour_channels(word)
-            if channels and _has_hue(channels):
-                found.append(word)
-    return found
-
-
 @pytest.mark.parametrize(
     "declaration",
     [
@@ -217,6 +206,15 @@ def _offenders_in(css: str) -> list[str]:
         "color: rgb(22 120 80 / 0.5);",
         "color: rgba(22 120 80 / 50%);",
         "color: rgb(10% 50% 30%);",
+        # Every CSS <number> spelling, and the function name in any case.
+        "color: rgb(.5 120 80);",
+        "color: rgb(-1 120 80);",
+        "color: rgb(+22 120 80);",
+        "color: rgb(1e2 120 80);",
+        "color: rgb(22.5e0 120 80);",
+        "color: RGB(22 120 80);",
+        "color: Rgba(22, 120, 80, 0.5);",
+        "color: rgb(none 120 80);",
         "color: #178050;",
         "color: #1785;",
         # The colour functions the guard did not know at all.
