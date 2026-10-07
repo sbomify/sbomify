@@ -16,6 +16,14 @@ legacy stylesheets carrying 140 !important declarations. A class name that
 collides with one of those loses, silently, only on the pages this library
 exists for. test_no_component_uses_a_class_the_legacy_sheets_override is the
 guard.
+
+That seam is wider than this library, so the guards over it are too. A public
+page renders mostly main-library components, and it carries its own layout
+classes; test_no_public_template_uses_a_class_the_legacy_sheets_override walks
+out from the page shells that link the legacy sheet and covers everything they
+reach. The collision does not need a class name either: a redeclared
+--radius-* forked the whole radius scale through variables the utilities read,
+which is what test_only_the_tailwind_entrypoint_declares_the_radius_scale pins.
 """
 
 import re
@@ -30,6 +38,11 @@ from sbomify.apps.teams.branding import DEFAULT_ACCENT_COLOR, DEFAULT_BRAND_COLO
 APP_ROOT = Path(settings.BASE_DIR) / "sbomify"
 BRANDED_DIR = APP_ROOT / "templates" / "components" / "branded"
 LEGACY_CSS = APP_ROOT / "static" / "css" / "utilities.css"
+TOKENS_CSS = APP_ROOT / "static" / "css" / "tokens.css"
+TEMPLATE_DIRS = [APP_ROOT / "templates", *sorted((APP_ROOT / "apps").glob("*/templates"))]
+COTTON_DIR = settings.COTTON_DIR
+# Tailwind's --spacing, the base its numbered spacing utilities multiply.
+TAILWIND_SPACING_REM = 0.25
 
 
 @pytest.fixture(scope="module")
@@ -149,10 +162,158 @@ def _legacy_important_classes() -> set[str]:
     return important
 
 
+def _class_names(template: Path) -> set[str]:
+    """The literal class tokens a template writes.
+
+    Variant-prefixed utilities are kept whole on purpose. ``first:pl-4`` puts the
+    class ``first:pl-4`` on the element, which the legacy ``.pl-4`` selector
+    cannot match, so it is not a collision; ``tables/cell.html`` relies on that.
+    Only a bare name can lose.
+    """
+    used: set[str] = set()
+    for attr in re.findall(r'class="([^"]*)"', template.read_text(errors="ignore")):
+        # Drop template tags, then keep the literal utilities around them.
+        used.update(re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", attr, flags=re.S).split())
+    return used
+
+
+def _rem(length: str) -> float:
+    length = length.strip()
+    return float(length.removesuffix("rem")) if length.endswith("rem") else float(length)
+
+
+def _spacing_steps_that_cannot_diverge() -> set[str]:
+    """Bootstrap steps whose legacy length equals Tailwind's step of the same name.
+
+    ``.p-2 { padding: var(--spacing-sm) !important }`` only hurts if
+    ``--spacing-sm`` is not what Tailwind's ``p-2`` would have been. It is
+    0.5rem and Tailwind's second step is 0.5rem, so that override paints the
+    value it replaced. Step 3 upwards is where the two scales part: the legacy
+    sheet runs 1rem / 1.5rem / 2rem against Tailwind's 0.75 / 1 / 1.25.
+
+    Read out of tokens.css rather than listed, so retuning that scale moves
+    which names this guard forbids instead of quietly invalidating it.
+    """
+    scale = dict(re.findall(r"--spacing-(\w+):\s*([^;]+);", TOKENS_CSS.read_text()))
+    agree = {"0"}
+    for step, name in (("1", "xs"), ("2", "sm"), ("3", "md"), ("4", "lg"), ("5", "xl")):
+        if name in scale and abs(_rem(scale[name]) - int(step) * TAILWIND_SPACING_REM) < 1e-9:
+            agree.add(step)
+    return agree
+
+
+def _collisions_that_cannot_bite() -> set[str]:
+    """Legacy !important names whose declaration states the value it overrides.
+
+    Every other name in that sheet is forbidden on a public page. These are not
+    forbidden because the override is a no-op: the legacy rule and Tailwind's
+    utility of the same name compute the same thing, so the page renders as the
+    app does. Each group has a reason, and the spacing group has a test.
+    """
+    sides = ("m", "mt", "mb", "ml", "mr", "p", "pt", "pb", "pl", "pr")
+    return {
+        # The steps where the two spacing scales still agree, zero included.
+        *(f"{side}-{step}" for side in sides for step in _spacing_steps_that_cannot_diverge()),
+        # One keyword, spelled the same on both sides. There is no scale to drift.
+        "flex-row",
+        "flex-wrap",
+        "text-left",
+        "text-right",
+        "text-center",
+        "overflow-auto",
+        "overflow-hidden",
+        "overflow-visible",
+        "overflow-scroll",
+        "w-auto",
+        "h-auto",
+        # These read the very --radius-* variable Tailwind's own utility reads,
+        # so they cannot part from it. Bare `rounded` is not here: the legacy
+        # rule reads --radius-md where Tailwind's `rounded` is a literal 0.25rem.
+        "rounded-sm",
+        "rounded-lg",
+    }
+
+
+def _resolve(name: str) -> Path | None:
+    for directory in TEMPLATE_DIRS:
+        candidate = directory / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _component_template(tag: str) -> Path | None:
+    """``<c-forms.search-input>`` is ``components/forms/search_input.html``."""
+    parts = [part.replace("-", "_") for part in tag.removeprefix("c-").split(".")]
+    for suffix in (".html", ".html.j2", ".j2"):
+        if found := _resolve(f"{COTTON_DIR}/{'/'.join(parts)}{suffix}"):
+            return found
+    return None
+
+
+def _references(template: Path) -> set[Path]:
+    """Every template this one pulls in: extends, include, and cotton tags."""
+    text = template.read_text(errors="ignore")
+    out: set[Path] = set()
+    for name in re.findall(r'{%\s*(?:extends|include)\s+["\']([^"\']+)["\']', text):
+        if found := _resolve(name):
+            out.add(found)
+    for tag in re.findall(r"<(c-[a-zA-Z0-9_.\-]+)", text):
+        if tag.startswith(("c-vars", "c-slot")):
+            continue
+        if found := _component_template(tag):
+            out.add(found)
+    return out
+
+
+def _templates_the_legacy_sheets_reach() -> set[Path]:
+    """Every template rendered on a page that loads utilities.css.
+
+    Derived rather than listed. The roots are the page shells that link the
+    legacy sheet, which today is public_base plus the enterprise contact page;
+    anything extending one of those inherits the problem, and the walk down
+    through include and cotton tags collects the components they compose. A new
+    public page is therefore in scope the moment it extends public_base.
+    """
+    templates = [path for directory in TEMPLATE_DIRS for path in directory.rglob("*") if path.is_file()]
+    reached = {path for path in templates if LEGACY_CSS.name in path.read_text(errors="ignore")}
+    growing = True
+    while growing:
+        growing = False
+        for path in templates:
+            if path in reached:
+                continue
+            for name in re.findall(r'{%\s*extends\s+["\']([^"\']+)["\']', path.read_text(errors="ignore")):
+                if _resolve(name) in reached:
+                    reached.add(path)
+                    growing = True
+    queue = list(reached)
+    while queue:
+        for reference in _references(queue.pop()):
+            if reference not in reached:
+                reached.add(reference)
+                queue.append(reference)
+    return reached
+
+
 def test_the_legacy_sheet_still_looks_the_way_this_guard_assumes() -> None:
     """If utilities.css is deleted, the guard below must fail loudly, not pass."""
     assert LEGACY_CSS.exists(), "utilities.css moved; update or retire the collision guard"
     assert len(_legacy_important_classes()) > 50
+
+
+def test_the_spacing_steps_this_guard_forgives_are_the_ones_that_match() -> None:
+    """_collisions_that_cannot_bite is arithmetic, so the arithmetic gets a test.
+
+    Steps 0, 1 and 2 are forgiven in about forty templates. They are only safe
+    while --spacing-xs and --spacing-sm hold the lengths Tailwind's steps hold,
+    which is exactly the "one prop away" risk this file exists to close. If that
+    scale is retuned, the step drops out of the forgiven set here and the guard
+    starts naming every template using it.
+    """
+    agree = _spacing_steps_that_cannot_diverge()
+    assert {"0", "1", "2"} <= agree, f"the legacy spacing scale moved under the guard: {agree}"
+    assert not {"3", "4", "5"} & agree, "the scales converged; retire the arbitrary-value workarounds"
 
 
 def test_no_component_uses_a_class_the_legacy_sheets_override() -> None:
@@ -162,19 +323,16 @@ def test_no_component_uses_a_class_the_legacy_sheets_override() -> None:
     !important, so it wins wherever both are loaded. The same trap holds for
     rounded-lg, shadow-sm, w-50 and text-muted. Components stay off those
     names; px-*, py-*, gap-*, rounded-xl and the token utilities are clear.
+
+    This set carries no forgiveness: a branded component is written for the
+    public pages, so it has no excuse for naming one of those classes at all.
     """
     legacy = _legacy_important_classes()
-    offenders: dict[str, set[str]] = {}
-
-    for template in sorted(BRANDED_DIR.rglob("*.html")):
-        used: set[str] = set()
-        for attr in re.findall(r'class="([^"]*)"', template.read_text()):
-            # Drop template tags, then keep the literal utilities around them.
-            for token in re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", attr, flags=re.S).split():
-                used.add(token.split(":")[-1] if ":" in token and "[" not in token else token)
-        if collisions := used & legacy:
-            offenders[template.relative_to(BRANDED_DIR).as_posix()] = collisions
-
+    offenders = {
+        template.relative_to(BRANDED_DIR).as_posix(): collisions
+        for template in sorted(BRANDED_DIR.rglob("*.html"))
+        if (collisions := _class_names(template) & legacy)
+    }
     assert not offenders, f"classes the legacy !important sheets would override: {offenders}"
 
 
@@ -295,51 +453,56 @@ def test_a_credential_is_not_branded(rendered: str) -> None:
 
 
 def test_no_public_template_uses_a_class_the_legacy_sheets_override() -> None:
-    """The same guard, applied to the pages rather than the components.
+    """The same guard, over everything the legacy sheets actually reach.
 
-    A component is not the only thing that can name a colliding utility: a page
-    composing them writes layout classes too, and these pages are exactly the
-    ones that load the legacy sheets. mb-4 slipped through this way, resolving
-    to the legacy spacing variable rather than Tailwind's 1rem.
+    A branded component is not the only thing that can name a colliding
+    utility. A page composing them writes layout classes too, and so does every
+    main-library component a public page happens to render, which is most of
+    them: 92 of the 209 named one of these classes while this guard watched
+    three trust-centre pages and the branded directory. mb-4 came out at 24px on
+    a public product page against 16px in the app, and pt-5 at 32px against
+    20px, on shipped markup nothing was looking at.
 
-    Pre-existing offenders are listed rather than fixed, so the guard can be
-    strict about new ones without turning red on markup this branch did not
-    write. Shrink the list, never grow it.
+    Scope is computed, not listed, so a new public page cannot land outside it.
+    What is forgiven is also computed: a name whose legacy declaration states
+    the length it overrides renders the same on both sides, and
+    _collisions_that_cannot_bite says which those are and why. Everything else
+    is an offender, with no per-template allowlist to grow.
     """
-    known = {
-        "components/trust_center/advisories_browse.html.j2": {"flex-wrap", "mb-2", "mb-3", "mt-1", "p-2"},
-        "workspace_public.html.j2": {"flex-wrap", "mt-1"},
-        # Not migrated yet; these go when that page is.
-        "trust_center_advisory_detail.html.j2": {
-            "flex-wrap",
-            "m-0",
-            "mb-3",
-            "mb-5",
-            "ml-1",
-            "mt-1",
-            "mt-4",
-        },
+    legacy = _legacy_important_classes() - _collisions_that_cannot_bite()
+    offenders = {
+        template.relative_to(APP_ROOT).as_posix(): collisions
+        for template in sorted(_templates_the_legacy_sheets_reach())
+        if (collisions := _class_names(template) & legacy)
     }
-    legacy = _legacy_important_classes()
-    trust_center = [
-        APP_ROOT / "apps/core/templates/core/workspace_public.html.j2",
-        APP_ROOT / "apps/core/templates/core/trust_center_advisories.html.j2",
-        APP_ROOT / "apps/core/templates/core/trust_center_advisory_detail.html.j2",
-        *sorted((APP_ROOT / "apps/core/templates/core/components/trust_center").glob("*.j2")),
-    ]
-    offenders: dict[str, set[str]] = {}
-    for template in trust_center:
-        if not template.exists():
-            continue
-        used: set[str] = set()
-        for attr in re.findall(r'class="([^"]*)"', template.read_text()):
-            for token in re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", attr, flags=re.S).split():
-                used.add(token.split(":")[-1] if ":" in token and "[" not in token else token)
-        key = template.as_posix().split("core/templates/core/")[-1]
-        if fresh := (used & legacy) - known.get(key, set()):
-            offenders[key] = fresh
+    assert not offenders, (
+        "classes the legacy !important sheets would override on a public page: "
+        f"{offenders}. Use px-*/py-*/gap-*, an arbitrary value such as mb-[1rem], "
+        "or a token utility instead."
+    )
 
-    assert not offenders, f"classes the legacy !important sheets would override: {offenders}"
+
+def test_only_the_tailwind_entrypoint_declares_the_radius_scale() -> None:
+    """The scale has one home, because a second one forks it silently.
+
+    public_base.htmx.j2 and tokens.css both used to restate --radius-*. Both are
+    unlayered and Tailwind publishes its theme inside @layer theme, so both beat
+    it whatever the source order: rounded-xl measured 16px on a public page
+    against 12px in the app, on every card, table frame, stat card and alert.
+    rounded-xl is the radius AGENTS.md names as the safe one, and the rule that
+    was written to prevent this could not see it, because the class name was
+    never the problem.
+    """
+    searched = [
+        *sorted((APP_ROOT / "static" / "css").rglob("*.css")),
+        *sorted(_templates_the_legacy_sheets_reach()),
+    ]
+    offenders = {
+        path.relative_to(APP_ROOT).as_posix(): sorted(set(found))
+        for path in searched
+        if (found := re.findall(r"(--radius-[a-z0-9]+)\s*:", path.read_text(errors="ignore")))
+    }
+    assert not offenders, f"--radius-* belongs to sbomify/assets/css/tailwind.src.css alone, found in: {offenders}"
 
 
 def test_no_template_has_a_comment_that_renders_as_page_text() -> None:

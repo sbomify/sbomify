@@ -63,7 +63,7 @@ def test_search_field_recipe_and_label_pairing(rendered: str) -> None:
     field = _element_holding(rendered, "input", 'id="probe-search"')
     for bit in (
         "py-2",
-        "pr-3",
+        "pr-[0.75rem]",
         "pl-9",
         "min-w-0",
         "bg-surface",
@@ -85,7 +85,7 @@ def test_search_forwards_its_binding_to_the_input(rendered: str) -> None:
 
 def test_page_size_select_recipe_and_options_slot(rendered: str) -> None:
     select = _element_holding(rendered, "select", 'id="probe-per-page"')
-    for bit in ("py-1.5 pr-8 pl-3", "appearance-none", "bg-[position:right_0.5rem_center]", "bg-[length:1.25rem]"):
+    for bit in ("py-1.5 pr-8 pl-[0.75rem]", "appearance-none", "bg-[position:right_0.5rem_center]", "bg-[length:1.25rem]"):
         assert bit in select
     assert "data:image/svg+xml," in select
     assert 'x-model.number="perPage"' in select

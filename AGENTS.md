@@ -279,6 +279,16 @@ overrides). Use token utilities (`bg-surface`, `text-text-muted`,
 (`bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]`). A raw hex
 in a diff is a review blocker.
 
+**That file is the only place a token may be declared.** The public pages load
+`static/css/tokens.css` and six other legacy sheets, all unlayered, and Tailwind
+publishes its theme inside `@layer theme`. An unlayered declaration beats a
+layered one whatever the source order, so a `--radius-*` or `--shadow-*`
+restated in any of those sheets does not shade a token, it forks the scale every
+utility reading it computes from, on the public side only and with no class name
+to grep for. `rounded-xl` shipped at 16px there against 12px in the app this
+way. `test_only_the_tailwind_entrypoint_declares_the_radius_scale` holds the
+radius line.
+
 #### The things that actually break
 
 - **Two utilities for one CSS property.** Tailwind resolves them by stylesheet
@@ -378,10 +388,25 @@ scope, a widget, an email preview or one card on a page the root does not brand.
 
 Class names need more care here than in the main library: these render on public
 pages, which load seven legacy stylesheets with 140 `!important` rules. `p-4`,
-`rounded-lg`, `shadow-sm`, `w-50` and `text-muted` all lose there. Stay on
-`px-*`, `py-*`, `gap-*`, `rounded-xl`, arbitrary values and the token utilities.
+`shadow-sm`, `w-50` and `text-muted` all lose there. Stay on `px-*`, `py-*`,
+`gap-*`, `rounded-xl`, arbitrary values and the token utilities.
 `test_cotton_branded.py` enforces this and the fill-not-text rule; an anchor also
 needs `data-button` or the legacy sheet repaints it.
+
+**The same care applies to any component a public page renders**, which is most
+of the main library: a trust centre is built out of `c-tables.*`, `c-forms.*`,
+`c-buttons.*` and `c-feedback.*`, and those lose the same way. The branded set
+must name none of the 154, because it exists for those pages; outside it the
+guard forbids only the names that genuinely compute differently, and a
+variant-prefixed utility such as `first:pl-4` is safe because the class name
+keeps its prefix and the legacy bare selector cannot match it. A spacing step
+that cannot diverge today (`mt-1`, `p-2`) is forgiven by arithmetic the guard
+re-derives from `tokens.css`, not by an allowlist, so retuning that scale turns
+the guard red rather than silently invalidating it. The replacement for a
+divergent name is an arbitrary value carrying Tailwind's own measurement:
+`mb-[1rem]` for `mb-4`, `pt-[1.25rem]` for `pt-5`,
+`rounded-[var(--radius-sm)]` for `rounded`. `tables/cell.html` is the worked
+example.
 
 **Which library a trust-centre control belongs to.** Not everything on a branded
 page is branded. The brand goes on what the page *is*, not on the machinery for
