@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -44,6 +45,19 @@ class ValidationError(Exception):
         super().__init__(message)
 
 
+_API_NOUN = re.compile(r"\b([Cc])ontact profile(s?)\b")
+
+
+def _party_copy(detail: str) -> str:
+    """An API message in the settings' word for this resource.
+
+    The API calls it a contact profile, after its own resource, and keeps that
+    wording for API clients. The settings call the same thing a party, so a
+    message passed through to a toast is rephrased here rather than in the API.
+    """
+    return _API_NOUN.sub(lambda match: ("P" if match[1] == "C" else "p") + ("arties" if match[2] else "arty"), detail)
+
+
 def _format_formset_errors(formset: Any) -> str:
     """Format formset errors into user-friendly messages."""
     messages = []
@@ -80,7 +94,7 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, profiles = list_contact_profiles(request, team_key)
         if status_code != 200:
-            return htmx_error_response(profiles.get("detail", "Failed to load parties"))
+            return htmx_error_response(_party_copy(profiles.get("detail", "Failed to load parties")))
 
         return render(
             request,
@@ -106,7 +120,7 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, result = delete_contact_profile(request, team_key, form.cleaned_data["profile_id"])
         if status_code != 204:
-            return htmx_error_response(result.get("detail", "Failed to delete party"))
+            return htmx_error_response(_party_copy(result.get("detail", "Failed to delete party")))
 
         return htmx_success_response("Party deleted", triggers={"refreshProfileList": True})
 
@@ -117,14 +131,14 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, profile = get_contact_profile(request, team_key, form.cleaned_data["profile_id"])
         if status_code != 200:
-            return htmx_error_response(profile.get("detail", "Failed to load party"))
+            return htmx_error_response(_party_copy(profile.get("detail", "Failed to load party")))
 
         if not profile.is_default:
             payload = ContactProfileUpdateSchema(is_default=True)
 
             status_code, result = update_contact_profile(request, team_key, profile.id, payload)
             if status_code != 200:
-                return htmx_error_response(result.get("detail", "Failed to set the default party"))
+                return htmx_error_response(_party_copy(result.get("detail", "Failed to set the default party")))
 
         return htmx_success_response(
             f"'{profile.name}' set as the default party", triggers={"refreshProfileList": True}
@@ -143,7 +157,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if profile_id:
             status_code, profile = get_contact_profile(request, team_key, profile_id, return_instance=True)
             if status_code != 200:
-                return htmx_error_response(profile.get("detail", "Failed to load party"))
+                return htmx_error_response(_party_copy(profile.get("detail", "Failed to load party")))
 
         entities_formset = ContactEntityFormSet(instance=profile, prefix="entities")
 
@@ -376,14 +390,14 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, result = create_contact_profile(request, team_key, payload)
         if status_code != 201:
-            return htmx_error_response(result.get("detail", "Failed to create party"))
+            return htmx_error_response(_party_copy(result.get("detail", "Failed to create party")))
 
         return self._render_profile_list_response(request, team_key, "Party created")
 
     def _update_profile(self, request: HttpRequest, team_key: str, profile_id: str) -> HttpResponse:
         status_code, profile = get_contact_profile(request, team_key, profile_id, return_instance=True)
         if status_code != 200:
-            return htmx_error_response(profile.get("detail", "Failed to load party"))
+            return htmx_error_response(_party_copy(profile.get("detail", "Failed to load party")))
 
         try:
             form_data, entities = self._validate_form_and_formsets(request, team_key, profile=profile)
@@ -398,7 +412,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         status_code, result = update_contact_profile(request, team_key, profile_id, payload)
         if status_code != 200:
-            return htmx_error_response(result.get("detail", "Failed to update party"))
+            return htmx_error_response(_party_copy(result.get("detail", "Failed to update party")))
 
         return self._render_profile_list_response(request, team_key, "Party updated")
 

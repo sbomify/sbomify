@@ -262,3 +262,18 @@ def test_the_list_a_save_returns_shows_when_each_party_changed(
     assert response.status_code == 200
     displays = [profile.get("updated_display") for profile in response.context["profiles"]]
     assert displays and all(displays), displays
+
+
+@pytest.mark.django_db
+def test_an_api_error_reaches_the_settings_in_their_word(
+    authenticated_web_client: Client, team_with_business_plan: Team
+) -> None:
+    """The API names this resource a contact profile; the settings call it a party,
+    so an API message shown as a toast there is put in the settings' word."""
+    response = authenticated_web_client.get(
+        reverse("teams:contact_profiles_detail_form", args=[team_with_business_plan.key, "missingprof1"]),
+        HTTP_HX_REQUEST="true",
+    )
+
+    messages = [message["message"] for message in json.loads(response.headers["HX-Trigger"])["messages"]]
+    assert messages == ["Party not found"]
