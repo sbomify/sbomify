@@ -130,6 +130,26 @@ def test_saving_the_support_period_refreshes_that_form_alone(
     assert 'id="support-period-fields"' in form[: form.index("</form>")]
 
 
+def test_saving_the_workspace_card_refreshes_that_card_alone(
+    client: Client, sample_team_with_owner_member: Member
+) -> None:
+    """Refreshing the whole tab after a name or freshness save would throw away an
+    unsaved patch-target or support-period edit further down."""
+    workspace = sample_team_with_owner_member.team
+    setup_authenticated_client_session(client, workspace, sample_team_with_owner_member.user)
+    url = reverse("teams:team_general", args=[workspace.key])
+
+    response = client.post(url, {"name": "Renamed workspace", "sbom_freshness_days": "30"})
+
+    trigger = json.loads(response.headers["HX-Trigger"])
+    assert "refreshWorkspaceCard" in trigger
+    assert "refreshTeamGeneral" not in trigger
+    # The refresh selects the card's forms alone, so the starting values must be inside them.
+    html = client.get(url, HTTP_HX_REQUEST="true").content.decode()
+    form = html[html.index('id="team-general-form"') :]
+    assert 'id="team-general-fields"' in form[: form.index("</form>")]
+
+
 @pytest.mark.parametrize("value", ["-1", "3651", "1.5", "invalid"])
 def test_invalid_patch_targets_do_not_change_saved_policy(
     client: Client, sample_team_with_owner_member: Member, value: str

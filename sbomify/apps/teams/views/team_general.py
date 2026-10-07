@@ -124,7 +124,7 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # until the cache expires on its own.
             update_user_teams_session(request, cast(User, request.user))
 
-            return htmx_success_response("Workspace settings updated", triggers={"refreshTeamGeneral": True})
+            return htmx_success_response("Workspace settings updated", triggers={"refreshWorkspaceCard": True})
 
         except Team.DoesNotExist:
             return htmx_error_response("Workspace not found")
@@ -147,7 +147,7 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             return htmx_success_response(
                 f"{membership.team.name} is now your default workspace",
-                triggers={"refreshTeamGeneral": True},
+                triggers={"refreshWorkspaceCard": True},
             )
 
         except Member.DoesNotExist:
