@@ -111,6 +111,7 @@ def test_digest_ranks_worst_first_and_excludes_suppressed(sample_team_with_owner
             _finding("CVE-CRIT-HIGH-SCORE", "critical", cvss=9.8),
             _finding("CVE-SUPPRESSED", "critical", cvss=10.0, state="not_affected"),
             _finding("CVE-HIGH", "high"),
+            _finding("CVE-LOW", "low"),
         ],
     )
     cache.clear()
@@ -123,6 +124,9 @@ def test_digest_ranks_worst_first_and_excludes_suppressed(sample_team_with_owner
     assert context["is_first_visit"] is False
     ids = [f["id"] for f in context["needs_attention"]]
     assert ids == ["CVE-CRIT-HIGH-SCORE", "CVE-CRIT-LOW-SCORE", "CVE-HIGH", "CVE-MEDIUM"]
+    # The panel states "Top 4 of N": N counts every unsuppressed finding, the
+    # one below the cut included, and not the suppressed one.
+    assert context["needs_attention_total"] == 5
     top = context["needs_attention"][0]
     assert top["component_id"] == component.id
     assert top["component_name"] == "api"
@@ -195,6 +199,7 @@ def test_overview_counts_latest_provider_results_and_scopes_products(sample_team
     assert result.value["metrics"]["critical_high"] == 1
     assert [row["name"] for row in result.value["products"]] == ["First", "Second"]
     assert [row["counts"]["total"] for row in result.value["products"]] == [1, 1]
+    assert result.value["product_count"] == 2
 
 
 def test_overview_unassessed_and_summary_only_results(sample_team_with_owner_member: Member) -> None:
@@ -222,6 +227,8 @@ def test_overview_unassessed_and_summary_only_results(sample_team_with_owner_mem
     assert result.value["metrics"]["open"] == 7
     assert result.value["products"][0]["counts"]["unknown"] == 2
     assert result.value["needs_attention"] == []
+    # Seven occurrences, none itemised: there is nothing to rank, so no total.
+    assert result.value["needs_attention_total"] == 0
 
 
 def test_overview_freshness_honours_component_override(sample_team_with_owner_member: Member) -> None:
@@ -411,6 +418,21 @@ def test_overview_evidence_distinguishes_missing_from_stale(sample_team_with_own
     assert result.ok and result.value is not None
     assert result.value["products"][0]["missing_sboms"] == 1
     assert result.value["products"][0]["stale"] == 1
+
+
+def test_the_product_count_includes_the_products_below_the_cap(sample_team_with_owner_member: Member) -> None:
+    """The panel shows eight products and says how many it left out, from this count."""
+    from sbomify.apps.core.models import Product
+
+    workspace = sample_team_with_owner_member.team
+    for index in range(9):
+        Product.objects.create(name=f"Product {index}", team=workspace)
+    cache.clear()
+
+    result = build_dashboard_context(workspace.id)
+    assert result.ok and result.value is not None
+    assert len(result.value["products"]) == 8
+    assert result.value["product_count"] == 9
 
 
 def test_exposure_reports_whether_its_rows_can_be_added_up(sample_team_with_owner_member: Member) -> None:
