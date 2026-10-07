@@ -2311,6 +2311,25 @@ class TestWelcomeRecoverySweep:
         user = self._owner("ancient", welcome_sent=False, age_days=WELCOME_RECOVERY_WINDOW_DAYS + 1)
         assert user.id not in self._run_sweep()
 
+    def test_an_unresolved_handoff_is_requeued_whatever_the_account_age(self) -> None:
+        """A welcome handed to the mailer and never recorded is settled by the next
+        send attempt, and the drip waits on its flag. Past the window nothing else
+        would come back to it, so the sweep does, however old the account."""
+        from sbomify.apps.onboarding.tasks import WELCOME_RECOVERY_WINDOW_DAYS
+
+        user = self._owner("unresolvedold", welcome_sent=False, age_days=WELCOME_RECOVERY_WINDOW_DAYS + 30)
+        record = OnboardingEmail.create_email(
+            user=user, email_type=OnboardingEmail.EmailType.WELCOME, subject="Welcome to sbomify"
+        )
+        OnboardingEmail.objects.filter(pk=record.pk).update(handed_to_mailer_at=timezone.now() - timedelta(days=1))
+
+        assert user.id in self._run_sweep()
+
+        mail.outbox = []
+        assert OnboardingEmailService.send_welcome_email(user) is True
+        assert mail.outbox == [], "settled as sent, not sent again"
+        assert OnboardingStatus.objects.get(user=user).welcome_email_sent
+
     def test_an_old_account_with_a_new_status_row_is_not_swept(self) -> None:
         """The window is the account's age, not its status row's.
 

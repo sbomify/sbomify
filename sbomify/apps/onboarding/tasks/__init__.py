@@ -304,6 +304,15 @@ def requeue_missed_welcome_emails_task() -> None:
     refused = OnboardingEmail.objects.filter(email_type=OnboardingEmail.EmailType.WELCOME).filter(
         refused_at_current_address()
     )
+    # A welcome handed to the mailer and never recorded, because the worker
+    # died or the outcome write failed, is settled by the next send attempt
+    # and the drip waits on its flag. Past the window nothing else would come
+    # back to it, so it is swept whatever the account's age.
+    unresolved = OnboardingEmail.objects.filter(
+        email_type=OnboardingEmail.EmailType.WELCOME,
+        status=OnboardingEmail.EmailStatus.PENDING,
+        handed_to_mailer_at__isnull=False,
+    )
     # Driven from the user, not from OnboardingStatus. The post-save signal
     # creates that row and queues the welcome, so a failure there leaves a user
     # with neither — invisible to a query that starts at the status table, and
@@ -313,7 +322,11 @@ def requeue_missed_welcome_emails_task() -> None:
     missed = (
         # Trimmed, because _is_mailable strips before deciding: without this a
         # whitespace-only address is queued every day for the service to refuse.
-        User.objects.filter(date_joined__gte=cutoff, is_active=True, deleted_at__isnull=True)
+        User.objects.filter(
+            Q(date_joined__gte=cutoff) | Q(id__in=unresolved.values("user_id")),
+            is_active=True,
+            deleted_at__isnull=True,
+        )
         .annotate(_trimmed_email=Trim("email"))
         .exclude(_trimmed_email="")
         .exclude(email__isnull=True)
