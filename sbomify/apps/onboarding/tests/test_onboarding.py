@@ -1365,6 +1365,13 @@ class TestTransientSendFailuresRetry:
     """
 
     @staticmethod
+    def _mail_host_failing(error: BaseException) -> Any:
+        """Fail where an outage fails: opening the connection, before the handoff."""
+        connection = MagicMock()
+        connection.open.side_effect = error
+        return patch("sbomify.apps.onboarding.services.get_connection", return_value=connection)
+
+    @staticmethod
     def _user(name: str) -> Any:
         user = User.objects.create_user(username=name, email=f"{name}@example.com", password="test123")
         team = Team.objects.create(name=f"{name} Team", key=f"{name}-team")
@@ -1377,8 +1384,7 @@ class TestTransientSendFailuresRetry:
 
         user = self._user("transient")
 
-        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+        with self._mail_host_failing(OSError(113, "No route to host")):
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
@@ -1392,8 +1398,7 @@ class TestTransientSendFailuresRetry:
 
         user = self._user("smtpdown")
 
-        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            mock_email_cls.return_value.send.side_effect = smtplib.SMTPConnectError(421, "try later")
+        with self._mail_host_failing(smtplib.SMTPConnectError(421, "try later")):
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
@@ -1530,18 +1535,71 @@ class TestTransientSendFailuresRetry:
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 
-    def test_a_dropped_connection_retries(self) -> None:
-        """No server answer at all, so there is no code to read — transport."""
+    def test_a_connection_dropped_while_connecting_retries(self) -> None:
+        """No server answer at all, so there is no code to read: transport, and
+        nothing was handed over yet, so another attempt cannot duplicate it."""
         import smtplib
 
         from sbomify.apps.onboarding.services import TransientEmailError
 
         user = self._user("disconnected")
 
-        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            mock_email_cls.return_value.send.side_effect = smtplib.SMTPServerDisconnected("connection lost")
+        with self._mail_host_failing(smtplib.SMTPServerDisconnected("connection lost")):
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
+
+    def test_a_connection_lost_after_the_handoff_is_not_sent_again(self) -> None:
+        """The server may have accepted the message before the connection went, so
+        a failure recorded here would have the retry send a second copy. The row
+        stays handed over and unresolved for the stale-handoff path to settle."""
+        import smtplib
+
+        user = self._user("lostafter")
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = smtplib.SMTPServerDisconnected("connection lost")
+            assert OnboardingEmailService.send_welcome_email(user) is False
+            assert OnboardingEmailService.send_welcome_email(user) is False
+
+        assert mock_email_cls.return_value.send.call_count == 1
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.WELCOME)
+        assert record.status == OnboardingEmail.EmailStatus.PENDING
+        assert record.handoff_unresolved
+
+    def test_a_sequence_email_lost_after_the_handoff_is_not_sent_again(self) -> None:
+        user = self._user("seqlostafter")
+        status = OnboardingStatus.objects.get(user=user)
+        status.mark_welcome_email_sent()
+        status.created_at = timezone.now() - timedelta(days=2)
+        status.save()
+
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = TimeoutError("timed out")
+            assert OnboardingEmailService.send_quick_start_email(user) is False
+
+        record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)
+        assert record.status == OnboardingEmail.EmailStatus.PENDING
+        assert record.handoff_unresolved
+
+    def test_an_unrecorded_welcome_flag_is_retried_without_a_second_send(self) -> None:
+        """The row says sent and the flag does not: acknowledging that would leave
+        the drip blocked until the sweep's seven-day window, so the attempt raises
+        and the retry reconciles the flag through the row that is already SENT."""
+        from django.db import OperationalError
+
+        from sbomify.apps.onboarding.services import TransientEmailError
+
+        user = self._user("flaglost")
+
+        with patch.object(
+            OnboardingStatus, "mark_welcome_email_sent", side_effect=OperationalError("connection lost")
+        ):
+            with pytest.raises(TransientEmailError):
+                OnboardingEmailService.send_welcome_email(user)
+
+        assert OnboardingEmailService.send_welcome_email(user) is True
+        assert len(mail.outbox) == 1, "the retry reconciled the flag instead of sending again"
+        assert OnboardingStatus.objects.get(user=user).welcome_email_sent
 
     def test_a_refused_address_is_remembered_and_not_re_sent(self) -> None:
         """The daily batch must not keep re-sending to a mailbox that is gone.
@@ -1996,8 +2054,7 @@ class TestTransientSendFailuresRetry:
         status.created_at = timezone.now() - timedelta(days=2)
         status.save()
 
-        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+        with self._mail_host_failing(OSError(113, "No route to host")):
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_quick_start_email(user)
 
@@ -2007,8 +2064,7 @@ class TestTransientSendFailuresRetry:
 
         user = self._user("tasktransient")
 
-        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+        with self._mail_host_failing(OSError(113, "No route to host")):
             with pytest.raises(TransientEmailError):
                 send_welcome_email_task(user.id)
 
@@ -2023,8 +2079,7 @@ class TestTransientSendFailuresRetry:
 
         user = self._user("quiettransient")
 
-        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+        with self._mail_host_failing(OSError(113, "No route to host")):
             with patch.object(onboarding_tasks, "logger", MagicMock()) as task_logger:
                 with pytest.raises(TransientEmailError):
                     send_welcome_email_task(user.id)
@@ -2063,8 +2118,7 @@ class TestTransientSendFailuresRetry:
 
         user = self._user("eventually")
 
-        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            mock_email_cls.return_value.send.side_effect = OSError(113, "No route to host")
+        with self._mail_host_failing(OSError(113, "No route to host")):
             with pytest.raises(TransientEmailError):
                 OnboardingEmailService.send_welcome_email(user)
 

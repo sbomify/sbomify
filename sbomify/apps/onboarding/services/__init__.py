@@ -6,11 +6,12 @@ from __future__ import annotations
 
 import smtplib
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db import Error, IntegrityError, InterfaceError, OperationalError
 from django.db.models import F, Q, QuerySet
 from django.template import TemplateDoesNotExist, TemplateSyntaxError
@@ -109,6 +110,30 @@ def _is_transient_send_error(exc: BaseException) -> bool:
     # relationship surprises most readers, and a check that looks like it
     # misses every smtplib error is worth one redundant name.
     return isinstance(exc, (smtplib.SMTPException, OSError))
+
+
+def _outcome_unknown(exc: BaseException) -> bool:
+    """Whether a send that failed this way may still have been delivered.
+
+    Only asked once the connection is open and the handoff is stamped. A server
+    that answers with a code has said no, so nothing was accepted and another
+    attempt cannot duplicate it. A connection that drops or times out mid
+    conversation says nothing: the server may already have queued the message
+    when the transport went, and a retry would send a second copy.
+    """
+    if isinstance(exc, smtplib.SMTPServerDisconnected):
+        return True
+    return isinstance(exc, OSError) and not isinstance(exc, smtplib.SMTPException)
+
+
+def _close_quietly(connection: Any) -> None:
+    """Close the mail connection without letting the close decide the outcome.
+
+    QUIT can fail after the server has taken the message, and that is not a
+    failed send.
+    """
+    with suppress(smtplib.SMTPException, OSError):
+        connection.close()
 
 
 #: After this, a ``PENDING`` row is assumed to belong to nobody. The sending
@@ -475,6 +500,8 @@ class OnboardingEmailService:
             logger.warning("Welcome email being processed by another worker for user %s", user.id)
             return False
 
+        connection = get_connection(fail_silently=False)
+        handed_over = False
         try:
             email = EmailMultiAlternatives(
                 subject=email_record.subject,
@@ -482,6 +509,7 @@ class OnboardingEmailService:
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[user.email],
                 reply_to=["hello@sbomify.com"],
+                connection=connection,
                 # Welcome opens the sequence, so it carries the opt-out too. It
                 # is not suppressed by one (nobody can unsubscribe before their
                 # first email), but bulk-sender rules look at the header, not at
@@ -489,12 +517,28 @@ class OnboardingEmailService:
                 headers=_unsubscribe_headers(context.get("unsubscribe_url")),
             )
             email.attach_alternative(html_content, "text/html")
+            # Connected before the stamp: a mail host that cannot be reached
+            # fails here, before anything is handed over, and stays a retry.
+            connection.open()
             # Stamped before the handoff, not after: everything past this line
             # may fail to record what SMTP did with the message, and a row that
             # says nothing is one a later pass will send again.
             email_record.mark_handed_to_mailer()
+            handed_over = True
             email.send(fail_silently=False)
         except Exception as e:
+            if handed_over and _outcome_unknown(e):
+                # The server may have taken the message before the connection
+                # went. A recorded failure would have the retry send it again,
+                # so the row stays handed over for the stale-handoff path.
+                logger.warning(
+                    "%s email to user %s may have been delivered before the connection failed (%s); "
+                    "leaving it for the stale-handoff path",
+                    email_record.email_type,
+                    user.id,
+                    type(e).__name__,
+                )
+                return False
             if _is_refused_address(e):
                 # Bound out of the lambda: ``except ... as e`` unbinds ``e``
                 # at the end of the block, and the write may run after that.
@@ -528,6 +572,8 @@ class OnboardingEmailService:
                 raise TransientEmailError(f"welcome email to user {user.id}") from e
             logger.error("Failed to send welcome email to user %s: %s", user.id, e, exc_info=True)
             return False
+        finally:
+            _close_quietly(connection)
 
         # Past the send, so nothing below may rewrite the record to FAILED: a
         # delivered email recorded as failed makes the recovery sweep send a
@@ -540,7 +586,11 @@ class OnboardingEmailService:
         # outcome was never recorded. If the record write landed and this one
         # does not, the next pass repairs it through _reconcile_welcome_flag.
         if _persist_outcome(email_record.mark_sent, f"a successful send for user {user.id}"):
-            _persist_outcome(onboarding_status.mark_welcome_email_sent, f"the welcome flag for user {user.id}")
+            if not _persist_outcome(onboarding_status.mark_welcome_email_sent, f"the welcome flag for user {user.id}"):
+                # The row says sent and the flag does not, and only the sweep's
+                # seven-day window would ever look again. Raise: the retry finds
+                # the SENT row and repairs the flag without sending again.
+                raise TransientEmailError(f"recording the welcome flag for user {user.id}")
         logger.info("Welcome email sent successfully to user %s", user.id)
         return True
 
@@ -633,6 +683,8 @@ class OnboardingEmailService:
             logger.warning("%s email being processed by another worker for user %s", email_type, user.id)
             return False
 
+        connection = get_connection(fail_silently=False)
+        handed_over = False
         try:
             email = EmailMultiAlternatives(
                 subject=email_record.subject,
@@ -640,15 +692,30 @@ class OnboardingEmailService:
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[user.email],
                 reply_to=["hello@sbomify.com"],
+                connection=connection,
                 headers=_unsubscribe_headers(context.get("unsubscribe_url")),
             )
             email.attach_alternative(html_content, "text/html")
+            # Connected before the stamp: a mail host that cannot be reached
+            # fails here, before anything is handed over, and stays a retry.
+            connection.open()
             # Stamped before the handoff, not after: everything past this line
             # may fail to record what SMTP did with the message, and a row that
             # says nothing is one a later pass will send again.
             email_record.mark_handed_to_mailer()
+            handed_over = True
             email.send(fail_silently=False)
         except Exception as e:
+            if handed_over and _outcome_unknown(e):
+                # See the welcome path: possibly delivered, so not repeated.
+                logger.warning(
+                    "%s email to user %s may have been delivered before the connection failed (%s); "
+                    "leaving it for the stale-handoff path",
+                    email_record.email_type,
+                    user.id,
+                    type(e).__name__,
+                )
+                return False
             if _is_refused_address(e):
                 # Bound out of the lambda: ``except ... as e`` unbinds ``e``
                 # at the end of the block, and the write may run after that.
@@ -679,6 +746,8 @@ class OnboardingEmailService:
                 raise TransientEmailError(f"{email_type} email to user {user.id}") from e
             logger.error("Failed to send %s email to user %s: %s", email_type, user.id, e, exc_info=True)
             return False
+        finally:
+            _close_quietly(connection)
 
         # See the welcome path: the record must not go back to FAILED once the
         # message has left.
