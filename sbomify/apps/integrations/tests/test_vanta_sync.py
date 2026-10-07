@@ -396,6 +396,22 @@ class TestOversizedProviderStrings:
         assert result.ok
         assert len(ControlCatalog.objects.get(external_id="fw_long").name) == 255
 
+    def test_a_long_framework_id_is_cut_to_fit_and_found_again(self, connected_vanta, install_client) -> None:
+        """Stored and looked up the same way, so the next sync finds the row it made."""
+        long_id = "fw_" + "9" * 300
+        install_client(
+            [{"id": long_id, "displayName": "Long Framework"}],
+            {long_id: [_control("c1", "CC1.1", "Control environment", "Security")]},
+            {"c1": {"status": "COMPLETED"}},
+        )
+
+        assert sync(connected_vanta).ok
+        assert sync(connected_vanta).ok
+
+        catalog = ControlCatalog.objects.get(team=connected_vanta.team, source=ControlCatalog.Source.VANTA)
+        assert catalog.external_id == long_id[:255]
+        assert catalog.controls.count() == 1
+
 
 class TestAFrameworkExistsOnce:
     """One catalog per framework, enforced where a race cannot get past it.

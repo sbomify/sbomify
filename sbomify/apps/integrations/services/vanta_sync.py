@@ -247,6 +247,9 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
     the tier that creates products. The Integrations tab is where someone
     makes that choice.
     """
+    # Cut once and used for every lookup and insert below, so an over-long id
+    # still finds the row it was stored under on the next sync.
+    framework_id = _fit(ControlCatalog, "external_id", framework_id)
     name = _fit(
         ControlCatalog,
         "name",

@@ -147,6 +147,13 @@ _RETRYABLE_STATUSES = frozenset({408, 429})
 
 
 def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
+    if not (provider.client_id and provider.client_secret and provider.token_url):
+        # This deployment's own settings, not the provider's answer. Sent
+        # anyway, the grant is refused and the refusal revokes the connection,
+        # so restoring the setting would leave every workspace to reconnect by
+        # hand. Unavailable instead: the next scheduled sync picks it back up.
+        raise ProviderUnavailable(f"{provider.name} is not configured on this deployment.", service=provider.key)
+
     body = {
         "client_id": provider.client_id,
         "client_secret": provider.client_secret,

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
+from django.template.loader import render_to_string
 from django.test import Client
 from django.urls import reverse
 
@@ -46,6 +49,18 @@ class TestTabPage:
 
         assert response.status_code == 200
         assert reverse("integrations:panel", kwargs={"team_key": team.key}).encode() in response.content
+
+    def test_the_section_draws_one_loading_state_until_its_panel_arrives(
+        self,
+        sample_team_with_owner_member,  # noqa: F811
+    ) -> None:
+        html = render_to_string(
+            "teams/team_settings_tabs/integrations.html.j2", {"team": sample_team_with_owner_member.team}
+        )
+
+        assert html.count("data-content-loading") == 1
+        # A hand-built skeleton pulses whatever the reader's motion setting is.
+        assert re.search(r"(?<![\w:-])animate-pulse", html) is None
 
     def test_a_member_is_sent_to_a_section_they_may_open(self, sample_team_with_owner_member, guest_user) -> None:  # noqa: F811
         team = sample_team_with_owner_member.team

@@ -121,6 +121,30 @@ class TestAccessToken:
         assert connected_vanta.status == Integration.Status.CONNECTED
         assert connected_vanta.refresh_token == "vrt_live"
 
+    def test_a_deployment_missing_its_client_secret_keeps_the_connection(
+        self, connected_vanta, vanta_credentials, monkeypatch
+    ) -> None:
+        """Our own missing setting is not the provider refusing the workspace.
+
+        Sent anyway, the refresh is refused, and a refusal revokes the
+        connection for good: restoring the setting would leave every workspace
+        to reconnect by hand.
+        """
+        vanta_credentials.VANTA_CLIENT_SECRET = ""
+        connected_vanta.token_expires_at = None
+        connected_vanta.save()
+
+        class Refused:
+            status_code = 401
+
+        monkeypatch.setattr(oauth, "request_with_retry", lambda *args, **kwargs: Refused())
+
+        with pytest.raises(ProviderUnavailable):
+            connections.access_token(connected_vanta, VANTA)
+
+        connected_vanta.refresh_from_db()
+        assert connected_vanta.status == Integration.Status.CONNECTED
+
     def test_a_connection_with_no_refresh_token_cannot_recover(self, connected_vanta) -> None:
         connected_vanta.refresh_token = ""
         connected_vanta.token_expires_at = None
@@ -260,6 +284,26 @@ class TestPublishing:
 
         synced_catalog.refresh_from_db()
         assert synced_catalog.is_published is False
+
+    def test_publishing_a_framework_turned_off_in_controls_shows_it_again(
+        self, connected_vanta, synced_catalog
+    ) -> None:
+        """The Trust Center shows a framework only while it is tracked and published,
+        so reporting a publication that leaves it untracked would be a false success."""
+        from sbomify.apps.controls.services.catalog_service import deactivate_catalog
+        from sbomify.apps.controls.services.public_service import get_public_controls_list
+
+        synced_catalog.is_published = True
+        synced_catalog.save()
+        deactivate_catalog(synced_catalog.id, connected_vanta.team)
+
+        [card] = connections.provider_cards(connected_vanta.team)
+        assert card["catalogs"][0]["is_published"] is False
+
+        assert connections.set_catalog_published(connected_vanta.team, synced_catalog.id, True).ok
+
+        listed = get_public_controls_list(connected_vanta.team).value or []
+        assert [entry["catalog"]["name"] for entry in listed] == ["SOC 2 Type II"]
 
     def test_refuses_a_framework_no_integration_owns(self, connected_vanta) -> None:
         """This endpoint publishes synced data; hand-maintained catalogues are not its business."""

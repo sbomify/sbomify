@@ -257,7 +257,10 @@ def provider_cards(team: Team) -> list[dict[str, Any]]:
                         "id": catalog.id,
                         "name": catalog.name,
                         "version": catalog.version,
-                        "is_published": catalog.is_published,
+                        # What the Trust Center shows, which needs both flags:
+                        # the Controls tab can stop tracking a framework that
+                        # is still marked published.
+                        "is_published": catalog.is_published and catalog.is_active,
                         "control_count": catalog.control_count,
                     }
                     for catalog in catalogs
@@ -310,6 +313,11 @@ def set_catalog_published(team: Team, catalog_id: str, published: bool) -> Servi
     settings tab left open from before the disconnect could put a framework
     nobody is syncing any more back on the trust center. Taking one down is
     always allowed: that is how a stale framework gets removed.
+
+    The Trust Center shows a framework only while it is tracked as well, and
+    the Controls tab can stop tracking one that is still marked published.
+    Publishing therefore turns tracking back on, or the success it reports
+    would put nothing on the page.
     """
     from sbomify.apps.controls.models import ControlCatalog
 
@@ -328,8 +336,11 @@ def set_catalog_published(team: Team, catalog_id: str, published: bool) -> Servi
             "Reconnect this provider before putting its frameworks on your Trust Center", status_code=409
         )
 
-    if catalog.is_published != published:
-        catalog.is_published = published
+    if published and not (catalog.is_published and catalog.is_active):
+        catalog.is_published = catalog.is_active = True
+        catalog.save(update_fields=["is_published", "is_active", "updated_at"])
+    elif not published and catalog.is_published:
+        catalog.is_published = False
         catalog.save(update_fields=["is_published", "updated_at"])
 
     return ServiceResult.success(catalog.name)

@@ -44,16 +44,26 @@ def _claim(integration_id: str) -> Integration | None:
     It is also where a disconnect takes effect: the row is gone or no longer
     connected by the time the worker starts, nothing is claimed, and queued work
     stops rather than syncing an account nobody is connected to any more.
+
+    The row is read before it is claimed, and the claim is keyed to the
+    credential read. A reconnect landing in between moves ``connected_at``, so
+    the claim matches nothing and the run the reconnect queued takes the
+    connection, rather than both runs syncing the new credential.
     """
     expired = timezone.now() - SYNC_LEASE
-    claimed = (
-        Integration.objects.filter(id=integration_id, status=Integration.Status.CONNECTED)
-        .filter(~Q(last_sync_status=Integration.SyncStatus.RUNNING) | Q(updated_at__lt=expired))
-        .update(last_sync_status=Integration.SyncStatus.RUNNING, updated_at=timezone.now())
+    claimable = Integration.objects.filter(id=integration_id, status=Integration.Status.CONNECTED).filter(
+        ~Q(last_sync_status=Integration.SyncStatus.RUNNING) | Q(updated_at__lt=expired)
+    )
+    integration = claimable.select_related("team").first()
+    if integration is None:
+        return None
+    claimed = claimable.filter(connected_at=integration.connected_at).update(
+        last_sync_status=Integration.SyncStatus.RUNNING, updated_at=timezone.now()
     )
     if not claimed:
         return None
-    return Integration.objects.filter(id=integration_id).select_related("team").first()
+    integration.last_sync_status = Integration.SyncStatus.RUNNING
+    return integration
 
 
 @dramatiq.actor(queue_name="integrations", max_retries=0, time_limit=1_800_000)

@@ -45,10 +45,17 @@ def run_sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
     try:
         result: ServiceResult[dict[str, Any]] = import_string(provider.sync_path)(integration)
     except ProviderAuthError as exc:
-        # ``connections.access_token`` has already flipped the connection to
-        # "needs reconnecting"; this records why, in the same words the tab
-        # shows.
-        _record_failure(integration, exc.detail)
+        # A refused refresh has already been marked by
+        # ``connections.access_token``, but a 401 or 403 from an API call
+        # mid-sync has not, and it means the same thing: nothing syncs until
+        # someone reconnects. Keyed to the generation like every write here, so
+        # a reconnect since this run started stays connected.
+        _record(
+            integration,
+            status=Integration.Status.REVOKED,
+            last_sync_status=Integration.SyncStatus.FAILED,
+            last_sync_error=exc.detail,
+        )
         return ServiceResult.failure(exc.detail, status_code=exc.status_code)
     except ExternalServiceError as exc:
         _record_failure(integration, exc.detail)

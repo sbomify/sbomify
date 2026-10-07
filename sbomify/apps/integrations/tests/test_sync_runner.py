@@ -59,6 +59,33 @@ class TestRunSync:
         assert connected_vanta.last_sync_status == Integration.SyncStatus.FAILED
         assert "reconnecting" in connected_vanta.last_sync_error
 
+    def test_a_refusal_from_the_api_asks_for_a_reconnect(self, connected_vanta, monkeypatch) -> None:
+        """``VantaClient`` raises on a 401 or 403 mid-sync, outside the token refresh
+        that marks a refused credential. Left connected, the scheduler would retry a
+        dead credential every six hours and the tab would offer no reconnect."""
+
+        def refuse(integration):
+            raise ProviderAuthError("Vanta rejected the connection. Reconnect the workspace.", service="vanta")
+
+        _install(monkeypatch, refuse)
+
+        run_sync(connected_vanta)
+
+        assert Integration.objects.get(pk=connected_vanta.pk).status == Integration.Status.REVOKED
+
+    def test_a_refusal_of_a_replaced_credential_leaves_the_new_one_connected(
+        self, connected_vanta, monkeypatch
+    ) -> None:
+        def reconnect_then_refuse(integration):
+            Integration.objects.filter(pk=integration.pk).update(connected_at=timezone.now())
+            raise ProviderAuthError("Vanta rejected the connection. Reconnect the workspace.", service="vanta")
+
+        _install(monkeypatch, reconnect_then_refuse)
+
+        run_sync(connected_vanta)
+
+        assert Integration.objects.get(pk=connected_vanta.pk).status == Integration.Status.CONNECTED
+
     def test_an_unreachable_provider_is_recorded(self, connected_vanta, monkeypatch) -> None:
         def unavailable(integration):
             raise ExternalServiceError("Vanta returned 503", service="vanta")
@@ -235,6 +262,46 @@ class TestClaimingAConnection:
         tasks.sync_integration(connected_vanta.id)
 
         assert seen == [Integration.SyncStatus.RUNNING]
+
+    @pytest.mark.parametrize("reconnect_at", ["before_the_read", "after_the_read"])
+    def test_a_reconnect_inside_a_claim_leaves_one_run_on_the_new_credential(
+        self, connected_vanta, monkeypatch, reconnect_at
+    ) -> None:
+        """The callback queues a run for the new credential, so a claim the reconnect
+        lands inside must not come out holding that credential as well."""
+        from django.db.models.query import QuerySet
+
+        from sbomify.apps.integrations import tasks
+        from sbomify.apps.integrations.oauth import TokenSet
+        from sbomify.apps.integrations.providers.vanta import VANTA
+        from sbomify.apps.integrations.services.connections import save_connection
+
+        def reconnect() -> None:
+            token_set = TokenSet("vat_new", "vrt_new", timezone.now() + timedelta(hours=1), ())
+            save_connection(connected_vanta.team, VANTA, token_set, connected_vanta.connected_by)
+
+        real_first = QuerySet.first
+        fired: list[bool] = []
+
+        def first_around_a_reconnect(queryset):
+            if fired:
+                return real_first(queryset)
+            fired.append(True)
+            if reconnect_at == "before_the_read":
+                reconnect()
+                return real_first(queryset)
+            row = real_first(queryset)
+            reconnect()
+            return row
+
+        monkeypatch.setattr(QuerySet, "first", first_around_a_reconnect)
+        claims = [tasks._claim(connected_vanta.id)]
+        monkeypatch.setattr(QuerySet, "first", real_first)
+        claims.append(tasks._claim(connected_vanta.id))
+
+        assert fired
+        current = Integration.objects.get(pk=connected_vanta.pk).connected_at
+        assert [claim is not None and claim.connected_at == current for claim in claims].count(True) == 1
 
 
 class TestASupersededRunDoesNotReportItsResult:
