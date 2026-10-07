@@ -3,6 +3,8 @@ import { morphPreservingMarkedSubtrees } from './htmx-morph-preserve'
 
 // No DOM library in this repo, so the nodes are the smallest shape the swap
 // actually touches: a node type, hx-preserve, children and outerHTML.
+// outerHTML is a label naming the node, not markup: the swap only hands it to
+// the morph, so the tests compare it and never parse it.
 const ELEMENT = 1
 const FRAGMENT = 11
 
@@ -23,7 +25,7 @@ function el(id: string, { preserve = false, children = [] as FakeNode[] } = {}):
         id,
         preserve,
         children,
-        outerHTML: `<div id="${id}"></div>`,
+        outerHTML: 'markup of ' + id,
         hasAttribute: (name: string) => name === 'hx-preserve' && preserve,
         querySelectorAll: (selector: string) => {
             expect(selector).toBe('[hx-preserve][id]')
@@ -110,7 +112,7 @@ function treeNode(id: string, { preserve = false, children = [] as TreeNode[] } 
         preserve,
         parent: null,
         children,
-        outerHTML: `<div id="${id}"></div>`,
+        outerHTML: 'markup of ' + id,
         hasAttribute: (name: string) => name === 'hx-preserve' && node.preserve,
         querySelectorAll(selector: string) {
             expect(selector).toBe('[hx-preserve][id]')
