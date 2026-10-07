@@ -236,7 +236,7 @@ def process_all_onboarding_reminders_task() -> None:
         logger.info("[TASK_process_all_onboarding_reminders] Starting onboarding email processing")
         process_onboarding_sequence_batch_task.send_with_options(args=(), delay=0)
         requeue_missed_welcome_emails_task.send_with_options(args=(), delay=0)
-        logger.info("[TASK_process_all_onboarding_reminders] Successfully queued sequence processing")
+        logger.info("[TASK_process_all_onboarding_reminders] Queued the sequence batch and the missed-welcome recovery")
 
     except Exception as e:
         logger.error("[TASK_process_all_onboarding_reminders] Error: %s", e)

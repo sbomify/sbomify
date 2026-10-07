@@ -246,7 +246,13 @@ def _persist_outcome(write: Callable[[], None], description: str) -> bool:
                     e,
                 )
                 return False
-            logger.warning("Retrying the write recording %s (attempt %d): %s", description, attempt, e)
+            logger.warning(
+                "The write recording %s failed on attempt %d of %d; retrying: %s",
+                description,
+                attempt,
+                OUTCOME_WRITE_ATTEMPTS,
+                e,
+            )
             # Only outside a transaction. A connection that has seen
             # OperationalError stays broken until it is closed, and the sends
             # run in autocommit so closing is the recovery. Inside an atomic
