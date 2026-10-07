@@ -28,9 +28,9 @@ def billing_session(browser_context: Any) -> None:
     """Exercise paid identifier controls with the browser's real workspace plan."""
     for row in Session.objects.all():
         session = SessionStore(session_key=row.session_key)
-        current = session.get("current_team") or {}
+        current = session.get("current_workspace") or {}
         current["billing_plan"] = "business"
-        session["current_team"] = current
+        session["current_workspace"] = current
         session.save()
 
 

@@ -33,7 +33,7 @@ def once_per_request(processor: Callable[[Any], Any]) -> Callable[[Any], Any]:
         resolver_match = getattr(request, "resolver_match", None)
         scope = (
             getattr(getattr(request, "user", None), "pk", None),
-            (session.get("current_team") or {}).get("key"),
+            (session.get("current_workspace") or {}).get("key"),
             resolver_match.kwargs.get("team_key") if resolver_match else None,
         )
         cache = getattr(request, "_ctx_cache", None)
@@ -169,7 +169,7 @@ def pending_access_requests_context(request: Any) -> Any:
             "has_pending_access_requests": False,
         }
 
-    current_team_data = request.session.get("current_team", {})
+    current_team_data = request.session.get("current_workspace", {})
     team_key = current_team_data.get("key")
 
     if not team_key:
@@ -257,7 +257,7 @@ def team_context(request: Any) -> Any:
     if not request.user.is_authenticated:
         return {}
 
-    current_team_data = request.session.get("current_team", {})
+    current_team_data = request.session.get("current_workspace", {})
     session_team_key = current_team_data.get("key")
 
     # The workspace this page is *about*, which is not always the one in the
@@ -381,7 +381,7 @@ def posthog_context(request: Any) -> dict[str, Any]:
         from sbomify.apps.core.posthog_service import hash_email
 
         user = request.user
-        team_key = request.session.get("current_team", {}).get("key", "")
+        team_key = request.session.get("current_workspace", {}).get("key", "")
         identify = {
             "distinct_id": str(user.pk),
             "email_hash": hash_email(getattr(user, "email", "")),
