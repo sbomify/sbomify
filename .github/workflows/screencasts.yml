@@ -122,6 +122,9 @@ jobs:
             for file in screencasts/*.py; do
               [ -f "$file" ] || continue
               [[ "$(basename "$file")" == "conftest.py" ]] && continue
+              # The tooling (narrator.py, transcode.py, ...) sits beside the
+              # recordings. Every recording is a pytest module; no tool is.
+              grep -q '^import pytest' "$file" || continue
               BASENAME=$(basename "$file" .py)
               echo "--- Recording: $file ---"
               docker compose -f docker-compose.tests.yml exec -T tests \
@@ -160,8 +163,16 @@ jobs:
             fi
           done
 
+      # Playwright writes VP8, which bands on the app's flat gradients. The
+      # timestamps pass through untouched, so this must run before the mux.
+      - name: Transcode recordings to VP9
+        run: |
+          docker compose -f docker-compose.tests.yml exec -T tests \
+            uv run python screencasts/transcode.py
+
+      # Not always(): a failed take leaves a partial video and manifest behind,
+      # and muxing and publishing them would replace the good copy on R2.
       - name: Mux narration and build subtitles
-        if: always()
         run: |
           docker compose -f docker-compose.tests.yml exec -T tests \
             uv run python screencasts/mux_narration.py
@@ -169,7 +180,7 @@ jobs:
           sudo chown -R $USER:$USER screencasts/output/ 2>/dev/null || true
 
       - name: Upload to Cloudflare R2
-        if: ${{ always() && env.R2_BUCKET != '' }}
+        if: ${{ success() && env.R2_BUCKET != '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

@@ -332,6 +332,20 @@ def narrate(page: Page, key: str) -> None:
     _narration_state["open_beat"] = {"entry": _narration_state["beats"][-1], "started": time.monotonic()}
 
 
+def _reset_narration(narrator: Narrator | None) -> None:
+    """Start a recording's narration from nothing.
+
+    Every per-recording field, because one pytest process records several
+    screencasts: a scene log or an open beat left over from the last take would
+    land in this one's manifest, measured against a clock that has restarted.
+    """
+    _narration_state["narrator"] = narrator
+    _narration_state["beats"] = []
+    _narration_state["busy_until"] = 0.0
+    _narration_state["open_beat"] = None
+    _narration_state["scenes"] = []
+
+
 def _close_open_beat() -> None:
     """Record how long the open beat's visual work took, before it is held out.
 
@@ -1577,9 +1591,7 @@ def recording_page(
     _narration_state["capture"] = capture
 
     narrator = Narrator.for_recording(recording_name)
-    _narration_state["narrator"] = narrator
-    _narration_state["beats"] = []
-    _narration_state["busy_until"] = 0.0
+    _reset_narration(narrator)
     if narrator is not None:
         # Synthesize the opening line while the splash screen and the first
         # navigation are still on screen, so its latency never reaches the video.

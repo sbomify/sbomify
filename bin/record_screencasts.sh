@@ -104,8 +104,16 @@ clean_temp_videos() {
     done
 }
 
+# The tooling (narrator.py, transcode.py, ...) sits beside the recordings.
+# Every recording is a pytest module; no tool is.
+is_recording() {
+    [[ "$(basename "$1")" != "conftest.py" ]] && grep -q '^import pytest' "$1"
+}
+
 list_screencasts() {
-    find "$SCREENCASTS_DIR" -maxdepth 1 -name "*.py" ! -name "conftest.py" -exec basename {} \; | sort
+    for file in "$SCREENCASTS_DIR"/*.py; do
+        if is_recording "$file"; then basename "$file"; fi
+    done
 }
 
 usage() {
@@ -147,8 +155,7 @@ case "${1:-}" in
         ensure_services
         ensure_ffmpeg
         for file in "$SCREENCASTS_DIR"/*.py; do
-            [ -f "$file" ] || continue
-            [[ "$(basename "$file")" == "conftest.py" ]] && continue
+            is_recording "$file" || continue
             run_screencast "$file"
         done
         clean_temp_videos

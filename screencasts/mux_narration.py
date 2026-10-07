@@ -25,6 +25,8 @@ Run after recording::
 from __future__ import annotations
 
 import array
+import difflib
+import itertools
 import json
 import subprocess
 import sys
@@ -246,8 +248,8 @@ def _wrap(text: str) -> str:
     return "\n".join([" ".join(words[:midpoint]), " ".join(words[midpoint:])])
 
 
-def _caption_char_times(char_times: list[tuple[str, float, float]]) -> list[float]:
-    """Start time for each character of the *caption*, from the raw timings.
+def _caption_char_times(char_times: list[tuple[str, float, float]]) -> tuple[str, list[float]]:
+    """The caption the raw timings spell, and the start time of each character.
 
     The API times the string it was given, tags and all; the caption is that
     string with tags stripped and whitespace collapsed.  Walking the raw
@@ -255,6 +257,7 @@ def _caption_char_times(char_times: list[tuple[str, float, float]]) -> list[floa
     the two up exactly, which is what lets a cue boundary be placed at the
     moment the word is actually spoken.
     """
+    kept: list[str] = []
     out: list[float] = []
     depth_sq = depth_lt = 0
     last_was_space = True
@@ -278,11 +281,29 @@ def _caption_char_times(char_times: list[tuple[str, float, float]]) -> list[floa
             if last_was_space:
                 continue
             last_was_space = True
+            kept.append(" ")
             out.append(start)
             continue
         last_was_space = False
+        kept.append(char)
         out.append(start)
-    return out
+    return "".join(kept), out
+
+
+def _caption_stamps(caption: str, char_times: list[tuple[str, float, float]]) -> list[float | None]:
+    """When each character of ``caption`` is spoken, or None where it is not.
+
+    The timings are for the spoken text, and a custom caption need not be that
+    text: "sbomify.com" on screen where "sbomify dot com" is said, or a spoken
+    word left off the screen.  Matching the two strings maps each caption
+    character to the spoken character it shows, so a caption that differs from
+    the voice in places is still cued at the words they share.
+    """
+    spoken, starts = _caption_char_times(char_times)
+    stamps: list[float | None] = [None] * len(caption)
+    for a, b, size in difflib.SequenceMatcher(None, caption, spoken, autojunk=False).get_matching_blocks():
+        stamps[a : a + size] = starts[b : b + size]
+    return stamps
 
 
 def write_vtt(destination: Path, beats: list[Beat], scale: float) -> None:
@@ -301,30 +322,33 @@ def write_vtt(destination: Path, beats: list[Beat], scale: float) -> None:
     index = 0
 
     for beat in beats:
-        cues = _split_into_cues(beat.caption or beat.key)
+        # Whitespace collapsed, as the cues are, so a cue's position in the
+        # caption is the running sum of the cues before it.
+        caption = " ".join((beat.caption or beat.key).split())
+        cues = _split_into_cues(caption)
         if not cues:
             continue
 
         start = beat.offset_ms * scale / 1000
-        caption = beat.caption or beat.key
-        stamps = _caption_char_times(beat.char_times) if beat.char_times else []
-        # Only trust the timings if they line up with the caption we are about
-        # to cut; a mismatch means the two came from different text.
-        usable = len(stamps) >= len(caption)
+        stamps = _caption_stamps(caption, beat.char_times) if beat.char_times else []
+        # Where each cue starts in the caption: +1 for the space the split
+        # consumed between cues.
+        bounds = list(itertools.accumulate((len(cue) + 1 for cue in cues[:-1]), initial=0))
+        # Only trust the timings at a cue boundary the voice actually says. A
+        # caption that strays from the spoken text there gets a proportional
+        # split instead.
+        usable = bool(stamps) and all(stamps[bound] is not None for bound in bounds)
 
-        cursor = 0
         elapsed = 0.0
         total_chars = sum(len(cue) for cue in cues)
 
         for position, cue in enumerate(cues):
             if usable:
-                cue_start = start + stamps[min(cursor, len(stamps) - 1)]
-                # +1 for the space the split consumed between cues.
-                cursor += len(cue) + 1
+                cue_start = start + stamps[bounds[position]]
                 if position == len(cues) - 1:
                     cue_end = start + beat.duration
                 else:
-                    cue_end = start + stamps[min(cursor, len(stamps) - 1)]
+                    cue_end = start + stamps[bounds[position + 1]]
             else:
                 share = beat.duration * (len(cue) / total_chars) if total_chars else beat.duration
                 cue_start = start + elapsed

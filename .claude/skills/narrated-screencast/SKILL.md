@@ -464,9 +464,9 @@ uv run python screencasts/mux_narration.py <name>    # audio + .vtt
 uv run python screencasts/score.py <name> <track> --loop   # music bed
 ```
 
-`transcode.py` is idempotent by marker file, so a re-run after a partial failure
-will not re-encode something already converted. Delete `<name>.transcoded.json`
-to force it.
+`transcode.py` asks each recording's codec first, so a re-run after a partial
+failure will not re-encode something already converted, and a fresh take over
+the same name is always converted.
 
 ### Record where the GPU is, post-process where the CPU is
 

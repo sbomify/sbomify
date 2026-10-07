@@ -29,7 +29,7 @@ beats:
     text: >-
       Then you turn on a public trust center.  There's no separate site
       to build and nothing to keep in sync, because it's backed by the same
-      artifacts already sitting in the workspace — the ones your pipeline has
+      artifacts already sitting in the workspace, the ones your pipeline has
       been feeding all along.
 
   tc_domain:

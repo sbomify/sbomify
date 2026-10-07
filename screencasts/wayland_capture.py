@@ -120,15 +120,26 @@ def start(destination: Path, fps: int, area: tuple[int, int, int, int]) -> subpr
 
 
 def stop(process: subprocess.Popen, timeout: float = 20.0) -> None:
-    """Ask the helper to stop, and wait for GNOME to finish writing the file."""
+    """Ask the helper to stop, and wait for GNOME to finish writing the file.
+
+    A helper still running after ``timeout`` is left alone rather than killed:
+    a SIGKILL leaves GNOME recording with nothing left to stop it. The take
+    fails instead, as it does when the helper reports the stop call failed, so
+    a file GNOME never finished is not published.
+    """
     if process.poll() is not None:
         return
     process.send_signal(signal.SIGTERM)
     try:
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=5)
+        raise RuntimeError(
+            f"the screen recorder did not finish within {timeout:.0f}s; its helper is left running "
+            "so GNOME can still stop the recording, and this take is not usable"
+        ) from None
+    if process.returncode != 0:
+        _, err = process.communicate()
+        raise RuntimeError(f"the screen recorder did not stop cleanly, so this take is not usable: {err.strip()}")
 
 
 def _record(destination: str, fps: int, x: int, y: int, width: int, height: int) -> int:
@@ -157,16 +168,24 @@ def _record(destination: str, fps: int, x: int, y: int, width: int, height: int)
     print(path, flush=True)
 
     loop = GLib.MainLoop()
+    stopped = False
 
     def finish(*_: object) -> bool:
-        proxy.call_sync("StopScreencast", None, Gio.DBusCallFlags.NONE, 10_000, None)
+        nonlocal stopped
+        # Quit even when the stop call fails: an exception here would leave the
+        # helper idling for good. The exit status says which way it went.
+        try:
+            proxy.call_sync("StopScreencast", None, Gio.DBusCallFlags.NONE, 10_000, None)
+            stopped = True
+        except GLib.Error as exc:
+            print(f"could not stop screencast: {exc.message}", file=sys.stderr)
         loop.quit()
         return False
 
     GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, finish)
     GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, finish)
     loop.run()
-    return 0
+    return 0 if stopped else 1
 
 
 if __name__ == "__main__":
