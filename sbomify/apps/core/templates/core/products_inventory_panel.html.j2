@@ -5,3 +5,6 @@
     <c-inventory.table :inventory="inventory" results_only />
 </div>
 {% if inventory_navigation_oob %}<c-chrome.inventory-nav kind="{{ inventory.kind }}" oob />{% endif %}
+{% if inventory_title_root %}
+    <title>{% include 'core/_inventory_title.html.j2' %}</title>
+{% endif %}
