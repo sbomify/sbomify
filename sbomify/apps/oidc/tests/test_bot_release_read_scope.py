@@ -113,6 +113,12 @@ def test_bot_cannot_read_a_private_product_it_does_not_publish_to(path, bot_toke
     assert _get(f"/api/v1/releases/{other_release.id}/{path}", bot_token).status_code == 403
 
 
+def test_bot_reads_release_detail_only_on_a_product_it_publishes_to(bot_token, own_release, other_release):
+    """The release detail lists what the release contains, so it follows the same rule."""
+    assert _get(f"/api/v1/releases/{own_release.id}", bot_token).status_code == 200
+    assert _get(f"/api/v1/releases/{other_release.id}", bot_token).status_code == 403
+
+
 def test_bot_gets_the_public_view_of_a_public_product_it_does_not_publish_to(bot_token, public_other_release, builders):
     for path in CONTENT_PATHS:
         assert _get(f"/api/v1/releases/{public_other_release.id}/{path}", bot_token).status_code == 200, path

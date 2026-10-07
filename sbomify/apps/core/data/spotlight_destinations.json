@@ -94,7 +94,7 @@
       "section": "navigate",
       "icon": "fa-chart-line",
       "keywords": ["trends", "over time", "history", "vulnerability chart", "graph", "metrics"],
-      "roles": ["owner", "admin", "member"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Plugin summary",
@@ -198,7 +198,7 @@
       "keywords": ["api key", "access token", "pat", "personal access token", "ci token", "secret"],
       "args": ["team_key"],
       "fragment": "tokens",
-      "roles": ["owner", "admin"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Parties",
@@ -280,7 +280,7 @@
       "icon": "fa-bug",
       "keywords": ["scan results", "findings", "cves", "vulnerabilities", "security scan"],
       "args": ["team_key"],
-      "roles": ["owner", "admin", "member"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Cryptography",

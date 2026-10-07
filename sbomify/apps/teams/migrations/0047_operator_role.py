@@ -9,9 +9,16 @@ The constraints are dropped and re-added rather than altered because PostgreSQL
 has no ALTER CONSTRAINT for a CHECK predicate. Both are widenings, so every
 existing row satisfies the new predicate and the re-add validates without a
 rewrite.
+
+Reversing narrows them back, and no operator membership or invitation would
+satisfy the old predicates. Mapping those rows to another role would silently
+widen access (member) or drop it (guest), so the reverse refuses to start while
+any exist and names what to reassign first. It runs before anything else is
+undone, and the migration is atomic, so a refusal leaves the database as it was.
 """
 
 from django.db import migrations, models
+from django.db.migrations.exceptions import IrreversibleError
 
 # Frozen deliberately, NOT read from settings.TEAMS_SUPPORTED_ROLES — the same
 # reason migration 0041 froze its list. A historical migration must describe the
@@ -30,6 +37,18 @@ LABELS = {
 }
 MEMBER_CHOICES = [(role, LABELS[role]) for role in SUPPORTED_ROLES]
 INVITATION_CHOICES = [(role, LABELS[role]) for role in INVITABLE_ROLES]
+
+
+def refuse_reverse_while_operators_exist(apps, schema_editor):
+    """Stop the reverse while a row still holds the role it is about to forbid."""
+    members = apps.get_model("teams", "Member").objects.filter(role="operator").count()
+    invitations = apps.get_model("teams", "Invitation").objects.filter(role="operator").count()
+    if members or invitations:
+        raise IrreversibleError(
+            f"Cannot reverse teams.0047: {members} operator membership(s) and {invitations} operator "
+            "invitation(s) exist. Give each a role that existed before this migration, or remove it, "
+            "then reverse again."
+        )
 
 
 class Migration(migrations.Migration):
@@ -70,4 +89,6 @@ class Migration(migrations.Migration):
                 name="invitation_role_is_invitable",
             ),
         ),
+        # Last, so it is the first step a reverse runs.
+        migrations.RunPython(migrations.RunPython.noop, refuse_reverse_while_operators_exist),
     ]

@@ -32,14 +32,10 @@ from sbomify.apps.teams.services.settings_page import tokens_context
 class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing personal access tokens in workspace settings."""
 
-    # Tokens are personal: this page only ever lists, creates and revokes the
-    # caller's own, scoped to this workspace. So it is the MANAGE tier rather
-    # than ADMINISTER — a member who can upload artifacts needs a token to do it
-    # from CI, and a token can never exceed its holder's role.
-    # READ_INTERNAL: tokens are personal and this view only ever lists,
-    # creates and revokes the caller's own, so it follows the tab registry
-    # rather than the workspace-management tier. An operator needs one to
-    # reach the triage API.
+    # READ_INTERNAL, the same tier as the tab registry: tokens are personal, and
+    # this view only ever lists, creates and revokes the caller's own, scoped to
+    # this workspace. A member needs one to upload from CI and an operator needs
+    # one to reach the triage API, and a token can never exceed its holder's role.
     allowed_roles = list(READ_INTERNAL)
 
     def _get_team_tokens_context(

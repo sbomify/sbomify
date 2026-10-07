@@ -7,6 +7,7 @@ from ninja import Query, Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.apis import _can_read_release
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.cle_schemas import (
     CLEEventCreateSchema,
@@ -53,8 +54,10 @@ _ERROR_CODE_BY_STATUS: dict[int, ErrorCode] = {
 # ---------------------------------------------------------------------------
 
 
-def _get_product_or_404(request: HttpRequest, product_id: str) -> Product | tuple[int, dict[str, Any]]:
-    """Look up a product and verify owner/admin access.
+def _get_product_or_404(
+    request: HttpRequest, product_id: str, *, read: bool = False
+) -> Product | tuple[int, dict[str, Any]]:
+    """Look up a product and verify the caller may read it, or with ``read=False`` manage it.
 
     Returns the Product on success, or a (status, error_dict) tuple on failure.
     """
@@ -63,14 +66,16 @@ def _get_product_or_404(request: HttpRequest, product_id: str) -> Product | tupl
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.PRODUCT_NOT_FOUND}
 
-    if not can(request, "product:manage", product):
+    if not can(request, "product:read" if read else "product:manage", product):
         return 403, {"detail": "Permission denied", "error_code": ErrorCode.FORBIDDEN}
 
     return product
 
 
-def _get_component_or_404(request: HttpRequest, component_id: str) -> Component | tuple[int, dict[str, Any]]:
-    """Look up a component and verify owner/admin access.
+def _get_component_or_404(
+    request: HttpRequest, component_id: str, *, read: bool = False
+) -> Component | tuple[int, dict[str, Any]]:
+    """Look up a component and verify the caller may read it, or with ``read=False`` manage it.
 
     Returns the Component on success, or a (status, error_dict) tuple on failure.
     """
@@ -79,14 +84,16 @@ def _get_component_or_404(request: HttpRequest, component_id: str) -> Component 
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.COMPONENT_NOT_FOUND}
 
-    if not can(request, "component:manage", component):
+    if not can(request, "component:read_internal" if read else "component:manage", component):
         return 403, {"detail": "Permission denied", "error_code": ErrorCode.FORBIDDEN}
 
     return component
 
 
-def _get_release_or_404(request: HttpRequest, release_id: str) -> Release | tuple[int, dict[str, Any]]:
-    """Look up a release and verify owner/admin access via its product.
+def _get_release_or_404(
+    request: HttpRequest, release_id: str, *, read: bool = False
+) -> Release | tuple[int, dict[str, Any]]:
+    """Look up a release and verify, via its product, the caller may read it, or with ``read=False`` manage it.
 
     Returns the Release on success, or a (status, error_dict) tuple on failure.
     """
@@ -95,16 +102,19 @@ def _get_release_or_404(request: HttpRequest, release_id: str) -> Release | tupl
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
-    if not can(request, "release:manage", release.product):
+    # A read goes through _can_read_release, which also keeps an OIDC bot to the
+    # products it publishes to; ``release:read`` alone spans its whole workspace.
+    allowed = _can_read_release(request, release.product) if read else can(request, "release:manage", release.product)
+    if not allowed:
         return 403, {"detail": "Permission denied", "error_code": ErrorCode.FORBIDDEN}
 
     return release
 
 
 def _get_component_release_or_404(
-    request: HttpRequest, component_release_id: str
+    request: HttpRequest, component_release_id: str, *, read: bool = False
 ) -> ComponentRelease | tuple[int, dict[str, Any]]:
-    """Look up a component release and verify owner/admin access via its component.
+    """Look up a component release and verify, via its component, the caller may read it, or manage it.
 
     Returns the ComponentRelease on success, or a (status, error_dict) tuple on failure.
     """
@@ -116,7 +126,7 @@ def _get_component_release_or_404(
             "error_code": ErrorCode.COMPONENT_RELEASE_NOT_FOUND,
         }
 
-    if not can(request, "component:manage", component_release.component):
+    if not can(request, "component:read_internal" if read else "component:manage", component_release.component):
         return 403, {"detail": "Permission denied", "error_code": ErrorCode.FORBIDDEN}
 
     return component_release
@@ -138,7 +148,7 @@ def list_cle_events(
     page_size: int = Query(100, ge=1, le=1000, alias="pageSize"),  # type: ignore[type-arg]
 ) -> Any:
     """List CLE events for a product (newest first)."""
-    result = _get_product_or_404(request, product_id)
+    result = _get_product_or_404(request, product_id, read=True)
     if not isinstance(result, Product):
         return result
 
@@ -187,7 +197,7 @@ def create_cle_event_endpoint(request: HttpRequest, product_id: str, payload: CL
 )
 def get_cle_event(request: HttpRequest, product_id: str, event_id: int) -> Any:
     """Get a single CLE event by event_id."""
-    result = _get_product_or_404(request, product_id)
+    result = _get_product_or_404(request, product_id, read=True)
     if not isinstance(result, Product):
         return result
 
@@ -210,7 +220,7 @@ def list_cle_support_definitions(
     page_size: int = Query(100, ge=1, le=1000, alias="pageSize"),  # type: ignore[type-arg]
 ) -> Any:
     """List CLE support definitions for a product."""
-    result = _get_product_or_404(request, product_id)
+    result = _get_product_or_404(request, product_id, read=True)
     if not isinstance(result, Product):
         return result
 
@@ -268,7 +278,7 @@ def list_component_cle_events(
     page_size: int = Query(100, ge=1, le=1000, alias="pageSize"),  # type: ignore[type-arg]
 ) -> Any:
     """List CLE events for a component (newest first)."""
-    result = _get_component_or_404(request, component_id)
+    result = _get_component_or_404(request, component_id, read=True)
     if not isinstance(result, Component):
         return result
 
@@ -317,7 +327,7 @@ def create_component_cle_event_endpoint(request: HttpRequest, component_id: str,
 )
 def get_component_cle_event(request: HttpRequest, component_id: str, event_id: int) -> Any:
     """Get a single CLE event for a component by event_id."""
-    result = _get_component_or_404(request, component_id)
+    result = _get_component_or_404(request, component_id, read=True)
     if not isinstance(result, Component):
         return result
 
@@ -340,7 +350,7 @@ def list_component_cle_support_definitions(
     page_size: int = Query(100, ge=1, le=1000, alias="pageSize"),  # type: ignore[type-arg]
 ) -> Any:
     """List CLE support definitions for a component."""
-    result = _get_component_or_404(request, component_id)
+    result = _get_component_or_404(request, component_id, read=True)
     if not isinstance(result, Component):
         return result
 
@@ -398,7 +408,7 @@ def list_release_cle_events(
     page_size: int = Query(100, ge=1, le=1000, alias="pageSize"),  # type: ignore[type-arg]
 ) -> Any:
     """List CLE events for a release (newest first)."""
-    result = _get_release_or_404(request, release_id)
+    result = _get_release_or_404(request, release_id, read=True)
     if not isinstance(result, Release):
         return result
 
@@ -447,7 +457,7 @@ def create_release_cle_event_endpoint(request: HttpRequest, release_id: str, pay
 )
 def get_release_cle_event(request: HttpRequest, release_id: str, event_id: int) -> Any:
     """Get a single CLE event for a release by event_id."""
-    result = _get_release_or_404(request, release_id)
+    result = _get_release_or_404(request, release_id, read=True)
     if not isinstance(result, Release):
         return result
 
@@ -470,7 +480,7 @@ def list_release_cle_support_definitions(
     page_size: int = Query(100, ge=1, le=1000, alias="pageSize"),  # type: ignore[type-arg]
 ) -> Any:
     """List CLE support definitions for a release."""
-    result = _get_release_or_404(request, release_id)
+    result = _get_release_or_404(request, release_id, read=True)
     if not isinstance(result, Release):
         return result
 
@@ -528,7 +538,7 @@ def list_component_release_cle_events(
     page_size: int = Query(100, ge=1, le=1000, alias="pageSize"),  # type: ignore[type-arg]
 ) -> Any:
     """List CLE events for a component release (newest first)."""
-    result = _get_component_release_or_404(request, component_release_id)
+    result = _get_component_release_or_404(request, component_release_id, read=True)
     if not isinstance(result, ComponentRelease):
         return result
 
@@ -579,7 +589,7 @@ def create_component_release_cle_event_endpoint(
 )
 def get_component_release_cle_event(request: HttpRequest, component_release_id: str, event_id: int) -> Any:
     """Get a single CLE event for a component release by event_id."""
-    result = _get_component_release_or_404(request, component_release_id)
+    result = _get_component_release_or_404(request, component_release_id, read=True)
     if not isinstance(result, ComponentRelease):
         return result
 
@@ -602,7 +612,7 @@ def list_component_release_cle_support_definitions(
     page_size: int = Query(100, ge=1, le=1000, alias="pageSize"),  # type: ignore[type-arg]
 ) -> Any:
     """List CLE support definitions for a component release."""
-    result = _get_component_release_or_404(request, component_release_id)
+    result = _get_component_release_or_404(request, component_release_id, read=True)
     if not isinstance(result, ComponentRelease):
         return result
 

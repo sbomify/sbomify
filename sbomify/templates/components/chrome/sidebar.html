@@ -60,7 +60,7 @@ release and component inventory tabs. Capability flags are live, so this compone
             {% else %}
                 {% firstof 'teams:team_settings' as settings_match %}
             {% endif %}
-            {% if can_manage %}
+            {% if can_read_internal %}
                 <c-chrome.nav-item :active="tokens_active" href="{% url 'teams:team_settings_tab' team_key=request.session.current_team.key tab='tokens' %}" label="API keys" icon="fas fa-key" />
             {% endif %}
             <c-chrome.nav-item href="{% url 'teams:team_settings' request.session.current_team.key %}" label="Settings" icon="fas fa-gear" match="{{ settings_match }}" />
