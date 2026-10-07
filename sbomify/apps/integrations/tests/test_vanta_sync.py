@@ -409,8 +409,48 @@ class TestOversizedProviderStrings:
         assert sync(connected_vanta).ok
 
         catalog = ControlCatalog.objects.get(team=connected_vanta.team, source=ControlCatalog.Source.VANTA)
-        assert catalog.external_id == long_id[:255]
+        assert len(catalog.external_id) <= 255
         assert catalog.controls.count() == 1
+
+    def test_two_long_framework_ids_that_share_a_prefix_stay_two_catalogues(
+        self, connected_vanta, install_client
+    ) -> None:
+        """Cut to the column, both would be one key, and one catalogue would take both frameworks."""
+        shared = "fw_" + "9" * 300
+        first, second = shared + "a", shared + "b"
+        install_client(
+            [{"id": first, "displayName": "First"}, {"id": second, "displayName": "Second"}],
+            {first: [_control("c1", "CC1.1", "One", "Security")], second: [_control("c2", "CC2.1", "Two", "Security")]},
+            {"c1": {"status": "COMPLETED"}, "c2": {"status": "COMPLETED"}},
+        )
+
+        assert sync(connected_vanta).ok
+        assert sync(connected_vanta).ok
+
+        catalogs = ControlCatalog.objects.filter(team=connected_vanta.team, source=ControlCatalog.Source.VANTA)
+        assert sorted((c.name, c.controls.count()) for c in catalogs) == [("First", 1), ("Second", 1)]
+
+    def test_two_long_control_ids_that_share_a_prefix_stay_two_controls(self, connected_vanta, install_client) -> None:
+        """Cut to the column, the second would find the first's row and overwrite its status."""
+        shared = "ctl_" + "9" * 300
+        first, second = shared + "a", shared + "b"
+        install_client(
+            [SOC2],
+            {"fw_soc2": [_control(first, "CC1.1", "One", "Security"), _control(second, "CC1.2", "Two", "Security")]},
+            {first: {"status": "COMPLETED"}, second: {"status": "NOT_STARTED"}},
+        )
+
+        assert sync(connected_vanta).ok
+        assert sync(connected_vanta).ok
+
+        statuses = {
+            status.control.control_id: status.status
+            for status in ControlStatus.objects.filter(control__catalog__external_id="fw_soc2", product__isnull=True)
+        }
+        assert statuses == {
+            "CC1.1": ControlStatus.Status.COMPLIANT,
+            "CC1.2": ControlStatus.Status.NOT_IMPLEMENTED,
+        }
 
 
 class TestAFrameworkExistsOnce:

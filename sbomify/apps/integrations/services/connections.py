@@ -201,6 +201,11 @@ def disconnect(team: Team, provider_key: str) -> ServiceResult[None]:
     them means a reconnect is not a re-import; unpublishing them means a public
     page never goes on claiming a control is met from a source nobody is
     reading any more.
+
+    The row is locked and read again inside the transaction, keyed to the
+    connection looked up here. A reconnect that lands in between has replaced
+    the credential, and deleting the row would throw away a connection somebody
+    has just authorized, so the disconnect stops and changes nothing.
     """
     integration = get_integration(team, provider_key)
     if integration is None:
@@ -209,10 +214,20 @@ def disconnect(team: Team, provider_key: str) -> ServiceResult[None]:
     from sbomify.apps.controls.models import ControlCatalog
 
     with transaction.atomic():
+        locked = (
+            Integration.objects.select_for_update()
+            .filter(pk=integration.pk, connected_at=integration.connected_at)
+            .first()
+        )
+        if locked is None:
+            return ServiceResult.failure(
+                "This connection changed while you were disconnecting it. Reload the page to see it.",
+                status_code=409,
+            )
         ControlCatalog.objects.filter(team=team, source=provider_key, is_published=True).update(
             is_published=False, updated_at=timezone.now()
         )
-        integration.delete()
+        locked.delete()
 
     logger.info("Disconnected %s for workspace %s", provider_key, team.key)
     return ServiceResult.success(None)

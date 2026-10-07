@@ -21,6 +21,7 @@ Two shapes of the Vanta API drive the code:
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -247,9 +248,7 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
     the tier that creates products. The Integrations tab is where someone
     makes that choice.
     """
-    # Cut once and used for every lookup and insert below, so an over-long id
-    # still finds the row it was stored under on the next sync.
-    framework_id = _fit(ControlCatalog, "external_id", framework_id)
+    external_id = _external_id(ControlCatalog, framework_id)
     name = _fit(
         ControlCatalog,
         "name",
@@ -260,7 +259,7 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
         version = ""
 
     catalog = ControlCatalog.objects.filter(
-        team=integration.team, source=ControlCatalog.Source.VANTA, external_id=framework_id
+        team=integration.team, source=ControlCatalog.Source.VANTA, external_id=external_id
     ).first()
 
     if catalog is not None:
@@ -286,7 +285,7 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
                 name=name,
                 version=version,
                 source=ControlCatalog.Source.VANTA,
-                external_id=framework_id,
+                external_id=external_id,
                 is_published=False,
             )
     except IntegrityError:
@@ -295,7 +294,7 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
         # with: creating a second would split this framework's controls and
         # statuses across two catalogs that later syncs pick between at random.
         raced = ControlCatalog.objects.filter(
-            team=integration.team, source=ControlCatalog.Source.VANTA, external_id=framework_id
+            team=integration.team, source=ControlCatalog.Source.VANTA, external_id=external_id
         ).first()
         if raced is not None:
             return raced
@@ -308,7 +307,7 @@ def _upsert_catalog(integration: Integration, framework: dict[str, Any], framewo
             name=name,
             version=_fit(ControlCatalog, "version", framework_id),
             source=ControlCatalog.Source.VANTA,
-            external_id=framework_id,
+            external_id=external_id,
             is_published=False,
         )
 
@@ -331,7 +330,7 @@ def _upsert_control(catalog: ControlCatalog, payload: dict[str, Any], external_i
     control_id = _fit(Control, "control_id", _text(payload.get("externalId")) or external_id)
     domains = payload.get("domains")
     group = _text(domains[0]) if isinstance(domains, list) and domains else _UNGROUPED
-    fitted_external_id = _fit(Control, "external_id", external_id)
+    fitted_external_id = _external_id(Control, external_id)
 
     fields = {
         "group": _fit(Control, "group", group or _UNGROUPED),
@@ -439,3 +438,18 @@ def _fit(model: type[models.Model], field_name: str, value: str) -> str:
     # any field kind, and only the concrete char fields carry a max_length.
     max_length = getattr(model._meta.get_field(field_name), "max_length", None)
     return value[:max_length] if isinstance(max_length, int) else value
+
+
+def _external_id(model: type[models.Model], upstream_id: str) -> str:
+    """Vanta's id as the ``external_id`` key its row is stored and found under.
+
+    ``_fit`` is for labels. A key cut the same way would let two ids sharing
+    their first 255 characters become one key, and one row would take both
+    items' controls and statuses. An id that fits is kept as it is; a longer
+    one keeps as much of its start as fits beside a digest of the whole id.
+    """
+    max_length = getattr(model._meta.get_field("external_id"), "max_length", None)
+    if not isinstance(max_length, int) or len(upstream_id) <= max_length:
+        return upstream_id
+    digest = hashlib.sha256(upstream_id.encode()).hexdigest()
+    return f"{upstream_id[: max_length - len(digest) - 1]}~{digest}"

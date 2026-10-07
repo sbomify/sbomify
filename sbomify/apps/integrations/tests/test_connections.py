@@ -216,6 +216,33 @@ class TestDisconnect:
         assert catalog.is_published is False
         assert not Integration.objects.filter(id=connected_vanta.id).exists()
 
+    def test_a_reconnect_landing_mid_disconnect_keeps_the_new_connection(self, connected_vanta, monkeypatch) -> None:
+        """The disconnect read the old connection; deleting by that read would throw
+        away credentials somebody has just authorized."""
+        catalog = ControlCatalog.objects.create(
+            team=connected_vanta.team,
+            name="SOC 2 Type II",
+            version="",
+            source=ControlCatalog.Source.VANTA,
+            external_id="fw_soc2",
+            is_published=True,
+        )
+        read = connections.get_integration
+
+        def read_then_reconnect(team, provider_key):
+            stale = read(team, provider_key)
+            connections.save_connection(team, VANTA, _token_set("vat_reconnected", "vrt_reconnected"), None)
+            return stale
+
+        monkeypatch.setattr(connections, "get_integration", read_then_reconnect)
+
+        result = connections.disconnect(connected_vanta.team, "vanta")
+
+        assert not result.ok
+        assert Integration.objects.get(id=connected_vanta.id).access_token == "vat_reconnected"
+        catalog.refresh_from_db()
+        assert catalog.is_published is True
+
     def test_keeps_the_synced_data_so_a_reconnect_is_not_a_reimport(self, connected_vanta) -> None:
         ControlCatalog.objects.create(
             team=connected_vanta.team,
