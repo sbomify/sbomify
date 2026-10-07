@@ -52,7 +52,18 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
         rb'<script id="navbar-search-suggestions" type="application/json">(.*?)</script>', contributor_page.content
     )
     assert member_suggestions
-    assert "api key" not in {item.get("query") for item in json.loads(member_suggestions[1])}
+    # Every internal role may open the API tokens tab, so a member keeps that example.
+    assert "api key" in {item.get("query") for item in json.loads(member_suggestions[1])}
+
+    member.role = "operator"
+    member.save(update_fields=["role"])
+    operator_page = client.get(reverse("core:dashboard"))
+    assert operator_page.status_code == 200
+    operator_suggestions = re.search(
+        rb'<script id="navbar-search-suggestions" type="application/json">(.*?)</script>', operator_page.content
+    )
+    assert operator_suggestions
+    assert "new release" not in {item.get("query") for item in json.loads(operator_suggestions[1])}
 
     member.role = "guest"
     member.save(update_fields=["role"])
