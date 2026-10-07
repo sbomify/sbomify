@@ -7,6 +7,7 @@ import pytest
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
+from django.utils import timezone
 from freezegun import freeze_time
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
@@ -29,6 +30,7 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
     team_with_business_plan,  # noqa: F401
 )
+from sbomify.apps.plugins.models import RegisteredPlugin
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -93,11 +95,15 @@ def setup_browser_session(
         team_with_business_plan.has_selected_billing_plan = True
         team_with_business_plan.save(update_fields=["has_selected_billing_plan"])
 
+    # The registry is written in real time at database setup, years after the
+    # frozen clock, so every plugin would otherwise be marked new on the page.
+    RegisteredPlugin.objects.update(created_at=timezone.now())
+
     django_client = Client()
     setup_authenticated_client_session(django_client, team_with_business_plan, sample_user)
 
     session = django_client.session
-    session["current_team"]["has_completed_wizard"] = True
+    session["current_workspace"]["has_completed_wizard"] = True
     session.save()
 
     return {

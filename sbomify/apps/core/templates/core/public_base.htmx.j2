@@ -1048,8 +1048,8 @@
                                             :aria-expanded="open"
                                             title="Switch workspace">
                                         <i class="fas fa-briefcase"></i>
-                                        {% if request.session.current_team %}
-                                            <span class="workspace-name-desktop">{{ request.session.current_team.name|workspace_display }}</span>
+                                        {% if request.session.current_workspace %}
+                                            <span class="workspace-name-desktop">{{ request.session.current_workspace.name|workspace_display }}</span>
                                             <span class="workspace-name-mobile">Workspace</span>
                                         {% else %}
                                             <span>Switch Workspace</span>
@@ -1067,13 +1067,13 @@
                                          x-cloak>
                                         <div class="workspace-dropdown-header">Switch Workspace</div>
                                         {% for t_key, t_info in available_workspaces.items %}
-                                            <a class="workspace-dropdown-item {% if request.session.current_team.key == t_key %}active{% endif %}"
+                                            <a class="workspace-dropdown-item {% if request.session.current_workspace.key == t_key %}active{% endif %}"
                                                href="{% url 'teams:switch_team' t_key %}">
                                                 <span class="item-content">
                                                     <i class="fas fa-folder"></i>
                                                     {{ t_info.name|workspace_display }}
                                                 </span>
-                                                {% if request.session.current_team.key == t_key %}<i class="fas fa-check check-icon"></i>{% endif %}
+                                                {% if request.session.current_workspace.key == t_key %}<i class="fas fa-check check-icon"></i>{% endif %}
                                             </a>
                                         {% endfor %}
                                     </div>

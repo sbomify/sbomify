@@ -255,14 +255,14 @@ def update_user_teams_session(
     teams = user_teams if user_teams is not None else get_user_teams(user)
     checksum = compute_user_teams_checksum(teams)
     existing_checksum = request.session.get("user_teams_version")
-    existing_teams = request.session.get("user_teams")
+    existing_teams = request.session.get("user_workspaces")
 
     if existing_checksum == checksum and existing_teams:
         request.session["user_teams_checked_at"] = timezone.now().isoformat()
         request.session.modified = True
         return existing_teams  # type: ignore[no-any-return]
 
-    request.session["user_teams"] = teams
+    request.session["user_workspaces"] = teams
     request.session["user_teams_version"] = checksum
     request.session["user_teams_checked_at"] = timezone.now().isoformat()
     request.session.modified = True
@@ -275,11 +275,11 @@ def refresh_current_team_session(request: HttpRequest, team: Team) -> None:
 
     Centralizes session mutation so callers don't manually patch keys.
     """
-    current_team = request.session.get("current_team") or {}
+    current_team = request.session.get("current_workspace") or {}
     if current_team.get("key") != team.key:
         return
 
-    request.session["current_team"] = {
+    request.session["current_workspace"] = {
         **current_team,
         "id": team.id,
         "key": team.key,
@@ -325,7 +325,7 @@ def switch_active_workspace(request: HttpRequest, team: Team, role: str | None =
         }
 
         user_teams[t_key] = {**existing_entry, **team_entry}
-        request.session["user_teams"] = user_teams
+        request.session["user_workspaces"] = user_teams
     else:
         team_entry = {
             "id": team.id,
@@ -338,7 +338,7 @@ def switch_active_workspace(request: HttpRequest, team: Team, role: str | None =
             "is_public": team.is_public,
         }
 
-    request.session["current_team"] = {"key": team.key, **team_entry}
+    request.session["current_workspace"] = {"key": team.key, **team_entry}
     request.session.modified = True
 
 
@@ -653,17 +653,17 @@ def recover_workspace_session(request: HttpRequest) -> HttpResponse:
     user = cast(User, request.user)
 
     # Get the name of the old workspace before we update the session
-    current_team = request.session.get("current_team", {})
+    current_team = request.session.get("current_workspace", {})
     old_team_name = current_team.get("name", "the workspace")
 
     # Refresh user teams from database
     user_teams = get_user_teams(user)
-    request.session["user_teams"] = user_teams
+    request.session["user_workspaces"] = user_teams
 
     if user_teams:
         # User has other workspaces, switch to the first one
         next_team_key, next_team = next(iter(user_teams.items()))
-        request.session["current_team"] = {"key": next_team_key, **next_team}
+        request.session["current_workspace"] = {"key": next_team_key, **next_team}
         request.session.modified = True
         messages.warning(
             request, f"You have been removed from {old_team_name}. You have been switched to your other workspace."
@@ -674,9 +674,9 @@ def recover_workspace_session(request: HttpRequest) -> HttpResponse:
     new_team = create_user_team_and_subscription(user)
     if new_team:
         user_teams = get_user_teams(user)
-        request.session["user_teams"] = user_teams
+        request.session["user_workspaces"] = user_teams
         new_team_key = new_team.key or ""
-        request.session["current_team"] = {"key": new_team_key, **user_teams.get(new_team_key, {})}
+        request.session["current_workspace"] = {"key": new_team_key, **user_teams.get(new_team_key, {})}
         request.session.modified = True
         messages.warning(
             request,
@@ -685,7 +685,7 @@ def recover_workspace_session(request: HttpRequest) -> HttpResponse:
         return redirect("core:dashboard")
 
     # Fallback if workspace creation failed
-    request.session.pop("current_team", None)
+    request.session.pop("current_workspace", None)
     request.session.modified = True
     return error_response(request, HttpResponseForbidden("You are not a member of any team"))
 
@@ -840,9 +840,9 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
                 )
                 # Update session with the new workspace
                 user_teams = get_user_teams(current_user)
-                request.session["user_teams"] = user_teams
+                request.session["user_workspaces"] = user_teams
                 new_key = new_team.key or ""
-                request.session["current_team"] = {"key": new_key, **user_teams.get(new_key, {})}
+                request.session["current_workspace"] = {"key": new_key, **user_teams.get(new_key, {})}
                 request.session.modified = True
 
                 return redirect("core:dashboard")
@@ -868,8 +868,8 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
                     ),
                 )
                 # Clear current team as they have none
-                request.session.pop("current_team", None)
-                request.session["user_teams"] = {}
+                request.session.pop("current_workspace", None)
+                request.session["user_workspaces"] = {}
                 request.session.modified = True
                 # Consider redirecting to a dedicated "my invitations" page if/when implemented.
                 return redirect("core:dashboard")
@@ -884,14 +884,14 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     if is_self_removal:
         messages.info(request, f"You have left {removed_team_name}.")
         user_teams = get_user_teams(current_user)
-        request.session["user_teams"] = user_teams
+        request.session["user_workspaces"] = user_teams
 
         # Reset current team to another workspace if available, otherwise clear it
         if user_teams:
             next_team_key, next_team = next(iter(user_teams.items()))
-            request.session["current_team"] = {"key": next_team_key, **next_team}
+            request.session["current_workspace"] = {"key": next_team_key, **next_team}
         else:
-            request.session.pop("current_team", None)
+            request.session.pop("current_workspace", None)
 
         request.session.modified = True
         return redirect("teams:teams_dashboard")

@@ -316,13 +316,13 @@ def user_logged_in_handler(sender: type, user: User, request: HttpRequest, **kwa
     # Get user teams and store them in session
     user_teams = update_user_teams_session(request, user)
 
-    if request.session.get("current_team", None) is None and user_teams:
+    if request.session.get("current_workspace", None) is None and user_teams:
         # Prefer an explicit default workspace; otherwise fall back to first
         default_team_key = next((key for key, data in user_teams.items() if data.get("is_default_team")), None)
         active_team_key = (
             (joined_invites[0]["team_key"] if joined_invites else None) or default_team_key or next(iter(user_teams))
         )
-        request.session["current_team"] = {"key": active_team_key, **user_teams[active_team_key]}
+        request.session["current_workspace"] = {"key": active_team_key, **user_teams[active_team_key]}
         request.session.modified = True
 
     # Fallback safety net: Ensure every user has a team
@@ -347,9 +347,9 @@ def user_logged_in_handler(sender: type, user: User, request: HttpRequest, **kwa
         created_team = create_user_team_and_subscription(user)
         if created_team and created_team.key:
             user_teams = get_user_teams(user)
-            request.session["user_teams"] = user_teams
+            request.session["user_workspaces"] = user_teams
             if user_teams:
-                request.session["current_team"] = {
+                request.session["current_workspace"] = {
                     "key": created_team.key,
                     **user_teams.get(created_team.key, {}),
                 }

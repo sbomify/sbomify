@@ -85,7 +85,7 @@ class TeamRoleRequiredMixin(AccessMixin):
         if not request.user.is_authenticated:
             return super().dispatch(request, *args, **kwargs)  # type: ignore[misc, no-any-return]
 
-        current_team: dict[str, Any] = request.session.get("current_team", {})
+        current_team: dict[str, Any] = request.session.get("current_workspace", {})
 
         # Authorize the workspace the URL names, not the one in the session.
         # These are not the same thing: the handlers below act on the URL's
@@ -136,7 +136,7 @@ class GuestAccessBlockedMixin(AccessMixin):
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         # Check if user is authenticated and is a guest member
         if request.user.is_authenticated:
-            current_team: dict[str, Any] = request.session.get("current_team", {})
+            current_team: dict[str, Any] = request.session.get("current_workspace", {})
             team_key = current_team.get("key")
             if team_key:
                 try:

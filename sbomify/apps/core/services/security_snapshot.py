@@ -10,12 +10,14 @@ from django.utils import timezone
 
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as _SEVERITY_RANK
+from sbomify.apps.vulnerability_scanning.utils import state_label
 
 
 def build_component_security_picture(
     component_ids: list[str], component_names: dict[str, str], sla_matrix: dict[str, Any]
 ) -> dict[str, Any]:
     """Worst non-suppressed findings across the given components."""
+    from sbomify.apps.plugins.latest import latest_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.models import Finding
@@ -34,10 +36,10 @@ def build_component_security_picture(
         .values("id", "component_id", "version", "created_at")
     )
     sbom_meta = {str(row["id"]): row for row in latest_sboms}
+    latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), sbom_meta.keys())
     runs = (
-        AssessmentRun.objects.filter(sbom_id__in=sbom_meta.keys(), category="security", status="completed")
-        .order_by("sbom_id", "plugin_name", "-created_at", "-id")
-        .distinct("sbom_id", "plugin_name")
+        AssessmentRun.objects.filter(id__in=latest_ids)
+        .order_by("sbom_id", "plugin_name")
         .values("id", "sbom_id", "result_summary", "result_skipped", "created_at")
     )
     results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
@@ -186,11 +188,6 @@ def _attach_patch_sla(findings: list[dict[str, Any]], component_ids: list[str], 
             count = ceil(seconds / 86400)
             label = f"{count} day{'s' if count != 1 else ''} left"
         finding["sla"] = {"label": label, "overdue": overdue, "remaining_seconds": seconds}
-        finding["decision"] = {
-            "exploitable": "Exploitable",
-            "in_triage": "In triage",
-            "false_positive": "False positive",
-            "not_affected": "Not affected",
-            "resolved": "Resolved",
-            "resolved_with_pedigree": "Resolved",
-        }.get(finding["vex_state"], "Not reviewed")
+        # One wording for an analysis state across the product; a finding nobody
+        # has triaged carries no state at all, which is its own answer.
+        finding["decision"] = state_label(finding["vex_state"]) or "Not reviewed"
