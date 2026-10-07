@@ -26,9 +26,10 @@ matter:
   bytes and would not share an object anyway.
 
 Payloads are serialised with sorted keys and no whitespace, so the same result
-dict always produces the same bytes and therefore the same key. Do not change
-that without reading ``verify_offloaded_results``: the hash in the key is what
-that command checks the payload against.
+dict always produces the same bytes and therefore the same key: re-running the
+sweep over a row finds its object already stored instead of writing a second
+one. ``verify_offloaded_results`` checks that each offloaded row's object still
+exists; it does not re-hash the bytes.
 """
 
 from __future__ import annotations

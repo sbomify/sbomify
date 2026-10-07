@@ -53,8 +53,8 @@ logger = getLogger(__name__)
 DEFAULT_OFFLOAD_AFTER_DAYS = 366
 
 
-def _has_payload_filter() -> dict[str, Any]:
-    """Rows carrying a result payload, inline or offloaded."""
+def _no_payload_filter() -> dict[str, Any]:
+    """Rows carrying no result payload: nothing inline and nothing offloaded."""
     return {"result__isnull": True, "result_object_key": ""}
 
 
@@ -71,7 +71,7 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
         return set()
 
     candidates = AssessmentRun.objects.filter(sbom_id__in=sbom_ids, plugin_name__in=plugin_names).exclude(
-        **_has_payload_filter()
+        **_no_payload_filter()
     )
 
     # One query for every association rather than one per run. The release set
