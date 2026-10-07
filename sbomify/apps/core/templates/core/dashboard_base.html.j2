@@ -1,9 +1,9 @@
 {% extends './base.html.j2' %}
 {% block title %}sbomify{% endblock %}
 {% block main %}
-    {% if request.session.current_team.key %}
+    {% if request.session.current_workspace.key %}
         <div x-data
-             x-init="$store.ws.connect('{{ request.session.current_team.key }}')"
+             x-init="$store.ws.connect('{{ request.session.current_workspace.key }}')"
              class="hidden"></div>
     {% endif %}
     <c-chrome.shell>

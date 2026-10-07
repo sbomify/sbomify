@@ -195,8 +195,13 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         # Check team has DT provider enabled
         if not self._team_has_dt_enabled(team):
-            return self._create_error_result(
-                f"Team {team.key} does not have Dependency Track enabled as vulnerability provider."
+            return self.create_skipped_result(
+                finding_id="dependency-track:not-enabled",
+                title="Dependency Track Not Enabled",
+                description=(
+                    "Dependency Track is not enabled for this workspace, so it did not scan this SBOM. "
+                    "Enable it in the workspace plugin settings to scan with it."
+                ),
             )
 
         # Guard: DT scanning requires product membership. Check via the direct

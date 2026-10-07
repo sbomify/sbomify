@@ -90,7 +90,7 @@
                         <template x-if="match.package">
                             <span>: <span x-text="match.package"></span><template x-if="match.version"><span x-text="'@' + match.version"></span></template></span>
                         </template>
-                        <span class="text-info" x-text="' → ' + match.state"></span>
+                        <span class="text-info" x-text="' → ' + match.state_label"></span>
                     </li>
                 </template>
             </ul>

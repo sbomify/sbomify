@@ -34,7 +34,7 @@ class SupplierListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     artifacts, which is not something a Trust Center guest should see.
 
     The role is checked against the workspace **in the URL**, not the one in the
-    session. ``TeamRoleRequiredMixin`` reads ``session["current_team"]``, so on
+    session. ``TeamRoleRequiredMixin`` reads ``session["current_workspace"]``, so on
     its own it answers a question about a different workspace than the one being
     acted on: an owner of A visiting B's URL clears the mixin on A's role. The
     mixin stays as a cheap first gate and ``_team`` is the authority.

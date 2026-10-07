@@ -421,7 +421,7 @@ def test_read_only_preset_includes_abac_access():
 def test_no_view_gates_on_the_cached_session_role():
     """Authorization and UI gating must read the Member row, not the session cache.
 
-    ``session["current_team"]["role"]`` has a 300s TTL, so a demoted user keeps
+    ``session["current_workspace"]["role"]`` has a 300s TTL, so a demoted user keeps
     being offered controls they can no longer use and a promoted one keeps
     missing controls they can. Every gate built on it in this codebase has been a
     bug, and the class kept reappearing one file at a time across four review
