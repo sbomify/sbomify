@@ -38,7 +38,7 @@ class ValidateWorkspaceMixin:
     """Mixin that validates the user is still a member of their current workspace."""
 
     def dispatch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
-        current_team = request.session.get("current_team", {})
+        current_team = request.session.get("current_workspace", {})
         team_key = current_team.get("key")
 
         if team_key:
@@ -59,7 +59,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
     show_setup: bool = False
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        current_team = request.session.get("current_team", {})
+        current_team = request.session.get("current_workspace", {})
 
         if not current_team.get("has_completed_wizard", True):
             return redirect("teams:onboarding_wizard")

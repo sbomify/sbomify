@@ -40,7 +40,7 @@ def mock_request_with_teams(mock_request, sample_team) -> HttpRequest:  # noqa: 
         sample_team.save()
 
     # Set up session data
-    mock_request.session["user_teams"] = {
+    mock_request.session["user_workspaces"] = {
         sample_team.key: {"role": member.role, "name": sample_team.name, "is_default_team": member.is_default_team}
     }
     return mock_request

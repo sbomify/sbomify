@@ -37,8 +37,8 @@ class TestTeamGeneralView:
         assert Team.objects.get(pk=team.pk).name == "Renamed Workspace"
 
         session = client.session
-        assert session["current_team"]["name"] == "Renamed Workspace"
-        assert session["user_teams"][team.key]["name"] == "Renamed Workspace"
+        assert session["current_workspace"]["name"] == "Renamed Workspace"
+        assert session["user_workspaces"][team.key]["name"] == "Renamed Workspace"
         assert session["user_teams_version"] != stale_version
 
     def test_set_default_workspace(
@@ -209,8 +209,8 @@ class TestTeamGeneralView:
         assert response.status_code == 200  # After following redirect
         session = client.session
         # The session should be switched to the default team
-        assert session["current_team"]["key"] == default_team_key, \
-            f"Expected {default_team_key}, got {session['current_team']['key']}"
+        assert session["current_workspace"]["key"] == default_team_key, \
+            f"Expected {default_team_key}, got {session['current_workspace']['key']}"
 
     def test_update_workspace_name(
         self, client: Client, sample_team_with_owner_member

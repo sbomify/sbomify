@@ -249,7 +249,7 @@ def test_workspace_crypto_page_blocks_guests_of_url_workspace(sample_sbom: SBOM,
     # The bypass: session's current team unset (or another workspace) makes the
     # mixin a no-op; the view's own role check must still reject the guest.
     session = guest.session
-    session["current_team"] = {}
+    session["current_workspace"] = {}
     session.save()
     response = guest.get(reverse("sboms:workspace_crypto", kwargs={"team_key": team.key}))
 

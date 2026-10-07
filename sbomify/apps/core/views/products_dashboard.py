@@ -75,7 +75,7 @@ class ProductCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """The New Product form, as a page, matching the New Advisory flow."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        current_team = request.session.get("current_team") or {}
+        current_team = request.session.get("current_workspace") or {}
         if get_member_role_by_key(request.user, current_team.get("key")) not in MANAGE:
             raise Http404("Workspace not found")
 

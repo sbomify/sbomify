@@ -52,7 +52,7 @@ def no_workspace_page(
     setup_authenticated_client_session(django_client, team_with_business_plan, sample_user)
 
     session = django_client.session
-    del session["current_team"]
+    del session["current_workspace"]
     session.save()
 
     browser_context.add_cookies(
