@@ -43,8 +43,8 @@ def another_owner(db, django_user_model, team):
 def _setup_session(client, team, role):
     """Helper to set up session data for a user after force_login."""
     session = client.session
-    session["current_team"] = {"key": team.key, "name": team.name, "role": role}
-    session["user_teams"] = {team.key: {"role": role, "name": team.name}}
+    session["current_workspace"] = {"key": team.key, "name": team.name, "role": role}
+    session["user_workspaces"] = {team.key: {"role": role, "name": team.name}}
     session.save()
 
 

@@ -4,7 +4,7 @@
      @open-metadata.window="metaOpen = true"
      @keydown.escape.window="if (metaOpen) metaOpen = false">
     <c-modal show="metaOpen" size="wide" title="Component Metadata" icon="fas fa-address-card" aria-label="Component metadata">
-    <div x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', allowEdit:
+    <div x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_workspace.key }}', allowEdit:
         {% if component.has_crud_permissions %}
             true
         {% else %}

@@ -22,7 +22,7 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
     workspace = member.team
     setup_authenticated_client_session(client, workspace, sample_user)
     session = client.session
-    session["current_team"]["has_completed_wizard"] = True
+    session["current_workspace"]["has_completed_wizard"] = True
     session.save()
     mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
 
@@ -98,7 +98,7 @@ def test_cryptography_is_reachable_from_the_rail(
     workspace = member.team
     setup_authenticated_client_session(client, workspace, sample_user)
     session = client.session
-    session["current_team"]["has_completed_wizard"] = True
+    session["current_workspace"]["has_completed_wizard"] = True
     session.save()
     mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
 
@@ -130,7 +130,7 @@ def test_trends_page_hands_its_filters_to_the_fragment_it_fetches(
     workspace = sample_team_with_owner_member.team
     setup_authenticated_client_session(client, workspace, sample_user)
     session = client.session
-    session["current_team"]["has_completed_wizard"] = True
+    session["current_workspace"]["has_completed_wizard"] = True
     session.save()
     mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
     fragment = reverse("vulnerability_scanning:vulnerability_trends")
