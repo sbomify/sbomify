@@ -73,14 +73,14 @@ def test_a_recording_made_again_is_converted_again(tmp_path: Path, monkeypatch: 
 class _Helper:
     """A capture helper that exits with ``exit_code``, or never when it is None."""
 
-    def __init__(self, exit_code: int | None) -> None:
+    def __init__(self, exit_code: int | None, *, exited_early: bool = False) -> None:
         self.exit_code = exit_code
-        self.returncode: int | None = None
+        self.returncode: int | None = exit_code if exited_early else None
         self.signals: list[int] = []
         self.killed = False
 
-    def poll(self) -> None:
-        return None
+    def poll(self) -> int | None:
+        return self.returncode
 
     def send_signal(self, sig: int) -> None:
         self.signals.append(sig)
@@ -116,6 +116,28 @@ def test_a_failed_stop_call_fails_the_take() -> None:
 
 def test_a_clean_stop_passes() -> None:
     wayland_capture.stop(_Helper(exit_code=0))
+
+
+def test_a_helper_that_failed_before_the_stop_fails_the_take() -> None:
+    """A failed start must not leave the caller to trust whatever file is there."""
+    helper = _Helper(exit_code=1, exited_early=True)
+
+    with pytest.raises(RuntimeError, match="Timeout was reached"):
+        wayland_capture.stop(helper)
+
+    assert helper.signals == []
+
+
+def test_a_new_take_never_starts_beside_an_old_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stale capture from an earlier take of the same name would pass for this one."""
+    stale = tmp_path / "demo.capture.webm"
+    stale.write_text("an earlier take")
+    monkeypatch.setattr(wayland_capture, "_interpreter_with_gi", lambda: "python3")
+    monkeypatch.setattr(wayland_capture.subprocess, "Popen", lambda *args, **kwargs: _Helper(exit_code=0))
+
+    wayland_capture.start(stale, 30, (0, 0, 10, 10))
+
+    assert not stale.exists()
 
 
 def test_a_new_recording_inherits_no_scenes_and_no_open_beat(request: pytest.FixtureRequest) -> None:

@@ -100,6 +100,9 @@ def start(destination: Path, fps: int, area: tuple[int, int, int, int]) -> subpr
     Returns the helper process. Call :func:`stop` on it; do not kill it.
     """
     x, y, width, height = area
+    # Whatever is at ``destination`` now is from an earlier take, and a failed
+    # start would otherwise leave it to pass for this one.
+    destination.unlink(missing_ok=True)
     env = {**os.environ, "DBUS_SESSION_BUS_ADDRESS": session_bus_address()}
     return subprocess.Popen(  # nosec B607 - fixed argv, shell=False
         [
@@ -124,22 +127,22 @@ def stop(process: subprocess.Popen, timeout: float = 20.0) -> None:
 
     A helper still running after ``timeout`` is left alone rather than killed:
     a SIGKILL leaves GNOME recording with nothing left to stop it. The take
-    fails instead, as it does when the helper reports the stop call failed, so
-    a file GNOME never finished is not published.
+    fails instead, as it does when the helper exits non-zero, whether its stop
+    call failed or it never started, so a file GNOME never finished is not
+    published.
     """
-    if process.poll() is not None:
-        return
-    process.send_signal(signal.SIGTERM)
-    try:
-        process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(
-            f"the screen recorder did not finish within {timeout:.0f}s; its helper is left running "
-            "so GNOME can still stop the recording, and this take is not usable"
-        ) from None
+    if process.poll() is None:
+        process.send_signal(signal.SIGTERM)
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                f"the screen recorder did not finish within {timeout:.0f}s; its helper is left running "
+                "so GNOME can still stop the recording, and this take is not usable"
+            ) from None
     if process.returncode != 0:
         _, err = process.communicate()
-        raise RuntimeError(f"the screen recorder did not stop cleanly, so this take is not usable: {err.strip()}")
+        raise RuntimeError(f"the screen recorder failed, so this take is not usable: {err.strip()}")
 
 
 def _record(destination: str, fps: int, x: int, y: int, width: int, height: int) -> int:
