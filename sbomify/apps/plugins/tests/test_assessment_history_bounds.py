@@ -29,14 +29,23 @@ from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunSta
 from sbomify.apps.sboms.models import SBOM
 
 
-def _result(finding_id: str) -> dict[str, Any]:
+def _result(plugin: str, finding_id: str) -> dict[str, Any]:
+    """A result that passes ``AssessmentResultSchema``, so serialisation keeps it."""
     return {
-        "plugin_name": "osv",
+        "plugin_name": plugin,
         "plugin_version": "1.0.0",
         "category": "security",
         "assessed_at": timezone.now().isoformat(),
         "summary": {"total_findings": 1, "by_severity": {"high": 1}},
-        "findings": [{"id": finding_id, "severity": "high", "component": {"name": "foo", "version": "1"}}],
+        "findings": [
+            {
+                "id": finding_id,
+                "title": finding_id,
+                "description": "A finding the history tests serialise.",
+                "severity": "high",
+                "component": {"name": "foo", "version": "1"},
+            }
+        ],
     }
 
 
@@ -49,7 +58,7 @@ def _run(sbom: SBOM, plugin: str, *, minutes_ago: int, finding_id: str = "CVE-20
         category=AssessmentCategory.SECURITY.value,
         run_reason=RunReason.SCHEDULED_REFRESH.value,
         status=RunStatus.COMPLETED.value,
-        result=_result(finding_id),
+        result=_result(plugin, finding_id),
     )
     # created_at is auto_now_add, so the age has to be written back.
     AssessmentRun.objects.filter(pk=run.pk).update(created_at=timezone.now() - timedelta(minutes=minutes_ago))
@@ -98,6 +107,8 @@ class TestTheHistoryIsBounded:
         response = _call(rf, scanned_sbom.id, history_limit=3)
 
         assert response.all_runs[0].id == str(newest.id)
+        # Serialised with its findings, not degraded to result=None.
+        assert response.all_runs[0].result.findings[0].id == "CVE-2026-1"
 
     def test_an_untruncated_history_reports_its_real_size(self, scanned_sbom, rf, monkeypatch):
         """``all_runs_total`` must equal len(all_runs) when nothing was dropped,
@@ -118,6 +129,17 @@ class TestTheHistoryIsBounded:
             _run(scanned_sbom, "osv", minutes_ago=minute)
 
         response = _call(rf, scanned_sbom.id)
+
+        assert len(response.all_runs) == DEFAULT_HISTORY_LIMIT
+        assert response.all_runs_total == DEFAULT_HISTORY_LIMIT + 5
+
+    def test_a_larger_history_limit_is_clamped_to_the_default(self, scanned_sbom, rf, monkeypatch):
+        """A bound the caller can lift is not a bound."""
+        monkeypatch.setattr("sbomify.apps.plugins.apis._readable_sbom", lambda request, sbom_id: scanned_sbom)
+        for minute in range(1, DEFAULT_HISTORY_LIMIT + 6):
+            _run(scanned_sbom, "osv", minutes_ago=minute)
+
+        response = _call(rf, scanned_sbom.id, history_limit=10_000)
 
         assert len(response.all_runs) == DEFAULT_HISTORY_LIMIT
         assert response.all_runs_total == DEFAULT_HISTORY_LIMIT + 5

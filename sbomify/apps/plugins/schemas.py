@@ -151,14 +151,16 @@ class SBOMAssessmentsResponse(BaseModel):
     all_runs: list[AssessmentRunSchema] = Field(
         description=(
             "Assessment run history, newest first, bounded by the ``history_limit`` "
-            "query parameter. Use ``all_runs_total`` to tell whether it was truncated."
+            "query parameter and a server-side ceiling. Empty when ``include_history`` is "
+            "false. Use ``all_runs_total`` to tell whether it was truncated."
         )
     )
     all_runs_total: int = Field(
         default=0,
         description=(
-            "How many runs exist for this SBOM, whatever ``history_limit`` returned. "
-            "Equals len(all_runs) when the history was not truncated."
+            "How many runs exist for this SBOM, whatever ``history_limit`` or "
+            "``include_history`` returned. Equals len(all_runs) only when the history "
+            "was included and not truncated."
         ),
     )
 

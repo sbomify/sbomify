@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from typing import Any
+from uuid import UUID
 
 from django.http import HttpRequest
 from ninja import Router
@@ -43,8 +44,9 @@ router = Router(tags=["plugins"])
 #
 # Generous rather than tight, because this is a default on a published contract:
 # enough that a history panel has something to page through, small enough that
-# the response size stops tracking the artifact's age. Callers that want more
-# pass ``history_limit``; ``all_runs_total`` tells them whether there is more.
+# the response size stops tracking the artifact's age. It is also the ceiling:
+# ``history_limit`` can lower it but not raise it, and ``all_runs_total`` tells a
+# caller whether there is more.
 DEFAULT_HISTORY_LIMIT = 50
 
 
@@ -367,7 +369,8 @@ def get_sbom_assessments(
     for the same run inside the history, and the artifact page reads only the
     former.
 
-    ``history_limit`` bounds how many runs ``all_runs`` carries. This is the one
+    ``history_limit`` bounds how many runs ``all_runs`` carries, up to
+    ``DEFAULT_HISTORY_LIMIT`` whatever the caller asks for. This is the one
     that makes the response size a function of the request rather than of how
     long the SBOM has existed. ``all_runs_total`` reports the true count so a
     caller can see that it was truncated.
@@ -393,10 +396,11 @@ def get_sbom_assessments(
     # plugin, so a plugin whose last run predates the history window is still
     # found. The window is one bounded query over ids, with the same ``-id``
     # tie-break for runs written in one transaction, which share a timestamp.
+    history_limit = min(max(history_limit, 0), DEFAULT_HISTORY_LIMIT)
     runs = AssessmentRun.objects.filter(sbom_id=sbom_id)
-    latest_ids = latest_run_ids(AssessmentRun.objects.all(), [sbom_id])
-    history_ids = (
-        list(runs.order_by("-created_at", "-id").values_list("id", flat=True)[: max(0, history_limit)])
+    latest_ids: list[UUID] = latest_run_ids(AssessmentRun.objects.all(), [sbom_id])
+    history_ids: list[UUID] = (
+        list(runs.order_by("-created_at", "-id").values_list("id", flat=True)[:history_limit])
         if include_history
         else []
     )
@@ -404,7 +408,9 @@ def get_sbom_assessments(
     # One fetch for the union, so a run appearing in both lists is loaded and
     # serialised against the same instance. dict.fromkeys dedupes in order.
     wanted_ids = list(dict.fromkeys([*latest_ids, *history_ids]))
-    runs_by_id = {run.id: run for run in AssessmentRun.objects.filter(id__in=wanted_ids).prefetch_related("releases")}
+    runs_by_id: dict[UUID, AssessmentRun] = {
+        run.id: run for run in AssessmentRun.objects.filter(id__in=wanted_ids).prefetch_related("releases")
+    }
     latest_runs = sorted(
         (runs_by_id[run_id] for run_id in latest_ids if run_id in runs_by_id),
         key=lambda run: (run.created_at, run.id),
