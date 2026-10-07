@@ -245,7 +245,7 @@ def test_settings_post_redirects_with_workspace(sample_user: AbstractBaseUser):
     )
 
     assert response.status_code == 302
-    team_key = client.session["current_team"]["key"]
+    team_key = client.session["current_workspace"]["key"]
     assert response.url == reverse("teams:team_settings_tab", kwargs={"team_key": team_key, "tab": "tokens"})
     assert AccessToken.objects.count() == initial_count
 
