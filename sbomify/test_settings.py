@@ -167,6 +167,7 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.GzipRequestDecompressionMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "sbomify.apps.core.middleware.RenamedSessionKeysMiddleware",
     "django.middleware.common.CommonMiddleware",
     "sbomify.apps.core.middleware.BearerAuthCsrfExemptMiddleware",
     "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
@@ -175,6 +176,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "sbomify.apps.core.middleware.IdentityProviderUnavailableMiddleware",
 ]
 
 # This module builds its own MIDDLEWARE rather than importing the real one, so

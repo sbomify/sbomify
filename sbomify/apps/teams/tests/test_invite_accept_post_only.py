@@ -18,7 +18,9 @@ from sbomify.apps.teams.models import Invitation, Member, Team
 
 @pytest.fixture
 def invitee() -> Any:
-    user = get_user_model().objects.create_user(username="invitee", email="invitee@example.com", password="pw")
+    user = get_user_model().objects.create_user(
+        username="invitee", email="invitee@example.com", password="pw", email_verified=True
+    )
     # A workspace of their own, so signing in leaves the invitation pending.
     home = Team.objects.create(name="Invitee Home")
     Member.objects.create(team=home, user=user, role="owner", is_default_team=True)
@@ -77,7 +79,7 @@ def test_emailed_link_confirms_before_joining(invitee: Any, invitation: Invitati
 @pytest.mark.django_db
 def test_only_the_confirmation_logs_an_acceptance(mocker: MockerFixture, invitee: Any, invitation: Invitation) -> None:
     log = mocker.patch("sbomify.apps.teams.views.log")
-    accepting = mocker.call("Accepting invitation %s", str(invitation.token))
+    accepting = mocker.call("Accepting invitation %s", invitation.pk)
     client = Client()
     client.force_login(invitee)
 
@@ -88,6 +90,7 @@ def test_only_the_confirmation_logs_an_acceptance(mocker: MockerFixture, invitee
     client.post(_url(invitation.token))
 
     assert accepting in log.info.call_args_list
+    assert not any(str(invitation.token) in str(call) for call in log.mock_calls), "a log line names the token"
 
 
 @pytest.mark.django_db

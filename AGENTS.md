@@ -474,7 +474,7 @@ Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"me
 
 Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` = `READ_INTERNAL` (+ member) ⊂ `PUBLISH` = `READ_INTERNAL_OR_BOT` (+ bot).
 
-`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities. Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capability they lack is deleting the workspace (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities. Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
 
 Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 
@@ -487,7 +487,7 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
 **`guest` is an external role and holds no capability tier at all.** A guest `Member` row is an ACL anchor for the trust-center access-request/NDA machinery, not a grant: guests reach restricted content solely through the attribute-based `component:access` path (`core/services/access_control.py`), never through a role check. `GuestAccessBlockedMixin` redirects guest members to the public workspace page. Do not add `guest` to a tier — if an external user needs to contribute, that is what the internal roles are for.
 
-**Templates must not branch on `request.session.current_team.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
+**Templates must not branch on `request.session.current_workspace.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
 
 ## This repository is public
 

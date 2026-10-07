@@ -28,13 +28,14 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_component
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.core.services.component_security import (
     ComponentVulnerabilitiesContext,
     build_component_vulnerabilities,
     viewer_rights,
 )
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
-from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query, query_string
+from sbomify.apps.vulnerability_scanning.services.finding_browse import FindingQuery, parse_finding_query, query_string
 
 #: The swappable region: toolbar, table and footer. The card around it is not
 #: re-rendered, so the collapsible keeps its open state across a filter change.
@@ -111,4 +112,39 @@ class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMi
             request,
             PANEL_TEMPLATE,
             vulnerabilities_panel_context(component_id, vulns, can_triage=rights.may_triage),
+        )
+
+
+class ComponentTriageModalView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """Load the selected occurrence's current decision only when triage is opened."""
+
+    def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
+        if not viewer_rights(request, component_id).may_triage:
+            return htmx_error_response("Component not found")
+        identity = (
+            request.GET.get("advisory", ""),
+            request.GET.get("package", ""),
+            request.GET.get("version", ""),
+            request.GET.get("ecosystem", ""),
+        )
+        vulns = build_component_vulnerabilities(component_id, FindingQuery(), triage_identity=identity)
+        rows = vulns.panel["rows"] if vulns.panel else []
+        if len(rows) != 1:
+            return htmx_error_response("This vulnerability changed. Refresh the dashboard and try again.")
+        finding = rows[0]
+        return render(
+            request,
+            "core/components/priority_triage_modal.html.j2",
+            {
+                "component_id": component_id,
+                "team_key": request.session.get("current_workspace", {}).get("key", ""),
+                "triage_payload": {
+                    "id": finding["id"],
+                    "purl": finding["purl"],
+                    "state": finding["vex_state"],
+                    "justification": finding["vex_justification"],
+                    "detail": finding["vex_detail"],
+                    "aliases": ",".join(finding["aliases"]),
+                },
+            },
         )

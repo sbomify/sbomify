@@ -20,6 +20,7 @@ from django.utils import timezone
 from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.queries import invitation_email
 from sbomify.apps.teams.utils import get_user_teams, update_user_teams_session, user_seat
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
     Returns a list of dicts with accepted invitation metadata (team_key, invitation_id)
     to drive session selection and downstream flows.
     """
-    if not user.email:
+    email = invitation_email(user)
+    if not email:
         return []
 
     # Skip auto-accept for existing users who already have workspaces
@@ -49,8 +51,8 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
     accepted: list[dict[str, Any]] = []
     has_default = Member.objects.filter(user=user, is_default_team=True).exists()
 
-    pending_invites = Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).select_related(
-        "team"
+    pending_invites = Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).select_related(
+        "team", "invited_by"
     )
 
     for invitation in pending_invites:
@@ -72,7 +74,7 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
             membership = Member.objects.create(
                 user=user,
                 team=invitation.team,
-                role=invitation.role,
+                role=invitation.granted_role,
                 is_default_team=not has_default,
             )
             # Inside the lock with the membership. The count is members plus
@@ -83,7 +85,7 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
             #
             # Read what the deferred capture needs first: the row is gone after
             # this and the lambda reads these by closure.
-            captured_role = invitation.role
+            captured_role = membership.role
             captured_team_key = invitation.team.key
             captured_invitation_id = invitation.id
             captured_token = str(invitation.token)
@@ -314,13 +316,13 @@ def user_logged_in_handler(sender: type, user: User, request: HttpRequest, **kwa
     # Get user teams and store them in session
     user_teams = update_user_teams_session(request, user)
 
-    if request.session.get("current_team", None) is None and user_teams:
+    if request.session.get("current_workspace", None) is None and user_teams:
         # Prefer an explicit default workspace; otherwise fall back to first
         default_team_key = next((key for key, data in user_teams.items() if data.get("is_default_team")), None)
         active_team_key = (
             (joined_invites[0]["team_key"] if joined_invites else None) or default_team_key or next(iter(user_teams))
         )
-        request.session["current_team"] = {"key": active_team_key, **user_teams[active_team_key]}
+        request.session["current_workspace"] = {"key": active_team_key, **user_teams[active_team_key]}
         request.session.modified = True
 
     # Fallback safety net: Ensure every user has a team
@@ -345,9 +347,9 @@ def user_logged_in_handler(sender: type, user: User, request: HttpRequest, **kwa
         created_team = create_user_team_and_subscription(user)
         if created_team and created_team.key:
             user_teams = get_user_teams(user)
-            request.session["user_teams"] = user_teams
+            request.session["user_workspaces"] = user_teams
             if user_teams:
-                request.session["current_team"] = {
+                request.session["current_workspace"] = {
                     "key": created_team.key,
                     **user_teams.get(created_team.key, {}),
                 }

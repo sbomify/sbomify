@@ -1,5 +1,7 @@
 {% comment %}
 href renders a navigation link with a quiet selected surface and plain count.
+active_binding also supports links, keeping their selection and aria-current in sync
+while a server-driven panel loads.
 Without href this is one tab in a tab row, a real button with the tab semantics: only the selected
 tab is in the tab order, and the row's arrow keys move between them.
 
@@ -15,7 +17,7 @@ backgrounds at once.
 {% endcomment %}
 <c-vars href panel active active_binding icon badge type="button" class />
 {# djlint:off #}
-{% if href %}<a href="{{ href }}"{% if active %} aria-current="page"{% endif %}{% else %}<button type="{{ type }}"
+{% if href %}<a href="{{ href }}"{% if active %} aria-current="page"{% endif %}{% if active_binding %} :aria-current="({{ active_binding }}) ? 'page' : null" :data-active="{{ active_binding }}" data-active="{{ active|yesno:'true,false' }}"{% endif %}{% else %}<button type="{{ type }}"
         role="tab"
         {% if panel %}id="tab-{{ panel }}" aria-controls="panel-{{ panel }}" data-tab="{{ panel }}"{% endif %}
         {% if active_binding %}
@@ -29,7 +31,7 @@ backgrounds at once.
         {% endif %}
         {% endif %}
 {# djlint:on #}
-class="{% if href %}inline-flex shrink-0 items-center whitespace-nowrap gap-2 px-3 py-2 mb-2 rounded-md text-[0.8125rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 {% if active %}bg-surface-hover text-text{% else %}text-text-muted hover:bg-surface-hover hover:text-text{% endif %}{% else %}relative shrink-0 whitespace-nowrap px-0 py-4 text-sm font-medium border-b-2 border-solid border-b-transparent -mb-px transition-colors duration-150 text-[color:var(--color-text-muted)] hover:text-text focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] data-[active=true]:text-text data-[active=true]:border-b-text [[data-tabs-pills]_&]:mb-0 [[data-tabs-pills]_&]:rounded-md [[data-tabs-pills]_&]:border-b-0 [[data-tabs-pills]_&]:px-4 [[data-tabs-pills]_&]:py-1.5 [[data-tabs-pills]_&]:min-h-8 [[data-tabs-pills]_&]:text-[0.8125rem] [[data-tabs-pills]_&]:data-[active=true]:bg-surface [[data-tabs-pills]_&]:data-[active=true]:shadow-[var(--shadow-xs)]{% endif %}{% if class %} {{ class }}{% endif %}"
+class="{% if href %}inline-flex shrink-0 items-center whitespace-nowrap gap-2 px-3 py-2 mb-2 rounded-md text-[0.8125rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 {% if active_binding %}text-text-muted hover:bg-surface-hover hover:text-text data-[active=true]:bg-surface-hover data-[active=true]:text-text{% elif active %}bg-surface-hover text-text{% else %}text-text-muted hover:bg-surface-hover hover:text-text{% endif %}{% else %}relative shrink-0 whitespace-nowrap px-0 py-4 text-sm font-medium border-b-2 border-solid border-b-transparent -mb-px transition-colors duration-150 text-[color:var(--color-text-muted)] hover:text-text focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] data-[active=true]:text-text data-[active=true]:border-b-text [[data-tabs-pills]_&]:mb-0 [[data-tabs-pills]_&]:rounded-md [[data-tabs-pills]_&]:border-b-0 [[data-tabs-pills]_&]:px-4 [[data-tabs-pills]_&]:py-1.5 [[data-tabs-pills]_&]:min-h-8 [[data-tabs-pills]_&]:text-[0.8125rem] [[data-tabs-pills]_&]:data-[active=true]:bg-surface [[data-tabs-pills]_&]:data-[active=true]:shadow-[var(--shadow-xs)]{% endif %}{% if class %} {{ class }}{% endif %}"
 {# djlint:off #}
         {{ attrs }}>
 {# djlint:on #}

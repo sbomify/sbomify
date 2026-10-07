@@ -174,6 +174,7 @@ class TestRequestPredicate:
         )
         row = AccessToken.objects.create(
             encoded_token=encoded,
+            token_type=TOKEN_TYPE_OIDC,
             description="orphan",
             user=orphan_bot,
             expires_at=timezone.now() + datetime.timedelta(seconds=900),
@@ -301,15 +302,10 @@ class TestRequestPredicate:
         assert is_authorised_for_component(fake_req, mocker.MagicMock(id="any-component")) is True
 
     @pytest.mark.django_db
-    def test_oidc_type_decoded_at_most_once_per_request(self, mocker, bound_component: Component) -> None:
-        """The signed ``token_type`` is verified at most once per request.
-
-        ``is_authorised_for_component`` calls ``request_is_oidc_authed``,
-        then ``bound_component_id_for_request`` calls it again — so the
-        JWT-decode in ``_token_is_oidc_typed`` would run twice without
-        memoisation. The result is cached on the per-request token-record
-        instance; this pins that an upload request never re-verifies the
-        JWT (regression guard for the round-3 Copilot perf finding).
+    def test_oidc_type_is_read_without_decoding_a_jwt(self, mocker, bound_component: Component) -> None:
+        """The row holds only the token's hash, so the OIDC check reads the
+        stored ``token_type`` and never decodes a JWT, however often an
+        upload request asks (the gate, then the bound-component lookup).
         """
         import datetime
 
@@ -339,6 +335,7 @@ class TestRequestPredicate:
         )
         row = AccessToken.objects.create(
             encoded_token=encoded,
+            token_type=TOKEN_TYPE_OIDC,
             description="oidc once",
             user=bot,
             expires_at=timezone.now() + datetime.timedelta(seconds=900),
@@ -349,10 +346,8 @@ class TestRequestPredicate:
             delattr(fake_req, "_oidc_binding_cache")
 
         spy = mocker.spy(at_utils, "decode_personal_access_token")
-        # Runs request_is_oidc_authed twice internally (the gate + the
-        # bound-component lookup) yet decodes the JWT at most once.
         assert is_authorised_for_component(fake_req, bound_component) is True
-        assert spy.call_count <= 1
+        assert spy.call_count == 0
 
 
 class TestSBOMUploadScope:
@@ -898,3 +893,72 @@ class TestBotReleaseConfinement:
             HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
         )
         assert resp.status_code == 201
+
+    @pytest.mark.parametrize("kind", ["sbom", "document"])
+    def test_bot_cannot_pin_into_release_of_product_without_its_component(
+        self, kind, oidc_sbomify_token, bound_component, other_component, team_with_business_plan
+    ):
+        """Pinning follows ``create_release``: the release's product must hold the bound component."""
+        from sbomify.apps.core.models import ReleaseArtifact
+        from sbomify.apps.documents.models import Document
+        from sbomify.apps.sboms.models import SBOM
+
+        product, release = self._release_in(team_with_business_plan, other_component)
+        if kind == "sbom":
+            sbom = SBOM.objects.create(name="b", component=bound_component, format="cyclonedx", format_version="1.6")
+            payload = {"sbom_id": sbom.id}
+        else:
+            payload = {"document_id": Document.objects.create(name="bd", component=bound_component).id}
+
+        resp = Client().post(
+            f"/api/v1/releases/{release.id}/artifacts",
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == 403
+        assert not ReleaseArtifact.objects.filter(release=release).exists()
+        detail = resp.json()["detail"]
+        assert bound_component.id in detail
+        assert product.id in detail
+
+    def test_bot_without_a_binding_cannot_pin(
+        self, oidc_sbomify_token, bound_component, team_with_business_plan, mocker
+    ):
+        """Patched for the reason ``test_bot_without_a_binding_says_so`` gives."""
+        from sbomify.apps.sboms.models import SBOM
+
+        _product, release = self._release_in(team_with_business_plan, bound_component)
+        sbom = SBOM.objects.create(name="b", component=bound_component, format="cyclonedx", format_version="1.6")
+        mocker.patch("sbomify.apps.oidc.permissions.bound_component_id_for_request", return_value=None)
+
+        resp = Client().post(
+            f"/api/v1/releases/{release.id}/artifacts",
+            data=json.dumps({"sbom_id": sbom.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == 403
+        assert "no component binding" in resp.json()["detail"]
+
+    @pytest.mark.parametrize(("in_product", "status"), [(False, 403), (True, 400)])
+    def test_product_confinement_runs_before_the_latest_release_guard(
+        self, in_product, status, oidc_sbomify_token, bound_component, other_component, team_with_business_plan
+    ):
+        """A latest release of a product without the bound component is refused as out of scope,
+        not as a latest release; only the bot's own product reaches the latest-release guard."""
+        from sbomify.apps.core.models import Product, Release
+        from sbomify.apps.sboms.models import SBOM
+
+        product = Product.objects.create(name="prod-latest", team=team_with_business_plan)
+        product.components.add(bound_component if in_product else other_component)
+        release = Release.get_or_create_latest_release(product)
+        sbom = SBOM.objects.create(name="b", component=bound_component, format="cyclonedx", format_version="1.6")
+
+        resp = Client().post(
+            f"/api/v1/releases/{release.id}/artifacts",
+            data=json.dumps({"sbom_id": sbom.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == status, resp.content

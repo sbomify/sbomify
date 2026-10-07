@@ -45,41 +45,42 @@ parlay ecosystems enrich sbomify_[...].json > sbomify_[...].json
 
 SBOMs for `qemux86-64` images, built from the default distribution (`poky`) by
 the Yocto Project's own autobuilder. The downloaded content is preserved byte for byte in
-all three. Only the filenames differ, to match the naming used in this
+all four. Only the filenames differ, to match the naming used in this
 directory, and the largest is gzipped for repository storage, so that file is a
 gzip wrapper around the published JSON rather than the JSON itself. Background:
 <https://sbomify.com/2026/05/19/yocto-spdx-3-0-overview/>.
 
-Two of them are the same image at two spec versions; the third is a much larger
-image, for exercising the paths where document size is the variable rather than
-the shape.
+Three of them are the same image at three spec versions; the fourth is a much
+larger image, for exercising the paths where document size is the variable
+rather than the shape.
 
 | Sample | Elements | Packages | purl | cpe | neither |
 | --- | --- | --- | --- | --- | --- |
-| 6.0.3 `core-image-sato-sdk` (SPDX 3.0) | 68511 | 3813 | 2206 | 2053 | 1607 |
-| 6.0.3 `core-image-minimal` (SPDX 3.0) | 3049 | 259 | 161 | 151 | 98 |
+| 6.0.3 `core-image-sato-sdk` (SPDX 3.0.1) | 68511 | 3813 | 2206 | 2053 | 1607 |
+| 6.0.3 `core-image-minimal` (SPDX 3.0.1) | 3049 | 259 | 161 | 151 | 98 |
+| 5.1.4 `core-image-minimal` (SPDX 3.0.0) | 2066 | 129 | 0 | 35 | 94 |
 | 5.0.19 `core-image-minimal` (SPDX 2.2) | n/a | 233 | 0 | 102 | 131 |
 
 Yocto always emits CPE external references, from `CVE_PRODUCT`/`CVE_VERSION`.
 Whether it also emits purls changed between releases, so the samples do not all
-exercise the same path: the 2.2 sample is the purl-less one, while on both 3.0
-samples most packages carry both, and a test meaning to exercise CPE identity
-there would pass on the purl instead. Note that the 3.0 purls live in the
+exercise the same path: the 2.2 and 3.0.0 samples are purl-less, while on both
+3.0.1 samples most packages carry both, and a test meaning to exercise CPE
+identity there would pass on the purl instead. Note that the 3.0.1 purls live in the
 `software_packageUrl` property, not only in `externalIdentifier`. 43 of the
 sato-sdk packages have the property and no matching external identifier, so
 counting one source alone undercounts.
 
 The packages carrying neither are source archives (`acl-2.3.2.tar.gz`, git
 checkouts versioned by commit), not shipped software: 97 of the 98 on the
-minimal 3.0 sample and 1606 of the 1607 on sato-sdk have
-`software_primaryPurpose: source`. On what the images install, coverage is
-151 of 153 and 1600 of 1600 respectively.
+minimal 3.0.1 sample, 92 of the 94 on the 3.0.0 sample and 1606 of the 1607 on
+sato-sdk have `software_primaryPurpose: source`. On what the images install,
+coverage is 151 of 153, 35 of 36 and 1600 of 1600 respectively.
 
 The 2.2 sample carries no VEX at all. SPDX 2.2 has no security profile, so
 `CVE_STATUS` has nowhere to live; its only annotations are `isNative` markers.
 VEX begins with the 3.0 output.
 
-### SPDX 3.0: core-image-minimal
+### SPDX 3.0.1: core-image-minimal
 
 `yocto_core-image-minimal.spdx3.json`, from Yocto 6.0.3 (Wrynose LTS), which
 emits SPDX 3.0.1 via `create-spdx-3.0`:
@@ -96,6 +97,27 @@ mv core-image-minimal-qemux86-64.rootfs.spdx.json \
 
 A single JSON-LD document: 3049 graph elements, 259 `software_Package`s, plus
 `build_Build` provenance and `security_Vulnerability` / VEX assessments.
+
+### SPDX 3.0.0: core-image-minimal
+
+`yocto_core-image-minimal.spdx3.0.0.json`, from Yocto 5.1.4 (Styhead), whose
+`create-spdx-3.0` still wrote SPDX 3.0.0:
+
+```bash
+curl -O https://downloads.yoctoproject.org/releases/yocto/yocto-5.1.4/machines/qemu/qemux86-64/core-image-minimal-qemux86-64.rootfs.spdx.json
+curl -O https://downloads.yoctoproject.org/releases/yocto/yocto-5.1.4/machines/qemu/qemux86-64/core-image-minimal-qemux86-64.rootfs.spdx.json.sha256sum
+sha256sum -c core-image-minimal-qemux86-64.rootfs.spdx.json.sha256sum
+mv core-image-minimal-qemux86-64.rootfs.spdx.json \
+   sboms/tests/test_data/yocto_core-image-minimal.spdx3.0.0.json
+```
+
+`sha256: 5d094931971242bcea68ffcba0dce5d9f08a82e70e6c800a2df2f67dbc1b0afb`
+
+A single JSON-LD document under the 3.0.0 `@context`: 2066 graph elements, 129
+`software_Package`s, with CPEs as `cpe23` external identifiers and no purls.
+All 2066 elements validate against the vendored `spdx_3.0.0-schema.json`. Like
+the large sample, it is checked in full out-of-band and on its first 500
+elements per commit.
 
 ### SPDX 3.0: core-image-sato-sdk (large)
 

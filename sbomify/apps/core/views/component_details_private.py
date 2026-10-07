@@ -54,7 +54,7 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             public = ComponentDetailsPublicView.as_view()(request, component_id=component_id)
             return cast("HttpResponse", public)
 
-        current_team = request.session.get("current_team", {})
+        current_team = request.session.get("current_workspace", {})
         billing_plan = current_team.get("billing_plan")
 
         # Get company NDA ID for visibility selector and check if gated visibility is allowed
