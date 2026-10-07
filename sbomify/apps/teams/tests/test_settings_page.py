@@ -10,6 +10,7 @@ from django.urls import reverse
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.models import User
+from sbomify.apps.core.services.dashboard_page import dashboard_cache_key
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.teams.models import ContactProfile, Member, default_patch_sla_days
 
@@ -152,7 +153,7 @@ def test_recommended_targets_restore_defaults_and_invalidate_dashboard(
     workspace.patch_sla_days = {"critical": 1, "high": None, "medium": None, "low": None}
     workspace.save(update_fields=["patch_sla_days"])
     setup_authenticated_client_session(client, workspace, membership.user)
-    cache_key = f"dashboard-page:v3:{workspace.pk}"
+    cache_key = dashboard_cache_key(workspace.pk)
     cache.set(cache_key, {"stale": True})
     with django_capture_on_commit_callbacks(execute=True):
         response = client.post(

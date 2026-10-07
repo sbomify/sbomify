@@ -58,7 +58,11 @@ def dashboard(
 
     scan_results = []
     start_date = timezone.now() - timedelta(days=29)
-    providers = ["osv", "dependency_track"]
+    # The names the plugins actually register under. "dependency_track" is not
+    # one of them, and spelling it that way sent every page that labels a
+    # provider down its unmapped-name branch, so the snapshots were guarding a
+    # rendering production never reaches.
+    providers = ["osv", "dependency-track"]
 
     for day_offset in range(30):
         created_at = start_date + timedelta(days=day_offset)

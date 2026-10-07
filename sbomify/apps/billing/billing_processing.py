@@ -223,7 +223,7 @@ def check_billing_limits(resource_type: str) -> Any:
             if not is_billing_enabled():
                 return view_func(request, *args, **kwargs)
 
-            team_key = request.session.get("current_team", {}).get("key")
+            team_key = request.session.get("current_workspace", {}).get("key")
             if not team_key:
                 return HttpResponseForbidden("No team selected")
 

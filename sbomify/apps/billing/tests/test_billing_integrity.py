@@ -85,7 +85,7 @@ def test_past_due_without_failed_at_is_enforced():
 
     request = MagicMock()
     request.method = "POST"
-    request.session = {"current_team": {"key": "test-team-nofail"}}
+    request.session = {"current_workspace": {"key": "test-team-nofail"}}
     request.headers = {}
     request.META = {}
 

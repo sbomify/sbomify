@@ -66,7 +66,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         if not query or len(query) < 2:
             return JsonResponse({"products": [], "components": [], "results": []})
 
-        current_team = request.session.get("current_team") or {}
+        current_team = request.session.get("current_workspace") or {}
         destinations = search_destinations(
             query,
             # Live Member row, not the session cache: this picks which
