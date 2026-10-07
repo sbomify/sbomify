@@ -344,9 +344,14 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
 
 
 class _ResultWithoutFindings(Func):
-    """``result`` minus its findings array, cut by Postgres in one pass over the blob."""
+    """``result`` minus its findings array, cut by Postgres in one pass over the blob.
 
-    template = "(%(expressions)s - 'findings'::text)"
+    Only an object can lose a key: ``jsonb - text`` raises on a scalar, which
+    would fail the whole request over one malformed row. Any other shape comes
+    back NULL, and the serializer degrades that run on its own.
+    """
+
+    template = "CASE WHEN jsonb_typeof(%(expressions)s) = 'object' THEN (%(expressions)s - 'findings'::text) END"
     output_field = JSONField()
 
 

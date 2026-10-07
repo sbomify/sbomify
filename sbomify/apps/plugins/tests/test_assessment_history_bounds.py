@@ -81,8 +81,8 @@ def scanned_sbom(sample_team_with_owner_member):
 
 def _whole_blob_queries(captured: Any) -> list[str]:
     """Queries that read whole ``result`` blobs. A history row's envelope, the
-    result minus its findings array, does not count."""
-    return [query["sql"] for query in captured.captured_queries if re.search(r'\."result"(?! - )', query["sql"])]
+    result minus its findings array behind its object check, does not count."""
+    return [query["sql"] for query in captured.captured_queries if re.search(r'\."result"(?! - |\))', query["sql"])]
 
 
 def _call(rf, sbom_id: str, **kwargs: Any):
@@ -177,6 +177,24 @@ class TestAHistoryRowIsASummary:
         assert [run.result.findings for run in response.all_runs] == [[], [], []]
         assert {(run.status, run.result.summary.total_findings) for run in response.all_runs} == {("completed", 1)}
         assert response.latest_runs[0].result.findings[0].id == "CVE-2026-1"
+
+
+@pytest.mark.django_db
+class TestAMalformedHistoryRowDegradesAlone:
+    def test_a_scalar_result_in_the_history_does_not_fail_the_response(self, scanned_sbom, rf, monkeypatch):
+        """A legacy row can hold a bare JSON value where the result object should
+        be. Postgres cannot remove a key from a scalar, so cutting the findings out
+        of it in SQL would fail the whole request; the row degrades instead."""
+        monkeypatch.setattr("sbomify.apps.plugins.apis._readable_sbom", lambda request, sbom_id: scanned_sbom)
+        _run(scanned_sbom, "osv", minutes_ago=1)
+        malformed = _run(scanned_sbom, "osv", minutes_ago=2)
+        AssessmentRun.objects.filter(pk=malformed.pk).update(result="not a result object")
+
+        response = _call(rf, scanned_sbom.id)
+
+        by_id = {run.id: run for run in response.all_runs}
+        assert by_id[str(malformed.id)].result is None
+        assert len(response.all_runs) == 2
 
 
 @pytest.mark.django_db
