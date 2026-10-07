@@ -41,8 +41,8 @@ def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Team]:
 
 def dashboard_cache_key(team_id: int) -> str:
     """The overview snapshot's cache key, versioned: an entry cached before the snapshot gained a key would read it as
-    zero, so the version moves with every new key (v5: medium_low)."""
-    return f"dashboard-page:v5:{team_id}"
+    zero, so the version moves with every new key (v6: has_scannable_components)."""
+    return f"dashboard-page:v6:{team_id}"
 
 
 def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
@@ -165,6 +165,12 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
             "unmeasured_known_exploited": known_exploited == 0 and unassessed > 0,
         },
         "unassessed": unassessed,
+        # Whether anything in this workspace could carry a vulnerability at all.
+        # The security picture is built from BOM components only, so a workspace
+        # holding documents alone has nothing to scan — which is not the same
+        # thing as having been scanned and found clean, and the panels below the
+        # cards must not confuse the two.
+        "has_scannable_components": bool(components),
         "products": products[:8],
         "product_count": len(products),
     }
