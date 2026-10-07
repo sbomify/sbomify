@@ -53,6 +53,15 @@ NUMERIC_RGB = re.compile(
     r"rgba?\(\s*" + _CHANNEL + r"\s*(?:,\s*|\s+)" + _CHANNEL + r"\s*(?:,\s*|\s+)" + _CHANNEL, re.IGNORECASE
 )
 
+# The same three channels parked in a custom property, `--tone-rgb: 22 120 80`,
+# which `rgb(var(--tone-rgb))` then turns into a hue through the token form the
+# guard allows. Only a declaration of exactly three channels counts: `0 1px 2px`
+# is a shadow, not a colour.
+CHANNEL_PROPERTY = re.compile(
+    r"--[\w-]+\s*:\s*" + _CHANNEL + r"\s*(?:,\s*|\s+)" + _CHANNEL + r"\s*(?:,\s*|\s+)" + _CHANNEL + r"\s*(?:;|\}|$)",
+    re.IGNORECASE,
+)
+
 
 def _rgb_channel(value: str) -> int:
     """One rgb() channel as 0-255, whether written as a number, a percentage or ``none``."""
@@ -156,7 +165,7 @@ def _offenders_in(css: str) -> list[str]:
             channels = _hex_channels(digits)
             if channels and _has_hue(channels):
                 offenders.append(f"{number}: #{digits}")
-        for match in NUMERIC_RGB.findall(line):
+        for match in NUMERIC_RGB.findall(line) + CHANNEL_PROPERTY.findall(line):
             channels = (_rgb_channel(match[0]), _rgb_channel(match[1]), _rgb_channel(match[2]))
             if _has_hue(channels):
                 offenders.append(f"{number}: rgb{channels}")
@@ -215,6 +224,10 @@ def test_the_severity_ramp_is_only_referenced_here_never_redefined() -> None:
         "color: RGB(22 120 80);",
         "color: Rgba(22, 120, 80, 0.5);",
         "color: rgb(none 120 80);",
+        # Raw channels parked in a custom property, then read through the
+        # token form the guard allows.
+        ".tone { --tone-rgb: 22 120 80; color: rgb(var(--tone-rgb)); }",
+        "--tone-rgb: 22, 120, 80;",
         "color: #178050;",
         "color: #1785;",
         # The colour functions the guard did not know at all.
@@ -246,6 +259,7 @@ def test_the_guard_reports_every_way_a_hue_can_be_written(declaration: str) -> N
         "box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);",
         "color: rgb(255, 255, 255);",
         "color: rgb(0% 0% 0%);",
+        "--shadow-rgb: 0 0 0;",
         "color: #ffffff;",
         "color: #000;",
         "color: white;",
