@@ -116,7 +116,8 @@ than re-recorded; it costs the same encode it would have had.
 
 ### The music pass
 
-Every recording carries a bed:
+The marketplace walkthrough carries a music bed. The FAQ recordings stay dry,
+so `score.py` is not part of `bin/record_screencasts.sh`; run it by hand:
 
 ```bash
 uv run python screencasts/score.py <recording> ~/ledger_trace.m4a --loop
