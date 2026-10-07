@@ -184,6 +184,46 @@ def test_a_downgrade_the_workspace_has_outgrown_is_refused(
 
 
 @pytest.mark.django_db
+def test_usage_committed_after_the_first_check_still_blocks_the_downgrade(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+):
+    """The first check runs before the plan write's transaction. Product creation
+    takes the same workspace lock as that write, so the write checks again under
+    it, and usage that landed in between still counts."""
+    from sbomify.apps.billing.services import plan_selection
+    from sbomify.apps.core.models import Product
+
+    team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
+    team_with_business_plan.save()
+    real_check = plan_selection.check_downgrade
+    outcomes: list[bool] = []
+
+    def check_then_race(workspace, plan):
+        result = real_check(workspace, plan)
+        if not outcomes:
+            # Another request commits two products between this check and the write.
+            for name in ("first", "second"):
+                Product.objects.create(team=team_with_business_plan, name=name)
+        outcomes.append(result.ok)
+        return result
+
+    client.force_login(sample_user)
+    with patch.object(plan_selection, "check_downgrade", side_effect=check_then_race):
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
+        )
+
+    assert outcomes == [True, False]
+    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+
+
+@pytest.mark.django_db
 def test_select_community_plan_with_subscription_redirects_to_portal(
     client: Client,
     sample_user: AbstractBaseUser,

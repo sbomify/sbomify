@@ -417,9 +417,18 @@ class SelectPlanView(LoginRequiredMixin, View):
         self, team: Team, team_key: str, plan: BillingPlan, request: HttpRequest
     ) -> HttpResponse | None:
         """Handle plan selection when no active subscription exists."""
+        from .services.plan_selection import check_downgrade
+
         if plan.key == BillingPlan.KEY_COMMUNITY:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
+                # Checked again under the workspace lock that product, component
+                # and seat creation also take, so usage committed after the first
+                # check cannot land under this downgrade.
+                downgrade = check_downgrade(team, plan)
+                if not downgrade.ok:
+                    messages.error(request, downgrade.error or "Reduce usage to choose this plan.")
+                    return redirect("billing:select_plan", team_key=team_key)
                 team.billing_plan = plan.key
                 existing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
                 existing_limits.update(
