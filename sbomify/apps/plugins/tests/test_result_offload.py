@@ -394,3 +394,45 @@ class TestTheApiDegradesRatherThanFailing:
         served = {run.id: run for run in response.all_runs}[str(superseded.id)]
         assert served.result is not None
         assert len(served.result.findings) == 2
+
+
+@pytest.mark.django_db
+class TestFindingRowsOutliveTheMove:
+    """``backfill_findings`` re-projects every completed security run. An
+    offloaded run's payload is in storage, not in ``result``, and reading the
+    empty column as "no findings" would delete the run's rows."""
+
+    def test_reprojecting_an_offloaded_run_keeps_its_rows(self, sbom, bucket):
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
+        from sbomify.apps.vulnerability_scanning.models import Finding
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        sync_findings(superseded, [])
+        projected = set(Finding.objects.filter(run=superseded).values_list("advisory_id", flat=True))
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+
+        sync_findings(superseded, [])
+
+        assert (
+            projected and set(Finding.objects.filter(run=superseded).values_list("advisory_id", flat=True)) == projected
+        )
+
+    def test_an_unreadable_payload_leaves_the_rows_alone(self, sbom, bucket):
+        """A missing object is not an empty result: the re-projection fails
+        loudly and the rows it would have rewritten stay."""
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
+        from sbomify.apps.vulnerability_scanning.models import Finding
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        sync_findings(superseded, [])
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+        bucket.objects.clear()
+
+        with pytest.raises(ResultObjectMissing):
+            sync_findings(superseded, [])
+
+        assert Finding.objects.filter(run=superseded).count() == 2
