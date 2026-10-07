@@ -86,6 +86,51 @@ def test_a_guest_still_reads_none_of_it(url_name, key, items) -> None:
     assert _client(items["team"], "guest").get(url).status_code == 403
 
 
+WORKSPACE_VULNERABILITY_READS = [
+    "vulnerability-kpis",
+    "vulnerability-stats",
+    "vulnerability-timeseries?days=7",
+    "vulnerability-drill-down?filter_type=severity&filter_value=high&days=7",
+]
+
+
+def _workspace_url(team, path: str) -> str:
+    return f"/api/v1/vulnerability-scanning/workspaces/{team.key}/{path}"
+
+
+@pytest.mark.parametrize("path", WORKSPACE_VULNERABILITY_READS)
+@pytest.mark.parametrize("role", ["member", "operator"])
+def test_every_internal_role_reads_the_workspace_vulnerability_dashboards(path, role, items) -> None:
+    """``workspace:read`` decides, as it does for the trends and heatmap beside them."""
+    response = _client(items["team"], role).get(_workspace_url(items["team"], path))
+
+    assert response.status_code == 200, response.content
+
+
+@pytest.mark.parametrize("path", WORKSPACE_VULNERABILITY_READS)
+def test_a_read_only_token_reads_the_workspace_vulnerability_dashboards(path, items) -> None:
+    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+    from sbomify.apps.core.authz import SCOPE_PRESETS
+
+    team = items["team"]
+    user = get_user_model().objects.create_user(username="operator-script", email="operator-script@example.com")
+    Member.objects.create(team=team, user=user, role="operator")
+    token = create_personal_access_token(user)
+    AccessToken.objects.create(
+        user=user, encoded_token=token, description="triage", team=team, scopes=SCOPE_PRESETS["read_only"]
+    )
+
+    response = Client().get(_workspace_url(team, path), HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    assert response.status_code == 200, response.content
+
+
+@pytest.mark.parametrize("path", WORKSPACE_VULNERABILITY_READS)
+def test_a_guest_still_reads_no_workspace_vulnerability_dashboard(path, items) -> None:
+    assert _client(items["team"], "guest").get(_workspace_url(items["team"], path)).status_code == 403
+
+
 def test_an_operator_has_a_way_to_its_api_keys(items) -> None:
     """The tokens tab admits every internal role, so the rail offers it to all of them."""
     team = items["team"]
