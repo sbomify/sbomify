@@ -318,9 +318,12 @@ def test_a_refresh_keeps_an_open_findings_panel_and_its_filters(authenticated_pa
     page.evaluate(
         """() => {
             window.__refreshSettled = false;
-            document.body.addEventListener('htmx:afterSettle', (event) => {
-                if (event.target.id === 'artifact-content') window.__refreshSettled = true;
-            });
+            const settled = (event) => {
+                if (event.target.id !== 'artifact-content') return;
+                document.body.removeEventListener('htmx:afterSettle', settled);
+                window.__refreshSettled = true;
+            };
+            document.body.addEventListener('htmx:afterSettle', settled);
             document.body.dispatchEvent(new CustomEvent('refresh-assessments'));
         }"""
     )
@@ -375,9 +378,12 @@ def test_a_refresh_keeps_a_half_written_triage_justification(authenticated_page,
     page.evaluate(
         """() => {
             window.__refreshSettled = false;
-            document.body.addEventListener('htmx:afterSettle', (event) => {
-                if (event.target.id === 'artifact-content') window.__refreshSettled = true;
-            });
+            const settled = (event) => {
+                if (event.target.id !== 'artifact-content') return;
+                document.body.removeEventListener('htmx:afterSettle', settled);
+                window.__refreshSettled = true;
+            };
+            document.body.addEventListener('htmx:afterSettle', settled);
             document.body.dispatchEvent(new CustomEvent('refresh-assessments'));
         }"""
     )
@@ -674,27 +680,43 @@ def test_the_broadcast_refreshes_the_panel_without_losing_the_readers_place(
             component_id,
         )
 
-    # Every GET the page makes from here, so both halves below can read it.
-    # The bridges debounce for 500ms, so each wait has to outlast that.
-    fetches: list[str] = []
-    page.on("request", lambda request: fetches.append(request.url) if request.method == "GET" else None)
+    # The element whose bridge answers this view's broadcasts: the panel on its
+    # own page, the whole region on the artifact page. The bridge runs while the
+    # message dispatches, so its debounce state shows at once whether it
+    # scheduled a refresh, with nothing to wait out.
+    bridge = page.locator("#artifact-content") if view == "plugin" else panel
+    scheduled = (
+        "(el) => { const data = window.Alpine.$data(el);"
+        " return 'refreshTimer' in data ? data.refreshTimer : 'no debounce state'; }"
+    )
+    assert bridge.evaluate(scheduled) is None
 
-    # Another component's re-apply must not refetch this panel: one workspace
-    # socket carries every component's broadcasts.
+    # Another component's re-apply schedules nothing: one workspace socket
+    # carries every component's broadcasts.
     _broadcast("some-other-component-id")
-    page.wait_for_timeout(1200)
-    assert fetches == [], f"an unrelated component's broadcast refetched the panel: {fetches}"
+    assert bridge.evaluate(scheduled) is None, "an unrelated component's broadcast scheduled a refresh"
 
-    # This component's does.
+    # This component's does, and when the debounce runs out the refresh asks for
+    # the page the reader is on. Recorded in the page and waited on there: the
+    # suite freezes the test process's clock, so a client-side wait such as
+    # expect_request never times out, and a refresh that never came would hang
+    # the run rather than fail it.
+    page.evaluate(
+        """() => {
+            window.__refreshedOnPage2 = false;
+            const seen = (event) => {
+                if (!event.detail.requestConfig.path.includes('page=2')) return;
+                document.body.removeEventListener('htmx:beforeRequest', seen);
+                window.__refreshedOnPage2 = true;
+            };
+            document.body.addEventListener('htmx:beforeRequest', seen);
+        }"""
+    )
     _broadcast(str(sbom.component_id))
-    page.wait_for_timeout(1200)
+    page.wait_for_function("() => window.__refreshedOnPage2 === true", timeout=10_000)
     expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
-    assert fetches, "the vex_reapplied broadcast refreshed nothing"
 
-    # The refresh carried the reader's place, in the query and on the screen.
-    refreshed = next((url for url in fetches if "page=2" in url), None)
-    assert refreshed is not None, f"no refresh carried the reader's page: {fetches}"
-
+    # And lands them back on it.
     # Generous, because the plugin view refreshes the whole artifact frame and
     # the findings panel then re-fetches itself inside the morphed result.
     # The total is deliberately not asserted, for the same reason as the test
