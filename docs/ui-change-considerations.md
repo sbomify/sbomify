@@ -62,17 +62,21 @@ all as design regressions in GitHub CI.
 ## Where CI checks UI changes
 
 Read the current [CI workflow](../.github/workflows/ci-cd.yml) instead of relying on
-an old passing test count. It runs app backend groups, frontend tests, browser
-tests, code quality and a production Docker build. The backend groups run sync
-and async tests separately; reproduce the failing invocation when diagnosing an
-order- or group-dependent failure. [The matrix check](../bin/check_ci_test_matrix.py)
-keeps app test directories represented in CI. Security checks also live in the
+an old passing test count. It runs the backend suite, frontend tests, browser
+tests, code quality and a production Docker build. The backend suite is one job
+running every app's tests under `pytest -n auto`, so a failure that only appears
+on a particular worker is reproduced with the same `-n auto --dist loadscope`
+invocation, not by selecting a single app. The browser suite is split across six
+matrix groups by [`pytest-split`](../.github/e2e-test-durations.json); to rerun a
+failing group locally, pass the same `--splits 6 --group N`.
+[The matrix check](../bin/check_ci_test_matrix.py) keeps those two jobs between
+them running every test exactly once. Security checks also live in the
 [CodeQL](../.github/workflows/codeql.yml) and [OpenGrep](../.github/workflows/opengrep.yaml) workflows.
 
 | Layer | Start here |
 | --- | --- |
 | Shared component markup, variants, state and accessibility | `test_cotton_*.py` in [Core tests](../sbomify/apps/core/tests/), [gallery view tests](../sbomify/apps/core/tests/test_design_system_view.py) and [gallery template](../sbomify/apps/core/templates/core/design_system.html.j2). |
-| Server-rendered pages, permissions and HTMX fragments | Each affected app's `tests/` directory in the CI matrix. Trace includes across Core, SBOMs, Plugins, Teams and other consumers instead of selecting tests by the edited file's directory alone. |
+| Server-rendered pages, permissions and HTMX fragments | Each affected app's `tests/` directory. Trace includes across Core, SBOMs, Plugins, Teams and other consumers instead of selecting tests by the edited file's directory alone. |
 | Client behavior, filters, keyboard handling, themes and chart lifetime | `*.spec.ts` beside the TypeScript source. Examples: [table paging](../sbomify/apps/sboms/js/sboms-table.spec.ts), [themes](../sbomify/apps/core/js/theme-manager.spec.ts) and [charts](../sbomify/apps/vulnerability_scanning/js/vulnerability-chart.spec.ts). |
 | User journeys and responsive layout | [E2E tests](../sbomify/apps/core/tests/e2e/), especially [headers](../sbomify/apps/core/tests/e2e/test_page_headers.py), [mobile](../sbomify/apps/core/tests/e2e/test_mobile_layout.py), [loading](../sbomify/apps/core/tests/e2e/test_loading_states.py), [actions](../sbomify/apps/core/tests/e2e/test_ui_action_repairs.py) and the changed page's snapshot tests. |
 
