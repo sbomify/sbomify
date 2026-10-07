@@ -104,7 +104,9 @@ def _get_release_or_404(
 
     # A read goes through _can_read_release, which also keeps an OIDC bot to the
     # products it publishes to; ``release:read`` alone spans its whole workspace.
-    allowed = _can_read_release(request, release.product) if read else can(request, "release:manage", release.product)
+    allowed = (
+        _can_read_release(request, release.product) if read else can(request, "release:manage", release.product).allowed
+    )
     if not allowed:
         return 403, {"detail": "Permission denied", "error_code": ErrorCode.FORBIDDEN}
 
