@@ -40,7 +40,8 @@ targets and syncs `*.webm` and the screenshot tree to Cloudflare R2.
 
 ### Record on a machine with a GPU
 
-**Anything being published should be recorded on macOS**, not in Docker.
+**Anything being published should be recorded on a host with a GPU**, not in
+Docker.
 
 The container has no GPU — `/dev/dri` is not exposed, it runs in a VM, and
 Chromium starts with `--disable-gpu` — so rasterisation is software and the
@@ -48,8 +49,9 @@ CDP screencast delivers 12-16 unique frames a second whatever you do. The
 recording is *correct*, but a page pan lands in five to eight frames and reads
 as a stutter.
 
-On a Mac, Chromium composites through Metal. Point Playwright at a locally
-launched browser instead of the container's CDP endpoint:
+On a Mac, Chromium composites through Metal; on a Linux desktop, through its
+GPU driver. Point Playwright at a locally launched browser instead of the
+container's CDP endpoint:
 
 ```bash
 docker compose -f docker-compose.tests.yml up -d db redis sbomify-s3
@@ -75,7 +77,9 @@ curl -sSL -o ~/.local/share/fonts/Figtree-variable.ttf \
     "https://github.com/google/fonts/raw/main/ofl/figtree/Figtree%5Bwght%5D.ttf"
 fc-cache -f
 fc-list | grep -c Figtree      # expect 8
-``` `SCREENCAST_LOCAL_BROWSER=1` launches Chromium **headed** on purpose:
+```
+
+`SCREENCAST_LOCAL_BROWSER=1` launches Chromium **headed** on purpose:
 headless still composites through SwiftShader on several platforms, which is
 the thing being avoided.
 
