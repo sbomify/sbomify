@@ -12,7 +12,13 @@ must never look alarming. unmeasured_label replaces the label rather than
 hiding behind it: a bare dash tells a sighted reader nothing, and an
 explanation only a screen reader gets leaves the people the state is for worse
 informed than the people it is not.
-The optional slot holds a change indicator beside the value. Accents include
+The optional slot holds a change indicator beside the value. The optional
+note slot is the line under the label: where a figure came from, or what it
+leaves out -- "From plan list prices", "Past due, in dunning". It is a slot
+rather than an attribute because a note is often a sentence assembled from
+template logic, and it is part of the card rather than a paragraph the page
+styles, so a strip of cards cannot drift apart one card at a time.
+Accents include
 semantic colours and the severity scale, so pages never supply a colour recipe.
 Value and icon ink use those tokens directly, never a mix with the text colour.
 Each card is its own description list and can sit in any grid or flex layout.
@@ -20,7 +26,7 @@ loading replaces the value and label with decorative skeletons in the same
 grid, for c-feedback.loading-stats. Its parent supplies the loading announcement.
 {% endcomment %}
 {% load humanize %}
-<c-vars value="0" label icon accent compact x_value unmeasured unmeasured_label="Not measured yet" loading="" class />
+<c-vars value="0" label icon accent compact x_value unmeasured unmeasured_label="Not measured yet" loading="" note class />
 {% if unmeasured or not value or value == '0' %}
     {% firstof 'true' as stat_zero %}
 {% else %}
@@ -36,6 +42,9 @@ grid, for c-feedback.loading-stats. Its parent supplies the loading announcement
             {{ label }}<span class="block text-text-muted">{{ unmeasured_label }}</span>
         {% else %}
             {{ label }}
+        {% endif %}
+        {% if note and not loading %}
+            <span class="block text-xs font-normal text-text-muted mt-2">{{ note }}</span>
         {% endif %}
         {% if icon %}
             <span class="absolute flex items-center justify-center rounded-lg border border-solid border-[color-mix(in_oklab,var(--stat-accent)_13%,transparent)] bg-[color-mix(in_oklab,var(--stat-accent)_8%,var(--color-surface))] leading-none {% if compact %}top-3 right-3 h-6 w-6 text-sm{% else %}top-4 right-3 h-7 w-7 text-base sm:rounded-[0.5625rem] sm:top-[1.125rem] sm:right-[1.125rem] sm:h-8 sm:w-8{% endif %} text-[color:var(--stat-accent)]"
