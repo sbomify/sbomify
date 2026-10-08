@@ -34,6 +34,9 @@
                             {% if plugin.requires_upgrade %}
                                 <c-badges.warning>{{ plugin.required_plan }} plan required</c-badges.warning>
                             {% endif %}
+                            {% if plugin.is_paused_by_plan %}
+                                <c-badges.info title="You had this enabled on a previous plan. Nothing runs it now. The setting is kept, so it starts again if you upgrade.">Paused by your plan</c-badges.info>
+                            {% endif %}
                         </div>
                         <c-forms.hint compact>{{ plugin.description }}</c-forms.hint>
                     </div>

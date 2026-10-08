@@ -597,6 +597,21 @@ def test_scanning_prompt_hidden_once_a_scanner_is_enabled(sample_user):
 
 
 @pytest.mark.django_db
+def test_scanning_prompt_shown_while_the_plan_pauses_the_only_scanner(sample_user, ensure_billing_plans):
+    """Dependency Track stays on file after a downgrade so it resumes on upgrade.
+    Community does not run it, so the workspace still has no scanner."""
+    from sbomify.apps.plugins.models import TeamPluginSettings
+
+    team = _public_workspace("Paused Scanner Workspace")
+    team.billing_plan = "community"
+    team.save(update_fields=["billing_plan"])
+    Member.objects.create(team=team, user=sample_user, role="owner")
+    TeamPluginSettings.objects.create(team=team, enabled_plugins=["dependency-track"])
+
+    assert ADMIN_PROMPT in _visit(team, sample_user)
+
+
+@pytest.mark.django_db
 def test_workspace_public_stat_labels_agree_with_their_counts():
     """The summary strip read "1 Products" to the first person who saw it.
 
