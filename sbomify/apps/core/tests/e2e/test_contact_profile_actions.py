@@ -10,7 +10,7 @@ def test_cannot_create_profile_without_entities(authenticated_page: Page, team_w
     page = authenticated_page
     page.goto(reverse("teams:team_settings_tab", args=[team_with_business_plan.key, "contact-profiles"]))
     expect(page.get_by_text("No parties yet", exact=True)).to_be_visible()
-    page.locator("#contact-profiles-content").get_by_role("button", name="Add party", exact=True).click()
+    page.get_by_role("button", name="Add party", exact=True).click()
     page.locator('.profile-form input[name="name"]').fill("Empty profile")
 
     expect(page.locator('.profile-form button[type="submit"]')).to_be_disabled()

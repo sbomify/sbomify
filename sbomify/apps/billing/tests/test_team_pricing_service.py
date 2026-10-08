@@ -76,16 +76,15 @@ class TestGetPlanLimits:
         """Test passing BillingPlan object directly."""
         limits = pricing_service.get_plan_limits(team_with_business_plan, business_plan)
 
-        assert len(limits) == 3
-        labels = [item["label"] for item in limits]
-        assert "Members" in labels
-        assert "Products" in labels
-        assert "Components" in labels
+        # Members is a real quota: max_users is enforced on invite, so the card
+        # that lists what the plan allows has to show it next to the other two.
+        assert [item["label"] for item in limits] == ["Members", "Products", "Components"]
+        assert {item["label"]: item["value"] for item in limits}["Members"] == "10"
 
     def test_fetches_billing_plan_if_not_provided(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
         """Test auto-fetch BillingPlan from DB when not provided."""
         limits = pricing_service.get_plan_limits(team_with_business_plan)
-        assert len(limits) == 3
+        assert [item["label"] for item in limits] == ["Members", "Products", "Components"]
 
     def test_unlimited_display(self, pricing_service, team_with_business_plan, enterprise_plan):  # noqa: F811
         """Test -1 or None shows 'Unlimited'."""
@@ -99,6 +98,10 @@ class TestGetPlanLimits:
 
         limits = pricing_service.get_plan_limits(team_with_business_plan, enterprise_plan)
 
+        # max_users is absent from billing_plan_limits and None on the plan, so
+        # this also covers the unlimited quota reading as a tile rather than
+        # vanishing from the card.
+        assert [item["label"] for item in limits] == ["Members", "Products", "Components"]
         for item in limits:
             assert item["value"] == "Unlimited"
             assert item["unlimited"] is True

@@ -164,3 +164,41 @@ class TestTheDeclaredSubject:
         document = _document(root=IMAGE, sbom_root=DECOY)
 
         assert _primary(document).name == "core-image-minimal"
+
+
+class TestAPackageTheSchemaCannotType:
+    """A malformed package element reaches extraction, not the catch-all.
+
+    ``SPDX3Schema.packages`` types each software_Package element the moment it
+    is read, so a package whose name is a number raises ValidationError out of
+    extraction rather than out of the schema gate — the gate stops at
+    MAX_VALIDATED_ELEMENTS and, on a large graph, never sees the element at
+    all. Uncaught, that raise reached the upload endpoint's ``except
+    Exception``, which answers every uploader "Invalid request" and files a
+    Sentry event per malformed upload.
+    """
+
+    @staticmethod
+    def _with_bad_package(**fields: Any) -> dict[str, Any]:
+        document = _document(root=IMAGE)
+        for element in document["@graph"]:
+            if element.get("type") == "software_Package":
+                element.update(fields)
+        return document
+
+    def test_a_non_string_name_is_reported_rather_than_raised(self) -> None:
+        document = self._with_bad_package(name=12345)
+
+        package, error = _extract_spdx_primary_package(SPDX3Schema.model_validate(document))
+
+        assert package is None
+        assert error.startswith("Invalid SPDX 3.0 package element:")
+
+    def test_the_message_names_the_field_that_is_wrong(self) -> None:
+        """The old answer, "Invalid request", told the uploader nothing to fix."""
+        document = self._with_bad_package(name=12345, software_packageVersion={"not": "a string"})
+
+        _, error = _extract_spdx_primary_package(SPDX3Schema.model_validate(document))
+
+        assert "name" in error
+        assert "software_packageVersion" in error

@@ -49,7 +49,9 @@
                 </div>
             </div>
             </c-tables.cell>
-            <c-tables.cell compact><c-badges.role role="{{ member.role }}">{{ member.role|title }}</c-badges.role></c-tables.cell>
+            <c-tables.cell compact>
+            <c-badges.role role="{{ member.role }}">{{ member.role|title }}</c-badges.role>
+            </c-tables.cell>
             <c-tables.actions-cell>
             {% if can_administer and member.role != 'owner' %}
                 <c-actions-menu label="Member actions">
@@ -65,8 +67,10 @@
     <div class="space-y-3">
         {% for role_key, role_label, role_description in role_descriptions %}
             <div class="flex items-start gap-3">
-                <c-badges.role role="{{ role_key }}" class="mt-0.5 shrink-0">{{ role_label }}</c-badges.role>
-                <c-forms.hint compact>{{ role_description }}</c-forms.hint>
+                <div class="shrink-0">
+                    <c-badges.role role="{{ role_key }}">{{ role_label }}</c-badges.role>
+                </div>
+                <c-forms.hint>{{ role_description }}</c-forms.hint>
             </div>
         {% endfor %}
     </div>
@@ -87,7 +91,9 @@
                 {% for invitation in team.invitations %}
                     <c-tables.row>
                     <c-tables.cell compact>{{ invitation.email }}</c-tables.cell>
-                    <c-tables.cell compact><c-badges.role role="{{ invitation.role }}">{{ invitation.role|title }}</c-badges.role></c-tables.cell>
+                    <c-tables.cell compact>
+                    <c-badges.role role="{{ invitation.role }}">{{ invitation.role|title }}</c-badges.role>
+                    </c-tables.cell>
                     <c-tables.cell compact date muted>{{ invitation.expires_at|date:"j M Y" }}</c-tables.cell>
                     <c-tables.actions-cell>
                     <c-buttons.icon-quiet size="sm" label="Revoke invitation for {{ invitation.email }}" @click="$dispatch('open-delete-invitation-modal', { displayName: '{{ invitation.email|escapejs }}', formData: { invitation_id: '{{ invitation.id }}' } })"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon-quiet>
@@ -101,6 +107,6 @@
         {% endif %}
         </c-cards.card>
         {% include "components/modals/delete_modal.html.j2" with modal_id="delete-member-modal" modal_title="Remove member" message_text="Are you sure you want to remove" warning_text="This action will immediately remove the member from the workspace and revoke their access." form_action=request.path form=delete_member_form submit_text="Remove member" additional_fields='<input type="hidden" name="active_tab" value="members">' %}
-        {% include "components/modals/delete_modal.html.j2" with modal_id="delete-invitation-modal" modal_title="Revoke invitation" message_text="Are you sure you want to revoke the invitation for" warning_text="The invitation stops working straight away. They can no longer join the workspace with this invite." form_action=request.path form=delete_invitation_form submit_text="Revoke invitation" additional_fields='<input type="hidden" name="active_tab" value="members">' %}
+        {% include "components/modals/delete_modal.html.j2" with modal_id="delete-invitation-modal" modal_title="Revoke invitation" message_text="Are you sure you want to revoke the invitation for" warning_text="This action will immediately revoke the invitation. The user will no longer be able to join the workspace with it." form_action=request.path form=delete_invitation_form submit_text="Revoke invitation" additional_fields='<input type="hidden" name="active_tab" value="members">' %}
     {% endif %}
 </div>

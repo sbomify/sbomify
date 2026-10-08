@@ -100,6 +100,12 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         icon="fa-list-check",
         template="controls",
     ),
+    SettingsTab(
+        key="integrations",
+        label="Integrations",
+        icon="fa-plug",
+        template="integrations",
+    ),
     # Plugins is deliberately absent: it has its own page in the sidebar, which
     # shows the summary bar as well as the same settings partial this tab
     # embedded. Two entry points to one screen is a choice the reader has to make

@@ -198,7 +198,7 @@ def test_cra_parties_link_opens_complete_settings(authenticated_page: Page, cra_
         settings.get_by_role("navigation", name="Settings sections").get_by_role("link", name="Parties", exact=True)
     ).to_have_attribute("aria-current", "page")
     expect(settings.locator('#contact-profiles-content > [x-data="contactProfileList"]')).to_be_visible()
-    settings.locator("#contact-profiles-content").get_by_role("button", name="Add party", exact=True).click()
+    settings.get_by_role("button", name="Add party", exact=True).click()
     settings.get_by_role("button", name="Back to parties", exact=True).click()
     expect(settings.locator("#contact-profiles-content")).to_be_visible()
     settings.close()

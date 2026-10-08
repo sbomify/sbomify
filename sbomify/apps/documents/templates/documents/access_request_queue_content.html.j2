@@ -1,29 +1,43 @@
 {% load humanize %}
-{# Access Requests Section #}
+{% comment %}
+    The queue renders inside the Trust Center tab, so it composes the same card
+    the tab's other sections use instead of drawing a heading band of its own.
+    The sub-sections are h3 under the card's h2; they were h6 under a hand
+    styled h3, which skipped two levels for a screen reader and kept type
+    styling on a page rather than in a component.
+
+    Four empty sub-sections used to stack four grey sentences down the tab, so
+    a workspace with nothing to review read as a wall of nothing. One empty
+    state covers that case now.
+{% endcomment %}
 <c-cards.card flush>
-<c-cards.header compact title="Access requests" hint="Who can reach your gated components.">
+<c-cards.header compact title="Access requests">
 <c-buttons.primary size="sm" onclick="window.dispatchEvent(new CustomEvent('open-invite-user-modal'))">
-<i class="fas fa-user-plus mr-1" aria-hidden="true"></i>Invite
+<i class="fas fa-user-plus mr-1" aria-hidden="true"></i>Invite guest
 </c-buttons.primary>
 </c-cards.header>
+<c-cards.body>
 {% if not pending_requests and not pending_invitations and not approved_requests and not rejected_requests %}
-    <c-feedback.empty-state compact icon="fas fa-user-shield" title="No access requests yet" message="Invite someone, or wait for a visitor to ask for access to a gated component." />
+    <c-feedback.empty-state compact icon="fas fa-user-shield" title="No access requests yet" message="Invite a guest, or wait for someone to ask for access to your gated components." />
 {% else %}
-    <c-cards.body>
-    <div class="space-y-6">
+    <c-forms.hint>Who can reach your gated components.</c-forms.hint>
+    <div class="mt-4 flex flex-col gap-6">
         {# Pending Requests #}
-        {% if pending_requests %}
-            <div class="space-y-3 border-t border-solid border-border pt-4 first:border-t-0 first:pt-0">
-                <div class="flex items-center gap-2">
-                    <h3 class="m-0 text-sm font-semibold text-text">Pending requests</h3>
-                    <c-badges.warning size="sm">{{ pending_requests|length|intcomma }}</c-badges.warning>
-                </div>
+        <div>
+            <c-layout.section-header density="compact" title="Pending requests" class="mb-3">
+            <c-slot name="actions">
+            {% if pending_requests %}
+                <c-badges.warning size="sm">{{ pending_requests|length|intcomma }}</c-badges.warning>
+            {% endif %}
+            </c-slot>
+            </c-layout.section-header>
+            {% if pending_requests %}
                 <c-tables.table>
                 <c-tables.head>
                 <c-tables.header-cell nowrap>User</c-tables.header-cell>
                 <c-tables.header-cell>Email</c-tables.header-cell>
                 <c-tables.header-cell>Requested</c-tables.header-cell>
-                <c-tables.header-cell>NDA Signed</c-tables.header-cell>
+                <c-tables.header-cell>NDA signed</c-tables.header-cell>
                 <c-tables.actions-cell as="th" label="Actions" />
                 </c-tables.head>
                 <tbody>
@@ -54,7 +68,7 @@
                         {% endif %}
                         {% if req.nda_signatures.all|length > 1 %}
                             <div class="text-xs text-text-muted mt-1"
-                                 title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }} — {{ sig.signed_name }} — {{ sig.signed_at|date:'M j, Y g:i A' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
+                                 title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }}, {{ sig.signed_name }}, {{ sig.signed_at|date:'j M Y, H:i' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
                                 {{ req.nda_signatures.all|length|intcomma }} signatures on record
                             </div>
                         {% endif %}
@@ -95,19 +109,24 @@
                     {% endfor %}
                 </tbody>
                 </c-tables.table>
-            </div>
-        {% endif %}
+            {% else %}
+                <c-feedback.empty-state compact icon="fas fa-user-clock" title="No pending requests" message="Nobody is waiting for access right now." />
+            {% endif %}
+        </div>
         {# Pending Invitations #}
-        {% if pending_invitations %}
-            <div class="space-y-3 border-t border-solid border-border pt-4 first:border-t-0 first:pt-0">
-                <div class="flex items-center gap-2">
-                    <h3 class="m-0 text-sm font-semibold text-text">Pending invitations</h3>
-                    <c-badges.info size="sm">{{ pending_invitations|length|intcomma }}</c-badges.info>
-                </div>
+        <div class="pt-4 border-t border-border">
+            <c-layout.section-header density="compact" title="Pending invitations" class="mb-3">
+            <c-slot name="actions">
+            {% if pending_invitations %}
+                <c-badges.info size="sm">{{ pending_invitations|length|intcomma }}</c-badges.info>
+            {% endif %}
+            </c-slot>
+            </c-layout.section-header>
+            {% if pending_invitations %}
                 <c-tables.table>
                 <c-tables.head>
                 <c-tables.header-cell nowrap>Email</c-tables.header-cell>
-                <c-tables.header-cell>Invited By</c-tables.header-cell>
+                <c-tables.header-cell>Invited by</c-tables.header-cell>
                 <c-tables.header-cell>Invited</c-tables.header-cell>
                 <c-tables.actions-cell as="th" label="Actions" />
                 </c-tables.head>
@@ -136,21 +155,26 @@
                     {% endfor %}
                 </tbody>
                 </c-tables.table>
-            </div>
-        {% endif %}
+            {% else %}
+                <c-feedback.empty-state compact icon="fas fa-envelope" title="No pending invitations" message="Invite a guest to give them access to your gated components." />
+            {% endif %}
+        </div>
         {# Approved Requests #}
-        {% if approved_requests %}
-            <div class="space-y-3 border-t border-solid border-border pt-4 first:border-t-0 first:pt-0">
-                <div class="flex items-center gap-2">
-                    <h3 class="m-0 text-sm font-semibold text-text">Approved requests</h3>
-                    <c-badges.success size="sm">{{ approved_requests|length|intcomma }}</c-badges.success>
-                </div>
+        <div class="pt-4 border-t border-border">
+            <c-layout.section-header density="compact" title="Approved requests" class="mb-3">
+            <c-slot name="actions">
+            {% if approved_requests %}
+                <c-badges.success size="sm">{{ approved_requests|length|intcomma }}</c-badges.success>
+            {% endif %}
+            </c-slot>
+            </c-layout.section-header>
+            {% if approved_requests %}
                 <c-tables.table>
                 <c-tables.head>
                 <c-tables.header-cell nowrap>User</c-tables.header-cell>
                 <c-tables.header-cell>Email</c-tables.header-cell>
-                <c-tables.header-cell>Approved By</c-tables.header-cell>
-                <c-tables.header-cell>NDA Status</c-tables.header-cell>
+                <c-tables.header-cell>Approved by</c-tables.header-cell>
+                <c-tables.header-cell>NDA status</c-tables.header-cell>
                 <c-tables.actions-cell as="th" label="Actions" />
                 </c-tables.head>
                 <tbody>
@@ -187,7 +211,7 @@
                         {% endif %}
                         {% if req.nda_signatures.all|length > 1 %}
                             <div class="text-xs text-text-muted mt-1"
-                                 title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }} — {{ sig.signed_name }} — {{ sig.signed_at|date:'M j, Y g:i A' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
+                                 title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }}, {{ sig.signed_name }}, {{ sig.signed_at|date:'j M Y, H:i' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
                                 {{ req.nda_signatures.all|length|intcomma }} signatures on record
                             </div>
                         {% endif %}
@@ -208,20 +232,25 @@
                     {% endfor %}
                 </tbody>
                 </c-tables.table>
-            </div>
-        {% endif %}
+            {% else %}
+                <c-feedback.empty-state compact icon="fas fa-user-check" title="No approved requests" message="Approved requests appear here." />
+            {% endif %}
+        </div>
         {# Rejected Requests #}
-        {% if rejected_requests %}
-            <div class="space-y-3 border-t border-solid border-border pt-4 first:border-t-0 first:pt-0">
-                <div class="flex items-center gap-2">
-                    <h3 class="m-0 text-sm font-semibold text-text">Rejected requests</h3>
-                    <c-badges.danger size="sm">{{ rejected_requests|length|intcomma }}</c-badges.danger>
-                </div>
+        <div class="pt-4 border-t border-border">
+            <c-layout.section-header density="compact" title="Rejected requests" class="mb-3">
+            <c-slot name="actions">
+            {% if rejected_requests %}
+                <c-badges.danger size="sm">{{ rejected_requests|length|intcomma }}</c-badges.danger>
+            {% endif %}
+            </c-slot>
+            </c-layout.section-header>
+            {% if rejected_requests %}
                 <c-tables.table>
                 <c-tables.head>
                 <c-tables.header-cell nowrap>User</c-tables.header-cell>
                 <c-tables.header-cell>Email</c-tables.header-cell>
-                <c-tables.header-cell>Rejected By</c-tables.header-cell>
+                <c-tables.header-cell>Rejected by</c-tables.header-cell>
                 <c-tables.header-cell>Rejected</c-tables.header-cell>
                 <c-tables.actions-cell as="th" label="Actions" />
                 </c-tables.head>
@@ -260,11 +289,13 @@
                     {% endfor %}
                 </tbody>
                 </c-tables.table>
-            </div>
-        {% endif %}
+            {% else %}
+                <c-feedback.empty-state compact icon="fas fa-user-slash" title="No rejected requests" message="Rejected requests appear here." />
+            {% endif %}
+        </div>
     </div>
-    </c-cards.body>
 {% endif %}
+</c-cards.body>
 </c-cards.card>
 <script>
     // Menu items call these directly, so they survive HTMX swaps and the
@@ -316,7 +347,7 @@
         // Use window.showConfirmation if available, otherwise use native confirm
         const confirmed = typeof window.showConfirmation === 'function' ?
             await window.showConfirmation({
-                title: 'Reject Access Request?',
+                title: 'Reject access request?',
                 message: message,
                 confirmButtonText: 'Reject',
                 cancelButtonText: 'Cancel',
