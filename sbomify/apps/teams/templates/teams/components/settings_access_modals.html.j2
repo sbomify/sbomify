@@ -5,7 +5,7 @@
          x-data="{ open: false }"
          @open-invite-user-modal.window="open = true"
          @close-invite-modal.window="open = false">
-        <c-modal teleport="false" id="inviteUserModal" title="Invite user" icon="fas fa-user-plus">
+        <c-modal teleport="false" id="inviteUserModal" title="Invite guest" icon="fas fa-user-plus">
         <form id="inviteUserForm"
               method="post"
               action="{% url 'documents:access_request_queue' team.key %}"

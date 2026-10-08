@@ -77,6 +77,26 @@ can interfere with focus and overwrite emulated motion preferences.
 docker compose -f docker-compose.tests.yml exec tests uv run pytest sbomify/apps/core/tests/e2e/
 ```
 
+CI splits this suite across six matrix groups with pytest-split, weighted by
+`.github/e2e-test-durations.json`, because serially it is the pipeline's critical
+path. To reproduce one CI group locally, pass the same flags:
+
+```bash
+docker compose -f docker-compose.tests.yml exec tests uv run pytest \
+  --splits 6 --group 3 --durations-path .github/e2e-test-durations.json \
+  sbomify/apps/core/tests/e2e/
+```
+
+A test with no entry in that file is scheduled at the average, so adding one
+never drops it from a group, it only skews the balance. Refresh the weights when
+the suite's shape changes materially:
+
+```bash
+docker compose -f docker-compose.tests.yml exec tests uv run pytest \
+  sbomify/apps/core/tests/e2e/ --store-durations \
+  --durations-path .github/e2e-test-durations.json
+```
+
 Frontend tests:
 
 ```bash
@@ -323,9 +343,10 @@ Read them when changing shared components, page structure or interaction flows.
 
 - **Small visual changes can affect many test suites.** Search component callers,
   template includes, labels, selectors and old assertions across `sbomify/apps/`.
-  Follow the app groups in [CI](.github/workflows/ci-cd.yml), including the backend
-  tests that render HTML. The design-system gallery and a browser screenshot are
-  only part of validation.
+  [CI](.github/workflows/ci-cd.yml) runs every app's tests in one job, so a change
+  to a shared component is checked against every consumer at once, including the
+  backend tests that render HTML. The design-system gallery and a browser
+  screenshot are only part of validation.
 - **Keep behavior and accessibility intact.** Preserve routes, permissions, IDs,
   HTMX targets, Alpine state and filter parameters. When presentation intentionally
   changes, update tests to verify the user-visible result and interaction. Do not

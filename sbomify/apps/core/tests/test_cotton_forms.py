@@ -154,6 +154,7 @@ def test_input_hover_and_disabled_utilities_are_shared(rendered: str) -> None:
     field = _open_tag(rendered, "input", 'id="probe-text"')
     assert "hover:not-focus:not-disabled:border-border-light" in field
     assert "disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-background" in field
+    assert "read-only:bg-background read-only:text-text-muted" in field
 
 
 def test_input_boolean_props_render_bare_attributes(rendered: str) -> None:
