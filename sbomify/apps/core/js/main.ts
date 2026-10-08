@@ -25,7 +25,6 @@ import {
 // Centralized Alpine components and HTMX lifecycle
 import { initHtmxLifecycle } from './htmx-lifecycle';
 import { registerHtmxConfig } from './htmx-config';
-import { registerMorphPreserve } from './htmx-morph-preserve';
 import { initializeAlpine } from './alpine-init';
 import { initDjangoMessages } from './django-messages';
 
@@ -51,10 +50,6 @@ window.sbomifyFormatCompactRelativeDate = formatCompactRelativeDate;
 
 // Register HTMX config
 registerHtmxConfig();
-
-// The artifact page refreshes its content region with this swap. Without it
-// hx-swap="morph" falls back to innerHTML and nests the region in itself.
-registerMorphPreserve();
 
 // Initialize centralized HTMX lifecycle handler
 initHtmxLifecycle();

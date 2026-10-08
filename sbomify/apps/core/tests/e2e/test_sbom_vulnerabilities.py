@@ -477,7 +477,12 @@ def triage_lands_immediately(mocker):
 
 
 def _patch_triage_storage(mocker):
-    """Make a stored VEX artifact readable back, without an object store."""
+    """Make a stored VEX artifact readable back, without an object store.
+
+    The re-apply's own completion broadcast is silenced too: the tests deliver
+    vex_reapplied to the page themselves, exactly once, when they mean to.
+    """
+    mocker.patch("sbomify.apps.core.utils.broadcast_to_workspace")
     store: dict[str, bytes] = {}
 
     def upload(payload, *args, **kwargs):
