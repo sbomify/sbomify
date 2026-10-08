@@ -21,7 +21,7 @@ class TestCriticalPaths:
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # 1. Create component via API
@@ -84,7 +84,7 @@ class TestCriticalPaths:
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # 1. View initial state
@@ -123,7 +123,7 @@ class TestCriticalPaths:
 
         # Set session again
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # 5. Try to make component private on community plan - should fail
@@ -147,7 +147,7 @@ class TestCriticalPaths:
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # Tokens are workspace-scoped and created via the workspace tokens view.
@@ -196,8 +196,8 @@ class TestCriticalPaths:
         # Test core pages - settings redirects when current_team is set
         # First test without current_team to check the settings page directly
         session = client.session
-        if "current_team" in session:
-            del session["current_team"]
+        if "current_workspace" in session:
+            del session["current_workspace"]
         session.save()
 
         response = client.get(reverse("core:settings"))
@@ -210,7 +210,7 @@ class TestCriticalPaths:
 
         # Now set current team for other tests
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # Test sboms pages

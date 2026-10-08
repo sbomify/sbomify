@@ -37,7 +37,7 @@ def test_scan_counts_are_grouped(
     page = authenticated_page
     page.set_viewport_size({"width": width, "height": 900})
     page.goto(f"/workspaces/{team_with_business_plan.key}/vulnerability-scans/")
-    card = page.locator("dl").filter(has=page.locator("dt", has_text="Vulnerabilities"))
+    card = page.locator("dl").filter(has=page.locator("dt", has_text="Open vulnerability occurrences"))
     expect(card.locator("dd")).to_have_text("12,345,678")
     expect(page.get_by_role("cell").filter(has_text="1,234,567 Critical")).to_have_count(1)
     assert card.locator("dd").evaluate("el => el.scrollWidth <= el.clientWidth")

@@ -23,7 +23,7 @@ pytestmark = pytest.mark.django_db
 def context(member: Member, item: Product, **params: str) -> dict[str, Any]:
     request = RequestFactory().get(reverse("core:product_details", args=[item.id]), params)
     request.user = member.user
-    request.session = {"current_team": {"key": member.team.key, "role": "owner"}}
+    request.session = {"current_workspace": {"key": member.team.key, "role": "owner"}}
     result = build_product_page_context(request, item.id)
     assert result.ok, result.error
     assert result.value is not None
@@ -180,7 +180,7 @@ def test_release_postures_are_computed_for_the_shown_releases_only(
     postures.reset_mock()
     request = RequestFactory().get(reverse("core:product_releases", args=[product.id]))
     request.user = member.user
-    request.session = {"current_team": {"key": member.team.key, "role": "owner"}}
+    request.session = {"current_workspace": {"key": member.team.key, "role": "owner"}}
     releases = build_product_releases_context(request, product.id)
     assert releases.ok, releases.error
     assert releases.value is not None

@@ -87,7 +87,7 @@ def test_update_user_teams_session_skips_when_checksum_matches(sample_team_with_
     result = update_user_teams_session(request, user)
 
     assert result == first_teams
-    assert request.session["user_teams"] == first_teams
+    assert request.session["user_workspaces"] == first_teams
     assert request.session["user_teams_version"] == compute_user_teams_checksum(first_teams)
     # Session is modified because timestamp is updated (for TTL reset), but data is unchanged
     assert request.session.modified is True
@@ -106,7 +106,7 @@ def test_user_workspaces_refreshes_when_ttl_expires(sample_team_with_owner_membe
     context = {"request": request}
 
     # Seed stale data with an old timestamp and mismatched checksum
-    request.session["user_teams"] = {"stale": {"id": 1}}
+    request.session["user_workspaces"] = {"stale": {"id": 1}}
     request.session["user_teams_version"] = "old"
     request.session["user_teams_checked_at"] = (timezone.now() - timedelta(seconds=400)).isoformat()
     request.session.save()
@@ -116,7 +116,7 @@ def test_user_workspaces_refreshes_when_ttl_expires(sample_team_with_owner_membe
     refreshed = user_workspaces(context)
 
     assert refreshed == teams
-    assert request.session["user_teams"] == teams
+    assert request.session["user_workspaces"] == teams
     assert request.session["user_teams_version"] == compute_user_teams_checksum(teams)
 
 
@@ -223,8 +223,8 @@ def test_non_owners_cannot_access_team_details(sample_team_with_guest_member: Me
 
     # Set up session data for guest user
     session = client.session
-    session["current_team"] = {"key": sample_team_with_guest_member.team.key}
-    session["user_teams"] = {
+    session["current_workspace"] = {"key": sample_team_with_guest_member.team.key}
+    session["user_workspaces"] = {
         sample_team_with_guest_member.team.key: {"role": "guest", "name": sample_team_with_guest_member.team.name}
     }
     session.save()
@@ -276,7 +276,7 @@ def test_delete_team(sample_user: AbstractBaseUser):
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     session = client.session
-    session["user_teams"] = {
+    session["user_workspaces"] = {
         default_team.key: {"role": "owner", "name": default_team.name, "is_default_team": True},
         team.key: {"role": "owner", "name": team.name, "is_default_team": False},
     }
@@ -321,7 +321,7 @@ def test_delete_team_not_owner(sample_user: AbstractBaseUser):  # noqa: F811
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     session = client.session
-    session["user_teams"] = {team.key: {"role": "admin", "name": team.name}}
+    session["user_workspaces"] = {team.key: {"role": "admin", "name": team.name}}
     session.save()
 
     # Try to delete the team
@@ -402,8 +402,8 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
 
     # Set up session data for owner user
     session = client.session
-    session["current_team"] = {"key": sample_team_with_owner_member.team.key}
-    session["user_teams"] = {
+    session["current_workspace"] = {"key": sample_team_with_owner_member.team.key}
+    session["user_workspaces"] = {
         sample_team_with_owner_member.team.key: {"role": "owner", "name": sample_team_with_owner_member.team.name}
     }
     session.save()
@@ -483,10 +483,10 @@ def test_accept_invitation_sets_default_team_and_session(django_user_model, comm
     assert membership.is_default_team is True
 
     session = client.session
-    assert session["current_team"]["key"] == team.key
-    assert session["current_team"]["role"] == invitation.role
-    assert session["user_teams"][team.key]["role"] == invitation.role
-    assert session["user_teams"][team.key]["is_default_team"] is True
+    assert session["current_workspace"]["key"] == team.key
+    assert session["current_workspace"]["role"] == invitation.role
+    assert session["user_workspaces"][team.key]["role"] == invitation.role
+    assert session["user_workspaces"][team.key]["is_default_team"] is True
 
 
 @pytest.mark.django_db
@@ -522,8 +522,8 @@ def test_pending_invitation_auto_accept_on_login(django_user_model, community_pl
 
     # Session should now reflect the joined workspace
     session = client.session
-    assert session["current_team"]["key"] == team.key
-    assert session["current_team"]["role"] == "guest"
+    assert session["current_workspace"]["key"] == team.key
+    assert session["current_workspace"]["role"] == "guest"
 
     membership = Member.objects.get(user=invited_user, team=team)
     assert membership.is_default_team is True
@@ -571,9 +571,9 @@ def test_accept_invitation_updates_existing_member_role(django_user_model, commu
 
     # Verify session was updated with new role
     session = client.session
-    assert session["current_team"]["key"] == team.key
-    assert session["current_team"]["role"] == "admin"
-    assert session["user_teams"][team.key]["role"] == "admin"
+    assert session["current_workspace"]["key"] == team.key
+    assert session["current_workspace"]["role"] == "admin"
+    assert session["user_workspaces"][team.key]["role"] == "admin"
 
     # Verify invitation was deleted
     assert not Invitation.objects.filter(id=invitation.id).exists()
@@ -803,8 +803,8 @@ def test_delete_membership(
 
     # Set up session data for admin user
     session = client.session
-    session["current_team"] = {"key": membership.team.key}
-    session["user_teams"] = {membership.team.key: {"role": "admin", "name": membership.team.name}}
+    session["current_workspace"] = {"key": membership.team.key}
+    session["user_workspaces"] = {membership.team.key: {"role": "admin", "name": membership.team.name}}
     session.save()
 
     response: HttpResponse = client.delete(uri)
@@ -815,8 +815,8 @@ def test_delete_membership(
 
     # Set up session data for owner user
     session = client.session
-    session["current_team"] = {"key": membership.team.key}
-    session["user_teams"] = {membership.team.key: {"role": "owner", "name": membership.team.name}}
+    session["current_workspace"] = {"key": membership.team.key}
+    session["user_workspaces"] = {membership.team.key: {"role": "owner", "name": membership.team.name}}
     session.save()
 
     response: HttpResponse = client.delete(uri)
@@ -983,8 +983,8 @@ def test_access_team_settings__when_user_is_not_member__should_fail(
 
     # Ensure no current_team in session
     session = client.session
-    if "current_team" in session:
-        del session["current_team"]
+    if "current_workspace" in session:
+        del session["current_workspace"]
     session.save()
 
     response: HttpResponse = client.get(uri)
@@ -1021,7 +1021,7 @@ def test_visibility_toggle__owner_can_make_public(
     assert response.status_code == 302
     team_with_business_plan.refresh_from_db()
     assert team_with_business_plan.is_public is True
-    assert client.session["current_team"]["is_public"] is True
+    assert client.session["current_workspace"]["is_public"] is True
 
     messages = list(get_messages(response.wsgi_request))
     assert any("Trust center is now public." in msg.message for msg in messages)
@@ -1623,7 +1623,7 @@ def test_cannot_delete_default_team(sample_user: AbstractBaseUser):
 
     # Set up session data
     session = client.session
-    session["user_teams"] = {
+    session["user_workspaces"] = {
         team1.key: {"role": "owner", "name": team1.name, "is_default_team": True},
         team2.key: {"role": "owner", "name": team2.name, "is_default_team": False},
     }
@@ -1661,7 +1661,7 @@ def test_cannot_delete_last_team(sample_user: AbstractBaseUser):
 
     # Set up session data
     session = client.session
-    session["user_teams"] = {team.key: {"role": "owner", "name": team.name, "is_default_team": True}}
+    session["user_workspaces"] = {team.key: {"role": "owner", "name": team.name, "is_default_team": True}}
     session.save()
 
     # Try to delete the only team - should fail
@@ -1701,7 +1701,7 @@ def test_can_delete_non_default_team_when_multiple_exist(sample_user: AbstractBa
 
     # Set up session data
     session = client.session
-    session["user_teams"] = {
+    session["user_workspaces"] = {
         team1.key: {"role": "owner", "name": team1.name, "is_default_team": True},
         team2.key: {"role": "owner", "name": team2.name, "is_default_team": False},
     }
@@ -2283,7 +2283,7 @@ def test_team_general_post__updates_session(
 
     # Verify session was updated
     session = client.session
-    assert session["current_team"]["name"] == new_name
+    assert session["current_workspace"]["name"] == new_name
 
 
 @pytest.mark.django_db
@@ -2321,3 +2321,43 @@ def test_team_response_omits_oidc_bot_memberships(
     emails = [member.user.email for member in response.members]
     assert bot_user.email not in emails
     assert sample_team_with_owner_member.user.email in emails
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "invite_token",
+    [
+        "91a0cbcd-5aad-4de1-b18f",  # the truncation a mail client's line wrap produces
+        "not-a-token",
+        "42",  # a bare number: not a token, and not accepted as an id either
+    ],
+)
+def test_accept_invite_with_an_unparseable_token_is_not_found(django_user_model, community_plan, invite_token):
+    """``Invitation.token`` is a UUIDField, so an unusable token used to raise
+    ValidationError straight out of the query and 500 the request. A broken invite
+    link is a missing invitation."""
+    user = django_user_model.objects.create_user(
+        username="mangled-invite-recipient",
+        email="mangled-invite@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Mangled Invite Workspace", billing_plan=community_plan.key)
+    Member.objects.create(team=team, user=user, role="owner", is_default_team=True)
+
+    client = Client()
+    assert client.login(username="mangled-invite-recipient", password="secret")
+    setup_authenticated_client_session(client, team, user)
+
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": invite_token}))
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_accept_invite_with_an_unparseable_token_sends_a_signed_out_visitor_to_login():
+    """The anonymous branch reaches the same query first, so it 500'd too."""
+    client = Client()
+
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": "not-a-token"}))
+
+    assert response.status_code == 302

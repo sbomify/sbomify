@@ -86,6 +86,21 @@ class InvitationSchema(BaseModel):
     expires_at: datetime
 
 
+class PendingInvitationSchema(BaseModel):
+    """An invitation nobody has accepted yet. The token is the link's secret, so it is left out."""
+
+    id: int
+    email: str
+    role: str
+    created_at: datetime
+    expires_at: datetime
+
+
+class InvitationCreateSchema(BaseModel):
+    email: str
+    role: str = Field(default="member", description="owner, admin or member. Only an owner can invite an owner.")
+
+
 class TeamSchema(BaseModel):
     key: str
     name: str

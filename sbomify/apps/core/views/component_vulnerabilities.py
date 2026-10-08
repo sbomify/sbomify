@@ -71,6 +71,10 @@ def vulnerabilities_panel_context(
 
     query = panel["query"]
     context["vuln_query_string"] = query_string(query, page=1)
+    # The pager's links reset to page 1; a refresh must not. This keeps the page
+    # the reader is on as well as the filters, so re-rendering the panel after a
+    # triage lands them back where they were.
+    context["vuln_refresh_query"] = query_string(query)
     return context
 
 
@@ -137,7 +141,7 @@ class ComponentTriageModalView(GuestAccessBlockedMixin, LoginRequiredMixin, View
             "core/components/priority_triage_modal.html.j2",
             {
                 "component_id": component_id,
-                "team_key": request.session.get("current_team", {}).get("key", ""),
+                "team_key": request.session.get("current_workspace", {}).get("key", ""),
                 "triage_payload": {
                     "id": finding["id"],
                     "purl": finding["purl"],

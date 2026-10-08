@@ -246,3 +246,57 @@ class TestGetAutomationMappings:
         assert "ntia-minimum-elements-2021" in mappings
         assert "osv" in mappings
         assert mappings == PLUGIN_CONTROL_MAP
+
+
+@pytest.mark.django_db
+class TestIntegrationOwnedCatalogues:
+    """A synced catalogue's statuses come from the workspace's own compliance
+    tool. Promoting one from a plugin result would overwrite the authoritative
+    answer and be undone by the next sync a few hours later, and the SOC 2
+    codes in PLUGIN_CONTROL_MAP are exactly the ones a synced SOC 2 catalogue
+    uses, so the collision is not hypothetical.
+    """
+
+    def test_a_synced_control_is_not_promoted(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        catalog = ControlCatalog.objects.create(
+            team=team,
+            name="SOC 2 Type II",
+            version="",
+            source=ControlCatalog.Source.VANTA,
+            external_id="fw_soc2",
+            is_active=True,
+        )
+        control = Control.objects.create(
+            catalog=catalog, group="Security", control_id="CC6.8", title="Unauthorised software", sort_order=0
+        )
+        ControlStatus.objects.create(
+            control=control, product=None, status=ControlStatus.Status.NOT_IMPLEMENTED
+        )
+
+        result = auto_update_from_assessment(team, "osv", passed=True)
+
+        assert result.ok
+        assert result.value == 0
+        assert (
+            ControlStatus.objects.get(control=control, product__isnull=True).status
+            == ControlStatus.Status.NOT_IMPLEMENTED
+        )
+
+    def test_a_hand_maintained_control_is_still_promoted(self, sample_team_with_owner_member) -> None:
+        """The exclusion must be narrow: this is the behaviour it protects."""
+        team = sample_team_with_owner_member.team
+        catalog = ControlCatalog.objects.create(
+            team=team, name="SOC 2 Type II", version="2024", source=ControlCatalog.Source.BUILTIN, is_active=True
+        )
+        control = Control.objects.create(
+            catalog=catalog, group="Security", control_id="CC6.8", title="Unauthorised software", sort_order=0
+        )
+
+        result = auto_update_from_assessment(team, "osv", passed=True)
+
+        assert result.value == 1
+        assert (
+            ControlStatus.objects.get(control=control, product__isnull=True).status
+            == ControlStatus.Status.COMPLIANT
+        )
