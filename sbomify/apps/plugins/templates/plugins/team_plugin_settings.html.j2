@@ -19,7 +19,7 @@
             <c-badges.secondary>{{ group.list|length|intcomma }}</c-badges.secondary>
             </c-cards.header>
             {% for plugin in group.list %}
-                <c-layout.select-row divided toggle_ref="toggle" :disabled="plugin.requires_upgrade" x_data="{ enabled: {{ plugin.is_enabled|yesno:'true,false' }} }">
+                <c-layout.select-row divided toggle_ref="toggle" x_data="{ enabled: {{ plugin.is_enabled|yesno:'true,false' }} }">
                 <c-forms.checkbox-input name="enabled_plugins" value="{{ plugin.name }}" id="plugin-{{ plugin.name }}" aria-label="Enable {{ plugin.display_name|default:plugin.name }}" x-ref="toggle" x-model="enabled" :checked="plugin.is_enabled" :disabled="plugin.requires_upgrade" />
                 <div class="flex min-w-0 flex-1 flex-col gap-3">
                     <div class="flex min-w-0 flex-col gap-2">
