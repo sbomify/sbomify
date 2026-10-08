@@ -7,6 +7,7 @@ from django.http import HttpRequest
 from sbomify.apps.core.apis import get_component, list_component_sboms
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import number_to_random_token
+from sbomify.apps.plugins.latest import latest_run_ids
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.forms import SbomDeleteForm
 from sbomify.apps.sboms.services.sboms import delete_sbom_record
@@ -40,10 +41,14 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
     if not sbom_ids:
         return
 
+    # Each provider's newest run per SBOM, picked by id without reading the run history.
+    latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), sbom_ids)
+
     if not merged:
+        # The newest of those per SBOM: a DISTINCT ON over the winners alone.
         latest_summaries = (
-            AssessmentRun.objects.filter(sbom_id__in=sbom_ids, category="security", status="completed")
-            .order_by("sbom_id", "-created_at")
+            AssessmentRun.objects.filter(id__in=latest_ids)
+            .order_by("sbom_id", "-created_at", "-id")
             .distinct("sbom_id")
             .values("sbom_id", *RESULT_SUMMARY_COLUMNS)
         )
@@ -60,13 +65,8 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
             item["vuln"] = counts_by_sbom.get(str(item.get("sbom", {}).get("id", "")))
         return
 
-    # DISTINCT ON (sbom_id, plugin_name) with newest-first ordering returns each
-    # provider's latest run per SBOM — never every historical result blob.
     latest_runs = (
-        AssessmentRun.objects.filter(sbom_id__in=sbom_ids, category="security", status="completed")
-        .order_by("sbom_id", "plugin_name", "-created_at")
-        .distinct("sbom_id", "plugin_name")
-        .values("sbom_id", "result")
+        AssessmentRun.objects.filter(id__in=latest_ids).order_by("sbom_id", "plugin_name").values("sbom_id", "result")
     )
     results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
     for run in latest_runs:

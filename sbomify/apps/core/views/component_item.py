@@ -22,6 +22,7 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.documents.services.documents import get_document_detail
+from sbomify.apps.plugins.latest import latest_run_ids
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.public_assessment_utils import get_sbom_passing_assessments, passing_assessments_to_dict
 from sbomify.apps.plugins.services.requirements import build_requirements
@@ -307,20 +308,10 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     )
                     alias_map: dict[str, list[str]] = {}
                     if latest_sbom_id:
-                        # Two-phase DISTINCT ON: picking the winning run ids first
-                        # touches no JSON; only then is `result` fetched for just
-                        # those winners. Projecting `result` directly on the
-                        # DISTINCT ON query forces Postgres to de-TOAST every
-                        # historical rescan's blob before picking a winner — the
-                        # same class of bug #1121 fixed for the SBOM list and
-                        # trends endpoints, still live here (#1218).
-                        winner_ids = list(
-                            AssessmentRun.objects.filter(
-                                sbom_id=latest_sbom_id, category="security", status="completed"
-                            )
-                            .order_by("plugin_name", "-created_at")
-                            .distinct("plugin_name")
-                            .values_list("id", flat=True)
+                        # Two phases: the winning run ids first, touching no JSON
+                        # and no run history, then `result` for just those winners.
+                        winner_ids = latest_run_ids(
+                            AssessmentRun.objects.filter(category="security", status="completed"), [latest_sbom_id]
                         )
                         provider_results = list(
                             AssessmentRun.objects.filter(id__in=winner_ids).values_list("result", flat=True)
@@ -344,18 +335,13 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 vex_suppression_states = [r["state"] for r in vex_suppressions]
             # Get latest vulnerability scan for this SBOM from AssessmentRun
             component_id_from_item = item.get("component_id") or component_id  # type: ignore[union-attr]
-            latest_scan = (
-                AssessmentRun.objects.filter(
-                    sbom_id=item_id,
-                    sbom__component_id=component_id_from_item,
-                    category="security",
-                    status="completed",
-                )
-                .select_related("sbom__component")
-                .order_by("-created_at")
-                .first()
-            )
-            if latest_scan:
+            has_scan = AssessmentRun.objects.filter(
+                sbom_id=item_id,
+                sbom__component_id=component_id_from_item,
+                category="security",
+                status="completed",
+            ).exists()
+            if has_scan:
                 # Actionable counts from every provider's latest run, merged by
                 # alias and filtered through the component's VEX — the same math
                 # as the component page badge, so the numbers agree everywhere.
@@ -367,14 +353,10 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 )
                 from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
-                # Two-phase DISTINCT ON — see the VEX alias-enrichment block above
-                # for why: picking winner ids first avoids de-TOASTing every
-                # historical rescan's `result` blob just to discard the losers.
-                winner_ids = list(
-                    AssessmentRun.objects.filter(sbom_id=item_id, category="security", status="completed")
-                    .order_by("plugin_name", "-created_at")
-                    .distinct("plugin_name")
-                    .values_list("id", flat=True)
+                # Two phases, as in the VEX alias-enrichment block above: winner
+                # ids first, so no historical rescan's `result` blob is read.
+                winner_ids = latest_run_ids(
+                    AssessmentRun.objects.filter(category="security", status="completed"), [item_id]
                 )
                 # Excluded in the database, not in Python: result can be
                 # multi-megabyte and TOASTed, and result_skipped exists as a
@@ -421,7 +403,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     )
                 if provider_runs:
                     # Dated from the runs the card is actually reporting. Taking
-                    # latest_scan here would stamp a provider that scanned with
+                    # the newest run here would stamp a provider that scanned with
                     # the time a later provider declined, so the card would read
                     # as "scanned then, found nothing" for a moment when nothing
                     # was scanned.

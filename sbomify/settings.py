@@ -276,6 +276,7 @@ INSTALLED_APPS = [
     "sbomify.apps.controls",
     "sbomify.apps.oidc",
     "sbomify.apps.security_advisories",
+    "sbomify.apps.integrations",
 ]
 
 
@@ -624,6 +625,25 @@ if REDIS_CA_CERTS and not _redis_is_tls:
     )
 
 
+# How many connections one cache alias may hold open to Redis at once, and how
+# long a caller waits for one of them to come free before giving up.
+#
+# The ceiling has to cover the threads that can be inside a cache command at the
+# same time in one process. Under the ASGI worker that is every thread Django
+# runs a sync view on, plus the channels consumers, plus the explicit
+# ``ThreadPoolExecutor`` fan-outs in the SBOM builder and the compliance
+# service — comfortably more than the 10 this used to allow. A pool is lazy, so
+# this is a ceiling rather than an allocation: a quiet process still opens one
+# connection, and the cost of the headroom is only paid under the load that
+# needs it.
+REDIS_CACHE_MAX_CONNECTIONS = int(os.environ.get("REDIS_CACHE_MAX_CONNECTIONS", "50"))
+
+# Two seconds is roughly a thousand times a healthy cache command, so a wait
+# this long means the pool is genuinely saturated rather than briefly busy, and
+# refusing is then the honest answer.
+REDIS_CACHE_POOL_TIMEOUT = int(os.environ.get("REDIS_CACHE_POOL_TIMEOUT", "2"))
+
+
 # Cache Configuration
 def build_redis_caches(location: str, ca_certs: str = "") -> dict[str, dict[str, Any]]:
     """The two Redis cache aliases, which differ in one option only.
@@ -635,11 +655,34 @@ def build_redis_caches(location: str, ca_certs: str = "") -> dict[str, dict[str,
     Both point at the same Redis. ``default`` swallows connection failures;
     ``throttle`` does not, and nothing else about them may drift apart.
     """
-    pool_kwargs: dict[str, Any] = {"max_connections": 10}
+    pool_kwargs: dict[str, Any] = {
+        "max_connections": REDIS_CACHE_MAX_CONNECTIONS,
+        "timeout": REDIS_CACHE_POOL_TIMEOUT,
+    }
     if ca_certs:
         pool_kwargs["ssl_ca_certs"] = ca_certs
     options: dict[str, Any] = {
         "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        # redis-py's plain ConnectionPool refuses the moment every connection is
+        # checked out: it raises MaxConnectionsError rather than waiting for one
+        # of the in-flight commands to return its connection, which they do in
+        # milliseconds. Neither alias below can tell that refusal apart from
+        # Redis being unreachable, because it arrives wrapped as the same
+        # django-redis ConnectionInterrupted — so a full pool was read as an
+        # outage while Redis was perfectly healthy.
+        #
+        # On ``default`` that cost the request its cache. On ``throttle`` it
+        # cost the user the request: the throttle treats a backend error as
+        # "refuse and retry shortly", and latches that refusal for a few seconds
+        # across the whole process, so one momentary pool exhaustion answered
+        # every throttled API call with a 429 it had not earned.
+        #
+        # BlockingConnectionPool waits for a free connection instead, up to
+        # ``timeout``. A busy pool then costs a caller the milliseconds it takes
+        # for a slot to open, and only a pool that stays full for seconds still
+        # raises — at which point the refusal is a true overload signal and the
+        # throttle shedding load is the right behaviour.
+        "CONNECTION_POOL_CLASS": "redis.BlockingConnectionPool",
         "SOCKET_CONNECT_TIMEOUT": 5,
         "SOCKET_TIMEOUT": 5,
         "RETRY_ON_TIMEOUT": True,
@@ -1371,3 +1414,23 @@ ENTERPRISE_SALES_EMAIL = os.environ.get("ENTERPRISE_SALES_EMAIL", "hello@sbomify
 # PostHog analytics
 POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY", "")
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
+
+# Integrations
+#
+# One OAuth client per provider, registered by whoever runs this deployment.
+# Without both halves the provider's tile renders disabled rather than hidden,
+# so a self-hoster can see the feature exists and what it wants.
+#
+# The redirect URI to register is /integrations/oauth/<provider>/callback on
+# whichever hostname the app is served from.
+
+VANTA_CLIENT_ID = os.environ.get("VANTA_CLIENT_ID", "")
+VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
+
+# Vanta serves its API from one host for every region, but consent happens on
+# the customer's own regional app host: app.eu.vanta.com for EU accounts,
+# app.aus.vanta.com for AU. A deployment whose customers are not all in the US
+# overrides the authorize URL.
+VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
+VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
+VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")
