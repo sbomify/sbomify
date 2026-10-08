@@ -211,7 +211,7 @@ def test_release_preview_shares_the_full_table_columns_and_the_page_says_where_i
     ]
     request = RequestFactory().get(reverse("core:product_releases", args=[product.id]))
     request.user = member.user
-    request.session = {"current_team": {"key": member.team.key, "role": "owner"}}
+    request.session = {"current_workspace": {"key": member.team.key, "role": "owner"}}
     history = build_product_releases_context(request, product.id)
     assert history.ok and history.value is not None
     assert history.value["breadcrumb_items"] == [
