@@ -4826,6 +4826,7 @@ def list_component_sboms(
         from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
         from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
+        from sbomify.apps.plugins.services.access import plugins_within_plan
         from sbomify.apps.vulnerability_scanning.utils import (
             reconstruct_result_summary,
         )
@@ -4838,13 +4839,17 @@ def list_component_sboms(
         sbom_ids = [str(s.id) for s in paginated_sboms]
 
         # 1. Team-level plugin enablement (already a single query)
+        # Only the plugins the plan includes count: an entry it excludes is kept across
+        # a downgrade so it resumes on upgrade, and nothing runs it meanwhile, so
+        # "no_plugins_enabled" is the honest default status for a workspace holding
+        # only those.
         team_has_enabled_plugins = False
         try:
             team = component.team
             if team:
                 plugin_settings = TeamPluginSettings.objects.filter(team=team).first()
                 if plugin_settings:
-                    team_has_enabled_plugins = bool(plugin_settings.enabled_plugins)
+                    team_has_enabled_plugins = bool(plugins_within_plan(team, plugin_settings.enabled_plugins or []))
         except Exception as e:
             team_id = getattr(component, "team_id", None) or "unknown"
             log.warning(f"Error checking plugin settings for team {team_id}: {e}")

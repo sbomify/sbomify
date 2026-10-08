@@ -89,14 +89,14 @@
                     <span class="text-xs text-text-muted">Triggers EN 18031-1 (RED Article 3(3)(d)): access control, authentication, secure update, cryptography.</span>
                 </span>
                 </c-layout.select-row>
-                <c-layout.select-row ::class="!isRadioEquipment ? 'opacity-50' : ''">
+                <c-layout.select-row>
                 <c-forms.checkbox-input x-model="processesPersonalData" ::disabled="!isRadioEquipment" class="mt-0.5" />
                 <span class="flex-1">
                     <span class="text-text font-medium block">Processes personal data</span>
                     <span class="text-xs text-text-muted">Triggers EN 18031-2 (RED Article 3(3)(e)): data minimization, GDPR alignment. Requires RED.</span>
                 </span>
                 </c-layout.select-row>
-                <c-layout.select-row ::class="!isRadioEquipment ? 'opacity-50' : ''">
+                <c-layout.select-row>
                 <c-forms.checkbox-input x-model="handlesFinancialValue" ::disabled="!isRadioEquipment" class="mt-0.5" />
                 <span class="flex-1">
                     <span class="text-text font-medium block">Handles monetary value or virtual currency</span>
