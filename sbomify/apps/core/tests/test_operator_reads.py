@@ -151,6 +151,52 @@ def test_an_operator_has_a_way_to_the_cryptography_page(items) -> None:
     assert f'href="{crypto}"' in page
 
 
+@pytest.mark.parametrize(("role", "offered"), [("operator", True), ("member", True), ("guest", False)])
+def test_the_overview_offers_triage_to_every_role_that_can_triage(role, offered, items, mocker) -> None:
+    """The Overview's Triage action opens a modal that admits every triage role, operators included."""
+    from sbomify.apps.core.services import dashboard_page
+
+    real = dashboard_page.build_dashboard_context
+    finding = {
+        "id": "CVE-2026-0001",
+        "severity": "high",
+        "kev": False,
+        "malicious": False,
+        "package": "libexample",
+        "version": "1.0",
+        "ecosystem": "pypi",
+        "component_id": items["component_id"],
+        "component_name": "Private component",
+        "products": ["Private product"],
+        "decision": "",
+        "sla": {"label": "7 days", "overdue": False},
+    }
+
+    def with_one_finding(team_id):
+        result = real(team_id)
+        return result.__class__.success({**result.value, "needs_attention": [finding]})
+
+    mocker.patch.object(dashboard_page, "build_dashboard_context", with_one_finding)
+    team = items["team"]
+    team.has_completed_wizard = True
+    team.save(update_fields=["has_completed_wizard"])
+    client = _client(team, role)
+    session = client.session
+    session["current_workspace"]["has_completed_wizard"] = True
+    session.save()
+
+    response = client.get(reverse("core:dashboard"))
+    page = response.content.decode()
+    modal = reverse("core:component_triage_modal", kwargs={"component_id": items["component_id"]})
+
+    if offered:
+        assert response.status_code == 200
+        assert 'id="priority-triage-host"' in page
+        assert modal in page
+    else:
+        assert modal not in page
+
+
 def test_the_report_offers_vex_upload_only_to_a_role_that_can_upload(items) -> None:
     """Uploading a VEX file needs ``artifact:publish`` as well as the triage right."""
     url = reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": items["sbom_id"]})

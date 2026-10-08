@@ -300,7 +300,7 @@ def team_context(request: Any) -> Any:
         from django.conf import settings
 
         from sbomify.apps.billing.config import is_billing_enabled
-        from sbomify.apps.core.authz import ADMINISTER, DELETE, MANAGE, READ_INTERNAL, ROLE_OWNER
+        from sbomify.apps.core.authz import ADMINISTER, DELETE, MANAGE, READ_INTERNAL, ROLE_OWNER, TRIAGE
 
         return {
             "team": team,
@@ -312,6 +312,9 @@ def team_context(request: Any) -> Any:
             "can_manage": role in MANAGE,
             "can_delete": role in DELETE,
             "can_read_internal": role in READ_INTERNAL,
+            # Not can_triage: views pass that name per component, and this one
+            # is the workspace role's, for surfaces such as the Overview.
+            "can_triage_vulnerabilities": role in TRIAGE,
             "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
             "billing_enabled": is_billing_enabled(),
         }

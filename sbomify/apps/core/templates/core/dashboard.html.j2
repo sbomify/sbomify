@@ -45,7 +45,7 @@
         {% endif %}
         <c-overview.priority :dashboard="dashboard" workspace_key="{{ current_team.key }}" />
         <c-overview.products :products="dashboard.products" />
-        {% if can_manage %}<div id="priority-triage-host" class="contents"></div>{% endif %}
+        {% if can_triage_vulnerabilities %}<div id="priority-triage-host" class="contents"></div>{% endif %}
     {% endif %}
 {% endblock %}
 {% block scripts %}
