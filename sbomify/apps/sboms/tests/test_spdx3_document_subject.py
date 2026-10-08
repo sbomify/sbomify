@@ -166,39 +166,32 @@ class TestTheDeclaredSubject:
         assert _primary(document).name == "core-image-minimal"
 
 
-class TestAPackageTheSchemaCannotType:
-    """A malformed package element reaches extraction, not the catch-all.
+class TestAPackageWithMistypedFields:
+    """A mistyped field on the declared subject still leaves it the subject.
 
-    ``SPDX3Schema.packages`` types each software_Package element the moment it
-    is read, so a package whose name is a number raises ValidationError out of
-    extraction rather than out of the schema gate — the gate stops at
-    MAX_VALIDATED_ELEMENTS and, on a large graph, never sees the element at
-    all. Uncaught, that raise reached the upload endpoint's ``except
-    Exception``, which answers every uploader "Invalid request" and files a
-    Sentry event per malformed upload.
+    ``SPDX3Package`` reads a value of the wrong type as absent, so typing a
+    package element no longer raises out of extraction into the upload
+    endpoint's catch-all, which answered "Invalid request" and filed a Sentry
+    event per malformed upload. What the merged reader must still get right is
+    which package the document is about: the declared image keeps that role on
+    its spdxId, rather than the version of whichever package serialised first.
     """
 
     @staticmethod
-    def _with_bad_package(**fields: Any) -> dict[str, Any]:
+    def _with_bad_image(**fields: Any) -> dict[str, Any]:
         document = _document(root=IMAGE)
         for element in document["@graph"]:
-            if element.get("type") == "software_Package":
+            if element.get("spdxId") == IMAGE:
                 element.update(fields)
         return document
 
-    def test_a_non_string_name_is_reported_rather_than_raised(self) -> None:
-        document = self._with_bad_package(name=12345)
+    def test_a_non_string_name_reads_as_absent_on_the_declared_subject(self) -> None:
+        package = _primary_lenient(self._with_bad_image(name=12345))
 
-        package, error = _extract_spdx_primary_package(SPDX3Schema.model_validate(document))
+        assert (package.spdx_id, package.name, package.version) == (IMAGE, "", "1.0")
 
-        assert package is None
-        assert error.startswith("Invalid SPDX 3.0 package element:")
+    def test_a_subject_with_no_usable_name_or_version_is_still_the_subject(self) -> None:
+        """Not the decoy: its version would label the whole image."""
+        package = _primary_lenient(self._with_bad_image(name=12345, software_packageVersion={"not": "a string"}))
 
-    def test_the_message_names_the_field_that_is_wrong(self) -> None:
-        """The old answer, "Invalid request", told the uploader nothing to fix."""
-        document = self._with_bad_package(name=12345, software_packageVersion={"not": "a string"})
-
-        _, error = _extract_spdx_primary_package(SPDX3Schema.model_validate(document))
-
-        assert "name" in error
-        assert "software_packageVersion" in error
+        assert (package.spdx_id, package.name, package.version) == (IMAGE, "", "")
