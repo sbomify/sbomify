@@ -1703,7 +1703,9 @@ def prune_assessment_runs_task() -> None:
     scheduled run, which feeds TOAST bloat and the long checkpoints seen on
     staging. See plugins/retention.py for the two rules.
     """
-    from sbomify.apps.plugins.retention import prune_assessment_runs
+    from sbomify.apps.plugins import result_store, retention
 
-    removed = prune_assessment_runs()
-    logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs")
+    # Before the prune, so a retry collects what a failed delete left behind.
+    orphans = result_store.delete_orphaned_result_objects()
+    removed = retention.prune_assessment_runs()
+    logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects")

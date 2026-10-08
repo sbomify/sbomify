@@ -510,6 +510,46 @@ class TestRetentionReclaimsTheStoredPayload:
         assert not AssessmentRun.objects.filter(pk=superseded.pk).exists()
         assert late_key not in bucket.objects
 
+    def test_objects_a_failed_delete_left_behind_are_collected(self, sbom, bucket):
+        """The row commits before its objects go, so an object store error in
+        between leaves them pointing at nothing, and the retry can no longer
+        find the row. The orphan sweep finds them by their run id instead."""
+        from sbomify.apps.plugins.result_store import delete_orphaned_result_objects
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        kept = _run(sbom, days_ago=800)
+        pruned = _run(sbom, days_ago=900)
+        assert offload_assessment_results() == 2
+
+        def unreachable(bucket_name: str, key: str) -> None:
+            raise ConnectionError("object store unreachable")
+
+        bucket.delete_object = unreachable  # type: ignore[method-assign]
+        with pytest.raises(ConnectionError):
+            prune_assessment_runs(keep_per_plugin=2, min_age_days=0)
+        del bucket.delete_object
+        assert not AssessmentRun.objects.filter(pk=pruned.pk).exists()
+
+        assert delete_orphaned_result_objects() == 1
+
+        assert not [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{pruned.id}/")]
+        assert [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{kept.id}/")]
+
+    def test_the_daily_task_collects_orphans_before_it_prunes(self, mocker):
+        """First, so the retry of a run that failed mid-delete collects what
+        that attempt left behind."""
+        from sbomify.apps.plugins.tasks import prune_assessment_runs_task
+
+        calls = mocker.Mock()
+        calls.orphans.return_value = calls.prune.return_value = 0
+        mocker.patch("sbomify.apps.plugins.result_store.delete_orphaned_result_objects", calls.orphans)
+        mocker.patch("sbomify.apps.plugins.retention.prune_assessment_runs", calls.prune)
+
+        prune_assessment_runs_task.fn()
+
+        assert [name for name, *_ in calls.mock_calls] == ["orphans", "prune"]
+
 
 @pytest.mark.django_db
 class TestTheRunFindingsCardReadsStorage:

@@ -117,7 +117,8 @@ def prune_assessment_runs(
         with transaction.atomic():
             # A run whose payload was offloaded is the only pointer to its
             # objects, so they go once the row has: never a row pointing at a
-            # deleted object. Every row of the batch is locked while its key is
+            # deleted object. If deleting them fails after the commit, the
+            # orphan sweep in the daily task collects them by run id. Every row of the batch is locked while its key is
             # read and the row deleted, not only rows already offloaded: an
             # offload holds the same lock from reading the payload to committing
             # its key, so one landing mid-batch is either seen here or never

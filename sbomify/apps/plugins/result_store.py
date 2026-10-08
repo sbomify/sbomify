@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from typing import Any
 
 from django.conf import settings
@@ -202,3 +203,40 @@ def delete_result_objects(run_id: Any) -> int:
     for key in keys:
         client.delete_object(bucket, key)
     return len(keys)
+
+
+def delete_orphaned_result_objects(batch_size: int = 1000) -> int:
+    """Remove stored payloads whose run is gone. Returns how many were deleted.
+
+    Retention deletes a run's objects only after the row's deletion commits, so
+    an object store error in between leaves them with nothing pointing at them,
+    and a retry cannot find the row to try again. The key starts with the run
+    id, so an id with no row marks an orphan. Every object is written for a row
+    that already exists, so a live run's objects are never taken for one.
+    """
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    client = _client()
+    bucket = _bucket()
+    keys_by_run: dict[uuid.UUID, list[str]] = {}
+    for key in client.list_cached_aggregates(RESULT_PREFIX):
+        try:
+            run_id = uuid.UUID(key[len(RESULT_PREFIX) :].split("/", 1)[0])
+        except ValueError:
+            continue
+        keys_by_run.setdefault(run_id, []).append(key)
+
+    run_ids = list(keys_by_run)
+    deleted = 0
+    for start in range(0, len(run_ids), batch_size):
+        batch = run_ids[start : start + batch_size]
+        live = set(AssessmentRun.objects.filter(id__in=batch).values_list("id", flat=True))
+        for run_id in batch:
+            if run_id in live:
+                continue
+            for key in keys_by_run[run_id]:
+                client.delete_object(bucket, key)
+                deleted += 1
+    if deleted:
+        logger.info(f"[RESULT_STORE] deleted {deleted} orphaned result objects")
+    return deleted
