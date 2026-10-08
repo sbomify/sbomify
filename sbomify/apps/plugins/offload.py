@@ -66,6 +66,7 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
     pairs is harmless: grouping is on the exact key.
     """
     from sbomify.apps.plugins.models import AssessmentRun, AssessmentRunRelease
+    from sbomify.apps.plugins.sdk.enums import RunStatus
 
     if not sbom_ids or not plugin_names:
         return set()
@@ -84,16 +85,24 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
 
     # Newest first, ``-id`` breaking ties: runs written in one transaction share
     # a timestamp, and an unstable order there would protect the wrong row.
+    #
+    # Two runs per key are current: the newest of any status, and the newest
+    # completed one. The findings readers ask for the latest completed run, and a
+    # failed run can carry a synthesised result, so a newer failure would
+    # otherwise demote the run those readers still resolve to.
     current: set[Any] = set()
     seen: set[tuple[Any, str, frozenset[Any]]] = set()
-    for run_id, sbom_id, plugin_name in (
-        candidates.order_by("-created_at", "-id").values_list("id", "sbom_id", "plugin_name").iterator()
+    seen_completed: set[tuple[Any, str, frozenset[Any]]] = set()
+    for run_id, sbom_id, plugin_name, status in (
+        candidates.order_by("-created_at", "-id").values_list("id", "sbom_id", "plugin_name", "status").iterator()
     ):
         key = (sbom_id, plugin_name, frozenset(releases_by_run.get(run_id, ())))
-        if key in seen:
-            continue
-        seen.add(key)
-        current.add(run_id)
+        if key not in seen:
+            seen.add(key)
+            current.add(run_id)
+        if status == RunStatus.COMPLETED.value and key not in seen_completed:
+            seen_completed.add(key)
+            current.add(run_id)
     return current
 
 

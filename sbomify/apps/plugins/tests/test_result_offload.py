@@ -94,7 +94,14 @@ def _result(total: int = 2) -> dict[str, Any]:
     }
 
 
-def _run(sbom: SBOM, plugin: str = "osv", *, days_ago: int, result: dict[str, Any] | None = None) -> AssessmentRun:
+def _run(
+    sbom: SBOM,
+    plugin: str = "osv",
+    *,
+    days_ago: int,
+    result: dict[str, Any] | None = None,
+    status: str = "completed",
+) -> AssessmentRun:
     run = AssessmentRun.objects.create(
         sbom=sbom,
         plugin_name=plugin,
@@ -102,7 +109,7 @@ def _run(sbom: SBOM, plugin: str = "osv", *, days_ago: int, result: dict[str, An
         plugin_config_hash="0" * 64,
         category="security",
         run_reason="scheduled_refresh",
-        status="completed",
+        status=status,
         result=_result() if result is None else result,
     )
     AssessmentRun.objects.filter(pk=run.pk).update(created_at=timezone.now() - timedelta(days=days_ago))
@@ -161,6 +168,16 @@ class TestWhatIsSafeToDemote:
         assert doomed == {osv_old.id, dt_old.id}
         assert osv_current.id not in doomed
         assert dt_current.id not in doomed
+
+    def test_a_newer_failed_run_does_not_unseat_the_last_completed_one(self, sbom):
+        """The findings readers ask for the newest completed run, and a failed
+        run can carry a synthesised result, so it ranks as a payload too."""
+        completed = _run(sbom, days_ago=800)
+        older = _run(sbom, days_ago=900)
+        _run(sbom, days_ago=1, status="failed")
+
+        assert demotable_run_ids() == [older.id]
+        assert completed.id not in demotable_run_ids()
 
     def test_a_run_with_no_payload_is_not_a_candidate(self, sbom):
         _run(sbom, days_ago=400)
