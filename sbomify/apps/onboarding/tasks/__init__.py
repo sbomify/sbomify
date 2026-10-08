@@ -264,12 +264,13 @@ def requeue_missed_welcome_emails_task() -> None:
     of the eligibility test, along with its own absence: a user with no
     ``OnboardingStatus`` row at all is the case where the welcome is most
     certainly missing, because the signal that creates the row is the signal
-    that queues the email. The service still applies its own gates — bot
-    identities, deactivated or soft-deleted accounts, and an address already
-    refused — so this only reaches users a send would legitimately go to, and it
-    is the right place for those rules to live rather than duplicated into this
-    query. The liveness pair is repeated here anyway, to avoid queueing a task
-    per deleted account for the service to throw away.
+    that queues the email. The service owns the other gates: bot identities,
+    deactivated or soft-deleted accounts, an empty address and one already
+    refused. A send is decided there, at send time, because a task queued
+    before a deletion runs after it. The query repeats each of them only as a
+    pre-filter, so a daily run does not queue a task per account for the
+    service to throw away. Dropping one from the query costs wasted tasks;
+    dropping one from the service would mail someone it must not.
 
     The drip opt-out is deliberately *not* one of them. It covers the scheduled
     sequence; the welcome email confirms an account the user just created, so
