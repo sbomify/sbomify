@@ -40,7 +40,7 @@ def test_component_foregrounds_match_the_palette(authenticated_page: Page, theme
     # accent itself: the two are deliberately not the same colour.
     for label, ink_token, accent_token in [
         ("Components with stale SBOMs", "warning-ink", "warning"),
-        ("Past your patch SLA", "danger-ink", "danger"),
+        ("Past patch SLA", "danger-ink", "danger"),
         ("NTIA compliant", "success-ink", "success"),
     ]:
         card = page.locator("dl").filter(has_text=label)

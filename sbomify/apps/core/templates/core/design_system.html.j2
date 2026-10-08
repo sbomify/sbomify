@@ -80,7 +80,7 @@
          class="grid grid-cols-2 xl:grid-cols-4 gap-3"
          aria-label="Example overview metrics">
         <c-layout.stat-card :value="12" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
-        <c-layout.stat-card :value="4" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
+        <c-layout.stat-card :value="4" label="Past patch SLA" icon="fas fa-clock" accent="danger" />
         <c-layout.stat-card unmeasured unmeasured_label="Not scanned yet" label="Open vulnerabilities" icon="fas fa-crosshairs" accent="warning" />
         <c-layout.stat-card :value="0" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
         <c-layout.stat-card :value="2" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
@@ -116,6 +116,9 @@
         <c-overview.evidence :product="overview_demo_evidence" />
     </div>
     </c-cards.card>
+    <c-forms.hint>Each panel is a slice of a longer list and states its own scope: the digest counts the findings it ranked, and exposure says why its rows cannot be added up.</c-forms.hint>
+    <c-overview.priority :dashboard="overview_demo_digest" />
+    <c-overview.products :products="overview_demo_products" :product_count="overview_demo_product_count" :shares_components="True" :omits_components="True" />
     <c-overview.priority :dashboard="overview_demo_empty" />
     <c-overview.products />
     <c-forms.hint>An empty workspace shows setup in place of metrics and tables, using the onboarding explanations and existing upload controls.</c-forms.hint>
@@ -1157,6 +1160,35 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-cards.header title="Vulnerability reports" />
     {% include "core/components/vulnerability_demo.html.j2" %}
     </c-cards.card>
+    <p class="text-sm text-text-muted">
+        A chart drawn on a canvas is a picture, so a screen reader gets its name and none of its numbers.
+        Follow the chart with a <c-code-inline>screen-reader-table</c-code-inline> built from the data the
+        chart draws. It renders nothing on screen: the card below holds one with three rows.
+    </p>
+    <c-cards.card title="Signups" subtitle="Last 3 days.">
+    <c-tables.screen-reader-table caption="Signups per day">
+    <thead>
+        <tr>
+            <th scope="col">Day</th>
+            <th scope="col">Signups</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <th scope="row">Oct 5</th>
+            <td>2</td>
+        </tr>
+        <tr>
+            <th scope="row">Oct 6</th>
+            <td>0</td>
+        </tr>
+        <tr>
+            <th scope="row">Oct 7</th>
+            <td>5</td>
+        </tr>
+    </tbody>
+    </c-tables.screen-reader-table>
+    </c-cards.card>
     <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
     <c-cards.card>
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />
@@ -1208,6 +1240,19 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-layout.stat-card accent="success" icon="fas fa-circle-check" value="96%" label="NTIA compliant" />
         <c-layout.stat-card accent="warning" icon="fas fa-clock" value="4" label="Stale scans" />
     </div>
+    <p class="tw-data-label mb-3">With a note, for a figure that needs a caveat</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <c-layout.stat-card icon="fas fa-box-open" label="Components" value="128" note="From the latest release of each product." />
+        <c-layout.stat-card accent="warning" icon="fas fa-clock" label="Awaiting a scan" value="6">
+        <c-slot name="note">Queued behind {{ running_jobs|default:2 }} running jobs.</c-slot>
+        </c-layout.stat-card>
+    </div>
+    <p class="text-sm text-text-muted mb-8">
+        <code class="tw-code-inline">note</code> is the footnote under a number: where it came from, or what it
+        leaves out. Pass it as an attribute for a fixed sentence, or as a <code class="tw-code-inline">note</code>
+        slot when the sentence is assembled from template logic. It is a part of the card rather than a paragraph
+        the page styles, so a strip of cards cannot drift apart one card at a time.
+    </p>
     <p class="tw-data-label">Compact, the dense metric strip above a table</p>
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <c-layout.stat-card compact accent="danger" value="3" label="At risk" />
@@ -1541,6 +1586,16 @@ first-of-type rule that drops the leading hairline reads the section's position
     <div class="mt-6">
         <c-navigation.tabs-pills :tabs="demo_tabs" active="sboms" />
     </div>
+    <p class="text-sm text-text-muted mt-6 mb-2">
+        The nav link is the one that moves you between pages, rather than between panels on one
+        page. It is a real anchor, and the page you are on carries
+        <c-code-inline>aria-current="page"</c-code-inline> on the anchor itself.
+    </p>
+    <nav class="flex items-center gap-1" aria-label="Navigation link demo">
+        <c-navigation.nav-link href="#nav-link" current>Overview</c-navigation.nav-link>
+        <c-navigation.nav-link href="#nav-link">Revenue</c-navigation.nav-link>
+        <c-navigation.nav-link href="#nav-link" icon="fas fa-heart-pulse">Platform</c-navigation.nav-link>
+    </nav>
     <p class="text-sm text-text-muted mt-6 mb-2">
         The segmented control wears the same pills, for buttons that switch what is already on screen
         rather than select a panel: it is a group, so every button stays in the tab order, and which

@@ -183,7 +183,7 @@ def test_select_default_segments_and_chevron(rendered: str) -> None:
     assert all(
         token in select for token in ("bg-no-repeat", "bg-[position:right_0.75rem_center]", "bg-[length:1.25rem]")
     )
-    assert "w-full py-3 pr-10 pl-4 text-sm" in select
+    assert "w-full py-3 pr-10 pl-[1rem] text-sm" in select
     assert "bg-surface border-border text-text" in select
     assert PRIMARY_RING in select
 
@@ -192,7 +192,7 @@ def test_select_small_segment_never_conflicts_with_the_default(rendered: str) ->
     select = _open_tag(rendered, "select", 'id="probe-select-sm"')
     classes = _classes(rendered, "select", 'id="probe-select-sm"')
     assert "w-auto py-1 pr-7 pl-2 max-sm:min-h-11 text-xs" in select
-    for bit in ("w-full", "py-3", "pr-10", "pl-4", "text-sm"):
+    for bit in ("w-full", "py-3", "pr-10", "pl-[1rem]", "text-sm"):
         assert bit not in classes
 
 
@@ -362,7 +362,7 @@ def test_search_input_precedes_the_icon_so_peer_can_reach_it(rendered: str) -> N
 def test_search_hint_segment_reserves_the_shortcut_room(rendered: str) -> None:
     field = _open_tag(rendered, "input", 'id="probe-search-hint"')
     assert "pl-11" in field and "pr-14" in field
-    assert "pr-4 sm:pr-14" in field
+    assert "pr-[1rem] sm:pr-14" in field
 
 
 def test_search_clear_button_is_wired_to_the_model(rendered: str) -> None:

@@ -1,6 +1,21 @@
 {% load humanize %}
-{% comment %}Product exposure uses the same occurrence snapshot as the metrics. Evidence distinguishes absent SBOMs from old ones.{% endcomment %}
-<c-vars products />
+{% comment %}Product exposure uses the same occurrence snapshot as the metrics. Evidence distinguishes absent SBOMs from old ones.
+
+The Vulnerabilities column states the vulnerability position and the Evidence
+column states the evidence position, so a product with nothing scannable says
+"Not applicable" once and keeps the specific reason in Evidence, rather than
+printing the same words twice in one row under two different treatments.
+
+Past SLA is ink, not a pill, and every row carries the same shape whether the
+count is zero or not. It matches the inventory table's column, which is the
+other place a reader compares these numbers.
+
+The footer explains a mismatch only when there is one. shares_components and
+omits_components are facts about this workspace, not a standing disclaimer: a
+workspace whose components each sit in exactly one product really does add up
+to the workspace total, and telling that reader otherwise is simply wrong.
+{% endcomment %}
+<c-vars products product_count shares_components omits_components />
 <c-cards.card flush>
 <c-cards.header compact title="Exposure by product"><c-buttons.ghost size="sm" href="{% url 'core:products_dashboard' %}">View products<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost></c-cards.header>
 {% if products %}
@@ -19,18 +34,12 @@
             <c-tables.cell>
             {% if product.security_component_count %}
                 <c-overview.exposure :counts="product.counts" :unassessed="product.unassessed" />
-            {% elif product.component_count %}
-                <c-feedback.status>Not applicable</c-feedback.status>
             {% else %}
-                <c-badges.secondary>No components</c-badges.secondary>
+                <c-feedback.status>Not applicable</c-feedback.status>
             {% endif %}
             </c-tables.cell>
             <c-tables.cell>
-            {% if product.past_sla %}
-                <c-badges.danger>{{ product.past_sla }}</c-badges.danger>
-            {% else %}
-                0
-            {% endif %}
+            <span class="text-xs tabular-nums {% if product.past_sla %}font-semibold text-danger-ink{% else %}text-text-muted{% endif %}">{{ product.past_sla|default:0|intcomma }}</span>
             </c-tables.cell>
             <c-tables.cell><c-overview.evidence :product="product" /></c-tables.cell>
             <c-tables.cell end><c-buttons.ghost size="sm" href="{% url 'core:product_details' product.id %}">View product</c-buttons.ghost></c-tables.cell>
@@ -38,6 +47,22 @@
         {% endfor %}
     </tbody>
     </c-overview.table>
+    {% if product_count > products|length or shares_components or omits_components %}
+        <c-cards.footer>
+        <p class="m-0 max-w-prose text-xs text-text-muted">
+            {% if product_count > products|length %}
+                Showing {{ products|length|intcomma }} of {{ product_count|intcomma }} products.
+            {% endif %}
+            {% if shares_components and omits_components %}
+                These count a shared component under every product that has it, and leave out a component in no product, so they can differ from the workspace total in either direction.
+            {% elif shares_components %}
+                These count a shared component under every product that has it, so they can add up to more than the workspace total.
+            {% elif omits_components %}
+                A component in no product is not listed here, so these can add up to less than the workspace total.
+            {% endif %}
+        </p>
+        </c-cards.footer>
+    {% endif %}
 {% else %}
     <c-feedback.empty-state compact icon_size="sm" icon="fas fa-cube" title="No products yet" message="Add a product to group your components and see their exposure together." />
 {% endif %}

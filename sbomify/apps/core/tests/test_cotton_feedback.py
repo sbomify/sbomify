@@ -91,7 +91,7 @@ def test_alert_padding_segments_never_conflict(rendered: str) -> None:
     assert "px-4" in plain
     assert "pr-14" not in plain
     dismissible = _probe(rendered, "alert-warning")
-    assert "relative pl-4 pr-14" in dismissible
+    assert "relative pl-[1rem] pr-14" in dismissible
     assert "px-4" not in dismissible
 
 
@@ -197,7 +197,7 @@ def test_empty_state_medallion_default_recipe(rendered: str) -> None:
 
 def test_empty_state_medallion_size_and_tone_segments(rendered: str) -> None:
     medallion = _section(rendered, "empty-compact")
-    assert "w-16 h-16 text-xl mb-4" in medallion
+    assert "w-16 h-16 text-xl mb-[1rem]" in medallion
     assert "w-20" not in medallion
     assert "color-mix(in_oklab,var(--color-border)_30%,transparent)" in medallion
     assert "text-text-muted" in medallion

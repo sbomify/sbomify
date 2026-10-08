@@ -3,14 +3,27 @@ The priority panel composes shared table primitives. SLA, decisions and product
 membership come from the workspace service. Each row links to its component
 and opens the shared triage modal for that advisory and package.
 {% endcomment %}
+{% load humanize %}
 <c-vars dashboard workspace_key />
 <c-cards.card flush>
-<c-cards.header compact title="What to fix first">
+{% comment %}
+The panel is a top-4 of a longer list, and a ranked list whose length is hidden
+is one the reader re-sorts for themselves. The count leads the hint rather than
+trailing it, so a narrow column wraps the sentence instead of orphaning the
+number. It appears only when there is more than fits, and it counts findings
+rather than occurrences: a summary-only scanner reports occurrences with
+nothing itemised to rank, and the alert above this panel accounts for those.
+
+The hint stays on one line: a multi-line {% if %} inside an attribute renders
+the value with a leading newline.
+{% endcomment %}
+{# djlint:off #}
+<c-cards.header compact title="What to fix first" hint="{% if dashboard.needs_attention_total > dashboard.needs_attention|length %}Top {{ dashboard.needs_attention|length|intcomma }} of {{ dashboard.needs_attention_total|intcomma }}, ranked by exploitation and patch SLA{% elif dashboard.needs_attention %}Ranked by exploitation and patch SLA{% endif %}">
+{# djlint:on #}
 {% if workspace_key %}
     <c-buttons.ghost size="sm" href="{% url 'vulnerability_scanning:vulnerability_scans' workspace_key %}">View vulnerability scans<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
 {% endif %}
-</c-cards.header>
-{% if dashboard.needs_attention %}
+</c-cards.header>{% if dashboard.needs_attention %}
     <c-overview.table aria-label="Priority vulnerabilities">
     <c-tables.head>
     <c-tables.header-cell>Vulnerability</c-tables.header-cell>

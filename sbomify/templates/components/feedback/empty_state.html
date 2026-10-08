@@ -17,11 +17,16 @@ size="sm" fits a small popover, including its type, mark and spacing.
 
 title is optional: the panel inside a detail view often has only the one line
 of explanation, and an empty heading would still take its own line.
+
+The mark's and the action row's margins are arbitrary values rather than mb-3,
+mb-4 and mt-4, which compute the same: public pages still load the pre-Tailwind
+static/css/utilities.css, where those names carry !important on a larger scale.
+tables/cell.html has the long version.
 {% endcomment %}
 <c-vars icon="fas fa-inbox" icon_size icon_variant title message compact secondary_text secondary_url size class />
 <div data-empty-state class="flex flex-col items-center justify-center text-center {% if size == 'sm' %}px-5 py-8{% elif compact %}px-8 py-8{% else %}px-8 py-12{% endif %}{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>
-    <div class="flex items-center justify-center rounded-full {% if size == 'sm' %}w-10 h-10 text-base mb-3{% elif icon_size == 'sm' %}w-16 h-16 text-xl mb-4{% else %}w-20 h-20 text-2xl mb-6{% endif %} {% if icon_variant == 'neutral' %}bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] text-text-muted{% else %}bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_15%,transparent)_0%,color-mix(in_oklab,var(--color-primary)_5%,transparent)_100%)] text-primary{% endif %}">
+    <div class="flex items-center justify-center rounded-full {% if size == 'sm' %}w-10 h-10 text-base mb-[0.75rem]{% elif icon_size == 'sm' %}w-16 h-16 text-xl mb-[1rem]{% else %}w-20 h-20 text-2xl mb-6{% endif %} {% if icon_variant == 'neutral' %}bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] text-text-muted{% else %}bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_15%,transparent)_0%,color-mix(in_oklab,var(--color-primary)_5%,transparent)_100%)] text-primary{% endif %}">
         <i class="{{ icon }}" aria-hidden="true"></i>
     </div>
     {% if title %}
@@ -35,7 +40,7 @@ of explanation, and an empty heading would still take its own line.
         </p>
     {% endif %}
     {% if slot.strip or secondary_text and secondary_url %}
-        <div class="flex items-center justify-center gap-3 flex-wrap{% if size == 'sm' %} mt-4{% endif %}">
+        <div class="flex items-center justify-center gap-3 flex-wrap{% if size == 'sm' %} mt-[1rem]{% endif %}">
             {{ slot }}
             {% if secondary_text and secondary_url %}
                 <a href="{{ secondary_url }}"
