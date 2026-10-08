@@ -164,3 +164,34 @@ class TestTheDeclaredSubject:
         document = _document(root=IMAGE, sbom_root=DECOY)
 
         assert _primary(document).name == "core-image-minimal"
+
+
+class TestAPackageWithMistypedFields:
+    """A mistyped field on the declared subject still leaves it the subject.
+
+    ``SPDX3Package`` reads a value of the wrong type as absent, so typing a
+    package element no longer raises out of extraction into the upload
+    endpoint's catch-all, which answered "Invalid request" and filed a Sentry
+    event per malformed upload. What the merged reader must still get right is
+    which package the document is about: the declared image keeps that role on
+    its spdxId, rather than the version of whichever package serialised first.
+    """
+
+    @staticmethod
+    def _with_bad_image(**fields: Any) -> dict[str, Any]:
+        document = _document(root=IMAGE)
+        for element in document["@graph"]:
+            if element.get("spdxId") == IMAGE:
+                element.update(fields)
+        return document
+
+    def test_a_non_string_name_reads_as_absent_on_the_declared_subject(self) -> None:
+        package = _primary_lenient(self._with_bad_image(name=12345))
+
+        assert (package.spdx_id, package.name, package.version) == (IMAGE, "", "1.0")
+
+    def test_a_subject_with_no_usable_name_or_version_is_still_the_subject(self) -> None:
+        """Not the decoy: its version would label the whole image."""
+        package = _primary_lenient(self._with_bad_image(name=12345, software_packageVersion={"not": "a string"}))
+
+        assert (package.spdx_id, package.name, package.version) == (IMAGE, "", "")

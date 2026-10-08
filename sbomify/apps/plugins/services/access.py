@@ -4,6 +4,8 @@ Shared by the plugin API and the artifact page's coverage check, so the card
 never offers a run the endpoint would refuse.
 """
 
+from collections.abc import Iterable
+
 from sbomify.apps.teams.models import Team
 
 
@@ -43,3 +45,20 @@ def team_has_plugin_access(team: Team, plugin_name: str) -> bool:
         return getattr(plan, required_feature, False)
     except BillingPlan.DoesNotExist:
         return False
+
+
+def plugins_within_plan(team: Team, plugin_names: Iterable[str]) -> list[str]:
+    """The subset of ``plugin_names`` the workspace's plan includes, in order.
+
+    ``TeamPluginSettings.enabled_plugins`` records what a workspace asked for,
+    which is not the same as what it may run: an entry the plan excludes stays
+    on the list so the setting takes effect again on upgrade instead of being
+    deleted by the next save. Anything that needs "what actually runs" has to
+    filter through here rather than read the list directly.
+    """
+    return [name for name in plugin_names if team_has_plugin_access(team, name)]
+
+
+def plugins_outside_plan(team: Team, plugin_names: Iterable[str]) -> list[str]:
+    """The subset of ``plugin_names`` the workspace's plan excludes, in order."""
+    return [name for name in plugin_names if not team_has_plugin_access(team, name)]
