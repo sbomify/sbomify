@@ -332,7 +332,7 @@ class DesignSystemView(LoginRequiredMixin, View):
         from django.core.paginator import Paginator
         from django.urls import reverse
 
-        from sbomify.apps.core.services.inventory_page import COLUMNS
+        from sbomify.apps.core.services.inventory_page import COLUMNS, HEADINGS, KINDS
 
         inventory_url = reverse("core:products_dashboard")
         row = {
@@ -372,6 +372,21 @@ class DesignSystemView(LoginRequiredMixin, View):
             ],
             "page": Paginator([row], 10).page(1),
             "page_range": [1],
+            # Shaped like build_inventory_table's tabs, so c-inventory.tab-link
+            # renders here from the same fields it reads on the real page.
+            "tabs": [
+                {
+                    "id": key,
+                    "label": key.title(),
+                    "is_active": key == "products",
+                    "heading": HEADINGS[key][0],
+                    "subtitle": HEADINGS[key][1],
+                    "document_title": f"{HEADINGS[key][0]} · sbomify",
+                    "badge": badge,
+                    "href": reverse(f"core:{key}_dashboard"),
+                }
+                for key, badge in zip(KINDS, ("1", "2", "3"), strict=True)
+            ],
         }
         if request.headers.get("HX-Target") == "ds-vulnerability-report":
             return render(request, "core/components/vulnerability_demo.html.j2", context)

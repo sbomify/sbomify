@@ -86,7 +86,9 @@ def _url(params: dict[str, Any], *, base_url: str = "", **changes: Any) -> str:
     return (base_url or reverse("core:products_dashboard")) + (f"?{query}" if query else "")
 
 
-def _scope_counts(workspace: Team, product_id: str = "") -> dict[str, int]:
+def _scope_counts(workspace: Team, product_id: str = "", *, products_known: int | None = None) -> dict[str, int]:
+    """How many of each kind the scope holds. ``products_known`` is a count the
+    caller already has, so the products table is not counted a second time."""
     products = Product.objects.filter(team=workspace)
     components = Component.objects.filter(team=workspace)
     releases = Release.objects.filter(product__team=workspace)
@@ -94,7 +96,11 @@ def _scope_counts(workspace: Team, product_id: str = "") -> dict[str, int]:
         products = products.filter(id=product_id)
         components = components.filter(products__id=product_id)
         releases = releases.filter(product_id=product_id)
-    return {"products": products.count(), "components": components.count(), "releases": releases.count()}
+    return {
+        "products": products.count() if products_known is None else products_known,
+        "components": components.count(),
+        "releases": releases.count(),
+    }
 
 
 def _tab_href(params: dict[str, Any], kind: str, target: str, *, chose_order: bool = False) -> str:
@@ -130,10 +136,8 @@ def _inventory_catalog(workspace: Team, product_id: str = "") -> dict[str, Any]:
     products = Product.objects.filter(team=workspace)
     if product_id:
         products = products.filter(id=product_id)
-    return {
-        "products": list(products.order_by("name", "id").values("id", "name")),
-        "counts": _scope_counts(workspace, product_id),
-    }
+    choices = list(products.order_by("name", "id").values("id", "name"))
+    return {"products": choices, "counts": _scope_counts(workspace, product_id, products_known=len(choices))}
 
 
 def build_inventory_snapshot(
@@ -434,9 +438,14 @@ def build_inventory_page(
         )["rows"]
         return detail_rows
 
-    # One extra count query, and only while a product filter is actually on.
+    # Two extra count queries, and only while a product filter is actually on. The
+    # Products badge keeps the catalog's count, since that tab drops the filter.
     filter_product = "" if kind == "products" else request.GET.get("product", "")
-    tab_counts = _scope_counts(workspace, filter_product) if filter_product and filter_product != "unassigned" else None
+    tab_counts = (
+        _scope_counts(workspace, filter_product, products_known=catalog["counts"]["products"])
+        if filter_product and filter_product != "unassigned"
+        else None
+    )
     return build_inventory_table(
         request,
         {**catalog, "rows": rows},

@@ -123,10 +123,8 @@
     </c-layout.frame>
     <c-layout.frame>
     <c-layout.page-header title="Product inventory" subtitle="Linked tabs, compact server-sorted cells, severity breakdowns and shared filters." />
-    <c-navigation.tabs links aria-label="Example inventory views" x-data="{ selectedInventory: 'products' }">
-    <c-navigation.tab href="{% url 'core:products_dashboard' %}" active_binding="selectedInventory === 'products'" badge="1" active>Products</c-navigation.tab>
-    <c-navigation.tab href="{% url 'core:releases_dashboard' %}" badge="2">Releases</c-navigation.tab>
-    <c-navigation.tab href="{% url 'core:components_dashboard' %}" badge="3">Components</c-navigation.tab>
+    <c-navigation.tabs links aria-label="Example inventory views" x-data="{ selectedKind: 'products' }">
+    {% for tab in inventory_demo.tabs %}<c-inventory.tab-link :tab="tab" />{% endfor %}
     </c-navigation.tabs>
     <c-inventory.table :inventory="inventory_demo" hx-disable />
     <c-inventory.results :inventory="inventory_demo" preview />

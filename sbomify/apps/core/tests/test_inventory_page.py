@@ -461,6 +461,29 @@ def test_tab_badges_count_the_scope_their_link_opens(sample_team_with_owner_memb
     assert filtered == {"products": "2", "components": "1", "releases": str(product_releases)}
 
 
+@pytest.mark.parametrize("filtered", [False, True], ids=["unfiltered", "product-filter"])
+def test_products_are_counted_from_the_list_already_loaded(
+    sample_team_with_owner_member: Member, filtered: bool
+) -> None:
+    """The product choices are loaded whole for the filter, so a COUNT of the same rows is a wasted query."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    member = sample_team_with_owner_member
+    product = Product.objects.create(team=member.team, name="One")
+    Product.objects.create(team=member.team, name="Two")
+    product.components.add(Component.objects.create(team=member.team, name="Inside"))
+    params = {"product": product.id} if filtered else {}
+
+    with CaptureQueriesContext(connection) as queries:
+        tabs = {tab["id"]: tab["badge"] for tab in inventory(member, view="components", **params)["tabs"]}
+
+    table = Product._meta.db_table
+    recounts = [q["sql"] for q in queries.captured_queries if "COUNT(" in q["sql"] and f'FROM "{table}"' in q["sql"]]
+    assert recounts == []
+    assert tabs["products"] == "2"
+
+
 def test_release_lists_open_on_their_newest(sample_team_with_owner_member: Member) -> None:
     member = sample_team_with_owner_member
     product = Product.objects.create(team=member.team, name="Product")
