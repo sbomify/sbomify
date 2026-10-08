@@ -294,7 +294,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         ),
         "original_licences": (
             "Original license(s) assigned by the component creator (distinct from distribution "
-            "licenses) — MUST be provided if they exist (BSI TR-03183-2 §5.2.4 Table 5, §6.1)"
+            "licenses). MUST be provided if they exist (BSI TR-03183-2 §5.2.4 Table 5, §6.1)"
         ),
         "no_vulnerabilities": (
             "SBOM MUST NOT contain vulnerability information. Use CSAF or VEX documents instead "
@@ -1473,7 +1473,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                 status="pass" if not original_licence_warnings else "warning",
                 details=self._format_failure_details(original_licence_warnings) if original_licence_warnings else None,
                 remediation=(
-                    "Populate licenseDeclared on each package — this is the license originally "
+                    "Populate licenseDeclared on each package. It holds the license originally "
                     "assigned by the component creator (distinct from licenseConcluded)."
                 ),
             )

@@ -78,7 +78,7 @@ The object of the declaration described above is in conformity with Regulation (
 
 ## 6. Standards & Specifications Applied
 {% for standard in applied_standards %}
-- **{{ standard.citation }}**{% if standard.url %}  [ref]({{ standard.url }}){% endif %}{% if standard.harmonised %}  (harmonized standard — presumption of conformity){% endif %}
+- **{{ standard.citation }}**{% if standard.url %}  [ref]({{ standard.url }}){% endif %}{% if standard.harmonised %}  (harmonized standard: presumption of conformity){% endif %}
 {% for covered in standard.cra_requirements_covered %}
     - {{ covered.cra_reference }}{% if covered.clause %} — *{{ covered.clause }}*{% endif %}{% if covered.summary %}: {{ covered.summary }}{% endif %}
 {% endfor %}

@@ -166,7 +166,7 @@ _BSI_HUMAN_SUMMARY: dict[str, str] = {
     ),
     "bsi-tr03183:original-licences": (
         "Original licenses are missing on some components. Same remediation "
-        "as distribution licenses — use a license scanner upstream."
+        "as distribution licenses: use a license scanner upstream."
     ),
     "bsi-tr03183:sbom-uri": (
         "The SBOM carries no canonical URI. Configure your generator to "
