@@ -18,9 +18,14 @@ so the two are one branch and never both render.
 The named mark slot replaces the glyph, for the notice whose mark is not one:
 a scan still running takes the brand loader, which is an include and not a
 Font Awesome class. Also one branch, so an alert never carries two marks.
+
+The dismissible variant's left padding is pl-[1rem] rather than pl-4, which
+computes the same: the legacy static/css/utilities.css loaded by public pages
+sets `.pl-4` to 1.5rem with !important, so the two sides of the box stopped
+matching there. tables/cell.html has the long version.
 {% endcomment %}
 <c-vars variant="info" title icon dismissible class />
-<div class="@container/alert grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3 py-3.5 rounded-xl text-sm leading-6 border border-solid bg-[color-mix(in_oklab,var(--alert-accent)_6%,var(--color-surface))] border-[color-mix(in_oklab,var(--alert-accent)_20%,transparent)] text-text {% if dismissible %}relative pl-4 pr-14{% else %}px-4{% endif %} {% if variant == 'success' %}[--alert-accent:var(--color-success)]{% elif variant == 'warning' %}[--alert-accent:var(--color-warning)]{% elif variant == 'danger' %}[--alert-accent:var(--color-danger)]{% else %}[--alert-accent:var(--color-primary)]{% endif %}{% if class %} {{ class }}{% endif %}"
+<div class="@container/alert grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3 py-3.5 rounded-xl text-sm leading-6 border border-solid bg-[color-mix(in_oklab,var(--alert-accent)_6%,var(--color-surface))] border-[color-mix(in_oklab,var(--alert-accent)_20%,transparent)] text-text {% if dismissible %}relative pl-[1rem] pr-14{% else %}px-4{% endif %} {% if variant == 'success' %}[--alert-accent:var(--color-success)]{% elif variant == 'warning' %}[--alert-accent:var(--color-warning)]{% elif variant == 'danger' %}[--alert-accent:var(--color-danger)]{% else %}[--alert-accent:var(--color-primary)]{% endif %}{% if class %} {{ class }}{% endif %}"
      role="alert"
      data-alert
      {{ attrs }}>
