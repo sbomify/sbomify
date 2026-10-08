@@ -102,6 +102,13 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         description="Compliance frameworks and workspace control statuses.",
     ),
     SettingsTab(
+        key="integrations",
+        label="Integrations",
+        icon="fa-plug",
+        template="integrations",
+        description="Connect the tools that already track your compliance.",
+    ),
+    SettingsTab(
         key="branding",
         label="Branding",
         icon="fa-palette",
