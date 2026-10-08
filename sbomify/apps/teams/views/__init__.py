@@ -11,7 +11,6 @@ if typing.TYPE_CHECKING:
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.forms import ChoiceField
 from django.http import (
@@ -40,6 +39,7 @@ from sbomify.apps.teams.permissions import check_member_removal
 from sbomify.apps.teams.queries import count_team_members, invitation_email
 from sbomify.apps.teams.services.invitations import invite_member, revoke_invitation
 from sbomify.apps.teams.utils import (
+    find_invitation_by_token,
     redirect_to_team_settings,
     switch_active_workspace,
     update_user_teams_session,
@@ -273,10 +273,13 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
 
 @require_http_methods(["GET", "POST"])
 def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFound | HttpResponse:
-    try:
-        invitation = Invitation.objects.filter(token=invite_token).first()
-    except ValidationError:
-        return error_response(request, HttpResponseNotFound("Unknown invitation"))
+    # find_invitation_by_token rejects a token the UUIDField cannot coerce
+    # before it reaches the ORM, so no ValidationError escapes the query: a
+    # mangled link is a missing invitation, which the branch below answers.
+    # It does not accept a primary key in place of a token -- an invitation id
+    # is guessable and a token is not -- and it logs nothing, so the token
+    # stays out of the log.
+    invitation = find_invitation_by_token(invite_token)
 
     if invitation is None:
         # If user is not authenticated, store token and redirect to login
