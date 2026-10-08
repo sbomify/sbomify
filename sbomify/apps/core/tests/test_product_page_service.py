@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 import pytest
 from django.test import Client, RequestFactory
 from django.urls import reverse
+from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
-from sbomify.apps.core.services.product_page import build_product_page_context
+from sbomify.apps.core.services import inventory_page
+from sbomify.apps.core.services.product_page import build_product_page_context, build_product_releases_context
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.tests.test_inventory_page import scan
 from sbomify.apps.teams.models import Member, Team
@@ -20,7 +23,7 @@ pytestmark = pytest.mark.django_db
 def context(member: Member, item: Product, **params: str) -> dict[str, Any]:
     request = RequestFactory().get(reverse("core:product_details", args=[item.id]), params)
     request.user = member.user
-    request.session = {"current_team": {"key": member.team.key, "role": "owner"}}
+    request.session = {"current_workspace": {"key": member.team.key, "role": "owner"}}
     result = build_product_page_context(request, item.id)
     assert result.ok, result.error
     assert result.value is not None
@@ -150,3 +153,37 @@ def test_product_partial_is_a_single_frame_and_hides_unavailable_actions(sample_
     assert "Product visibility" not in html
     assert "Delete Product" not in html
     assert "HX-Target" in response["Vary"]
+
+
+def test_release_postures_are_computed_for_the_shown_releases_only(
+    sample_team_with_owner_member: Member, mocker: Any
+) -> None:
+    """A product released on every commit must not read every release's scan results."""
+    member = sample_team_with_owner_member
+    product = Product.objects.create(name="Product", team=member.team)
+    now = timezone.now()
+    for day in range(12):
+        Release.objects.create(product=product, name=f"r{day}", released_at=now + timedelta(days=day + 1))
+    newest = list(Release.objects.filter(product=product, is_latest=False).order_by("-released_at")[:4])
+    postures = mocker.spy(inventory_page, "build_release_vuln_postures")
+
+    result = context(member, product)
+    total = Release.objects.filter(product=product).count()
+
+    assert max(len(call.args[0]) for call in postures.call_args_list) == 5
+    preview = result["release_inventory"]
+    assert preview["total"] == total
+    assert [row["id"] for row in preview["rows"]][-4:] == [release.id for release in newest]
+    assert preview["rows"][0]["release_type"] == "Rolling latest"
+    assert result["release_editor_data"] == preview["rows"]
+
+    postures.reset_mock()
+    request = RequestFactory().get(reverse("core:product_releases", args=[product.id]))
+    request.user = member.user
+    request.session = {"current_workspace": {"key": member.team.key, "role": "owner"}}
+    releases = build_product_releases_context(request, product.id)
+    assert releases.ok, releases.error
+    assert releases.value is not None
+    assert max(len(call.args[0]) for call in postures.call_args_list) == 10
+    assert releases.value["inventory"]["total"] == total
+    assert releases.value["release_editor_data"] == releases.value["inventory"]["rows"]

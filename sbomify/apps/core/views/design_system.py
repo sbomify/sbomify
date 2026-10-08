@@ -43,6 +43,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "pagination", "label": "Pagination", "group": "Data"},
     {"id": "stats", "label": "Stat cards", "group": "Data"},
     {"id": "severity", "label": "Severity badges", "group": "Data"},
+    {"id": "role-badges", "label": "Role badges", "group": "Data"},
     {"id": "progress", "label": "Progress", "group": "Data"},
     {"id": "badges", "label": "Badges", "group": "Data"},
     {"id": "tags", "label": "Tags", "group": "Data"},
@@ -146,7 +147,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 ],
                 "passed": [{"tone": "success", "count": 3}],
             },
-            "team": request.session.get("current_team", {}),
+            "team": request.session.get("current_workspace", {}),
             "sections": GALLERY_SECTIONS,
             # One row per brand, chosen to show the ink switching rather than to
             # look pretty: navy and violet take white text, amber and mint take

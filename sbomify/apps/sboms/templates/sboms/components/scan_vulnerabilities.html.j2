@@ -1,21 +1,19 @@
-{% comment %}The report's findings panel. It swaps itself for a filter, a page, and a
-saved triage decision.
-
-Triage writes the VEX in the request but re-annotates the stored scan results on the
-queue, so the decision reaches these rows in two steps: the save dispatches
-refresh-assessments straight away, and reapply_vex_to_component_scans broadcasts
-vex_reapplied when the re-annotation lands. Both arrive here as the same event. Without
-this the modal would close on a toast and the row it was opened from would keep its
-pre-triage state until the reader reloaded the page by hand.
-
-The debounce matches the artifact page's: a workspace broadcast can arrive more than once
-for one re-apply, and refetching the panel per message is wasted work.{% endcomment %}
+{% comment %}Refreshed in place after a triage decision and again when the
+background re-apply broadcasts, rather than reloading the page out from under
+the reader. The triage modal dispatches refresh-assessments when it saves; the
+re-apply's vex_reapplied arrives on the socket, and the bridge below turns it
+into the same event for this component only, debounced as on the artifact page.
+scan_refresh_query keeps the active filters and page; morph keeps scroll and
+focus. The key lets the report region's morph, when a scan finishes, find this
+panel by name if the card's children ever change in number, rather than
+replacing it by position.{% endcomment %}
 <div id="scan-vulnerabilities"
+     key="scan-vulnerabilities"
      x-data="{ refreshTimer: null }"
+     hx-target="this"
+     hx-swap="morph"
      hx-get="{% url 'sboms:sbom_vulnerabilities' sbom.id %}?{{ scan_refresh_query }}"
      hx-trigger="refresh-assessments from:body"
-     hx-target="this"
-     hx-swap="outerHTML"
      @ws:message.window=" if ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
     <c-tables.shell nested>
     <c-vulnerabilities.filters :panel="scan_panel" url="{% url 'sboms:sbom_vulnerabilities' sbom.id %}" target="scan-vulnerabilities" id="scan" prefix="scan_" push_url="true" />

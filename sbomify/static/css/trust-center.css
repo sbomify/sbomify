@@ -297,22 +297,6 @@
     background: var(--bg-secondary);
 }
 
-/* The severity spine: a 3px bar down the left edge of the row. */
-.tc-advisory-severity {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background: var(--gray-200);
-}
-
-.tc-severity-critical { background: var(--color-severity-critical-fill); }
-.tc-severity-high     { background: var(--color-severity-high-fill); }
-.tc-severity-medium   { background: var(--color-severity-medium-fill); }
-.tc-severity-low      { background: var(--color-severity-low-fill); }
-.tc-severity-none     { background: var(--gray-200); }
-
 .tc-advisory-id {
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
     font-size: 0.75rem;
@@ -1539,35 +1523,28 @@
 
 /* The dot is tinted by the event's own variant, so the rail carries the
    remediation story on its own — green where it resolved, amber where it was
-   withdrawn — without having to read the labels. */
-.tc-dot-success {
-    border-color: rgba(22, 163, 74, 0.35);
-    background: rgba(22, 163, 74, 0.12);
-    color: #16a34a;
-}
+   withdrawn — without having to read the labels.
 
-.tc-dot-info {
-    border-color: rgba(37, 99, 235, 0.35);
-    background: rgba(37, 99, 235, 0.12);
-    color: #2563eb;
-}
+   The colours are the app's own status tokens, so a remediation state looks the
+   same to a customer here as it does to the workspace inside the app, and both
+   follow the theme. Each variant names its colour once and the recipe below
+   paints it; five near-identical blocks is how a ramp drifts, one tweak at a
+   time. --color-accent is the app's violet: c-badges.dynamic maps variant
+   violet to text-accent, and fix_in_progress is the state that reaches both. */
+.tc-dot-success { --tone: var(--color-success); }
+.tc-dot-info    { --tone: var(--color-info); }
+.tc-dot-warning { --tone: var(--color-warning); }
+.tc-dot-danger  { --tone: var(--color-danger); }
+.tc-dot-violet  { --tone: var(--color-accent); }
 
-.tc-dot-warning {
-    border-color: rgba(217, 119, 6, 0.35);
-    background: rgba(217, 119, 6, 0.12);
-    color: #d97706;
-}
-
-.tc-dot-danger {
-    border-color: rgba(220, 38, 38, 0.35);
-    background: rgba(220, 38, 38, 0.12);
-    color: #dc2626;
-}
-
+.tc-dot-success,
+.tc-dot-info,
+.tc-dot-warning,
+.tc-dot-danger,
 .tc-dot-violet {
-    border-color: rgba(124, 58, 237, 0.35);
-    background: rgba(124, 58, 237, 0.12);
-    color: #7c3aed;
+    border-color: color-mix(in oklab, var(--tone) 35%, transparent);
+    background: color-mix(in oklab, var(--tone) 12%, transparent);
+    color: var(--tone);
 }
 
 /* The newest entry gets a halo, so "where is this now" is answered before

@@ -4,6 +4,7 @@ import pytest
 from playwright.sync_api import Page
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
+from sbomify.apps.core.tests.shared_fixtures import register_plugin
 
 
 @pytest.fixture
@@ -23,6 +24,7 @@ def sbom_with_findings(sbom_component_details, mocker):
     # detail page's lazy crypto inventory from waiting on live object storage.
     mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data", return_value=None)
 
+    register_plugin("dependency_track")
     AssessmentRun.objects.create(
         sbom=sbom,
         plugin_name="dependency_track",

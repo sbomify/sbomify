@@ -23,7 +23,7 @@ def dashboard(authenticated_web_client, mocker, settings):
     settings.BILLING = True
     settings.PAYMENT_GRACE_PERIOD_DAYS = 3
     session = authenticated_web_client.session
-    session["current_team"]["has_completed_wizard"] = True
+    session["current_workspace"]["has_completed_wizard"] = True
     session.save()
     mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
 

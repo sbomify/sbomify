@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from typing import Any
 
-from django.db.models import OuterRef, Subquery
 from django.http import HttpRequest
 from ninja import Router
 from ninja.decorators import decorate_view
@@ -19,6 +18,7 @@ from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
 
+from .latest import latest_run_ids, status_runs
 from .models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
 from .schemas import (
     AssessmentBadgeData,
@@ -27,7 +27,7 @@ from .schemas import (
     SBOMAssessmentsResponse,
 )
 from .sdk.enums import RunReason, RunStatus
-from .services.access import plugin_plan_requirement, team_has_plugin_access
+from .services.access import plugin_plan_requirement, plugins_outside_plan, team_has_plugin_access
 from .tasks import run_assessment_task
 
 logger = getLogger(__name__)
@@ -363,9 +363,14 @@ def get_sbom_assessments(
             all_runs=[],
         )
 
-    # Get all runs for this SBOM, ordered newest-first. Prefetch the
-    # ``releases`` M2M so per-run serialization doesn't trigger N+1.
-    all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).prefetch_related("releases").order_by("-created_at"))
+    # Runs newest-first, with the ``releases`` M2M prefetched so per-run
+    # serialization doesn't trigger N+1. Without history only each plugin's
+    # newest run is read: an SBOM rescanned hourly has hundreds, each carrying
+    # its whole findings list.
+    runs = AssessmentRun.objects.filter(sbom_id=sbom_id)
+    if not include_history:
+        runs = AssessmentRun.objects.filter(id__in=latest_run_ids(AssessmentRun.objects.all(), [sbom_id]))
+    all_runs = list(runs.prefetch_related("releases").order_by("-created_at"))
 
     # Latest-per-plugin selection: under the scan-once-per-SBOM model, each
     # plugin produces at most one current run for an SBOM, so a single pass
@@ -423,27 +428,9 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
             skipped_count=0,
             plugins=[],
         )
-    # Fetch only the latest run per plugin_name via Subquery/OuterRef —
-    # bounded to ``enabled plugins per SBOM`` rather than the full run
-    # history. Under the scan-once-per-SBOM model there's one run per
-    # plugin per SBOM so this lookup is a simple group-by-plugin.
-    latest_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .values("plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(
-                    sbom_id=sbom_id,
-                    plugin_name=OuterRef("plugin_name"),
-                )
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
-    )
-    latest_ids = [pk for pk in latest_ids if pk is not None]
-    latest_runs = list(AssessmentRun.objects.filter(id__in=latest_ids))
+    # The latest run per plugin_name, without its findings: the status helpers
+    # read only its summary and metadata.
+    latest_runs = status_runs(latest_run_ids(AssessmentRun.objects.all(), [sbom_id]), "-created_at")
     status_summary = _compute_status_summary(latest_runs)
 
     # Prefetch display names once — avoids N+1 in the per-plugin loop below.
@@ -761,8 +748,17 @@ def update_team_plugin_settings(
             if isinstance(dt_config, dict):
                 dt_config.pop("dt_server_id", None)
 
-    # Update settings
-    settings.enabled_plugins = payload.enabled_plugins
+    # Update settings. The payload replaces only the plugins the caller could have
+    # spoken for: a plugin the plan excludes cannot be in it (the check above refuses
+    # it), and on the settings page it renders as a *disabled* checkbox, which submits
+    # nothing at all. Assigning the payload wholesale therefore deleted those entries
+    # on any save — including one made for an unrelated reason, reported as a success.
+    # Carrying them over keeps the record of what the workspace asked for, so it takes
+    # effect again on upgrade. Nothing runs them meanwhile: every path that starts a
+    # run checks the plan (``enqueue_assessment``, the re-run endpoint), and anything
+    # asking "what runs" filters through ``plugins_within_plan``.
+    retained = plugins_outside_plan(team, settings.enabled_plugins or [])
+    settings.enabled_plugins = list(payload.enabled_plugins) + retained
     if payload.plugin_configs is not None:
         settings.plugin_configs = payload.plugin_configs
     settings.save()

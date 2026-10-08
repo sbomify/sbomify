@@ -141,7 +141,7 @@ class ComponentTriageModalView(GuestAccessBlockedMixin, LoginRequiredMixin, View
             "core/components/priority_triage_modal.html.j2",
             {
                 "component_id": component_id,
-                "team_key": request.session.get("current_team", {}).get("key", ""),
+                "team_key": request.session.get("current_workspace", {}).get("key", ""),
                 "triage_payload": {
                     "id": finding["id"],
                     "purl": finding["purl"],

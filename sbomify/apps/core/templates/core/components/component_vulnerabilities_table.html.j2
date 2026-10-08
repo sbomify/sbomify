@@ -1,20 +1,19 @@
-{% comment %}The component panel and its filters swap together. Its modal remains outside this region.
+{% comment %}The component panel and its filters swap together. Its modal remains
+outside this region.
 
-It also swaps itself for a saved triage decision. Triage writes the VEX in the request but
-re-annotates the stored scan results on the queue, so the decision reaches these rows in
-two steps: the save dispatches refresh-assessments straight away, and
-reapply_vex_to_component_scans broadcasts vex_reapplied when the re-annotation lands. Both
-arrive here as the same event. Without this the modal would close on a toast and the row it
-was opened from would keep its pre-triage state until the reader reloaded the page by hand.
-
-The debounce matches the artifact page's: a workspace broadcast can arrive more than once
-for one re-apply, and refetching the panel per message is wasted work.{% endcomment %}
+A triage decision re-annotates findings in a background task, so the panel
+refreshes twice: once straight away, on the refresh-assessments the triage modal
+dispatches when it saves, and again when the re-apply broadcasts vex_reapplied,
+which the bridge below turns into the same event for this component only. The
+debounce matches the artifact page's: one re-apply can broadcast more than once.
+Both refreshes carry vuln_refresh_query, which keeps the filters and the page the
+reader was on, and morph keeps their scroll position and focus.{% endcomment %}
 <div id="component-vulnerabilities-table"
      x-data="{ refreshTimer: null }"
+     hx-target="this"
+     hx-swap="morph"
      hx-get="{{ vuln_panel_url }}?{{ vuln_refresh_query }}"
      hx-trigger="refresh-assessments from:body"
-     hx-target="this"
-     hx-swap="outerHTML"
      @ws:message.window=" if ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
     <c-tables.shell nested>
     <c-vulnerabilities.filters :panel="vuln_panel" url="{{ vuln_panel_url }}" target="component-vulnerabilities-table" id="vuln" prefix="vuln_" push_url="true" />

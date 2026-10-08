@@ -70,6 +70,7 @@ urlpatterns = [
     path("onboarding/", include("sbomify.apps.onboarding.urls")),
     path("billing/", include("sbomify.apps.billing.urls")),
     path("controls/", include("sbomify.apps.controls.urls")),
+    path("integrations/", include("sbomify.apps.integrations.urls")),
     path("plugins/", include("sbomify.apps.plugins.urls")),
     path("compliance/", include("sbomify.apps.compliance.urls")),
     path("", include("sbomify.apps.vulnerability_scanning.urls")),
