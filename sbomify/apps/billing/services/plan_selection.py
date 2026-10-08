@@ -45,6 +45,15 @@ def _exceeded(usage: dict[str, int], seat_label: str, plan: BillingPlan) -> list
     ]
 
 
+def usage_over(workspace: Team, plan: BillingPlan) -> list[str]:
+    """Each of ``plan``'s limits that ``workspace`` is already past, ready to show.
+
+    One count for every place that asks, so the plan cards, the request and the
+    scheduled downgrade cannot disagree about which quotas a plan has.
+    """
+    return _exceeded(*_usage(workspace), plan)
+
+
 def check_downgrade(workspace: Team, plan: BillingPlan) -> ServiceResult[None]:
     """Refuse a move down to ``plan`` that ``workspace`` has outgrown.
 
@@ -54,7 +63,7 @@ def check_downgrade(workspace: Team, plan: BillingPlan) -> ServiceResult[None]:
     current = workspace.billing_plan or BillingPlan.KEY_COMMUNITY
     if _ORDER.get(plan.key or "", 99) >= _ORDER.get(current, 99):
         return ServiceResult.success()
-    exceeded = _exceeded(*_usage(workspace), plan)
+    exceeded = usage_over(workspace, plan)
     if exceeded:
         return ServiceResult.failure(f"Reduce usage to choose {plan.name}: {', '.join(exceeded)}.", status_code=409)
     return ServiceResult.success()

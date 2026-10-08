@@ -15,7 +15,7 @@ from django.db import models, transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
-from sbomify.apps.core.queries import get_team_asset_count, get_team_asset_counts
+from sbomify.apps.core.queries import get_team_asset_count
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
@@ -30,6 +30,7 @@ from .billing_helpers import (
 )
 from .config import get_unlimited_plan_limits, is_billing_enabled
 from .models import BillingPlan
+from .services.plan_selection import usage_over
 from .stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from .stripe_client import (
     LIVE_SUBSCRIPTION_STATUSES,
@@ -797,22 +798,9 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                     team.save()
                     downgrade_ended_subscription(team.pk, subscription.id)
                 else:
-                    counts = get_team_asset_counts(str(team.id))
-                    product_count = counts["products"]
-                    component_count = counts["components"]
+                    exceeded_resources = usage_over(team, target_plan)
 
-                    usage_exceeds_limits = False
-                    exceeded_resources: list[str] = []
-
-                    if target_plan.max_products is not None and product_count > target_plan.max_products:
-                        usage_exceeds_limits = True
-                        exceeded_resources.append(f"{product_count} products (limit: {target_plan.max_products})")
-
-                    if target_plan.max_components is not None and component_count > target_plan.max_components:
-                        usage_exceeds_limits = True
-                        exceeded_resources.append(f"{component_count} components (limit: {target_plan.max_components})")
-
-                    if usage_exceeds_limits:
+                    if exceeded_resources:
                         existing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
                         existing_limits.update(
                             {

@@ -403,8 +403,8 @@ def test_a_payment_redelivery_caught_under_the_lock_sends_nothing(workspace, not
 )
 def test_a_deletion_redelivery_caught_under_the_lock_sends_nothing(workspace, notify, mocker, limits, products):
     Team.objects.filter(pk=workspace.pk).update(billing_plan_limits={**workspace.billing_plan_limits, **limits})
-    counts = {"products": products, "components": 0}
-    mocker.patch.object(billing_processing, "get_team_asset_counts", return_value=counts)
+    exceeded = [f"{products} products (limit: 1)"] if products else []
+    mocker.patch.object(billing_processing, "usage_over", return_value=exceeded)
     # What a concurrent delivery of the same event read before the first one committed.
     before = Team.objects.get(pk=workspace.pk)
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 100))
