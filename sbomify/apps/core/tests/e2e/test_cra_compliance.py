@@ -225,3 +225,41 @@ def test_cra_empty_workspace_can_create_product(authenticated_page: Page, cra_bi
     expect(dialog.get_by_role("heading", name="Create a product first")).to_be_visible()
     dialog.get_by_role("link", name="Create product", exact=True).click()
     expect(page).to_have_url(re.compile("/products/new/$"))
+
+
+@pytest.mark.django_db
+def test_the_dependent_scope_rows_grey_with_their_own_control(authenticated_page: Page, cra_assessment) -> None:
+    """The EN 18031-2/-3 rows follow ``::disabled``, with no second source of truth.
+
+    They are inert until radio equipment is ticked, and they used to say so with a
+    hand-rolled ``opacity-50`` that faded the "Triggers EN 18031-*" sentence
+    explaining each one. ``c-layout.select-row`` now derives the greying from the
+    control through ``has-[input:disabled]``, so these rows carry no state class at
+    all. That only holds if ``:has()`` tracks Alpine's binding live, which is what
+    this walks: greyed and never faded while blocked, fully coloured once enabled.
+    """
+    page = authenticated_page
+    page.goto(f"/compliance/cra/{cra_assessment.id}/step/1/")
+
+    def scope_row(label: str):
+        """These controls carry no label element, so reach them through the row text."""
+        return page.get_by_text(label, exact=True).locator("..").locator("..")
+
+    radio = scope_row("Radio equipment under the RED").locator("input")
+    row = scope_row("Processes personal data")
+    dependent = row.locator("input")
+
+    expect(dependent).to_be_disabled()
+    assert row.evaluate("el => getComputedStyle(el).filter") == "grayscale(1)"
+    assert row.evaluate("el => getComputedStyle(el).opacity") == "1"
+    explanation = row.get_by_text("Triggers EN 18031-2", exact=False)
+    expect(explanation).to_be_visible()
+    assert explanation.evaluate("el => getComputedStyle(el).opacity") == "1"
+
+    radio.check()
+    expect(dependent).to_be_enabled()
+    assert row.evaluate("el => getComputedStyle(el).filter") == "none"
+
+    radio.uncheck()
+    expect(dependent).to_be_disabled()
+    assert row.evaluate("el => getComputedStyle(el).filter") == "grayscale(1)"

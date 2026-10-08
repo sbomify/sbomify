@@ -18,8 +18,15 @@
               hx-swap="none">
             {% csrf_token %}
             {% if not branding_info.branding_enabled %}
-                <c-feedback.alert variant="warning">Custom branding is off, so customers still see the default sbomify look. Enable it below to use your saved colors and logo.</c-feedback.alert>
+                <c-feedback.alert variant="warning">Custom branding is off, so customers still see the default sbomify look. Turn it on to use your saved colors and logo.</c-feedback.alert>
             {% endif %}
+            <c-cards.card>
+            <c-forms.checkbox id="branding-enabled-toggle" :checked="branding_info.branding_enabled" x-model="localBrandingInfo.branding_enabled">Use custom branding</c-forms.checkbox>
+            <c-forms.hint>Turn off to use the default sbomify appearance. Your colors and assets stay saved.</c-forms.hint>
+            <input type="hidden"
+                   name="branding_enabled"
+                   :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
+            </c-cards.card>
             <c-cards.card flush>
             <c-cards.header compact title="Colors"><c-buttons.ghost size="sm" @click="setDefaultColors">Reset</c-buttons.ghost></c-cards.header>
             <c-cards.body>
@@ -48,20 +55,13 @@
             </div>
             </c-cards.body>
             </c-cards.card>
-            <c-cards.card>
-            <c-forms.checkbox id="branding-enabled-toggle" :checked="branding_info.branding_enabled" x-model="localBrandingInfo.branding_enabled">Use custom branding</c-forms.checkbox>
-            <c-forms.hint>Turn off to use the default sbomify appearance. Your colors and assets stay saved.</c-forms.hint>
-            <input type="hidden"
-                   name="branding_enabled"
-                   :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
-            </c-cards.card>
             <div class="flex items-center justify-end gap-2">
                 <c-buttons.secondary size="sm" ::disabled="!hasUnsavedChanges()" @click="$dispatch('refreshTeamBranding')">Discard</c-buttons.secondary>
                 <c-buttons.primary type="submit" size="sm" id="team-branding-save-btn" ::disabled="!hasUnsavedChanges()">Save changes</c-buttons.primary>
             </div>
         </form>
         <aside class="min-w-0 flex flex-col gap-3 xl:sticky xl:top-6">
-            <c-layout.section-header title="Live preview">
+            <c-layout.section-header title="Preview">
             <c-slot name="actions"><c-buttons.ghost size="sm" href="{% url 'core:workspace_public' workspace_key=team.key %}" target="_blank" rel="noopener">Open Trust Center</c-buttons.ghost></c-slot>
             </c-layout.section-header>
             {% url 'core:workspace_public' workspace_key=team.key as public_path %}

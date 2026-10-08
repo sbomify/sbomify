@@ -7,6 +7,8 @@ from the control itself (the choice tile and the selectable row), so pages can
 rely on them without ever writing a class themselves.
 """
 
+import re
+
 import pytest
 from django.template.loader import render_to_string
 
@@ -460,11 +462,30 @@ def test_toggle_ref_points_the_row_click_at_its_own_switch(rendered: str) -> Non
     assert 'x-data="{ enabled: false }"' in opening
 
 
-def test_disabled_dims_the_row_while_the_control_blocks_it(rendered: str) -> None:
-    assert "opacity-50 grayscale" in _classes(rendered, SELECT_ROW, "Dependency Track")
+def test_the_control_being_disabled_is_what_drains_the_row(rendered: str) -> None:
+    """The real input is the source of truth, so there is no prop to fall out of step.
+
+    Cursor, hover and colour are all read off ``has-[input:disabled]``, which means
+    a row bound reactively (``::disabled``) greys the moment its control does.
+    """
+    classes = _classes(rendered, SELECT_ROW, "Dependency Track")
+    assert "has-[input:disabled]:grayscale" in classes
     row = rendered[rendered.index("Dependency Track") :]
     assert 'id="probe-row-2"' in row.split("</div>")[0]
     assert "disabled" in row.split("</div>")[0]
+
+
+def test_a_row_never_fades_its_own_explanation(rendered: str) -> None:
+    """A row carrying the reason it is unavailable must keep that reason readable.
+
+    opacity on the row composites every descendant against the page and no
+    descendant can opt out, so a plan-required badge and its description land far
+    under the 4.5:1 AA floor. The contrast the greyed row actually ships is pinned
+    in ``test_select_row_contrast``; this only pins that nothing fades it.
+    """
+    for name in ("BSI TR-03183-2", "Dependency Track"):
+        classes = _classes(rendered, SELECT_ROW, name).split()
+        assert not [c for c in classes if re.fullmatch(r"opacity-\d+", c)], (name, classes)
 
 
 def test_the_control_and_the_body_stay_in_the_slot(rendered: str) -> None:

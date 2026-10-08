@@ -12,7 +12,7 @@
     {% endif %}
     {% if new_encoded_access_token %}
         <c-feedback.alert variant="warning" title="Copy your token now">You cannot see this token again.</c-feedback.alert>
-        {% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}
+        <c-token-display token="{{ new_encoded_access_token }}" masked />
     {% endif %}
     <c-cards.card flush>
     <c-cards.header compact title="Your tokens" />
@@ -46,8 +46,8 @@
                 {% endfor %}
             </tbody>
             </c-tables.table>
-            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showBulkModal' title='Revoke Tokens' message='Are you sure you want to revoke' item_name_expression='countLabel' warning_message='This action cannot be undone. The selected tokens will stop working immediately.' confirm_text='Revoke' confirm_callback='revokeSelected()' %}
-            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showRevokeAllModal' title='Revoke All Tokens' message='Are you sure you want to revoke' item_name='all tokens in this workspace' warning_message='This action cannot be undone. Every token listed here, including unscoped legacy tokens, will stop working immediately.' confirm_text='Revoke all' confirm_callback='revokeAll()' %}
+            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showBulkModal' title='Revoke tokens' message='Are you sure you want to revoke' item_name_expression='countLabel' warning_message='This action cannot be undone. The selected tokens will stop working immediately.' confirm_text='Revoke' confirm_callback='revokeSelected()' %}
+            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showRevokeAllModal' title='Revoke all tokens' message='Are you sure you want to revoke' item_name='all tokens in this workspace' warning_message='This action cannot be undone. Every token listed here, including unscoped legacy tokens, will stop working immediately.' confirm_text='Revoke all' confirm_callback='revokeAll()' %}
         </div>
     {% else %}
         <c-feedback.empty-state compact icon="fas fa-key" title="No tokens yet" message="Generate a token to connect your tools to this workspace." />
