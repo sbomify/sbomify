@@ -16,7 +16,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("plugins", "0020_assessmentrun_scan_history_index"),
+        ("plugins", "0021_assessmentrun_plugins_run_sbom_settled_idx"),
     ]
 
     operations = [

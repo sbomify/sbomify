@@ -163,6 +163,14 @@ def vulnerability_scan_factory():
             run_reason="on_upload",
             status="completed",
             result={
+                # AssessmentResultSchema requires these four. Without them the
+                # blob fails validation and _run_to_schema degrades the run to
+                # result=None, so the card rendered an assessment that reported
+                # nothing rather than the scan this factory is describing.
+                "plugin_name": provider,
+                "plugin_version": "1.0.0",
+                "category": "security",
+                "assessed_at": "2020-01-01T00:00:00Z",
                 "summary": {
                     "total_findings": total,
                     "by_severity": {

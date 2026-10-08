@@ -326,8 +326,15 @@ class TeamPricingService:
         Returns:
             List of limit dictionaries with icon, label, and value
         """
-        # Define PLAN_LIMITS locally to avoid circular import
+        # Define PLAN_LIMITS locally to avoid circular import.
+        # Members first, matching the order the plan comparison cards use. It is a
+        # real quota: max_users is enforced on invite, so leaving it out hid the
+        # one limit that stops a workspace growing.
         PLAN_LIMITS: dict[str, dict[str, str]] = {
+            "max_users": {
+                "label": "Members",
+                "icon": "users",
+            },
             "max_products": {
                 "label": "Products",
                 "icon": "cube",
@@ -356,10 +363,10 @@ class TeamPricingService:
                 if limit_key in billing_plan_limits:
                     limits_dict[limit_key] = billing_plan_limits[limit_key]
                 else:
-                    # Direct attribute access instead of hasattr/getattr
-                    limit_value = getattr(billing_plan_obj, limit_key, None)
-                    if limit_value is not None:
-                        limits_dict[limit_key] = limit_value
+                    # None on the model means no cap, which reads as "Unlimited"
+                    # below. Skipping the key instead dropped the whole tile, so an
+                    # unlimited quota looked like a quota the plan does not have.
+                    limits_dict[limit_key] = getattr(billing_plan_obj, limit_key, None)
 
             # Build plan_limits list
             for limit_key, limit_value in limits_dict.items():

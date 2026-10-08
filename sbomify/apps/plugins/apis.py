@@ -27,7 +27,7 @@ from .schemas import (
     SBOMAssessmentsResponse,
 )
 from .sdk.enums import RunReason, RunStatus
-from .services.access import plugin_plan_requirement, team_has_plugin_access
+from .services.access import plugin_plan_requirement, plugins_outside_plan, team_has_plugin_access
 from .tasks import run_assessment_task
 
 logger = getLogger(__name__)
@@ -767,8 +767,17 @@ def update_team_plugin_settings(
             if isinstance(dt_config, dict):
                 dt_config.pop("dt_server_id", None)
 
-    # Update settings
-    settings.enabled_plugins = payload.enabled_plugins
+    # Update settings. The payload replaces only the plugins the caller could have
+    # spoken for: a plugin the plan excludes cannot be in it (the check above refuses
+    # it), and on the settings page it renders as a *disabled* checkbox, which submits
+    # nothing at all. Assigning the payload wholesale therefore deleted those entries
+    # on any save — including one made for an unrelated reason, reported as a success.
+    # Carrying them over keeps the record of what the workspace asked for, so it takes
+    # effect again on upgrade. Nothing runs them meanwhile: every path that starts a
+    # run checks the plan (``enqueue_assessment``, the re-run endpoint), and anything
+    # asking "what runs" filters through ``plugins_within_plan``.
+    retained = plugins_outside_plan(team, settings.enabled_plugins or [])
+    settings.enabled_plugins = list(payload.enabled_plugins) + retained
     if payload.plugin_configs is not None:
         settings.plugin_configs = payload.plugin_configs
     settings.save()

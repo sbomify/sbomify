@@ -63,7 +63,7 @@
         <input type="hidden" name="action" value="update_support_period">
         <c-cards.card flush>
         <c-cards.header compact title="Product support" />
-        <c-forms.field horizontal label="Default support period (years)" for="default-support-period" hint="Used for new product assessments. Product support dates take precedence. Existing assessments keep their dates. Leave empty for no default.">
+        <c-forms.field horizontal label="Default support period (years)" for="default-support-period" hint="Used for new product assessments. Product support dates take precedence. Existing assessments keep their dates. Enter 5 years or more, or leave empty for no default.">
         <c-forms.input size="sm" id="default-support-period" name="default_support_period_years" type="number" min="5" max="100" step="1" value="{{ default_support_period_years|default_if_none:'' }}" placeholder="No default" />
         </c-forms.field>
         </c-cards.card>
