@@ -74,37 +74,6 @@ def test_select_plan_page(
 
 
 @pytest.mark.django_db
-def test_the_usage_card_names_pending_invitations_in_the_seat_count(
-    client: Client,
-    sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
-    community_plan: BillingPlan,  # noqa: F811
-    business_plan: BillingPlan,  # noqa: F811
-):
-    """The seat count includes pending invitations, so the card must not call it
-    members alone: one member and one invitation is not "2 Members"."""
-    from datetime import timedelta
-
-    from django.utils import timezone
-
-    from sbomify.apps.teams.models import Invitation
-
-    Invitation.objects.create(
-        team=team_with_business_plan,
-        email="invited@example.com",
-        role="member",
-        expires_at=timezone.now() + timedelta(days=1),
-    )
-    client.force_login(sample_user)
-
-    response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
-
-    assert response.status_code == 200
-    assert response.context["usage"]["members"] == 2
-    assert "Members and pending invitations" in response.content.decode()
-
-
-@pytest.mark.django_db
 def test_what_a_downgrade_costs_renders_as_the_alert_body(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811

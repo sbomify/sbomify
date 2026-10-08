@@ -18,10 +18,10 @@ class TestWorkspaceDisplay:
     def test_returns_the_name_as_set(self):
         assert workspace_display("John") == "John"
 
-    def test_leaves_a_name_that_already_ends_in_workspace(self):
+    def test_preserves_existing_suffix(self):
         assert workspace_display("John's Workspace") == "John's Workspace"
 
-    def test_leaves_a_curly_apostrophe_name(self):
+    def test_preserves_curly_apostrophe_suffix(self):
         assert workspace_display("John's Workspace") == "John's Workspace"
 
     def test_strips_whitespace(self):
