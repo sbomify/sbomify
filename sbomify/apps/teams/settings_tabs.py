@@ -99,7 +99,6 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         label="Integrations",
         icon="fa-plug",
         template="integrations",
-        description="Connect the tools that already track your compliance.",
     ),
     SettingsTab(
         key="branding",
