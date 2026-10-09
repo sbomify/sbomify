@@ -154,12 +154,14 @@
   --color-severity-low: rgb(13 202 240);        /* 6.46 */
   /* The same idea for the brand statuses: read as text on a tint of themselves.
      The brand value stays the fill, only the ink moves, and only where a theme
-     needs it, so dark repeats the brand value and :root.light darkens it. */
+     needs it. Dark repeats the brand value where it clears 4.5:1 on its 12%
+     tint over the surface, and lifts danger and accent, whose brand values
+     measure 4.46 and 4.16 there. :root.light darkens all five. */
   --color-success-ink: rgb(54 197 143);
   --color-warning-ink: rgb(247 181 70);
-  --color-danger-ink: rgb(246 109 113);
+  --color-danger-ink: rgb(246 109 113);  /* 4.75 on its tint */
   --color-info-ink: rgb(108 183 240);
-  --color-accent-ink: rgb(162 137 255);
+  --color-accent-ink: rgb(162 137 255);  /* 4.83 */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */
   --color-alert-success-border: rgb(187 247 208); /* var(--color-alert-success-border) */
   --color-alert-danger-bg: rgb(254 242 242);    /* var(--color-alert-danger-bg) */
