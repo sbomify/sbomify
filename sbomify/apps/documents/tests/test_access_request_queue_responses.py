@@ -43,7 +43,7 @@ def test_an_htmx_decision_returns_the_refreshed_queue(queue, team_with_business_
     assert response.status_code == 200
     assert "HX-Trigger" not in response
     body = response.content.decode()
-    assert "Approved Requests" in body
+    assert "Approved requests" in body
     assert guest_user.email in body
 
 

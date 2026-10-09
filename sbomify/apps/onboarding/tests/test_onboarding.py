@@ -1560,7 +1560,7 @@ class TestTransientSendFailuresRetry:
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
             mock_email_cls.return_value.send.side_effect = TimeoutError("timed out")
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
 
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)
         assert record.status == OnboardingEmail.EmailStatus.PENDING
@@ -1626,13 +1626,13 @@ class TestTransientSendFailuresRetry:
             mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
                 {"gone@example.com": (550, b"No such user here")}
             )
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
 
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)
         assert record.status == OnboardingEmail.EmailStatus.UNDELIVERABLE
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
             mock_email_cls.assert_not_called()
 
     def test_a_corrected_address_is_tried_again(self) -> None:
@@ -1925,12 +1925,12 @@ class TestTransientSendFailuresRetry:
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"):
             with patch.object(OnboardingEmail, "mark_sent", side_effect=OperationalError("connection lost")):
-                assert OnboardingEmailService.send_quick_start_email(user) is True
+                assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is True
 
         self._age_handoff(OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START))
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            assert OnboardingEmailService.send_quick_start_email(user) is True
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is True
             mock_email_cls.assert_not_called()
 
     def test_an_abandoned_pending_row_is_reclaimed(self) -> None:
@@ -1989,7 +1989,7 @@ class TestTransientSendFailuresRetry:
         )
 
         mail.outbox = []
-        assert OnboardingEmailService.send_quick_start_email(user) is True
+        assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is True
         assert len(mail.outbox) == 1
 
     def test_a_broken_template_is_reported_as_permanent(self) -> None:
@@ -2041,7 +2041,7 @@ class TestTransientSendFailuresRetry:
 
         with self._mail_host_failing(OSError(113, "No route to host")):
             with pytest.raises(TransientEmailError):
-                OnboardingEmailService.send_quick_start_email(user)
+                OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
 
     def test_the_task_lets_a_transient_failure_out_so_dramatiq_sees_it(self) -> None:
         """The actor has to receive the exception, or the retry never happens."""
@@ -2244,7 +2244,7 @@ class TestTransientSendFailuresRetry:
             side_effect=InterfaceError("connection already closed"),
         ):
             with pytest.raises(InterfaceError):
-                OnboardingEmailService.send_quick_start_email(user)
+                OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
 
 
 @pytest.mark.django_db
@@ -2605,7 +2605,7 @@ class TestRefusedAddressesLeaveTheBatch:
             mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
                 {user.email: (550, b"No such user here")}
             )
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
 
         assert not self._eligible_quick_start(user)
 
@@ -2618,10 +2618,10 @@ class TestRefusedAddressesLeaveTheBatch:
             mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
                 {user.email: (550, b"No such user here")}
             )
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
 
         with patch("sbomify.apps.onboarding.services.render_email_templates") as render:
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
             render.assert_not_called()
 
     def test_a_corrected_address_comes_back(self) -> None:
@@ -2632,7 +2632,7 @@ class TestRefusedAddressesLeaveTheBatch:
             mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
                 {user.email: (550, b"No such user here")}
             )
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
 
         User.objects.filter(pk=user.pk).update(email="fixedquick2@example.com")
         assert self._eligible_quick_start(user)

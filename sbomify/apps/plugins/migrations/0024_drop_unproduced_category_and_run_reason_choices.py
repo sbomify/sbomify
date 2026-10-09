@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("plugins", "0021_remove_assessmentrun_raw_output_key"),
+        ("plugins", "0023_remove_assessmentrun_raw_output_key"),
     ]
 
     operations = [

@@ -385,7 +385,6 @@ def test_the_other_badges_stay_spans(rendered: str) -> None:
         "Warning",
         "Danger",
         "Info",
-        "Accent",
         "Violet",
         "KEV",
         "Compact",
