@@ -101,6 +101,14 @@
   --color-primary-dark: rgb(66 99 235);    /* Brand Blue #4263EB */
   --color-primary-light: rgb(163 174 255); /* #A3AEFF - for subtle states */
   --color-primary-lighter: rgb(199 205 255); /* #C7CDFF - for backgrounds */
+  /* Fill behind white text on filled controls (primary button, active step).
+     --color-primary is an accent for text and edges on dark surfaces, so white
+     on it measures 3.0:1; these keep every point of the gradient and its hover
+     at 4.5:1 or better (4.98 to 6.74, hover 4.6 to 5.6). */
+  --color-primary-fill: rgb(66 99 235);
+  --color-primary-fill-end: rgb(52 78 205);
+  --color-primary-fill-hover: rgb(74 104 237);
+  --color-primary-fill-hover-end: rgb(60 90 225);
   --color-background: rgb(21 23 36);       /* Deep Navy #151724 - darkest layer */
   --color-surface: rgb(30 33 50);          /* Navy Surface #1E2132 - cards & panels */
   --color-surface-elevated: rgb(37 41 63); /* Brand Navy #25293F - modals, dropdowns */
@@ -137,10 +145,13 @@
   --color-gray-700: rgb(51 65 85);      /* var(--color-gray-700) */
   --color-gray-800: rgb(30 41 59);      /* var(--color-gray-800) */
   --color-gray-900: rgb(15 23 42);      /* var(--color-text) */
-  --color-severity-critical: rgb(220 53 69);    /* var(--color-danger) */
-  --color-severity-high: rgb(253 126 20);       /* var(--color-severity-high) */
-  --color-severity-medium: rgb(255 193 7);      /* var(--color-severity-medium) */
-  --color-severity-low: rgb(13 202 240);        /* var(--color-severity-low) */
+  /* Severity text, dark theme. Used as text over a 12% tint of itself, so each
+     value is pitched against that tint rather than against the surface.
+     Critical is lifted off the unlifted Bootstrap red, which measured 3.21. */
+  --color-severity-critical: rgb(239 122 133);  /* 4.92 on its own tint */
+  --color-severity-high: rgb(253 126 20);       /* 5.19 */
+  --color-severity-medium: rgb(255 193 7);      /* 7.55 */
+  --color-severity-low: rgb(13 202 240);        /* 6.46 */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */
   --color-alert-success-border: rgb(187 247 208); /* var(--color-alert-success-border) */
   --color-alert-danger-bg: rgb(254 242 242);    /* var(--color-alert-danger-bg) */
@@ -163,6 +174,50 @@
    Dark Theme (Default) - Refined Navy Palette
    ============================================ */
 :root {
+  /* Severity fills: solid chips and bars that always carry white text, on the
+     public Trust Center as well as in the app. Same hues as the light severity
+     text ramp, which clears the same >= 4.5:1-against-white bar.
+
+     Two deliberate placements. They are theme-independent, because the contrast
+     partner is #fff either way, so there is nothing to retune and they are not
+     redeclared under :root.light. And they live in this plain :root block
+     rather than in @theme, because their only consumer is static/css/
+     trust-center.css, which Tailwind does not process: an @theme variable no
+     Tailwind-scanned source mentions is tree-shaken out of the build, and every
+     rule reading it would fall back to transparent. Verified against the
+     production build, not assumed. */
+  --color-severity-critical-fill: rgb(111 19 28);  /* 11.76 under white text */
+  --color-severity-high-fill: rgb(114 54 4);       /* 9.35 */
+  --color-severity-medium-fill: rgb(107 81 3);     /* 7.49 */
+  --color-severity-low-fill: rgb(10 109 129);      /* 5.97 */
+  --color-severity-none-fill: rgb(100 116 139);    /* 4.76 */
+
+  /* The radius scale, and the only place it is declared. The values are
+     Tailwind's own defaults, restated so that this file owns the scale outright.
+
+     Public pages load tokens.css and six other legacy sheets before this one,
+     all unlayered, while Tailwind publishes its theme inside @layer theme. An
+     unlayered declaration beats a layered one whatever the source order, so a
+     --radius-* redeclared in any of those sheets silently forked every
+     rounded-* utility on the public side: rounded-xl measured 16px there
+     against 12px in the app, on every card, table frame, stat card and alert.
+     Declaring the scale here, unlayered and last, is what closes that.
+
+     This plain :root block rather than @theme, for the reason the severity
+     fills above give: static/css/*.css is not processed by Tailwind, and an
+     @theme variable no scanned source mentions is tree-shaken out of the
+     build, so the var(--radius-*) rules in pages.css and public-pages.css
+     would fall back to nothing. Theme-independent, so not redeclared under
+     :root.light.
+
+     --radius-full has no Tailwind counterpart, because rounded-full compiles
+     to a literal calc(infinity * 1px). It is here for public-pages.css. */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+
   /* Primary Brand Colors */
 
   /* Background Layers (darkest to lightest for depth) */
@@ -213,6 +268,10 @@
   /* Primary — brand navy ink (buttons, links, focus) */
   --color-primary: rgb(37 41 63);          /* Brand Navy #25293F */
   --color-primary-dark: rgb(26 29 46);     /* #1A1D2E - hover/pressed */
+  --color-primary-fill: rgb(37 41 63);     /* 14.3:1 under white */
+  --color-primary-fill-end: rgb(26 29 46);
+  --color-primary-fill-hover: rgb(81 84 107); /* 7.4:1 under white */
+  --color-primary-fill-hover-end: rgb(37 41 63);
   --color-primary-light: rgb(81 84 107);   /* Navy-80 #51546B */
   --color-primary-lighter: rgb(211 212 217); /* Navy-20 #D3D4D9 */
 
@@ -234,20 +293,23 @@
   --color-text-disabled: rgb(168 169 178); /* Navy-40 #A8A9B2 */
 
   /* Status Colors */
-  --color-success: rgb(31 169 113);        /* Brand Green #1FA971 */
-  --color-success-dark: rgb(23 138 91);    /* #178A5B */
+  /* Status colours double as text, so they are the measured ink rather than the
+     brand swatch: each reads at 4.5:1 or better on white and on its own 12%
+     badge tint (the brand values measured 1.9 to 4.2 on the tint). */
+  --color-success: rgb(22 120 80);         /* 5.47 on white, 4.64 on tint (brand #1FA971) */
+  --color-success-dark: rgb(17 98 65);
   --color-success-light: rgb(231 246 239); /* Tint #E7F6EF */
 
-  --color-warning: rgb(245 166 35);        /* Brand Amber #F5A623 */
-  --color-warning-dark: rgb(216 140 15);   /* #D88C0F */
+  --color-warning: rgb(142 96 20);         /* 5.48, 4.66 (brand #F5A623) */
+  --color-warning-dark: rgb(118 79 16);
   --color-warning-light: rgb(253 243 225); /* Tint #FDF3E1 */
 
-  --color-danger: rgb(229 72 77);          /* Brand Red #E5484D */
-  --color-danger-dark: rgb(197 52 57);     /* #C53439 */
+  --color-danger: rgb(185 58 62);          /* 5.62, 4.70 (brand #E5484D) */
+  --color-danger-dark: rgb(158 46 50);
   --color-danger-light: rgb(252 234 235);  /* Tint #FCEAEB */
 
-  --color-info: rgb(66 99 235);            /* Brand Blue #4263EB */
-  --color-info-dark: rgb(52 80 196);       /* #3450C4 */
+  --color-info: rgb(62 93 221);            /* 5.51, 4.67 (brand #4263EB) */
+  --color-info-dark: rgb(50 74 180);
   --color-info-light: rgb(234 238 253);    /* Tint #EAEEFD */
 
   /* Accent Colors */
@@ -284,11 +346,18 @@
   --color-gray-800: rgb(30 41 59);      /* var(--color-gray-800) */
   --color-gray-900: rgb(15 23 42);      /* var(--color-text) */
 
-  /* Severity colors (same across themes) */
-  --color-severity-critical: rgb(220 53 69);    /* var(--color-danger) */
-  --color-severity-high: rgb(253 126 20);       /* var(--color-severity-high) */
-  --color-severity-medium: rgb(255 193 7);      /* var(--color-severity-medium) */
-  --color-severity-low: rgb(13 202 240);        /* var(--color-severity-low) */
+  /* Severity text, light theme. The dark ramp was chosen against a near-black
+     background; reused on white it measured 1.53 to 3.81 as badge text, all
+     below the 4.5 it needs at 12px. These are the same four hues taken down
+     until each clears 4.5:1 on the strongest tint any component paints behind
+     it and 3:1 on plain white, so a 32px trend value passes too. Two tints are
+     in use: c-badges.severity paints 12%, c-branded.badge paints 14%, and the
+     14% one is the binding constraint. The badge always prints its level as text,
+     so hue never carries the meaning alone. */
+  --color-severity-critical: rgb(197 39 54);    /* 4.52 on a 14% tint, 5.65 on white */
+  --color-severity-high: rgb(168 80 6);         /* 4.51, 5.50 */
+  --color-severity-medium: rgb(133 100 3);      /* 4.54, 5.50 */
+  --color-severity-low: rgb(11 115 136);        /* 4.51, 5.49 */
 
   /* Alert backgrounds (same across themes) */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */
@@ -339,6 +408,163 @@ header {
 html.no-transitions,
 html.no-transitions * {
   transition: none !important;
+}
+
+/* ============================================
+   Stacked tables
+   ============================================ */
+/* Below sm a c-tables.table (table[data-stack]) lays each row out as a block of
+   labelled values, so status, counts and the row's action stay on screen
+   instead of behind a sideways scroll. Each cell's label is its column header,
+   written into data-label by core/js/table-stack.ts.
+
+   Unlayered on purpose: these must beat the cells' utility padding and
+   borders, and the `hidden md:table-cell` a caller uses to drop a column on a
+   narrow table, since a stacked row has room for every value. Inline display
+   from Alpine's x-show still wins, so rows and details it hides stay hidden. */
+@media (max-width: 639.98px) {
+  table[data-stack] {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* The header row's labels move onto the cells, but its sort controls must
+     stay usable: sortable headers become a "Sort by" bar above the rows and the
+     rest step aside. A table with nothing to sort hides the row visually. */
+  table[data-stack] > thead {
+    display: block;
+  }
+
+  table[data-stack] > thead:not(:has([data-table-sort])) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  table[data-stack] > thead > tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-background);
+  }
+
+  table[data-stack] > thead:has([data-table-sort]) > tr::before {
+    content: "Sort by";
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  table[data-stack] > thead > tr > th {
+    display: none;
+    position: static;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  table[data-stack] > thead > tr > th:has([data-table-sort]) {
+    display: block;
+  }
+
+  table[data-stack] > tbody {
+    display: block;
+  }
+
+  /* One column: a half-width value squeezed badge groups into a tall stack and
+     broke long names, so every value gets the row's full width. */
+  table[data-stack] > tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
+  }
+
+  table[data-stack] > tbody:last-child > tr:last-child {
+    border-bottom: 0;
+  }
+
+  /* Widths and pinning belong to the side-by-side table: a stacked cell spans
+     the row, which is also what lets the actions cell reach the right edge. */
+  table[data-stack] > tbody > tr > td {
+    display: block;
+    position: static;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  table[data-stack] > tbody > tr > td[data-cell-end] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  table[data-stack] > tbody > tr > td:empty {
+    display: none;
+  }
+
+  /* The label sits in a left gutter beside its value, not above it, which
+     halves a row's height. It is positioned rather than a flex or grid item so
+     a value made of several nodes (a name, a version and a badge) keeps its
+     own flow. The row's first cell is its subject and needs no label. */
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]) {
+    position: relative;
+    padding-left: 7.5rem;
+    min-height: 1.25rem;
+  }
+
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end])::before {
+    content: attr(data-label);
+    position: absolute;
+    top: 0.125rem;
+    left: 0;
+    width: 6.75rem;
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ============================================
+   Surface corners
+   ============================================ */
+/* Surfaces (cards, table shells, collapsibles, dropdown panels) are rounded-xl
+   and do not clip, because a menu inside one must be free to overflow it. So
+   whatever paints into their corners takes the curve itself: the first child
+   the top corners, the last child the bottom, at the surface radius less the
+   1px border it sits inside. A table's scroll box is such a child, and it
+   clips its header band to that curve, so header cells never round
+   themselves. Zero specificity: a child that states its own radius wins. */
+@layer base {
+  :where([data-surface]) > :where(:first-child) {
+    border-top-left-radius: calc(var(--radius-xl) - 1px);
+    border-top-right-radius: calc(var(--radius-xl) - 1px);
+  }
+
+  :where([data-surface]) > :where(:last-child) {
+    border-bottom-left-radius: calc(var(--radius-xl) - 1px);
+    border-bottom-right-radius: calc(var(--radius-xl) - 1px);
+  }
 }
 
 /* ============================================

@@ -43,9 +43,15 @@ Still scanning.
 <c-feedback.skeleton type="avatar" data-probe="skeleton-avatar" />
 <c-feedback.skeleton type="button" width="7rem" data-probe="skeleton-button" />
 <c-feedback.skeleton type="image" height="9rem" data-probe="skeleton-image" />
-<c-feedback.skeleton type="paragraph" lines="2" class="mt-2" data-probe="skeleton-paragraph" />
+<c-feedback.skeleton type="paragraph" lines="2" class="w-full" data-probe="skeleton-paragraph" />
 <c-feedback.loading message="Loading artifacts…" data-probe="loading-panel" />
-<c-feedback.loading row compact size="md" message="Refreshing…" hx-swap-oob="true" data-probe="loading-row" />
+<c-feedback.loading-list message="Loading items..." rows="2" hx-swap-oob="true" x-show="isLoading" x-cloak data-probe="loading-list" />
+<c-feedback.loading-table rows="2" data-probe="loading-table" />
+<c-feedback.loading-table nested rows="1" data-probe="loading-table-nested" />
+<c-feedback.loading-stats count="3" data-probe="loading-stats" />
+<c-feedback.loading-chart data-probe="loading-chart" />
+<c-feedback.loading-page data-probe="loading-page" />
+<c-feedback.spinner size="inline" message="Saving" x-show="isSaving" x-cloak data-probe="spinner">Saving...</c-feedback.spinner>
 <c-feedback.toast variant="success" title="Saved" data-probe="toast-success">Component updated.</c-feedback.toast>
 <c-feedback.toast variant="danger" title="Failed" dismissible="false" class="mt-2" data-probe="toast-danger">Could not parse the SBOM.</c-feedback.toast>
 <c-feedback.toast-container />

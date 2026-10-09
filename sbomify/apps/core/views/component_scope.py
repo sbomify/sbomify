@@ -41,9 +41,18 @@ class ComponentScopeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             component.products.clear()
         component.save()
 
-        if is_global:
-            messages.success(request, "Component is now workspace-wide and visible on the Trust Center.")
-        else:
+        if not is_global:
             messages.success(request, "Component is now product-scoped.")
+        elif component.visibility == Component.Visibility.PRIVATE:
+            # Scope and visibility are two decisions, and this used to promise
+            # the Trust Center for both. A private workspace-wide component is
+            # on no public page, so saying so here would be wrong in the one
+            # moment the reader is most likely to believe it.
+            messages.success(
+                request,
+                "Component is now workspace-wide. Make it public or gated to show it on your Trust Center.",
+            )
+        else:
+            messages.success(request, "Component is now workspace-wide and on your Trust Center.")
 
         return redirect("core:component_details", component_id=component.id)

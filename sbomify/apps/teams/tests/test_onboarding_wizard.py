@@ -39,7 +39,7 @@ class TestDashboardRedirectToOnboarding:
         """Test that dashboard redirects to onboarding wizard when has_completed_wizard is False."""
         client.force_login(sample_user)
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": sample_team_with_owner_member.team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -62,7 +62,7 @@ class TestDashboardRedirectToOnboarding:
         team.save(update_fields=["has_selected_billing_plan"])
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": True,
@@ -85,7 +85,7 @@ class TestDashboardRedirectToOnboarding:
         team.save(update_fields=["has_selected_billing_plan"])
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             # Note: has_completed_wizard is intentionally missing
@@ -112,7 +112,7 @@ class TestOnboardingWizard:
         """Test that GET request without params shows the welcome step."""
         client.force_login(sample_user)
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": sample_team_with_owner_member.team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -129,7 +129,7 @@ class TestOnboardingWizard:
         """Test that GET request with ?step=setup shows the form with pre-filled email."""
         client.force_login(sample_user)
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": sample_team_with_owner_member.team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -155,7 +155,7 @@ class TestOnboardingWizard:
         original_team_name = team.name
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -180,7 +180,7 @@ class TestOnboardingWizard:
 
         # Check success message
         messages = list(get_messages(response.wsgi_request))
-        assert any("SBOM identity has been set up" in str(m) for m in messages)
+        assert any("Your workspace settings are saved." in str(m) for m in messages)
 
         # Verify workspace was renamed
         team.refresh_from_db()
@@ -195,7 +195,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -244,7 +244,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -286,7 +286,7 @@ class TestOnboardingWizard:
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
         session = client.session
-        session["current_team"] = {"key": team.key, "role": "owner", "has_completed_wizard": False}
+        session["current_workspace"] = {"key": team.key, "role": "owner", "has_completed_wizard": False}
         session.save()
 
         response = client.post(
@@ -314,7 +314,7 @@ class TestOnboardingWizard:
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
         session = client.session
-        session["current_team"] = {"key": team.key, "role": "owner", "has_completed_wizard": False}
+        session["current_workspace"] = {"key": team.key, "role": "owner", "has_completed_wizard": False}
         session.save()
 
         client.post(
@@ -345,7 +345,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -384,7 +384,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -402,8 +402,8 @@ class TestOnboardingWizard:
 
         # Check session was updated
         session = client.session
-        assert session["current_team"]["has_completed_wizard"] is True
-        assert session["current_team"]["name"] == "Session Test's Workspace"
+        assert session["current_workspace"]["has_completed_wizard"] is True
+        assert session["current_workspace"]["name"] == "Session Test's Workspace"
 
     def test_company_name_required(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
@@ -413,7 +413,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -441,7 +441,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -469,7 +469,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -502,7 +502,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -530,7 +530,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -558,7 +558,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -603,7 +603,7 @@ class TestOnboardingWizard:
             product.components.add(comp)
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -645,7 +645,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -672,7 +672,7 @@ class TestOnboardingWizard:
         team.has_completed_wizard = False
         team.save(update_fields=["has_completed_wizard"])
         session = client.session
-        session["current_team"]["has_completed_wizard"] = False
+        session["current_workspace"]["has_completed_wizard"] = False
         session.save()
 
         # Second onboarding with different company name
@@ -704,7 +704,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -729,7 +729,7 @@ class TestOnboardingWizard:
         team.has_completed_wizard = False
         team.save(update_fields=["has_completed_wizard"])
         session = client.session
-        session["current_team"]["has_completed_wizard"] = False
+        session["current_workspace"]["has_completed_wizard"] = False
         session.save()
 
         # Re-run WITHOUT providing a website
@@ -753,7 +753,7 @@ class TestOnboardingWizard:
         team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": True,
@@ -779,7 +779,7 @@ class TestOnboardingWizard:
         team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": True,
@@ -809,7 +809,7 @@ class TestOnboardingWizard:
         team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": True,
@@ -828,7 +828,7 @@ class TestOnboardingWizard:
         team = sample_team_with_owner_member.team
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -852,7 +852,7 @@ class TestOnboardingWizard:
         team.has_completed_wizard = False
         team.save(update_fields=["has_completed_wizard"])
         session = client.session
-        session["current_team"]["has_completed_wizard"] = False
+        session["current_workspace"]["has_completed_wizard"] = False
         session.save()
 
         # Re-run onboarding with a name that conflicts
@@ -888,7 +888,7 @@ class TestOnboardingWizard:
         member.save(update_fields=["role"])
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "member",
             "has_completed_wizard": False,
@@ -916,7 +916,7 @@ class TestOnboardingWizard:
         mocker.patch.object(Team, "is_payment_restricted", new_callable=mocker.PropertyMock, return_value=True)
 
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": False,
@@ -954,7 +954,7 @@ class TestOnboardingWizard:
         )
 
         session = client.session
-        session["current_team"] = {"key": team.key, "role": "owner", "has_completed_wizard": True}
+        session["current_workspace"] = {"key": team.key, "role": "owner", "has_completed_wizard": True}
         session["wizard_component_id"] = component.id
         session["wizard_company_name"] = "Test Corp"
         session.save()
@@ -975,7 +975,7 @@ class TestOnboardingWizard:
         team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
 
         session = client.session
-        session["current_team"] = {"key": team.key, "role": "owner", "has_completed_wizard": True}
+        session["current_workspace"] = {"key": team.key, "role": "owner", "has_completed_wizard": True}
         session.save()
 
         response = client.get(reverse("teams:onboarding_wizard") + "?step=complete")

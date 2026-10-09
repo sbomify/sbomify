@@ -623,8 +623,9 @@ class SPDXSupportedVersion(str, Enum):
     Supported SPDX specification versions, as accepted by validate_spdx_sbom.
 
     SPDX 2.x parses through the lenient SPDXSchema; SPDX 3.0.x parses through
-    SPDX3Schema, with documents claiming 3.0.1+ additionally validated against
-    the vendored official schema (see spdx3_validation).
+    SPDX3Schema, with documents claiming 3.0.0 or 3.0.1+ additionally validated
+    against the vendored official schema for that version (see
+    _spdx3_schema_version and spdx3_validation).
     """
 
     v2_2 = "2.2"
@@ -642,8 +643,8 @@ def _detect_spdx3_context(sbom_data: dict[str, Any]) -> bool:
     3.x line).
 
     Deliberately narrower than the shared ``is_spdx3`` detector: this gate
-    decides which documents claim spec conformance and are held to the
-    vendored 3.0.1 schema. Legacy ``spdxVersion``/``elements`` documents are
+    decides which documents claim spec conformance and are held to a
+    vendored schema. Legacy ``spdxVersion``/``elements`` documents are
     SPDX 3 too, but they declare themselves non-conformant by shape and keep
     the lenient path — routing them through ``is_spdx3`` here would strict-
     validate them and reject stored producers' output.
@@ -679,6 +680,40 @@ _SPDX31_REJECTION = (
     "SPDX {version} is not supported. sbomify accepts SPDX 2.2, 2.3 and "
     "3.0.x; send 3.0.1 to also satisfy the BSI TR-03183-2 floor."
 )
+
+# The 3.0 line's alias with no patch number. spdx.org serves a context there,
+# but which release it meant depends on when the document was written.
+_UNVERSIONED_SPDX3_CONTEXT = "spdx.org/rdf/3.0/"
+
+
+def _names_unversioned_spdx3_context(context: Any) -> bool:
+    """Whether the ``@context``, in any of its shapes, points at the unversioned alias."""
+    if isinstance(context, list):
+        return any(_UNVERSIONED_SPDX3_CONTEXT in str(entry) for entry in context)
+    return isinstance(context, str | dict) and _UNVERSIONED_SPDX3_CONTEXT in str(context)
+
+
+def _spdx3_schema_version(version: tuple[int, ...] | None, context: Any) -> str | None:
+    """Which vendored schema a native SPDX 3 document is held to, or None.
+
+    The claim decides: 3.0.1 and any later 3.0 patch go to the 3.0.1 schema,
+    3.0.0 to its own. The two cannot stand in for each other, since 3.0.1
+    renamed properties 3.0.0 defines (see spdx3_validation).
+
+    None, the lenient path, where the claim names no schema. A bare "3.0",
+    which Microsoft sbom-tool writes, names no release. A 3.0.0 claim under the
+    unversioned alias keeps the leniency every 3.0.0 claim had before 3.0.0
+    was checked, until someone decides how strict to be with the alias. A
+    3.0.1 claim under the alias was already held to the 3.0.1 schema, whose
+    pinned ``@context`` refuses it, and still is.
+    """
+    if version is None or len(version) < 3:
+        return None
+    if version >= (3, 0, 1):
+        return "3.0.1"
+    if version == (3, 0, 0) and not _names_unversioned_spdx3_context(context):
+        return "3.0.0"
+    return None
 
 
 def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Schema, str]:
@@ -726,16 +761,17 @@ def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Sch
             supported = ", ".join(get_supported_spdx_versions())
             raise ValueError(f"Unsupported SPDX version: {full_version}. Supported versions: {supported}")
 
-        # A document claiming 3.0.1 or later is held to the vendored official
-        # schema. 3.0/3.0.0 stays lenient — syft, sbom-tool and JFrog emit it
-        # and no 3.0.0 schema is vendored to hold them to — and the legacy
-        # spdxVersion/elements branch below never reaches this check.
-        if version_tuple and version_tuple >= (3, 0, 1):
+        # A document is held to the vendored official schema for the version
+        # it claims. The legacy spdxVersion/elements branch below never
+        # reaches this check.
+        if schema_version := _spdx3_schema_version(version_tuple, sbom_data.get("@context")):
             from sbomify.apps.sboms.spdx3_validation import spdx3_schema_errors
 
-            errors = spdx3_schema_errors(sbom_data)
+            errors = spdx3_schema_errors(sbom_data, schema_version)
             if errors:
-                raise ValueError(f"SPDX {full_version} document failed 3.0.1 schema validation: " + "; ".join(errors))
+                raise ValueError(
+                    f"SPDX {full_version} document failed {schema_version} schema validation: " + "; ".join(errors)
+                )
 
         return payload, full_version
 
@@ -819,6 +855,28 @@ class SPDX3Package(BaseModel):
     version: str = Field("", alias="software_packageVersion")
     spdx_id: str = Field("", alias="spdxId")
     type: str = ""
+
+    @field_validator("name", "version", "spdx_id", "type", mode="before")
+    @classmethod
+    def read_non_string_as_absent(cls, value: Any) -> Any:
+        """A value of the wrong type is read the same way a missing one is.
+
+        This parser is the lenient one, and on most SPDX 3 documents it is the
+        only one: ``spdx3_validation`` holds a document to the vendored
+        official schema only where it claims a version that has one, so a
+        legacy ``spdxVersion``/``elements`` document, or a bare "3.0" claim,
+        reaches here unchecked. Every field above already defaults to "", so a
+        package element carrying a number or an object where the spec wants a
+        string has nothing a reader can use, exactly as if it had omitted the
+        field.
+
+        Strict typing here raised instead, out of ``SPDX3Schema.packages`` --
+        a property, evaluated well past the upload handler's
+        ``except ValidationError`` guard. The upload answered an unusable
+        document with 400 "Invalid request", naming nothing the uploader could
+        act on, and reported itself to Sentry as a server fault.
+        """
+        return value if isinstance(value, str) else ""
 
     @property
     def purl(self) -> str:

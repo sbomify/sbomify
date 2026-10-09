@@ -87,6 +87,7 @@ from sbomify.apps.plugins.builtins._spdx_shared import (
     spdx2_annotation_targets_document,
     spdx2_reference_type,
     spdx2_root_spdxid,
+    spdx2_yocto_source_downloads,
     spdx3_annotation_subject_matches,
     spdx3_document_subjects,
 )
@@ -326,6 +327,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
         unique_id_failures: list[str] = []
         support_status_failures: list[str] = []
         end_of_support_failures: list[str] = []
+        source_downloads = spdx2_yocto_source_downloads(data)
 
         # Narrow doc-level CLE fallback, mirroring the CycloneDX path.
         # Only the SPDX root subject (DESCRIBES target) inherits document-level
@@ -371,7 +373,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             has_unique_id = (isinstance(purl, str) and bool(purl)) or any(
                 spdx2_reference_type(ref) in SPDX2_IDENTIFIER_TYPES for ref in external_refs
             )
-            if not has_unique_id:
+            if not has_unique_id and spdx_id not in source_downloads:
                 unique_id_failures.append(package_name)
 
             # === FDA CLE Elements ===
@@ -707,7 +709,10 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 is_ntia=True,
                 status="fail" if unique_id_failures else "pass",
                 details=f"Missing for: {', '.join(unique_id_failures)}" if unique_id_failures else None,
-                remediation="Add externalIdentifiers with packageURL, cpe23, or swid type.",
+                remediation=(
+                    "Add software_packageUrl to each package, or an externalIdentifier "
+                    "of type packageUrl, cpe23 or swid."
+                ),
             )
         )
 
@@ -775,8 +780,8 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 status="fail" if end_of_support_failures else "pass",
                 details=f"Missing for: {', '.join(end_of_support_failures)}" if end_of_support_failures else None,
                 remediation=(
-                    "Add software_validUntilDate field to packages with ISO-8601 date. "
-                    "Use sbomify GitHub Action to inject CLE data."
+                    "Add validUntilTime to each package, as a UTC timestamp of the form "
+                    "YYYY-MM-DDTHH:MM:SSZ. Use the sbomify GitHub Action to inject CLE data."
                 ),
             )
         )

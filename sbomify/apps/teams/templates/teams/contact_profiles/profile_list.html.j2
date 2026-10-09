@@ -1,32 +1,32 @@
 {# The shell sits inside the settings card, so it draws no frame of its own. #}
-<c-tables.shell nested x-cloak x-data="contactProfileList" x-init="init()">
+<c-tables.shell nested x-cloak x-data="contactProfileList">
 {{ profiles|json_script:"profiles-data" }}
 {% if profiles %}
     <c-tables.toolbar>
-    <c-tables.search id="search-input" label="Search contact profiles" placeholder="Search profiles..." x-model="searchQuery" @input="filterProfiles()" />
+    <c-forms.search-input size="sm" id="search-input" label="Search parties" placeholder="Search parties" x-model="searchQuery" @input="filterProfiles()" />
     </c-tables.toolbar>
 {% endif %}
 {% if not profiles %}
-    <c-feedback.empty-state icon="fas fa-address-book" title="No contact profiles yet" message="Create a profile to reuse supplier information across components.">
+    <c-feedback.empty-state icon="fas fa-address-book" title="No parties yet" message="Add a party to reuse supplier details across components.">
     <c-buttons.primary hx-get="{% url 'teams:contact_profiles_form' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML">
-    <i class="fas fa-plus mr-2"></i>Create Profile
+    <i class="fas fa-plus mr-2"></i>Add your first party
     </c-buttons.primary>
     </c-feedback.empty-state>
 {% else %}
-    <c-tables.table>
+    <c-tables.table sized variant_class="min-w-128" aria-label="Parties">
     <c-tables.head>
     <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
     <c-tables.header-cell class="w-[120px]">Status</c-tables.header-cell>
-    <c-tables.header-cell sort="updated_at" date class="w-[150px]">Last Modified</c-tables.header-cell>
+    <c-tables.header-cell sort="updated_at" date class="w-40">Last updated</c-tables.header-cell>
     <c-tables.actions-cell as="th" />
     </c-tables.head>
     <tbody>
         <template x-for="profile in filteredProfiles" :key="profile.id">
-            <c-tables.row x-show="!profile.hidden" x-transition>
+            <c-tables.row x-show="!profile.hidden">
             <c-tables.cell nowrap>
             <div class="flex items-center gap-3">
                 <c-avatar size="sm" />
-                <span class="font-medium text-text" x-text="profile.name"></span>
+                <c-overview.record x-text="profile.name" />
             </div>
             </c-tables.cell>
             <c-tables.cell>
@@ -34,40 +34,28 @@
             <i class="fas fa-star mr-1"></i>Default
             </c-badges.success>
             </c-tables.cell>
-            <c-tables.cell date>
-            <span class="text-text-muted text-sm"
-                  x-text="formatDate(profile.updated_at)"></span>
+            <c-tables.cell date muted>
+            <span x-text="formatDate(profile.updated_at)"></span>
             </c-tables.cell>
             <c-tables.actions-cell>
-            <c-actions-menu label="Profile actions" width="w-56">
-            <c-dropdowns.item icon="far fa-edit" @click="editProfile(profile.id)">Edit profile</c-dropdowns.item>
+            <c-actions-menu label="Party actions" width="w-56">
+            <c-dropdowns.item icon="far fa-edit" @click="editProfile(profile.id)">Edit party</c-dropdowns.item>
             <c-dropdowns.item icon="far fa-star" x-show="!profile.is_default" @click="setDefaultProfile(profile.id)">
             Set as default
             </c-dropdowns.item>
             <c-dropdowns.item-danger icon="fas fa-trash-can" @click="$dispatch('open-delete-contact-profile-modal', { displayName: profile.name, formData: { profile_id: profile.id } })">
-            Delete profile
+            Delete party
             </c-dropdowns.item-danger>
             </c-actions-menu>
             </c-tables.actions-cell>
             </c-tables.row>
-            {# Collapsible Preview Row #}
-            <tr x-show="expandedProfiles.includes(profile.id)"
-                x-transition:enter="transition ease-out duration-200"
-                x-transition:enter-start="opacity-0"
-                x-transition:enter-end="opacity-100"
-                x-transition:leave="transition ease-in duration-150"
-                x-transition:leave-start="opacity-100"
-                x-transition:leave-end="opacity-0">
-                <td colspan="4" class="bg-background/50 p-4">
-                    {% include "teams/contact_profiles/partials/profile_details.html.j2" %}
-                </td>
-            </tr>
         </template>
     </tbody>
     </c-tables.table>
-    <template x-if="filteredProfiles.length === 0 && profiles.length > 0">
-        <c-feedback.empty-state compact icon="fas fa-search" icon_variant="neutral" title="No matches found" message="No profiles match your search criteria" />
+    <template x-if="filteredProfiles.every(profile => profile.hidden) && profiles.length > 0">
+        <c-feedback.empty-state compact icon="fas fa-search" icon_variant="neutral" title="No matches found" message="No parties match your search." />
     </template>
 {% endif %}
 </c-tables.shell>
-{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}
+{% url 'teams:contact_profiles_list' team.key as delete_url %}
+{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete party" message_text="Are you sure you want to delete" warning_text="This cannot be undone." form_action=delete_url form=form submit_text="Delete party" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}

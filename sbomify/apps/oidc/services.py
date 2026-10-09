@@ -37,7 +37,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, create_personal_access_token
+from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, create_personal_access_token, hash_token
 from sbomify.apps.core.models import User
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.oidc.github_api import GitHubResolveError, resolve_repository
@@ -64,7 +64,11 @@ logger = getLogger(__name__)
 # routable, so a misconfigured mailer can't accidentally try to deliver
 # notifications to "oidc-bot-…@sbomify.local".
 BOT_USERNAME_PREFIX = "oidc-bot-"
-_BOT_EMAIL_DOMAIN = "sbomify.local"
+#: Public because a queryset that wants to leave bots out has to express the
+#: same rule ``is_synthetic_bot_user`` applies, and reaching for a private name
+#: to do it is how the two drift apart.
+BOT_EMAIL_DOMAIN = "sbomify.local"
+_BOT_EMAIL_DOMAIN = BOT_EMAIL_DOMAIN
 _BOT_ROLE = "bot"
 
 
@@ -125,7 +129,8 @@ def _bot_username(binding_id: str) -> str:
 
 
 def _bot_email(binding_id: str) -> str:
-    return f"{BOT_USERNAME_PREFIX}{binding_id}@{_BOT_EMAIL_DOMAIN}"
+    # Lower case, as User.save() stores every address.
+    return f"{BOT_USERNAME_PREFIX}{binding_id}@{_BOT_EMAIL_DOMAIN}".lower()
 
 
 def is_synthetic_bot_user(user: Any) -> bool:
@@ -555,7 +560,8 @@ def exchange_github_oidc_token(*, component_id: str, oidc_token: str) -> Service
     )
     with transaction.atomic():
         AccessToken.objects.create(
-            encoded_token=sbomify_jwt,
+            token_hash=hash_token(sbomify_jwt),
+            token_type=TOKEN_TYPE_OIDC,
             description=f"oidc:github:{binding.id}",
             user=binding.bot_user,
             team=binding.component.team,

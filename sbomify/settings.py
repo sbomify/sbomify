@@ -34,8 +34,13 @@ from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
-from sbomify.logging_filters import is_benign_shielded_future_error
+from sbomify.logging_filters import (
+    is_benign_shielded_future_error,
+    is_on_demand_tls_ask_denial,
+    redact_access_log_secrets,
+)
 from sbomify.sentry_config import (
+    is_repeat_self_healing_notice,
     resolve_environment,
     should_warn_missing_dsn,
     throttle_self_healing_notices,
@@ -150,8 +155,47 @@ TRUSTED_PROXIES = [
     if cidr.strip()
 ]
 
-# Allow larger request bodies for OSCAL catalog imports (default is 2.5 MB)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB
+
+def _megabytes_from_env(name: str, default_mb: int) -> int:
+    """Bytes from a megabyte-valued env var, falling back on anything unusable.
+
+    These are read at import, so bad config would fail the boot rather than one
+    request. A value that is not a positive integer, such as "100MB" or a stray
+    space, and a zero or negative one that would refuse every request body, both
+    fall back to the default instead.
+    """
+    raw = (os.environ.get(name) or "").strip()
+    megabytes = int(raw) if raw.isdigit() else 0
+    return (megabytes if megabytes > 0 else default_mb) * 1024 * 1024
+
+
+# The ceiling on a request body Django will read into memory (its own default is
+# 2.5 MB). SBOM uploads are the large bodies here: a Yocto SPDX 3 image SBOM runs
+# to tens of megabytes, because SPDX 3 makes every relationship a standalone
+# element rather than an entry in an array.
+#
+# Keep this at or above sbomify.apps.sboms.apis.SBOM_MAX_UPLOAD_SIZE. Below it,
+# the endpoint's own limit never runs and never reports: Django raises
+# RequestDataTooBig while reading the body, so a document inside the advertised
+# cap is refused with no message naming a size. That is what this setting sitting
+# at 20 MB under a 100 MB endpoint cap did.
+DATA_UPLOAD_MAX_MEMORY_SIZE = _megabytes_from_env("DATA_UPLOAD_MAX_MEMORY_SIZE_MB", 100)
+
+# What any artifact upload may weigh: SBOM, CBOM, HBOM, AI BOM, SaaSBOM, VEX and
+# documents. One number so the formats cannot drift apart, and so a document is
+# not held to a different limit from the SBOM beside it.
+#
+# Documents arrive as multipart file uploads, which Django does not measure
+# against DATA_UPLOAD_MAX_MEMORY_SIZE, so that path enforces this itself.
+ARTIFACT_MAX_UPLOAD_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
+
+# Optional: hold BOMs to something smaller than the shared ceiling. Clamped to
+# it, because a cap above the body ceiling is unreachable, Django refuses the
+# body first and the caller never sees this limit's message.
+SBOM_MAX_UPLOAD_SIZE = min(
+    _megabytes_from_env("SBOM_MAX_UPLOAD_SIZE_MB", ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024)),
+    ARTIFACT_MAX_UPLOAD_SIZE,
+)
 
 # Prevent browsers from MIME-sniffing responses away from their declared
 # Content-Type — defense-in-depth for user-uploaded artifact downloads.
@@ -232,6 +276,8 @@ INSTALLED_APPS = [
     "sbomify.apps.controls",
     "sbomify.apps.oidc",
     "sbomify.apps.security_advisories",
+    "sbomify.apps.ops",
+    "sbomify.apps.integrations",
     "sbomify.apps.mcp",
 ]
 
@@ -274,6 +320,7 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.GzipRequestDecompressionMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "sbomify.apps.core.middleware.RenamedSessionKeysMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
     "django.middleware.common.CommonMiddleware",
     # Must precede CsrfViewMiddleware so the bearer exemption flag is set before any
@@ -287,9 +334,11 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "sbomify.apps.core.middleware.ContentSecurityPolicyMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "sbomify.apps.core.middleware.IdentityProviderUnavailableMiddleware",
 ]
 
-GZIP_REQUEST_MAX_SIZE = 200 * 1024 * 1024  # 200 MB – safety limit for decompressed request bodies
+# A compressed body inflates no further than an uncompressed one may weigh.
+GZIP_REQUEST_MAX_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
 
 if REQUEST_TIMING_LOGGING_ENABLED:
     MIDDLEWARE.insert(
@@ -339,13 +388,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "sbomify.apps.core.context_processors.version_context",
-                "sbomify.apps.core.context_processors.pending_invitations_context",
-                "sbomify.apps.core.context_processors.pending_access_requests_context",
-                "sbomify.apps.core.context_processors.global_modals_context",
-                "sbomify.apps.core.context_processors.team_context",
-                "sbomify.apps.core.context_processors.sentry_context",
-                "sbomify.apps.core.context_processors.posthog_context",
+                "sbomify.apps.core.context_processors.app_context",
             ],
         },
     },
@@ -584,6 +627,25 @@ if REDIS_CA_CERTS and not _redis_is_tls:
     )
 
 
+# How many connections one cache alias may hold open to Redis at once, and how
+# long a caller waits for one of them to come free before giving up.
+#
+# The ceiling has to cover the threads that can be inside a cache command at the
+# same time in one process. Under the ASGI worker that is every thread Django
+# runs a sync view on, plus the channels consumers, plus the explicit
+# ``ThreadPoolExecutor`` fan-outs in the SBOM builder and the compliance
+# service — comfortably more than the 10 this used to allow. A pool is lazy, so
+# this is a ceiling rather than an allocation: a quiet process still opens one
+# connection, and the cost of the headroom is only paid under the load that
+# needs it.
+REDIS_CACHE_MAX_CONNECTIONS = int(os.environ.get("REDIS_CACHE_MAX_CONNECTIONS", "50"))
+
+# Two seconds is roughly a thousand times a healthy cache command, so a wait
+# this long means the pool is genuinely saturated rather than briefly busy, and
+# refusing is then the honest answer.
+REDIS_CACHE_POOL_TIMEOUT = int(os.environ.get("REDIS_CACHE_POOL_TIMEOUT", "2"))
+
+
 # Cache Configuration
 def build_redis_caches(location: str, ca_certs: str = "") -> dict[str, dict[str, Any]]:
     """The two Redis cache aliases, which differ in one option only.
@@ -595,11 +657,34 @@ def build_redis_caches(location: str, ca_certs: str = "") -> dict[str, dict[str,
     Both point at the same Redis. ``default`` swallows connection failures;
     ``throttle`` does not, and nothing else about them may drift apart.
     """
-    pool_kwargs: dict[str, Any] = {"max_connections": 10}
+    pool_kwargs: dict[str, Any] = {
+        "max_connections": REDIS_CACHE_MAX_CONNECTIONS,
+        "timeout": REDIS_CACHE_POOL_TIMEOUT,
+    }
     if ca_certs:
         pool_kwargs["ssl_ca_certs"] = ca_certs
     options: dict[str, Any] = {
         "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        # redis-py's plain ConnectionPool refuses the moment every connection is
+        # checked out: it raises MaxConnectionsError rather than waiting for one
+        # of the in-flight commands to return its connection, which they do in
+        # milliseconds. Neither alias below can tell that refusal apart from
+        # Redis being unreachable, because it arrives wrapped as the same
+        # django-redis ConnectionInterrupted — so a full pool was read as an
+        # outage while Redis was perfectly healthy.
+        #
+        # On ``default`` that cost the request its cache. On ``throttle`` it
+        # cost the user the request: the throttle treats a backend error as
+        # "refuse and retry shortly", and latches that refusal for a few seconds
+        # across the whole process, so one momentary pool exhaustion answered
+        # every throttled API call with a 429 it had not earned.
+        #
+        # BlockingConnectionPool waits for a free connection instead, up to
+        # ``timeout``. A busy pool then costs a caller the milliseconds it takes
+        # for a slot to open, and only a pool that stays full for seconds still
+        # raises — at which point the refusal is a true overload signal and the
+        # throttle shedding load is the right behaviour.
+        "CONNECTION_POOL_CLASS": "redis.BlockingConnectionPool",
         "SOCKET_CONNECT_TIMEOUT": 5,
         "SOCKET_TIMEOUT": 5,
         "RETRY_ON_TIMEOUT": True,
@@ -754,7 +839,7 @@ def build_dramatiq_redis_options(location: str, ca_certs: str = "") -> dict[str,
 
 _dramatiq_redis_options: dict[str, Any] = build_dramatiq_redis_options(REDIS_WORKER_URL, REDIS_CA_CERTS)
 DRAMATIQ_BROKER = {
-    "BROKER": "dramatiq.brokers.redis.RedisBroker",
+    "BROKER": "sbomify.dramatiq_broker.RedisBroker",
     "OPTIONS": _dramatiq_redis_options,
     "MIDDLEWARE": [
         "dramatiq.middleware.Callbacks",
@@ -837,12 +922,30 @@ LOGGING = {
             "()": "django.utils.log.CallbackFilter",
             "callback": lambda record: not is_benign_shielded_future_error(record),
         },
+        # These two run on every console record, so both bail on a cheap
+        # attribute check before formatting a message. Between them they are
+        # most of what made the production log stream unreadable: a third of it
+        # was one repeated 404 path, and the error-level portion was dominated
+        # by faults that had already recovered.
+        "suppress_on_demand_tls_ask_denials": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_on_demand_tls_ask_denial(record),
+        },
+        # Keeps the first line of each distinct fault per five-minute window and
+        # drops the repeats, so an outage that lasts is still reported for as
+        # long as it lasts. Same throttle the Sentry before_send hook applies,
+        # with its own window.
+        "throttle_self_healing_notices": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_repeat_self_healing_notice(record),
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
             "formatter": "default",
+            "filters": ["suppress_on_demand_tls_ask_denials", "throttle_self_healing_notices"],
         },
         "console_asyncio": {
             "class": "logging.StreamHandler",
@@ -894,6 +997,15 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # CRA audit trail (sbomify.compliance.audit). Pinned for the same reason:
+        # scope-screening answers, step 1 classification and finding status changes
+        # back legally binding exports, and every emitter logs at INFO, so without
+        # this the whole trail vanishes the moment LOG_LEVEL is raised to WARNING.
+        "sbomify.compliance.audit": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "core": {
             "handlers": ["console"],
             "level": "DEBUG",
@@ -921,6 +1033,11 @@ LOGGING = {
         # },
     },
 }
+
+# uvicorn (and gunicorn's UvicornWorker) install the access logger's handlers
+# before the app loads. Naming the logger in LOGGING would make dictConfig strip
+# those handlers, so the filter is attached to the logger directly instead.
+logging.getLogger("uvicorn.access").addFilter(redact_access_log_secrets)
 
 
 # Feature flags
@@ -955,7 +1072,6 @@ KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
 KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
-KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
 
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {
@@ -1314,3 +1430,23 @@ ENTERPRISE_SALES_EMAIL = os.environ.get("ENTERPRISE_SALES_EMAIL", "hello@sbomify
 # PostHog analytics
 POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY", "")
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
+
+# Integrations
+#
+# One OAuth client per provider, registered by whoever runs this deployment.
+# Without both halves the provider's tile renders disabled rather than hidden,
+# so a self-hoster can see the feature exists and what it wants.
+#
+# The redirect URI to register is /integrations/oauth/<provider>/callback on
+# whichever hostname the app is served from.
+
+VANTA_CLIENT_ID = os.environ.get("VANTA_CLIENT_ID", "")
+VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
+
+# Vanta serves its API from one host for every region, but consent happens on
+# the customer's own regional app host: app.eu.vanta.com for EU accounts,
+# app.aus.vanta.com for AU. A deployment whose customers are not all in the US
+# overrides the authorize URL.
+VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
+VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
+VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")

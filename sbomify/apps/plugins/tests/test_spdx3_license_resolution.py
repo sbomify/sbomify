@@ -234,14 +234,14 @@ class TestPluginsFailOnDanglingLicence:
         assert "fail" in self._licence_statuses(findings)
 
     def test_cisa_licence_check_fails(self):
-        from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+        from sbomify.apps.plugins.builtins.cisa_2026 import CISAMinimumElementsPlugin
 
         findings = CISAMinimumElementsPlugin()._validate_spdx3(self._dangling())
         assert "fail" in self._licence_statuses(findings)
 
     def test_conformant_corpus_still_passes_licence_checks(self):
         from sbomify.apps.plugins.builtins.bsi import BSICompliancePlugin
-        from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+        from sbomify.apps.plugins.builtins.cisa_2026 import CISAMinimumElementsPlugin
 
         doc = spdx3_corpus.minimal_conformant()
         for plugin in (BSICompliancePlugin(), CISAMinimumElementsPlugin()):

@@ -35,12 +35,14 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from datetime import timezone as dt_timezone
 from math import ceil
+from types import SimpleNamespace
 from typing import Any
 
-from django.db.models import Prefetch, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils.timesince import timesince
 
 from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.security_advisories.expressions import csaf_filename_expression, csaf_year_expression
 from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
@@ -231,6 +233,67 @@ def resolve_viewer_scope(request: Any, team: Any) -> ViewerScope:
     )
 
 
+def anonymous_viewer_scope(team: Any) -> ViewerScope:
+    """The scope every anonymous reader shares: public products only.
+
+    A CSAF TLP:WHITE distribution serves one document per URL to everybody, so
+    it must not be built from the requesting reader's scope. Doing that would
+    vary a cacheable, TLP-labelled URL by identity, and an aggregator that
+    fetched it while holding a grant would republish gated content as WHITE.
+    This resolves the same three-tier rule against nobody, so the answer does
+    not depend on who is asking.
+    """
+    return resolve_viewer_scope(SimpleNamespace(), team)
+
+
+def public_advisories(team: Any) -> Any:
+    """Advisories a CSAF TLP:WHITE distribution may carry, with the graph loaded.
+
+    ``_readable_queryset`` already drops PRIVATE and anything not published or
+    withdrawn. GATED goes too: its whole point is that a reader has to be known
+    to see it, and nobody is known here.
+
+    This one prefetches the whole advisory graph, so it is for rendering a
+    document. Listing wants ``public_advisory_index``.
+    """
+    return _readable_queryset(team).filter(visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+
+def public_advisory_index(team: Any) -> Any:
+    """The same advisories as scalar rows, for listing and for resolving a filename.
+
+    Same three filters, none of the prefetches: a feed prints an id, a title and
+    two timestamps, so pulling vulnerabilities, product statuses, version ranges,
+    references and events for every advisory would load the entire disclosure
+    history of a workspace to render a list of links.
+    """
+    public = SecurityAdvisory.objects.filter(
+        team=team,
+        status__in=_READABLE_STATUSES,
+        visibility=SecurityAdvisory.Visibility.PUBLIC,
+    ).alias(_csaf_filename=csaf_filename_expression(), _csaf_year=csaf_year_expression())
+    collisions = public.filter(_csaf_filename=OuterRef("_csaf_filename"), _csaf_year=OuterRef("_csaf_year")).exclude(
+        pk=OuterRef("pk")
+    )
+    # Imported tracking IDs can normalize to the same URL. Do not advertise
+    # either ambiguous document, matching white_document's 404 behavior.
+    return (
+        public.filter(~Exists(collisions))
+        .only("id", "tracking_id", "title", "published_at", "created_at", "updated_at")
+        .order_by("-published_at", "-created_at")
+    )
+
+
+def anonymous_projection(team: Any, advisory: SecurityAdvisory) -> dict[str, Any]:
+    """The detail projection an anonymous reader would be given for one advisory.
+
+    The caller has already restricted itself to ``public_advisories``; this
+    supplies the matching scope so product chips and version rows are filtered
+    to what the world may see, not to what the requester may see.
+    """
+    return _public_projection(advisory, anonymous_viewer_scope(team), detail=True)
+
+
 def _readable_queryset(team: Any) -> Any:
     """Externally-visible advisories with the rows a public projection reads.
 
@@ -264,19 +327,30 @@ def _readable_queryset(team: Any) -> Any:
     )
 
 
+def product_link_is_readable(link: AdvisoryProduct, scope: ViewerScope) -> bool:
+    """Whether this reader may be shown the product this row names.
+
+    A NULL ``product`` is not proof that the name is external: it is also what a
+    deleted product leaves behind. ``public_name_snapshot`` is the difference,
+    and without it retiring a private product would publish its name.
+    """
+    if link.product_id is not None:
+        return str(link.product_id) in scope.product_ids
+    return link.public_name_snapshot or scope.is_insider
+
+
 def _visible_products(advisory: SecurityAdvisory, scope: ViewerScope) -> tuple[list[dict[str, Any]], int]:
     """Product chips the reader may see, plus a count of the ones withheld.
 
     An advisory can name several products, and passing the gate on one of them is
-    not permission to learn the names of the others. Rows with no ``product`` FK
-    are a workspace naming something it does not track in sbomify — there is no
-    product to hold a permission against, so they are shown as plain text.
+    not permission to learn the names of the others. A row with no ``product`` FK
+    needs explicit external provenance; see ``product_link_is_readable``.
     """
     chips: list[dict[str, Any]] = []
     withheld = 0
     for advisory_product in advisory.products.all():
         product = advisory_product.product
-        if product is not None and str(product.id) not in scope.product_ids:
+        if not product_link_is_readable(advisory_product, scope):
             withheld += 1
             continue
         chips.append(
@@ -459,14 +533,19 @@ def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[
     rows: list[dict[str, Any]] = []
     for vulnerability in advisory.vulnerabilities.all():
         for status in vulnerability.product_statuses.all():
+            # A component-scoped status describes one component, and this
+            # projection carries no component scope to check it against. Falling
+            # through would publish it as the portfolio-wide "All products".
+            if status.advisory_component_id is not None:
+                continue
             advisory_product = status.advisory_product
             product = advisory_product.product if advisory_product else None
-            if product is not None and str(product.id) not in scope.product_ids:
+            if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
             if advisory_product is None:
                 label = "All products"
             else:
-                label = advisory_product.product_name or (product.name if product else "")
+                label = product.name if product else advisory_product.product_name
             affected, unaffected = _version_expressions(status)
             rows.append(
                 {
@@ -570,6 +649,11 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         ]
         projection["acknowledgments"] = advisory.acknowledgments or []
         projection["statuses"] = _public_statuses(advisory, scope)
+        # Only the CSAF renderer reads these: the trust centre shows a timeline,
+        # a machine consumer needs a version that moves for every rendered
+        # change. See ``signals.py`` for where they are advanced.
+        projection["csaf_revision"] = advisory.csaf_revision
+        projection["csaf_revision_at"] = advisory.csaf_revision_at
     return projection
 
 
@@ -577,20 +661,25 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
     """The "is my version affected" table: one row per vulnerability x product.
 
     Rows for products the reader may not see are dropped for the same reason
-    their chips are, and a portfolio-wide row (``advisory_product`` NULL) is kept
+    their chips are, and a portfolio-wide row (both subject FKs NULL) is kept
     because it names nothing.
     """
     rows: list[dict[str, Any]] = []
     for vulnerability in advisory.vulnerabilities.all():
         for status in vulnerability.product_statuses.all():
+            # A component-scoped status describes one component, and this
+            # projection carries no component scope to check it against. Falling
+            # through would publish it as the portfolio-wide "All products".
+            if status.advisory_component_id is not None:
+                continue
             advisory_product = status.advisory_product
             product = advisory_product.product if advisory_product else None
-            if product is not None and str(product.id) not in scope.product_ids:
+            if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
             if advisory_product is None:
                 scope_label = "All products"
             else:
-                scope_label = advisory_product.product_name or (product.name if product else "")
+                scope_label = product.name if product else advisory_product.product_name
             affected, unaffected = _version_expressions(status)
             rows.append(
                 {

@@ -22,7 +22,7 @@ import pytest
 
 from sbomify.apps.plugins.builtins.bsi import BSICompliancePlugin
 import sbomify.apps.sboms
-from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+from sbomify.apps.plugins.builtins.cisa_2026 import CISAMinimumElementsPlugin
 from sbomify.apps.plugins.builtins.fda_medical_device_cybersecurity import FDAMedicalDevicePlugin
 from sbomify.apps.plugins.builtins.ntia import NTIAMinimumElementsPlugin
 from sbomify.apps.plugins.tests import spdx3_corpus as corpus

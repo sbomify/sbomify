@@ -6,6 +6,7 @@ import json
 import logging
 from typing import Any
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -21,7 +22,7 @@ from sbomify.apps.core.authz import can
 from sbomify.apps.core.object_store import StorageClient, log_orphaned_object
 from sbomify.apps.core.purl import extract_purl_qualifiers
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
-from sbomify.apps.core.services.access_control import check_component_access, check_component_access_for_user
+from sbomify.apps.core.services.access_control import check_component_access_for_user
 from sbomify.apps.core.utils import (
     ExtractSpec,
     broadcast_to_workspace,
@@ -61,12 +62,27 @@ from .schemas import (
     validate_cyclonedx_sbom,
     validate_spdx_sbom,
 )
-from .services.sboms import delete_sbom_record, get_crypto_inventory, get_sbom_detail, schedule_vex_reapply
+from .services.sboms import (
+    delete_sbom_record,
+    get_crypto_inventory,
+    get_sbom_detail,
+    schedule_vex_reapply,
+    upload_sbom_file,
+)
 
 log = logging.getLogger(__name__)
 
-# Max SBOM upload size in bytes (100MB — SPDX 3.0 SBOMs can be 50-100MB)
-SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+# Max SBOM upload size in bytes. SPDX 3 SBOMs from Yocto and similar image
+# builds run to tens of megabytes.
+#
+# Capped at DATA_UPLOAD_MAX_MEMORY_SIZE because a limit above it is unreachable:
+# Django raises RequestDataTooBig while reading the body, before this check can
+# run, so the caller gets a bare 400 rather than a message naming the size.
+# Raise DATA_UPLOAD_MAX_MEMORY_SIZE_MB to raise both.
+# One knob by default: DATA_UPLOAD_MAX_MEMORY_SIZE_MB moves this with it.
+# SBOM_MAX_UPLOAD_SIZE_MB holds BOMs lower if wanted. Both are parsed in
+# settings, so config parsing lives in one place.
+SBOM_MAX_UPLOAD_SIZE = settings.SBOM_MAX_UPLOAD_SIZE
 
 
 _VALID_BOM_TYPES = {choice[0] for choice in SBOM.BomType.choices}
@@ -128,7 +144,6 @@ def _store_external_vex(
     version = "" if raw_version is None else str(raw_version)
 
     s3 = StorageClient("SBOMS")
-    filename = s3.upload_sbom(file_content)
 
     sbom = SBOM(
         name=component.name,
@@ -137,12 +152,14 @@ def _store_external_vex(
         format_version=format_version[:20],
         version=version,
         source=source,
-        sbom_filename=filename,
         sha256_hash=sha256_hash,
         bom_type=SBOM.BomType.VEX.value,
     )
+    filename = ""
     try:
         with transaction.atomic():
+            filename = upload_sbom_file(s3, file_content)
+            sbom.sbom_filename = filename
             sbom.save()
     except IntegrityError:
         _cleanup_orphaned_s3_object(filename)
@@ -637,18 +654,19 @@ def sbom_upload_cyclonedx(
             }
 
         s3 = StorageClient("SBOMS")
-        filename = s3.upload_sbom(request.body)
 
         sbom_dict["format"] = sbom_format
-        sbom_dict["sbom_filename"] = filename
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
         sbom_dict["sha256_hash"] = sha256_hash
         sbom_dict["qualifiers"] = sbom_qualifiers
         sbom_dict["bom_type"] = bom_type
 
+        filename = ""
         try:
             with transaction.atomic():
+                filename = upload_sbom_file(s3, request.body)
+                sbom_dict["sbom_filename"] = filename
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError as e:
@@ -882,15 +900,16 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
             }
 
         s3 = StorageClient("SBOMS")
-        filename = s3.upload_sbom(request.body)
 
         sbom_dict["version"] = sbom_version
-        sbom_dict["sbom_filename"] = filename
         sbom_dict["qualifiers"] = sbom_qualifiers
         sbom_dict["bom_type"] = bom_type
 
+        filename = ""
         try:
             with transaction.atomic():
+                filename = upload_sbom_file(s3, request.body)
+                sbom_dict["sbom_filename"] = filename
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError as e:
@@ -1156,11 +1175,12 @@ def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, An
     # Check access permissions using centralized access control
     # This handles public, gated (with approved guest access), and private components
     component = sbom.component
-    access_result = check_component_access(request, component)
-
-    if not access_result.has_access:
-        # Provide helpful error message based on access result
-        if access_result.requires_access_request:
+    # can() adds the API-token scope gate that check_component_access alone skips.
+    decision = can(request, "component:access", component)
+    if not decision:
+        # Only a gated_* reason is a denial an access request can lift. No
+        # approval widens a token's scope.
+        if decision.reason.startswith("gated_"):
             if not request.user.is_authenticated:
                 return 403, {
                     "detail": "Access denied. Please request access to download this SBOM.",
@@ -1454,15 +1474,16 @@ def sbom_upload_file(
                 }
 
             s3 = StorageClient("SBOMS")
-            filename = s3.upload_sbom(file_content)
 
             sbom_dict["version"] = sbom_version
-            sbom_dict["sbom_filename"] = filename
             sbom_dict["qualifiers"] = sbom_qualifiers
             sbom_dict["bom_type"] = bom_type
 
+            filename = ""
             try:
                 with transaction.atomic():
+                    filename = upload_sbom_file(s3, file_content)
+                    sbom_dict["sbom_filename"] = filename
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError as e:
@@ -1569,18 +1590,19 @@ def sbom_upload_file(
                 }
 
             s3 = StorageClient("SBOMS")
-            filename = s3.upload_sbom(file_content)
 
             sbom_dict["format"] = sbom_format
-            sbom_dict["sbom_filename"] = filename
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
             sbom_dict["sha256_hash"] = sha256_hash
             sbom_dict["qualifiers"] = sbom_qualifiers
             sbom_dict["bom_type"] = bom_type
 
+            filename = ""
             try:
                 with transaction.atomic():
+                    filename = upload_sbom_file(s3, file_content)
+                    sbom_dict["sbom_filename"] = filename
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError as e:

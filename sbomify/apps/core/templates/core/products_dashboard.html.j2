@@ -1,12 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load design_system %}
-{% load static %}
-{% block title %}sbomify Products{% endblock %}
+{% block title %}Products · sbomify{% endblock %}
 {% block dashboard_content %}
-    <c-layout.page-header title="Products" subtitle="Your products and the components in them." icon="fas fa-cube" />
-    <div class="space-y-6">
-        {# Products table #}
-        {% include 'core/products_table.html.j2' %}
-    </div>
+    {% include 'core/products_inventory.html.j2' %}
 {% endblock %}
-{% block scripts %}{% endblock %}

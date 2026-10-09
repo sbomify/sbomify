@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from dataclasses import replace as dataclass_replace
 from typing import TYPE_CHECKING, Any
 
-from django.db.models import OuterRef, Subquery
 from django.db.utils import NotSupportedError
 
+from .latest import latest_run_ids, status_runs
 from .models import AssessmentRun, RegisteredPlugin
 from .sdk.enums import AssessmentCategory, RunStatus
 
@@ -84,26 +84,11 @@ def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
     breakdown lives on ``AssessmentRun.releases`` M2M and is surfaced in the
     UI as badges on the single plugin card.
 
-    Uses Subquery/OuterRef to fetch only the newest row per plugin_name
-    (no DISTINCT ON — portable to SQLite). Prefetches ``releases`` so the
-    card template can render the release badges without N+1 lookups.
+    Fetches only the newest row per plugin_name, picked with one probe per
+    plugin. Prefetches ``releases`` so the card template can render the
+    release badges without N+1 lookups.
     """
-    latest_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .values("plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(
-                    sbom_id=sbom_id,
-                    plugin_name=OuterRef("plugin_name"),
-                )
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
-    )
-    latest_ids = [pk for pk in latest_ids if pk is not None]
+    latest_ids = latest_run_ids(AssessmentRun.objects.all(), [sbom_id])
     if not latest_ids:
         return []
     return sorted(
@@ -251,15 +236,32 @@ def _collect_details(details_by_plugin: dict[str, PassingAssessment], assessment
             details_by_plugin[assessment.plugin_name] = assessment
 
 
+def _get_passing_assessments_by_sbom(
+    sbom_ids: list[str], plugin_info: dict[str, tuple[str, str]]
+) -> dict[str, list[PassingAssessment]]:
+    """Passing assessments for several SBOMs, each list sorted by plugin name.
+
+    The latest run per SBOM and plugin is picked by id, one probe per pair,
+    and only those runs are read. Only
+    ``result.summary`` and ``result.metadata`` leave the database:
+    scanner results carry the whole findings list, and a component with many
+    SBOM versions would otherwise pull every one of them into memory.
+    """
+
+    runs = status_runs(latest_run_ids(AssessmentRun.objects.all(), sbom_ids), "plugin_name")
+    passing_by_sbom: dict[str, list[PassingAssessment]] = {sbom_id: [] for sbom_id in sbom_ids}
+    for run in runs:
+        if _is_run_passing(run):
+            passing_by_sbom[str(run.sbom_id)].append(_passing_assessment_from_run(run, plugin_info))
+    return passing_by_sbom
+
+
 def get_sbom_passing_assessments(sbom_id: str) -> list[PassingAssessment]:
     """Get list of passing assessments for an SBOM.
 
     Only returns assessments that have completed successfully with no failures.
     """
-    plugin_info = _get_plugin_display_names()
-    latest_runs = _get_latest_assessment_runs_for_sbom(sbom_id)
-
-    return [_passing_assessment_from_run(run, plugin_info) for run in latest_runs if _is_run_passing(run)]
+    return _get_passing_assessments_by_sbom([sbom_id], _get_plugin_display_names())[sbom_id]
 
 
 def get_component_assessment_status(component: "Component") -> ComponentAssessmentStatus:
@@ -282,11 +284,14 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
             passing_assessments=[],
         )
 
+    plugin_info = _get_plugin_display_names()
+    passing_by_sbom = _get_passing_assessments_by_sbom([str(sbom_id) for sbom_id in sbom_ids], plugin_info)
+
     # Get passing assessments per SBOM
     sbom_passing: dict[str, set[str]] = {}  # sbom_id -> set of passing plugin names
     details_by_plugin: dict[str, PassingAssessment] = {}
     for sbom_id in sbom_ids:
-        passing = get_sbom_passing_assessments(str(sbom_id))
+        passing = passing_by_sbom[str(sbom_id)]
         sbom_passing[str(sbom_id)] = {p.plugin_name for p in passing}
         _collect_details(details_by_plugin, passing)
 
@@ -299,7 +304,6 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
     # Check if there are any assessments at all
     has_assessments = any(sbom_passing.values())
 
-    plugin_info = _get_plugin_display_names()
     passing_assessments = _aggregate_passing(common_passing, details_by_plugin, plugin_info)
 
     # all_pass is True if we have assessments and ALL of them pass
@@ -553,20 +557,9 @@ def get_products_latest_sbom_assessments_batch(
         return {str(p.id): [] for p in products}
 
     # Step 3: Get all assessment runs for these SBOMs (batch query)
-    latest_run_ids = (
-        AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-        .values("sbom_id", "plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=OuterRef("sbom_id"), plugin_name=OuterRef("plugin_name"))
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
-    )
+    latest_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
 
-    all_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids).select_related())
+    all_runs = status_runs(latest_ids, "-created_at")
 
     # Step 4: Compute passing assessments per SBOM
     plugin_info = _get_plugin_display_names()
@@ -664,22 +657,9 @@ def get_components_latest_sbom_assessments_batch(
     sbom_ids = list(sbom_to_component.keys())
 
     # Step 2: Get all assessment runs for these SBOMs (batch query)
-    from django.db.models import OuterRef, Subquery
+    latest_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
 
-    latest_run_ids = (
-        AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-        .values("sbom_id", "plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=OuterRef("sbom_id"), plugin_name=OuterRef("plugin_name"))
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
-    )
-
-    all_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids).select_related())
+    all_runs = status_runs(latest_ids, "-created_at")
 
     # Step 3: Compute passing assessments per SBOM
     plugin_info = _get_plugin_display_names()

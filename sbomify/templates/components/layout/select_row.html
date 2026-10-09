@@ -17,12 +17,32 @@ otherwise toggle the first of those rather than the row's own switch. Without
 it the row clicks the first input it contains, which is right whenever the
 control is the only one.
 
-disabled dims the row. What actually blocks it is the control's own disabled
-attribute, which is what :has(input:disabled) reads, so the two can never
-disagree.
+A row whose control is disabled is drained of colour, derived from the control
+itself with has-[input:disabled]: rather than from a prop. The real input is the
+source of truth -- it is what blocks the row, and it is already where cursor and
+hover are read from -- so the visual state cannot drift from it, and a row bound
+reactively (x-model, ::disabled) greys the moment the control does.
+
+It desaturates and does not fade. opacity on the row composites every descendant
+against the page, text included, and a row that explains why it is unavailable
+needs that explanation readable: at opacity-50 the plan-required badge measured
+1.4:1 and the description 2.0:1 against a 4.5:1 AA floor. Nothing a descendant
+does can cancel an ancestor's opacity or filter, so whatever the row must keep
+legible has to be something the row never dimmed in the first place.
+
+grayscale is not a free pass either. CSS filters apply their matrix to
+non-linear sRGB channels, while WCAG linearises first, so grayscale does move
+relative luminance and can move contrast in either direction -- on this row's
+own palette the plan-required badge goes 4.66 -> 5.01 in light and 6.90 -> 6.49
+in dark. Every pair here was measured after the filter and clears 4.5:1 in both
+themes; test_select_row_contrast.py pins those numbers, so a token change that
+breaks them fails there rather than on a customer's screen.
+
+divided gives a list of rows a shared hairline separator, leaving the last
+row open so it can sit directly inside a card without another bordered box.
 {% endcomment %}
-<c-vars x_data toggle_ref disabled class />
-<div class="flex items-start gap-4 p-4 cursor-pointer transition-colors duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_6%,transparent)] has-[:checked]:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)] has-[:checked]:hover:bg-[color-mix(in_oklab,var(--color-primary)_9%,transparent)] has-[:focus-visible]:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] has-[input:disabled]:cursor-not-allowed has-[input:disabled]:hover:bg-transparent{% if disabled %} opacity-50 grayscale{% endif %}{% if class %} {{ class }}{% endif %}"
+<c-vars x_data toggle_ref divided class />
+<div class="flex items-start gap-4 p-4 cursor-pointer transition-colors duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_6%,transparent)] has-[:checked]:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)] has-[:checked]:hover:bg-[color-mix(in_oklab,var(--color-primary)_9%,transparent)] has-[:focus-visible]:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] has-[input:disabled]:cursor-not-allowed has-[input:disabled]:hover:bg-transparent has-[input:disabled]:grayscale{% if divided %} border-b border-solid border-border last:border-b-0{% endif %}{% if class %} {{ class }}{% endif %}"
      {% if x_data %}x-data="{{ x_data }}"{% else %}x-data{% endif %}
      {% if toggle_ref %}@click="if (!$event.target.closest('a, button, select, input, textarea, label')) $refs.{{ toggle_ref }}.click()"{% else %}@click="if (!$event.target.closest('a, button, select, input, textarea, label')) $el.querySelector('input')?.click()"{% endif %}
      {{ attrs }}>{{ slot }}

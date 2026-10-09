@@ -38,6 +38,15 @@ class PluginsConfig(AppConfig):
         from django.db import transaction
         from django.db.utils import OperationalError, ProgrammingError
 
+        # The registry's version is what a stored run is compared against to tell
+        # whether its result is out of date, so it must come from the class.
+        from .builtins.bsi import BSICompliancePlugin
+        from .builtins.cisa_2025 import CISA2025MinimumElementsPlugin
+        from .builtins.cisa_2026 import CISAMinimumElementsPlugin
+        from .builtins.fda_medical_device_cybersecurity import FDAMedicalDevicePlugin
+        from .builtins.ntia import NTIAMinimumElementsPlugin
+        from .builtins.openchain_telco import OpenChainTelcoPlugin
+        from .builtins.verification import SBOMVerificationPlugin
         from .models import RegisteredPlugin
 
         def _is_missing_schema_error(exc: BaseException) -> bool:
@@ -81,8 +90,59 @@ class PluginsConfig(AppConfig):
                     "SBOM Author, and Timestamp."
                 ),
                 "category": "compliance",
-                "version": "0.1.0",
+                "version": NTIAMinimumElementsPlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.ntia.NTIAMinimumElementsPlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
+        # CISA 2026 Minimum Elements Plugin
+        _register(
+            "cisa-minimum-elements-2026",
+            {
+                "display_name": "CISA Minimum Elements (2026)",
+                "description": (
+                    "Scores SBOMs against the 2026 Minimum Elements for a Software Bill of "
+                    "Materials, published by CISA with the NSA, the FBI and fifteen "
+                    "international partners, which replaced the 2021 NTIA elements. Checks "
+                    "the seventeen data fields: nine about the document, including its "
+                    "author, signature, format, generation context, tool and version, and "
+                    "eight about each component, including producer, identifiers, hash "
+                    "value and algorithm, licence and dependencies. Where the standard "
+                    "allows an author to state that a value is unknown, saying so reads as "
+                    "a warning rather than a miss."
+                ),
+                "category": "compliance",
+                "version": CISAMinimumElementsPlugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.cisa_2026.CISAMinimumElementsPlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
+        # CISA 2025 Minimum Elements Plugin. Superseded by the 2026 elements
+        # above, and kept because a contract or a regulation can name this
+        # version of the standard.
+        _register(
+            "cisa-minimum-elements-2025",
+            {
+                "display_name": "CISA Minimum Elements (2025 Draft)",
+                "description": (
+                    "Scores SBOMs against the August 2025 public comment draft of the CISA "
+                    "Minimum Elements, which the 2026 elements have since replaced. Checks "
+                    "the eleven data fields: SBOM author, software producer, component name "
+                    "and version, software identifiers, hash, licence, dependencies, tool "
+                    "name, timestamp and generation context. Use this where an agreement "
+                    "asks for the 2025 elements by name; otherwise use the 2026 plugin."
+                ),
+                "category": "compliance",
+                "version": CISA2025MinimumElementsPlugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.cisa_2025.CISA2025MinimumElementsPlugin",
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,
@@ -103,7 +163,7 @@ class PluginsConfig(AppConfig):
                     "CONTAINS relationships, and the build information including the CISA SBOM Type."
                 ),
                 "category": "compliance",
-                "version": "1.0.0",
+                "version": OpenChainTelcoPlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.openchain_telco.OpenChainTelcoPlugin",
                 "is_enabled": True,
                 "is_beta": True,
@@ -124,7 +184,7 @@ class PluginsConfig(AppConfig):
                     "data including software support status and end-of-support dates for each component."
                 ),
                 "category": "compliance",
-                "version": "0.1.0",
+                "version": FDAMedicalDevicePlugin.VERSION,
                 "plugin_class_path": (
                     "sbomify.apps.plugins.builtins.fda_medical_device_cybersecurity.FDAMedicalDevicePlugin"
                 ),
@@ -149,7 +209,7 @@ class PluginsConfig(AppConfig):
                     "For digital signature requirements, use in combination with attestation plugins."
                 ),
                 "category": "compliance",
-                "version": "1.0.0",
+                "version": BSICompliancePlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.bsi.BSICompliancePlugin",
                 "is_enabled": True,
                 "is_beta": True,
@@ -179,7 +239,7 @@ class PluginsConfig(AppConfig):
                     "verifies the SBOM."
                 ),
                 "category": "attestation",
-                "version": "2.0.0",
+                "version": SBOMVerificationPlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.verification.SBOMVerificationPlugin",
                 "is_enabled": True,
                 "is_beta": True,

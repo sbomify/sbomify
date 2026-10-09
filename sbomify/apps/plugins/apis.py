@@ -1,9 +1,11 @@
 """API endpoints for the plugins framework."""
 
 from collections.abc import Callable
+from itertools import chain
 from typing import Any
+from uuid import UUID
 
-from django.db.models import OuterRef, Subquery
+from django.db.models import Func, JSONField
 from django.http import HttpRequest
 from ninja import Router
 from ninja.decorators import decorate_view
@@ -19,6 +21,7 @@ from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
 
+from .latest import latest_run_ids, status_runs
 from .models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
 from .schemas import (
     AssessmentBadgeData,
@@ -27,11 +30,26 @@ from .schemas import (
     SBOMAssessmentsResponse,
 )
 from .sdk.enums import RunReason, RunStatus
+from .services.access import plugin_plan_requirement, plugins_outside_plan, team_has_plugin_access
 from .tasks import run_assessment_task
 
 logger = getLogger(__name__)
 
 router = Router(tags=["plugins"])
+
+# How many historical runs ``get_sbom_assessments`` returns when the caller does
+# not say. A scheduled scanner writes one run per SBOM per cycle, so an SBOM's
+# history is a function of how long it has existed rather than of anything the
+# caller asked for: at an hourly cadence the unbounded response grew by 24 runs
+# a day, each carrying its own findings array, on an endpoint reachable without
+# authentication for a public component.
+#
+# Generous rather than tight, because this is a default on a published contract:
+# enough that a history panel has something to page through, small enough that
+# the response size stops tracking the artifact's age. It is also the ceiling:
+# ``history_limit`` can lower it but not raise it, and ``all_runs_total`` tells a
+# caller whether there is more.
+DEFAULT_HISTORY_LIMIT = 50
 
 
 def _readable_sbom(request: HttpRequest, sbom_id: str) -> SBOM | None:
@@ -125,7 +143,12 @@ def _get_plugin_display_names_map(plugin_names: set[str]) -> dict[str, str]:
     }
 
 
-def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None, euvd_ids: frozenset[str] | None = None) -> Any:
+def _result_with_kev(
+    run: AssessmentRun,
+    kev_ids: frozenset[str] | None,
+    euvd_ids: frozenset[str] | None = None,
+    findings_limit: int | None = None,
+) -> Any:
     """A copy of the run's result with the read-time finding flags stamped in.
 
     Three flags, all derived rather than stored: ``kev`` from the cached CISA
@@ -133,36 +156,39 @@ def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None, euvd_id
     already inside the finding. Deriving them here means every run ever
     recorded carries them without a rescan.
 
-    The stored blob is never mutated. Non-security runs pass through as-is.
+    The stored blob is never mutated. Only the flags are security-only; the
+    bound below applies to every category, because a compliance plugin checks
+    each component and reports per component, so its list grows with the SBOM
+    exactly as a scanner's does.
     """
     result = run.result
-    if run.category != "security" or not isinstance(result, dict):
+    if not isinstance(result, dict):
         return result
     findings = result.get("findings")
-    if not isinstance(findings, list):
+
+    # Bounded before the stamping below, so a caller that renders a count and one
+    # title does not pay KEV lookup, schema validation and JSON serialisation per
+    # finding for thousands it will never read.
+    # Clamped at zero because the endpoint above takes this as a query parameter
+    # from anyone: a negative limit would slice from the end and hand back all
+    # but the last finding, which is the response this bound exists to prevent.
+    if isinstance(findings, list) and findings_limit is not None:
+        limit = max(findings_limit, 0)
+        if len(findings) > limit:
+            result = {**result, "findings": findings[:limit]}
+            findings = result["findings"]
+
+    if run.category != "security" or not isinstance(findings, list):
         return result
 
-    from sbomify.apps.vulnerability_scanning.kev import finding_in_kev
+    from sbomify.apps.vulnerability_scanning.kev import stamp_exploited
     from sbomify.apps.vulnerability_scanning.malicious import stamp_malicious
 
-    # Build a new findings list only once a match is actually found — the common
-    # case (no matches) returns the original result with no allocation.
-    # finding_in_kev is a generic id-or-alias set membership test, so the EUVD
-    # list reuses it rather than growing a twin.
-    stamped: list[Any] | None = None
-    if kev_ids or euvd_ids:
-        for i, finding in enumerate(findings):
-            if not isinstance(finding, dict):
-                continue
-            flags: dict[str, bool] = {}
-            if kev_ids and finding_in_kev(finding, kev_ids):
-                flags["kev"] = True
-            if euvd_ids and finding_in_kev(finding, euvd_ids):
-                flags["euvd"] = True
-            if flags:
-                if stamped is None:
-                    stamped = list(findings)
-                stamped[i] = {**finding, **flags}
+    # Both stampers return the list they were given when nothing matched, so the
+    # common case allocates nothing and the identity check below reads as "did
+    # anything change".
+    flagged = stamp_exploited(findings, kev_ids, euvd_ids)
+    stamped: list[Any] | None = flagged if flagged is not findings else None
 
     findings_out, malicious_count = stamp_malicious(stamped if stamped is not None else findings)
     if findings_out is not (stamped if stamped is not None else findings):
@@ -184,6 +210,7 @@ def _run_to_schema(
     display_names: dict[str, str] | None = None,
     kev_ids: frozenset[str] | None = None,
     euvd_ids: frozenset[str] | None = None,
+    findings_limit: int | None = None,
 ) -> AssessmentRunSchema:
     """Convert an AssessmentRun model to schema.
 
@@ -230,7 +257,7 @@ def _run_to_schema(
         "started_at": run.started_at,
         "completed_at": run.completed_at,
         "error_message": run.error_message or None,
-        "result": _result_with_kev(run, kev_ids, euvd_ids),
+        "result": _result_with_kev(run, kev_ids, euvd_ids, findings_limit),
         "created_at": run.created_at,
     }
     try:
@@ -316,12 +343,74 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
     )
 
 
+class _ResultWithoutFindings(Func):
+    """``result`` minus its findings array, cut by Postgres in one pass over the blob.
+
+    Only an object can lose a key: ``jsonb - text`` raises on a scalar, which
+    would fail the whole request over one malformed row. Any other shape comes
+    back NULL, and the serializer degrades that run on its own.
+    """
+
+    template = "CASE WHEN jsonb_typeof(%(expressions)s) = 'object' THEN (%(expressions)s - 'findings'::text) END"
+    output_field = JSONField()
+
+
+def _history_runs(run_ids: list[UUID]) -> list[AssessmentRun]:
+    """The runs for ``run_ids``, in that order, each holding its result without findings."""
+    by_id = {
+        run.id: run
+        for run in AssessmentRun.objects.filter(id__in=run_ids)
+        .defer("result")
+        .annotate(envelope=_ResultWithoutFindings("result"))
+        .prefetch_related("releases")
+    }
+    runs: list[AssessmentRun] = [by_id[run_id] for run_id in run_ids if run_id in by_id]
+    for run in runs:
+        envelope = getattr(run, "envelope", None)
+        run.result = {**envelope, "findings": []} if isinstance(envelope, dict) else None
+    return runs
+
+
 @router.get("/assessments/{sbom_id}", response=SBOMAssessmentsResponse, auth=None)
 @decorate_view(optional_auth)
-def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsResponse:
-    """Get all assessment runs for an SBOM.
+def get_sbom_assessments(
+    request: HttpRequest,
+    sbom_id: str,
+    *,
+    findings_limit: int | None = None,
+    include_history: bool = True,
+    history_limit: int = DEFAULT_HISTORY_LIMIT,
+) -> SBOMAssessmentsResponse:
+    """Get assessment runs for an SBOM: the latest per plugin, plus recent history.
 
-    Returns both the latest run per plugin and the full history.
+    Three knobs, because the unbounded version of this response is a denial of
+    service on a public endpoint. ``auth=None``: for a public component, any
+    unauthenticated caller could make the server de-TOAST an SBOM's entire scan
+    history, and a scheduled scanner writes a run per SBOM per cycle, so that
+    history grows without limit for as long as the artifact exists.
+
+    ``findings_limit`` bounds the findings carried per run. The artifact page's
+    card shows counts from ``result.summary`` and exactly one title, and the
+    findings list behind it reached 31 MB on a four-thousand-finding scan, which
+    is a 504 at the gateway before the page is ever written.
+
+    ``include_history`` drops ``all_runs``. Every finding was otherwise stamped,
+    validated and serialised twice, once for the latest run per plugin and again
+    for the same run inside the history, and the artifact page reads only the
+    former.
+
+    ``history_limit`` bounds how many runs ``all_runs`` carries, up to
+    ``DEFAULT_HISTORY_LIMIT`` whatever the caller asks for. This is the one
+    that makes the response size a function of the request rather than of how
+    long the SBOM has existed. ``all_runs_total`` reports the true count so a
+    caller can see that it was truncated.
+
+    Only the latest runs carry their findings. A history row carries the run's
+    status and its result without the findings array, which is what grows with
+    the SBOM, so ``history_limit`` bounds the response's size as well as its
+    length. The newest run per plugin is found on its own, so it shows even when
+    it falls outside the history window: deriving it from the truncated history
+    would hide a plugin whose last run predates the newest ``history_limit`` runs.
     """
     # Only expose results for an SBOM whose component the caller may read (public, or an
     # authorized member/token). Otherwise return the empty "no assessments" shape so neither
@@ -332,42 +421,49 @@ def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsR
             status_summary=AssessmentStatusSummary(overall_status="no_assessments"),
             latest_runs=[],
             all_runs=[],
+            all_runs_total=0,
         )
 
-    # Get all runs for this SBOM, ordered newest-first. Prefetch the
-    # ``releases`` M2M so per-run serialization doesn't trigger N+1.
-    all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).prefetch_related("releases").order_by("-created_at"))
+    # The newest run per plugin comes from latest_run_ids, an index probe per
+    # plugin, so a plugin whose last run predates the history window is still
+    # found. The window is one bounded query over ids, with the same ``-id``
+    # tie-break for runs written in one transaction, which share a timestamp.
+    history_limit = min(max(history_limit, 0), DEFAULT_HISTORY_LIMIT)
+    runs = AssessmentRun.objects.filter(sbom_id=sbom_id)
+    latest_ids: list[UUID] = latest_run_ids(AssessmentRun.objects.all(), [sbom_id])
+    history_ids: list[UUID] = (
+        list(runs.order_by("-created_at", "-id").values_list("id", flat=True)[:history_limit])
+        if include_history
+        else []
+    )
 
-    # Latest-per-plugin selection: under the scan-once-per-SBOM model, each
-    # plugin produces at most one current run for an SBOM, so a single pass
-    # over the newest-first list picks the right row per plugin_name.
-    seen_plugins: set[str] = set()
-    latest_runs: list[AssessmentRun] = []
-    for run in all_runs:
-        if run.plugin_name in seen_plugins:
-            continue
-        seen_plugins.add(run.plugin_name)
-        latest_runs.append(run)
+    latest_runs = list(
+        AssessmentRun.objects.filter(id__in=latest_ids).prefetch_related("releases").order_by("-created_at", "-id")
+    )
+    history_runs = _history_runs(history_ids)
 
     # Compute status summary from latest runs only
     status_summary = _compute_status_summary(latest_runs)
 
     # Prefetch display names for all plugin_names present in this response
     # in a single query so serialization stays O(n) without per-run lookups.
-    display_names = _get_plugin_display_names_map({run.plugin_name for run in all_runs})
+    display_names = _get_plugin_display_names_map({run.plugin_name for run in chain(latest_runs, history_runs)})
 
     from sbomify.apps.vulnerability_scanning.euvd import euvd_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
 
-    has_security = any(run.category == "security" for run in all_runs)
+    # Catalogue lookups exist to stamp the findings being serialised, and only
+    # the latest runs carry findings.
+    has_security = any(run.category == "security" for run in latest_runs)
     kev_ids = kev_ids_for_serialization() if has_security else frozenset()
     euvd_ids = euvd_ids_for_serialization() if has_security else frozenset()
 
     return SBOMAssessmentsResponse(
         sbom_id=sbom_id,
         status_summary=status_summary,
-        latest_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids) for run in latest_runs],
-        all_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids) for run in all_runs],
+        latest_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in latest_runs],
+        all_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in history_runs],
+        all_runs_total=runs.count(),
     )
 
 
@@ -390,27 +486,9 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
             skipped_count=0,
             plugins=[],
         )
-    # Fetch only the latest run per plugin_name via Subquery/OuterRef —
-    # bounded to ``enabled plugins per SBOM`` rather than the full run
-    # history. Under the scan-once-per-SBOM model there's one run per
-    # plugin per SBOM so this lookup is a simple group-by-plugin.
-    latest_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .values("plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(
-                    sbom_id=sbom_id,
-                    plugin_name=OuterRef("plugin_name"),
-                )
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
-    )
-    latest_ids = [pk for pk in latest_ids if pk is not None]
-    latest_runs = list(AssessmentRun.objects.filter(id__in=latest_ids))
+    # The latest run per plugin_name, without its findings: the status helpers
+    # read only its summary and metadata.
+    latest_runs = status_runs(latest_run_ids(AssessmentRun.objects.all(), [sbom_id]), "-created_at")
     status_summary = _compute_status_summary(latest_runs)
 
     # Prefetch display names once — avoids N+1 in the per-plugin loop below.
@@ -493,6 +571,19 @@ class TeamPluginSettingsResponse(BaseModel):
     enabled_plugins: list[str]
     plugin_configs: dict[str, Any]
     available_plugins: list[dict[str, Any]]
+    # The handler has always returned this and the schema never declared it, so
+    # it went undocumented while the settings page read it straight off the
+    # dict. It says which plugins the workspace may enable at all, which is
+    # exactly what an API caller needs before it tries.
+    team_plan: str
+
+
+class UpdateTeamPluginSettingsResponse(BaseModel):
+    """What a workspace's plugin list looks like after an update."""
+
+    message: str
+    enabled_plugins: list[str]
+    plugin_configs: dict[str, Any]
 
 
 class UpdateTeamPluginSettingsRequest(BaseModel):
@@ -528,45 +619,6 @@ def _plugin_supported_bom_types(plugin_class_path: str) -> tuple[str, ...]:
     return result
 
 
-def _get_plugin_plan_requirement(plugin_name: str) -> str | None:
-    """Get the required plan feature for a plugin.
-
-    Returns the plan feature name or None if available to all plans.
-    """
-    # Map plugin names to their required plan features
-    plan_requirements = {
-        "ntia-minimum-elements-2021": "has_ntia_compliance",
-        "fda-medical-device-2025": "has_fda_compliance",
-        "dependency-track": "has_dependency_track_access",
-        # Future plugins can be added here
-        # "cisa-minimum-elements-2025": "has_cisa_compliance",
-    }
-    return plan_requirements.get(plugin_name)
-
-
-def _check_team_has_plugin_access(team: Team, plugin_name: str) -> bool:
-    """Check if a team's billing plan allows access to a plugin."""
-    from sbomify.apps.billing.config import is_billing_enabled
-    from sbomify.apps.billing.models import BillingPlan
-
-    # If billing is disabled, grant access to all plugins
-    if not is_billing_enabled():
-        return True
-
-    required_feature = _get_plugin_plan_requirement(plugin_name)
-    if required_feature is None:
-        return True  # No plan requirement
-
-    if not team.billing_plan:
-        return False  # No billing plan means community (free) tier
-
-    try:
-        plan = BillingPlan.objects.get(key=team.billing_plan)
-        return getattr(plan, required_feature, False)
-    except BillingPlan.DoesNotExist:
-        return False
-
-
 def _resolve_dt_servers(team: Team | None = None) -> list[dict[str, Any]]:
     """Resolve available Dependency Track servers for select field.
 
@@ -580,11 +632,11 @@ def _resolve_dt_servers(team: Team | None = None) -> list[dict[str, Any]]:
     if plan_key != "enterprise":
         return []
 
-    from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+    from sbomify.apps.vulnerability_scanning.services import dt_servers_open_to
 
     return [
         {"value": str(s.id), "label": s.name or f"Server {s.id}"}
-        for s in DependencyTrackServer.objects.filter(is_active=True).order_by("priority", "name")
+        for s in dt_servers_open_to(team).order_by("priority", "name")
     ]
 
 
@@ -617,6 +669,27 @@ def _resolve_config_schema(schema: list[dict[str, Any]], team: Team | None = Non
     return resolved
 
 
+def _token_may_manage_plugins(request: HttpRequest, team: Team) -> bool:
+    """Whether a token caller's scope reaches this workspace's plugin settings.
+
+    The Member check in both handlers is the authority on *who* may change
+    them, and it is enough for the settings page, which posts a session. A token
+    carries a second, narrower question: its owner may well be an admin, and the
+    token may still be scoped to reads or to another workspace. ``can`` answers
+    that, and is a no-op for a session because there is no token record on the
+    request to narrow against.
+    """
+    if getattr(request, "access_token_record", None) is None:
+        return True
+    return bool(can(request, "workspace:manage", team))
+
+
+@router.get(
+    "/workspaces/{team_key}/settings",
+    response={200: TeamPluginSettingsResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    throttle=[AccessTokenRateThrottle()],
+)
 def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, dict[str, Any]]:
     """Get plugin settings for a team.
 
@@ -633,6 +706,8 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
         return 403, {"detail": "You don't have permission to view this workspace's plugins"}
     if not Member.objects.filter(user=request.user, team=team, role__in=("owner", "admin")).exists():
         return 403, {"detail": "You don't have permission to view this workspace's plugins"}
+    if not _token_may_manage_plugins(request, team):
+        return 403, {"detail": "You don't have permission to view this workspace's plugins"}
 
     # Get or create team plugin settings
     settings, _ = TeamPluginSettings.objects.get_or_create(team=team)
@@ -640,8 +715,8 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
     # Get all available plugins with plan availability info
     available_plugins = []
     for p in RegisteredPlugin.objects.filter(is_enabled=True):
-        has_access = _check_team_has_plugin_access(team, p.name)
-        required_feature = _get_plugin_plan_requirement(p.name)
+        has_access = team_has_plugin_access(team, p.name)
+        required_feature = plugin_plan_requirement(p.name)
 
         available_plugins.append(
             {
@@ -672,6 +747,17 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
     }
 
 
+@router.put(
+    "/workspaces/{team_key}/settings",
+    response={
+        200: UpdateTeamPluginSettingsResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    throttle=[AccessTokenRateThrottle()],
+)
 def update_team_plugin_settings(
     request: HttpRequest, team_key: str, payload: UpdateTeamPluginSettingsRequest
 ) -> tuple[int, dict[str, Any]]:
@@ -691,6 +777,8 @@ def update_team_plugin_settings(
         return 403, {"detail": "You don't have permission to manage this workspace's plugins"}
     if not Member.objects.filter(user=request.user, team=team, role__in=("owner", "admin")).exists():
         return 403, {"detail": "You don't have permission to manage this workspace's plugins"}
+    if not _token_may_manage_plugins(request, team):
+        return 403, {"detail": "You don't have permission to manage this workspace's plugins"}
 
     # Validate that all enabled plugins are registered and enabled
     available_plugins = set(RegisteredPlugin.objects.filter(is_enabled=True).values_list("name", flat=True))
@@ -699,9 +787,7 @@ def update_team_plugin_settings(
         return 400, {"detail": f"Invalid plugins: {', '.join(invalid_plugins)}"}
 
     # Validate that team has access to all enabled plugins based on billing plan
-    inaccessible_plugins = [
-        plugin for plugin in payload.enabled_plugins if not _check_team_has_plugin_access(team, plugin)
-    ]
+    inaccessible_plugins = [plugin for plugin in payload.enabled_plugins if not team_has_plugin_access(team, plugin)]
     if inaccessible_plugins:
         return 403, {
             "detail": f"Your plan does not include access to: {', '.join(inaccessible_plugins)}. "
@@ -720,8 +806,17 @@ def update_team_plugin_settings(
             if isinstance(dt_config, dict):
                 dt_config.pop("dt_server_id", None)
 
-    # Update settings
-    settings.enabled_plugins = payload.enabled_plugins
+    # Update settings. The payload replaces only the plugins the caller could have
+    # spoken for: a plugin the plan excludes cannot be in it (the check above refuses
+    # it), and on the settings page it renders as a *disabled* checkbox, which submits
+    # nothing at all. Assigning the payload wholesale therefore deleted those entries
+    # on any save — including one made for an unrelated reason, reported as a success.
+    # Carrying them over keeps the record of what the workspace asked for, so it takes
+    # effect again on upgrade. Nothing runs them meanwhile: every path that starts a
+    # run checks the plan (``enqueue_assessment``, the re-run endpoint), and anything
+    # asking "what runs" filters through ``plugins_within_plan``.
+    retained = plugins_outside_plan(team, settings.enabled_plugins or [])
+    settings.enabled_plugins = list(payload.enabled_plugins) + retained
     if payload.plugin_configs is not None:
         settings.plugin_configs = payload.plugin_configs
     settings.save()
@@ -772,7 +867,7 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
     if not can(request, "component:manage", sbom.component):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-    registered = RegisteredPlugin.objects.filter(name=plugin_name).only("name", "is_enabled").first()
+    registered = RegisteredPlugin.objects.filter(name=plugin_name).only("name", "display_name", "is_enabled").first()
     if registered is None:
         return 404, {"detail": f"Plugin '{plugin_name}' is not registered", "error_code": ErrorCode.NOT_FOUND}
     if not registered.is_enabled:
@@ -792,6 +887,14 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
         return 400, {
             "detail": f"Plugin '{plugin_name}' is not enabled for this workspace",
             "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    # A downgrade leaves the plugin in the enabled list, so the plan is checked
+    # here too, by the same rule that decides what the settings page offers.
+    if not team_has_plugin_access(sbom.component.team, plugin_name):
+        return 403, {
+            "detail": f"Your plan does not include {registered.display_name or plugin_name}.",
+            "error_code": ErrorCode.FORBIDDEN,
         }
 
     user = getattr(request, "user", None)

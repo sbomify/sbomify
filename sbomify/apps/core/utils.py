@@ -7,6 +7,7 @@ from __future__ import annotations
 import collections.abc
 import ipaddress
 import logging
+import re
 import string
 import uuid
 from dataclasses import dataclass
@@ -167,6 +168,34 @@ def sanitize_email_for_cache_key(email: str | None, user_id: str | int | None = 
     return sanitized_email
 
 
+_TOKEN_WORD_SEPARATORS = re.compile(r"[_\-\s]+")
+
+
+def humanize_token(value: object, default: str = "") -> str:
+    """A machine code as display text: ``on_upload`` becomes "On Upload".
+
+    The last line of defence for a code that reaches a page without a label of
+    its own — an enum member nobody added to a map, a value a published spec
+    gained after we wrote the map, a string read straight out of a stored
+    document. Underscore and hyphen both separate words, because the codes we
+    render come from both conventions: our own enums spell ``on_upload``, the
+    document types aligned with SPDX and CycloneDX spell ``release-notes``.
+
+    An all-caps word is left alone, so ``nda-report`` keeps its acronym rather
+    than reading as "Nda Report".
+
+    Prefer a real label wherever one exists — ``get_FOO_display()``, or the
+    app's own label map. This only guarantees that no user ever reads a raw
+    code.
+    """
+    if not isinstance(value, str):
+        return default
+    words = [word for word in _TOKEN_WORD_SEPARATORS.split(value.strip()) if word]
+    if not words:
+        return default
+    return " ".join(word if word.isupper() else word[:1].upper() + word[1:] for word in words)
+
+
 def number_to_random_token(value: int) -> str:
     """
     Convert an integer to a random token.
@@ -207,7 +236,7 @@ def get_current_team_id(request: HttpRequest) -> int | None:
 
     If no current team is found in the request session, return None.
     """
-    team_key = request.session.get("current_team", {}).get("key")
+    team_key = request.session.get("current_workspace", {}).get("key")
     if team_key is None:
         return None
 
@@ -250,6 +279,20 @@ def get_client_ip(request: HttpRequest) -> str | None:
     direct peer (REMOTE_ADDR) is a trusted proxy (settings.TRUSTED_PROXIES);
     otherwise a client reaching Django directly could spoof X-Real-IP and defeat
     per-IP rate limiting.
+
+    X-Real-IP is the ONLY header consulted here, and deliberately so. Caddy
+    resolves the origin address once, from its own ``client_ip_headers`` and
+    only for a peer in its ``trusted_proxies`` list, then writes the answer into
+    X-Real-IP with ``header_up`` — which replaces whatever the client sent. That
+    makes the value arriving here one Caddy vouches for.
+
+    Cf-Connecting-Ip in particular must NOT be read here, however tempting it is
+    as "the header Cloudflare sets". Caddy forwards the client's raw
+    Cf-Connecting-Ip upstream untouched, so anything that reaches the edge
+    directly, bypassing Cloudflare, can set it to any value it likes. Trusting
+    it here would hand every caller a rate-limit bucket and an audit-log entry
+    of their choosing. Add new sources to Caddy's ``client_ip_headers``, never
+    to this function.
     """
     remote_addr: str | None = request.META.get("REMOTE_ADDR")
     real_ip: str | None = request.META.get("HTTP_X_REAL_IP")
@@ -416,7 +459,7 @@ def get_team_id_from_session(request: Any) -> str | None:
         str | None: The team ID as string, or None if not found
     """
     session = request.session
-    current_team = session.get("current_team")
+    current_team = session.get("current_workspace")
 
     if not current_team:
         return None

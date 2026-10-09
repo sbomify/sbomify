@@ -10,6 +10,7 @@ from sbomify.apps.billing.stripe_pricing_service import StripePricingService
 from sbomify.apps.core.utils import (
     generate_id,
     get_client_ip,
+    humanize_token,
     number_to_random_token,
     token_to_number,
 )
@@ -22,6 +23,28 @@ def test_id_token_conversion():
         assert isinstance(tok, str)
         assert len(tok) > 6
         assert num == token_to_number(tok)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("on_upload", "On Upload"),
+        ("release-notes", "Release Notes"),
+        ("manual", "Manual"),
+        ("resolved_with_pedigree", "Resolved With Pedigree"),
+        # An acronym the codes already carry in caps survives as one.
+        ("NDA-report", "NDA Report"),
+        ("  padded_value  ", "Padded Value"),
+    ],
+)
+def test_humanize_token_words_a_machine_code(value, expected):
+    assert humanize_token(value) == expected
+
+
+@pytest.mark.parametrize("value", ["", "   ", "___", None, 7])
+def test_humanize_token_falls_back_when_there_is_no_word(value):
+    assert humanize_token(value) == ""
+    assert humanize_token(value, default="Unknown") == "Unknown"
 
 
 def test_generate_id():
@@ -122,6 +145,31 @@ def test_get_client_ip_rejects_non_ip_x_real_ip_from_trusted_proxy():
     request = HttpRequest()
 
     request.META = {"HTTP_X_REAL_IP": "not-an-ip", "REMOTE_ADDR": "10.0.0.1"}
+    assert get_client_ip(request) == "10.0.0.1"
+
+
+def test_get_client_ip_ignores_cf_connecting_ip_even_from_trusted_proxy():
+    """Cf-Connecting-Ip is never read here, even when the peer is trusted.
+
+    Caddy resolves the origin address and writes it into X-Real-IP; it forwards
+    the client's raw Cf-Connecting-Ip upstream untouched. A request that reaches
+    the edge directly, bypassing Cloudflare, therefore controls that header, so
+    honouring it here would let any caller choose its own rate-limit bucket and
+    its own audit-log entry.
+    """
+    request = HttpRequest()
+
+    # Caddy says the origin is 1.2.3.4; the client claims otherwise. Caddy wins.
+    request.META = {
+        "HTTP_CF_CONNECTING_IP": "9.9.9.9",
+        "HTTP_X_REAL_IP": "1.2.3.4",
+        "REMOTE_ADDR": "10.0.0.1",
+    }
+    assert get_client_ip(request) == "1.2.3.4"
+
+    # With no X-Real-IP there is nothing Caddy vouched for, so fall back to the
+    # peer rather than believing the client's own header.
+    request.META = {"HTTP_CF_CONNECTING_IP": "9.9.9.9", "REMOTE_ADDR": "10.0.0.1"}
     assert get_client_ip(request) == "10.0.0.1"
 
 
@@ -240,7 +288,7 @@ class TestVerifyItemAccessIsDbAuthoritative:
 
         request = RequestFactory().get("/")
         request.user = user
-        request.session = {"user_teams": user_teams}
+        request.session = {"user_workspaces": user_teams}
         return request
 
     def test_stale_cached_role_does_not_grant_elevated_access(self, sample_team_with_owner_member):

@@ -1,4 +1,5 @@
 {% extends "core/public_base.htmx.j2" %}
+{% load humanize %}
 {% load static %}
 {% load django_vite %}
 {% load public_url_tags %}
@@ -31,9 +32,9 @@
             {% endif %}
             </c-slot>
             <c-branded.stats>
-            <c-branded.stat label="Advisor{{ advisories.total|pluralize:'y,ies' }}">{{ advisories.total }}</c-branded.stat>
-            <c-branded.stat label="Product{{ products|length|pluralize }}">{{ products|length }}</c-branded.stat>
-            <c-branded.stat label="Compliance artifact{{ global_components|length|pluralize }}">{{ global_components|length }}</c-branded.stat>
+            <c-branded.stat label="Advisor{{ advisories.total|pluralize:'y,ies' }}">{{ advisories.total|intcomma }}</c-branded.stat>
+            <c-branded.stat label="Product{{ products|length|pluralize }}">{{ products|length|intcomma }}</c-branded.stat>
+            <c-branded.stat label="Compliance artifact{{ global_components|length|pluralize }}">{{ global_components|length|intcomma }}</c-branded.stat>
             <c-branded.stat label="Latest advisory">{{ advisories.latest_display|default:"Not yet" }}</c-branded.stat>
             </c-branded.stats>
             </c-branded.page-header>
@@ -61,6 +62,27 @@
                     {% for certification in certifications %}
                         {% public_url 'core:component_details_public' component_id=certification.component_id component_slug=certification.component_slug as certification_url %}
                         <c-branded.credential label="{{ certification.label }}" summary="{{ certification.summary }}" image="{{ certification.image }}" href="{{ certification_url }}" note="{{ certification.note }}" />
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+        {# ---- Compliance frameworks ------------------------------------------- #}
+        {% comment %}
+        Second, under certifications, because the two answer the same question
+        at different resolutions: a certificate says an auditor signed off, a
+        framework says how much of the programme behind it is in place.
+
+        Like certifications, the whole section disappears when there is nothing
+        published rather than announcing an absence. A workspace publishes a
+        framework deliberately, from Settings, whether it maintains the
+        controls by hand or an integration keeps them current.
+        {% endcomment %}
+        {% if controls_summary_list %}
+            <section class="flex flex-col gap-4 scroll-mt-[4.5rem]" id="frameworks">
+                <c-branded.section-header title="Compliance frameworks" subtitle="The frameworks we work to, and how much of each one is in place." />
+                <div class="flex flex-col gap-4">
+                    {% for catalog_summary in controls_summary_list %}
+                        {% include "core/components/trust_center/framework_panel.html.j2" with catalog_summary=catalog_summary %}
                     {% endfor %}
                 </div>
             </section>
@@ -107,7 +129,7 @@
                 <c-slot name="action">
                 {# The search landmark stays on the wrapper; the component is the box inside it. #}
                 <div role="search">
-                    <c-tables.search id="tc-products-search" label="Search products" placeholder="Search products..." x-model="q" />
+                    <c-forms.search-input size="sm" id="tc-products-search" label="Search products" placeholder="Search products..." x-model="q" />
                 </div>
                 </c-slot>
             {% endif %}
@@ -147,11 +169,11 @@
                             <div class="text-xs opacity-75 mt-1" title="{{ product.description }}">{{ product.description|truncatechars:80 }}</div>
                         {% endif %}
                         <div class="md:hidden text-xs opacity-75 mt-1">
-                            {{ product.component_count }} component{{ product.component_count|pluralize }}
+                            {{ product.component_count|intcomma }} component{{ product.component_count|pluralize }}
                         </div>
                         </c-tables.cell>
                         <c-tables.cell class="hidden md:table-cell whitespace-nowrap">
-                        {{ product.component_count }} component{{ product.component_count|pluralize }}
+                        {{ product.component_count|intcomma }} component{{ product.component_count|pluralize }}
                         </c-tables.cell>
                         <c-tables.cell class="hidden md:table-cell">
                         {% if product.passing_assessments %}
@@ -188,9 +210,9 @@
                      x-show="rows.length > perPage"
                      x-cloak>
                     <c-tables.info>
-                    Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="matched.length"></strong> products
+                    Showing <strong x-text="$number(startIndex)"></strong> to <strong x-text="$number(endIndex)"></strong> of <strong x-text="$number(matched.length)"></strong> products
                     <template x-if="needle">
-                        <span>(filtered from <strong x-text="rows.length"></strong> total)</span>
+                        <span>(filtered from <strong x-text="$number(rows.length)"></strong> total)</span>
                     </template>
                     </c-tables.info>
                     <c-tables.pager />

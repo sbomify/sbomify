@@ -13,7 +13,7 @@ from sbomify.apps.core.apis import _build_item_response, get_component
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
-    build_custom_domain_url,
+    custom_domain_redirect,
     get_component_public_slug,
     get_public_path,
     get_workspace_public_url,
@@ -22,8 +22,10 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.documents.services.documents import get_document_detail
+from sbomify.apps.plugins.latest import latest_run_ids
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.public_assessment_utils import get_sbom_passing_assessments, passing_assessments_to_dict
+from sbomify.apps.plugins.services.requirements import build_requirements
 from sbomify.apps.sboms.services.sboms import get_sbom_detail
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -195,7 +197,9 @@ class ComponentItemPublicView(View):
                 item_type=item_type,
                 item_id=item_id,
             )
-            return HttpResponseRedirect(build_custom_domain_url(component.team, path, request.is_secure()))
+            redirect = custom_domain_redirect(component.team, path, request.is_secure())
+            if redirect is not None:
+                return redirect
 
         # After the redirect, so a gated artifact lands on the workspace's own
         # domain exactly as a public one does; a gate served from the app domain
@@ -304,20 +308,10 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     )
                     alias_map: dict[str, list[str]] = {}
                     if latest_sbom_id:
-                        # Two-phase DISTINCT ON: picking the winning run ids first
-                        # touches no JSON; only then is `result` fetched for just
-                        # those winners. Projecting `result` directly on the
-                        # DISTINCT ON query forces Postgres to de-TOAST every
-                        # historical rescan's blob before picking a winner — the
-                        # same class of bug #1121 fixed for the SBOM list and
-                        # trends endpoints, still live here (#1218).
-                        winner_ids = list(
-                            AssessmentRun.objects.filter(
-                                sbom_id=latest_sbom_id, category="security", status="completed"
-                            )
-                            .order_by("plugin_name", "-created_at")
-                            .distinct("plugin_name")
-                            .values_list("id", flat=True)
+                        # Two phases: the winning run ids first, touching no JSON
+                        # and no run history, then `result` for just those winners.
+                        winner_ids = latest_run_ids(
+                            AssessmentRun.objects.filter(category="security", status="completed"), [latest_sbom_id]
                         )
                         provider_results = list(
                             AssessmentRun.objects.filter(id__in=winner_ids).values_list("result", flat=True)
@@ -341,18 +335,13 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 vex_suppression_states = [r["state"] for r in vex_suppressions]
             # Get latest vulnerability scan for this SBOM from AssessmentRun
             component_id_from_item = item.get("component_id") or component_id  # type: ignore[union-attr]
-            latest_scan = (
-                AssessmentRun.objects.filter(
-                    sbom_id=item_id,
-                    sbom__component_id=component_id_from_item,
-                    category="security",
-                    status="completed",
-                )
-                .select_related("sbom__component")
-                .order_by("-created_at")
-                .first()
-            )
-            if latest_scan:
+            has_scan = AssessmentRun.objects.filter(
+                sbom_id=item_id,
+                sbom__component_id=component_id_from_item,
+                category="security",
+                status="completed",
+            ).exists()
+            if has_scan:
                 # Actionable counts from every provider's latest run, merged by
                 # alias and filtered through the component's VEX — the same math
                 # as the component page badge, so the numbers agree everywhere.
@@ -364,14 +353,10 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 )
                 from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
-                # Two-phase DISTINCT ON — see the VEX alias-enrichment block above
-                # for why: picking winner ids first avoids de-TOASTing every
-                # historical rescan's `result` blob just to discard the losers.
-                winner_ids = list(
-                    AssessmentRun.objects.filter(sbom_id=item_id, category="security", status="completed")
-                    .order_by("plugin_name", "-created_at")
-                    .distinct("plugin_name")
-                    .values_list("id", flat=True)
+                # Two phases, as in the VEX alias-enrichment block above: winner
+                # ids first, so no historical rescan's `result` blob is read.
+                winner_ids = latest_run_ids(
+                    AssessmentRun.objects.filter(category="security", status="completed"), [item_id]
                 )
                 # Excluded in the database, not in Python: result can be
                 # multi-megabyte and TOASTed, and result_skipped exists as a
@@ -418,7 +403,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     )
                 if provider_runs:
                     # Dated from the runs the card is actually reporting. Taking
-                    # latest_scan here would stamp a provider that scanned with
+                    # the newest run here would stamp a provider that scanned with
                     # the time a later provider declined, so the card would read
                     # as "scanned then, found nothing" for a moment when nothing
                     # was scanned.
@@ -431,11 +416,28 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             # Get assessment runs for this SBOM
             try:
                 from sbomify.apps.plugins.apis import get_sbom_assessments
+                from sbomify.apps.plugins.services.coverage import get_assessment_coverage
 
-                # Create a mock request object with the sbom_id parameter
-                assessment_response = get_sbom_assessments(request, item_id)
+                # The card loops `latest_runs` alone, reads counts from each
+                # run's summary, and shows one title; the findings list behind
+                # it is fetched when a reader opens the card. Asking for the
+                # whole response built every finding of every run twice, which
+                # is how this page reached 31 MB and a 504 on a
+                # four-thousand-finding scan.
+                assessment_response = get_sbom_assessments(request, item_id, findings_limit=1, include_history=False)
                 # Use mode='json' to ensure datetime objects are serialized as ISO strings
                 assessment_runs = assessment_response.model_dump(mode="json")
+                coverage = get_assessment_coverage(item_id, component.team, assessment_runs["latest_runs"])
+                if coverage.ok and coverage.value is not None:
+                    assessment_runs["plugins_enabled"] = coverage.value.plugins_enabled
+                    assessment_runs["plan_excludes_plugins"] = coverage.value.plan_excludes_plugins
+                    assessment_runs["unassessed_plugins"] = coverage.value.unassessed
+                    for run in assessment_runs["latest_runs"]:
+                        run["current_version"] = coverage.value.outdated.get(run["plugin_name"])
+                        run["run_blocked"] = run["plugin_name"] not in coverage.value.runnable
+                requirements = build_requirements(assessment_runs["latest_runs"])
+                if requirements.ok:
+                    assessment_runs["requirements"] = requirements.value
             except Exception:
                 # Degrade to no assessments section rather than failing the page,
                 # but leave a trace — a silent None here hides real data problems.
@@ -460,10 +462,9 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         # Same tier the rerun endpoint enforces, so the button is only offered
         # to a caller the API would actually accept.
         can_rerun = can(request, "component:manage", component)
+        can_manage_plugins = can(request, "workspace:administer", component.team)
 
-        # Page-header context: the icon is conditional and the copy chip and
-        # breadcrumb trail are lists, so the view builds them per the design
-        # system contract.
+        # The header takes the copy chip and breadcrumb trail as lists.
         if is_vex:
             item_kind = "VEX"
         elif is_cbom:
@@ -472,7 +473,6 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             item_kind = "SBOM"
         else:
             item_kind = "Document"
-        header_icon = "fas fa-file-code" if is_sbom_backed else "fas fa-file-alt"
         header_copy_values = [{"value": item_id, "title": f"ID: {item_id} (click to copy)"}]
         breadcrumb_items = [
             {"label": component.name, "url": reverse("core:component_details", args=[component_id])},
@@ -486,7 +486,6 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "APP_BASE_URL": settings.APP_BASE_URL,
                 "item": item,
                 "item_type": item_type,
-                "header_icon": header_icon,
                 "header_copy_values": header_copy_values,
                 "breadcrumb_items": breadcrumb_items,
                 "component": component,
@@ -501,6 +500,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "is_sbom_backed": is_sbom_backed,
                 "can_triage": can_triage,
                 "can_rerun": can_rerun,
+                "can_manage_plugins": can_manage_plugins,
                 "team_key": component.team.key,
             },
         )

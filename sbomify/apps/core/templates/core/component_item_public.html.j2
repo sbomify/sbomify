@@ -78,14 +78,16 @@
         <div class="flex flex-col sm:flex-row sm:items-center gap-4">
             <div class="min-w-0 flex-1">
                 <p class="text-text font-medium m-0">{{ item.name }}</p>
-                <p class="text-text-muted text-sm m-0 mt-1">The file exactly as it was published. sbomify never modifies artifacts.</p>
+                <p class="text-text-muted text-sm mb-0 mt-1">
+                    The file exactly as it was published. sbomify never modifies artifacts.
+                </p>
             </div>
             {% if component.component_type == 'bom' %}
                 {% url 'sboms:sbom_download' item.id as download_url %}
             {% elif component.component_type == 'document' %}
                 {% url 'documents:document_download' item.id as download_url %}
             {% endif %}
-            <c-buttons.primary href="{{ download_url }}" class="no-underline">
+            <c-buttons.secondary href="{{ download_url }}" class="no-underline">
             <i class="fas fa-download"></i>
             Download
             {% if component.component_type == 'bom' %}
@@ -93,7 +95,7 @@
             {% else %}
                 Document
             {% endif %}
-            </c-buttons.primary>
+            </c-buttons.secondary>
         </div>
     </div>
     {# Cryptographic Assets (CBOM) — lazy-loaded for SBOM artifacts; collapses when there are none #}
