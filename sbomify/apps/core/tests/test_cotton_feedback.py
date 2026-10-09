@@ -315,6 +315,12 @@ def test_a_list_draws_every_row_its_caller_counted(rendered_with_catalogue: str)
     assert _section(rendered_with_catalogue, "loading-list-long").count("rounded-full") == 24
 
 
+def test_a_row_draws_every_subline_its_caller_asked_for(rendered: str) -> None:
+    # Each subline is one 45% skeleton, so the count is the caller's, not a
+    # literal's length.
+    assert _section(rendered, "loading-list-deep").count("width: 45%;") == 6
+
+
 def test_an_empty_shape_draws_no_cards_and_an_absent_one_falls_back(rendered_with_catalogue: str) -> None:
     # An empty catalogue answers "no cards"; two generic ones would never arrive.
     assert _section(rendered_with_catalogue, "loading-page-empty").count("rounded-full") == 0

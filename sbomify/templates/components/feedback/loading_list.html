@@ -10,9 +10,10 @@ the height of the rows that replace it and the page moves when they land.
 Rows start at the top rather than centring once they are more than one line
 tall, so the leading mark stays level with the title on every row.
 
-rows counts a caller's real content, so it is not bounded by a literal to slice:
-a catalogue with more rows than the string was long used to get a placeholder
-shorter than the list replacing it, which is the jump this component prevents.
+rows and sublines count a caller's real content, so neither is bounded by a
+literal to slice: a catalogue with more rows than the string was long used to
+get a placeholder shorter than the list replacing it, which is the jump this
+component prevents.
 {% endcomment %}
 {% load utils %}
 <c-vars message="Loading items..." rows="3" sublines="1" class="" />
@@ -22,7 +23,7 @@ shorter than the list replacing it, which is the jump this component prevents.
         <c-feedback.skeleton type="avatar" width="2rem" height="2rem" />
         <div class="flex min-w-0 flex-1 flex-col gap-2">
             <c-feedback.skeleton width="70%" />
-            {% for subline in "1234"|make_list|slice:sublines %}
+            {% for subline in sublines|repeat %}
                 <c-feedback.skeleton width="45%" height="0.625rem" />
             {% endfor %}
         </div>

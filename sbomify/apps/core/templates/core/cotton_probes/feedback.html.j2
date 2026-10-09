@@ -57,6 +57,7 @@ Still scanning.
 <c-feedback.toast-container />
 {# A list sized from a real catalogue, past the length of any literal a loop could slice. #}
 <c-feedback.loading-list rows="24" data-probe="loading-list-long" />
+<c-feedback.loading-list rows="1" sublines="6" data-probe="loading-list-deep" />
 {# An empty shape is an answer: no cards, rather than the generic two. #}
 <c-feedback.loading-page :sections="empty_sections" data-probe="loading-page-empty" />
 <c-feedback.loading-page :sections="catalogue_sections" data-probe="loading-page-sections" />
