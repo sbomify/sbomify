@@ -157,7 +157,7 @@ def save_result(run: Any, result: dict[str, Any]) -> None:
     """Persist a rewritten result wherever the run's payload lives now.
 
     Where it lives is read from the row under its lock, the lock the offload
-    sweep holds from reading a payload to committing its key, never from the
+    sweep's UPDATE waits on before it can apply, never from the
     instance, which may predate an offload. Inline, it is the ordinary save,
     which keeps the summary columns in step. Offloaded, the rewrite is stored as
     a new object under the run's prefix and the row moves to its key, with the

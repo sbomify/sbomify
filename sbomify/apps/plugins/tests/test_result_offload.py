@@ -361,6 +361,56 @@ class TestTheMove:
 
 
 @pytest.mark.django_db
+class TestTheSweepHoldsNoLockAcrossStorage:
+    """Storing a payload is a network round trip, so the sweep makes it outside
+    any transaction. The UPDATE guards against a rewrite landing in between: it
+    applies only while the row still holds the payload that was read."""
+
+    def test_storage_is_called_outside_a_transaction(self, sbom, bucket):
+        from django.db import connection
+
+        _run(sbom, days_ago=400)
+        _run(sbom, days_ago=800)
+        depth = len(connection.atomic_blocks)
+        seen: list[int] = []
+        exists = bucket.object_exists
+
+        def recording(bucket_name: str, key: str) -> bool:
+            seen.append(len(connection.atomic_blocks))
+            return exists(bucket_name, key)
+
+        bucket.object_exists = recording  # type: ignore[method-assign]
+
+        assert offload_assessment_results() == 1
+        assert seen == [depth]
+
+    def test_a_rewrite_landing_mid_offload_is_kept(self, sbom, bucket):
+        from sbomify.apps.plugins.result_store import save_result
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        rewrite = _result(total=1)
+        upload = bucket.upload_data_as_file
+
+        def rewritten_while_storing(bucket_name: str, key: str, data: bytes) -> None:
+            upload(bucket_name, key, data)
+            if bucket.puts == 1:
+                save_result(AssessmentRun.objects.get(pk=superseded.pk), rewrite)
+
+        bucket.upload_data_as_file = rewritten_while_storing  # type: ignore[method-assign]
+
+        assert offload_assessment_results() == 0
+        superseded.refresh_from_db()
+        assert superseded.result == rewrite
+        assert superseded.result_object_key == ""
+
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+        assert superseded.result is None
+        assert load_result(superseded) == rewrite
+
+
+@pytest.mark.django_db
 class TestAMissingPayloadIsNotAnEmptyOne:
     """The failure this design must never have: a run whose payload cannot be
     read showing up as a run that found nothing. `result_summary` stays in the
@@ -504,8 +554,7 @@ class TestRetentionReclaimsTheStoredPayload:
     def test_an_offload_landing_mid_prune_still_has_its_objects_deleted(self, sbom, bucket):
         """An offload that commits its key after the batch read which rows hold
         one, but before the delete, would leave its object behind for good.
-        Here it holds its row lock while the prune starts, as the sweep does
-        from reading the payload to committing the key."""
+        Here its UPDATE holds the row lock while the prune starts."""
         import threading
 
         from django.db import connection, transaction
@@ -713,7 +762,7 @@ class TestVexReachesAnOffloadedRun:
     @pytest.mark.django_db(transaction=True)
     def test_an_offload_landing_mid_rewrite_does_not_split_the_payload(self, sbom, bucket, monkeypatch):
         """The re-apply reads a run, then writes it. An offload committing in
-        between, as the sweep does while it holds the row lock, must not leave
+        between must not leave
         the rewrite inline beside a key to the payload it replaced: readers
         would take the inline copy and no later sweep would move it."""
         import threading

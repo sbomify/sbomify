@@ -31,7 +31,6 @@ from collections.abc import Iterator
 from datetime import timedelta
 from typing import Any
 
-from django.db import transaction
 from django.utils import timezone
 
 from sbomify.logging import getLogger
@@ -172,7 +171,10 @@ def offload_run(run: Any) -> bool:
        whose key is not committed.
 
     The UPDATE is guarded on the key still being empty, so a concurrent sweep or
-    a retry cannot double-apply.
+    a retry cannot double-apply, and on the row still holding the payload that
+    was read, so a VEX re-annotation landing in between makes it miss rather
+    than be discarded. The next pass offloads the rewrite. That guard is what
+    lets ``put_result`` run outside any transaction.
     """
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.plugins.result_store import put_result
@@ -183,7 +185,7 @@ def offload_run(run: Any) -> bool:
 
     key = put_result(run.id, payload)
     run._populate_result_columns()
-    changed = AssessmentRun.objects.filter(pk=run.pk, result_object_key="").update(
+    changed = AssessmentRun.objects.filter(pk=run.pk, result_object_key="", result=payload).update(
         result=None,
         result_summary=run.result_summary,
         result_skipped=run.result_skipped,
@@ -201,11 +203,9 @@ def offload_assessment_results(
 ) -> int:
     """Demote payloads in batches. Returns how many rows were changed.
 
-    Batched so a first pass over a large table holds a series of short locks
-    rather than one long one, and so an interruption costs at most one batch.
-    Each batch takes ``select_for_update`` on its rows for the read-store-write
-    cycle, so a concurrent VEX re-annotation cannot land between reading the
-    payload and nulling it and be silently discarded.
+    Batched so an interruption costs at most one batch. No transaction is held
+    across a batch: each row's store is an object storage round trip, and each
+    write is one guarded UPDATE (see :func:`offload_run`).
     """
     batches = demotable_batches(older_than_days=older_than_days, batch_size=batch_size, limit=limit)
     if dry_run:
@@ -213,22 +213,14 @@ def offload_assessment_results(
         logger.info(f"[OFFLOAD] dry run: {count} assessment results would be offloaded")
         return count
 
+    from sbomify.apps.plugins.models import AssessmentRun
+
     moved = 0
     for batch in batches:
-        with transaction.atomic():
-            for run in (
-                _runs_for_update(batch)
-                # Deferring nothing on purpose: the payload is what is being read.
-                .iterator()
-            ):
-                if offload_run(run):
-                    moved += 1
+        # Deferring nothing on purpose: the payload is what is being read.
+        for run in AssessmentRun.objects.filter(id__in=batch, result_object_key="").iterator():
+            if offload_run(run):
+                moved += 1
     if moved:
         logger.info(f"[OFFLOAD] offloaded {moved} assessment results")
     return moved
-
-
-def _runs_for_update(ids: list[Any]) -> Any:
-    from sbomify.apps.plugins.models import AssessmentRun
-
-    return AssessmentRun.objects.filter(id__in=ids, result_object_key="").select_for_update()

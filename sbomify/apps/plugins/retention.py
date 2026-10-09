@@ -120,9 +120,9 @@ def prune_assessment_runs(
             # deleted object. If deleting them fails after the commit, the
             # orphan sweep in the daily task collects them by run id. Every row of the batch is locked while its key is
             # read and the row deleted, not only rows already offloaded: an
-            # offload holds the same lock from reading the payload to committing
-            # its key, so one landing mid-batch is either seen here or never
-            # starts on a row this batch deletes.
+            # offload writes its key in one UPDATE that waits on the same lock,
+            # so one landing mid-batch is either seen here or finds the row gone
+            # and writes nothing, leaving what it stored to the orphan sweep.
             offloaded = [
                 run_id
                 for run_id, key in AssessmentRun.objects.select_for_update()
