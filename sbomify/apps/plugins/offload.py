@@ -149,7 +149,8 @@ def demotable_batches(
         if remaining is not None:
             remaining -= len(page)
         last_id, _, _, last_created = page[-1]
-        after = Q(created_at__gt=last_created) | Q(created_at=last_created, id__gt=last_id)
+        # The leading >= is what the index can start from; the OR alone is a filter.
+        after = Q(created_at__gte=last_created) & (Q(created_at__gt=last_created) | Q(id__gt=last_id))
         protected = current_run_ids({sbom_id for _, sbom_id, _, _ in page}, {plugin for _, _, plugin, _ in page})
         yield [run_id for run_id, _, _, _ in page if run_id not in protected]
 

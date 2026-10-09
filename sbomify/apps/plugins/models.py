@@ -279,6 +279,14 @@ class AssessmentRun(models.Model):
                 condition=models.Q(category="security", status="completed"),
                 name="plugins_scan_history_idx",
             ),
+            # The offload sweep pages its candidates oldest first: a range scan
+            # here rather than a scan and sort of the whole table per page. Partial
+            # on an inline payload, so the index shrinks as the sweep moves rows.
+            models.Index(
+                fields=["created_at", "id"],
+                condition=models.Q(result_object_key="", result__isnull=False),
+                name="plugins_ar_offload_idx",
+            ),
         ]
         ordering = ["-created_at"]
 

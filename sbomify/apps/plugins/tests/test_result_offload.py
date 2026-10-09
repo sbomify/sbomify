@@ -359,6 +359,39 @@ class TestTheMove:
         assert offload_assessment_results(batch_size=2, dry_run=True) == 3
         assert bucket.puts == 0
 
+    def test_each_page_is_a_range_on_the_offload_index(self, sbom):
+        """A page must start at its cursor in the index, not scan past every
+        earlier candidate. Rows a pass keeps (the current runs, a dry run's
+        whole backlog) stay in the index, so a filter-only cursor rescans them
+        on every page."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from sbomify.apps.plugins.offload import demotable_batches
+
+        _run(sbom, days_ago=400)
+        for day in (500, 600, 700):
+            _run(sbom, days_ago=day)
+        with CaptureQueriesContext(connection) as captured:
+            list(demotable_batches(batch_size=1))
+        pages = [q["sql"] for q in captured.captured_queries if '"plugins_assessment_runs"."created_at" <' in q["sql"]]
+        assert len(pages) > 2
+
+        with connection.cursor() as cursor:
+            # Small tables plan as a scan and sort; force the ordered index path
+            # so the plan shows which conditions bound it.
+            for setting in ("enable_seqscan", "enable_bitmapscan", "enable_sort"):
+                cursor.execute(f"SET LOCAL {setting} = off")
+            plans = []
+            for sql in pages:
+                cursor.execute("EXPLAIN (COSTS OFF) " + sql)
+                plans.append("\n".join(row[0] for row in cursor.fetchall()))
+
+        assert all("plugins_ar_offload_idx" in plan for plan in plans)
+        for plan in plans[1:]:
+            index_cond = next(line for line in plan.splitlines() if "Index Cond" in line)
+            assert "created_at >=" in index_cond, plan
+
 
 @pytest.mark.django_db
 class TestTheSweepHoldsNoLockAcrossStorage:
