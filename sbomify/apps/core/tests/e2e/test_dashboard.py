@@ -10,6 +10,7 @@ from pytest_django.fixtures import SettingsWrapper
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.core.tests.e2e.utils import take_screenshot
+from sbomify.apps.core.tests.shared_fixtures import register_plugin
 
 
 @pytest.mark.django_db
@@ -38,6 +39,7 @@ def overview_dashboard(dashboard: dict[str, Any]) -> dict[str, Any]:
     from sbomify.apps.plugins.models import AssessmentRun, VulnerabilityLifecycle
     from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
+    register_plugin("overview-review")
     run = AssessmentRun.objects.create(
         sbom=dashboard["sboms"][0],
         plugin_name="overview-review",

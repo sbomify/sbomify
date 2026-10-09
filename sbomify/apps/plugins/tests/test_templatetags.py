@@ -1,6 +1,8 @@
 """Tests for plugins template tags and filters."""
 
+from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.plugins.templatetags.plugins_extras import (
+    RUN_REASONS,
     advisory_prose,
     format_finding_description,
     format_run_reason,
@@ -26,8 +28,22 @@ class TestFormatRunReason:
         for reason in RunReason:
             assert format_run_reason(reason.value) != reason.value
 
-    def test_unknown_returns_original(self) -> None:
-        assert format_run_reason("unknown_reason") == "unknown_reason"
+    def test_every_sdk_reason_has_an_explicit_label(self) -> None:
+        """A RunReason the SDK defines must be worded here, not left to the fallback.
+
+        Asserted against the map rather than against the rendered string:
+        humanize_token would de-underscore an unmapped reason too, so a
+        rendering check alone would pass for a reason nobody wrote wording
+        for, and "On Release Association" is not what that trigger is called.
+        """
+        missing = [reason.value for reason in RunReason if reason.value not in RUN_REASONS]
+        assert not missing, f"RunReason values with no label: {missing}"
+
+    def test_unknown_is_humanized_not_printed_raw(self) -> None:
+        assert format_run_reason("unknown_reason") == "Unknown Reason"
+
+    def test_empty_stays_empty(self) -> None:
+        assert format_run_reason("") == ""
 
 
 class TestFormatFindingDescription:

@@ -109,7 +109,7 @@ def _team_or_error(
 
 
 def _public_summary_response(team: Team, product: Product | None = None) -> HttpResponse | tuple[int, Any]:
-    """The first active catalog's public summary, cacheable for an hour."""
+    """The first published catalog's public summary, cacheable for a minute."""
     result = get_public_controls_list(team, product)
     if not result.ok or not result.value:
         return 404, ErrorResponse(detail="No active catalog")
@@ -130,7 +130,11 @@ def _public_summary_response(team: Team, product: Product | None = None) -> Http
         content_type="application/json",
         status=200,
     )
-    response["Cache-Control"] = "public, max-age=3600"
+    # A minute, not an hour. Unpublishing a framework and disconnecting the
+    # provider both promise the score comes off the trust center straight away,
+    # and there is no purge on the edge to make that true, so the cache window
+    # is the upper bound on how long a taken-down claim can still be served.
+    response["Cache-Control"] = "public, max-age=60"
     return response
 
 

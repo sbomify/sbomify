@@ -9,7 +9,7 @@ from django.core.validators import URLValidator
 from django.db import models
 from django.utils.text import slugify
 
-from sbomify.apps.core.utils import generate_id
+from sbomify.apps.core.utils import generate_id, humanize_token
 from sbomify.apps.teams.models import Team
 
 # LEGACY MODELS - kept here primarily for data persistence.
@@ -918,4 +918,6 @@ class SBOM(models.Model):
             "sbomify-triage": "sbomify Triage",
             "dependency-track": "Dependency Track",
         }
-        return source_display_map.get(self.source or "", self.source or "Unknown")
+        # An unmapped source is still written by some integration, so it is
+        # worded rather than printed: "seed_demo_data" reads as a bug on a page.
+        return source_display_map.get(self.source or "") or humanize_token(self.source, default="Unknown")

@@ -787,3 +787,24 @@ class ApiVersionDeprecationMiddleware:
         existing = response.get("Link")
         response["Link"] = f"{existing}, {self._LINK}" if existing else self._LINK
         return response
+
+
+class RenamedSessionKeysMiddleware:
+    """Move session values written under a key's old name to its new one.
+
+    Removable once every session older than this middleware has expired (SESSION_COOKIE_AGE).
+    """
+
+    _RENAMED = {"current_team": "current_workspace", "user_teams": "user_workspaces"}
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        # A request without a session cookie has no session to load or migrate.
+        if settings.SESSION_COOKIE_NAME in request.COOKIES:
+            session = request.session
+            for old, new in self._RENAMED.items():
+                if old in session:
+                    session.setdefault(new, session.pop(old))
+        return self.get_response(request)

@@ -12,21 +12,33 @@ must never look alarming. unmeasured_label replaces the label rather than
 hiding behind it: a bare dash tells a sighted reader nothing, and an
 explanation only a screen reader gets leaves the people the state is for worse
 informed than the people it is not.
-The optional slot holds a change indicator beside the value. Accents include
+The optional slot holds a change indicator beside the value. The optional
+note slot is the line under the label: where a figure came from, or what it
+leaves out -- "From plan list prices", "Past due, in dunning". It is a slot
+rather than an attribute because a note is often a sentence assembled from
+template logic, and it is part of the card rather than a paragraph the page
+styles, so a strip of cards cannot drift apart one card at a time.
+Accents include
 semantic colours and the severity scale, so pages never supply a colour recipe.
 Value and icon ink use those tokens directly, never a mix with the text colour.
 Each card is its own description list and can sit in any grid or flex layout.
 loading replaces the value and label with decorative skeletons in the same
 grid, for c-feedback.loading-stats. Its parent supplies the loading announcement.
+
+The top padding is pt-[1rem] rather than pt-4, which computes the same: public
+pages still load the pre-Tailwind static/css/utilities.css, whose .pt-4 carries
+!important at 1.5rem. sm:pb-4 is safe as written, because a variant utility's
+class name keeps its prefix and the legacy bare selector cannot match it.
+tables/cell.html has the long version.
 {% endcomment %}
 {% load humanize %}
-<c-vars value="0" label icon accent compact x_value unmeasured unmeasured_label="Not measured yet" loading="" class />
+<c-vars value="0" label icon accent compact x_value unmeasured unmeasured_label="Not measured yet" loading="" note class />
 {% if unmeasured or not value or value == '0' %}
     {% firstof 'true' as stat_zero %}
 {% else %}
     {% firstof 'false' as stat_zero %}
 {% endif %}
-<dl class="relative grid m-0 min-w-0 grid-rows-[auto_1fr] rounded-xl border border-solid border-border bg-[linear-gradient(135deg,color-mix(in_oklab,var(--stat-accent)_4%,var(--color-surface)),var(--color-surface)_70%)] shadow-[var(--shadow-xs)] {% if compact %}gap-1 px-3 py-3 [--stat-value-size:1.5rem] [--stat-label-size:0.75rem]{% else %}min-h-[6.5rem] gap-[0.5625rem] px-3.5 pt-4 pb-3.5 sm:min-h-[6.75rem] sm:px-5 sm:pt-[1.125rem] sm:pb-4 [--stat-value-size:1.875rem] sm:[--stat-value-size:2rem] [--stat-label-size:0.75rem] sm:[--stat-label-size:0.78125rem]{% endif %} {% if accent == 'danger' %}[--stat-accent:var(--color-danger)] [--stat-ink:var(--color-danger)]{% elif accent == 'warning' %}[--stat-accent:var(--color-warning)] [--stat-ink:var(--color-warning)]{% elif accent == 'success' %}[--stat-accent:var(--color-success)] [--stat-ink:var(--color-success)]{% elif accent == 'muted' %}[--stat-accent:var(--color-text-muted)] [--stat-ink:var(--color-text)]{% elif accent == 'severity-critical' %}[--stat-accent:var(--color-severity-critical)] [--stat-ink:var(--color-severity-critical)]{% elif accent == 'severity-high' %}[--stat-accent:var(--color-severity-high)] [--stat-ink:var(--color-severity-high)]{% elif accent == 'severity-medium' %}[--stat-accent:var(--color-severity-medium)] [--stat-ink:var(--color-severity-medium)]{% elif accent == 'severity-low' %}[--stat-accent:var(--color-severity-low)] [--stat-ink:var(--color-severity-low)]{% else %}[--stat-accent:var(--color-info)] [--stat-ink:var(--color-text)]{% endif %} data-[zero=true]:[--stat-accent:var(--color-text-muted)] data-[zero=true]:[--stat-ink:var(--color-text)]{% if class %} {{ class }}{% endif %}"
+<dl class="relative grid m-0 min-w-0 grid-rows-[auto_1fr] rounded-xl border border-solid border-border bg-[linear-gradient(135deg,color-mix(in_oklab,var(--stat-accent)_4%,var(--color-surface)),var(--color-surface)_70%)] shadow-[var(--shadow-xs)] {% if compact %}gap-1 px-3 py-3 [--stat-value-size:1.5rem] [--stat-label-size:0.75rem]{% else %}min-h-[6.5rem] gap-[0.5625rem] px-3.5 pt-[1rem] pb-3.5 sm:min-h-[6.75rem] sm:px-5 sm:pt-[1.125rem] sm:pb-4 [--stat-value-size:1.875rem] sm:[--stat-value-size:2rem] [--stat-label-size:0.75rem] sm:[--stat-label-size:0.78125rem]{% endif %} {% if accent == 'danger' %}[--stat-accent:var(--color-danger)] [--stat-ink:var(--color-danger)]{% elif accent == 'warning' %}[--stat-accent:var(--color-warning)] [--stat-ink:var(--color-warning)]{% elif accent == 'success' %}[--stat-accent:var(--color-success)] [--stat-ink:var(--color-success)]{% elif accent == 'muted' %}[--stat-accent:var(--color-text-muted)] [--stat-ink:var(--color-text)]{% elif accent == 'severity-critical' %}[--stat-accent:var(--color-severity-critical)] [--stat-ink:var(--color-severity-critical)]{% elif accent == 'severity-high' %}[--stat-accent:var(--color-severity-high)] [--stat-ink:var(--color-severity-high)]{% elif accent == 'severity-medium' %}[--stat-accent:var(--color-severity-medium)] [--stat-ink:var(--color-severity-medium)]{% elif accent == 'severity-low' %}[--stat-accent:var(--color-severity-low)] [--stat-ink:var(--color-severity-low)]{% else %}[--stat-accent:var(--color-info)] [--stat-ink:var(--color-text)]{% endif %} data-[zero=true]:[--stat-accent:var(--color-text-muted)] data-[zero=true]:[--stat-ink:var(--color-text)]{% if class %} {{ class }}{% endif %}"
     {% if x_value and not unmeasured %}:data-zero="Number({{ x_value }}) === 0"{% else %}data-zero="{{ stat_zero }}"{% endif %}
     {{ attrs }}>
     <dt class="row-start-2 m-0 font-medium leading-[1.45] text-text-secondary text-[length:var(--stat-label-size)] sm:leading-[1.4]">
@@ -36,6 +48,9 @@ grid, for c-feedback.loading-stats. Its parent supplies the loading announcement
             {{ label }}<span class="block text-text-muted">{{ unmeasured_label }}</span>
         {% else %}
             {{ label }}
+        {% endif %}
+        {% if note and not loading %}
+            <span class="block text-xs font-normal text-text-muted mt-2">{{ note }}</span>
         {% endif %}
         {% if icon %}
             <span class="absolute flex items-center justify-center rounded-lg border border-solid border-[color-mix(in_oklab,var(--stat-accent)_13%,transparent)] bg-[color-mix(in_oklab,var(--stat-accent)_8%,var(--color-surface))] leading-none {% if compact %}top-3 right-3 h-6 w-6 text-sm{% else %}top-4 right-3 h-7 w-7 text-base sm:rounded-[0.5625rem] sm:top-[1.125rem] sm:right-[1.125rem] sm:h-8 sm:w-8{% endif %} text-[color:var(--stat-accent)]"

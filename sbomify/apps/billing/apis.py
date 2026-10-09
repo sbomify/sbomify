@@ -63,7 +63,7 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
     Any team member can view usage stats — the membership check below is sufficient.
     Owner-level access is not required here (unlike billing mutations).
     """
-    team_key = request.GET.get("team_key") or request.session.get("current_team", {}).get("key")
+    team_key = request.GET.get("team_key") or request.session.get("current_workspace", {}).get("key")
     if not team_key:
         return 404, {"detail": "No team selected"}
 
@@ -104,7 +104,7 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
     if is_ratelimited(request, group="change_plan", key="user", rate=RATE_LIMIT, increment=True):
         return 429, {"detail": "Too many requests. Please try again later."}
 
-    team_key = data.team_key or request.session.get("current_team", {}).get("key")
+    team_key = data.team_key or request.session.get("current_workspace", {}).get("key")
 
     if not team_key:
         return 404, {"detail": "No team selected"}

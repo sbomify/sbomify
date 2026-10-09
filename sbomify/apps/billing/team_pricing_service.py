@@ -326,8 +326,15 @@ class TeamPricingService:
         Returns:
             List of limit dictionaries with icon, label, and value
         """
-        # Define PLAN_LIMITS locally to avoid circular import
+        # Define PLAN_LIMITS locally to avoid circular import.
+        # Members first, matching the order the plan comparison cards use. It is a
+        # real quota: max_users is enforced on invite, so leaving it out hid the
+        # one limit that stops a workspace growing.
         PLAN_LIMITS: dict[str, dict[str, str]] = {
+            "max_users": {
+                "label": "Members",
+                "icon": "users",
+            },
             "max_products": {
                 "label": "Products",
                 "icon": "cube",
@@ -349,13 +356,15 @@ class TeamPricingService:
             except BillingPlan.DoesNotExist:
                 billing_plan_obj = None
 
-        # The workspace's own limits win over the plan's. A limit neither sets
-        # is left out.
+        # The workspace's own limits win over the plan's. With a plan, every
+        # limit gets a tile: one the plan leaves unset has no cap and reads
+        # "Unlimited", so it is not mistaken for a quota the plan lacks.
+        # Without a plan, only the workspace's own limits are shown.
         for limit_key, meta in PLAN_LIMITS.items():
             if limit_key in billing_plan_limits:
                 limit_value = billing_plan_limits[limit_key]
-            elif billing_plan_obj is not None and getattr(billing_plan_obj, limit_key, None) is not None:
-                limit_value = getattr(billing_plan_obj, limit_key)
+            elif billing_plan_obj is not None:
+                limit_value = getattr(billing_plan_obj, limit_key, None)
             else:
                 continue
             plan_limits.append(

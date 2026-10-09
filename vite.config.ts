@@ -31,6 +31,7 @@ export default defineConfig({
         teams: resolve('./sbomify/apps/teams/js/main.ts'),
         documents: resolve('./sbomify/apps/documents/js/main.ts'),
         plugins: resolve('./sbomify/apps/plugins/js/main.ts'),
+        ops: resolve('./sbomify/apps/ops/js/main.ts'),
         htmxBundle: resolve('./sbomify/apps/core/js/htmx-bundle.ts'),
         // Tailwind CSS entry (source outside static to avoid collectstatic processing)
         tailwind: resolve('./sbomify/assets/css/tailwind.src.css'),

@@ -23,7 +23,7 @@ from sbomify.apps.teams.models import Member, Team
 def _context_request(member: Member) -> HttpRequest:
     request = RequestFactory().get("/products/")
     request.user = member.user
-    request.session = {"current_team": {"key": member.team.key, "role": "owner"}}
+    request.session = {"current_workspace": {"key": member.team.key, "role": "owner"}}
     return request
 
 
@@ -64,7 +64,7 @@ def test_request_context_follows_workspace_changes(sample_team_with_owner_member
     request = _context_request(member)
     assert app_context(request)["can_administer"]
     if scope == "session":
-        request.session["current_team"]["key"] = workspace.key
+        request.session["current_workspace"]["key"] = workspace.key
     else:
         request.resolver_match = ResolverMatch(lambda request: None, (), {"team_key": workspace.key})
     context = app_context(request)
@@ -203,7 +203,7 @@ class TestPosthogContext:
         request.user.pk = 42
         request.user.email = "test@example.com"
         request.user.get_full_name.return_value = "Test User"
-        request.session = {"current_team": {"key": "team_abc"}}
+        request.session = {"current_workspace": {"key": "team_abc"}}
         result = posthog_context(request)
         assert result["posthog_identify"] is not None
         assert result["posthog_identify"]["distinct_id"] == "42"

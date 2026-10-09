@@ -26,6 +26,9 @@ assert on the output; it is not routed anywhere.
 <c-buttons.primary size="sm">Add entity</c-buttons.primary>
 </c-slot>
 </c-layout.section-header>
+<c-layout.section-body class="space-y-3">
+<p class="m-0">Indented to the title's left edge.</p>
+</c-layout.section-body>
 <c-layout.form-section step="1" title="What it is" description="A title is all a draft needs." data-probe="form-section-step">
 <p class="m-0">Step fields</p>
 </c-layout.form-section>
@@ -59,7 +62,7 @@ assert on the output; it is not routed anywhere.
 </div>
 <input type="checkbox" id="probe-row-1" checked>
 </c-layout.select-row>
-<c-layout.select-row disabled>
+<c-layout.select-row>
 <span>Dependency Track</span>
 <input type="checkbox" id="probe-row-2" disabled>
 </c-layout.select-row>

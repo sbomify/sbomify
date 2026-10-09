@@ -1,0 +1,20 @@
+{% comment %}
+Render probe for the cotton screen reader table. Unit tests render this file and
+assert on the output; it is not routed anywhere. It lives apart from the tables
+probe because that one holds every table to the stacked layout, and this table
+is never on screen to stack.
+{% endcomment %}
+<c-tables.screen-reader-table caption="Probe series" data-probe="screen-reader-table">
+<thead>
+    <tr>
+        <th scope="col">Day</th>
+        <th scope="col">Count</th>
+    </tr>
+</thead>
+<tbody>
+    <tr>
+        <th scope="row">Oct 7</th>
+        <td>3</td>
+    </tr>
+</tbody>
+</c-tables.screen-reader-table>

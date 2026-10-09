@@ -8,7 +8,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
-from sbomify.apps.controls.models import Control
+from sbomify.apps.controls.models import Control, ControlStatus
 from sbomify.apps.controls.services.catalog_service import (
     activate_builtin_catalog,
     deactivate_catalog,
@@ -25,7 +25,7 @@ from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequ
 
 def _check_team_key_matches_session(request: HttpRequest, team_key: str) -> bool:
     """Return True if the session's current_team key matches the URL team_key."""
-    current_team_key: str = request.session.get("current_team", {}).get("key", "")
+    current_team_key: str = request.session.get("current_workspace", {}).get("key", "")
     return current_team_key == team_key
 
 
@@ -216,7 +216,10 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if not result.ok:
             messages.error(request, result.error or "Bulk update failed")
         else:
-            messages.success(request, f"Set {result.value} controls in {category} to {status}.")
+            # The stored status is a code; the message quotes it back at the
+            # user, so it goes out as the label the dropdown offered.
+            status_label = ControlStatus.Status(status).label if status in ControlStatus.Status.values else status
+            messages.success(request, f"Set {result.value} controls in {category} to {status_label}.")
 
         if request.headers.get("HX-Request"):
             control = controls_qs.select_related("catalog__team").first()

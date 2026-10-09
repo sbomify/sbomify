@@ -14,7 +14,7 @@ class TestUIWorkflows:
 
         # Mark wizard as completed to avoid redirect to onboarding
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": True,
@@ -68,7 +68,7 @@ class TestUIWorkflows:
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # Test API-based component creation
@@ -118,7 +118,7 @@ class TestUIWorkflows:
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # First, verify we can access the components dashboard
@@ -185,7 +185,7 @@ class TestUIWorkflows:
         team.save()
 
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         response = client.post(
@@ -213,7 +213,7 @@ class TestUIWorkflows:
         team.save()
 
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         response = client.post(

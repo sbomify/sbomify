@@ -86,8 +86,8 @@ NOTIFICATION_PROVIDERS = [
 ```python
 def check_billing_plan(request):
     """Check if a workspace has a billing plan selected"""
-    if "current_team" in request.session:
-        team_key = request.session["current_team"]["key"]
+    if "current_workspace" in request.session:
+        team_key = request.session["current_workspace"]["key"]
         try:
             team = Team.objects.get(key=team_key)
             if not team.billing_plan:
@@ -119,7 +119,7 @@ def check_billing_plan(request):
 def check_subscription_status(request):
     """Check subscription status"""
     notifications = []
-    if "current_team" in request.session:
+    if "current_workspace" in request.session:
         team = get_team(request)
         if team and team.billing_plan == "business":
             if team.billing_plan_limits.get("subscription_status") == "past_due":

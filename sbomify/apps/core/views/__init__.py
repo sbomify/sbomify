@@ -92,7 +92,7 @@ def home(request: HttpRequest) -> HttpResponse:
 
     # Standard home page behavior
     if request.user.is_authenticated:
-        current_team = request.session.get("current_team", {})
+        current_team = request.session.get("current_workspace", {})
 
         # Wizard not finished yet → send to Welcome step (not plan)
         if not current_team.get("has_completed_wizard", True):
@@ -173,7 +173,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
 
     # Token creation requires a workspace context (scoped tokens only)
     if request.method == "POST":
-        current_team = request.session.get("current_team")
+        current_team = request.session.get("current_workspace")
         if current_team and current_team.get("key"):
             return redirect("teams:team_tokens", team_key=current_team["key"])
 
@@ -186,7 +186,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
         return render(request, "core/settings.html.j2", context)
 
     # Check if user has a current workspace - if so, redirect to tokens tab
-    current_team = request.session.get("current_team")
+    current_team = request.session.get("current_workspace")
     if current_team and current_team.get("key"):
         return redirect("teams:team_settings", team_key=current_team["key"])
 
@@ -274,7 +274,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         invitation.delete()
 
     # Refresh user_teams in session and switch to new workspace
-    request.session["user_teams"] = get_user_teams(user)
+    request.session["user_workspaces"] = get_user_teams(user)
     switch_active_workspace(request, team, role)
 
     messages.add_message(request, messages.SUCCESS, f"You have joined {team.display_name} as {role}.")

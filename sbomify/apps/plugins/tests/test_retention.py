@@ -10,6 +10,8 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from sbomify.apps.plugins.models import AssessmentRun
@@ -110,3 +112,65 @@ class TestPruning:
 
     def test_an_empty_table_is_a_no_op(self):
         assert prune_assessment_runs() == 0
+
+
+class TestCost:
+    """The prune walks the whole table every night, so what it reads matters as
+    much as what it deletes."""
+
+    def test_deleting_never_loads_a_scan_result(self, sample_sbom):
+        """A run's result is a findings list of up to a few MB, and Django's
+        delete collector loads each doomed run whole before deleting it."""
+        for age in range(100, 106):
+            _run(sample_sbom, "osv", days_ago=age)
+
+        with CaptureQueriesContext(connection) as queries:
+            prune_assessment_runs(keep_per_plugin=3, min_age_days=30)
+
+        assert not [query["sql"] for query in queries if '"result"' in query["sql"]]
+
+    def test_the_ranking_happens_in_postgres(self, sample_sbom):
+        """Ranking in Python streamed every run to the worker through a
+        server-side cursor, about 12 s end to end on a million runs. One window
+        query ranks them in Postgres and returns only the doomed ids."""
+        for age in range(100, 106):
+            _run(sample_sbom, "osv", days_ago=age)
+
+        with CaptureQueriesContext(connection) as queries:
+            doomed = prunable_run_ids(keep_per_plugin=3, min_age_days=30)
+
+        assert len(doomed) == 3
+        assert len(queries) == 1
+        assert "ROW_NUMBER()" in queries[0]["sql"]
+
+    def test_a_pruned_runs_findings_go_with_it(self, sample_sbom):
+        """Loading only the id must not cost the cascade: a run's finding rows
+        point at it, and an orphaned row would keep counting in the overview."""
+        from sbomify.apps.vulnerability_scanning.models import Finding
+
+        for age in range(100, 106):
+            Finding.objects.create(
+                run=_run(sample_sbom, "osv", days_ago=age),
+                sbom=sample_sbom,
+                component_id=sample_sbom.component_id,
+                advisory_id="CVE-2026-0001",
+                severity="high",
+                severity_rank=1,
+            )
+
+        prune_assessment_runs(keep_per_plugin=3, min_age_days=30)
+
+        assert Finding.objects.count() == 3
+
+    def test_runs_sharing_a_timestamp_still_rank_by_id(self, sample_sbom):
+        """Runs created in one transaction can share ``created_at``; the id
+        breaks the tie, so the quota keeps exactly ``keep_per_plugin`` of them."""
+        runs = [_run(sample_sbom, "osv", days_ago=100) for _ in range(5)]
+        stamp = timezone.now() - timedelta(days=100)
+        AssessmentRun.objects.filter(pk__in=[run.pk for run in runs]).update(created_at=stamp)
+        newest_three = sorted((run.pk for run in runs), reverse=True)[:3]
+
+        doomed = prunable_run_ids(keep_per_plugin=3, min_age_days=30)
+
+        assert len(doomed) == 2
+        assert not set(doomed) & set(newest_three)

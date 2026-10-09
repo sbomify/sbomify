@@ -746,6 +746,28 @@ class SPDX3Package(BaseModel):
     spdx_id: str = Field("", alias="spdxId")
     type: str = ""
 
+    @field_validator("name", "version", "spdx_id", "type", mode="before")
+    @classmethod
+    def read_non_string_as_absent(cls, value: Any) -> Any:
+        """A value of the wrong type is read the same way a missing one is.
+
+        This parser is the lenient one, and on most SPDX 3 documents it is the
+        only one: ``spdx3_validation`` holds a document to the vendored
+        official schema only where it claims a version that has one, so a
+        legacy ``spdxVersion``/``elements`` document, or a bare "3.0" claim,
+        reaches here unchecked. Every field above already defaults to "", so a
+        package element carrying a number or an object where the spec wants a
+        string has nothing a reader can use, exactly as if it had omitted the
+        field.
+
+        Strict typing here raised instead, out of ``SPDX3Schema.packages`` --
+        a property, evaluated well past the upload handler's
+        ``except ValidationError`` guard. The upload answered an unusable
+        document with 400 "Invalid request", naming nothing the uploader could
+        act on, and reported itself to Sentry as a server fault.
+        """
+        return value if isinstance(value, str) else ""
+
     @property
     def purl(self) -> str:
         # Deferred so this parsing module carries no import-time edge into the

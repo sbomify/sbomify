@@ -3,11 +3,11 @@
 {% if messages %}
     {% for message in messages %}
         {% if message.tags == 'success' %}
-            <c-feedback.alert variant="success" dismissible class="mb-4">{{ message }}</c-feedback.alert>
+            <c-feedback.alert variant="success" dismissible class="mb-[1rem]">{{ message }}</c-feedback.alert>
         {% elif message.tags == 'error' %}
-            <c-feedback.alert variant="danger" dismissible class="mb-4">{{ message }}</c-feedback.alert>
+            <c-feedback.alert variant="danger" dismissible class="mb-[1rem]">{{ message }}</c-feedback.alert>
         {% else %}
-            <c-feedback.alert dismissible class="mb-4">{{ message }}</c-feedback.alert>
+            <c-feedback.alert dismissible class="mb-[1rem]">{{ message }}</c-feedback.alert>
         {% endif %}
     {% endfor %}
 {% endif %}
@@ -19,7 +19,7 @@
 <form method="post" novalidate>
     {% csrf_token %}
     <div class="mb-8">
-        <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
+        <div class="flex items-center gap-3 mb-[1rem] pb-[0.75rem] border-b border-border">
             <c-chips.icon-chip>
             <i class="fas fa-building" aria-hidden="true"></i>
             </c-chips.icon-chip>
@@ -57,7 +57,7 @@
         </div>
     </div>
     <div class="mb-8">
-        <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
+        <div class="flex items-center gap-3 mb-[1rem] pb-[0.75rem] border-b border-border">
             <c-chips.icon-chip>
             <i class="fas fa-user" aria-hidden="true"></i>
             </c-chips.icon-chip>
@@ -111,7 +111,7 @@
         </div>
     </div>
     <div class="mb-8">
-        <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
+        <div class="flex items-center gap-3 mb-[1rem] pb-[0.75rem] border-b border-border">
             <c-chips.icon-chip>
             <i class="fas fa-tasks" aria-hidden="true"></i>
             </c-chips.icon-chip>
@@ -139,7 +139,7 @@
         </div>
     </div>
     <div class="mb-8">
-        <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
+        <div class="flex items-center gap-3 mb-[1rem] pb-[0.75rem] border-b border-border">
             <c-chips.icon-chip>
             <i class="fas fa-comment-alt" aria-hidden="true"></i>
             </c-chips.icon-chip>
@@ -167,7 +167,7 @@
     </div>
     {% if turnstile_site_key and not debug %}
         <div class="mb-6">
-            <div class="flex items-center gap-3 mb-3 pb-2 border-b border-border">
+            <div class="flex items-center gap-3 mb-[0.75rem] pb-2 border-b border-border">
                 <c-chips.icon-chip>
                 <i class="fas fa-shield-alt" aria-hidden="true"></i>
                 </c-chips.icon-chip>

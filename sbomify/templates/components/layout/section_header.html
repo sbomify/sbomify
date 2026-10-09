@@ -1,7 +1,8 @@
 {% comment %}
 A chip, a title and one optional line under it, introducing a block inside a
-card. The containing flex/grid layout owns the gap before the block; the
-header has no external margin.
+card. The block itself goes in c-layout.section-body, which indents it to the
+title's left edge. The containing flex/grid layout owns the gap before the
+block; the header has no external margin.
 
 level renders the title as h2 or h3 so a page keeps one heading outline; the
 two branches differ only in the element and must stay in lockstep. accent is

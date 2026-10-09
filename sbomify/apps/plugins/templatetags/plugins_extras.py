@@ -7,6 +7,8 @@ from typing import Any
 from django import template
 from django.utils.html import conditional_escape, format_html, format_html_join
 
+from sbomify.apps.core.utils import humanize_token
+
 logger = logging.getLogger(__name__)
 
 register = template.Library()
@@ -51,31 +53,37 @@ _CODE_SPAN_RE = re.compile(r"`+([^`\n]+)`+")
 MAX_DESCRIPTION_CHARS = 100_000
 
 
+# Every RunReason the SDK defines, plus the two legacy codes still sitting in
+# stored rows ("scheduled" predates SCHEDULED_REFRESH, "migration" was written
+# by the 0004 backfill). A reason is shown as a plain trigger word, so the
+# wording drops the "on_" and "_refresh" the enum carries for its own sake.
+RUN_REASONS = {
+    "on_upload": "Upload",
+    "manual": "Manual",
+    "scheduled": "Scheduled",
+    "scheduled_refresh": "Scheduled",
+    "config_change": "Config Change",
+    "plugin_update": "Plugin Update",
+    "on_release_association": "Release",
+    "dependency_changed": "Dependency Change",
+    "migration": "Migration",
+}
+
+
 @register.filter
 def format_run_reason(reason: str) -> str:
-    """Format assessment run reason for display.
+    """Format an assessment run reason for display.
 
     Args:
-        reason: The run reason code. Expected values:
-            - "on_upload": Triggered by SBOM upload
-            - "manual": Manually triggered by user
-            - "config_change": Triggered by configuration change
-            - "scheduled_refresh": Triggered by a scheduled job
-            - "dependency_changed": Re-run after a plugin it depends on finished
-            - "on_release_association": Recorded on runs from before release attachments reused the run
+        reason: The run reason code, e.g. ``"on_upload"``.
 
     Returns:
-        Human-readable display string for the reason.
+        Human-readable display string for the reason. A code with no wording of
+        its own — a reason added to the SDK after this map, or a value from a
+        stored row older than the enum — is humanized rather than printed raw,
+        so "on_upload" can never reach a reader as written.
     """
-    reasons = {
-        "on_upload": "Upload",
-        "manual": "Manual",
-        "config_change": "Config Change",
-        "scheduled_refresh": "Scheduled",
-        "dependency_changed": "Dependency Update",
-        "on_release_association": "Release",
-    }
-    return reasons.get(reason, reason)
+    return RUN_REASONS.get(reason) or humanize_token(reason)
 
 
 @register.filter

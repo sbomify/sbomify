@@ -9,6 +9,7 @@ from typing import Any
 
 from django.apps import apps
 from django.db import models
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
@@ -237,6 +238,45 @@ class AssessmentRun(models.Model):
             models.Index(fields=["sbom", "plugin_name", "plugin_config_hash", "-created_at"]),
             models.Index(fields=["category", "-created_at"]),
             models.Index(fields=["status", "-created_at"]),
+            # Serves the failure-backoff sweep's per-SBOM probe: for one
+            # plugin and one SBOM, the newest few terminal runs by when they
+            # *settled* -- Coalesce(completed_at, created_at), see
+            # tasks._failure_backed_off_sbom_ids for why the creation time is
+            # the wrong clock there.
+            #
+            # The settled time is an expression, so none of the indexes above
+            # can serve either the range or the ordering, and the sweep would
+            # fall back to reading every run of every SBOM once an hour. With
+            # sbom_id leading the ordered columns, each probe descends
+            # straight to one SBOM's newest run and walks backwards until the
+            # LIMIT, so the sweep's cost follows the number of SBOMs it is
+            # about to enqueue rather than the size of the table.
+            #
+            # ``id`` closes the ordering so the probe never needs a sort to
+            # break a tie: runs written in one transaction can share a settled
+            # time, and the streak has to read them in a stable order.
+            #
+            # Partial on the same terminal-status predicate the probe filters
+            # by, which is what makes its LIMIT exact rather than approximate:
+            # without it the descent walks past whatever in-flight rows sit
+            # above the newest settled one before it has its few. It also keeps
+            # the index off rows that are about to be rewritten anyway -- a
+            # PENDING run is updated twice on its way to a verdict.
+            models.Index(
+                "plugin_name",
+                "sbom_id",
+                Coalesce("completed_at", "created_at").desc(),
+                models.F("id").desc(),
+                name="plugins_run_sbom_settled_idx",
+                condition=~models.Q(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value]),
+            ),
+            # Scan history counts every security run in its window, a million
+            # rows with hourly rescans: per SBOM, from the index, not the heap.
+            models.Index(
+                fields=["sbom", "created_at"],
+                condition=models.Q(category="security", status="completed"),
+                name="plugins_scan_history_idx",
+            ),
         ]
         ordering = ["-created_at"]
 

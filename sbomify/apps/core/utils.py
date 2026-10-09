@@ -7,6 +7,7 @@ from __future__ import annotations
 import collections.abc
 import ipaddress
 import logging
+import re
 import string
 import uuid
 from functools import lru_cache
@@ -166,6 +167,34 @@ def sanitize_email_for_cache_key(email: str | None, user_id: str | int | None = 
     return sanitized_email
 
 
+_TOKEN_WORD_SEPARATORS = re.compile(r"[_\-\s]+")
+
+
+def humanize_token(value: object, default: str = "") -> str:
+    """A machine code as display text: ``on_upload`` becomes "On Upload".
+
+    The last line of defence for a code that reaches a page without a label of
+    its own — an enum member nobody added to a map, a value a published spec
+    gained after we wrote the map, a string read straight out of a stored
+    document. Underscore and hyphen both separate words, because the codes we
+    render come from both conventions: our own enums spell ``on_upload``, the
+    document types aligned with SPDX and CycloneDX spell ``release-notes``.
+
+    An all-caps word is left alone, so ``nda-report`` keeps its acronym rather
+    than reading as "Nda Report".
+
+    Prefer a real label wherever one exists — ``get_FOO_display()``, or the
+    app's own label map. This only guarantees that no user ever reads a raw
+    code.
+    """
+    if not isinstance(value, str):
+        return default
+    words = [word for word in _TOKEN_WORD_SEPARATORS.split(value.strip()) if word]
+    if not words:
+        return default
+    return " ".join(word if word.isupper() else word[:1].upper() + word[1:] for word in words)
+
+
 def number_to_random_token(value: int) -> str:
     """
     Convert an integer to a random token.
@@ -321,7 +350,7 @@ def get_team_id_from_session(request: Any) -> str | None:
         str | None: The team ID as string, or None if not found
     """
     session = request.session
-    current_team = session.get("current_team")
+    current_team = session.get("current_workspace")
 
     if not current_team:
         return None

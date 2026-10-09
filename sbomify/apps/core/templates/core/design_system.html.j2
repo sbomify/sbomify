@@ -66,6 +66,11 @@
     </c-layout.frame>
     <c-layout.frame id="app-overview">
     <c-layout.page-header title="App chrome and overview" subtitle="The rail, workspace picker, top bar and footer frame this gallery. Vulnerability bars open a severity breakdown at both sizes." />
+    <c-cards.card title="Inventory navigation">
+    <div x-data="{ sidebarMobileOpen: false }">
+        <c-chrome.inventory-nav id="gallery-inventory-navigation" kind="components" />
+    </div>
+    </c-cards.card>
     <c-overview.header active="trends" />
     <p class="text-sm text-text-muted">
         On phones, the top bar puts navigation and quick actions above a full-width search field.
@@ -75,7 +80,7 @@
          class="grid grid-cols-2 xl:grid-cols-4 gap-3"
          aria-label="Example overview metrics">
         <c-layout.stat-card :value="12" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
-        <c-layout.stat-card :value="4" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
+        <c-layout.stat-card :value="4" label="Past patch SLA" icon="fas fa-clock" accent="danger" />
         <c-layout.stat-card unmeasured unmeasured_label="Not scanned yet" label="Open vulnerabilities" icon="fas fa-crosshairs" accent="warning" />
         <c-layout.stat-card :value="0" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
         <c-layout.stat-card :value="2" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
@@ -111,6 +116,9 @@
         <c-overview.evidence :product="overview_demo_evidence" />
     </div>
     </c-cards.card>
+    <c-forms.hint>Each panel is a slice of a longer list and states its own scope: the digest counts the findings it ranked, and exposure says why its rows cannot be added up.</c-forms.hint>
+    <c-overview.priority :dashboard="overview_demo_digest" />
+    <c-overview.products :products="overview_demo_products" :product_count="overview_demo_product_count" :shares_components="True" :omits_components="True" />
     <c-overview.priority :dashboard="overview_demo_empty" />
     <c-overview.products />
     <c-forms.hint>An empty workspace shows setup in place of metrics and tables, using the onboarding explanations and existing upload controls.</c-forms.hint>
@@ -120,8 +128,8 @@
     <c-layout.page-header title="Product inventory" subtitle="Linked tabs, compact server-sorted cells, severity breakdowns and shared filters." />
     <c-navigation.tabs links aria-label="Example inventory views" x-data="{ selectedInventory: 'products' }">
     <c-navigation.tab href="{% url 'core:products_dashboard' %}" active_binding="selectedInventory === 'products'" badge="1" active>Products</c-navigation.tab>
-    <c-navigation.tab href="{% url 'core:products_dashboard' %}?view=releases" badge="2">Releases</c-navigation.tab>
-    <c-navigation.tab href="{% url 'core:products_dashboard' %}?view=components" badge="3">Components</c-navigation.tab>
+    <c-navigation.tab href="{% url 'core:releases_dashboard' %}" badge="2">Releases</c-navigation.tab>
+    <c-navigation.tab href="{% url 'core:components_dashboard' %}" badge="3">Components</c-navigation.tab>
     </c-navigation.tabs>
     <c-inventory.table :inventory="inventory_demo" hx-disable />
     <c-inventory.results :inventory="inventory_demo" preview />
@@ -372,9 +380,11 @@
     <hr class="border-border">
     <div class="flex flex-col gap-4">
         <c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />
+        <c-layout.section-body>
         <c-forms.field label="Token name" for="ds-section-token">
         <c-forms.input name="ds-section-token" placeholder="ci-pipeline" />
         </c-forms.field>
+        </c-layout.section-body>
     </div>
     <c-layout.section-header icon="fas fa-building" accent="success" title="Entities" subtitle="Organizations (Manufacturer, Supplier, Author)">
     <c-slot name="actions">
@@ -384,7 +394,9 @@
     </c-slot>
     </c-layout.section-header>
     <p class="text-sm text-text-muted">
-        A section header introduces a block inside a card. Pass <code class="tw-code-inline">level="2"</code> when the page
+        A section header introduces a block inside a card.
+        <code class="tw-code-inline">c-layout.section-body</code> indents that block to the title's left edge and
+        drops the indent on a narrow screen. Pass <code class="tw-code-inline">level="2"</code> when the page
         needs the title as an h2, and fill the named
         <code class="tw-code-inline">actions</code> slot for the control the section is headed by.
     </p>
@@ -995,7 +1007,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     </p>
     <div class="border border-border rounded-xl divide-y divide-border/50 overflow-hidden">
         {% for row in demo_select_rows %}
-            <c-layout.select-row :disabled="row.disabled">
+            <c-layout.select-row>
             <div class="flex-1 min-w-0">
                 <div class="flex items-center flex-wrap gap-2 mb-1">
                     <label class="font-medium text-text cursor-pointer"
@@ -1144,6 +1156,35 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-cards.header title="Vulnerability reports" />
     {% include "core/components/vulnerability_demo.html.j2" %}
     </c-cards.card>
+    <p class="text-sm text-text-muted">
+        A chart drawn on a canvas is a picture, so a screen reader gets its name and none of its numbers.
+        Follow the chart with a <c-code-inline>screen-reader-table</c-code-inline> built from the data the
+        chart draws. It renders nothing on screen: the card below holds one with three rows.
+    </p>
+    <c-cards.card title="Signups" subtitle="Last 3 days.">
+    <c-tables.screen-reader-table caption="Signups per day">
+    <thead>
+        <tr>
+            <th scope="col">Day</th>
+            <th scope="col">Signups</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <th scope="row">Oct 5</th>
+            <td>2</td>
+        </tr>
+        <tr>
+            <th scope="row">Oct 6</th>
+            <td>0</td>
+        </tr>
+        <tr>
+            <th scope="row">Oct 7</th>
+            <td>5</td>
+        </tr>
+    </tbody>
+    </c-tables.screen-reader-table>
+    </c-cards.card>
     <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
     <c-cards.card>
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />
@@ -1191,6 +1232,19 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-layout.stat-card accent="success" icon="fas fa-circle-check" value="96%" label="NTIA compliant" />
         <c-layout.stat-card accent="warning" icon="fas fa-clock" value="4" label="Stale scans" />
     </div>
+    <p class="tw-data-label mb-3">With a note, for a figure that needs a caveat</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <c-layout.stat-card icon="fas fa-box-open" label="Components" value="128" note="From the latest release of each product." />
+        <c-layout.stat-card accent="warning" icon="fas fa-clock" label="Awaiting a scan" value="6">
+        <c-slot name="note">Queued behind {{ running_jobs|default:2 }} running jobs.</c-slot>
+        </c-layout.stat-card>
+    </div>
+    <p class="text-sm text-text-muted mb-8">
+        <code class="tw-code-inline">note</code> is the footnote under a number: where it came from, or what it
+        leaves out. Pass it as an attribute for a fixed sentence, or as a <code class="tw-code-inline">note</code>
+        slot when the sentence is assembled from template logic. It is a part of the card rather than a paragraph
+        the page styles, so a strip of cards cannot drift apart one card at a time.
+    </p>
     <p class="tw-data-label">Compact, the dense metric strip above a table</p>
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <c-layout.stat-card compact accent="danger" value="3" label="At risk" />
@@ -1237,6 +1291,27 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-code-inline>level</c-code-inline>.
     </p>
     </c-cards.card>
+    <h2 id="role-badges" class="text-xl font-semibold text-text">Role badges</h2>
+    <c-cards.card>
+    <p class="text-sm text-text-muted mb-4">
+        The workspace roles, keyed the same way as the severity scale. Owner and admin carry an accent so
+        privilege reads at a glance on the members table; everything below them stays neutral. Pass the key as
+        <c-code-inline>role</c-code-inline> and the label as the slot, because the table title-cases the stored
+        value while the role legend uses the name from <c-code-inline>authz.ROLE_DESCRIPTIONS</c-code-inline>.
+    </p>
+    {% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/badges/role.html).
+    {% endcomment %}
+    <div class="flex flex-wrap items-center gap-2">
+        <c-badges.role role="owner">Owner</c-badges.role>
+        <c-badges.role role="admin">Admin</c-badges.role>
+        <c-badges.role role="member">Member</c-badges.role>
+        <c-badges.role role="guest">Guest</c-badges.role>
+        <c-badges.role role="bot">Bot</c-badges.role>
+        <c-badges.role role="something-new">Unknown role</c-badges.role>
+    </div>
+    </c-cards.card>
     <h2 id="progress" class="text-xl font-semibold text-text">Progress</h2>
     <c-cards.card>
     {% comment %}
@@ -1266,6 +1341,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-badges.primary>Primary</c-badges.primary>
         <c-badges.secondary>Secondary</c-badges.secondary>
         <c-badges.success>Success</c-badges.success>
+        <c-badges.success>Dependency Track</c-badges.success>
         <c-badges.warning>Warning</c-badges.warning>
         <c-badges.danger>Danger</c-badges.danger>
         <c-badges.info>Info</c-badges.info>
@@ -1495,6 +1571,16 @@ first-of-type rule that drops the leading hairline reads the section's position
     <div class="mt-6">
         <c-navigation.tabs-pills :tabs="demo_tabs" active="sboms" />
     </div>
+    <p class="text-sm text-text-muted mt-6 mb-2">
+        The nav link is the one that moves you between pages, rather than between panels on one
+        page. It is a real anchor, and the page you are on carries
+        <c-code-inline>aria-current="page"</c-code-inline> on the anchor itself.
+    </p>
+    <nav class="flex items-center gap-1" aria-label="Navigation link demo">
+        <c-navigation.nav-link href="#nav-link" current>Overview</c-navigation.nav-link>
+        <c-navigation.nav-link href="#nav-link">Revenue</c-navigation.nav-link>
+        <c-navigation.nav-link href="#nav-link" icon="fas fa-heart-pulse">Platform</c-navigation.nav-link>
+    </nav>
     <p class="text-sm text-text-muted mt-6 mb-2">
         The segmented control wears the same pills, for buttons that switch what is already on screen
         rather than select a panel: it is a group, so every button stays in the tab order, and which

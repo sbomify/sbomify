@@ -10,7 +10,21 @@
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to SBOM
     </c-buttons.secondary>
     </c-layout.page-header>
-    <div class="space-y-6">
+    {% comment %}The report refreshes itself when a scan of this SBOM finishes, rather than
+    reloading on a timer. The bridge sits on this always-rendered region: the
+    results panel exists only once there are results, which is exactly when a
+    report opened before its scan has none. The refresh asks for the address
+    bar's URL, which the filter form keeps current, and morphs this region to
+    the one in the page it gets back, as the triage refresh does, so a search
+    being typed or a focused control survives it. The region's text nodes are
+    merged first: the filter form swaps the panel in with whitespace around it,
+    and a morph pairing children by position would otherwise move the panel,
+    which drops the reader's focus. One message comes per plugin, so it is
+    debounced.{% endcomment %}
+    <div id="scan-report"
+         class="space-y-6"
+         x-data="{ refreshTimer: null }"
+         @ws:message.window=" if ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ sbom.id }}') { const region = $el; clearTimeout(refreshTimer); refreshTimer = setTimeout(() => { region.normalize(); htmx.ajax('GET', location.pathname + location.search, { source: region, target: region, select: '#scan-report', swap: 'morph' }); }, 500); } ">
         {# Stats Badges #}
         <div class="flex flex-wrap gap-2">
             {% if sbom_version_info %}
@@ -48,7 +62,7 @@
                 </c-chips.metric-chip>
             {% endif %}
         </div>
-        <c-cards.card title="Scan results" :flush="scan_panel">
+        <c-cards.card id="scan-results-card" title="Scan results" :flush="scan_panel">
         {% if can_triage %}
             <c-slot name="header">
             <c-cards.header title="Scan results" class="flex flex-wrap items-center justify-between gap-3">

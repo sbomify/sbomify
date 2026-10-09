@@ -7,13 +7,11 @@ components and a live assessment.
 """
 
 import hashlib
+import re
 from typing import Generator
 
 import pytest
 from playwright.sync_api import Page, expect
-
-from sbomify.apps.core.models import Component
-from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 
 # Imported at module scope on purpose. The compliance services pull in
 # trestle, whose pydantic-v1 layer subclasses ``datetime.date`` at import
@@ -22,6 +20,8 @@ from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 # Collection happens before any clock is frozen, so importing here is safe.
 from sbomify.apps.compliance.models import CRAScopeScreening  # noqa: E402
 from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment  # noqa: E402
+from sbomify.apps.core.models import Component
+from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 
 
 @pytest.fixture
@@ -37,9 +37,9 @@ def cra_billing_session(browser_context) -> None:
 
     for row in Session.objects.all():
         store = SessionStore(session_key=row.session_key)
-        current_team = store.get("current_team") or {}
+        current_team = store.get("current_workspace") or {}
         current_team["billing_plan"] = "business"
-        store["current_team"] = current_team
+        store["current_workspace"] = current_team
         store.save()
 
 
@@ -171,3 +171,95 @@ class TestCRAProductListSnapshot:
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [375, 1920])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_start_assessment_from_empty_list(
+    authenticated_page: Page, cra_billing_session, product_factory, width: int, theme: str, snapshot
+) -> None:
+    product = product_factory(name="Product to assess")
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}')")
+    page.goto("/compliance/cra/")
+    page.get_by_role("button", name="Start assessment", exact=True).last.click()
+    dialog = page.get_by_role("dialog", name="Start assessment", exact=True)
+    expect(dialog).to_be_visible()
+    action = dialog.get_by_role("button", name="Start scope screening")
+    expect(action).to_be_disabled()
+    dialog.get_by_label("Product", exact=False).select_option(label=product.name)
+    expect(action).to_be_enabled()
+    baseline = snapshot.get_or_create_baseline_screenshot(page, width=width)
+    current = snapshot.take_screenshot(page, width=width)
+    snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+    action.click()
+    expect(page).to_have_url(re.compile(f"/compliance/cra/scope/{product.id}/$"))
+    expect(page.get_by_role("heading", name="CRA scope screening", exact=True)).to_be_visible()
+
+
+@pytest.mark.django_db
+def test_cra_picker_keeps_existing_assessments_accessible(
+    authenticated_page: Page, cra_billing_session, cra_assessment, product_factory
+) -> None:
+    available = product_factory(name="Another product")
+    page = authenticated_page
+    page.goto("/compliance/cra/")
+    page.get_by_role("button", name="Start assessment", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Start assessment", exact=True)
+    choices = dialog.get_by_label("Product", exact=False).locator("option")
+    expect(choices).to_have_text(["Choose a product", available.name])
+    page.keyboard.press("Escape")
+    expect(dialog).to_be_hidden()
+    page.get_by_role("link", name="Continue", exact=True).click()
+    expect(page).to_have_url(re.compile(f"/compliance/cra/{cra_assessment.id}/step/1/$"))
+
+
+@pytest.mark.django_db
+def test_cra_empty_workspace_can_create_product(authenticated_page: Page, cra_billing_session) -> None:
+    page = authenticated_page
+    page.goto("/compliance/cra/")
+    page.get_by_role("button", name="Start assessment", exact=True).first.click()
+    dialog = page.get_by_role("dialog", name="Start assessment", exact=True)
+    expect(dialog.get_by_role("heading", name="Create a product first")).to_be_visible()
+    dialog.get_by_role("link", name="Create product", exact=True).click()
+    expect(page).to_have_url(re.compile("/products/new/$"))
+
+
+@pytest.mark.django_db
+def test_the_dependent_scope_rows_grey_with_their_own_control(authenticated_page: Page, cra_assessment) -> None:
+    """The EN 18031-2/-3 rows follow ``::disabled``, with no second source of truth.
+
+    They are inert until radio equipment is ticked, and they used to say so with a
+    hand-rolled ``opacity-50`` that faded the "Triggers EN 18031-*" sentence
+    explaining each one. ``c-layout.select-row`` now derives the greying from the
+    control through ``has-[input:disabled]``, so these rows carry no state class at
+    all. That only holds if ``:has()`` tracks Alpine's binding live, which is what
+    this walks: greyed and never faded while blocked, fully coloured once enabled.
+    """
+    page = authenticated_page
+    page.goto(f"/compliance/cra/{cra_assessment.id}/step/1/")
+
+    def scope_row(label: str):
+        """These controls carry no label element, so reach them through the row text."""
+        return page.get_by_text(label, exact=True).locator("..").locator("..")
+
+    radio = scope_row("Radio equipment under the RED").locator("input")
+    row = scope_row("Processes personal data")
+    dependent = row.locator("input")
+
+    expect(dependent).to_be_disabled()
+    assert row.evaluate("el => getComputedStyle(el).filter") == "grayscale(1)"
+    assert row.evaluate("el => getComputedStyle(el).opacity") == "1"
+    explanation = row.get_by_text("Triggers EN 18031-2", exact=False)
+    expect(explanation).to_be_visible()
+    assert explanation.evaluate("el => getComputedStyle(el).opacity") == "1"
+
+    radio.check()
+    expect(dependent).to_be_enabled()
+    assert row.evaluate("el => getComputedStyle(el).filter") == "none"
+
+    radio.uncheck()
+    expect(dependent).to_be_disabled()
+    assert row.evaluate("el => getComputedStyle(el).filter") == "grayscale(1)"

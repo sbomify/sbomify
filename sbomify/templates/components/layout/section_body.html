@@ -1,0 +1,8 @@
+{% comment %}
+The block a section header introduces, indented to the title's left edge and
+flush again below 40rem, where there is no room for the indent. It replaces the
+hand-written ml-11 that used to trail every section header.
+{% endcomment %}
+<c-vars class />
+<div class="sm:ml-11{% if class %} {{ class }}{% endif %}" {{ attrs }}>{{ slot }}
+</div>
