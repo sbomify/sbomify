@@ -240,6 +240,8 @@ class ViewerRights:
     may_see: bool
     #: ``artifact:publish_vex``: may record a VEX decision on what they see.
     may_triage: bool
+    #: The component's own workspace, which a page may not share with the session.
+    team_key: str = ""
 
 
 def viewer_rights(request: Any, component_id: str) -> ViewerRights:
@@ -247,10 +249,16 @@ def viewer_rights(request: Any, component_id: str) -> ViewerRights:
     from sbomify.apps.core.authz import can
     from sbomify.apps.core.models import Component
 
-    component = Component.objects.filter(pk=component_id).only("id", "team_id", "visibility").first()
+    component = (
+        Component.objects.filter(pk=component_id)
+        .select_related("team")
+        .only("id", "team_id", "visibility", "team__key")
+        .first()
+    )
     if component is None:
         return ViewerRights(may_see=False, may_triage=False)
     return ViewerRights(
         may_see=bool(can(request, "component:read_internal", component)),
         may_triage=bool(can(request, "artifact:publish_vex", component)),
+        team_key=component.team.key or "",
     )
