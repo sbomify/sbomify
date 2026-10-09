@@ -54,14 +54,22 @@ _REGISTRY: dict[str, ToolSpec] = {}
 #
 # Two sets, not one, because each catches what the other misses.
 #
-# The verb test is the one that survives a new action: anything named
-# *:delete or *:administer is refused the day it is added, with nobody
+# The verb test is the one that survives a new action: any verb containing
+# delete or administer (sbom:delete, sbom:bulk_delete, workspace:force_delete,
+# component:administer) is refused the day it is added, with nobody
 # remembering to list it. What it cannot see is the rest of what authz carves
 # up to ADMINISTER for being outward-facing rather than destructive, so the
 # named set carries those. The named set in turn would quietly drop an action
 # that was renamed (product:delete -> product:remove), which the verb test
 # still catches.
 _FORBIDDEN_VERBS = ("delete", "administer")
+
+
+def _forbidden_by_verb(action: str) -> bool:
+    """Whether ``action``'s verb contains a forbidden verb, in any form."""
+    verb = action.split(":", 1)[1]
+    return any(forbidden in verb for forbidden in _FORBIDDEN_VERBS)
+
 
 #: Outward-facing or standing-grant actions, which are not destructive by verb
 #: but are the ones a prompt-injected agent would do the most damage with.
@@ -71,14 +79,19 @@ _FORBIDDEN_NAMED = frozenset(
         "component:set_visibility",
         "component:manage_publishers",
         "member:manage",
+        # Inviting someone as owner: the most damaging standing grant there is.
+        "member:grant_owner",
         "billing:manage",
         "advisory:publish",
+        # Approving an access request makes the requester a guest of the
+        # workspace, the same outward-facing act as publishing to the trust center.
+        "access_request:decide",
     }
 )
 
-FORBIDDEN_ACTIONS: frozenset[str] = frozenset(
-    action for action in ALL_ACTIONS if action.split(":", 1)[1] in _FORBIDDEN_VERBS
-) | (_FORBIDDEN_NAMED & set(ALL_ACTIONS))
+FORBIDDEN_ACTIONS: frozenset[str] = frozenset(action for action in ALL_ACTIONS if _forbidden_by_verb(action)) | (
+    _FORBIDDEN_NAMED & set(ALL_ACTIONS)
+)
 
 
 def register(name: str, action: str, *, also_requires: tuple[str, ...] = (), writes: bool = False) -> ToolSpec:

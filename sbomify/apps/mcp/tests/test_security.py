@@ -56,6 +56,28 @@ def test_registering_a_destructive_tool_is_rejected():
         registry.register("delete_everything", "sbom:delete")
 
 
+def test_owner_grants_and_access_decisions_are_never_exposable():
+    """Inviting an owner is the most damaging standing grant in the system, and
+    deciding an access request makes an outsider a guest of the workspace.
+    Reading the request queue stays exposable: reads are already on the surface."""
+    assert {"member:grant_owner", "access_request:decide"} <= registry.FORBIDDEN_ACTIONS
+    assert "access_request:read" not in registry.FORBIDDEN_ACTIONS
+
+
+@pytest.mark.parametrize(
+    "action", ["sbom:delete", "sbom:bulk_delete", "workspace:force_delete", "component:administer"]
+)
+def test_the_verb_test_refuses_any_form_of_delete_or_administer(action):
+    """A new sbom:bulk_delete has to be refused the day it is added, without
+    anybody listing it, which an exact match on the verb did not do."""
+    assert registry._forbidden_by_verb(action)
+
+
+def test_the_verb_test_leaves_reads_alone():
+    assert not registry._forbidden_by_verb("sbom:read")
+    assert not registry._forbidden_by_verb("access_request:read")
+
+
 def test_forbidden_actions_are_real_actions():
     """Guards against the deny-list silently emptying if authz renames verbs."""
     assert registry.FORBIDDEN_ACTIONS <= ALL_ACTIONS
