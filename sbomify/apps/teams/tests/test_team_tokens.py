@@ -23,10 +23,16 @@ from sbomify.apps.teams.models import Member, Team
 class TestTeamTokensView:
     """Test cases for TeamTokensView."""
 
-    def test_get_requires_authentication(self, client: Client):
-        """Test that GET requires authentication."""
+    def test_an_htmx_read_requires_authentication(self, client: Client):
+        """Signed out, the panel's own htmx read is sent to sign in."""
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": "test"}), HTTP_HX_REQUEST="true")
         assert response.status_code == 302
+        assert response["Location"].startswith("/login")
+
+    def test_a_direct_visit_is_a_404_even_signed_out(self, client: Client):
+        """The URL is a fragment, not a page: a plain GET gets 404 whoever asks, before the login gate."""
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": "test"}))
+        assert response.status_code == 404
 
     def test_get_requires_team_membership(self, client: Client, sample_user: AbstractBaseUser):
         """Test that GET requires team membership."""

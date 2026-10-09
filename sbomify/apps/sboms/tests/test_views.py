@@ -549,6 +549,11 @@ class TestSbomsTableViewAnonymousAccess:
         response = client.get(url, HTTP_HX_REQUEST="true")
 
         assert response.status_code == 302
+        # A plain visit meets the same login redirect: the view's own dispatch
+        # gates the private route before the fragment guard runs.
+        plain = client.get(url)
+        assert plain.status_code == 302
+        assert plain["Location"].startswith("/login")
 
     def test_public_table_stays_open_to_anonymous(self, client, sample_component):  # noqa: F811
         """The guard must not gate the route that is meant to be anonymous."""

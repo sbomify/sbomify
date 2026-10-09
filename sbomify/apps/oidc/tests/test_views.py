@@ -97,6 +97,11 @@ class TestListView:
         # LoginRequiredMixin sends to login URL — status 302
         assert response.status_code in (302, 401, 403)
 
+    def test_a_direct_visit_with_no_session_is_a_404(self, component: Component) -> None:
+        """The URL is a fragment, not a page: a plain GET gets 404 whoever asks, before the login gate."""
+        response = Client().get(reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}))
+        assert response.status_code == 404
+
     @pytest.mark.django_db
     def test_workflow_snippet_normalises_schemeless_app_base_url(
         self, authed_client: Client, component: Component, settings
@@ -336,3 +341,5 @@ class TestPermissions:
         )
         # GuestAccessBlockedMixin redirects guests
         assert response.status_code in (302, 403)
+        # A plain visit is a 404 for a guest too: the URL is a fragment, not a page.
+        assert client.get(reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})).status_code == 404
