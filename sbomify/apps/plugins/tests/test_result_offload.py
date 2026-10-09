@@ -16,6 +16,7 @@ here:
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from datetime import timedelta
 from typing import Any
 
@@ -58,6 +59,10 @@ class FakeBucket:
 
     def list_cached_aggregates(self, prefix: str) -> list[str]:
         return [key for key in self.objects if key.startswith(prefix)]
+
+    def iter_cached_aggregates(self, prefix: str) -> Iterator[str]:
+        # A snapshot, sorted as S3 lists, so deleting while walking is safe here as there.
+        yield from sorted(key for key in self.objects if key.startswith(prefix))
 
     def delete_object(self, bucket: str, key: str) -> None:
         self.objects.pop(key, None)
@@ -558,6 +563,27 @@ class TestRetentionReclaimsTheStoredPayload:
 
         assert not [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{pruned.id}/")]
         assert [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{kept.id}/")]
+
+    def test_the_orphan_sweep_checks_runs_a_batch_at_a_time(self, sbom, bucket, django_assert_num_queries):
+        """The listing is read as a stream and checked against the table a
+        bounded batch of run ids at a time, so neither the keys nor the ids are
+        ever all held at once."""
+        import uuid
+
+        from sbomify.apps.plugins.result_store import delete_orphaned_result_objects
+
+        live = _run(sbom, days_ago=1)
+        bucket.objects[f"{RESULT_PREFIX}{live.id}/a.json"] = b"{}"
+        gone = [uuid.uuid4() for _ in range(3)]
+        for run_id in gone:
+            bucket.objects[f"{RESULT_PREFIX}{run_id}/a.json"] = b"{}"
+            bucket.objects[f"{RESULT_PREFIX}{run_id}/b.json"] = b"{}"
+        bucket.list_cached_aggregates = None  # type: ignore[assignment,method-assign]
+
+        with django_assert_num_queries(2):
+            assert delete_orphaned_result_objects(batch_size=2) == 6
+
+        assert list(bucket.objects) == [f"{RESULT_PREFIX}{live.id}/a.json"]
 
     def test_the_daily_task_collects_orphans_before_it_prunes(self, mocker):
         """First, so the retry of a run that failed mid-delete collects what

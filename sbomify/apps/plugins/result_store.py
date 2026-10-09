@@ -213,30 +213,36 @@ def delete_orphaned_result_objects(batch_size: int = 1000) -> int:
     and a retry cannot find the row to try again. The key starts with the run
     id, so an id with no row marks an orphan. Every object is written for a row
     that already exists, so a live run's objects are never taken for one.
-    """
-    from sbomify.apps.plugins.models import AssessmentRun
 
+    The listing is streamed and checked against the table ``batch_size`` run
+    ids at a time, so neither the keys nor the ids are ever all held at once.
+    """
     client = _client()
     bucket = _bucket()
-    keys_by_run: dict[uuid.UUID, list[str]] = {}
-    for key in client.list_cached_aggregates(RESULT_PREFIX):
+    deleted = 0
+    pending: dict[uuid.UUID, list[str]] = {}
+    for key in client.iter_cached_aggregates(RESULT_PREFIX):
         try:
             run_id = uuid.UUID(key[len(RESULT_PREFIX) :].split("/", 1)[0])
         except ValueError:
             continue
-        keys_by_run.setdefault(run_id, []).append(key)
-
-    run_ids = list(keys_by_run)
-    deleted = 0
-    for start in range(0, len(run_ids), batch_size):
-        batch = run_ids[start : start + batch_size]
-        live = set(AssessmentRun.objects.filter(id__in=batch).values_list("id", flat=True))
-        for run_id in batch:
-            if run_id in live:
-                continue
-            for key in keys_by_run[run_id]:
-                client.delete_object(bucket, key)
-                deleted += 1
+        if run_id not in pending and len(pending) >= batch_size:
+            deleted += _delete_orphans(client, bucket, pending)
+            pending = {}
+        pending.setdefault(run_id, []).append(key)
+    deleted += _delete_orphans(client, bucket, pending)
     if deleted:
         logger.info(f"[RESULT_STORE] deleted {deleted} orphaned result objects")
     return deleted
+
+
+def _delete_orphans(client: Any, bucket: str, keys_by_run: dict[uuid.UUID, list[str]]) -> int:
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    if not keys_by_run:
+        return 0
+    live = set(AssessmentRun.objects.filter(id__in=list(keys_by_run)).values_list("id", flat=True))
+    orphaned = [key for run_id, keys in keys_by_run.items() if run_id not in live for key in keys]
+    for key in orphaned:
+        client.delete_object(bucket, key)
+    return len(orphaned)
