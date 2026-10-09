@@ -9,7 +9,7 @@ ones that are plan-gated in production) is clickable here.
 import pytest
 from playwright.sync_api import Page
 
-from conftest import enable_and_save_plugin, start_on_dashboard
+from conftest import enable_and_save_plugin, narrate, settle, start_on_dashboard
 
 PLUGIN_SLUGS = [
     "osv",
@@ -28,5 +28,15 @@ PLUGIN_SLUGS = [
 @pytest.mark.parametrize("plugin_slug", PLUGIN_SLUGS, ids=PLUGIN_SLUGS)
 def plugin_enablement(recording_page: Page, plugin_slug: str) -> None:
     page = recording_page
-    start_on_dashboard(page)
+
+    # Narration copy is per plugin: each clip reads
+    # narration/plugin_enablement_<slug>.yaml, which defines the same three
+    # beat keys with text specific to that plugin.
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
+
+    narrate(page, "what_it_does")
     enable_and_save_plugin(page, plugin_slug)
+
+    narrate(page, "outro")
+    settle(page)

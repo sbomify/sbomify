@@ -11,9 +11,11 @@ from playwright.sync_api import Page
 from conftest import (
     enable_and_configure_trust_center,
     hover_and_click,
+    narrate,
     navigate_to_trust_center_tab,
     pace,
     rewrite_localhost_urls,
+    settle,
     start_on_dashboard,
 )
 from sbomify.apps.teams.models import Team
@@ -27,12 +29,15 @@ from sbomify.apps.teams.models import Team
 def tea_enabling(recording_page: Page, deletable_team: Team) -> None:
     page = recording_page
 
-    start_on_dashboard(page)
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
 
     # ── 1. Navigate to Settings → Trust Center tab ────────────────────────
+    narrate(page, "why")
     navigate_to_trust_center_tab(page)
 
     # ── 2. Enable trust center + configure domain ─────────────────────────
+    narrate(page, "prerequisites")
     enable_and_configure_trust_center(page)
 
     # ── 3. Mock domain validation ─────────────────────────────────────────
@@ -42,12 +47,14 @@ def tea_enabling(recording_page: Page, deletable_team: Team) -> None:
     Team.objects.filter(key=deletable_team.key).update(custom_domain_validated=True)
 
     # Reload the trust center tab to pick up the validated domain
+    narrate(page, "domain_validated")
     page.reload()
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
     pace(page, 1500)
 
     # ── 4. Enable TEA ─────────────────────────────────────────────────────
+    narrate(page, "enable_tea")
     tea_toggle = page.locator("#tea-toggle")
     tea_toggle.wait_for(state="visible", timeout=10_000)
     pace(page, 400)
@@ -60,6 +67,8 @@ def tea_enabling(recording_page: Page, deletable_team: Team) -> None:
 
     # ── 5. Verify TEA discovery URL is shown ──────────────────────────────
     # After reload the TEA section should show the discovery URL
+    narrate(page, "discovery")
     tea_url = page.locator("text=.well-known/tea")
     tea_url.wait_for(state="visible", timeout=10_000)
-    pace(page, 2000)
+    narrate(page, "outro")
+    settle(page)

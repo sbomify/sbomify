@@ -1,0 +1,58 @@
+# Narration for screencasts/vex_upload.py
+#
+# Thesis: a scanner reports what is present, not what is exploitable. VEX is
+# how you state, in machine-readable form, that a finding does not apply — and
+# sbomify shows you the effect before storing anything.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      A scanner tells you a vulnerable package is present. It cannot tell you
+      whether the vulnerable code is ever actually reached.
+
+  why_vex:
+    text: >-
+      Most of the time it isn't, and answering that question by email, once per
+      customer, does not scale. VEX is the machine-readable version of that
+      answer.
+
+  component:
+    text: >-
+      It attaches to the component the finding was raised against.
+
+  upload_menu:
+    text: >-
+      A VEX document uploads like any other artifact, from the same menu you'd
+      use for an SBOM.
+
+  pick_type:
+    text: >-
+      But tell sbomify it's a VEX rather than an SBOM, because the two are
+      treated very differently from here. An SBOM is stored; a VEX changes how
+      existing findings are counted.
+
+  preview:
+    text: >-
+      Now the useful part. [pause] Before anything is stored, sbomify dry runs
+      the document and shows exactly what it would change.
+
+  preview_detail:
+    text: >-
+      This one marks a high severity finding as not affected, because the
+      vulnerable code path is never reachable. You can see the counts move
+      before you commit to it.
+
+  apply:
+    text: >-
+      Apply it, and only now is anything written.
+
+  outro:
+    text: >-
+      The VEX sits beside the SBOM as its own artifact, and the original SBOM
+      is untouched. [pause] sbomify never edits what you uploaded, so the
+      assessment lives next to the evidence rather than inside it. An auditor
+      sees both the claim and the reasoning behind it, and your customer's
+      tooling can consume the VEX directly instead of asking you to explain
+      the finding by email.
