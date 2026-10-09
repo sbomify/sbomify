@@ -15,7 +15,7 @@ from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE,
 GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "settings-controls", "label": "Settings controls", "group": "Layout"},
     {"id": "app-overview", "label": "App chrome and overview", "group": "Layout"},
-    {"id": "colors", "label": "Colour tokens", "group": "Foundations"},
+    {"id": "colors", "label": "Color tokens", "group": "Foundations"},
     {"id": "typography", "label": "Typography", "group": "Foundations"},
     {"id": "icon-chips", "label": "Icon chips", "group": "Foundations"},
     {"id": "metric-chips", "label": "Metric chips", "group": "Foundations"},
@@ -313,7 +313,7 @@ class DesignSystemView(LoginRequiredMixin, View):
             "demo_accordion": [
                 {
                     "id": "org",
-                    "label": "Organisational controls",
+                    "label": "Organizational controls",
                     "body": "Policies, roles and supplier relationships.",
                 },
                 {
