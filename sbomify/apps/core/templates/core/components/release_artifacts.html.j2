@@ -47,6 +47,7 @@
         <c-forms.select size="md" id="artifact-type-filter" label="Filter by type" x-model="typeFilter" @change="handleTypeFilter()">
         <option value="">All Types</option>
         <option value="sbom">SBOMs Only</option>
+        <option value="cbom">CBOMs Only</option>
         <option value="vex">VEX Only</option>
         <option value="document">Documents Only</option>
         </c-forms.select>
@@ -160,6 +161,7 @@
                     <c-forms.select id="modal-artifact-type-filter" x-model="availableTypeFilter">
                     <option value="">All Types</option>
                     <option value="sbom">SBOMs Only</option>
+                    <option value="cbom">CBOMs Only</option>
                     <option value="vex">VEX Only</option>
                     <option value="document">Documents Only</option>
                     </c-forms.select>

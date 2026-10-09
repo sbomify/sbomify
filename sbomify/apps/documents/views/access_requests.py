@@ -40,6 +40,7 @@ from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.queries import invitation_email
 from sbomify.apps.teams.utils import (
+    find_invitation_by_token,
     switch_active_workspace,
     update_user_teams_session,
     user_seat,
@@ -530,7 +531,7 @@ class NDASigningView(View):
             pending_invitation_token = request.session.pop("pending_invitation_token", None)
             if pending_invitation_token:
                 current_user = cast(User, request.user)
-                invitation = Invitation.objects.filter(token=pending_invitation_token, team=team).first()
+                invitation = find_invitation_by_token(pending_invitation_token, team=team)
                 if invitation and invitation_email(current_user).lower() == invitation.email.lower():
                     # Get inviter from cache if available
                     cache_key = f"invitation_inviter:{invitation.token}"

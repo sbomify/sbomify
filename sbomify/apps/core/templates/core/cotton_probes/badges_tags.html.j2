@@ -48,3 +48,12 @@ and assert on the output; it is not routed anywhere.
 {# The badge that is a control: a real button wearing the secondary tint. #}
 <c-badges.action data-probe="badge-action" ::disabled="busy" @click="rerun()"><i class="fas fa-rotate-right mr-1"></i>Re-run</c-badges.action>
 <c-badges.action size="sm" data-probe="badge-action-sm">Re-run</c-badges.action>
+{# The workspace role badge: owner and admin take an accent, every other role stays neutral. #}
+<c-badges.role role="owner">Owner role</c-badges.role>
+<c-badges.role role="admin">Admin role</c-badges.role>
+<c-badges.role role="member">Member role</c-badges.role>
+<c-badges.role role="guest">Guest role</c-badges.role>
+<c-badges.role role="not-a-role">Off ladder role</c-badges.role>
+<c-badges.role role="owner" size="sm" pill>Rounded owner role</c-badges.role>
+{# The runtime twin: the members table binds the stored role onto the same recipes. #}
+<c-badges.role role="member" class="shrink-0" ::data-role="m.role" x-text="m.role">Runtime role</c-badges.role>

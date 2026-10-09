@@ -1,0 +1,20 @@
+{% comment %}
+The workspace role badge: one tone per role, so privilege reads at a glance.
+
+The members table is the page where someone asks "who can do what here". While
+every role rendered in the same neutral badge, an owner and a guest looked
+identical and that question could only be answered by reading each row. Owner
+takes the primary accent, admin the warning accent, and every other role the
+neutral one, which is the pairing the page used before the prototype migration
+flattened it.
+
+Pass role for a server value, or bind data-role for an Alpine row; both select
+the same recipes on the shared badge shell, the way c-badges.severity does. A
+role the ladder does not know renders neutral rather than unstyled.
+
+The label is the slot, not the key: the members table title-cases the stored
+value and the role legend passes the name from authz.ROLE_DESCRIPTIONS, and
+those two must be able to differ without a second component.
+{% endcomment %}
+<c-vars role="member" size pill class />
+<c-badges.badge data-role="{{ role }}" variant_class="text-text-muted bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] data-[role=owner]:text-primary data-[role=owner]:bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)] data-[role=owner]:border-[color-mix(in_oklab,var(--color-primary)_20%,transparent)] data-[role=admin]:text-warning data-[role=admin]:bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)] data-[role=admin]:border-[color-mix(in_oklab,var(--color-warning)_20%,transparent)]" size="{{ size }}" :pill="pill" class="{{ class }}" :attrs="attrs">{{ slot }}</c-badges.badge>
