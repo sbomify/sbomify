@@ -119,7 +119,9 @@ def test_severity_level_prop_picks_the_band_accent(rendered: str, label: str, to
 def test_severity_shape_segment_replaces_the_badge_shape(rendered: str) -> None:
     critical = _badge(rendered, "Critical")
     assert "px-2 py-1 text-xs leading-[1.5] uppercase tracking-[0.04em]" in critical
-    assert "rounded" in critical
+    # Not bare `rounded`: the legacy sheet's .rounded carries !important at a
+    # different radius, so the severity corner states the token it wants.
+    assert "rounded-[var(--radius-sm)]" in critical
     assert "rounded-full" not in critical
     assert "px-3" not in critical
     assert "tracking-[0.01em]" not in critical

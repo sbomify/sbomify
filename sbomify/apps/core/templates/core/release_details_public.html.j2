@@ -54,7 +54,7 @@
     {% if release.has_sboms or release.has_vex or release.has_cbom %}
         <div class="tc-panel">
             <h2 class="tc-panel-title">Download this release</h2>
-            <p class="tc-prose mb-4">Combined artifacts covering everything in this release.</p>
+            <p class="tc-prose mb-[1rem]">Combined artifacts covering everything in this release.</p>
             {% comment %}
             secondary, not a primary or accent-tinted button: on a public page
             the accent is the workspace's own colour, and a neutral button is
@@ -141,7 +141,7 @@
                                     {# state_label, never state: the raw one is the document's enum. #}
                                     <c-badges.secondary x-show="f.suppressed" x-text="f.state_label" />
                                 </div>
-                                <p class="text-xs text-text-muted m-0 mt-0.5"
+                                <p class="text-xs text-text-muted mb-0 mt-0.5"
                                    x-show="f.suppressed &amp;&amp; f.justification"
                                    x-text="'VEX: ' + (f.justification_label || f.justification)"></p>
                             </div>
