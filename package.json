@@ -50,7 +50,7 @@
     "signature_pad": "^5.1.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.2",
-    "vite": "^8.3.2",
+    "vite": "^8.3.3",
     "vite-plugin-pwa": "^2.0.0"
   },
   "overrides": {
