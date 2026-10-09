@@ -6,7 +6,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response, refuse_direct_read
 from sbomify.apps.sboms.services.sboms_table import build_sboms_table_context, delete_sbom_from_request
 
 
@@ -18,7 +18,9 @@ class SbomsTableView(HtmxFragmentMixin, View):
         component-level check even for an anonymous caller, so without this the
         private route reached the workspace lookup holding AnonymousUser and
         raised. A blanket login requirement would wrongly close the public route.
+        A direct visit is a 404 before that gate, whoever asks.
         """
+        refuse_direct_read(request)
         if not kwargs.get("is_public_view", False) and not request.user.is_authenticated:
             from django.contrib.auth.views import redirect_to_login
             from django.urls import reverse

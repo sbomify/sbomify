@@ -9,12 +9,22 @@ from django.views import View
 from sbomify.apps.core.domain.exceptions import DomainError
 
 
+def refuse_direct_read(request: HttpRequest) -> None:
+    """A fragment is not a page: a GET or HEAD that htmx did not send is a 404, whoever asks."""
+    if request.method in ("GET", "HEAD") and request.headers.get("HX-Request") != "true":
+        raise Http404
+
+
 class HtmxFragmentMixin(View):
-    """A fragment is not a page: a GET that htmx did not send is a 404, not bare markup."""
+    """A fragment is not a page: a GET that htmx did not send is a 404, not bare markup.
+
+    First in a view's bases, so the 404 comes before any login or role check.
+    A view that gates access in its own ``dispatch`` calls ``refuse_direct_read``
+    before that gate, for the same order.
+    """
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        if request.method in ("GET", "HEAD") and request.headers.get("HX-Request") != "true":
-            raise Http404
+        refuse_direct_read(request)
         return cast(HttpResponse, super().dispatch(request, *args, **kwargs))
 
 

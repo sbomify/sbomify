@@ -46,7 +46,7 @@ def no_queue(monkeypatch):
 
 class TestPanel:
     def test_an_admin_sees_the_provider(self, admin_client_for_team, sample_team_with_owner_member) -> None:  # noqa: F811
-        response = admin_client_for_team.get(_panel_url(sample_team_with_owner_member.team))
+        response = admin_client_for_team.get(_panel_url(sample_team_with_owner_member.team), HTTP_HX_REQUEST="true")
 
         assert response.status_code == 200
         assert b"Vanta" in response.content
@@ -58,19 +58,24 @@ class TestPanel:
         client = Client()
         setup_authenticated_client_session(client, team, guest_user)
 
-        response = client.get(_panel_url(team))
+        response = client.get(_panel_url(team), HTTP_HX_REQUEST="true")
 
         assert response.status_code == 403
 
     def test_it_needs_a_sign_in(self, sample_team_with_owner_member) -> None:  # noqa: F811
-        response = Client().get(_panel_url(sample_team_with_owner_member.team))
+        response = Client().get(_panel_url(sample_team_with_owner_member.team), HTTP_HX_REQUEST="true")
         assert response.status_code == 302
+        assert response["Location"].startswith("/login")
+
+    def test_a_direct_visit_is_a_404_even_signed_out(self, sample_team_with_owner_member) -> None:  # noqa: F811
+        """The panel is a fragment, not a page: a plain GET gets 404 whoever asks, before the login gate."""
+        assert Client().get(_panel_url(sample_team_with_owner_member.team)).status_code == 404
 
     @pytest.mark.usefixtures("vanta_credentials")
     def test_an_unconnected_provider_offers_to_connect(
         self, admin_client_for_team, sample_team_with_owner_member  # noqa: F811
     ) -> None:
-        response = admin_client_for_team.get(_panel_url(sample_team_with_owner_member.team))
+        response = admin_client_for_team.get(_panel_url(sample_team_with_owner_member.team), HTTP_HX_REQUEST="true")
 
         assert b"Connect Vanta" in response.content
 
@@ -80,7 +85,7 @@ class TestPanel:
         settings.VANTA_CLIENT_ID = ""
         settings.VANTA_CLIENT_SECRET = ""
 
-        response = admin_client_for_team.get(_panel_url(sample_team_with_owner_member.team))
+        response = admin_client_for_team.get(_panel_url(sample_team_with_owner_member.team), HTTP_HX_REQUEST="true")
 
         assert b"Not available here" in response.content
         assert b"Connect Vanta" not in response.content
@@ -96,7 +101,7 @@ class TestPanel:
             is_published=True,
         )
 
-        response = admin_client_for_team.get(_panel_url(connected_vanta.team))
+        response = admin_client_for_team.get(_panel_url(connected_vanta.team), HTTP_HX_REQUEST="true")
 
         assert b"SOC 2 Type II" in response.content
         assert b"Sync now" in response.content
@@ -116,7 +121,7 @@ class TestPanel:
             is_published=True,
         )
 
-        response = admin_client_for_team.get(_panel_url(connected_vanta.team))
+        response = admin_client_for_team.get(_panel_url(connected_vanta.team), HTTP_HX_REQUEST="true")
 
         assert b"SOC 2 Type II" in response.content
         assert b"Disconnect" in response.content
@@ -129,13 +134,13 @@ class TestPanel:
         connected_vanta.status = Integration.Status.REVOKED
         connected_vanta.save()
 
-        response = admin_client_for_team.get(_panel_url(connected_vanta.team))
+        response = admin_client_for_team.get(_panel_url(connected_vanta.team), HTTP_HX_REQUEST="true")
 
         assert b"Reconnect" in response.content
         assert b"Sync now" not in response.content
 
     def test_no_credential_ever_reaches_the_page(self, admin_client_for_team, connected_vanta) -> None:
-        response = admin_client_for_team.get(_panel_url(connected_vanta.team))
+        response = admin_client_for_team.get(_panel_url(connected_vanta.team), HTTP_HX_REQUEST="true")
 
         assert b"vat_live" not in response.content
         assert b"vrt_live" not in response.content
@@ -190,7 +195,7 @@ class TestPanelActions:
         self, admin_client_for_team, connected_vanta
     ) -> None:
         """The card already says syncing has stopped; a button would contradict it."""
-        response = admin_client_for_team.get(_panel_url(connected_vanta.team))
+        response = admin_client_for_team.get(_panel_url(connected_vanta.team), HTTP_HX_REQUEST="true")
 
         assert b"credentials are missing" in response.content
         assert b"Sync now" not in response.content

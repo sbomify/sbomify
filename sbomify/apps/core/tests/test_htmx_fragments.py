@@ -39,8 +39,11 @@ def test_writes_pass_through(method: str) -> None:
 @pytest.mark.parametrize(
     "url_name,arg",
     [
+        ("controls:product_controls", "team_product"),
+        ("core:component_triage_modal", "component"),
         ("core:product_links", "product"),
         ("documents:documents_table", "component"),
+        ("integrations:panel", "team"),
         ("oidc:trusted_publishers", "component"),
         ("plugins:plugins_summary", None),
         ("sboms:sboms_table", "component"),
@@ -56,6 +59,7 @@ def test_each_app_guards_its_fragments(url_name, arg, sample_user, sample_produc
         "product": {"product_id": sample_product.id},
         "component": {"component_id": sample_component.id},
         "team": {"team_key": team.key},
+        "team_product": {"team_key": team.key, "product_id": sample_product.id},
     }[arg]
     url = reverse(url_name, kwargs=kwargs)
 
@@ -67,9 +71,14 @@ def test_each_app_guards_its_fragments(url_name, arg, sample_user, sample_produc
 @pytest.mark.parametrize(
     "url_name,arg",
     [
+        ("controls:product_controls", "team_product"),
+        ("core:component_triage_modal", "component"),
         ("core:product_links", "product"),
+        ("documents:documents_table", "component"),
+        ("integrations:panel", "team"),
         ("oidc:trusted_publishers", "component"),
         ("plugins:plugins_summary", None),
+        ("sboms:sboms_table", "component"),
         ("teams:team_tokens", "team"),
     ],
 )
@@ -81,6 +90,7 @@ def test_an_htmx_read_without_a_session_still_meets_the_login_gate(url_name, arg
         "product": {"product_id": sample_product.id},
         "component": {"component_id": sample_component.id},
         "team": {"team_key": sample_component.team.key},
+        "team_product": {"team_key": sample_component.team.key, "product_id": sample_product.id},
     }[arg]
 
     response = Client().get(reverse(url_name, kwargs=kwargs), HTTP_HX_REQUEST="true")

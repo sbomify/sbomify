@@ -321,16 +321,13 @@ class TestDocumentsTableView:
         assert response.status_code == 302
         assert response["Location"].startswith("/login")
 
-    def test_documents_table_direct_visit_signed_out_is_sent_to_sign_in(self, client, sample_document_component):
-        """The view gates access in its own dispatch, before the fragment guard
-        runs, so a signed-out plain visit still meets the login redirect."""
+    def test_documents_table_direct_visit_is_a_404_even_signed_out(self, client, sample_document_component):
+        """The URL is a fragment, not a page: a plain GET gets 404 whoever asks, before the login gate."""
         url = reverse(
             "documents:documents_table",
             kwargs={"component_id": sample_document_component.id},
         )
-        response = client.get(url)
-        assert response.status_code == 302
-        assert response["Location"].startswith("/login")
+        assert client.get(url).status_code == 404
 
     def test_documents_table_private_view_accessible_auth(
         self, authenticated_web_client, sample_document_component, sample_user
@@ -357,9 +354,8 @@ class TestDocumentsTableView:
         )
         response = authenticated_web_client.get(url, HTTP_HX_REQUEST="true")
         assert response.status_code == 302  # Redirect to workspace public
-        # A plain visit meets the same redirect: the view's own dispatch gates
-        # access before the fragment guard runs.
-        assert authenticated_web_client.get(url).status_code == 302
+        # A plain visit is a 404 for a guest too: the URL is a fragment, not a page.
+        assert authenticated_web_client.get(url).status_code == 404
 
     def test_documents_table_post_requires_auth(self, client, public_document_component):
         """Test that POST actions require authentication even on public view."""
