@@ -365,3 +365,26 @@ def test_the_advisory_body_reaches_the_page_as_prose(sample_sbom: SBOM):  # noqa
     assert "### Impact" not in html
     assert "`fast-uri`" not in html
     assert "Impact fast-uri decodes percent-encoded characters" in html
+
+
+@pytest.mark.django_db
+def test_a_scanner_the_registry_no_longer_holds_counts_on_neither_the_report_nor_the_panel(sample_sbom: SBOM):  # noqa: F811
+    """The card and the panel read the newest run of each registered plugin, so
+    the report reads the same runs. A scanner taken out of the registry stops
+    adding rows to all of them at once, rather than to the report alone."""
+    from sbomify.apps.core.services.component_security import build_component_vulnerabilities
+    from sbomify.apps.core.tests.shared_fixtures import register_plugin
+    from sbomify.apps.vulnerability_scanning.services.finding_browse import parse_finding_query
+
+    register_plugin("osv")
+    _run(sample_sbom, "osv", [_finding("CVE-1", "kept")])
+    _run(sample_sbom, "retired-scanner", [_finding("CVE-2", "dropped")])
+    client = Client()
+    team = sample_sbom.component.team
+    setup_test_session(client, team, team.members.first())
+
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
+    panel = build_component_vulnerabilities(str(sample_sbom.component_id), parse_finding_query({}))
+
+    assert [row["package"] for row in _rows(response)] == ["kept"]
+    assert panel.summary is not None and panel.summary["total"] == 1
