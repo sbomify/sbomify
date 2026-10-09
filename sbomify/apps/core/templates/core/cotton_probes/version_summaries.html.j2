@@ -1,0 +1,13 @@
+{% for name, summary in vulnerabilities %}
+    <div data-probe="vuln-{{ name }}">
+        <c-vulnerabilities.open :summary="summary" />
+    </div>
+{% endfor %}
+<div data-probe="vuln-bound">
+    <c-vulnerabilities.open bind="item.vuln" />
+</div>
+{% for name, summary in compliance %}
+    <div data-probe="compliance-{{ name }}">
+        <c-assessments.compliance :summary="summary" href="/component/x/sboms/y/" />
+    </div>
+{% endfor %}

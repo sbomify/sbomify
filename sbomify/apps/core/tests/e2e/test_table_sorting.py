@@ -115,23 +115,26 @@ def test_inventory_sorting_preserves_columns_and_position(
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("width", [1280, 375])
-def test_artifact_columns_contain_long_values_and_keep_badges_readable(
+def test_artifact_columns_contain_long_values_and_keep_the_vulnerability_line_readable(
     authenticated_page: Page, sbom_component_details: Component, width: int
 ) -> None:
     page = authenticated_page
     version = "1.0.0-" + "long-build-identifier" * 5
     SBOM.objects.filter(component=sbom_component_details).update(version=version)
     page.set_viewport_size({"width": width, "height": 900})
-    page.goto(f"/component/{sbom_component_details.id}/")
+    page.goto(f"/component/{sbom_component_details.id}/artifacts/")
     table = page.get_by_role("table", name="Artifacts", exact=True)
     expect(table.locator("tbody tr")).to_have_count(1)
     original = geometry(table)
     for column in ("name", "created_at"):
         sort_with_keyboard(table, column, original)
-    badges = table.locator("tbody [data-level]")
-    expect(badges).to_have_count(4)
-    rows = badges.evaluate_all("elements => new Set(elements.map(el => el.getBoundingClientRect().top)).size")
-    assert rows <= 2, "Severity badges should not stack into a tall single column"
+    headline = table.locator("tbody").get_by_text("1 critical", exact=True)
+    expect(headline).to_be_visible()
+    # Its items are flex boxes, so measure the line's height rather than text rects.
+    single_line = headline.locator("xpath=..").evaluate(
+        "el => el.getBoundingClientRect().height < parseFloat(getComputedStyle(el).lineHeight) * 1.5"
+    )
+    assert single_line, "The worst-first vulnerability line should read as one line beside a long version"
     if width >= 768:
         cell = table.locator("tbody tr").first.locator("td").nth(2)
         expect(cell.locator("span")).to_have_attribute("title", version)
