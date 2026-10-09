@@ -1,0 +1,6 @@
+<div id="integrations-wrapper"
+     hx-get="{% url 'integrations:panel' team.key %}"
+     hx-trigger="load, refreshIntegrations from:body"
+     hx-swap="innerHTML">
+    <c-feedback.loading-list message="Loading integrations..." rows="1" />
+</div>

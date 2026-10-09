@@ -42,6 +42,11 @@ class TeamPluginSettingsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
         new_plugins = plugins_added_since_last_save(team_key).value or set()
         for plugin in plugins:
             plugin["is_enabled"] = plugin["name"] in enabled_plugins and plugin.get("has_access", False)
+            # Enabled while the plan still included it, and kept across the downgrade.
+            # Its checkbox is disabled and unchecked, so without saying so the row reads
+            # as "off" when the stored setting is really "on, not running" — and the row
+            # would look unchanged by an upgrade that in fact restarts the plugin.
+            plugin["is_paused_by_plan"] = plugin["name"] in enabled_plugins and not plugin.get("has_access", False)
             plugin["is_new"] = (
                 plugin["name"] in new_plugins and plugin.get("has_access", False) and not plugin["is_enabled"]
             )

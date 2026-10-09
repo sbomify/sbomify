@@ -1,8 +1,11 @@
 """API endpoints for the plugins framework."""
 
 from collections.abc import Callable
+from itertools import chain
 from typing import Any
+from uuid import UUID
 
+from django.db.models import Func, JSONField
 from django.http import HttpRequest
 from ninja import Router
 from ninja.decorators import decorate_view
@@ -27,12 +30,26 @@ from .schemas import (
     SBOMAssessmentsResponse,
 )
 from .sdk.enums import RunReason, RunStatus
-from .services.access import plugin_plan_requirement, team_has_plugin_access
+from .services.access import plugin_plan_requirement, plugins_outside_plan, team_has_plugin_access
 from .tasks import run_assessment_task
 
 logger = getLogger(__name__)
 
 router = Router(tags=["plugins"])
+
+# How many historical runs ``get_sbom_assessments`` returns when the caller does
+# not say. A scheduled scanner writes one run per SBOM per cycle, so an SBOM's
+# history is a function of how long it has existed rather than of anything the
+# caller asked for: at an hourly cadence the unbounded response grew by 24 runs
+# a day, each carrying its own findings array, on an endpoint reachable without
+# authentication for a public component.
+#
+# Generous rather than tight, because this is a default on a published contract:
+# enough that a history panel has something to page through, small enough that
+# the response size stops tracking the artifact's age. It is also the ceiling:
+# ``history_limit`` can lower it but not raise it, and ``all_runs_total`` tells a
+# caller whether there is more.
+DEFAULT_HISTORY_LIMIT = 50
 
 
 def _readable_sbom(request: HttpRequest, sbom_id: str) -> SBOM | None:
@@ -326,6 +343,34 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
     )
 
 
+class _ResultWithoutFindings(Func):
+    """``result`` minus its findings array, cut by Postgres in one pass over the blob.
+
+    Only an object can lose a key: ``jsonb - text`` raises on a scalar, which
+    would fail the whole request over one malformed row. Any other shape comes
+    back NULL, and the serializer degrades that run on its own.
+    """
+
+    template = "CASE WHEN jsonb_typeof(%(expressions)s) = 'object' THEN (%(expressions)s - 'findings'::text) END"
+    output_field = JSONField()
+
+
+def _history_runs(run_ids: list[UUID]) -> list[AssessmentRun]:
+    """The runs for ``run_ids``, in that order, each holding its result without findings."""
+    by_id = {
+        run.id: run
+        for run in AssessmentRun.objects.filter(id__in=run_ids)
+        .defer("result")
+        .annotate(envelope=_ResultWithoutFindings("result"))
+        .prefetch_related("releases")
+    }
+    runs: list[AssessmentRun] = [by_id[run_id] for run_id in run_ids if run_id in by_id]
+    for run in runs:
+        envelope = getattr(run, "envelope", None)
+        run.result = {**envelope, "findings": []} if isinstance(envelope, dict) else None
+    return runs
+
+
 @router.get("/assessments/{sbom_id}", response=SBOMAssessmentsResponse, auth=None)
 @decorate_view(optional_auth)
 def get_sbom_assessments(
@@ -334,13 +379,15 @@ def get_sbom_assessments(
     *,
     findings_limit: int | None = None,
     include_history: bool = True,
+    history_limit: int = DEFAULT_HISTORY_LIMIT,
 ) -> SBOMAssessmentsResponse:
-    """Get all assessment runs for an SBOM.
+    """Get assessment runs for an SBOM: the latest per plugin, plus recent history.
 
-    Returns both the latest run per plugin and the full history.
-
-    Two knobs for callers that render a summary rather than a list, both
-    defaulting to the full response so the HTTP contract is unchanged:
+    Three knobs, because the unbounded version of this response is a denial of
+    service on a public endpoint. ``auth=None``: for a public component, any
+    unauthenticated caller could make the server de-TOAST an SBOM's entire scan
+    history, and a scheduled scanner writes a run per SBOM per cycle, so that
+    history grows without limit for as long as the artifact exists.
 
     ``findings_limit`` bounds the findings carried per run. The artifact page's
     card shows counts from ``result.summary`` and exactly one title, and the
@@ -351,6 +398,19 @@ def get_sbom_assessments(
     validated and serialised twice, once for the latest run per plugin and again
     for the same run inside the history, and the artifact page reads only the
     former.
+
+    ``history_limit`` bounds how many runs ``all_runs`` carries, up to
+    ``DEFAULT_HISTORY_LIMIT`` whatever the caller asks for. This is the one
+    that makes the response size a function of the request rather than of how
+    long the SBOM has existed. ``all_runs_total`` reports the true count so a
+    caller can see that it was truncated.
+
+    Only the latest runs carry their findings. A history row carries the run's
+    status and its result without the findings array, which is what grows with
+    the SBOM, so ``history_limit`` bounds the response's size as well as its
+    length. The newest run per plugin is found on its own, so it shows even when
+    it falls outside the history window: deriving it from the truncated history
+    would hide a plugin whose last run predates the newest ``history_limit`` runs.
     """
     # Only expose results for an SBOM whose component the caller may read (public, or an
     # authorized member/token). Otherwise return the empty "no assessments" shape so neither
@@ -361,39 +421,40 @@ def get_sbom_assessments(
             status_summary=AssessmentStatusSummary(overall_status="no_assessments"),
             latest_runs=[],
             all_runs=[],
+            all_runs_total=0,
         )
 
-    # Runs newest-first, with the ``releases`` M2M prefetched so per-run
-    # serialization doesn't trigger N+1. Without history only each plugin's
-    # newest run is read: an SBOM rescanned hourly has hundreds, each carrying
-    # its whole findings list.
+    # The newest run per plugin comes from latest_run_ids, an index probe per
+    # plugin, so a plugin whose last run predates the history window is still
+    # found. The window is one bounded query over ids, with the same ``-id``
+    # tie-break for runs written in one transaction, which share a timestamp.
+    history_limit = min(max(history_limit, 0), DEFAULT_HISTORY_LIMIT)
     runs = AssessmentRun.objects.filter(sbom_id=sbom_id)
-    if not include_history:
-        runs = AssessmentRun.objects.filter(id__in=latest_run_ids(AssessmentRun.objects.all(), [sbom_id]))
-    all_runs = list(runs.prefetch_related("releases").order_by("-created_at"))
+    latest_ids: list[UUID] = latest_run_ids(AssessmentRun.objects.all(), [sbom_id])
+    history_ids: list[UUID] = (
+        list(runs.order_by("-created_at", "-id").values_list("id", flat=True)[:history_limit])
+        if include_history
+        else []
+    )
 
-    # Latest-per-plugin selection: under the scan-once-per-SBOM model, each
-    # plugin produces at most one current run for an SBOM, so a single pass
-    # over the newest-first list picks the right row per plugin_name.
-    seen_plugins: set[str] = set()
-    latest_runs: list[AssessmentRun] = []
-    for run in all_runs:
-        if run.plugin_name in seen_plugins:
-            continue
-        seen_plugins.add(run.plugin_name)
-        latest_runs.append(run)
+    latest_runs = list(
+        AssessmentRun.objects.filter(id__in=latest_ids).prefetch_related("releases").order_by("-created_at", "-id")
+    )
+    history_runs = _history_runs(history_ids)
 
     # Compute status summary from latest runs only
     status_summary = _compute_status_summary(latest_runs)
 
     # Prefetch display names for all plugin_names present in this response
     # in a single query so serialization stays O(n) without per-run lookups.
-    display_names = _get_plugin_display_names_map({run.plugin_name for run in all_runs})
+    display_names = _get_plugin_display_names_map({run.plugin_name for run in chain(latest_runs, history_runs)})
 
     from sbomify.apps.vulnerability_scanning.euvd import euvd_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
 
-    has_security = any(run.category == "security" for run in all_runs)
+    # Catalogue lookups exist to stamp the findings being serialised, and only
+    # the latest runs carry findings.
+    has_security = any(run.category == "security" for run in latest_runs)
     kev_ids = kev_ids_for_serialization() if has_security else frozenset()
     euvd_ids = euvd_ids_for_serialization() if has_security else frozenset()
 
@@ -401,11 +462,8 @@ def get_sbom_assessments(
         sbom_id=sbom_id,
         status_summary=status_summary,
         latest_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in latest_runs],
-        all_runs=(
-            [_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in all_runs]
-            if include_history
-            else []
-        ),
+        all_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids, findings_limit) for run in history_runs],
+        all_runs_total=runs.count(),
     )
 
 
@@ -748,8 +806,17 @@ def update_team_plugin_settings(
             if isinstance(dt_config, dict):
                 dt_config.pop("dt_server_id", None)
 
-    # Update settings
-    settings.enabled_plugins = payload.enabled_plugins
+    # Update settings. The payload replaces only the plugins the caller could have
+    # spoken for: a plugin the plan excludes cannot be in it (the check above refuses
+    # it), and on the settings page it renders as a *disabled* checkbox, which submits
+    # nothing at all. Assigning the payload wholesale therefore deleted those entries
+    # on any save — including one made for an unrelated reason, reported as a success.
+    # Carrying them over keeps the record of what the workspace asked for, so it takes
+    # effect again on upgrade. Nothing runs them meanwhile: every path that starts a
+    # run checks the plan (``enqueue_assessment``, the re-run endpoint), and anything
+    # asking "what runs" filters through ``plugins_within_plan``.
+    retained = plugins_outside_plan(team, settings.enabled_plugins or [])
+    settings.enabled_plugins = list(payload.enabled_plugins) + retained
     if payload.plugin_configs is not None:
         settings.plugin_configs = payload.plugin_configs
     settings.save()

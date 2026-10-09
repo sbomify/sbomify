@@ -20,6 +20,29 @@ from sbomify.apps.teams.models import Team
 
 _CACHE_TTL_SECONDS = 60
 _DIGEST_LIMIT = 4
+_PRODUCT_LIMIT = 8
+
+# The cached context's shape. v7 adds needs_attention_total, which the digest
+# panel compares against the rows it shows to decide whether to state the
+# slice, and the two product-membership flags the exposure footer uses to say
+# why its rows do not sum. v6 added has_scannable_components, v5 medium_low,
+# v4 the unmeasured flags. An entry written by an earlier release lacks the
+# newer keys, and each missing value reads as false, so the panel silently
+# drops the sentence it exists to show.
+_CACHE_VERSION = "v7"
+
+
+def dashboard_cache_key(team_id: int) -> str:
+    """The one place this key is spelled.
+
+    Everything that invalidates the snapshot has to move when the version
+    does, and it did not: the patch SLA writer still deleted v3 long after the
+    context went to v4, so changing a workspace's SLA targets left the overview
+    showing the old deadlines until the entry expired on its own. The test
+    covering that invalidation seeded and read the same stale key, so it passed
+    throughout. One function, imported by both sides, cannot drift again.
+    """
+    return f"dashboard-page:{_CACHE_VERSION}:{team_id}"
 
 
 def get_first_component(team_id: int) -> ServiceResult[Component]:
@@ -37,12 +60,6 @@ def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Team]:
     if workspace is None:
         return ServiceResult.failure("Workspace not found", status_code=404)
     return ServiceResult.success(workspace)
-
-
-def dashboard_cache_key(team_id: int) -> str:
-    """The overview snapshot's cache key, versioned: an entry cached before the snapshot gained a key would read it as
-    zero, so the version moves with every new key (v5: medium_low)."""
-    return f"dashboard-page:v5:{team_id}"
 
 
 def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
@@ -132,6 +149,14 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     counts = picture["counts"]
     for finding in picture["findings"]:
         finding["products"] = product_names_by_component.get(finding["component_id"], [])
+    # Why the exposure rows need not sum to the workspace total, as two facts
+    # rather than a standing disclaimer. Both are asked of the components the
+    # bars count, which is the same set the workspace total counts, so a
+    # workspace where neither holds really does add up and is told nothing.
+    shares_components = any(
+        len(product_names_by_component.get(component_id, ())) > 1 for component_id in component_names
+    )
+    omits_components = any(component_id not in product_names_by_component for component_id in component_names)
     open_findings = sum(count["total"] for count in counts.values())
     past_sla = sum(overdue_by_component.values())
     known_exploited = sum(bool(finding["kev"]) for finding in picture["findings"])
@@ -139,6 +164,11 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     context = {
         "is_first_visit": not has_artifacts,
         "needs_attention": picture["findings"][:_DIGEST_LIMIT],
+        # The digest is a top-4. Its panel says so, and it counts findings
+        # rather than occurrences: the occurrences a summary-only scanner
+        # reports have no itemised finding to rank, and the alert above the
+        # panel is where those are accounted for.
+        "needs_attention_total": len(picture["findings"]),
         "metrics": {
             "open": open_findings,
             "critical_high": sum(count["critical"] + count["high"] for count in counts.values()),
@@ -165,8 +195,16 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
             "unmeasured_known_exploited": known_exploited == 0 and unassessed > 0,
         },
         "unassessed": unassessed,
-        "products": products[:8],
+        # Whether anything in this workspace could carry a vulnerability at all.
+        # The security picture is built from BOM components only, so a workspace
+        # holding documents alone has nothing to scan — which is not the same
+        # thing as having been scanned and found clean, and the panels below the
+        # cards must not confuse the two.
+        "has_scannable_components": bool(components),
+        "products": products[:_PRODUCT_LIMIT],
         "product_count": len(products),
+        "shares_components": shares_components,
+        "omits_components": omits_components,
     }
     # The first upload must replace setup immediately, without waiting for a
     # cached empty snapshot to expire.

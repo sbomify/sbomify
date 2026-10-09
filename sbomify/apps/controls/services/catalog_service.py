@@ -37,13 +37,18 @@ def activate_builtin_catalog(team: Team, catalog_name: str) -> ServiceResult[Con
             team=team,
             name=data["name"],
             version=data["version"],
-            defaults={"source": ControlCatalog.Source.BUILTIN, "is_active": True},
+            # A framework the workspace maintains itself is public when it is
+            # active, which is what is_active meant before is_published existed.
+            # The opt-in belongs to synced frameworks, where the workspace is
+            # republishing somebody else's answer.
+            defaults={"source": ControlCatalog.Source.BUILTIN, "is_active": True, "is_published": True},
         )
 
         if not created:
             if not catalog.is_active:
                 catalog.is_active = True
-                catalog.save(update_fields=["is_active", "updated_at"])
+                catalog.is_published = True
+                catalog.save(update_fields=["is_active", "is_published", "updated_at"])
             return ServiceResult.success(catalog)
 
         # Create controls from catalog data in bulk
@@ -116,6 +121,7 @@ def import_oscal_catalog(team: Team, oscal_json: dict[str, Any]) -> ServiceResul
                 version=version,
                 source=ControlCatalog.Source.CUSTOM,
                 is_active=True,
+                is_published=True,
             )
 
             # Parse controls from OSCAL groups
