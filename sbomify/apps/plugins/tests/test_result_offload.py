@@ -331,6 +331,29 @@ class TestTheMove:
         assert offload_assessment_results(limit=3) <= 3
         assert AssessmentRun.objects.exclude(result_object_key="").count() <= 3
 
+    def test_the_sweep_holds_one_page_of_candidates_at_a_time(self, sbom, bucket, mocker):
+        """A first pass over a large table must not load every candidate up
+        front, so each page is ranked on its own SBOMs and plugins."""
+        from sbomify.apps.plugins import offload
+
+        current = _run(sbom, days_ago=400)
+        older = [_run(sbom, days_ago=day) for day in (500, 600, 700)]
+        ranked = mocker.spy(offload, "current_run_ids")
+
+        assert offload_assessment_results(batch_size=2) == len(older)
+
+        assert ranked.call_count == 2
+        assert AssessmentRun.objects.get(pk=current.pk).result_object_key == ""
+        assert all(AssessmentRun.objects.get(pk=run.pk).result_object_key for run in older)
+
+    def test_a_dry_run_counts_across_pages(self, sbom, bucket):
+        _run(sbom, days_ago=400)
+        for day in (500, 600, 700):
+            _run(sbom, days_ago=day)
+
+        assert offload_assessment_results(batch_size=2, dry_run=True) == 3
+        assert bucket.puts == 0
+
 
 @pytest.mark.django_db
 class TestAMissingPayloadIsNotAnEmptyOne:

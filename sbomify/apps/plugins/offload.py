@@ -109,29 +109,50 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
 def demotable_run_ids(*, older_than_days: int = DEFAULT_OFFLOAD_AFTER_DAYS, limit: int | None = None) -> list[Any]:
     """Ids whose payload is safe to move: inline, past the floor, superseded.
 
-    Returned rather than acted on, so the policy can be counted and dry-run
-    without being welded to the write.
+    Returned rather than acted on, so the policy can be inspected without being
+    welded to the write. This holds every id it returns; the sweep itself walks
+    :func:`demotable_batches` a page at a time.
     """
+    return [run_id for batch in demotable_batches(older_than_days=older_than_days, limit=limit) for run_id in batch]
+
+
+def demotable_batches(
+    *, older_than_days: int = DEFAULT_OFFLOAD_AFTER_DAYS, batch_size: int = 100, limit: int | None = None
+) -> Iterator[list[Any]]:
+    """The demotable ids, one page of candidates at a time, oldest first.
+
+    A first pass covers the whole historical backlog, so the candidates are
+    paged rather than loaded, and each page is ranked against the runs of its
+    own SBOMs and plugins. Paged on ``(created_at, id)`` rather than by offset:
+    a protected run stays a candidate, so an offset would skip rows once the
+    pages before it had been demoted.
+    """
+    from django.db.models import Q
+
     from sbomify.apps.plugins.models import AssessmentRun
 
     cutoff = timezone.now() - timedelta(days=max(0, older_than_days))
-    rows = (
+    candidates = (
         AssessmentRun.objects.filter(result_object_key="", created_at__lt=cutoff)
         .exclude(result__isnull=True)
         # Oldest first: the coldest rows are the least likely to be contended and
         # the most likely to still be here on the next pass if this one stops.
         .order_by("created_at", "id")
-        .values_list("id", "sbom_id", "plugin_name")
     )
-    candidates = list(rows[:limit] if limit is not None else rows)
-    if not candidates:
-        return []
-
-    protected = current_run_ids(
-        {sbom_id for _, sbom_id, _ in candidates},
-        {plugin_name for _, _, plugin_name in candidates},
-    )
-    return [run_id for run_id, _, _ in candidates if run_id not in protected]
+    page_size = max(1, batch_size)
+    remaining = limit
+    after = Q()
+    while remaining is None or remaining > 0:
+        size = page_size if remaining is None else min(page_size, remaining)
+        page = list(candidates.filter(after).values_list("id", "sbom_id", "plugin_name", "created_at")[:size])
+        if not page:
+            return
+        if remaining is not None:
+            remaining -= len(page)
+        last_id, _, _, last_created = page[-1]
+        after = Q(created_at__gt=last_created) | Q(created_at=last_created, id__gt=last_id)
+        protected = current_run_ids({sbom_id for _, sbom_id, _, _ in page}, {plugin for _, _, plugin, _ in page})
+        yield [run_id for run_id, _, _, _ in page if run_id not in protected]
 
 
 def offload_run(run: Any) -> bool:
@@ -186,13 +207,14 @@ def offload_assessment_results(
     cycle, so a concurrent VEX re-annotation cannot land between reading the
     payload and nulling it and be silently discarded.
     """
-    doomed = demotable_run_ids(older_than_days=older_than_days, limit=limit)
+    batches = demotable_batches(older_than_days=older_than_days, batch_size=batch_size, limit=limit)
     if dry_run:
-        logger.info(f"[OFFLOAD] dry run: {len(doomed)} assessment results would be offloaded")
-        return len(doomed)
+        count = sum(len(batch) for batch in batches)
+        logger.info(f"[OFFLOAD] dry run: {count} assessment results would be offloaded")
+        return count
 
     moved = 0
-    for batch in _batched(doomed, max(1, batch_size)):
+    for batch in batches:
         with transaction.atomic():
             for run in (
                 _runs_for_update(batch)
@@ -210,8 +232,3 @@ def _runs_for_update(ids: list[Any]) -> Any:
     from sbomify.apps.plugins.models import AssessmentRun
 
     return AssessmentRun.objects.filter(id__in=ids, result_object_key="").select_for_update()
-
-
-def _batched(items: list[Any], size: int) -> Iterator[list[Any]]:
-    for start in range(0, len(items), size):
-        yield items[start : start + size]
