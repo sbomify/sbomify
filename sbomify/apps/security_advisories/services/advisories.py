@@ -397,8 +397,8 @@ def _base_queryset(team: Any) -> QuerySet[SecurityAdvisory]:
     )
 
 
-def list_advisories(team: Any, search: str = "") -> ServiceResult[list[dict[str, Any]]]:
-    """The workspace's advisories, newest first."""
+def _filtered_queryset(team: Any, search: str = "", status: str | None = None) -> QuerySet[SecurityAdvisory]:
+    """The workspace's advisories, narrowed but not yet projected."""
     queryset = _base_queryset(team)
     if search := (search or "").strip():
         queryset = (
@@ -406,7 +406,36 @@ def list_advisories(team: Any, search: str = "") -> ServiceResult[list[dict[str,
             | queryset.filter(tracking_id__icontains=search)
             | queryset.filter(vulnerabilities__cve_id__icontains=search)
         ).distinct()
-    return ServiceResult.success([_advisory_projection(a) for a in queryset])
+    if status:
+        queryset = queryset.filter(status=status)
+    return queryset
+
+
+def list_advisories(team: Any, search: str = "") -> ServiceResult[list[dict[str, Any]]]:
+    """The workspace's advisories, newest first."""
+    return ServiceResult.success([_advisory_projection(a) for a in _filtered_queryset(team, search)])
+
+
+def list_advisories_page(
+    team: Any,
+    search: str = "",
+    *,
+    status: str | None = None,
+    offset: int = 0,
+    limit: int = 25,
+) -> ServiceResult[tuple[list[dict[str, Any]], int]]:
+    """One page of the workspace's advisories, and the total that matched.
+
+    ``list_advisories`` projects every row because the page it was written for
+    renders every row. A caller that shows twenty-five of two thousand should
+    not pay for the other 1975: the projection sorts events, computes the worst
+    severity and CVSS, and builds a timeline, on top of a four-way prefetch.
+    Filtering and slicing happen in the database, and only the page is projected.
+    """
+    queryset = _filtered_queryset(team, search, status)
+    total = queryset.count()
+    rows = [_advisory_projection(a) for a in queryset[offset : offset + limit]]
+    return ServiceResult.success((rows, total))
 
 
 def get_advisory(team: Any, advisory_id: str) -> ServiceResult[dict[str, Any]]:
