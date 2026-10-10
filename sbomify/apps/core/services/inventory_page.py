@@ -22,6 +22,23 @@ from sbomify.apps.vulnerability_scanning.posture import build_release_vuln_postu
 
 KINDS = ("products", "releases", "components")
 SEVERITIES = ("total", "critical", "high", "medium", "low")
+# One page holds the three kinds, so the page has to say which one it is
+# holding: the browser title that a bookmark and a row of open tabs read, and
+# the heading above the table. The tab row alone cannot carry that.
+HEADINGS = {
+    "products": ("Products", "Everything this workspace ships, and the evidence behind it."),
+    "components": ("Components", "Every component this workspace maintains, and the evidence behind it."),
+    "releases": ("Releases", "Every release across this workspace, and what each one ships."),
+}
+# Each kind opens on the order its readers want. A product or component list is
+# a catalogue, read by name; a release list is a history, read newest first.
+# Alphabetical order there puts v10.0.0 above v2.0.0 and scatters the rolling
+# `latest` rows through the versions.
+DEFAULT_ORDER = {
+    "products": ("name", "asc"),
+    "components": ("name", "asc"),
+    "releases": ("created_at", "desc"),
+}
 COLUMNS = {
     "products": (
         ("name", "Product"),
@@ -60,12 +77,18 @@ def _counts(counts: dict[str, int] | None = None) -> dict[str, int]:
     return result
 
 
+def _visibility_options(kind: str) -> tuple[str, ...]:
+    return ("all", "public", "private", "gated") if kind == "components" else ("all", "public", "private")
+
+
 def _url(params: dict[str, Any], *, base_url: str = "", **changes: Any) -> str:
     query = urlencode({key: value for key, value in {**params, **changes}.items() if value != ""})
     return (base_url or reverse("core:products_dashboard")) + (f"?{query}" if query else "")
 
 
-def _inventory_catalog(workspace: Team, product_id: str = "") -> dict[str, Any]:
+def _scope_counts(workspace: Team, product_id: str = "", *, products_known: int | None = None) -> dict[str, int]:
+    """How many of each kind the scope holds. ``products_known`` is a count the
+    caller already has, so the products table is not counted a second time."""
     products = Product.objects.filter(team=workspace)
     components = Component.objects.filter(team=workspace)
     releases = Release.objects.filter(product__team=workspace)
@@ -73,11 +96,48 @@ def _inventory_catalog(workspace: Team, product_id: str = "") -> dict[str, Any]:
         products = products.filter(id=product_id)
         components = components.filter(products__id=product_id)
         releases = releases.filter(product_id=product_id)
-    choices = list(products.order_by("name", "id").values("id", "name"))
     return {
-        "products": choices,
-        "counts": {"products": len(choices), "components": components.count(), "releases": releases.count()},
+        "products": products.count() if products_known is None else products_known,
+        "components": components.count(),
+        "releases": releases.count(),
     }
+
+
+def _tab_href(params: dict[str, Any], kind: str, target: str, *, chose_order: bool = False) -> str:
+    """Carry the slice the user built, drop what belongs to the list they typed it into.
+
+    Risk, visibility, ordering and page size describe the same question asked of
+    three kinds, so a tab switch keeps them; search and the page number describe
+    one list and are left behind. Anything the target kind cannot honour, a
+    gated visibility outside components or a sort key it has no column for, is
+    dropped here rather than silently reset on arrival.
+
+    An order the reader never chose is the source kind's own default, and each
+    kind is entitled to its own; chose_order says the order came from the query
+    string, and then it travels even where it matches that default.
+    """
+    sort, direction = params["sort"], params["direction"]
+    if (not chose_order and (sort, direction) == DEFAULT_ORDER[kind]) or sort not in dict(COLUMNS[target]):
+        sort = direction = ""
+    return _url(
+        {
+            "product": params["product"] if target != "products" and params["product"] != "unassigned" else "",
+            "risk": params["risk"] if params["risk"] != "all" else "",
+            "visibility": params["visibility"] if params["visibility"] in _visibility_options(target)[1:] else "",
+            "sort": sort,
+            "direction": direction,
+            "per_page": params["per_page"] if params["per_page"] != "10" else "",
+        },
+        base_url=reverse(f"core:{target}_dashboard"),
+    )
+
+
+def _inventory_catalog(workspace: Team, product_id: str = "") -> dict[str, Any]:
+    products = Product.objects.filter(team=workspace)
+    if product_id:
+        products = products.filter(id=product_id)
+    choices = list(products.order_by("name", "id").values("id", "name"))
+    return {"products": choices, "counts": _scope_counts(workspace, product_id, products_known=len(choices))}
 
 
 def build_inventory_snapshot(
@@ -378,6 +438,14 @@ def build_inventory_page(
         )["rows"]
         return detail_rows
 
+    # Two extra count queries, and only while a product filter is actually on. The
+    # Products badge keeps the catalog's count, since that tab drops the filter.
+    filter_product = "" if kind == "products" else request.GET.get("product", "")
+    tab_counts = (
+        _scope_counts(workspace, filter_product, products_known=catalog["counts"]["products"])
+        if filter_product and filter_product != "unassigned"
+        else None
+    )
     return build_inventory_table(
         request,
         {**catalog, "rows": rows},
@@ -385,6 +453,7 @@ def build_inventory_page(
         product_id=product_id,
         base_url=base_url,
         content_id=content_id,
+        tab_counts=tab_counts,
         hydrate=hydrate,
     )
 
@@ -397,6 +466,7 @@ def build_inventory_table(
     base_url: str = "",
     content_id: str = "inventory-content",
     product_id: str = "",
+    tab_counts: dict[str, int] | None = None,
     hydrate: Callable[[list[str]], list[dict[str, Any]]] | None = None,
 ) -> ServiceResult[dict[str, Any]]:
     """One server filter, sort and pagination contract for lists and detail pages.
@@ -405,24 +475,26 @@ def build_inventory_table(
     product scope is fixed by the route and cannot be widened by a query string.
     """
     base_url = base_url or reverse(f"core:{kind}_dashboard")
+    default_sort, default_direction = DEFAULT_ORDER[kind]
+    chose_order = request.GET.get("sort") in dict(COLUMNS[kind]) or request.GET.get("direction") in ("asc", "desc")
     params: dict[str, Any] = {
         "search": request.GET.get("search", "").strip(),
         "risk": request.GET.get("risk", "all"),
         "visibility": request.GET.get("visibility", "all"),
         "product": product_id or (request.GET.get("product", "") if kind != "products" else ""),
-        "sort": request.GET.get("sort", "name"),
-        "direction": request.GET.get("direction", "asc"),
+        "sort": request.GET.get("sort", default_sort),
+        "direction": request.GET.get("direction", default_direction),
         "per_page": request.GET.get("per_page", "10"),
     }
     if params["risk"] not in ("all", "attention", "clear", "unassessed"):
         params["risk"] = "all"
-    visibility_options = ("all", "public", "private", "gated") if kind == "components" else ("all", "public", "private")
+    visibility_options = _visibility_options(kind)
     if params["visibility"] not in visibility_options:
         params["visibility"] = "all"
     if params["sort"] not in dict(COLUMNS[kind]):
-        params["sort"] = "name"
+        params["sort"] = default_sort
     if params["direction"] not in ("asc", "desc"):
-        params["direction"] = "asc"
+        params["direction"] = default_direction
     if params["per_page"] not in ("10", "25", "50"):
         params["per_page"] = "10"
     product_ids = {p["id"] for p in snapshot["products"]}
@@ -489,6 +561,9 @@ def build_inventory_table(
         "scope_product": product_id,
         "kind": kind,
         "singular": {"products": "product", "releases": "release", "components": "component"}[kind],
+        "heading": HEADINGS[kind][0],
+        "heading_subtitle": HEADINGS[kind][1],
+        "document_title": f"{HEADINGS[kind][0]} · sbomify",
         "rows": list(page),
         "params": params,
         "headers": headers,
@@ -499,13 +574,18 @@ def build_inventory_table(
             {
                 "id": key,
                 "label": key.title(),
-                "badge": str(snapshot["counts"][key]),
-                "href": _url(
-                    {
-                        "product": params["product"] if key != "products" and params["product"] != "unassigned" else "",
-                    },
-                    base_url=reverse(f"core:{key}_dashboard"),
-                ),
+                "is_active": key == kind,
+                # The heading the page takes when this tab is the open one, so a
+                # tab switch can say where it landed without another round trip.
+                "heading": HEADINGS[key][0],
+                "subtitle": HEADINGS[key][1],
+                "document_title": f"{HEADINGS[key][0]} · sbomify",
+                # The badge counts the scope its own link opens. A tab that
+                # carries the product filter counts that product; one that drops
+                # it counts the workspace, so no badge promises rows the table
+                # under it will not show.
+                "badge": str(tab_counts[key] if tab_counts and key != "products" else snapshot["counts"][key]),
+                "href": _tab_href(params, kind, key, chose_order=chose_order),
             }
             for key in KINDS
         ],

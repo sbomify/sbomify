@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
@@ -350,8 +351,17 @@ def test_paged_inventory_preserves_full_snapshot_filter_and_sort_contract(
         assert actual["rows"] == expected_table["rows"], params
         assert actual["page"].number == expected_table["page"].number, params
         assert actual["page"].paginator.count == expected_table["page"].paginator.count, params
-        for field in ("total", "tabs", "products", "headers", "query", "refresh_url"):
+        for field in ("total", "products", "headers", "query", "refresh_url"):
             assert actual[field] == expected_table[field], (params, field)
+        # A tab badge counts the scope its own link opens, which takes a count
+        # the bare table builder is never handed. Under a product filter only
+        # the links are comparable; the badges have their own test.
+        if params.get("product", "") in ("", "unassigned"):
+            assert actual["tabs"] == expected_table["tabs"], params
+        else:
+            assert [tab["href"] for tab in actual["tabs"]] == [
+                tab["href"] for tab in expected_table["tabs"]
+            ], params
 
 
 @pytest.mark.parametrize("kind", ["products", "components", "releases"])
@@ -376,3 +386,133 @@ def test_inventory_narrows_security_work_before_risk_filter(
     else:
         assert len(result["rows"]) == 1
         assert len(picture.call_args.args[0]) == 1
+
+
+def test_tab_links_carry_the_slice_and_leave_the_list_behind(sample_team_with_owner_member: Member) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    member = sample_team_with_owner_member
+    Component.objects.create(team=member.team, name="Gated", visibility="gated")
+    tabs = {
+        tab["id"]: parse_qs(urlsplit(tab["href"]).query)
+        for tab in inventory(
+            member,
+            view="components",
+            search="Gated",
+            page="2",
+            risk="attention",
+            visibility="gated",
+            per_page="25",
+            sort="freshness_label",
+            direction="desc",
+        )["tabs"]
+    }
+    for kind, query in tabs.items():
+        # The search box and the page number describe one list, not the slice.
+        assert "search" not in query, kind
+        assert "page" not in query, kind
+        assert query["risk"] == ["attention"], kind
+        assert query["per_page"] == ["25"], kind
+    # Gated visibility and a freshness sort exist on components alone, so the
+    # other two tabs open on their own defaults rather than a reset arrival.
+    assert tabs["components"]["visibility"] == ["gated"]
+    assert tabs["components"]["sort"] == ["freshness_label"]
+    assert tabs["components"]["direction"] == ["desc"]
+    assert "visibility" not in tabs["products"]
+    assert "sort" not in tabs["products"]
+    assert "direction" not in tabs["releases"]
+
+
+def test_an_order_the_reader_chose_travels_even_when_it_matches_the_default(
+    sample_team_with_owner_member: Member,
+) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    member = sample_team_with_owner_member
+    chosen = {
+        tab["id"]: parse_qs(urlsplit(tab["href"]).query)
+        for tab in inventory(member, view="products", sort="name", direction="asc")["tabs"]
+    }
+    # Products already opens on name ascending, but the reader said so here, and
+    # releases would otherwise open on their own newest-first default.
+    assert chosen["releases"]["sort"] == ["name"]
+    assert chosen["releases"]["direction"] == ["asc"]
+    untouched = {
+        tab["id"]: parse_qs(urlsplit(tab["href"]).query) for tab in inventory(member, view="products")["tabs"]
+    }
+    assert "sort" not in untouched["releases"]
+
+
+def test_tab_badges_count_the_scope_their_link_opens(sample_team_with_owner_member: Member) -> None:
+    member = sample_team_with_owner_member
+    product = Product.objects.create(team=member.team, name="Filtered")
+    other = Product.objects.create(team=member.team, name="Other")
+    product.components.add(Component.objects.create(team=member.team, name="Inside"))
+    other.components.add(Component.objects.create(team=member.team, name="Outside"))
+    Release.objects.create(product=product, name="v1")
+    Release.objects.create(product=other, name="v1")
+    workspace_releases = Release.objects.filter(product__team=member.team).count()
+    product_releases = Release.objects.filter(product=product).count()
+    assert product_releases < workspace_releases
+    unfiltered = {tab["id"]: tab["badge"] for tab in inventory(member, view="components")["tabs"]}
+    assert unfiltered == {"products": "2", "components": "2", "releases": str(workspace_releases)}
+    filtered = {tab["id"]: tab["badge"] for tab in inventory(member, view="components", product=product.id)["tabs"]}
+    # Products drops the filter when it opens, so it still counts the workspace.
+    assert filtered == {"products": "2", "components": "1", "releases": str(product_releases)}
+
+
+@pytest.mark.parametrize("filtered", [False, True], ids=["unfiltered", "product-filter"])
+def test_products_are_counted_from_the_list_already_loaded(
+    sample_team_with_owner_member: Member, filtered: bool
+) -> None:
+    """The product choices are loaded whole for the filter, so a COUNT of the same rows is a wasted query."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    member = sample_team_with_owner_member
+    product = Product.objects.create(team=member.team, name="One")
+    Product.objects.create(team=member.team, name="Two")
+    product.components.add(Component.objects.create(team=member.team, name="Inside"))
+    params = {"product": product.id} if filtered else {}
+
+    with CaptureQueriesContext(connection) as queries:
+        tabs = {tab["id"]: tab["badge"] for tab in inventory(member, view="components", **params)["tabs"]}
+
+    table = Product._meta.db_table
+    recounts = [q["sql"] for q in queries.captured_queries if "COUNT(" in q["sql"] and f'FROM "{table}"' in q["sql"]]
+    assert recounts == []
+    assert tabs["products"] == "2"
+
+
+def test_release_lists_open_on_their_newest(sample_team_with_owner_member: Member) -> None:
+    member = sample_team_with_owner_member
+    product = Product.objects.create(team=member.team, name="Product")
+    for name in ("v2.0.0", "v10.0.0"):
+        Release.objects.create(product=product, name=name)
+    releases = inventory(member, view="releases")
+    assert releases["params"]["sort"] == "created_at"
+    assert releases["params"]["direction"] == "desc"
+    assert [row["name"] for row in releases["rows"]][:2] == ["v10.0.0", "v2.0.0"]
+    # A catalogue still opens by name; only the history reads newest first.
+    for kind in ("products", "components"):
+        assert inventory(member, view=kind)["params"] == {
+            **inventory(member, view=kind)["params"],
+            "sort": "name",
+            "direction": "asc",
+        }
+    by_name = inventory(member, view="releases", sort="name", direction="asc")["rows"]
+    assert [row["name"] for row in by_name][-2:] == ["v10.0.0", "v2.0.0"]
+
+
+@pytest.mark.parametrize("kind", ["products", "components", "releases"])
+def test_each_inventory_page_says_which_one_it_is(
+    client: Client, sample_team_with_owner_member: Member, kind: str
+) -> None:
+    member = sample_team_with_owner_member
+    setup_authenticated_client_session(client, member.team, member.user)
+    html = client.get(reverse(f"core:{kind}_dashboard")).content.decode()
+    heading = kind.title()
+    title = re.search(r"<title>(.*?)</title>", html, re.S)
+    page_heading = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.S)
+    assert title and title.group(1).strip() == f"{heading} · sbomify"
+    assert page_heading and page_heading.group(1).strip() == heading
