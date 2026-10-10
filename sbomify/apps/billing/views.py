@@ -191,6 +191,21 @@ class PublicEnterpriseContactView(_BaseEnterpriseContactView):
         }
 
 
+def _community_refusal(team: Team) -> str | None:
+    """Why ``team`` cannot move to Community now, or None when it can.
+
+    Called once before the portal opens and again under the workspace lock
+    before each write that records Community as the scheduled plan, since
+    product, component and seat creation take that lock too.
+    """
+    from .services.plan_selection import check_downgrade
+
+    community = BillingPlan.objects.filter(key=BillingPlan.KEY_COMMUNITY).first()
+    if community and not (downgrade := check_downgrade(team, community)).ok:
+        return downgrade.error or "Reduce usage to choose this plan."
+    return None
+
+
 class CreatePortalSessionView(LoginRequiredMixin, View):
     """Create a Stripe Billing Portal session and redirect to it."""
 
@@ -229,13 +244,9 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
 
             # The plan page links an active subscription straight here, so the one
             # move whose target is known, cancelling to Community, is checked here.
-            if flow_type == "subscription_cancel":
-                from .services.plan_selection import check_downgrade
-
-                community = BillingPlan.objects.filter(key=BillingPlan.KEY_COMMUNITY).first()
-                if community and not (downgrade := check_downgrade(team, community)).ok:
-                    messages.error(request, downgrade.error or "Reduce usage to choose this plan.")
-                    return redirect("billing:select_plan", team_key=team.key)
+            if flow_type == "subscription_cancel" and (refusal := _community_refusal(team)):
+                messages.error(request, refusal)
+                return redirect("billing:select_plan", team_key=team.key)
 
             if sub_id and sub_status in ["active", "trialing"]:
                 if flow_type == "subscription_update" and not cancel_at_period_end:
@@ -256,6 +267,9 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                     if not billing_limits.get("scheduled_downgrade_plan"):
                         with transaction.atomic():
                             team = Team.objects.select_for_update().get(pk=team.pk)
+                            if refusal := _community_refusal(team):
+                                messages.error(request, refusal)
+                                return redirect("billing:select_plan", team_key=team.key)
                             billing_limits = team.billing_plan_limits or {}
                             billing_limits["scheduled_downgrade_plan"] = "community"
                             team.billing_plan_limits = billing_limits
@@ -286,6 +300,9 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                     if not billing_limits.get("scheduled_downgrade_plan"):
                         with transaction.atomic():
                             team = Team.objects.select_for_update().get(pk=team.pk)
+                            if refusal := _community_refusal(team):
+                                messages.error(request, refusal)
+                                return redirect("billing:select_plan", team_key=team.key)
                             billing_limits = team.billing_plan_limits or {}
                             billing_limits["scheduled_downgrade_plan"] = "community"
                             billing_limits["cancel_at_period_end"] = True
