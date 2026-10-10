@@ -259,6 +259,64 @@ class TestReleaseContextsAreBothCurrent:
 
         assert demotable_run_ids() == [superseded.id]
 
+    def test_a_release_attached_after_the_move_keeps_column_readers_inline(self, sbom, bucket, monkeypatch):
+        """Attaching a release to the newest run makes the moved older run the
+        newest of the set it left. The readers of the column rank per (sbom,
+        plugin) and stay on the inline run; the VEX re-apply reaches the moved
+        one through the result store."""
+        from sbomify.apps.plugins.latest import latest_run_ids
+        from sbomify.apps.plugins.models import RegisteredPlugin
+        from sbomify.apps.plugins.offload import current_run_ids
+        from sbomify.apps.vulnerability_scanning import vex
+
+        RegisteredPlugin.objects.update_or_create(
+            name="osv",
+            defaults={
+                "display_name": "osv",
+                "category": "security",
+                "version": "1.0.0",
+                "plugin_class_path": "tests.osv",
+                "is_enabled": True,
+            },
+        )
+        product = Product.objects.create(name="p3", team=sbom.component.team)
+        ProductComponent.objects.create(product=product, component=sbom.component)
+        v1 = Release.objects.create(product=product, name="v1")
+        payload = _result()
+        for finding in payload["findings"]:
+            finding["component"]["ecosystem"] = "pypi"
+        older = _run(sbom, days_ago=800, result=payload)
+        newer = _run(sbom, days_ago=400)
+        assert demotable_run_ids() == [older.id]
+        assert offload_run(older)
+        older.refresh_from_db()
+        moved_key = older.result_object_key
+
+        # The row attach_release_to_runs_task writes for each plugin's newest run.
+        newer.releases.add(v1)
+
+        assert older.id in current_run_ids({sbom.id}, {"osv"})
+        assert latest_run_ids(AssessmentRun.objects.filter(status="completed"), [sbom.id]) == [newer.id]
+        newer.refresh_from_db()
+        assert newer.result is not None
+
+        statement = {
+            "ids": {"cve-2026-0"},
+            "packages": {("pypi", "foo", "1")},
+            "state": "not_affected",
+            "justification": "code_not_reachable",
+            "product_scoped": False,
+            "source": "manual",
+        }
+        monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids: [statement])
+        monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
+
+        vex.reannotate_component_runs(sbom.component_id)
+
+        older.refresh_from_db()
+        assert older.result is None
+        assert older.result_object_key not in ("", moved_key)
+
 
 @pytest.mark.django_db
 class TestTheMove:

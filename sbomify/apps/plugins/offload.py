@@ -63,6 +63,15 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
     Scoped to the given SBOMs and plugins so the sweep can answer this for a
     batch without ranking every run in the installation. Passing a superset of
     pairs is harmless: grouping is on the exact key.
+
+    A release attached later can change the answer for a run already moved.
+    The attach task adds the release to each plugin's newest run, so an older
+    run that newest one superseded becomes the newest of the set it left. That
+    is safe because of who reads what. Every reader of the payload column ranks
+    per (sbom, plugin) and ignores release sets, so it lands on the newer run,
+    which is current for its own key. The one reader that ranks per release set,
+    the VEX re-apply, reads and writes through the result store. An attach a week
+    after the sweep leaves the same state, so a lock here would not prevent it.
     """
     from sbomify.apps.plugins.models import AssessmentRun, AssessmentRunRelease
     from sbomify.apps.plugins.sdk.enums import RunStatus
