@@ -7,6 +7,7 @@ import dramatiq
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.utils import timezone
+from dramatiq_crontab import cron
 
 from sbomify.logging import getLogger
 from sbomify.task_utils import record_task_breadcrumb
@@ -234,15 +235,16 @@ You can reply to this email and we'll receive your message at {settings.ENTERPRI
         record_task_breadcrumb("send_enterprise_inquiry_email", "error", level="error", data={"error": str(e)})
 
 
+@cron("30 3 * * *")  # type: ignore[untyped-decorator]  # Daily at 3:30 AM UTC
 @dramatiq.actor(queue_name="billing", max_retries=1, time_limit=600000)  # 10 minutes
 def sync_active_subscriptions_task() -> None:
     """Safety-net sync of every team that has a Stripe subscription.
 
     Subscription data is normally kept current by Stripe webhooks
-    (customer.subscription.updated / invoice.*). This task — scheduled daily by
-    ``billing.cron.daily_subscription_sync`` — is the fallback for missed/failed
-    webhooks, and replaces the per-request Stripe sync that used to run inside
-    the ``team_context`` context processor on every authenticated page load.
+    (customer.subscription.updated / invoice.*). This task runs daily as the
+    fallback for missed/failed webhooks, and replaces the per-request Stripe
+    sync that used to run inside the ``team_context`` context processor on
+    every authenticated page load.
     """
     from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
     from sbomify.apps.teams.models import Team
@@ -269,6 +271,7 @@ def sync_active_subscriptions_task() -> None:
     logger.info("Subscription sync complete: synced=%d, errors=%d", synced, errors)
 
 
+@cron("0 2 * * *")  # type: ignore[untyped-decorator]  # Daily at 2:00 AM UTC
 @dramatiq.actor(queue_name="billing", max_retries=1, time_limit=600000)  # 10 minutes
 def check_stale_trials_task() -> None:
     """

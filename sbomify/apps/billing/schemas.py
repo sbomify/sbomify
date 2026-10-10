@@ -1,30 +1,7 @@
 from __future__ import annotations
 
-from typing import TypedDict
-
 from ninja import Schema
 from pydantic import Field
-
-
-class BillingLimitsData(TypedDict, total=False):
-    """Type definition for Team.billing_plan_limits JSON field."""
-
-    max_products: int | None
-    max_components: int | None
-    stripe_customer_id: str
-    stripe_subscription_id: str
-    billing_period: str
-    subscription_status: str
-    is_trial: bool
-    trial_end: int | None
-    cancel_at_period_end: bool
-    scheduled_downgrade_plan: str | None
-    next_billing_date: str | None
-    last_updated: str
-    last_processed_webhook_id: str | None
-    last_processed_checkout_session: str
-    last_payment_amount: float
-    last_payment_currency: str | None
 
 
 class PlanSchema(Schema):

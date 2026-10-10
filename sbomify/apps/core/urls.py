@@ -211,11 +211,6 @@ urlpatterns = [
         name="sbom_download_product",
     ),
     path(
-        "component/<str:component_id>/metadata",
-        views.get_component_metadata,
-        name="get_component_metadata",
-    ),
-    path(
         "component/<str:component_id>/metadata/form/",
         ComponentMetadataFormView.as_view(),
         name="component_metadata_form",

@@ -33,10 +33,6 @@ def get_team_user_counts(team_id: int | str) -> tuple[int, int, int]:
     return members, pending, members + pending
 
 
-def get_member_role(user_id: int, team_id: str) -> str | None:
-    return Member.objects.filter(user_id=user_id, team_id=team_id).values_list("role", flat=True).first()
-
-
 def get_member_role_by_key(user: Any, team_key: str | None) -> str | None:
     """The user's live role in a workspace, by workspace key.
 

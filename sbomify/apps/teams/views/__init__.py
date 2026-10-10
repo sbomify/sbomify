@@ -389,12 +389,12 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
                 # If user was upgraded from guest to admin/owner, remove their access requests
                 if old_role == ROLE_GUEST and new_role in READ_INTERNAL:
                     from sbomify.apps.documents.access_models import AccessRequest
-                    from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
+                    from sbomify.apps.documents.services.access_requests import invalidate_access_requests_cache
 
                     # Delete all access requests for this user in this team
                     AccessRequest.objects.filter(team=invitation.team, user=request.user).delete()
                     # Invalidate cache so the queue updates immediately
-                    _invalidate_access_requests_cache(invitation.team)
+                    invalidate_access_requests_cache(invitation.team)
 
             switch_active_workspace(request, invitation.team, new_role)
 
@@ -545,9 +545,9 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         access_request_approved_here = True
 
     # Invalidate cache to refresh the access requests list
-    from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
+    from sbomify.apps.documents.services.access_requests import invalidate_access_requests_cache
 
-    _invalidate_access_requests_cache(joined_team)
+    invalidate_access_requests_cache(joined_team)
 
     update_user_teams_session(request, request.user)
     switch_active_workspace(request, joined_team, joined_role)

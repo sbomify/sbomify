@@ -23,7 +23,6 @@ from urllib.parse import urlparse, urlunparse
 import dj_database_url
 import redis
 import sentry_sdk
-from django.contrib import messages
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import find_dotenv, load_dotenv
 from redis.asyncio.retry import Retry as AsyncRedisRetry
@@ -56,23 +55,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Define IN_DOCKER early
 IN_DOCKER = bool(int(os.environ["AM_I_IN_DOCKER_CONTAINER"])) if "AM_I_IN_DOCKER_CONTAINER" in os.environ else False
 
-API_VERSION = "v1"
-
-# This is used for the SBOM analysis results cache
-OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS = int(os.environ.get("OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS", 7 * 24 * 3600))
-
-# OSV Scanner subprocess timeout in seconds (default: 5 minutes, less than Dramatiq's 6-minute time limit)
-OSV_SCANNER_TIMEOUT_SECONDS = int(os.environ.get("OSV_SCANNER_TIMEOUT_SECONDS", 300))
-
-# Vulnerability scanning cache TTL in seconds (default: 1 hour)
-VULNERABILITY_SCAN_CACHE_TTL = int(os.environ.get("VULNERABILITY_SCAN_CACHE_TTL", 3600))
-
 # TEA API response cache TTL in seconds (default: 1 hour). Set to 0 to disable.
 TEA_CACHE_TTL: int = int(os.environ.get("TEA_CACHE_TTL", "3600"))
-
-# Dependency Track processing delay in seconds (default: 5 seconds)
-# Time to wait after SBOM upload before retrieving results to allow DT to process
-DT_PROCESSING_DELAY_SECONDS = int(os.environ.get("DT_PROCESSING_DELAY_SECONDS", 5))
 
 # Payment failure grace period in days before account is restricted
 PAYMENT_GRACE_PERIOD_DAYS = int(os.environ.get("PAYMENT_GRACE_PERIOD_DAYS", 3))
@@ -88,9 +72,6 @@ SIGNED_URL_SALT = os.environ.get("SIGNED_URL_SALT", "django-insecure-signed-url-
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False") == "True"
-
-# Local development mode (separate from DEBUG for security)
-LOCAL_DEV = os.environ.get("LOCAL_DEV", "False").lower() == "true"
 
 
 def _env_bool(value: str | None, default: bool) -> bool:
@@ -247,12 +228,10 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "django_dramatiq",
     "dramatiq_crontab",
-    "django_extensions",
     "django_vite",
     "django_htmx",
     "django_cotton",
     "ninja",
-    "widget_tweaks",
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
@@ -269,7 +248,6 @@ INSTALLED_APPS = [
     "sbomify.apps.compliance",
     "health_check",
     "health_check.db",
-    "anymail",
     "sbomify.apps.licensing",
     "sbomify.apps.plugins",
     "sbomify.apps.tea",
@@ -357,18 +335,6 @@ if DEBUG:
         # Debug toolbar not available (e.g., in production with DEBUG=True)
         pass
 
-    # Add CORS headers in development mode - allow all origins
-    try:
-        import corsheaders  # noqa: F401
-
-        INSTALLED_APPS.append("corsheaders")
-        MIDDLEWARE.insert(
-            MIDDLEWARE.index("django.middleware.common.CommonMiddleware"),
-            "corsheaders.middleware.CorsMiddleware",
-        )
-    except ImportError:
-        pass
-
 INTERNAL_IPS = [
     "127.0.0.1",
 ]
@@ -408,18 +374,6 @@ WSGI_APPLICATION = "sbomify.wsgi.application"
 ASGI_APPLICATION = "sbomify.asgi.application"
 
 
-MESSAGE_TAGS = {
-    messages.constants.DEBUG: "alert-info",
-    messages.constants.INFO: "alert-info",
-    messages.constants.SUCCESS: "alert-success",
-    messages.constants.WARNING: "alert-warning",
-    messages.constants.ERROR: "alert-danger",
-}
-
-# Filter out login success messages
-MESSAGE_LEVEL = messages.constants.INFO  # Only show messages of INFO level and above
-
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
@@ -435,14 +389,8 @@ if not DEBUG:
         },
     }
 
-STATICFILES_FINDERS = [
-    "django.contrib.staticfiles.finders.FileSystemFinder",
-    "django.contrib.staticfiles.finders.AppDirectoriesFinder",
-]
-
 # WhiteNoise configuration for better static file serving
 WHITENOISE_USE_FINDERS = True
-WHITENOISE_AUTOREFRESH = DEBUG
 WHITENOISE_MAX_AGE = 31536000 if not DEBUG else 0  # 1 year cache for production
 
 # Django Vite - now outputs to static/dist/ to avoid conflicts
@@ -476,23 +424,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Database
-
-
-# Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-# DATABASES = {
-#     "default": {
-#         "ENGINE": os.environ["SQL_ENGINE"],
-#         "NAME": os.environ["SQL_DATABASE"],
-#         "USER": os.environ["SQL_USER"],
-#         "PASSWORD": os.environ["SQL_PASSWORD"],
-#         "HOST": os.environ["SQL_HOST"],
-#         "PORT": os.environ["SQL_PORT"],
-#     }
-# }
-
-# DB_URL = os.environ.get("DATABASE_URL", "")
 if "DATABASE_URL" in os.environ:
     db_config_dict = dj_database_url.parse(os.environ["DATABASE_URL"])
 else:
@@ -1005,17 +938,7 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
-        "core": {
-            "handlers": ["console"],
-            "level": "DEBUG",
-            "propagate": False,
-        },
         "allauth": {
-            "handlers": ["console"],
-            "level": "DEBUG",
-            "propagate": False,
-        },
-        "allauth.socialaccount": {
             "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,
@@ -1025,11 +948,6 @@ LOGGING = {
             "level": "WARNING",
             "propagate": False,
         },
-        # "teams": {
-        #     "handlers": ["console"],
-        #     "level": os.getenv("LOG_LEVEL", "INFO"),
-        #     "propagate": False,
-        # },
     },
 }
 
@@ -1108,13 +1026,7 @@ if _trust_center_raw:
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
-
 TIME_ZONE = "UTC"
-
-USE_I18N = True
-
-USE_TZ = True
 
 
 # Email settings
@@ -1138,49 +1050,11 @@ SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 logger = logging.getLogger(__name__)
 
-
-def _sentry_traces_sampler(sampling_context: dict[str, Any]) -> float:
-    """Sample traces for Sentry with fallback to default on invalid values."""
-    try:
-        base_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
-    except (ValueError, TypeError):
-        logger.warning("Invalid SENTRY_TRACES_SAMPLE_RATE, using default 0.1")
-        base_rate = 0.1
-
-    if base_rate <= 0:
-        return 0.0
-
-    try:
-        api_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_API", base_rate))
-    except (ValueError, TypeError):
-        api_rate = base_rate
-
-    try:
-        htmx_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_HTMX", base_rate))
-    except (ValueError, TypeError):
-        htmx_rate = base_rate
-
-    try:
-        job_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_JOBS", base_rate))
-    except (ValueError, TypeError):
-        job_rate = base_rate
-
-    wsgi_environ = sampling_context.get("wsgi_environ")
-    if wsgi_environ:
-        path = wsgi_environ.get("PATH_INFO", "")
-        if wsgi_environ.get("HTTP_HX_REQUEST"):
-            return htmx_rate
-        if path.startswith("/api/"):
-            return api_rate
-        return base_rate
-
-    transaction_context = sampling_context.get("transaction_context") or {}
-    op = transaction_context.get("op", "")
-    if op.startswith("dramatiq") or op in ("queue.process", "task"):
-        return job_rate
-
-    return base_rate
-
+try:
+    _SENTRY_TRACES_SAMPLE_RATE = max(float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")), 0.0)
+except ValueError:
+    logger.warning("Invalid SENTRY_TRACES_SAMPLE_RATE, using default 0.1")
+    _SENTRY_TRACES_SAMPLE_RATE = 0.1
 
 _SENTRY_DSN = os.environ.get("SENTRY_DSN")
 
@@ -1203,7 +1077,9 @@ sentry_sdk.init(
         LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
     ],
     before_send=throttle_self_healing_notices,
-    traces_sampler=_sentry_traces_sampler,
+    # A sampler, not traces_sample_rate: that would let the sampled flag of an
+    # incoming sentry-trace header, or of the request that queued a task, decide.
+    traces_sampler=lambda _context: _SENTRY_TRACES_SAMPLE_RATE,
     profiles_sample_rate=float(os.environ.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
     # CancelledError is expected under ASGI when clients disconnect mid-request.
     # On Python 3.14+ it's a BaseException that propagates through middleware.
@@ -1306,13 +1182,11 @@ AWS_MEDIA_STORAGE_BUCKET_URL = os.environ.get("AWS_MEDIA_STORAGE_BUCKET_URL", ""
 AWS_SBOMS_ACCESS_KEY_ID = os.environ.get("AWS_SBOMS_ACCESS_KEY_ID", "")
 AWS_SBOMS_SECRET_ACCESS_KEY = os.environ.get("AWS_SBOMS_SECRET_ACCESS_KEY", "")
 AWS_SBOMS_STORAGE_BUCKET_NAME = os.environ.get("AWS_SBOMS_STORAGE_BUCKET_NAME", "")
-AWS_SBOMS_STORAGE_BUCKET_URL = os.environ.get("AWS_SBOMS_STORAGE_BUCKET_URL", "")
 
 # Documents S3 settings - fallback to SBOMS bucket if not configured
 AWS_DOCUMENTS_ACCESS_KEY_ID = os.environ.get("AWS_DOCUMENTS_ACCESS_KEY_ID", AWS_SBOMS_ACCESS_KEY_ID)
 AWS_DOCUMENTS_SECRET_ACCESS_KEY = os.environ.get("AWS_DOCUMENTS_SECRET_ACCESS_KEY", AWS_SBOMS_SECRET_ACCESS_KEY)
 AWS_DOCUMENTS_STORAGE_BUCKET_NAME = os.environ.get("AWS_DOCUMENTS_STORAGE_BUCKET_NAME", AWS_SBOMS_STORAGE_BUCKET_NAME)
-AWS_DOCUMENTS_STORAGE_BUCKET_URL = os.environ.get("AWS_DOCUMENTS_STORAGE_BUCKET_URL", AWS_SBOMS_STORAGE_BUCKET_URL)
 
 # A stale token (a form rendered before the login redirect chain rotated the
 # CSRF secret) should send the user back to retry, not dead-end on the stock
@@ -1326,10 +1200,6 @@ if DEBUG:
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ]
-
-    # CORS settings - allow all origins in development mode
-    CORS_ALLOW_ALL_ORIGINS = True
-    CORS_ALLOW_CREDENTIALS = True
 else:
     # Production cookie + transport hardening (#922). Caddy terminates TLS at the edge
     # (SECURE_PROXY_SSL_HEADER above lets Django see the original scheme), but Caddy
@@ -1358,10 +1228,7 @@ else:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
-STRIPE_SECRET_KEY = STRIPE_API_KEY
-STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
-STRIPE_BILLING_URL = os.environ.get("STRIPE_BILLING_URL", "")
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # Pin the version our requests are made against, so a library upgrade cannot
 # quietly move it. Event payloads follow the account's own version, which is a
@@ -1393,9 +1260,6 @@ NOTIFICATION_PROVIDERS = [
     "sbomify.apps.teams.notifications.get_notifications",
     "sbomify.apps.vulnerability_scanning.notifications.get_notifications",
 ]
-
-# Optionally override refresh interval
-NOTIFICATION_REFRESH_INTERVAL = 60 * 1000  # 1 minute
 
 # Billing settings
 BILLING = os.getenv("BILLING", "True").lower() == "true"

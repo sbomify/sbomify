@@ -22,6 +22,7 @@ from sbomify.apps.compliance.models import (
     CRAGeneratedDocument,
     OSCALFinding,
 )
+from sbomify.apps.compliance.services.document_generation_service import _COUNTRY_LANGUAGE_MAP
 from sbomify.apps.compliance.services.oscal_service import (
     create_assessment_result,
     ensure_cra_catalog,
@@ -90,42 +91,13 @@ _MAX_WAIVER_JUSTIFICATION_CHARS = 2_000
 # the row and stall JSON serialisation.
 _MAX_STEP_1_TEXT_CHARS = 4_000
 
-# EU member states (ISO 3166-1 alpha-2). Mirrors
+# EU member states (ISO 3166-1 alpha-2), the keys of the document generator's
+# country-language map. Mirrors
 # ``sbomify/apps/compliance/js/eu-countries.ts`` — a market code that
 # isn't in this set is rejected at save time (CRA Art 24: DoC enumerates
 # the member states the product is placed on the market in, so an
 # invalid code would land in a regulated artefact).
-_EU_COUNTRIES: frozenset[str] = frozenset(
-    {
-        "AT",
-        "BE",
-        "BG",
-        "HR",
-        "CY",
-        "CZ",
-        "DK",
-        "EE",
-        "FI",
-        "FR",
-        "DE",
-        "GR",
-        "HU",
-        "IE",
-        "IT",
-        "LV",
-        "LT",
-        "LU",
-        "MT",
-        "NL",
-        "PL",
-        "PT",
-        "RO",
-        "SK",
-        "SI",
-        "ES",
-        "SE",
-    }
-)
+_EU_COUNTRIES: frozenset[str] = frozenset(_COUNTRY_LANGUAGE_MAP)
 
 
 def _auto_fill_from_contacts(assessment: CRAAssessment) -> None:
@@ -230,17 +202,6 @@ def get_or_create_assessment(
         return ServiceResult.success(existing)
 
     return ServiceResult.success(assessment)
-
-
-def get_assessment_by_id(assessment_id: str) -> ServiceResult[CRAAssessment]:
-    """Fetch a CRA assessment by ID with related data."""
-    try:
-        assessment = CRAAssessment.objects.select_related("team", "product", "oscal_assessment_result__catalog").get(
-            pk=assessment_id
-        )
-        return ServiceResult.success(assessment)
-    except CRAAssessment.DoesNotExist:
-        return ServiceResult.failure("Assessment not found", status_code=404)
 
 
 def get_step_context(
@@ -678,7 +639,6 @@ _AR_GATED_FIELDS = frozenset(
         "authorized_rep_mandate_reference",
     }
 )
-_STEP_1_JSON_FIELDS = ("target_eu_markets",)
 
 # ---- Step 3b/3c fields ----
 _STEP_3_VH_FIELDS = ("vdp_url", "acknowledgment_timeline_days", "csirt_contact_email", "security_contact_url")
@@ -1374,13 +1334,6 @@ def _mark_step_complete(assessment: CRAAssessment, step: int) -> None:
         assessment.status = CRAAssessment.WizardStatus.IN_PROGRESS
     next_step = min(step + 1, 5)
     assessment.current_step = max(assessment.current_step, next_step)
-
-
-def get_compliance_summary(
-    assessment: CRAAssessment,
-) -> ServiceResult[dict[str, Any]]:
-    """Get the full compliance summary for Step 5 dashboard."""
-    return ServiceResult.success(_compute_compliance_summary(assessment))
 
 
 def get_assessment_list_for_team(team_id: int | str) -> ServiceResult[list[dict[str, Any]]]:

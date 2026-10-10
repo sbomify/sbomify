@@ -185,13 +185,6 @@ export function registerDocumentUpload(): void {
                 }
                 this.selectedFile = file;
             }
-        },
-
-        cleanup(): void {
-            if (this.abortController) {
-                this.abortController.abort();
-                this.abortController = null;
-            }
         }
     }));
 }

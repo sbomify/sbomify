@@ -18,7 +18,7 @@ class PluginMetadata:
     denormalize into AssessmentRun for efficient querying.
 
     Attributes:
-        name: Plugin identifier (e.g., "ntia-minimum-elements", "osv", "checksum").
+        name: Plugin identifier (e.g., "ntia-minimum-elements", "osv").
         version: Semantic version of the plugin (e.g., "1.0.0"). Bump it
             whenever scoring changes: a stored run whose version differs from
             the registered one is shown as out of date.
@@ -40,22 +40,6 @@ class PluginMetadata:
     scan_mode: ScanMode = ScanMode.ONE_SHOT
     supported_bom_types: list[str] | None = None
     requires_crypto_assets: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert metadata to dictionary for serialization.
-
-        Returns:
-            Dictionary representation with category as string value.
-        """
-        result: dict[str, Any] = {
-            "name": self.name,
-            "version": self.version,
-            "category": self.category.value,
-            "scan_mode": self.scan_mode.value,
-        }
-        if self.supported_bom_types is not None:
-            result["supported_bom_types"] = self.supported_bom_types
-        return result
 
 
 @dataclass
@@ -86,7 +70,6 @@ class Finding:
         analysis_response: VEX response actions (e.g., ["update", "workaround_available"]).
         analysis_detail: Free-text explanation of the analysis.
         remediation: Suggested fix or recommendation.
-        evidence_key: S3 key for large evidence payloads.
         metadata: Plugin-specific additional data.
     """
 
@@ -131,7 +114,6 @@ class Finding:
 
     # Common optional fields
     remediation: str | None = None
-    evidence_key: str | None = None
     metadata: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -180,6 +162,18 @@ class AssessmentSummary:
         """
         result = asdict(self)
         return {k: v for k, v in result.items() if v is not None}
+
+
+def summarize(findings: list[Finding]) -> AssessmentSummary:
+    """Count findings by status."""
+    return AssessmentSummary(
+        total_findings=len(findings),
+        pass_count=sum(1 for f in findings if f.status == "pass"),
+        fail_count=sum(1 for f in findings if f.status == "fail"),
+        warning_count=sum(1 for f in findings if f.status == "warning"),
+        error_count=sum(1 for f in findings if f.status == "error"),
+        info_count=sum(1 for f in findings if f.status == "info"),
+    )
 
 
 @dataclass

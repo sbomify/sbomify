@@ -99,15 +99,6 @@ class TestPruning:
         assert removed == 3
         assert AssessmentRun.objects.count() == 3
 
-    def test_a_dry_run_deletes_nothing(self, sample_sbom):
-        for age in range(100, 106):
-            _run(sample_sbom, "osv", days_ago=age)
-
-        counted = prune_assessment_runs(keep_per_plugin=3, min_age_days=30, dry_run=True)
-
-        assert counted == 3
-        assert AssessmentRun.objects.count() == 6
-
     def test_batching_deletes_everything_it_selected(self, sample_sbom):
         """Batched so a first run against a large table holds short locks; the
         batch size must not change the outcome."""

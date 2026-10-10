@@ -15,10 +15,7 @@ dramatiq.set_broker(stub_broker)
 # Mock Stripe settings for testing - set these before any other imports
 import os
 
-os.environ["STRIPE_API_KEY"] = "sk_test_dummy_key_for_ci"
 os.environ["STRIPE_SECRET_KEY"] = "sk_test_dummy_key_for_ci"
-os.environ["STRIPE_PUBLISHABLE_KEY"] = "pk_test_dummy_key_for_ci"
-os.environ["STRIPE_BILLING_URL"] = "https://billing.stripe.com/test"
 os.environ["STRIPE_WEBHOOK_SECRET"] = "whsec_test_webhook_secret_key"
 
 # Mock trial period settings
@@ -30,7 +27,6 @@ os.environ["POSTHOG_API_KEY"] = ""
 
 # Mock email settings
 os.environ["DEFAULT_FROM_EMAIL"] = "test@sbomify.com"
-EMAIL_SUBJECT_PREFIX = "[sbomify] "
 
 
 # Import settings in a way that ensures they are loaded immediately
@@ -66,12 +62,6 @@ DRAMATIQ_RESULT_BACKEND = {
     "BACKEND": "dramatiq.results.backends.stub.StubBackend",
     "BACKEND_OPTIONS": {},
 }
-
-# Ensure allauth apps are included in INSTALLED_APPS
-if "allauth" not in INSTALLED_APPS:
-    INSTALLED_APPS.extend(
-        ["allauth", "allauth.account", "allauth.socialaccount", "allauth.socialaccount.providers.openid_connect"]
-    )
 
 # Database configuration: Use PostgreSQL if test env vars are set, otherwise SQLite in-memory
 if os.environ.get("TEST_DATABASE_HOST"):
@@ -125,19 +115,12 @@ AWS_MEDIA_STORAGE_BUCKET_URL = "http://test-s3.localhost/test-media-bucket"
 AWS_SBOMS_ACCESS_KEY_ID = "test-key"  # nosec B105
 AWS_SBOMS_SECRET_ACCESS_KEY = "test-secret"  # nosec B105
 AWS_SBOMS_STORAGE_BUCKET_NAME = "test-sboms-bucket"
-AWS_SBOMS_STORAGE_BUCKET_URL = "http://test-s3.localhost/test-sboms-bucket"
 AWS_DOCUMENTS_ACCESS_KEY_ID = "test-key"  # nosec B105
 AWS_DOCUMENTS_SECRET_ACCESS_KEY = "test-secret"  # nosec B105
 AWS_DOCUMENTS_STORAGE_BUCKET_NAME = "test-documents-bucket"
-AWS_DOCUMENTS_STORAGE_BUCKET_URL = "http://test-s3.localhost/test-documents-bucket"
 
 APP_BASE_URL = "http://localhost:8001"
 TRUST_CENTER_DOMAIN = ""  # Opt-in per test via @override_settings(TRUST_CENTER_DOMAIN="trustcenters.test")
-
-# Static files configuration
-STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "sbomify" / "static"]
-STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Add WhiteNoise compression for test similarity
 STORAGES = {
@@ -187,16 +170,8 @@ MIDDLEWARE = [
 API_V1_DEPRECATED_ON = datetime(2026, 8, 26, tzinfo=UTC)
 API_V1_SUNSET = None
 
-# Configure ALLOWED_HOSTS for tests
-# Use wildcard - DynamicHostValidationMiddleware handles validation
-ALLOWED_HOSTS = ["*"]
-
 # Run tests without Django Debug Toolbar middleware to avoid djdt namespace errors.
 # (Debug Toolbar middleware is not included in the MIDDLEWARE list above.)
-
-SITE_URL = "http://testserver"
-
-INVITATION_EXPIRY_DAYS = 7
 
 # Use local memory cache for testing
 CACHES = {

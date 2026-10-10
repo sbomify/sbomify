@@ -13,11 +13,10 @@ def validate_role_in_url_team(allowed_roles: list[str]) -> Callable[..., Any]:
     """Require one of ``allowed_roles`` in the workspace named by the URL ``team_key``,
     checked against the database.
 
-    Unlike :func:`validate_role_in_current_team`, which authorizes the caller's *active*
-    (session) workspace, this authorizes the workspace the request actually acts on. Views
-    that take a URL ``team_key`` must use this — trusting the session workspace lets an owner
-    of workspace A act on workspace B. The DB lookup also avoids honouring a stale cached
-    role in the session.
+    This authorizes the workspace the request actually acts on, not the caller's *active*
+    (session) workspace. Views that take a URL ``team_key`` must use this — trusting the
+    session workspace lets an owner of workspace A act on workspace B. The DB lookup also
+    avoids honouring a stale cached role in the session.
     """
 
     def _decorator(function: Callable[..., Any]) -> Callable[..., Any]:
@@ -43,52 +42,6 @@ def validate_role_in_url_team(allowed_roles: list[str]) -> Callable[..., Any]:
                 return error_response(
                     request,
                     HttpResponseForbidden("You don't have sufficient permissions to access this workspace"),
-                )
-
-            return function(request, *args, **kwargs)  # type: ignore[no-any-return]
-
-        return _wrapped_view
-
-    return _decorator
-
-
-def validate_role_in_current_team(allowed_roles: list[str]) -> Callable[..., Any]:
-    """
-    Verify that a user is logged in and current logged in user has one of the given roles
-    within the team.
-
-    Args:
-        allowed_roles: List of allowed roles (e.g., ['owner', 'admin'])
-
-    Returns:
-        Decorator function that checks user authentication and role permissions
-    """
-
-    def _decorator(function: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(function)
-        def _wrapped_view(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-            if not request.user.is_authenticated:
-                return error_response(request, HttpResponseForbidden("Not logged in"))
-
-            # Get current team from session
-            current_team = request.session.get("current_workspace", {})
-            team_key = current_team.get("key", None)
-
-            if team_key is None:
-                return error_response(request, HttpResponseForbidden("No current workspace selected"))
-
-            # Get user teams from session
-            user_teams = request.session.get("user_workspaces", {})
-
-            if team_key not in user_teams:
-                return error_response(request, HttpResponseForbidden("Unknown workspace"))
-
-            # Check if user has the required role
-            user_role = user_teams[team_key].get("role", "")
-            if user_role not in allowed_roles:
-                return error_response(
-                    request,
-                    HttpResponseForbidden("You don't have sufficient permissions to access this page"),
                 )
 
             return function(request, *args, **kwargs)  # type: ignore[no-any-return]

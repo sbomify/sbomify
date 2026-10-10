@@ -1,5 +1,5 @@
 {# Component metadata form using entity/contact FormSets - same as contact profiles #}
-{% load static widget_tweaks %}
+{% load static %}
 <div class="component-metadata-formset"
      x-data="contactProfileForm('{{ entities_formset.prefix|escapejs }}')"
      @update-counts.window="updateCounts()">

@@ -7,12 +7,13 @@ executing plugins, and storing results.
 
 from __future__ import annotations
 
-import importlib
+import hashlib
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from django.utils import timezone
+from django.utils.module_loading import import_string
 
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
@@ -22,10 +23,9 @@ from .models import AssessmentRun, RegisteredPlugin
 from .sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from .sdk.enums import AssessmentCategory, RunReason, RunStatus, ScanMode
 from .sdk.results import PluginMetadata
-from .utils import compute_config_hash, compute_content_digest
+from .utils import compute_config_hash
 
 if TYPE_CHECKING:
-    from sbomify.apps.access_tokens.models import AccessToken
     from sbomify.apps.core.models import User
 
 logger = getLogger(__name__)
@@ -37,36 +37,6 @@ class DependencyCheckResult(TypedDict):
     satisfied: bool
     passing_plugins: list[str]
     failed_plugins: list[str]
-
-
-class DependencyStatus(TypedDict, total=False):
-    """Status of plugin dependencies passed to assess().
-
-    This TypedDict is partial (total=False). A key is present only if
-    the plugin declares the corresponding dependency type in its
-    dependencies configuration:
-
-    - requires_one_of is included when the plugin defines a
-      requires_one_of dependency group.
-    - requires_all is included when the plugin defines a
-      requires_all dependency group.
-    """
-
-    requires_one_of: DependencyCheckResult
-    requires_all: DependencyCheckResult
-
-
-def load_plugin_class(plugin_class_path: str) -> type[AssessmentPlugin]:
-    """Resolve a dotted plugin class path to its class.
-
-    The one import path both the orchestrator and the settings API use, so
-    the two can never disagree about how a registry row resolves. Raises
-    ImportError/AttributeError on a broken path; callers pick their policy.
-    """
-    module_path, class_name = plugin_class_path.rsplit(".", 1)
-    module = importlib.import_module(module_path)
-    plugin_class: type[AssessmentPlugin] = getattr(module, class_name)
-    return plugin_class
 
 
 def plugin_applies_to(metadata: PluginMetadata, bom_type: str, has_crypto_assets: bool | None) -> bool:
@@ -114,7 +84,7 @@ class PluginOrchestrator:
         >>> orchestrator = PluginOrchestrator()
         >>> run = orchestrator.run_assessment(
         ...     sbom_id="abc123",
-        ...     plugin=ChecksumPlugin(),
+        ...     plugin=NTIAMinimumElementsPlugin(),
         ...     run_reason=RunReason.ON_UPLOAD,
         ... )
         >>> print(run.status)
@@ -127,9 +97,7 @@ class PluginOrchestrator:
         plugin: AssessmentPlugin,
         run_reason: RunReason,
         triggered_by_user: User | None = None,
-        triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
-        release_id: str | None = None,
     ) -> AssessmentRun | None:
         """Execute a plugin assessment with full lifecycle management.
 
@@ -146,13 +114,8 @@ class PluginOrchestrator:
             plugin: An initialized AssessmentPlugin instance.
             run_reason: Why this assessment is being triggered.
             triggered_by_user: Optional user who triggered a manual run.
-            triggered_by_token: Optional API token used to trigger the run.
             existing_run_id: Optional ID of an existing AssessmentRun to reuse
                 (for retries after RetryLaterError).
-            release_id: Optional ID of the triggering Release. Passed to
-                plugins as an informational hint via ``SBOMContext.release_id``
-                (not persisted on AssessmentRun — releases are tracked via
-                the ``releases`` M2M populated at run completion).
 
         Returns:
             The AssessmentRun record with results, or None if the SBOM's
@@ -220,9 +183,7 @@ class PluginOrchestrator:
             # Create the AssessmentRun record in PENDING state. Under the
             # scan-once-per-SBOM model, releases are attached via the M2M
             # at run completion (see _sync_run_releases), not at creation
-            # time. The ``release_id`` argument threaded through callers
-            # is kept only as an informational hint for plugins via
-            # ``SBOMContext.release_id`` and is not written to a FK here.
+            # time.
             assessment_run = AssessmentRun.objects.create(
                 sbom_id=sbom_id,
                 plugin_name=metadata.name,
@@ -232,7 +193,6 @@ class PluginOrchestrator:
                 run_reason=run_reason.value,
                 status=RunStatus.PENDING.value,
                 triggered_by_user=triggered_by_user,
-                triggered_by_token=triggered_by_token,
             )
             logger.info(
                 f"[PLUGIN] Created run {assessment_run.id} for SBOM {sbom_id} "
@@ -253,22 +213,14 @@ class PluginOrchestrator:
             sbom_instance, sbom_bytes = get_sbom_data_bytes(sbom_id)
 
             # Compute content digest for auditability
-            content_digest = compute_content_digest(sbom_bytes)
-            assessment_run.input_content_digest = content_digest
+            assessment_run.input_content_digest = hashlib.sha256(sbom_bytes).hexdigest()
             assessment_run.save(update_fields=["input_content_digest"])
 
             # Build SBOMContext with pre-computed metadata from database
             # This allows plugins to skip redundant computations (e.g., sha256_hash)
             sbom_context = SBOMContext(
                 sha256_hash=sbom_instance.sha256_hash,
-                sbom_format=sbom_instance.format,
-                format_version=sbom_instance.format_version,
-                sbom_name=sbom_instance.name,
-                sbom_version=sbom_instance.version,
-                component_id=sbom_instance.component_id,
-                team_id=sbom_instance.component.team_id if sbom_instance.component else None,
                 bom_type=sbom_instance.bom_type,
-                release_id=release_id,
                 signature_blob_key=sbom_instance.signature_blob_key,
                 signature_type=sbom_instance.signature_type,
                 provenance_blob_key=sbom_instance.provenance_blob_key,
@@ -692,10 +644,6 @@ class PluginOrchestrator:
         if "requires_one_of" in dependencies:
             dependency_status["requires_one_of"] = self._check_one_of(sbom_id, dependencies["requires_one_of"])
 
-        # Check requires_all (AND logic - all must pass)
-        if "requires_all" in dependencies:
-            dependency_status["requires_all"] = self._check_all_of(sbom_id, dependencies["requires_all"])
-
         return dependency_status if dependency_status else None
 
     def _check_one_of(self, sbom_id: str, deps: list[dict[str, str]]) -> DependencyCheckResult:
@@ -703,7 +651,7 @@ class PluginOrchestrator:
 
         Args:
             sbom_id: The SBOM's primary key.
-            deps: List of dependency specs ({"type": "category|plugin", "value": "..."}).
+            deps: List of dependency specs ({"type": "category", "value": "..."}).
 
         Returns:
             Status dict with satisfied, passing_plugins, and failed_plugins.
@@ -728,94 +676,14 @@ class PluginOrchestrator:
                     else:
                         failed.append(run.plugin_name)
 
-            elif dep_type == "plugin":
-                # Check specific plugin
-                single_run = (
-                    AssessmentRun.objects.filter(
-                        sbom_id=sbom_id,
-                        plugin_name=dep_value,
-                        status=RunStatus.COMPLETED.value,
-                    )
-                    .only("plugin_name", "result")
-                    .order_by("-created_at")
-                    .first()
-                )
-
-                if single_run:
-                    if self._is_passing(single_run):
-                        passing.append(single_run.plugin_name)
-                    else:
-                        failed.append(single_run.plugin_name)
-
         return {
             "satisfied": len(passing) > 0,
             "passing_plugins": list(set(passing)),
             "failed_plugins": list(set(failed)),
         }
 
-    def _check_all_of(self, sbom_id: str, deps: list[dict[str, str]]) -> DependencyCheckResult:
-        """Check if all dependencies are satisfied (AND logic).
-
-        Args:
-            sbom_id: The SBOM's primary key.
-            deps: List of dependency specs ({"type": "category|plugin", "value": "..."}).
-
-        Returns:
-            Status dict with satisfied, passing_plugins, and failed_plugins.
-        """
-        passing: list[str] = []
-        failed: list[str] = []
-        all_satisfied = True
-
-        for dep in deps:
-            dep_type = dep.get("type")
-            dep_value = dep.get("value")
-            dep_satisfied = False
-
-            if dep_type == "category":
-                # At least one plugin in this category must pass
-                runs = AssessmentRun.objects.filter(
-                    sbom_id=sbom_id,
-                    category=dep_value,
-                    status=RunStatus.COMPLETED.value,
-                ).only("plugin_name", "result")
-                for run in runs:
-                    if self._is_passing(run):
-                        passing.append(run.plugin_name)
-                        dep_satisfied = True
-                    else:
-                        failed.append(run.plugin_name)
-
-            elif dep_type == "plugin":
-                # Specific plugin must pass
-                single_run = (
-                    AssessmentRun.objects.filter(
-                        sbom_id=sbom_id,
-                        plugin_name=dep_value,
-                        status=RunStatus.COMPLETED.value,
-                    )
-                    .only("plugin_name", "result")
-                    .order_by("-created_at")
-                    .first()
-                )
-
-                if single_run:
-                    if self._is_passing(single_run):
-                        passing.append(single_run.plugin_name)
-                        dep_satisfied = True
-                    else:
-                        failed.append(single_run.plugin_name)
-
-            if not dep_satisfied:
-                all_satisfied = False
-
-        return {
-            "satisfied": all_satisfied,
-            "passing_plugins": list(set(passing)),
-            "failed_plugins": list(set(failed)),
-        }
-
-    def _is_passing(self, run: AssessmentRun) -> bool:
+    @staticmethod
+    def _is_passing(run: AssessmentRun) -> bool:
         """Check if an assessment run is passing.
 
         For security plugins: passing means no vulnerabilities found
@@ -900,51 +768,9 @@ class PluginOrchestrator:
 
         # Import and instantiate the plugin class
         try:
-            instance: AssessmentPlugin = load_plugin_class(registered.plugin_class_path)(config=merged_config)
+            instance: AssessmentPlugin = import_string(registered.plugin_class_path)(config=merged_config)
             return instance
         except (ImportError, AttributeError) as e:
             raise PluginOrchestratorError(
                 f"Failed to load plugin '{plugin_name}' from '{registered.plugin_class_path}': {e}"
             )
-
-    def run_assessment_by_name(
-        self,
-        sbom_id: str,
-        plugin_name: str,
-        run_reason: RunReason,
-        config: dict[str, Any] | None = None,
-        triggered_by_user: User | None = None,
-        triggered_by_token: AccessToken | None = None,
-        existing_run_id: str | None = None,
-        release_id: str | None = None,
-    ) -> AssessmentRun | None:
-        """Run an assessment by plugin name.
-
-        Convenience method that loads the plugin by name and runs the assessment.
-
-        Args:
-            sbom_id: The SBOM's primary key.
-            plugin_name: The plugin identifier to run.
-            run_reason: Why this assessment is being triggered.
-            config: Optional configuration overrides for the plugin.
-            triggered_by_user: Optional user who triggered a manual run.
-            triggered_by_token: Optional API token used to trigger the run.
-            existing_run_id: Optional ID of an existing AssessmentRun to reuse
-                (for retries after RetryLaterError).
-            release_id: Optional ID of the Release this assessment targets.
-                See :py:meth:`run_assessment` for details.
-
-        Returns:
-            The AssessmentRun record with results, or None if skipped
-            due to unsupported bom_type.
-        """
-        plugin = self.get_plugin_instance(plugin_name, config)
-        return self.run_assessment(
-            sbom_id=sbom_id,
-            plugin=plugin,
-            run_reason=run_reason,
-            triggered_by_user=triggered_by_user,
-            triggered_by_token=triggered_by_token,
-            existing_run_id=existing_run_id,
-            release_id=release_id,
-        )

@@ -356,46 +356,23 @@ class TeamPricingService:
             except BillingPlan.DoesNotExist:
                 billing_plan_obj = None
 
-        if billing_plan_obj:
-            # Build limits dict - prefer billing_plan_limits, fallback to model
-            limits_dict: dict[str, Any] = {}
-            for limit_key in PLAN_LIMITS:
-                if limit_key in billing_plan_limits:
-                    limits_dict[limit_key] = billing_plan_limits[limit_key]
-                else:
-                    # None on the model means no cap, which reads as "Unlimited"
-                    # below. Skipping the key instead dropped the whole tile, so an
-                    # unlimited quota looked like a quota the plan does not have.
-                    limits_dict[limit_key] = getattr(billing_plan_obj, limit_key, None)
-
-            # Build plan_limits list
-            for limit_key, limit_value in limits_dict.items():
-                if limit_key not in PLAN_LIMITS:
-                    continue
-
-                if limit_value is None or limit_value == -1:
-                    limit_display = "Unlimited"
-                else:
-                    limit_display = str(limit_value)
-
-                plan_limits.append(
-                    {
-                        "icon": PLAN_LIMITS[limit_key]["icon"],
-                        "label": PLAN_LIMITS[limit_key]["label"],
-                        "value": limit_display,
-                    }
-                )
-        else:
-            # Fallback: use billing_plan_limits if BillingPlan doesn't exist
-            for limit_key, limit_value in billing_plan_limits.items():
-                if limit_key not in PLAN_LIMITS:
-                    continue
-                plan_limits.append(
-                    {
-                        "icon": PLAN_LIMITS[limit_key]["icon"],
-                        "label": PLAN_LIMITS[limit_key]["label"],
-                        "value": "Unlimited" if limit_value == -1 or limit_value is None else str(limit_value),
-                    }
-                )
+        # The workspace's own limits win over the plan's. With a plan, every
+        # limit gets a tile: one the plan leaves unset has no cap and reads
+        # "Unlimited", so it is not mistaken for a quota the plan lacks.
+        # Without a plan, only the workspace's own limits are shown.
+        for limit_key, meta in PLAN_LIMITS.items():
+            if limit_key in billing_plan_limits:
+                limit_value = billing_plan_limits[limit_key]
+            elif billing_plan_obj is not None:
+                limit_value = getattr(billing_plan_obj, limit_key, None)
+            else:
+                continue
+            plan_limits.append(
+                {
+                    "icon": meta["icon"],
+                    "label": meta["label"],
+                    "value": "Unlimited" if limit_value is None or limit_value == -1 else str(limit_value),
+                }
+            )
 
         return plan_limits

@@ -8,6 +8,8 @@ from django.apps import apps
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Func, JSONField, Value
+from django.db.models.functions import Coalesce
 
 from .utils import PRICE_VALIDATION_TOLERANCE, is_test_environment
 
@@ -91,27 +93,8 @@ class BillingPlan(models.Model):
         return self.key in ["business", "enterprise"]
 
     @property
-    def has_vulnerability_scanning(self) -> bool:
-        """Check if this plan includes vulnerability scanning.
-
-        Note: OSV vulnerability scanning is available for ALL teams.
-        This property now indicates if Dependency Track is available.
-        """
-        return True
-
-    @property
     def has_dependency_track_access(self) -> bool:
         """Check if this plan includes Dependency Track access."""
-        return self.key in ["business", "enterprise"]
-
-    @property
-    def allows_unlimited_users(self) -> bool:
-        """Check if this plan allows unlimited users."""
-        return self.max_users is None
-
-    @property
-    def has_custom_domain_access(self) -> bool:
-        """Check if this plan includes custom domain feature."""
         return self.key in ["business", "enterprise"]
 
     @property
@@ -129,16 +112,6 @@ class BillingPlan(models.Model):
             return None
         discount = Decimal(self.discount_percent_annual) / Decimal("100")
         return self.annual_price * (Decimal("1") - discount)
-
-    @property
-    def monthly_savings(self) -> Decimal | None:
-        """Calculate savings amount for monthly billing if discount is applied."""
-        if self.monthly_price is None or self.discount_percent_monthly == 0:
-            return None
-        discounted = self.monthly_price_discounted
-        if discounted is None:
-            return None
-        return self.monthly_price - discounted
 
     @property
     def annual_savings(self) -> Decimal | None:
@@ -161,31 +134,6 @@ class BillingPlan(models.Model):
             return None
         monthly_yearly_total = monthly_discounted * Decimal("12")
         return monthly_yearly_total - annual_discounted
-
-    @property
-    def annual_discount_percent(self) -> Decimal | None:
-        """Calculate percentage discount of annual vs monthly billing."""
-        if self.monthly_price is None or self.annual_price is None:
-            return None
-        monthly_discounted = self.monthly_price_discounted
-        annual_discounted = self.annual_price_discounted
-        if monthly_discounted is None or annual_discounted is None:
-            return None
-        monthly_yearly_total = monthly_discounted * Decimal("12")
-        if monthly_yearly_total == 0:
-            return None
-        discount = ((monthly_yearly_total - annual_discounted) / monthly_yearly_total) * Decimal("100")
-        return discount.quantize(Decimal("0.1"))
-
-    @property
-    def total_annual_savings(self) -> Decimal | None:
-        """Calculate total savings when choosing annual billing."""
-        annual_vs_monthly = (
-            self.annual_vs_monthly_savings if self.annual_vs_monthly_savings is not None else Decimal("0")
-        )
-        promo_savings = self.annual_savings if self.annual_savings is not None else Decimal("0")
-        total = annual_vs_monthly + promo_savings
-        return total if total > 0 else None
 
     def clean(self) -> None:
         """Validate prices against Stripe when price IDs are set."""
@@ -256,48 +204,30 @@ class BillingPlan(models.Model):
 
     def _update_teams_with_new_limits(self) -> None:
         """
-        Update all teams using this plan with the current limits from the model.
+        Copy this plan's limits onto the workspaces on it.
 
-        Uses bulk_update for efficiency when updating multiple teams.
-        Only updates teams whose limits actually changed (idempotent).
+        One UPDATE merges just the three limit keys into each workspace's JSON, so a
+        checkout or payment webhook writing the same row is never read around and
+        overwritten: Postgres redoes the merge on whatever that transaction committed.
+        Workspaces that already hold these limits are left alone.
         """
         from sbomify.apps.teams.models import Team
 
-        teams = Team.objects.filter(billing_plan=self.key)
-        team_count = teams.count()
-
-        if team_count == 0:
-            return
-
-        # Prepare updates for bulk operation - only for teams that actually need updates
-        teams_to_update = []
-        new_limit_values: dict[str, int | None] = {
+        limits = {
             "max_products": self.max_products,
             "max_components": self.max_components,
             "max_users": self.max_users,
         }
-
-        for team in teams:
-            existing_limits = team.billing_plan_limits or {}
-
-            # Check if limits actually changed (idempotency check)
-            needs_update = False
-            for key, new_value in new_limit_values.items():
-                if existing_limits.get(key) != new_value:
-                    needs_update = True
-                    break
-
-            if not needs_update:
-                continue
-
-            new_limits = existing_limits.copy()
-            new_limits.update(new_limit_values)
-            team.billing_plan_limits = new_limits
-            teams_to_update.append(team)
-
-        # Use bulk_update for better performance
-        if teams_to_update:
-            Team.objects.bulk_update(teams_to_update, ["billing_plan_limits"], batch_size=100)
+        merged = Func(
+            Coalesce("billing_plan_limits", Value({}, JSONField())),
+            Value(limits, JSONField()),
+            arg_joiner=" || ",
+            template="%(expressions)s",
+            output_field=JSONField(),
+        )
+        Team.objects.filter(billing_plan=self.key).exclude(billing_plan_limits__contains=limits).update(
+            billing_plan_limits=merged
+        )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """
@@ -333,8 +263,3 @@ class BillingPlan(models.Model):
 
     # Plan keys eligible for CRA Compliance — single source of truth
     CRA_ELIGIBLE_PLAN_KEYS: frozenset[str] = frozenset({"business", "enterprise"})
-
-    @property
-    def has_cra_compliance(self) -> bool:
-        """Check if this plan includes CRA Compliance Wizard."""
-        return self.key in self.CRA_ELIGIBLE_PLAN_KEYS

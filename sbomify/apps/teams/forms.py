@@ -26,6 +26,11 @@ class AddTeamForm(_TeamFormBase):
         model = Team
         fields = ["name"]
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # form_modal renders Django's own widget, so the legacy input class goes on it here.
+        self.fields["name"].widget.attrs["class"] = "tw-form-input"
+
     def save(self, *args: Any, user: Any = None, **kwargs: Any) -> Team:
         is_new = self.instance._state.adding
         super().save(*args, **kwargs)
@@ -133,48 +138,6 @@ class PatchSLAForm(forms.Form):
 
 class SupportPeriodForm(forms.Form):
     default_support_period_years = forms.IntegerField(required=False, min_value=5, max_value=100)
-
-
-class OnboardingProductForm(forms.Form):
-    """Form for creating a product during onboarding."""
-
-    name = forms.CharField(
-        label="Product Name",
-        max_length=255,
-        required=True,
-        widget=forms.TextInput(
-            attrs={
-                "class": "form-control form-control-lg",
-                "placeholder": "Enter product name",
-                "autofocus": True,
-            }
-        ),
-        help_text=(
-            "A product is your top-level offering, which can be physical hardware, software, or a combination of both. "
-            "For example, a smart device, an application suite, or an IoT platform."
-        ),
-    )
-
-
-class OnboardingComponentForm(forms.Form):
-    """Form for creating a component during onboarding."""
-
-    name = forms.CharField(
-        label="Component Name",
-        max_length=255,
-        required=True,
-        widget=forms.TextInput(
-            attrs={
-                "class": "form-control form-control-lg",
-                "placeholder": "Enter component name",
-                "autofocus": True,
-            }
-        ),
-        help_text=(
-            "Components are the individual building blocks that make up your product. These can be libraries, "
-            "microservices, firmware modules, or any other distinct piece of software."
-        ),
-    )
 
 
 class OnboardingCompanyForm(PatchSLAForm):

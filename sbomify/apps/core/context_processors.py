@@ -84,10 +84,6 @@ def version_context(request: Any) -> Any:
     Provides the following context variables:
     - app_version: The semantic version from package metadata
     - git_commit: Short git commit hash (7 characters)
-    - git_commit_full: Full git commit SHA
-    - git_ref: Git ref name (tag or branch)
-    - build_type: 'release' for tag builds, 'branch' for branch builds
-    - build_date: Build timestamp in RFC 3339 format
     """
     try:
         app_version = version("sbomify")
@@ -96,18 +92,10 @@ def version_context(request: Any) -> Any:
 
     # Get build metadata from environment variables (set during Docker build)
     git_commit_short = os.environ.get("SBOMIFY_GIT_COMMIT_SHORT", "")
-    git_commit_full = os.environ.get("SBOMIFY_GIT_COMMIT", "")
-    git_ref = os.environ.get("SBOMIFY_GIT_REF", "")
-    build_type = os.environ.get("SBOMIFY_BUILD_TYPE", "")
-    build_date = os.environ.get("SBOMIFY_BUILD_DATE", "")
 
     return {
         "app_version": app_version,
         "git_commit": git_commit_short if git_commit_short else None,
-        "git_commit_full": git_commit_full if git_commit_full else None,
-        "git_ref": git_ref if git_ref else None,
-        "build_type": build_type if build_type else None,
-        "build_date": build_date if build_date else None,
     }
 
 
@@ -130,7 +118,6 @@ def pending_invitations_context(request: Any) -> Any:
     if not sanitized_email:
         return {
             "pending_invitations_count": 0,
-            "has_pending_invitations": False,
         }
     cache_key = f"pending_invitations:{sanitized_email}"
     cached = cache.get(cache_key)
@@ -143,7 +130,6 @@ def pending_invitations_context(request: Any) -> Any:
 
     return {
         "pending_invitations_count": count,
-        "has_pending_invitations": count > 0,  # Boolean for cache key to avoid key explosion
     }
 
 
@@ -166,7 +152,6 @@ def pending_access_requests_context(request: Any) -> Any:
     if not request.user.is_authenticated:
         return {
             "pending_access_requests_count": 0,
-            "has_pending_access_requests": False,
         }
 
     current_team_data = request.session.get("current_workspace", {})
@@ -175,7 +160,6 @@ def pending_access_requests_context(request: Any) -> Any:
     if not team_key:
         return {
             "pending_access_requests_count": 0,
-            "has_pending_access_requests": False,
         }
 
     try:
@@ -193,7 +177,6 @@ def pending_access_requests_context(request: Any) -> Any:
         if not member or member.role not in ADMINISTER:
             return {
                 "pending_access_requests_count": 0,
-                "has_pending_access_requests": False,
             }
 
         # Cache the count to avoid querying on every page load
@@ -226,13 +209,11 @@ def pending_access_requests_context(request: Any) -> Any:
 
         return {
             "pending_access_requests_count": count,
-            "has_pending_access_requests": count > 0,
         }
     except Exception:
         # Fail silently to avoid crashing unrelated pages
         return {
             "pending_access_requests_count": 0,
-            "has_pending_access_requests": False,
         }
 
 
@@ -293,7 +274,7 @@ def team_context(request: Any) -> Any:
         # request — degrading page loads and causing ASGI CancelledError on
         # client disconnect. The DB is kept current by Stripe webhooks
         # (customer.subscription.updated / invoice.*) plus a daily safety-net
-        # task (billing.cron.daily_subscription_sync).
+        # task (billing.tasks.sync_active_subscriptions_task).
         member = Member.objects.filter(team=team, user=request.user).first()
         role = member.role if member else None
 

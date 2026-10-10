@@ -10,6 +10,8 @@ from django.contrib import admin
 from django.http import HttpRequest
 from django.utils.html import format_html
 
+from sbomify.apps.core.admin import admin_site
+
 from .models import OnboardingEmail, OnboardingStatus
 
 if TYPE_CHECKING:
@@ -22,7 +24,7 @@ else:
     _OnboardingEmailAdmin = admin.ModelAdmin
 
 
-@admin.register(OnboardingStatus)
+@admin.register(OnboardingStatus, site=admin_site)
 class OnboardingStatusAdmin(_OnboardingStatusAdmin):
     """Admin interface for OnboardingStatus."""
 
@@ -53,6 +55,7 @@ class OnboardingStatusAdmin(_OnboardingStatusAdmin):
     ]
 
     readonly_fields = [
+        "id",
         "user",
         "created_at",
         "updated_at",
@@ -63,6 +66,10 @@ class OnboardingStatusAdmin(_OnboardingStatusAdmin):
     ]
 
     ordering = ["-created_at"]
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        # The app creates these rows, and the user is read-only here.
+        return False
 
     @admin.display(description="Email", ordering="user__email")
     def user_email(self, obj: OnboardingStatus) -> str:
@@ -104,7 +111,7 @@ class OnboardingStatusAdmin(_OnboardingStatusAdmin):
         return format_html('<div style="color: {};">{} ({}%)</div>', color, " → ".join(steps), progress)
 
 
-@admin.register(OnboardingEmail)
+@admin.register(OnboardingEmail, site=admin_site)
 class OnboardingEmailAdmin(_OnboardingEmailAdmin):
     """Admin interface for OnboardingEmail."""
 
@@ -129,6 +136,7 @@ class OnboardingEmailAdmin(_OnboardingEmailAdmin):
     ]
 
     readonly_fields = [
+        "id",
         "user",
         "email_type",
         "subject",
@@ -138,6 +146,9 @@ class OnboardingEmailAdmin(_OnboardingEmailAdmin):
     ]
 
     ordering = ["-sent_at"]
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
 
     @admin.display(description="Email", ordering="user__email")
     def user_email(self, obj: OnboardingEmail) -> str:

@@ -238,13 +238,12 @@ class TestBuildSbomsTableContext:
             assert result.ok is True
             # get_team should NOT be called for public view
             mock_get_team.assert_not_called()
-            assert "team_billing_plan" not in result.value
 
     @patch("sbomify.apps.sboms.services.sboms_table.get_team")
     @patch("sbomify.apps.sboms.services.sboms_table.list_component_sboms")
     @patch("sbomify.apps.sboms.services.sboms_table.get_component")
     def test_private_view_includes_team_data(self, mock_get_component, mock_list_sboms, mock_get_team, mock_request):
-        """Private view includes team_billing_plan and team_key."""
+        """Private view includes team_key."""
         mock_get_component.return_value = (
             200,
             {"id": "comp123", "has_crud_permissions": True, "team_id": 123},
@@ -253,13 +252,11 @@ class TestBuildSbomsTableContext:
 
         # Mock team response
         mock_team = MagicMock()
-        mock_team.billing_plan = "business"
         mock_get_team.return_value = (200, mock_team)
 
         result = build_sboms_table_context(mock_request, "comp123", is_public_view=False)
 
         assert result.ok is True
-        assert "team_billing_plan" in result.value
         assert "team_key" in result.value
         assert "delete_form" in result.value
 

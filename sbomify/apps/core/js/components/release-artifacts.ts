@@ -1,6 +1,7 @@
 import Alpine from 'alpinejs';
 import { artifactLink, type ArtifactRoutes } from './artifact-links';
-import $axios, { formatDate as sharedFormatDate } from '../utils';
+import { formatDate as sharedFormatDate } from '../utils';
+import { getCsrfToken } from '../csrf';
 import { showError, showSuccess } from '../alerts';
 
 interface SBOMData {
@@ -108,7 +109,6 @@ export function registerReleaseArtifacts() {
             componentFilter: '',
             currentPage: 1,
             pageSize: 25,
-            pageSizeOptions: [10, 25, 50, 100],
 
             // Main table sorting
             sortColumn: 'name' as 'type' | 'name' | 'component' | 'format' | 'version' | 'created_at',
@@ -135,11 +135,12 @@ export function registerReleaseArtifacts() {
                     // page_size=-1 returns every row. The table filters, sorts
                     // and paginates client-side, so a server page would silently
                     // hide artifacts and make the pager report wrong totals.
-                    const response = await $axios.get(
+                    const response = await fetch(
                         `/api/v1/releases/${this.releaseId}/artifacts?mode=existing&page_size=-1`
                     );
-                    const artifactsData = Array.isArray(response.data) ? response.data : response.data.items || [];
-                    this.artifacts = artifactsData;
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const artifactsData = await response.json();
+                    this.artifacts = Array.isArray(artifactsData) ? artifactsData : artifactsData.items || [];
                 } catch (error) {
                     console.error('Failed to load artifacts:', error);
                     showError('Failed to load artifacts');
@@ -151,9 +152,10 @@ export function registerReleaseArtifacts() {
             async loadAvailableArtifacts() {
                 this.isLoadingAvailable = true;
                 try {
-                    const response = await $axios.get(`/api/v1/releases/${this.releaseId}/artifacts?mode=available&page_size=-1`);
-                    const data = Array.isArray(response.data) ? response.data : response.data.items || [];
-                    this.availableArtifacts = data;
+                    const response = await fetch(`/api/v1/releases/${this.releaseId}/artifacts?mode=available&page_size=-1`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const data = await response.json();
+                    this.availableArtifacts = Array.isArray(data) ? data : data.items || [];
                 } catch (error) {
                     console.error('Failed to load available artifacts:', error);
                     showError('Failed to load available artifacts');
@@ -237,46 +239,6 @@ export function registerReleaseArtifacts() {
                 const start = (this.currentPage - 1) * this.pageSize;
                 const end = start + this.pageSize;
                 return this.filteredArtifacts.slice(start, end);
-            },
-
-            get totalItems(): number {
-                return this.filteredArtifacts.length;
-            },
-
-            get startItem(): number {
-                return this.filteredArtifacts.length > 0 ? (this.currentPage - 1) * this.pageSize + 1 : 0;
-            },
-
-            get endItem(): number {
-                return Math.min(this.currentPage * this.pageSize, this.filteredArtifacts.length);
-            },
-
-            get visiblePages(): (number | string)[] {
-                const pages: (number | string)[] = [];
-                const total = this.totalPages;
-                const current = this.currentPage;
-                if (total <= 7) {
-                    for (let i = 1; i <= total; i++) pages.push(i);
-                } else {
-                    pages.push(1);
-                    if (current > 3) pages.push('...');
-                    for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
-                        pages.push(i);
-                    }
-                    if (current < total - 2) pages.push('...');
-                    pages.push(total);
-                }
-                return pages;
-            },
-
-            goToPage(page: number) {
-                if (page >= 1 && page <= this.totalPages) {
-                    this.currentPage = page;
-                }
-            },
-
-            handlePageSizeChange() {
-                this.currentPage = 1;
             },
 
             // Computed-like getters for available artifacts modal
@@ -561,18 +523,6 @@ export function registerReleaseArtifacts() {
                 return text.substring(0, maxLength - 3) + '...';
             },
 
-            formatFileSize(bytes?: number): string {
-                if (!bytes) return '-';
-                const units = ['B', 'KB', 'MB', 'GB'];
-                let size = bytes;
-                let unitIndex = 0;
-                while (size >= 1024 && unitIndex < units.length - 1) {
-                    size /= 1024;
-                    unitIndex++;
-                }
-                return `${size.toFixed(1)} ${units[unitIndex]}`;
-            },
-
             // Filter handlers
             handleSearch() {
                 this.currentPage = 1;
@@ -680,11 +630,19 @@ export function registerReleaseArtifacts() {
                                 errors.push(`${artifact.name}: Unknown artifact type`);
                                 continue;
                             }
-                            await $axios.post(`/api/v1/releases/${this.releaseId}/artifacts`, payload);
-                            addedCount++;
-                        } catch (err: unknown) {
-                            const axiosErr = err as { response?: { data?: { detail?: string } } };
-                            errors.push(`${artifact.name}: ${axiosErr.response?.data?.detail || 'Failed'}`);
+                            const response = await fetch(`/api/v1/releases/${this.releaseId}/artifacts`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                                body: JSON.stringify(payload),
+                            });
+                            if (response.ok) {
+                                addedCount++;
+                            } else {
+                                const body = await response.json().catch(() => ({}));
+                                errors.push(`${artifact.name}: ${body.detail || 'Failed'}`);
+                            }
+                        } catch {
+                            errors.push(`${artifact.name}: Failed`);
                         }
                     }
 
@@ -719,7 +677,11 @@ export function registerReleaseArtifacts() {
                 if (!this.deleteTarget) return;
 
                 try {
-                    await $axios.delete(`/api/v1/releases/${this.releaseId}/artifacts/${this.deleteTarget.id}`);
+                    const response = await fetch(`/api/v1/releases/${this.releaseId}/artifacts/${this.deleteTarget.id}`, {
+                        method: 'DELETE',
+                        headers: { 'X-CSRFToken': getCsrfToken() },
+                    });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     showSuccess('Artifact removed from release');
                     this.closeDeleteModal();
                     await this.loadArtifacts();

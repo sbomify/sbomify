@@ -446,18 +446,14 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-buttons.secondary>Secondary</c-buttons.secondary>
         <c-buttons.ghost>Ghost</c-buttons.ghost>
         <c-buttons.ghost-danger>Ghost danger</c-buttons.ghost-danger>
-        <c-buttons.gradient>Gradient</c-buttons.gradient>
-        <c-buttons.success>Success</c-buttons.success>
         <c-buttons.warning>Warning</c-buttons.warning>
         <c-buttons.danger><i class="fas fa-trash" aria-hidden="true"></i> <span>Danger</span></c-buttons.danger>
     </div>
     <p class="tw-data-label mb-3">Outline</p>
     <div class="flex flex-wrap gap-2 mb-6">
-        <c-buttons.outline>Outline</c-buttons.outline>
         <c-buttons.outline-primary>Outline primary</c-buttons.outline-primary>
         <c-buttons.outline-warning>Outline warning</c-buttons.outline-warning>
         <c-buttons.outline-danger>Outline danger</c-buttons.outline-danger>
-        <c-buttons.outline-success>Outline success</c-buttons.outline-success>
     </div>
     <p class="tw-data-label mb-3">Sizes, states and links</p>
     <div class="flex flex-wrap items-center gap-2">
@@ -1229,15 +1225,11 @@ first-of-type rule that drops the leading hairline reads the section's position
     <h2 id="stats" class="text-xl font-semibold text-text">Stat cards</h2>
     <p class="text-sm text-text-muted">
         One stat card serves dashboards, scan summaries and dense panels. Pass a value,
-        label and optional icon. The slot places a change indicator beside the value.
+        label and optional icon.
     </p>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <c-layout.stat-card value="1234" label="Total products">
-        <c-layout.stat.change-up><i class="fas fa-arrow-up" aria-hidden="true"></i> 12%</c-layout.stat.change-up>
-        </c-layout.stat-card>
-        <c-layout.stat-card accent="danger" icon="fas fa-shield-halved" value="17" label="Vulnerabilities">
-        <c-layout.stat.change-down><i class="fas fa-arrow-down" aria-hidden="true"></i> 5</c-layout.stat.change-down>
-        </c-layout.stat-card>
+        <c-layout.stat-card value="1234" label="Total products" />
+        <c-layout.stat-card accent="danger" icon="fas fa-shield-halved" value="17" label="Vulnerabilities" />
         <c-layout.stat-card accent="success" icon="fas fa-circle-check" value="96%" label="NTIA compliant" />
         <c-layout.stat-card accent="warning" icon="fas fa-clock" value="4" label="Stale scans" />
     </div>
@@ -1354,7 +1346,6 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-badges.warning>Warning</c-badges.warning>
         <c-badges.danger>Danger</c-badges.danger>
         <c-badges.info>Info</c-badges.info>
-        <c-badges.accent>Accent</c-badges.accent>
         <c-badges.violet>Violet</c-badges.violet>
         <c-badges.info><i class="fas fa-star mr-1" aria-hidden="true"></i> With icon</c-badges.info>
         <c-badges.primary pill>Pill</c-badges.primary>
@@ -1416,8 +1407,6 @@ first-of-type rule that drops the leading hairline reads the section's position
     <div class="flex flex-wrap gap-2">
         <c-tags.tag>Neutral</c-tags.tag>
         <c-tags.primary>Primary</c-tags.primary>
-        <c-tags.success>Success</c-tags.success>
-        <c-tags.warning>Warning</c-tags.warning>
         <c-tags.danger>Danger</c-tags.danger>
         <c-tags.tag><i class="fab fa-python" aria-hidden="true"></i> Python</c-tags.tag>
         <c-tags.tag href="#tags"><i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i> Linked tag</c-tags.tag>
@@ -1522,7 +1511,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         event. Never build a notification by hand.
     </p>
     <div class="flex flex-wrap gap-2">
-        <c-buttons.success size="sm" @click="$dispatch('toast', { type: 'success', title: 'Saved', message: 'Component updated.' })">Success toast</c-buttons.success>
+        <c-buttons.secondary size="sm" @click="$dispatch('toast', { type: 'success', title: 'Saved', message: 'Component updated.' })">Success toast</c-buttons.secondary>
         <c-buttons.danger size="sm" @click="$dispatch('toast', { type: 'error', title: 'Failed', message: 'Could not parse the SBOM.' })">Error toast</c-buttons.danger>
     </div>
     </c-cards.card>

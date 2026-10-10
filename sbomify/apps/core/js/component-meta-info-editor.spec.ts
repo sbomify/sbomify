@@ -131,34 +131,6 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
     });
 
     describe('Form Validation', () => {
-        const isValidUrl = (url: string): boolean => {
-            try {
-                new URL(url);
-                return true;
-            } catch {
-                return false;
-            }
-        };
-
-        const isValidEmail = (email: string): boolean => {
-            if (!email) return true;
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            return emailRegex.test(email);
-        };
-
-        test('should validate URLs correctly', () => {
-            expect(isValidUrl('https://example.com')).toBe(true);
-            expect(isValidUrl('http://localhost:3000')).toBe(true);
-            expect(isValidUrl('not-a-url')).toBe(false);
-            expect(isValidUrl('')).toBe(false);
-        });
-
-        test('should validate emails correctly', () => {
-            expect(isValidEmail('user@example.com')).toBe(true);
-            expect(isValidEmail('')).toBe(true); // Empty is valid (optional)
-            expect(isValidEmail('invalid')).toBe(false);
-        });
-
         test('should determine form validity', () => {
             const isFormValid = (errors: {
                 supplier: Record<string, string>;

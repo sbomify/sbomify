@@ -401,10 +401,7 @@ def logout(request: HttpRequest) -> HttpResponse:
     django_logout(request)
     # Redirect to Keycloak logout endpoint and then straight into its login page.
     # Using post_logout_redirect_uri avoids pausing on the Keycloak "You are logged out" splash.
-    if hasattr(settings, "KEYCLOAK_PUBLIC_URL"):
-        base_url = settings.KEYCLOAK_PUBLIC_URL.rstrip("/")  # type: ignore[misc]
-    else:
-        base_url = settings.KEYCLOAK_SERVER_URL.rstrip("/")
+    base_url = settings.KEYCLOAK_SERVER_URL.rstrip("/")
     realm = settings.KEYCLOAK_REALM
     client_id = settings.KEYCLOAK_CLIENT_ID
 
@@ -568,21 +565,6 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
         # Catch any other exceptions without exposing internal details
         logger.exception("Error generating product SBOM")
         return error_response(request, HttpResponseServerError("Error generating product SBOM"))
-
-
-@login_required
-def get_component_metadata(request: HttpRequest, component_id: str) -> HttpResponse:
-    try:
-        component: Component = Component.objects.get(pk=component_id)
-    except Component.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Component not found"))
-
-    if not can(request, "component:manage", component):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    metadata = component.metadata or {}
-    metadata.setdefault("supplier", None)
-    return JsonResponse(metadata)
 
 
 @login_required

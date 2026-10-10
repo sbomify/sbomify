@@ -11,6 +11,7 @@ import urllib3
 from django.db.models import DateTimeField, F
 from django.db.models.functions import Coalesce, Greatest, Now
 from django.utils import timezone
+from dramatiq_crontab import cron
 
 from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.utils import custom_domain_challenge, invalidate_custom_domain_cache
@@ -155,6 +156,7 @@ def check_custom_domain(team_id: int, domain: str, last_checked_at: str | None =
     _check(team_id, domain, datetime.fromisoformat(last_checked_at) if last_checked_at else None)
 
 
+@cron("*/15 * * * *")  # type: ignore[untyped-decorator]
 @dramatiq.actor(time_limit=900000)  # 15 minutes
 def verify_custom_domains() -> None:
     """
@@ -189,8 +191,3 @@ def verify_custom_domains() -> None:
             _check(team.pk, cast(str, team.custom_domain), team.custom_domain_last_checked_at)
         except Exception as e:
             logger.error(f"Error verifying domain {team.custom_domain}: {e}")
-
-
-# Import cron module at end of file to ensure cron tasks are registered when this module is autodiscovered
-# This must be at the end to avoid circular import (cron imports verify_custom_domains from this module)
-from .. import cron as _cron  # noqa: F401, E402

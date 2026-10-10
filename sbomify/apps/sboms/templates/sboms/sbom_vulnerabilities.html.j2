@@ -1,5 +1,4 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
 {% load advisory_tags %}
@@ -79,13 +78,6 @@
             <c-feedback.alert variant="danger" icon="fas fa-exclamation-triangle" title="Vulnerability Scan Failed">
             <c-slot name="body">
             <div class="whitespace-pre-wrap break-words">{{ error_message }}</div>
-            {% if error_details and error_details != error_message %}
-                <hr class="my-4 border-border" />
-                <div>
-                    <strong class="text-text">Additional Details:</strong>
-                    <pre class="mt-2 p-4 bg-background border border-border rounded-lg text-sm overflow-auto max-h-[300px] whitespace-pre-wrap break-words">{{ error_details }}</pre>
-                </div>
-            {% endif %}
             </c-slot>
             </c-feedback.alert>
         {% elif skipped_scans %}

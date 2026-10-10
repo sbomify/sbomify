@@ -1370,8 +1370,7 @@ input[type="color"]::-moz-color-swatch {
   color: var(--color-danger);
 }
 
-/* Loading Button State — pair with an inline brand loader element
-   (components/tw/button.html.j2 renders one when loading=True) */
+/* Loading Button State — pair with an inline brand loader element */
 .tw-btn-loading {
   pointer-events: none;
   opacity: 0.8;

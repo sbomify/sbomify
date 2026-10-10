@@ -2,8 +2,10 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.contrib import messages
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.stripe_client import StripeClient, StripeError
 from sbomify.apps.billing.stripe_sync import sync_plan_prices_from_stripe
 
 pytestmark = pytest.mark.django_db
@@ -79,3 +81,36 @@ class TestSyncPlanPrices:
         assert fresh_plan.stripe_price_annual_id == "price_ent_yr"
         assert fresh_plan.monthly_price == Decimal("50.00")
         assert fresh_plan.annual_price == Decimal("500.00")
+
+
+def _run_admin_action(plans) -> list[tuple[str, int]]:
+    from sbomify.apps.billing.admin import sync_prices_from_stripe
+
+    modeladmin = MagicMock()
+    sync_prices_from_stripe(modeladmin, MagicMock(), plans)
+    return [(call.args[1], call.kwargs["level"]) for call in modeladmin.message_user.call_args_list]
+
+
+def test_admin_action_does_not_stamp_a_plan_whose_price_fetches_all_failed():
+    plan = BillingPlan.objects.create(
+        key="business", name="Business", stripe_price_monthly_id="price_m", stripe_price_annual_id="price_a"
+    )
+
+    with patch.object(StripeClient, "get_price", side_effect=StripeError("no connection")):
+        shown = _run_admin_action(BillingPlan.objects.all())
+
+    plan.refresh_from_db()
+    assert plan.last_synced_at is None
+    assert not [text for text, level in shown if level == messages.SUCCESS]
+    assert ("Encountered errors for 1 plan(s).", messages.WARNING) in shown
+
+
+def test_admin_action_leaves_a_plan_with_no_price_ids_alone():
+    plan = BillingPlan.objects.create(key="business", name="Business")
+
+    with patch.object(StripeClient, "list_products") as list_products:
+        _run_admin_action(BillingPlan.objects.all())
+
+    plan.refresh_from_db()
+    assert (plan.stripe_product_id, plan.last_synced_at) == (None, None)
+    list_products.assert_not_called()

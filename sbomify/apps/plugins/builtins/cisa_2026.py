@@ -58,11 +58,11 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
     extract_spdx3_licenses,
     get_spdx3_package_license,
-    is_spdx3,
     iter_spdx3_external_identifiers,
     spdx3_refs,
 )
 from sbomify.apps.plugins.builtins._spdx_shared import (
+    detect_format,
     spdx2_annotation_targets_document,
     spdx2_reference_type,
     spdx2_root_spdxid,
@@ -72,9 +72,9 @@ from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
-    AssessmentSummary,
     Finding,
     PluginMetadata,
+    summarize,
 )
 from sbomify.logging import getLogger
 
@@ -426,7 +426,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         if not isinstance(data, dict):
             return self._error_result("The document is valid JSON but not an object")
 
-        sbom_format = self._detect_format(data)
+        sbom_format = detect_format(data)
         if sbom_format == "spdx3":
             findings = self._validate_spdx3(data, context)
         elif sbom_format == "spdx":
@@ -437,20 +437,13 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             logger.warning("[CISA-2026] Unknown SBOM format for %s", sbom_id)
             return self._error_result("Unable to detect SBOM format (expected SPDX or CycloneDX)")
 
-        counts = {status: sum(1 for f in findings if f.status == status) for status in ("pass", "fail", "warning")}
-        summary = AssessmentSummary(
-            total_findings=len(findings),
-            pass_count=counts["pass"],
-            fail_count=counts["fail"],
-            warning_count=counts["warning"],
-            error_count=0,
-        )
+        summary = summarize(findings)
         logger.info(
             "[CISA-2026] Completed compliance check for SBOM %s: %s pass, %s fail, %s warning",
             sbom_id,
-            counts["pass"],
-            counts["fail"],
-            counts["warning"],
+            summary.pass_count,
+            summary.fail_count,
+            summary.warning_count,
         )
 
         return AssessmentResult(
@@ -467,18 +460,6 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 "sbom_format": sbom_format,
             },
         )
-
-    def _detect_format(self, data: dict[str, Any]) -> str:
-        """Which of the two sanctioned formats this document is written in."""
-        if is_spdx3(data):
-            return "spdx3"
-        if "spdxVersion" in data:
-            return "spdx"
-        if isinstance(data.get("bomFormat"), str) and data["bomFormat"].lower() == "cyclonedx":
-            return "cyclonedx"
-        if "specVersion" in data and "components" in data:
-            return "cyclonedx"
-        return "unknown"
 
     # ------------------------------------------------------------------
     # Shared outcome shaping
@@ -1518,26 +1499,14 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
 
     def _error_result(self, message: str) -> AssessmentResult:
         """A run that could not read the document, reported as an error rather than a score."""
-        finding = Finding(
-            id="cisa-2026:error",
+        return self.build_single_finding_result(
+            finding_id="cisa-2026:error",
             title="Assessment Error",
             description=message,
             status="error",
             severity="high",
-        )
-        return AssessmentResult(
-            plugin_name=self.PLUGIN_NAME,
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.COMPLIANCE.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=AssessmentSummary(
-                total_findings=1,
-                pass_count=0,
-                fail_count=0,
-                warning_count=0,
-                error_count=1,
-            ),
-            findings=[finding],
+            error_count=1,
+            total_findings=1,
             metadata={
                 "standard_name": self.STANDARD_NAME,
                 "standard_version": self.STANDARD_VERSION,

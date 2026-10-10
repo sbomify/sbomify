@@ -7,7 +7,7 @@ import json
 import logging
 import re
 import time
-from typing import TYPE_CHECKING, Any, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Callable
 
 import requests
 from django.conf import settings
@@ -24,26 +24,6 @@ from sbomify.apps.teams.utils import normalize_host
 
 if TYPE_CHECKING:
     from sbomify.apps.teams.models import Team
-
-
-class CustomDomainRequest(Protocol):
-    """
-    Protocol documenting the custom domain attributes added to HttpRequest by middleware.
-
-    These attributes are dynamically added by CustomDomainContextMiddleware using setattr().
-    To access them safely in views, use getattr() with defaults:
-
-        is_custom_domain = getattr(request, "is_custom_domain", False)
-        is_trust_center_subdomain = getattr(request, "is_trust_center_subdomain", False)
-        custom_domain_team = getattr(request, "custom_domain_team", None)
-
-    Note: This protocol is for documentation purposes. Type checkers won't enforce it
-    because we're adding attributes dynamically to Django's HttpRequest.
-    """
-
-    is_custom_domain: bool
-    is_trust_center_subdomain: bool
-    custom_domain_team: "Team | None"
 
 
 logger = logging.getLogger(__name__)
@@ -320,7 +300,7 @@ class CustomDomainContextMiddleware:
         # Check BYOD custom domain (only reached for non-trust-center hosts)
         is_custom_domain = self._is_custom_domain(host)
 
-        # Add custom domain attributes to request (see CustomDomainRequest protocol)
+        # Add custom domain attributes to request
         # Using setattr to avoid type errors - this is a standard Django middleware pattern
         if is_custom_domain:
             team = self._get_team_for_domain(host)

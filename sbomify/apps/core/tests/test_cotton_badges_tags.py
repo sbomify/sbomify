@@ -38,7 +38,6 @@ def _badge(rendered: str, label: str) -> str:
         ("Danger", "text-danger bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)]"),
         ("Info", "text-info bg-[color-mix(in_oklab,var(--color-info)_12%,transparent)]"),
         ("Violet", "text-accent bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)]"),
-        ("Accent", "bg-[linear-gradient(135deg,var(--color-primary-dark)_0%,var(--color-accent-pink)_100%)]"),
         ("KEV", "text-white bg-danger"),
     ],
 )
@@ -52,7 +51,6 @@ def test_badge_variants_carry_their_recipe(rendered: str, label: str, recipe_bit
         ("Bare", "border-[color-mix(in_oklab,var(--color-border)_20%,transparent)]"),
         ("Primary", "border-[color-mix(in_oklab,var(--color-primary)_20%,transparent)]"),
         ("Secondary", "border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]"),
-        ("Accent", "border-[color-mix(in_oklab,var(--color-border)_20%,transparent)]"),
         ("KEV", "border-[color-mix(in_oklab,var(--color-danger)_20%,transparent)]"),
     ],
 )
@@ -224,8 +222,6 @@ def test_format_badge_is_not_the_badge_shell(rendered: str) -> None:
     [
         ("Neutral", "text-text bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]"),
         ("Tag primary", "text-primary bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]"),
-        ("Tag success", "text-success bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)]"),
-        ("Tag warning", "text-warning bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)]"),
         ("Tag danger", "text-danger bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)]"),
     ],
 )
@@ -389,7 +385,6 @@ def test_the_other_badges_stay_spans(rendered: str) -> None:
         "Warning",
         "Danger",
         "Info",
-        "Accent",
         "Violet",
         "KEV",
         "Compact",

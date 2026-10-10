@@ -15,12 +15,14 @@ import hashlib
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.contrib.messages import get_messages
 from django.core.cache import cache
 from django.middleware.csrf import get_token
 from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
+from sbomify.apps.core.models import User
 from sbomify.apps.core.tests.shared_fixtures import (
     get_api_headers,
     setup_authenticated_client_session,
@@ -28,7 +30,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Invitation, Member
+from sbomify.apps.teams.models import Invitation, Member, Team
 
 
 @pytest.fixture
@@ -358,6 +360,90 @@ class TestNDASigning:
         assert signature is not None
         # Django test client sets REMOTE_ADDR to 127.0.0.1 by default
         assert signature.ip_address is not None
+
+
+@pytest.mark.django_db
+class TestNDASigningRequestStatus:
+    """Signing the NDA reports a request as pending only while it is."""
+
+    @pytest.fixture
+    def sign(
+        self,
+        authenticated_web_client,
+        team_with_business_plan,
+        guest_user,
+        pending_access_request,
+        company_nda_document,
+        django_capture_on_commit_callbacks,
+    ):
+        """Submit the signing form as the requester, with the request in the given status."""
+
+        def _sign(status):
+            AccessRequest.objects.filter(pk=pending_access_request.pk).update(status=status)
+            authenticated_web_client.force_login(guest_user)
+            url = reverse(
+                "documents:sign_nda",
+                kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            )
+            with patch("sbomify.apps.documents.views.access_requests.StorageClient") as storage:
+                storage.return_value.get_document_data.return_value = b"Test NDA Content"
+                with django_capture_on_commit_callbacks(execute=True):
+                    return authenticated_web_client.post(url, {"signed_name": "Test User", "consent": "on"})
+
+        return _sign
+
+    @staticmethod
+    def _flashed(response):
+        return " ".join(str(message) for message in get_messages(response.wsgi_request))
+
+    @patch("sbomify.apps.documents.views.access_requests.notify_admins_of_access_request")
+    def test_a_pending_request_is_announced_to_the_admins(self, notify, sign):
+        response = sign(AccessRequest.Status.PENDING)
+
+        notify.assert_called_once()
+        assert notify.call_args.kwargs["requires_nda"] is True
+        assert "pending approval" in self._flashed(response)
+
+    @pytest.mark.parametrize(
+        "status",
+        [AccessRequest.Status.APPROVED, AccessRequest.Status.REJECTED, AccessRequest.Status.REVOKED],
+    )
+    @patch("sbomify.apps.documents.views.access_requests.notify_admins_of_access_request")
+    def test_a_request_that_is_not_pending_is_not_announced(self, notify, sign, pending_access_request, status):
+        response = sign(status)
+
+        notify.assert_not_called()
+        assert "pending" not in self._flashed(response)
+        assert NDASignature.objects.filter(access_request=pending_access_request).count() == 1
+        pending_access_request.refresh_from_db()
+        assert pending_access_request.status == status
+
+    @pytest.mark.parametrize("status", [AccessRequest.Status.REJECTED, AccessRequest.Status.REVOKED])
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
+    def test_an_invitation_still_approves_a_closed_request(
+        self, storage, client, team_with_business_plan, company_nda_document, status
+    ):
+        storage.return_value.get_document_data.return_value = b"Test NDA Content"
+        invitee = User.objects.create_user(username="invitee", email="invitee@example.com", email_verified=True)
+        Member.objects.create(user=invitee, team=Team.objects.create(name="Own Workspace"), role="owner")
+        invitation = Invitation.objects.create(team=team_with_business_plan, email=invitee.email, role="guest")
+        access_request = AccessRequest.objects.create(team=team_with_business_plan, user=invitee, status=status)
+        client.force_login(invitee)
+        session = client.session
+        session["pending_invitation_token"] = str(invitation.token)
+        session.save()
+
+        client.post(
+            reverse(
+                "documents:sign_nda",
+                kwargs={"team_key": team_with_business_plan.key, "request_id": access_request.id},
+            ),
+            {"signed_name": "Invitee", "consent": "on"},
+        )
+
+        access_request.refresh_from_db()
+        assert access_request.status == AccessRequest.Status.APPROVED
+        assert Member.objects.filter(user=invitee, team=team_with_business_plan, role="guest").exists()
 
 
 @pytest.mark.django_db

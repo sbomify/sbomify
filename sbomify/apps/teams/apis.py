@@ -945,17 +945,8 @@ def list_contact_profiles(request: HttpRequest, team_key: str) -> tuple[int, Any
     return 200, [serialize_contact_profile(profile) for profile in profiles]
 
 
-@router.get(
-    "/{team_key}/contact-profiles/{profile_id}",
-    response={200: ContactProfileSchema, 403: ErrorResponse, 404: ErrorResponse},
-)
-def get_contact_profile(
-    request: HttpRequest, team_key: str, profile_id: str, return_instance: bool = False
-) -> tuple[int, Any]:
-    """Get a specific contact profile.
-
-    All team members can view contact profiles, but only owners and admins can manage them.
-    """
+def get_readable_contact_profile(request: HttpRequest, team_key: str, profile_id: str) -> tuple[int, Any]:
+    """Return (200, profile) when the caller may read it, otherwise (status, error body)."""
     team, role, error = _get_team_and_membership_role(request, team_key)
     if error:
         return error
@@ -972,8 +963,20 @@ def get_contact_profile(
     except ContactProfile.DoesNotExist:
         return 404, {"detail": "Contact profile not found"}
 
-    response = profile if return_instance else serialize_contact_profile(profile)
-    return 200, response
+    return 200, profile
+
+
+@router.get(
+    "/{team_key}/contact-profiles/{profile_id}",
+    response={200: ContactProfileSchema, 403: ErrorResponse, 404: ErrorResponse},
+)
+def get_contact_profile(request: HttpRequest, team_key: str, profile_id: str) -> tuple[int, Any]:
+    """Get a specific contact profile.
+
+    All team members can view contact profiles, but only owners and admins can manage them.
+    """
+    status_code, result = get_readable_contact_profile(request, team_key, profile_id)
+    return status_code, serialize_contact_profile(result) if status_code == 200 else result
 
 
 @router.post(
@@ -1338,7 +1341,7 @@ class TeamDomainResponseSchema(BaseModel):
 def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema) -> tuple[int, Any]:
     """Set or update workspace custom domain."""
     from sbomify.apps.teams.tasks import check_custom_domain
-    from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+    from sbomify.apps.teams.utils import invalidate_custom_domain_cache, plan_has_custom_domain_access
     from sbomify.apps.teams.validators import validate_custom_domain
 
     try:
@@ -1355,17 +1358,7 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     # Feature gating: Check billing plan
-    from sbomify.apps.billing.models import BillingPlan
-
-    plan_key = team.billing_plan or "free"
-    try:
-        plan = BillingPlan.objects.get(key=plan_key)
-        has_access = plan.has_custom_domain_access
-    except BillingPlan.DoesNotExist:
-        # Fallback for unknown plans
-        has_access = plan_key in ["business", "enterprise"]
-
-    if not has_access:
+    if not plan_has_custom_domain_access(team.billing_plan):
         return 403, {"detail": "Custom domains are available on Business and Enterprise plans only"}
 
     # Validate domain format using comprehensive FQDN validation

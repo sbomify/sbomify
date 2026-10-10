@@ -331,11 +331,6 @@ button[type="submit"].htmx-request {
   color: #7c3aed;
 }
 
-.compliance-icon--license {
-  background: rgba(236, 72, 153, 0.15);
-  color: #db2777;
-}
-
 /* Empty state for compliance column */
 .compliance-empty {
   color: var(--text-muted);

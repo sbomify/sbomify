@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
 from django.core.mail import EmailMultiAlternatives
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import redirect, render
@@ -20,13 +20,12 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 
-from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.url_utils import get_base_url
-from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.services.access_emails import (
@@ -34,6 +33,17 @@ from sbomify.apps.documents.services.access_emails import (
     notify_access_rejected,
     notify_access_revoked,
     notify_admins_of_access_request,
+)
+from sbomify.apps.documents.services.access_requests import (
+    ANY_MEMBER_ROLES,
+    approve_request,
+    dismiss_access_request_notification_if_no_pending,
+    invalidate_access_requests_cache,
+    pending_access_requests,
+    record_nda_signature,
+    reject_request,
+    request_access,
+    revoke_request,
 )
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Invitation, Member, Team
@@ -45,10 +55,6 @@ from sbomify.apps.teams.utils import (
     update_user_teams_session,
     user_seat,
 )
-
-# Anyone already in the workspace, internal or external — they do not need to
-# ask for access they already have.
-ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 
 logger = logging.getLogger(__name__)
 
@@ -71,42 +77,6 @@ def user_has_signed_current_nda(user: User, team: Team) -> bool:
 
     result: bool = _user_has_signed_current_nda(user, team)
     return result
-
-
-def _invalidate_access_requests_cache(team: Team) -> None:
-    """Invalidate cache for pending access requests count for all owners/admins of the team."""
-    admin_members = Member.objects.filter(team=team, role__in=ADMINISTER).values_list("user_id", flat=True)
-
-    for user_id in admin_members:
-        cache_key = f"pending_access_requests:{team.key}:{user_id}"
-        cache.delete(cache_key)
-
-
-def _get_pending_access_requests(team: Team) -> QuerySet[AccessRequest]:
-    """Get pending access requests for a team, filtering by NDA signature if required.
-
-    Args:
-        team: Team instance to get requests for
-
-    Returns:
-        QuerySet of pending AccessRequest objects with optimized prefetching
-    """
-    company_nda = team.get_company_nda_document()
-    requires_nda = company_nda is not None
-
-    base_queryset = (
-        AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING)
-        .select_related("user", "decided_by")
-        .prefetch_related("nda_signatures__nda_document")
-        .order_by("-requested_at")
-    )
-
-    if requires_nda:
-        # Only show requests that have NDA signature (request is complete)
-        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
-        return base_queryset.filter(id__in=signed_request_ids)
-
-    return base_queryset
 
 
 def _get_approved_access_requests(team: Team) -> QuerySet[AccessRequest]:
@@ -168,19 +138,77 @@ def _annotate_nda_signature_status(requests: list[AccessRequest], company_nda: D
             req.has_current_nda_signature = True  # type: ignore[attr-defined]
 
 
-def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team) -> None:
-    """Dismiss the access request notification if there are no more pending requests."""
-    # Check if there are any pending requests left
-    pending_requests = _get_pending_access_requests(team)
-    pending_count = pending_requests.count()
+def _back(team_key: str, active_tab: str) -> HttpResponse:
+    """Where a queue action lands without htmx: the trust-center tab, told to refresh, or the queue."""
+    if active_tab == "trust-center":
+        response: HttpResponse = redirect(
+            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+        )
+        response["HX-Trigger"] = "refreshAccessRequests"
+        return response
+    return redirect("documents:access_request_queue", team_key=team_key)
 
-    # If no pending requests, dismiss the notification
-    if pending_count == 0:
-        notification_id = f"access_request_pending_{team.key}"
-        dismissed_ids = set(request.session.get("dismissed_notifications", []))
-        dismissed_ids.add(notification_id)
-        request.session["dismissed_notifications"] = list(dismissed_ids)
-        request.session.save()
+
+def _queue_response(request: HttpRequest, team: Team, hx_trigger: str | None = None) -> HttpResponse:
+    """The queue section: pending, approved and rejected requests, and pending invitations."""
+    company_nda = team.get_company_nda_document()
+    pending_requests = list(pending_access_requests(team))
+    approved_requests = list(_get_approved_access_requests(team))
+    rejected_requests = list(_get_rejected_access_requests(team))
+
+    # Annotate requests with current NDA signature status
+    _annotate_nda_signature_status(pending_requests, company_nda)
+    _annotate_nda_signature_status(approved_requests, company_nda)
+
+    # Try to get inviter info from cache for each invitation
+    # Fallback: check AccessRequest if user already exists
+    invitations_with_inviter = []
+    for invitation in Invitation.objects.filter(team=team).order_by("-created_at"):
+        inviter_email = None
+        cache_key = f"invitation_inviter:{invitation.token}"
+        inviter_id = cache.get(cache_key)
+        if inviter_id:
+            try:
+                inviter = User.objects.get(id=inviter_id)
+                inviter_email = inviter.email
+            except User.DoesNotExist:
+                # Inviter user not found in cache, continue without inviter_email
+                pass
+
+        # Fallback: check if user exists and has an AccessRequest with decided_by set
+        if not inviter_email:
+            try:
+                invited_user = User.objects.get(email__iexact=invitation.email)
+                access_request = AccessRequest.objects.filter(
+                    team=team, user=invited_user, decided_by__isnull=False
+                ).first()
+                if access_request and access_request.decided_by:
+                    inviter_email = access_request.decided_by.email
+            except (User.DoesNotExist, User.MultipleObjectsReturned):
+                # Invited user not found, continue without inviter_email
+                pass
+
+        invitations_with_inviter.append(
+            {
+                "invitation": invitation,
+                "inviter_email": inviter_email,
+            }
+        )
+
+    response = render(
+        request,
+        "documents/access_request_queue_content.html.j2",
+        {
+            "team": team,
+            "pending_requests": pending_requests,
+            "approved_requests": approved_requests,
+            "rejected_requests": rejected_requests,
+            "pending_invitations": invitations_with_inviter,
+        },
+    )
+    if hx_trigger:
+        response["HX-Trigger"] = hx_trigger
+    return response
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -306,53 +334,12 @@ class AccessRequestView(View):
             messages.info(request, "Your access request is already pending approval.")
             return redirect("core:workspace_public", workspace_key=team_key)
 
-        # Check for existing request (REVOKED or REJECTED) - if exists, update it to PENDING instead of creating new one
-        request_state_changed = False
+        # A revoked or rejected request is reopened rather than duplicated
         with transaction.atomic():
-            # Use select_for_update to prevent race conditions
-            existing_request = AccessRequest.objects.select_for_update().filter(team=team, user=user).first()
-
-            # Create or update access request
-            access_request = None
-            if existing_request:
-                # If request is REVOKED or REJECTED, update it to PENDING
-                if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
-                    existing_request.reopen()
-                    access_request = existing_request
-                    request_state_changed = True
-                elif existing_request.status == AccessRequest.Status.PENDING:
-                    # Request already exists and is pending
-                    access_request = existing_request
-                else:
-                    # Request is APPROVED - user already has access
-                    access_request = existing_request
-            else:
-                # Create new access request using get_or_create to handle race conditions
-                try:
-                    access_request, created = AccessRequest.objects.get_or_create(
-                        team=team,
-                        user=user,
-                        defaults={"status": AccessRequest.Status.PENDING},
-                    )
-                    request_state_changed = created
-                    if not created:
-                        # Another request was created concurrently, refresh from DB
-                        access_request.refresh_from_db()
-                except IntegrityError:
-                    # Race condition: another request was created between check and create
-                    # Fetch the existing request
-                    try:
-                        access_request = AccessRequest.objects.get(team=team, user=user)
-                    except AccessRequest.DoesNotExist:
-                        # Extremely rare: row was deleted between IntegrityError and get()
-                        # Retry get_or_create one more time
-                        access_request, retry_created = AccessRequest.objects.get_or_create(
-                            team=team, user=user, defaults={"status": AccessRequest.Status.PENDING}
-                        )
-                        request_state_changed = retry_created
+            access_request, request_state_changed = request_access(team, user)
 
         # Invalidate cache after transaction commits to avoid long-running transaction
-        transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+        transaction.on_commit(lambda: invalidate_access_requests_cache(team))
 
         # AccessRequest is workspace-scoped (no component_id field). Issue #817 listed
         # `component_id` as a property but the access-request flow is per-workspace.
@@ -507,22 +494,9 @@ class NDASigningView(View):
 
             # Wrap NDA signing and related operations in a transaction
             with transaction.atomic():
-                # A signature for an earlier NDA version stays untouched: each
-                # row is the record of one acceptance, and signing the current
-                # version adds to that history rather than rewriting it.
-
-                # Create NDA signature
-                NDASignature.objects.create(
-                    access_request=access_request,
-                    nda_document=company_nda,
-                    nda_content_hash=nda_content_hash,
-                    signed_name=signed_name,
-                    ip_address=get_client_ip(request),
-                    user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
+                _, access_request = record_nda_signature(
+                    request, access_request, company_nda, nda_content_hash, signed_name
                 )
-
-                # Reload access request with NDA signature relationship
-                access_request = AccessRequest.objects.prefetch_related("nda_signatures").get(pk=access_request.id)
 
                 # Inside the atomic block so transaction.on_commit deferral applies.
                 transaction.on_commit(lambda: capture_for_request(request, "nda:signed", team_key=team_key))
@@ -603,7 +577,7 @@ class NDASigningView(View):
                                     )
 
                                 # Invalidate cache after transaction commits
-                                transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+                                transaction.on_commit(lambda: invalidate_access_requests_cache(team))
 
                                 messages.success(
                                     request,
@@ -645,7 +619,7 @@ class NDASigningView(View):
                             access_request.save()
 
                             # Invalidate cache after transaction commits
-                            transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+                            transaction.on_commit(lambda: invalidate_access_requests_cache(team))
 
                         messages.success(request, "NDA signed successfully.")
 
@@ -656,14 +630,16 @@ class NDASigningView(View):
 
                         return redirect("core:dashboard")
 
-            # Now that NDA is signed, send notification to admins (request is now complete)
-            # Invalidate cache after transaction commits
-            transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
-            transaction.on_commit(lambda: notify_admins_of_access_request(access_request, team, requires_nda=True))
-
-            messages.success(
-                request, "NDA signed successfully. Your access request has been submitted and is pending approval."
-            )
+            # Only a pending request is waiting on the admins; a re-signed or closed one is not news to them
+            if access_request.status == AccessRequest.Status.PENDING:
+                transaction.on_commit(lambda: invalidate_access_requests_cache(team))
+                transaction.on_commit(lambda: notify_admins_of_access_request(access_request, team, requires_nda=True))
+                messages.success(
+                    request,
+                    "NDA signed successfully. Your access request has been submitted and is pending approval.",
+                )
+            else:
+                messages.success(request, "NDA signed successfully.")
 
             # Check for return URL in session
             return_url = request.session.pop("nda_signing_return_url", None)
@@ -712,72 +688,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         except Member.DoesNotExist:
             return error_response(request, HttpResponse(status=403, content="Access denied"))
 
-        # Get pending, approved, and rejected requests using helper functions
-        company_nda = team.get_company_nda_document()
-        pending_requests = list(_get_pending_access_requests(team))
-        approved_requests = list(_get_approved_access_requests(team))
-        rejected_requests = list(_get_rejected_access_requests(team))
-
-        # Annotate requests with current NDA signature status
-        _annotate_nda_signature_status(pending_requests, company_nda)
-        _annotate_nda_signature_status(approved_requests, company_nda)
-
-        # Get pending invitations (invited but not yet accepted)
-        pending_invitations = Invitation.objects.filter(team=team).order_by("-created_at")
-
-        # Try to get inviter info from cache for each invitation
-        # Fallback: check AccessRequest if user already exists
-        invitations_with_inviter = []
-        for invitation in pending_invitations:
-            inviter_email = None
-            cache_key = f"invitation_inviter:{invitation.token}"
-            inviter_id = cache.get(cache_key)
-            if inviter_id:
-                try:
-                    inviter = User.objects.get(id=inviter_id)
-                    inviter_email = inviter.email
-                except User.DoesNotExist:
-                    # Inviter user not found in cache, continue without inviter_email
-                    pass
-
-            # Fallback: check if user exists and has an AccessRequest with decided_by set
-            if not inviter_email:
-                try:
-                    invited_user = User.objects.get(email__iexact=invitation.email)
-                    access_request = AccessRequest.objects.filter(
-                        team=team, user=invited_user, decided_by__isnull=False
-                    ).first()
-                    if access_request and access_request.decided_by:
-                        inviter_email = access_request.decided_by.email
-                except (User.DoesNotExist, User.MultipleObjectsReturned):
-                    # Invited user not found, continue without inviter_email
-                    pass
-
-            invitations_with_inviter.append(
-                {
-                    "invitation": invitation,
-                    "inviter_email": inviter_email,
-                }
-            )
-
-        # Check if this is a partial request (for embedding in trust center tab)
-        # is_partial = request.headers.get("HX-Request") == "true" or request.GET.get("partial") == "true"
-
-        # Use content template for partial requests, otherwise use the content template wrapped in a page
-        # The full page template doesn't exist - it's embedded in team settings
-        template_name = "documents/access_request_queue_content.html.j2"
-
-        return render(
-            request,
-            template_name,
-            {
-                "team": team,
-                "pending_requests": pending_requests,
-                "approved_requests": approved_requests,
-                "rejected_requests": rejected_requests,
-                "pending_invitations": invitations_with_inviter,
-            },
-        )
+        return _queue_response(request, team)
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:  # noqa: C901
         """Approve, reject, or revoke access request."""
@@ -804,13 +715,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             invitation_id = request.POST.get("invitation_id")
             if not invitation_id:
                 messages.error(request, "Invalid invitation ID")
-                if active_tab == "trust-center":
-                    response: HttpResponse = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                    )
-                    response["HX-Trigger"] = "refreshAccessRequests"
-                    return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return _back(team_key, active_tab)
 
             try:
                 invitation = Invitation.objects.get(id=invitation_id, team=team)
@@ -825,98 +730,20 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
                 # For HTMX requests, return the updated access request queue
                 if request.headers.get("HX-Request") == "true":
-                    # Get updated requests using helper functions
-                    company_nda = team.get_company_nda_document()
-                    pending_requests = list(_get_pending_access_requests(team))
-                    approved_requests = list(_get_approved_access_requests(team))
-                    rejected_requests = list(_get_rejected_access_requests(team))
-                    _annotate_nda_signature_status(pending_requests, company_nda)
-                    _annotate_nda_signature_status(approved_requests, company_nda)
+                    return _queue_response(request, team)
 
-                    # Get pending invitations
-                    pending_invitations_list = Invitation.objects.filter(team=team).order_by("-created_at")
-
-                    # Try to get inviter info from cache for each invitation
-                    # Fallback: check AccessRequest if user already exists
-                    invitations_with_inviter = []
-                    for inv in pending_invitations_list:
-                        inviter_email = None
-                        cache_key_inv = f"invitation_inviter:{inv.token}"
-                        inviter_id = cache.get(cache_key_inv)
-                        if inviter_id:
-                            UserModel = get_user_model()
-                            try:
-                                inviter = UserModel.objects.get(id=inviter_id)
-                                inviter_email = inviter.email
-                            except UserModel.DoesNotExist:
-                                # Inviter user not found in cache, continue without inviter_email
-                                pass
-
-                        # Fallback: check if user exists and has an AccessRequest with decided_by set
-                        if not inviter_email:
-                            try:
-                                invited_user = User.objects.get(email__iexact=inv.email)
-                                access_request = AccessRequest.objects.filter(
-                                    team=team, user=invited_user, decided_by__isnull=False
-                                ).first()
-                                if access_request and access_request.decided_by:
-                                    inviter_email = access_request.decided_by.email
-                            except (User.DoesNotExist, User.MultipleObjectsReturned):
-                                # Invited user not found, continue without inviter_email
-                                pass
-
-                        invitations_with_inviter.append(
-                            {
-                                "invitation": inv,
-                                "inviter_email": inviter_email,
-                            }
-                        )
-
-                    html = render_to_string(
-                        "documents/access_request_queue_content.html.j2",
-                        {
-                            "team": team,
-                            "pending_requests": pending_requests,
-                            "approved_requests": approved_requests,
-                            "rejected_requests": rejected_requests,
-                            "pending_invitations": invitations_with_inviter,
-                        },
-                        request=request,
-                    )
-                    response = HttpResponse(html)
-                    response["HX-Trigger"] = "refreshAccessRequests"
-                    return response
-
-                if active_tab == "trust-center":
-                    response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                    )
-                    response["HX-Trigger"] = "refreshAccessRequests"
-                    return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return _back(team_key, active_tab)
 
             except Invitation.DoesNotExist:
                 messages.error(request, "Invitation not found")
-                if active_tab == "trust-center":
-                    response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                    )
-                    response["HX-Trigger"] = "refreshAccessRequests"
-                    return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return _back(team_key, active_tab)
 
         # Handle invite action (doesn't require request_id)
         if action == "invite":
             email = request.POST.get("email", "").strip()
             if not email:
                 messages.error(request, "Email is required")
-                if active_tab == "trust-center":
-                    response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                    )
-                    response["HX-Trigger"] = "refreshAccessRequests"
-                    return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return _back(team_key, active_tab)
 
             # Check if user is already a member
             UserModel = get_user_model()
@@ -924,13 +751,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 invitee = UserModel.objects.get(email__iexact=email)
                 if Member.objects.filter(team=team, user=invitee).exists():
                     messages.error(request, f"{email} is already a member of this workspace")
-                    if active_tab == "trust-center":
-                        response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                        )
-                        response["HX-Trigger"] = "refreshAccessRequests"
-                        return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return _back(team_key, active_tab)
             except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
                 # User doesn't exist yet, will be created when they accept invitation
                 pass
@@ -942,13 +763,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     existing_invitation.delete()
                 else:
                     messages.error(request, f"Invitation already sent to {email}")
-                    if active_tab == "trust-center":
-                        response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                        )
-                        response["HX-Trigger"] = "refreshAccessRequests"
-                        return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return _back(team_key, active_tab)
 
             # Create invitation
             invitation = Invitation.objects.create(team=team, email=email, role="guest")
@@ -1002,91 +817,13 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             # For HTMX requests, return the updated access request queue
             if request.headers.get("HX-Request") == "true":
-                # Get updated requests (same logic as GET method)
-                company_nda = team.get_company_nda_document()
-                requires_nda = company_nda is not None
+                return _queue_response(request, team, "closeInviteModal")
 
-                if requires_nda:
-                    signed_request_ids = (
-                        NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
-                    )
-                    pending_requests = list(
-                        AccessRequest.objects.filter(
-                            team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
-                        )
-                        .select_related("user", "decided_by")
-                        .prefetch_related("nda_signatures__nda_document")
-                        .order_by("-requested_at")
-                    )
-                else:
-                    pending_requests = list(
-                        AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING)
-                        .select_related("user", "decided_by")
-                        .prefetch_related("nda_signatures__nda_document")
-                        .order_by("-requested_at")
-                    )
-
-                approved_requests = list(
-                    AccessRequest.objects.filter(team=team, status=AccessRequest.Status.APPROVED)
-                    .select_related("user", "decided_by")
-                    .prefetch_related("nda_signatures__nda_document")
-                    .order_by("-decided_at")
-                )
-
-                rejected_requests = list(_get_rejected_access_requests(team))
-
-                # Get pending invitations
-                pending_invitations_list = Invitation.objects.filter(team=team).order_by("-created_at")
-
-                # Try to get inviter info from cache for each invitation
-                invitations_with_inviter = []
-                for invitation in pending_invitations_list:
-                    inviter_email = None
-                    cache_key = f"invitation_inviter:{invitation.token}"
-                    inviter_id = cache.get(cache_key)
-                    if inviter_id:
-                        try:
-                            inviter = User.objects.get(id=inviter_id)
-                            inviter_email = inviter.email
-                        except User.DoesNotExist:
-                            # Inviter user not found in cache, continue without inviter_email
-                            pass
-
-                    invitations_with_inviter.append(
-                        {
-                            "invitation": invitation,
-                            "inviter_email": inviter_email,
-                        }
-                    )
-
-                html = render_to_string(
-                    "documents/access_request_queue_content.html.j2",
-                    {
-                        "team": team,
-                        "pending_requests": pending_requests,
-                        "approved_requests": approved_requests,
-                        "rejected_requests": rejected_requests,
-                        "pending_invitations": invitations_with_inviter,
-                    },
-                    request=request,
-                )
-                response = HttpResponse(html)
-                response["HX-Trigger"] = "refreshAccessRequests,closeInviteModal"
-                return response
-
-            if active_tab == "trust-center":
-                response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
-                response["HX-Trigger"] = "refreshAccessRequests"
-                return response
-            return redirect("documents:access_request_queue", team_key=team_key)
+            return _back(team_key, active_tab)
 
         if not action or not request_id:
             messages.error(request, "Invalid request")
-            if active_tab == "trust-center":
-                response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
-                response["HX-Trigger"] = "refreshAccessRequests"
-                return response
-            return redirect("documents:access_request_queue", team_key=team_key)
+            return _back(team_key, active_tab)
 
         with transaction.atomic():
             # Lock the access request row to prevent race conditions
@@ -1098,98 +835,37 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 )
             except AccessRequest.DoesNotExist:
                 messages.error(request, "Access request not found")
-                if active_tab == "trust-center":
-                    response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                    )
-                    response["HX-Trigger"] = "refreshAccessRequests"
-                    return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return _back(team_key, active_tab)
 
             if action == "approve":
                 # Check status inside transaction after locking
                 if access_request.status != AccessRequest.Status.PENDING:
                     messages.error(request, "Access request is not pending")
-                    if active_tab == "trust-center":
-                        response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                        )
-                        response["HX-Trigger"] = "refreshAccessRequests"
-                        return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return _back(team_key, active_tab)
 
-                access_request.status = AccessRequest.Status.APPROVED
-                access_request.decided_by = user
-                access_request.decided_at = timezone.now()
-                access_request.save()
-
-                # Automatically create guest member
-                Member.objects.get_or_create(
-                    team=team,
-                    user=access_request.user,
-                    defaults={"role": "guest"},
-                )  # noqa: F841 - created variable not needed
+                approve_request(access_request, user)
 
             elif action == "reject":
                 # Check status inside transaction after locking
                 if access_request.status != AccessRequest.Status.PENDING:
                     messages.error(request, "Access request is not pending")
-                    if active_tab == "trust-center":
-                        response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                        )
-                        response["HX-Trigger"] = "refreshAccessRequests"
-                        return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return _back(team_key, active_tab)
 
-                # Supersede the live signature so a re-request must sign again;
-                # the row itself is the record of what was accepted and survives.
-                access_request.nda_signatures.live().update(superseded_at=timezone.now())
-
-                access_request.status = AccessRequest.Status.REJECTED
-                access_request.decided_by = user
-                access_request.decided_at = timezone.now()
-                access_request.save()
+                reject_request(access_request, user)
 
             elif action == "revoke":
                 # Check status inside transaction after locking
                 if access_request.status != AccessRequest.Status.APPROVED:
                     messages.error(request, "Access request is not approved")
-                    if active_tab == "trust-center":
-                        response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                        )
-                        response["HX-Trigger"] = "refreshAccessRequests"
-                        return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return _back(team_key, active_tab)
 
-                # Supersede the live signature so a re-request must sign again;
-                # the row itself is the record of what was accepted and survives.
-                access_request.nda_signatures.live().update(superseded_at=timezone.now())
-
-                access_request.status = AccessRequest.Status.REVOKED
-                access_request.revoked_by = user
-                access_request.revoked_at = timezone.now()
-                access_request.save()
-
-                # Remove guest membership
-                try:
-                    Member.objects.get(team=team, user=access_request.user, role="guest").delete()
-                except Member.DoesNotExist:
-                    # Guest member doesn't exist, nothing to remove
-                    pass
+                revoke_request(access_request, user)
 
             elif action == "clear_rejection":
                 # Check status inside transaction after locking
                 if access_request.status != AccessRequest.Status.REJECTED:
                     messages.error(request, "Access request is not rejected")
-                    if active_tab == "trust-center":
-                        response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                        )
-                        response["HX-Trigger"] = "refreshAccessRequests"
-                        return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return _back(team_key, active_tab)
 
                 # Store user email before deleting
                 user_email = access_request.user.email
@@ -1204,16 +880,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             else:
                 messages.error(request, "Invalid action")
-                if active_tab == "trust-center":
-                    response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
-                    )
-                    response["HX-Trigger"] = "refreshAccessRequests"
-                    return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return _back(team_key, active_tab)
 
         # Invalidate cache after transaction commits
-        transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+        transaction.on_commit(lambda: invalidate_access_requests_cache(team))
 
         # Handle post-transaction actions based on action type
         if action == "approve":
@@ -1254,72 +924,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.success(request, f"Access revoked for {access_request.user.email}.")
 
         # Dismiss notification if no more pending requests
-        _dismiss_access_request_notification_if_no_pending(request, team)
+        dismiss_access_request_notification_if_no_pending(request, team)
 
         # For HTMX requests, return the updated access request queue content
         if request.headers.get("HX-Request") == "true":
-            # Get updated requests using helper functions
-            company_nda = team.get_company_nda_document()
-            pending_requests = list(_get_pending_access_requests(team))
-            approved_requests = list(_get_approved_access_requests(team))
-            rejected_requests = list(_get_rejected_access_requests(team))
-            _annotate_nda_signature_status(pending_requests, company_nda)
-            _annotate_nda_signature_status(approved_requests, company_nda)
+            return _queue_response(request, team)
 
-            # Get pending invitations
-            UserModel = get_user_model()
-            pending_invitations_list = Invitation.objects.filter(team=team).order_by("-created_at")
-
-            # Try to get inviter info from cache for each invitation
-            invitations_with_inviter = []
-            for inv in pending_invitations_list:
-                inviter_email = None
-                cache_key_inv = f"invitation_inviter:{inv.token}"
-                inviter_id = cache.get(cache_key_inv)
-                if inviter_id:
-                    try:
-                        inviter = UserModel.objects.get(id=inviter_id)
-                        inviter_email = inviter.email
-                    except UserModel.DoesNotExist:
-                        pass
-
-                # Fallback: check if user exists and has an AccessRequest with decided_by set
-                if not inviter_email:
-                    try:
-                        invited_user = UserModel.objects.get(email__iexact=inv.email)
-                        ar = AccessRequest.objects.filter(
-                            team=team, user=invited_user, decided_by__isnull=False
-                        ).first()
-                        if ar and ar.decided_by:
-                            inviter_email = ar.decided_by.email
-                    except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
-                        pass
-
-                invitations_with_inviter.append(
-                    {
-                        "invitation": inv,
-                        "inviter_email": inviter_email,
-                    }
-                )
-
-            html = render_to_string(
-                "documents/access_request_queue_content.html.j2",
-                {
-                    "team": team,
-                    "pending_requests": pending_requests,
-                    "approved_requests": approved_requests,
-                    "rejected_requests": rejected_requests,
-                    "pending_invitations": invitations_with_inviter,
-                },
-                request=request,
-            )
-            response = HttpResponse(html)
-            response["HX-Trigger"] = "refreshAccessRequests"
-            return response
-
-        if active_tab == "trust-center":
-            # Redirect to trust center tab and trigger refresh of access requests
-            response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
-            response["HX-Trigger"] = "refreshAccessRequests"
-            return response
-        return redirect("documents:access_request_queue", team_key=team_key)
+        return _back(team_key, active_tab)

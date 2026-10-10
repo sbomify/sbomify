@@ -263,7 +263,7 @@ def retire_access_requests_on_internal_promotion(sender: type, instance: Member,
 
     try:
         from sbomify.apps.documents.access_models import AccessRequest
-        from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
+        from sbomify.apps.documents.services.access_requests import invalidate_access_requests_cache
 
         stale = AccessRequest.objects.filter(team=instance.team, user=instance.user).exclude(
             status=AccessRequest.Status.REVOKED
@@ -283,7 +283,7 @@ def retire_access_requests_on_internal_promotion(sender: type, instance: Member,
             instance.team.key,
             instance.role,
         )
-        transaction.on_commit(lambda: _invalidate_access_requests_cache(instance.team))
+        transaction.on_commit(lambda: invalidate_access_requests_cache(instance.team))
     except Exception:
         # A promotion must not fail because the trust-center tidy-up did.
         logger.exception(

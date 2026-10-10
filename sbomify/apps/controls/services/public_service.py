@@ -11,22 +11,12 @@ if TYPE_CHECKING:
     from sbomify.apps.teams.models import Team
 
 
-def get_public_controls(team: Team) -> ServiceResult[dict[str, Any]]:
-    """Get public compliance controls summary for a team's first active catalog.
-
-    Returns failure if no active catalog exists.
-    Kept for backward compatibility — prefer get_public_controls_list for multi-catalog.
-    """
-    result = get_public_controls_list(team)
-    if not result.ok or not result.value:
-        return ServiceResult.failure("No active catalog", status_code=404)
-    return ServiceResult.success(result.value[0])
-
-
-def get_public_controls_list(team: Team) -> ServiceResult[list[dict[str, Any]]]:
+def get_public_controls_list(team: Team, product: Product | None = None) -> ServiceResult[list[dict[str, Any]]]:
     """Get public compliance controls for all active catalogs.
 
     Returns a list of catalog data dicts, each with catalog info, summary, and categories.
+    For a product, each control uses the product-specific ControlStatus if it exists,
+    otherwise the global (product=None) ControlStatus.
     """
     # Both flags, because they answer different questions. is_active is whether
     # the workspace tracks the framework at all; is_published is whether it has
@@ -34,61 +24,6 @@ def get_public_controls_list(team: Team) -> ServiceResult[list[dict[str, Any]]]:
     # internally is not consent to publish it, and a catalogue the workspace has
     # stopped tracking should not stay on the page because it was published once.
     # See the field notes on ControlCatalog.
-    active_catalogs = list(ControlCatalog.objects.filter(team=team, is_active=True, is_published=True))
-    if not active_catalogs:
-        return ServiceResult.failure("No active catalog", status_code=404)
-
-    results: list[dict[str, Any]] = []
-    for catalog in active_catalogs:
-        summary_result = get_controls_summary(team, catalog=catalog)
-        if not summary_result.ok or summary_result.value is None:
-            continue
-
-        data: dict[str, Any] = {
-            "catalog": {
-                "name": catalog.name,
-                "version": catalog.version,
-                # Who keeps this catalogue up to date. A visitor reading a
-                # score wants to know whether a human typed it or a compliance
-                # tool is answering for it, so the public page says which.
-                "source": catalog.source,
-                "source_label": catalog.get_source_display(),
-                "is_synced": catalog.is_integration_owned,
-            },
-            **summary_result.value,
-        }
-
-        # Enrich categories with individual controls for the public accordion
-        detail_result = get_controls_detail(catalog)
-        if detail_result.ok and detail_result.value:
-            _merge_controls_into_categories(data["categories"], detail_result.value)
-
-        results.append(data)
-
-    if not results:
-        return ServiceResult.failure("No controls data available", status_code=404)
-
-    return ServiceResult.success(results)
-
-
-def get_public_product_controls(product: Product) -> ServiceResult[dict[str, Any]]:
-    """Get public compliance controls for a product (first active catalog).
-
-    Kept for backward compatibility — prefer get_public_product_controls_list.
-    """
-    result = get_public_product_controls_list(product)
-    if not result.ok or not result.value:
-        return ServiceResult.failure("No active catalog", status_code=404)
-    return ServiceResult.success(result.value[0])
-
-
-def get_public_product_controls_list(product: Product) -> ServiceResult[list[dict[str, Any]]]:
-    """Get public compliance controls for a product across all active catalogs.
-
-    For each control: uses product-specific ControlStatus if it exists,
-    otherwise falls back to the global (product=None) ControlStatus.
-    """
-    team = product.team
     active_catalogs = list(ControlCatalog.objects.filter(team=team, is_active=True, is_published=True))
     if not active_catalogs:
         return ServiceResult.failure("No active catalog", status_code=404)
@@ -110,13 +45,12 @@ def get_public_product_controls_list(product: Product) -> ServiceResult[list[dic
                 "source_label": catalog.get_source_display(),
                 "is_synced": catalog.is_integration_owned,
             },
-            "product": {
-                "id": product.id,
-                "name": product.name,
-            },
-            **summary_result.value,
         }
+        if product is not None:
+            data["product"] = {"id": product.id, "name": product.name}
+        data.update(summary_result.value)
 
+        # Enrich categories with individual controls for the public accordion
         detail_result = get_controls_detail(catalog, product=product)
         if detail_result.ok and detail_result.value:
             _merge_controls_into_categories(data["categories"], detail_result.value)
@@ -127,6 +61,11 @@ def get_public_product_controls_list(product: Product) -> ServiceResult[list[dic
         return ServiceResult.failure("No controls data available", status_code=404)
 
     return ServiceResult.success(results)
+
+
+def get_public_product_controls_list(product: Product) -> ServiceResult[list[dict[str, Any]]]:
+    """Get public compliance controls for a product across all active catalogs."""
+    return get_public_controls_list(product.team, product)
 
 
 def _merge_controls_into_categories(categories: list[dict[str, Any]], detail_groups: list[dict[str, Any]]) -> None:

@@ -1,6 +1,7 @@
 """Tests for the unified SBOMVerificationPlugin."""
 
 import base64
+import builtins
 import hashlib
 import json
 from pathlib import Path
@@ -368,6 +369,24 @@ class TestCosignBundleVerification:
     def test_cosign_verification_success(self, tmp_path: Path) -> None:
         finding = self._run_with_mock(tmp_path, "pass", "verified")
         assert finding.status == "pass"
+
+    @pytest.mark.parametrize(
+        "error",
+        [ImportError("no sigstore"), AttributeError("module 'lib' has no attribute 'GEN_EMAIL'")],
+    )
+    def test_cosign_library_that_fails_to_import_is_a_finding(self, error: Exception) -> None:
+        real_import = builtins.__import__
+
+        def failing_import(name: str, *args: Any, **kwargs: Any) -> Any:
+            if name.startswith("sigstore"):
+                raise error
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=failing_import):
+            finding = SBOMVerificationPlugin()._verify_cosign_bundle(b"{}", b"{}")
+
+        assert finding.id == "verification:signature-valid"
+        assert finding.status == "fail"
 
 
 class TestGitHubAttestation:

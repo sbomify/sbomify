@@ -169,59 +169,6 @@ class Component(SbomComponent):
 
         return latest_documents
 
-    def get_latest_artifacts_by_type(self) -> dict[str, Any]:
-        """Get the latest artifacts of each type/format for this component.
-
-        Returns:
-            Dict with 'sboms' and 'documents' keys containing the latest artifacts.
-            Example: {
-                'sboms': {'cyclonedx': <SBOM>, 'spdx': <SBOM>},
-                'documents': {'fcc': <Document>, 'ce': <Document>}
-            }
-        """
-        return {"sboms": self.get_latest_sboms_by_format(), "documents": self.get_latest_documents_by_type()}
-
-    def get_all_artifacts(self) -> list[Any]:
-        """Get all artifacts (SBOMs and Documents) for this component ordered by creation date.
-
-        Returns:
-            A list of all artifacts (both SBOMs and Documents) ordered by most recent first.
-        """
-        from sbomify.apps.documents.models import Document
-
-        artifacts: list[Any] = []
-
-        # Add all SBOMs
-        for sbom in self.sbom_set.all():
-            artifacts.append(sbom)
-
-        # Add all Documents
-        for document in Document.objects.filter(component=self):
-            artifacts.append(document)
-
-        # Sort by created_at descending (most recent first)
-        artifacts.sort(key=lambda x: x.created_at, reverse=True)
-
-        return artifacts
-
-    def get_artifacts_by_type(self, artifact_type: str) -> QuerySet[Any]:
-        """Get artifacts of a specific type.
-
-        Args:
-            artifact_type: Either 'sbom' or 'document'
-
-        Returns:
-            QuerySet of artifacts of the specified type.
-        """
-        if artifact_type.lower() == "sbom":
-            return self.sbom_set.order_by("-created_at")
-        elif artifact_type.lower() == "document":
-            from sbomify.apps.documents.models import Document
-
-            return Document.objects.filter(component=self).order_by("-created_at")
-        else:
-            raise ValueError("artifact_type must be either 'sbom' or 'document'")
-
     def get_products(self) -> QuerySet[Product]:
         """Get all products that contain this component.
 
@@ -517,64 +464,6 @@ class Release(models.Model):
             self.bump_collection_version(self.CollectionUpdateReason.ARTIFACT_UPDATED)
         elif self.artifacts.count() > 1:
             self.bump_collection_version(self.CollectionUpdateReason.ARTIFACT_ADDED)
-
-    def get_artifacts(self) -> QuerySet[ReleaseArtifact]:
-        """Get all artifacts (ReleaseArtifact objects) in this release.
-
-        Returns:
-            QuerySet of ReleaseArtifact objects ordered by creation date.
-        """
-        return self.artifacts.order_by("-created_at")
-
-    def get_sboms(self) -> list[Any]:
-        """Get all SBOM objects in this release.
-
-        Returns:
-            List of SBOM objects from the release artifacts.
-        """
-        sbom_artifacts = self.artifacts.filter(sbom__isnull=False).select_related("sbom")
-        return [artifact.sbom for artifact in sbom_artifacts]
-
-    def get_documents(self) -> list[Any]:
-        """Get all Document objects in this release.
-
-        Returns:
-            List of Document objects from the release artifacts.
-        """
-        document_artifacts = self.artifacts.filter(document__isnull=False).select_related("document")
-        return [artifact.document for artifact in document_artifacts]
-
-    def add_sbom(self, sbom: Any) -> None:
-        """Add an SBOM to this release.
-
-        Args:
-            sbom: SBOM instance to add to the release.
-        """
-        ReleaseArtifact.objects.create(release=self, sbom=sbom)
-
-    def add_document(self, document: Any) -> None:
-        """Add a Document to this release.
-
-        Args:
-            document: Document instance to add to the release.
-        """
-        ReleaseArtifact.objects.create(release=self, document=document)
-
-    def remove_sbom(self, sbom: Any) -> None:
-        """Remove an SBOM from this release.
-
-        Args:
-            sbom: SBOM instance to remove from the release.
-        """
-        self.artifacts.filter(sbom=sbom).delete()
-
-    def remove_document(self, document: Any) -> None:
-        """Remove a Document from this release.
-
-        Args:
-            document: Document instance to remove from the release.
-        """
-        self.artifacts.filter(document=document).delete()
 
 
 class ComponentRelease(models.Model):

@@ -39,7 +39,7 @@ sbomify uses Stripe for payment processing and subscription management. The bill
 | --------------------------- | ------------------------------------------------------ |
 | `models.py`                 | BillingPlan model, feature flags, price calculations   |
 | `views.py`                  | HTTP endpoints (plan selection, checkout, portal)      |
-| `billing_processing.py`     | Webhook event handlers, check_billing_limits decorator |
+| `billing_processing.py`     | Webhook event handlers                                 |
 | `stripe_client.py`          | Stripe API wrapper with error handling                 |
 | `stripe_pricing_service.py` | Fetches/caches pricing from Stripe                     |
 | `team_pricing_service.py`   | Calculates team-specific pricing display               |
@@ -98,20 +98,29 @@ sbomify uses Stripe for payment processing and subscription management. The bill
 
 ## Billing Limits Enforcement
 
-Use the `check_billing_limits` decorator to enforce plan limits:
+Product and component creation enforce plan limits with two helpers in `sbomify/apps/core/apis.py`. Both take a workspace id and `"product"` or `"component"`, and return `(allowed, error_message, error_code)`:
+
+- `_check_billing_limits` runs before the insert transaction opens. It checks the plan, a payment suspension and a scheduled downgrade, and can call Stripe.
+- `_enforce_limit_under_lock` runs inside the transaction that does the insert. It locks the workspace row, counts, and compares, so two requests cannot both take the last slot.
+
+A new create path calls both:
 
 ```python
-from sbomify.apps.billing.billing_processing import check_billing_limits
+from sbomify.apps.core.apis import _check_billing_limits, _enforce_limit_under_lock
 
-class MyCreateView(View):
-    @check_billing_limits('product')  # or 'component'
-    def post(self, request, *args, **kwargs):
-        # Create logic here
+allowed, error_message, error_code = _check_billing_limits(team_id, "component")
+if not allowed:
+    return 403, {"detail": error_message, "error_code": error_code}
+
+with transaction.atomic():
+    allowed, error_message, error_code = _enforce_limit_under_lock(team_id, "component")
+    if not allowed:
+        return 403, {"detail": error_message, "error_code": error_code}
+    # Create the component here, in the same transaction
 ```
 
-Limits are stored in `Team.billing_plan_limits` JSONField:
-
-- `max_products`, `max_components`
+- The limits come from the workspace's `BillingPlan` (`max_products`, `max_components`). `None` means unlimited, and the enterprise plan has no limit.
+- `Team.billing_plan_limits` keeps a copy for display. Saving a plan in the admin refreshes it on the workspaces on that plan.
 - When billing is disabled (`BILLING=FALSE`), all teams get unlimited access
 
 ## Async Tasks & Cron Jobs

@@ -57,7 +57,7 @@ tables/cell.html has the long version.
                   aria-hidden="true"><i class="{{ icon }}"></i></span>
         {% endif %}
     </dt>
-    <dd class="row-start-1 m-0 min-w-0 break-words text-[length:var(--stat-value-size)] font-bold leading-[1.1] tracking-[-0.035em] tabular-nums text-[color:var(--stat-ink)]{% if slot %} flex items-baseline gap-2.5 [--stat-change-mt:0px]{% endif %}{% if icon %}{% if compact %} pr-8{% else %} pr-[2.125rem] sm:pr-[2.625rem]{% endif %}{% endif %}">
+    <dd class="row-start-1 m-0 min-w-0 break-words text-[length:var(--stat-value-size)] font-bold leading-[1.1] tracking-[-0.035em] tabular-nums text-[color:var(--stat-ink)]{% if slot %} flex items-baseline gap-2.5{% endif %}{% if icon %}{% if compact %} pr-8{% else %} pr-[2.125rem] sm:pr-[2.625rem]{% endif %}{% endif %}">
         {% if loading %}
             <c-feedback.skeleton width="3rem" height="1lh" />
         {% elif unmeasured %}

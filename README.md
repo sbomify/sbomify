@@ -273,16 +273,11 @@ variables control the development servers:
 
 ```bash
 # Vite development settings
-DJANGO_VITE_DEV_MODE=True
-DJANGO_VITE_DEV_SERVER_PORT=5170
-DJANGO_VITE_DEV_SERVER_HOST=http://localhost
+USE_VITE_DEV_SERVER=True
+VITE_DEV_SERVER_PORT=5170
 
 # Static and development server settings
-STATIC_URL=/static/
-DEV_JS_SERVER=http://127.0.0.1:5170
 WEBSITE_BASE_URL=http://127.0.0.1:8000
-VITE_API_BASE_URL=http://127.0.0.1:8000
-VITE_WEBSITE_BASE_URL=http://127.0.0.1:8000
 ```
 
 These settings can be configured using environment variables.
@@ -355,13 +350,11 @@ For production deployments, you can configure separate S3 buckets for documents:
 export AWS_DOCUMENTS_ACCESS_KEY_ID="your-documents-access-key"
 export AWS_DOCUMENTS_SECRET_ACCESS_KEY="your-documents-secret-key"
 export AWS_DOCUMENTS_STORAGE_BUCKET_NAME="your-documents-bucket"
-export AWS_DOCUMENTS_STORAGE_BUCKET_URL="https://your-documents-bucket.s3.region.amazonaws.com"
 
 # If not configured, documents will automatically use the SBOMs bucket
 export AWS_SBOMS_ACCESS_KEY_ID="your-sboms-access-key"
 export AWS_SBOMS_SECRET_ACCESS_KEY="your-sboms-secret-key"
 export AWS_SBOMS_STORAGE_BUCKET_NAME="your-sboms-bucket"
-export AWS_SBOMS_STORAGE_BUCKET_URL="https://your-sboms-bucket.s3.region.amazonaws.com"
 ```
 
 Benefits of separate buckets:

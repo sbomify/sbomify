@@ -6,7 +6,7 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
@@ -87,6 +87,9 @@ from .schemas import (
     SBOMReleaseTaggingSchema,
 )
 
+if TYPE_CHECKING:
+    from sbomify.apps.sboms.models import Component as BaseComponent
+
 log = getLogger(__name__)
 
 
@@ -140,15 +143,6 @@ class ProductLookupResult:
 
     payload: dict[str, Any]
     instance: Product
-
-
-# Creation schemas
-class CreateItemRequest(BaseModel):
-    name: str
-
-
-class CreateItemResponse(BaseModel):
-    id: str
 
 
 router = Router(tags=["Products"], auth=(PersonalAccessTokenAuth(), django_auth))
@@ -276,15 +270,6 @@ def _get_team_crud_permission(request: HttpRequest, team_id: str) -> bool:
     # computes the same flag via can(..., "*:manage"), and the two disagreeing
     # would render an edit button the API then refuses (or hide one it allows).
     return member.role in MANAGE
-
-
-def _private_items_allowed(team: Team) -> bool:
-    return team.can_be_private()
-
-
-def _gated_visibility_allowed(team: Team) -> bool:
-    """Check if gated visibility is allowed for the team (Business or Enterprise plans)."""
-    return team.can_be_private()  # Same restriction as private items
 
 
 def _ensure_latest_release_exists(product: "Product") -> None:
@@ -420,25 +405,6 @@ def _build_component_response(
 
     response["freshness"] = component_freshness(component)
     return response
-
-
-def _build_item_response(
-    request: HttpRequest,
-    item: Any,
-    item_type: str,
-    has_crud_permissions: bool | None = None,
-) -> Any:
-    """Dispatch to the per-type response builder.
-
-    Kept as a thin dispatcher because 12 call sites pass an `item_type`
-    string. New code should call ``_build_product_response`` /
-    ``_build_component_response`` directly.
-    """
-    if item_type == "product":
-        return _build_product_response(request, item, has_crud_permissions)
-    if item_type == "component":
-        return _build_component_response(request, item, has_crud_permissions)
-    raise ValueError(f"Unknown item_type: {item_type!r}")
 
 
 def _paginate_queryset(queryset: Any, page: int = 1, page_size: int = 15) -> Any:
@@ -617,27 +583,6 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
                     )
                     return False, error_message, ErrorCode.BILLING_LIMIT_EXCEEDED
 
-    # At this point, billing_plan should be set (handled above)
-    # But double-check in case it wasn't saved properly
-    if not team.billing_plan:
-        try:
-            plan = BillingPlan.objects.get(key="community")
-            team.billing_plan = "community"
-            if not team.billing_plan_limits:
-                team.billing_plan_limits = {}
-            team.billing_plan_limits.update(
-                {
-                    "max_products": plan.max_products,
-                    "max_components": plan.max_components,
-                    "subscription_status": "active",
-                    "last_updated": timezone.now().isoformat(),
-                }
-            )
-            team.save(update_fields=["billing_plan", "billing_plan_limits"])
-            log.warning(f"billing_plan was still None for team {team.key}, set to community")
-        except BillingPlan.DoesNotExist:
-            return False, "No active billing plan", ErrorCode.NO_BILLING_PLAN
-
     try:
         plan = BillingPlan.objects.get(key=team.billing_plan)
     except BillingPlan.DoesNotExist:
@@ -712,7 +657,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
                     "error_code": ErrorCode.FORBIDDEN,
                 }
 
-            allow_private = _private_items_allowed(team)
+            allow_private = team.can_be_private()
 
             product = Product.objects.create(
                 name=payload.name,
@@ -742,7 +687,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
             )
         )
 
-        return 201, _build_item_response(request, product, "product")
+        return 201, _build_product_response(request, product)
 
     except IntegrityError:
         return 400, {
@@ -795,11 +740,9 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
             _ensure_latest_release_exists(product)
 
         # Build response items
-        items = [
-            _build_item_response(request, product, "product", has_crud_permissions) for product in paginated_products
-        ]
+        items = [_build_product_response(request, product, has_crud_permissions) for product in paginated_products]
 
-        return 200, PaginatedProductsResponse(items=items, pagination=pagination_meta)
+        return 200, PaginatedProductsResponse.model_validate({"items": items, "pagination": pagination_meta})
     except Exception:
         log.exception("Error listing products")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -829,7 +772,7 @@ def _get_product_with_instance(
         if not can(request, "product:manage", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    response_payload = _build_item_response(request, product, "product")
+    response_payload = _build_product_response(request, product)
     return 200, ProductLookupResult(payload=response_payload, instance=product)
 
 
@@ -922,7 +865,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
 
     try:
         with transaction.atomic():
-            if payload.is_public is False and not _private_items_allowed(product.team):
+            if payload.is_public is False and not product.team.can_be_private():
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             product.name = payload.name
@@ -936,7 +879,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
 
             product.save()
 
-        return 200, _build_item_response(request, product, "product")
+        return 200, _build_product_response(request, product)
 
     except IntegrityError:
         return 400, {
@@ -992,7 +935,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
                 }
 
             # Check billing plan restrictions when trying to make items private
-            if not new_is_public and product.is_public and not _private_items_allowed(product.team):
+            if not new_is_public and product.is_public and not product.team.can_be_private():
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             # If updating component relationships, validate constraints
@@ -1025,7 +968,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
                 setattr(product, field, value)
             product.save()
 
-        return 200, _build_item_response(request, product, "product")
+        return 200, _build_product_response(request, product)
 
     except IntegrityError:
         return 400, {
@@ -1719,7 +1662,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
                     "error_code": ErrorCode.INVALID_DATA,
                 }
 
-            allow_private = _private_items_allowed(team)
+            allow_private = team.can_be_private()
 
             # Set visibility based on is_public (for backward compatibility)
             # Community plan users can only create public components
@@ -1772,7 +1715,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
             )
         )
 
-        return 201, _build_item_response(request, component, "component")
+        return 201, _build_component_response(request, component)
 
     except IntegrityError:
         return 400, {
@@ -1837,14 +1780,35 @@ def list_components(
 
         # Build response items
         items = [
-            _build_item_response(request, component, "component", has_crud_permissions)
-            for component in paginated_components
+            _build_component_response(request, component, has_crud_permissions) for component in paginated_components
         ]
 
-        return 200, PaginatedComponentsResponse(items=items, pagination=pagination_meta)
+        return 200, PaginatedComponentsResponse.model_validate({"items": items, "pagination": pagination_meta})
     except Exception:
         log.exception("Error listing components")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+def get_accessible_component(request: HttpRequest, component_id: str) -> tuple[int, Any]:
+    """Return (200, component) when the caller may see it, otherwise (status, error body)."""
+    try:
+        component = optimize_component_queryset(Component.objects.filter(pk=component_id)).get()
+    except Component.DoesNotExist:
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
+
+    # Check if component allows public access (PUBLIC or GATED visibility)
+    # Gated components are publicly viewable but downloads require access
+    if component.public_access_allowed:
+        return 200, component
+
+    # For private components, require authentication and team access
+    if not request.user or not request.user.is_authenticated:
+        return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
+
+    if not can(request, "component:manage", component):
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    return 200, component
 
 
 @router.get(
@@ -1854,28 +1818,10 @@ def list_components(
     tags=["Components"],
 )
 @decorate_view(optional_token_auth)
-def get_component(request: HttpRequest, component_id: str, return_instance: bool = False) -> Any:
+def get_component(request: HttpRequest, component_id: str) -> Any:
     """Get a specific component by ID."""
-    try:
-        component = optimize_component_queryset(Component.objects.filter(pk=component_id)).get()
-    except Component.DoesNotExist:
-        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
-
-    # Check if component allows public access (PUBLIC or GATED visibility)
-    # Gated components are publicly viewable but downloads require access
-    if component.public_access_allowed:
-        response = component if return_instance else _build_item_response(request, component, "component")
-        return 200, response
-
-    # For private components, require authentication and team access
-    if not request.user or not request.user.is_authenticated:
-        return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
-
-    if not can(request, "component:manage", component):
-        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-
-    response = component if return_instance else _build_item_response(request, component, "component")
-    return 200, response
+    status_code, result = get_accessible_component(request, component_id)
+    return status_code, _build_component_response(request, result) if status_code == 200 else result
 
 
 @router.put(
@@ -1934,11 +1880,11 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             # Check billing plan restrictions
             if new_visibility in (Component.Visibility.PRIVATE, Component.Visibility.GATED):  # type: ignore[comparison-overlap]
                 current_visibility = component.visibility
-                if current_visibility == Component.Visibility.PUBLIC and not _private_items_allowed(component.team):
+                if current_visibility == Component.Visibility.PUBLIC and not component.team.can_be_private():
                     return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             # Check billing plan restrictions for gated visibility specifically
-            if new_visibility == Component.Visibility.GATED and not _gated_visibility_allowed(component.team):  # type: ignore[comparison-overlap]
+            if new_visibility == Component.Visibility.GATED and not component.team.can_be_private():  # type: ignore[comparison-overlap]
                 return 403, {
                     "detail": (
                         "Gated visibility is only available on Business or Enterprise plans. "
@@ -1985,7 +1931,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
             component.save()
 
-        return 200, _build_item_response(request, component, "component")
+        return 200, _build_component_response(request, component)
 
     except IntegrityError:
         return 400, {
@@ -2070,11 +2016,11 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                 Component.Visibility.GATED,
             ):
                 current_visibility = component.visibility
-                if current_visibility == Component.Visibility.PUBLIC and not _private_items_allowed(component.team):
+                if current_visibility == Component.Visibility.PUBLIC and not component.team.can_be_private():
                     return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             # Check billing plan restrictions for gated visibility specifically
-            if new_visibility == Component.Visibility.GATED and not _gated_visibility_allowed(component.team):
+            if new_visibility == Component.Visibility.GATED and not component.team.can_be_private():
                 return 403, {
                     "detail": (
                         "Gated visibility is only available on Business or Enterprise plans. "
@@ -2132,7 +2078,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
 
             component.save()
 
-        return 200, _build_item_response(request, component, "component")
+        return 200, _build_component_response(request, component)
 
     except IntegrityError:
         return 400, {
@@ -2227,6 +2173,15 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
     if not access_result.has_access:
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+    return build_component_metadata(component)
+
+
+def build_component_metadata(component: BaseComponent) -> ComponentMetaData:
+    """Component metadata from its native fields and contact profile.
+
+    Callers prefetch supplier_contacts, authors, licenses and
+    contact_profile__entities__contacts.
+    """
     # Build supplier and manufacturer information from contact profile or component fields
     supplier: dict[str, Any] = {"contacts": []}
     manufacturer: dict[str, Any] = {"contacts": []}
@@ -2313,8 +2268,7 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         "end_of_life": component.end_of_life,
     }
 
-    comp_meta = ComponentMetaData.model_validate(response_data)
-    return comp_meta
+    return ComponentMetaData.model_validate(response_data)
 
 
 @router.patch(

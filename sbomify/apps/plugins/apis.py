@@ -7,6 +7,7 @@ from uuid import UUID
 
 from django.db.models import Func, JSONField
 from django.http import HttpRequest
+from django.utils.module_loading import import_string
 from ninja import Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
@@ -19,10 +20,12 @@ from sbomify.apps.core.authz import can
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.vulnerability_scanning.utils import result_scanned_nothing
 from sbomify.logging import getLogger
 
 from .latest import latest_run_ids, status_runs
 from .models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
+from .orchestrator import PluginOrchestrator
 from .schemas import (
     AssessmentBadgeData,
     AssessmentRunSchema,
@@ -70,12 +73,7 @@ def _is_run_skipped(run: AssessmentRun) -> bool:
     the plugin never actually scanned anything. The plugin signals this
     via ``result.metadata.skipped = True``.
     """
-    if not run.result or not isinstance(run.result, dict):
-        return False
-    metadata = run.result.get("metadata")
-    if not isinstance(metadata, dict):
-        return False
-    return bool(metadata.get("skipped"))
+    return result_scanned_nothing(run.result)
 
 
 def _is_run_failing(run: AssessmentRun) -> bool:
@@ -95,37 +93,11 @@ def _is_run_failing(run: AssessmentRun) -> bool:
 
     Skipped runs are NOT failing — they never scanned, so they produced no
     findings. They're not passing either (see ``_compute_status_summary``).
+    Neither is a run with no summary to judge.
     """
-    if _is_run_skipped(run):
+    if _is_run_skipped(run) or not isinstance(run.result, dict) or not isinstance(run.result.get("summary"), dict):
         return False
-
-    if not run.result or not isinstance(run.result, dict):
-        return False
-
-    summary = run.result.get("summary")
-    if not isinstance(summary, dict):
-        return False
-
-    if run.category == "security":
-        # An operational scan error (error_count > 0, no by_severity) must not read as a clean
-        # pass — the scanner produced no verdict, so the posture is unknown, not good.
-        if summary.get("error_count", 0) > 0:
-            return True
-        by_severity = summary.get("by_severity") or {}
-        total_from_severity: int = sum(
-            by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
-        )
-        return total_from_severity > 0
-
-    fail_count: int = summary.get("fail_count", 0)
-    error_count: int = summary.get("error_count", 0)
-    # Legacy summaries (predating ``pass_count`` tracking) lack the key
-    # entirely; treat that as the old contract. Modern runs always
-    # include the key — present-and-zero is the warnings-only signal.
-    pass_count = summary.get("pass_count")
-    if pass_count is None:
-        return fail_count > 0 or error_count > 0
-    return fail_count > 0 or error_count > 0 or pass_count == 0
+    return not PluginOrchestrator._is_passing(run)
 
 
 def _get_plugin_display_names_map(plugin_names: set[str]) -> dict[str, str]:
@@ -207,7 +179,7 @@ def _result_with_kev(
 
 def _run_to_schema(
     run: AssessmentRun,
-    display_names: dict[str, str] | None = None,
+    display_names: dict[str, str],
     kev_ids: frozenset[str] | None = None,
     euvd_ids: frozenset[str] | None = None,
     findings_limit: int | None = None,
@@ -216,22 +188,10 @@ def _run_to_schema(
 
     Args:
         run: The AssessmentRun to serialize.
-        display_names: Optional prefetched map of plugin_name → display_name.
-            Callers that serialize multiple runs should prefetch this once
+        display_names: Prefetched map of plugin_name → display_name, built once
             via ``_get_plugin_display_names_map`` to avoid N+1 queries.
-            When None, falls back to a per-call DB lookup for backward
-            compatibility with single-run callers.
     """
-    if display_names is not None:
-        display_name = display_names.get(run.plugin_name)
-    else:
-        # Fallback: legacy single-run callers
-        display_name = None
-        try:
-            plugin = RegisteredPlugin.objects.only("display_name").get(name=run.plugin_name)
-            display_name = plugin.display_name
-        except RegisteredPlugin.DoesNotExist:
-            pass
+    display_name = display_names.get(run.plugin_name)
 
     # Populate release_ids from the M2M. Callers that want to avoid an N+1
     # per-run lookup should prefetch ``releases`` on the queryset before
@@ -599,8 +559,8 @@ _supported_bom_types_cache: dict[str, tuple[str, ...]] = {}
 def _plugin_supported_bom_types(plugin_class_path: str) -> tuple[str, ...]:
     """BOM types a plugin declares in its metadata, for the artifact-type badges.
 
-    Resolves through the orchestrator's loader so the badge and dispatch can
-    never disagree. Falls back to ("sbom",) when the class cannot be loaded so
+    Resolves the class path with import_string, as the orchestrator does, so
+    the badge and dispatch can never disagree. Falls back to ("sbom",) when the class cannot be loaded so
     a stale registry row never breaks the settings page — but only successful
     resolutions are cached, so a transient import failure does not pin the
     fallback for the process lifetime.
@@ -608,10 +568,8 @@ def _plugin_supported_bom_types(plugin_class_path: str) -> tuple[str, ...]:
     cached = _supported_bom_types_cache.get(plugin_class_path)
     if cached is not None:
         return cached
-    from .orchestrator import load_plugin_class
-
     try:
-        supported = load_plugin_class(plugin_class_path)().get_metadata().supported_bom_types
+        supported = import_string(plugin_class_path)().get_metadata().supported_bom_types
         result = tuple(supported) if supported else ("sbom",)
     except Exception:
         return ("sbom",)

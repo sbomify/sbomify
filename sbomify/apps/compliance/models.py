@@ -390,18 +390,6 @@ class CRAAssessment(models.Model):
         return self.is_eu_established is False
 
     @property
-    def authorized_rep_is_complete(self) -> bool:
-        """Whether the AR block carries what checklist 7.4.2/7.4.3 asks for."""
-        return all(
-            [
-                self.authorized_rep_name.strip(),
-                self.authorized_rep_address.strip(),
-                self.authorized_rep_email.strip(),
-                self.authorized_rep_mandate_date is not None,
-            ]
-        )
-
-    @property
     def eu_representation_problems(self) -> list[str]:
         """Reasons the EU-representation block is not yet compliant.
 
@@ -567,22 +555,6 @@ class CRAExportPackage(models.Model):
         if isinstance(support_end, date) and support_end > floor:
             return support_end
         return floor
-
-    @property
-    def is_retained(self) -> bool:
-        """Whether the Art. 13(15) floor still forbids deleting this package."""
-        return self.retain_until is None or timezone.now().date() <= self.retain_until
-
-    @classmethod
-    def past_retention(cls) -> "models.QuerySet[CRAExportPackage]":
-        """The only rows a cleanup job may delete.
-
-        Anything a sweep removes must come through here; NULL floors (rows
-        predating the field) never qualify. Deleting the S3 object without
-        the row, or vice versa, leaves either a dangling record or an
-        orphaned bundle — a cleanup must remove the pair together.
-        """
-        return cls.objects.filter(retain_until__isnull=False, retain_until__lt=timezone.now().date())
 
 
 class CRAScopeScreening(models.Model):

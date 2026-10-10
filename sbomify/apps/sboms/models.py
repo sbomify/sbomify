@@ -18,37 +18,6 @@ from sbomify.apps.teams.models import Team
 # Exercise caution when adding new business logic.
 
 
-def check_identifier_collision(
-    team: Team, identifier_type: str, value: str, exclude_model: str, exclude_pk: str | None = None
-) -> None:
-    """Check if an identifier would collide with existing product identifiers.
-
-    Only checks the OTHER model for cross-model collisions. Same-model uniqueness
-    is enforced by database unique_together constraints.
-
-    Args:
-        team: The team to check within
-        identifier_type: The type of identifier (e.g., 'sku', 'purl')
-        value: The identifier value
-        exclude_model: The model being saved (skipped from collision check)
-        exclude_pk: Reserved for future use (not applied in cross-model checks)
-
-    Raises:
-        ValidationError: If a collision is detected with the other model
-    """
-    if exclude_model != "product":
-        # Check ProductIdentifier for cross-model collision
-        if ProductIdentifier.objects.filter(
-            team=team,
-            identifier_type=identifier_type,
-            value=value,
-        ).exists():
-            raise ValidationError(
-                f"An identifier of type '{identifier_type}' with value '{value}' "
-                "already exists for a product in this workspace."
-            )
-
-
 class Product(models.Model):
     """Legacy Product model for data persistence only."""
 
@@ -325,17 +294,9 @@ class ProductIdentifier(models.Model):
         return f"{self.get_identifier_type_display()}: {self.value}"
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Override save to ensure team consistency with product and check for collisions."""
+        """Override save to ensure team consistency with product."""
         if self.product_id:
             self.team = self.product.team
-        # Check for cross-model identifier collisions
-        check_identifier_collision(
-            team=self.team,
-            identifier_type=self.identifier_type,
-            value=self.value,
-            exclude_model="product",
-            exclude_pk=self.pk,
-        )
         super().save(*args, **kwargs)
 
 
@@ -705,15 +666,6 @@ class Component(models.Model):
         return self.sbom_set.filter(bom_type=SBOM.BomType.SBOM).order_by("-created_at").first()
 
     @property
-    def latest_bom_artifact(self) -> "SBOM | None":
-        """Get the latest BOM artifact of any type for this component.
-
-        Returns:
-            The most recent BOM artifact (SBOM, VEX, CBOM, etc.) or None.
-        """
-        return self.sbom_set.order_by("-created_at").first()
-
-    @property
     def public_access_allowed(self) -> bool:
         """Check if public access is allowed for this component.
 
@@ -734,17 +686,6 @@ class Component(models.Model):
         """
         return self.visibility == self.Visibility.GATED
 
-    @property
-    def is_visible_to_guest_members(self) -> bool:
-        """Check if component is visible to guest members.
-
-        Guest members can see public and gated components, but not private.
-
-        Returns:
-            True if visible to guest members, False otherwise.
-        """
-        return self.visibility in (self.Visibility.PUBLIC, self.Visibility.GATED)
-
     def requires_nda(self) -> bool:
         """Check if component requires NDA signing.
 
@@ -752,29 +693,6 @@ class Component(models.Model):
             True if gating_mode is approval_plus_nda, False otherwise.
         """
         return self.gating_mode == self.GatingMode.APPROVAL_PLUS_NDA
-
-    def get_nda_document(self) -> Any:
-        """Get the NDA document for this component.
-
-        Returns component-specific NDA if set, otherwise company-wide NDA from team.
-
-        Returns:
-            Document instance or None if no NDA exists.
-        """
-        if self.nda_document_id:
-            return self.nda_document
-
-        from sbomify.apps.documents.models import Document
-
-        company_nda_id = self.team.branding_info.get("company_nda_document_id")
-        if company_nda_id:
-            try:
-                return Document.objects.get(id=company_nda_id)
-            except Document.DoesNotExist:
-                # Document was deleted or ID is invalid, return None
-                pass
-
-        return None
 
     def get_company_nda_document(self) -> Any:
         """Get the company-wide NDA document from team.
@@ -793,77 +711,6 @@ class Component(models.Model):
                 pass
 
         return None
-
-    def can_be_accessed_by(self, user: Any, team: Team | None = None) -> bool:
-        """Check if component can be accessed by user.
-
-        DEPRECATED: Use check_component_access() from core.services.access_control instead.
-        This method is kept for backward compatibility but will be removed in a future version.
-
-        Args:
-            user: User instance to check access for
-            team: Optional team instance (uses self.team if not provided)
-
-        Returns:
-            True if user can access, False otherwise.
-        """
-        if not team:
-            team = self.team
-
-        # Use centralized access control logic
-        from sbomify.apps.core.services.access_control import _check_gated_access
-
-        if self.visibility == self.Visibility.PUBLIC:
-            return True
-
-        if self.visibility == self.Visibility.GATED:
-            if not user or not user.is_authenticated:
-                return False
-            has_access, _ = _check_gated_access(user, team)
-            return bool(has_access)
-
-        if self.visibility == self.Visibility.PRIVATE:
-            if not user or not user.is_authenticated:
-                return False
-            # Private components are internal: any internal role may read them.
-            # Bound to the tier rather than repeating ("owner", "admin"), which
-            # is how this copy and check_component_access could have disagreed
-            # about the same rule after a role was added.
-            from sbomify.apps.core.authz import READ_INTERNAL
-            from sbomify.apps.teams.models import Member
-
-            try:
-                member = Member.objects.get(team=team, user=user)
-                return member.role in READ_INTERNAL
-            except Member.DoesNotExist:
-                return False
-
-        return False
-
-    def user_has_gated_access(self, user: Any, team: Team | None = None) -> bool:
-        """Check if user has gated access to this component.
-
-        DEPRECATED: Use check_component_access() from core.services.access_control instead.
-        This method is kept for backward compatibility but will be removed in a future version.
-
-        Args:
-            user: User instance to check access for
-            team: Optional team instance (uses self.team if not provided)
-
-        Returns:
-            True if user has gated access, False otherwise.
-        """
-        if not team:
-            team = self.team
-
-        if not user or not user.is_authenticated:
-            return False
-
-        # Use centralized access control logic
-        from sbomify.apps.core.services.access_control import _check_gated_access
-
-        has_access, _ = _check_gated_access(user, team)
-        return bool(has_access)
 
 
 class ProductComponent(models.Model):

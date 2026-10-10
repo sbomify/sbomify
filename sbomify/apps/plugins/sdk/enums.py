@@ -16,9 +16,6 @@ class AssessmentCategory(str, Enum):
     SECURITY = "security"
     """Security assessments (e.g., OSV, Dependency-Track vulnerability scanning)."""
 
-    LICENSE = "license"
-    """License policy assessments (e.g., allowed/denied license lists)."""
-
     COMPLIANCE = "compliance"
     """Compliance assessments (e.g., NTIA Minimum Elements, CRA)."""
 
@@ -49,7 +46,7 @@ class RunStatus(str, Enum):
 class ScanMode(str, Enum):
     """Declares whether a plugin completes in a single pass or polls externally.
 
-    One-shot plugins (e.g., NTIA, checksum, OSV) run ``assess()`` once and
+    One-shot plugins (e.g., NTIA, OSV) run ``assess()`` once and
     return a final ``AssessmentResult`` immediately.
 
     Continuous plugins (e.g., Dependency Track, SBOM Verification's GitHub
@@ -86,11 +83,11 @@ class RunReason(str, Enum):
     CONFIG_CHANGE = "config_change"
     """Triggered because plugin configuration changed."""
 
-    PLUGIN_UPDATE = "plugin_update"
-    """Triggered because the plugin version was updated."""
-
     ON_RELEASE_ASSOCIATION = "on_release_association"
-    """Triggered because the SBOM was associated with a release via ReleaseArtifact."""
+    """Triggered because the SBOM was associated with a release via ReleaseArtifact.
+
+    No longer produced: a release association now attaches the release to the
+    existing run. Kept because runs recorded before that change carry it."""
 
     DEPENDENCY_CHANGED = "dependency_changed"
     """Triggered because an upstream plugin this run depends on completed

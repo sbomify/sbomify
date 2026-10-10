@@ -69,6 +69,7 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     spdx3_refs,
 )
 from sbomify.apps.plugins.builtins._spdx_shared import (
+    is_valid_timestamp,
     spdx2_reference_type,
     spdx2_yocto_source_downloads,
     spdx3_document_subjects,
@@ -77,9 +78,9 @@ from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
-    AssessmentSummary,
     Finding,
     PluginMetadata,
+    summarize,
 )
 from sbomify.logging import getLogger
 
@@ -381,22 +382,11 @@ class BSICompliancePlugin(AssessmentPlugin):
         # Check attestation requirement using orchestrator-provided dependency status
         findings.append(self._check_attestation_requirement(dependency_status))
 
-        # Calculate summary
-        pass_count = sum(1 for f in findings if f.status == "pass")
-        fail_count = sum(1 for f in findings if f.status == "fail")
-        warning_count = sum(1 for f in findings if f.status == "warning")
-
-        summary = AssessmentSummary(
-            total_findings=len(findings),
-            pass_count=pass_count,
-            fail_count=fail_count,
-            warning_count=warning_count,
-            error_count=0,
-        )
+        summary = summarize(findings)
 
         logger.info(
             f"[BSI-TR03183] Completed compliance check for SBOM {sbom_id}: "
-            f"{pass_count} pass, {fail_count} fail, {warning_count} warning"
+            f"{summary.pass_count} pass, {summary.fail_count} fail, {summary.warning_count} warning"
         )
 
         return AssessmentResult(
@@ -562,7 +552,7 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # 2. Timestamp
         timestamp = metadata.get("timestamp")
-        timestamp_valid = self._validate_timestamp(timestamp)
+        timestamp_valid = is_valid_timestamp(timestamp)
         timestamp_details = None
         if not timestamp_valid:
             timestamp_details = "Missing timestamp" if not timestamp else "Invalid ISO-8601 format"
@@ -973,7 +963,7 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # 2. Timestamp
         timestamp = creation_info.get("created") if creation_info else None
-        timestamp_valid = self._validate_timestamp(timestamp)
+        timestamp_valid = is_valid_timestamp(timestamp)
         timestamp_details = None
         if not timestamp_valid:
             timestamp_details = "Missing timestamp" if not timestamp else "Invalid ISO-8601 format"
@@ -1301,7 +1291,7 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # Timestamp
         timestamp = creation_info.get("created")
-        timestamp_valid = self._validate_timestamp(timestamp)
+        timestamp_valid = is_valid_timestamp(timestamp)
         findings.append(
             self._create_finding(
                 "timestamp",
@@ -1912,16 +1902,6 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         return has_deps, has_completeness
 
-    def _validate_timestamp(self, timestamp: str | None) -> bool:
-        """Validate that a timestamp is in valid ISO-8601 format."""
-        if not timestamp:
-            return False
-        try:
-            datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            return True
-        except (ValueError, TypeError):
-            return False
-
     def _format_failure_details(self, failures: list[str], max_shown: int = 5) -> str:
         """Format a list of failures into a details string.
 
@@ -2146,33 +2126,18 @@ class BSICompliancePlugin(AssessmentPlugin):
         Returns:
             AssessmentResult with error finding.
         """
-        finding = Finding(
-            id="bsi-tr03183:error",
+        return self.build_single_finding_result(
+            finding_id="bsi-tr03183:error",
             title="Assessment Error",
             description=error_message,
             status="error",
             severity="high",
-        )
-
-        summary = AssessmentSummary(
-            total_findings=1,
-            pass_count=0,
-            fail_count=0,
-            warning_count=0,
-            error_count=1,
-        )
-
-        return AssessmentResult(
-            plugin_name="bsi-tr03183-v2.1-compliance",
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.COMPLIANCE.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=summary,
-            findings=[finding],
             metadata={
                 "standard_name": self.STANDARD_NAME,
                 "standard_version": self.STANDARD_VERSION,
                 "standard_url": self.STANDARD_URL,
                 "error": True,
             },
+            error_count=1,
+            total_findings=1,
         )

@@ -172,14 +172,16 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 
     def _process_plan(self, request: HttpRequest) -> HttpResponse:
-        from sbomify.apps.billing.billing_helpers import RATE_LIMIT, RATE_LIMIT_PERIOD, check_rate_limit
+        from django_ratelimit.core import is_ratelimited  # type: ignore[import-untyped]
+
+        from sbomify.apps.billing.billing_helpers import RATE_LIMIT
 
         if not is_billing_enabled():
             return redirect("core:dashboard")
 
         plan_url = f"{reverse('teams:onboarding_wizard')}?step=plan"
 
-        if check_rate_limit(f"onboarding_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
+        if is_ratelimited(request, group="onboarding_plan", key="user", rate=RATE_LIMIT, increment=True):
             messages.error(request, "Too many requests. Please try again later.")
             return redirect(plan_url)
 
