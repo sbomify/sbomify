@@ -55,3 +55,14 @@ Still scanning.
 <c-feedback.toast variant="success" title="Saved" data-probe="toast-success">Component updated.</c-feedback.toast>
 <c-feedback.toast variant="danger" title="Failed" dismissible="false" class="mt-2" data-probe="toast-danger">Could not parse the SBOM.</c-feedback.toast>
 <c-feedback.toast-container />
+{# A list sized from a real catalogue, past the length of any literal a loop could slice. #}
+<c-feedback.loading-list rows="24" data-probe="loading-list-long" />
+<c-feedback.loading-list rows="1" sublines="6" data-probe="loading-list-deep" />
+{# An empty shape is an answer: no cards, rather than the generic two. #}
+<c-feedback.loading-page :sections="empty_sections" data-probe="loading-page-empty" />
+<c-feedback.loading-page :sections="catalogue_sections" data-probe="loading-page-sections" />
+{# A card the rows cannot describe follows the counted ones, inside the same status. #}
+<c-feedback.loading-page :sections="empty_sections" data-probe="loading-page-slot">
+<c-feedback.loading-list rows="1" />
+</c-feedback.loading-page>
+<c-feedback.loading-list rows="4" columns="2" data-probe="loading-list-columns" />

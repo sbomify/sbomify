@@ -129,5 +129,5 @@ def test_the_past_sla_column_keeps_one_shape_at_zero() -> None:
         "components/overview/products.html",
         {"products": [product("Breached", past_sla=3), product("Clean", past_sla=0)], "product_count": 2},
     )
-    assert 'class="text-xs tabular-nums font-semibold text-danger">3<' in html
+    assert 'class="text-xs tabular-nums font-semibold text-danger-ink">3<' in html
     assert 'class="text-xs tabular-nums text-text-muted">0<' in html

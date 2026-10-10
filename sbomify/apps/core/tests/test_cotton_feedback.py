@@ -18,6 +18,15 @@ def rendered() -> str:
     return render_to_string("core/cotton_probes/feedback.html.j2")
 
 
+@pytest.fixture(scope="module")
+def rendered_with_catalogue() -> str:
+    """The same probes, for the callers that know the shape of what is coming."""
+    return render_to_string(
+        "core/cotton_probes/feedback.html.j2",
+        {"empty_sections": [], "catalogue_sections": [3, 1]},
+    )
+
+
 def _tag_around(rendered: str, needle: str) -> str:
     """The opening tag that carries (or immediately precedes) `needle`."""
     index = rendered.index(needle)
@@ -298,6 +307,41 @@ def test_loading_density_and_table_surface_modifiers(rendered: str) -> None:
     assert "bg-transparent" in _section(rendered, "loading-table-nested")
     assert _section(rendered, "loading-stats").count("<dl ") == 3
     assert _section(rendered, "loading-stats").count("height: 1lh;") == 6
+
+
+def test_a_list_draws_every_row_its_caller_counted(rendered_with_catalogue: str) -> None:
+    # Sized from a catalogue, so the placeholder must not stop at the length of
+    # whatever literal the loop happens to be written over.
+    assert _section(rendered_with_catalogue, "loading-list-long").count("rounded-full") == 24
+
+
+def test_a_row_draws_every_subline_its_caller_asked_for(rendered: str) -> None:
+    # Each subline is one 45% skeleton, so the count is the caller's, not a
+    # literal's length.
+    assert _section(rendered, "loading-list-deep").count("width: 45%;") == 6
+
+
+def test_an_empty_shape_draws_no_cards_and_an_absent_one_falls_back(rendered_with_catalogue: str) -> None:
+    # An empty catalogue answers "no cards"; two generic ones would never arrive.
+    assert _section(rendered_with_catalogue, "loading-page-empty").count("rounded-full") == 0
+    # A shape that was given is drawn card for card, row for row.
+    assert _section(rendered_with_catalogue, "loading-page-sections").count("rounded-full") == 4
+    # Left off entirely, the generic body still stands in: two cards of two rows.
+    assert _section(rendered_with_catalogue, "loading-page").count("rounded-full") == 4
+
+
+def test_a_card_the_rows_cannot_describe_follows_the_counted_ones(rendered_with_catalogue: str) -> None:
+    # No counted cards, then the caller's own, under the page's one status.
+    slot = _section(rendered_with_catalogue, "loading-page-slot")
+    assert slot.count("rounded-full") == 1
+
+
+def test_a_list_can_sit_two_to_a_line_from_md(rendered: str) -> None:
+    # One display segment each way: the grid stacks on a phone, the default never grids.
+    columns = _section(rendered, "loading-list-columns")
+    assert columns.count("rounded-full") == 4
+    assert 'class="grid min-w-0 gap-5 px-4 py-4 md:grid-cols-2"' in columns
+    assert "md:grid-cols-2" not in _section(rendered, "loading-list")
 
 
 def test_loading_forwards_state_to_the_root(rendered: str) -> None:

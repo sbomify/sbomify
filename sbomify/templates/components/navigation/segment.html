@@ -22,6 +22,6 @@ weight of the main tabs, while the icon size remains a separate modifier.
 <c-vars type="button" size class />
 <button type="{{ type }}"
         data-active="false"
-        class="relative shrink-0 whitespace-nowrap {% if size == 'sm' %}w-7 h-7 text-xs{% else %}px-4 py-1.5 min-h-8 text-[0.8125rem] leading-5{% endif %} font-medium rounded-md transition-colors duration-150 text-[color:var(--color-text-muted)] hover:text-text focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] data-[active=true]:text-text data-[active=true]:bg-surface data-[active=true]:shadow-[var(--shadow-xs)]{% if class %} {{ class }}{% endif %}"
+        class="relative shrink-0 whitespace-nowrap {% if size == 'sm' %}w-7 h-7 max-sm:min-w-11 max-sm:min-h-11 text-xs{% else %}px-4 py-1.5 min-h-8 max-sm:min-h-11 text-[0.8125rem] leading-5{% endif %} font-medium rounded-md transition-colors duration-150 text-[color:var(--color-text-muted)] hover:text-text focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] data-[active=true]:text-text data-[active=true]:bg-surface data-[active=true]:shadow-[var(--shadow-xs)]{% if class %} {{ class }}{% endif %}"
         {{ attrs }}>{{ slot }}
 </button>

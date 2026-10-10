@@ -1,7 +1,8 @@
 {% comment %}
 The number in a metric chip. Tabular figures, so a strip of chips does not
-jitter as values change. Colour is inherited from the chip's accent.
+jitter as values change. Colour is the chip's ink under an accent, so it reads
+on the tint; on a plain chip it is inherited.
 {% endcomment %}
 <c-vars class />
-<span class="min-w-0 font-semibold tabular-nums{% if class %} {{ class }}{% endif %}"
+<span class="min-w-0 font-semibold tabular-nums text-[color:var(--metric-ink,currentColor)]{% if class %} {{ class }}{% endif %}"
       {{ attrs }}>{{ slot }}</span>
