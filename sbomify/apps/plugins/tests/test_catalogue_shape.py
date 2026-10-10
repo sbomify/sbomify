@@ -33,6 +33,8 @@ def test_shape_counts_one_card_per_category_and_one_row_per_plugin() -> None:
     assert shape.value["stat_cards"] == 4
     # One card per category, holding that category's plugins.
     assert shape.value["section_rows"] == [3, 1]
+    # The response always ends with the About assessments card.
+    assert shape.value["card_rows"] == [3, 1, 2]
 
 
 @pytest.mark.django_db
@@ -70,6 +72,8 @@ def test_an_empty_catalogue_asks_for_no_cards() -> None:
 
     assert shape.value["section_rows"] == []
     assert shape.value["stat_cards"] == 2
+    # "No plugins available" still arrives above the About assessments card.
+    assert shape.value["card_rows"] == [2]
 
 
 @pytest.mark.django_db
@@ -93,3 +97,26 @@ def test_the_frame_draws_the_list_heading_only_when_sections_arrive(
 
     # The heading's title skeleton is the only 12rem-wide one on the page.
     assert ("width: 12rem" in html) is heading_drawn
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("categories", "cards"), [(["compliance", "security"], 3), ([], 1)])
+def test_the_frame_draws_a_card_for_every_card_the_response_brings(
+    client, sample_team_with_owner_member, categories: list[str], cards: int
+) -> None:
+    """The settings response ends with the About assessments card whatever the
+    catalogue holds, so the placeholder draws it too, empty catalogue included."""
+    from django.urls import reverse
+
+    from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+    RegisteredPlugin.objects.all().delete()
+    for category in categories:
+        _plugin(f"{category}-plugin", category)
+    member = sample_team_with_owner_member
+    setup_authenticated_client_session(client, member.team, member.user)
+
+    html = client.get(reverse("plugins:plugins_page")).content.decode()
+    frame = html.split('id="plugins-page-content"', 1)[1]
+
+    assert frame.count("data-surface") == cards

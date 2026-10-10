@@ -12,6 +12,10 @@ from ..models import RegisteredPlugin
 # by name, exactly as the view's own tiebreaker does.
 CATEGORY_ORDER = {"compliance": 0, "license": 1, "security": 2, "attestation": 3}
 
+# The About assessments card closes every settings response, empty catalogue
+# included: its four notes sit two to a row on a wide screen.
+ABOUT_CARD_ROWS = 2
+
 
 def get_catalogue_shape() -> ServiceResult[dict[str, int | list[int]]]:
     """Describe the plugins page before its content arrives.
@@ -27,7 +31,8 @@ def get_catalogue_shape() -> ServiceResult[dict[str, int | list[int]]]:
     category. ``section_rows`` is the list below it, one entry per category card
     holding that category's plugin count, in the order the page renders those
     cards, so the placeholder draws the cards and rows that actually arrive
-    rather than a generic two.
+    rather than a generic two. ``card_rows`` is every card the response brings:
+    those, then the About assessments card.
     """
     categories = RegisteredPlugin.objects.filter(is_enabled=True).values("category").annotate(total=Count("id"))
     section_rows = [
@@ -38,5 +43,6 @@ def get_catalogue_shape() -> ServiceResult[dict[str, int | list[int]]]:
         {
             "stat_cards": 2 + len(section_rows),
             "section_rows": section_rows,
+            "card_rows": [*section_rows, ABOUT_CARD_ROWS],
         }
     )
