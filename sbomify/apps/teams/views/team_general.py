@@ -68,7 +68,11 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
             result = update_support_period(team_key, support_form.cleaned_data["default_support_period_years"])
             if not result.ok:
                 return htmx_error_response(result.error or "Unable to save support period")
-            return htmx_success_response("Default support period updated")
+            # Re-render this form alone so it compares against what was saved.
+            # Without it Save and Discard stay live and Discard restores the
+            # pre-save value over the one the server already holds; refreshing
+            # the whole tab instead would drop an unsaved edit in the card above.
+            return htmx_success_response("Default support period updated", triggers={"refreshSupportPeriod": True})
 
         if action == "update_patch_sla":
             form = PatchSLAForm(request.POST)
@@ -120,7 +124,7 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
             # until the cache expires on its own.
             update_user_teams_session(request, cast(User, request.user))
 
-            return htmx_success_response("Workspace settings updated", triggers={"refreshTeamGeneral": True})
+            return htmx_success_response("Workspace settings updated", triggers={"refreshWorkspaceCard": True})
 
         except Team.DoesNotExist:
             return htmx_error_response("Workspace not found")
@@ -143,7 +147,7 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
 
             return htmx_success_response(
                 f"{membership.team.name} is now your default workspace",
-                triggers={"refreshTeamGeneral": True},
+                triggers={"refreshWorkspaceCard": True},
             )
 
         except Member.DoesNotExist:

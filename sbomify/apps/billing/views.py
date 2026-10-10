@@ -191,6 +191,21 @@ class PublicEnterpriseContactView(_BaseEnterpriseContactView):
         }
 
 
+def _community_refusal(team: Team) -> str | None:
+    """Why ``team`` cannot move to Community now, or None when it can.
+
+    Called once before the portal opens and again under the workspace lock
+    before each write that records Community as the scheduled plan, since
+    product, component and seat creation take that lock too.
+    """
+    from .services.plan_selection import check_downgrade
+
+    community = BillingPlan.objects.filter(key=BillingPlan.KEY_COMMUNITY).first()
+    if community and not (downgrade := check_downgrade(team, community)).ok:
+        return downgrade.error or "Reduce usage to choose this plan."
+    return None
+
+
 class CreatePortalSessionView(LoginRequiredMixin, View):
     """Create a Stripe Billing Portal session and redirect to it."""
 
@@ -227,6 +242,12 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                 flow_type = None
             flow_data: dict[str, Any] | None = None
 
+            # The plan page links an active subscription straight here, so the one
+            # move whose target is known, cancelling to Community, is checked here.
+            if flow_type == "subscription_cancel" and (refusal := _community_refusal(team)):
+                messages.error(request, refusal)
+                return redirect("billing:select_plan", team_key=team.key)
+
             if sub_id and sub_status in ["active", "trialing"]:
                 if flow_type == "subscription_update" and not cancel_at_period_end:
                     flow_data = {
@@ -246,6 +267,9 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                     if not billing_limits.get("scheduled_downgrade_plan"):
                         with transaction.atomic():
                             team = Team.objects.select_for_update().get(pk=team.pk)
+                            if refusal := _community_refusal(team):
+                                messages.error(request, refusal)
+                                return redirect("billing:select_plan", team_key=team.key)
                             billing_limits = team.billing_plan_limits or {}
                             billing_limits["scheduled_downgrade_plan"] = "community"
                             team.billing_plan_limits = billing_limits
@@ -276,6 +300,9 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                     if not billing_limits.get("scheduled_downgrade_plan"):
                         with transaction.atomic():
                             team = Team.objects.select_for_update().get(pk=team.pk)
+                            if refusal := _community_refusal(team):
+                                messages.error(request, refusal)
+                                return redirect("billing:select_plan", team_key=team.key)
                             billing_limits = team.billing_plan_limits or {}
                             billing_limits["scheduled_downgrade_plan"] = "community"
                             billing_limits["cancel_at_period_end"] = True
@@ -315,6 +342,7 @@ class SelectPlanView(LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from .billing_helpers import check_rate_limit
+        from .services.plan_selection import check_downgrade
 
         if check_rate_limit(f"select_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
             messages.error(request, "Too many requests. Please try again later.")
@@ -352,6 +380,11 @@ class SelectPlanView(LoginRequiredMixin, View):
         sync_subscription_from_stripe(team, force_refresh=True)
         team.refresh_from_db()
 
+        downgrade = check_downgrade(team, plan)
+        if not downgrade.ok:
+            messages.error(request, downgrade.error or "Reduce usage to choose this plan.")
+            return redirect("billing:select_plan", team_key=team_key)
+
         billing_limits = team.billing_plan_limits or {}
         stripe_sub_id = billing_limits.get("stripe_subscription_id")
         current_sub_status = billing_limits.get("subscription_status")
@@ -359,7 +392,7 @@ class SelectPlanView(LoginRequiredMixin, View):
         scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
 
         if plan.key == BillingPlan.KEY_COMMUNITY and cancel_at_period_end:
-            return self._handle_scheduled_downgrade(team, team_key, scheduled_downgrade_plan, request)
+            return self._handle_scheduled_downgrade(team, team_key, plan, scheduled_downgrade_plan, request)
 
         if not stripe_sub_id or current_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
             result = self._handle_subscription_cancel(team, team_key, plan, request)
@@ -384,9 +417,11 @@ class SelectPlanView(LoginRequiredMixin, View):
         return redirect("billing:select_plan", team_key=team_key)
 
     def _handle_scheduled_downgrade(
-        self, team: Team, team_key: str, scheduled_downgrade_plan: Any, request: HttpRequest
+        self, team: Team, team_key: str, plan: BillingPlan, scheduled_downgrade_plan: Any, request: HttpRequest
     ) -> HttpResponse:
         """Handle case where subscription already has cancel_at_period_end set."""
+        from .services.plan_selection import check_downgrade
+
         if scheduled_downgrade_plan:
             messages.info(
                 request,
@@ -396,6 +431,11 @@ class SelectPlanView(LoginRequiredMixin, View):
         else:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
+                # Checked again under the workspace lock, as the immediate move does.
+                downgrade = check_downgrade(team, plan)
+                if not downgrade.ok:
+                    messages.error(request, downgrade.error or "Reduce usage to choose this plan.")
+                    return redirect("billing:select_plan", team_key=team_key)
                 billing_limits = team.billing_plan_limits or {}
                 billing_limits["scheduled_downgrade_plan"] = "community"
                 team.billing_plan_limits = billing_limits
@@ -411,9 +451,20 @@ class SelectPlanView(LoginRequiredMixin, View):
         self, team: Team, team_key: str, plan: BillingPlan, request: HttpRequest
     ) -> HttpResponse | None:
         """Handle plan selection when no active subscription exists."""
+        from .services.plan_selection import check_downgrade
+
         if plan.key == BillingPlan.KEY_COMMUNITY:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
+                # Checked again under the workspace lock that product, component
+                # and seat creation also take. Like the first check, it only applies
+                # to a live status, which here means one with no subscription id. A
+                # cancelled or absent subscription is never blocked, so it moves to
+                # Community whatever its usage.
+                downgrade = check_downgrade(team, plan)
+                if not downgrade.ok:
+                    messages.error(request, downgrade.error or "Reduce usage to choose this plan.")
+                    return redirect("billing:select_plan", team_key=team_key)
                 team.billing_plan = plan.key
                 existing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
                 existing_limits.update(

@@ -334,6 +334,11 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
         response = client.get(reverse("teams:team_general", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        html = response.content.decode()
 
         assert response.status_code == 200
-        assert 'data-freshness-days="45"' in response.content.decode()
+        # Once in the field the user edits, and once in the starting values the
+        # save pair compares against, so an untouched form is never dirty.
+        assert 'id="sbom-freshness-days"' in html
+        assert 'value="45"' in html
+        assert '"sbom_freshness_days": "45"' in html

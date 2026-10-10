@@ -15,10 +15,12 @@ from django.contrib import messages
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
+from django.template.defaultfilters import pluralize
 from django.utils import timezone
 
 from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end
 from sbomify.apps.billing.stripe_client import get_stripe_client
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -384,6 +386,23 @@ def user_seat(team: Team, *, is_joining_via_invite: bool = False) -> Iterator[tu
         yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite)
 
 
+def _scheduled_downgrade_plan(team: Team) -> BillingPlan | None:
+    """The plan a cancelled subscription drops to, while that cancel is still due.
+
+    Products and components stop at this plan's limits for the rest of the
+    billing period, so the downgrade cannot land over them. Seats follow the
+    same rule.
+    """
+    limits = team.billing_plan_limits or {}
+    key = limits.get("scheduled_downgrade_plan")
+    if not (limits.get("cancel_at_period_end") and key):
+        return None
+    subscription_id = str(limits.get("stripe_subscription_id") or "")
+    if not get_subscription_cancel_at_period_end(subscription_id, team.key or "", fallback_value=True):
+        return None
+    return BillingPlan.objects.filter(key=key).first()
+
+
 def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tuple[bool, str]:
     """
     Check if a team can add more users based on their billing plan limits.
@@ -427,6 +446,18 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
 
     try:
         plan = BillingPlan.objects.get(key=team.billing_plan)
+
+        # A pending invitee already holds the seat it joins with, so only a new
+        # seat is weighed against the plan the workspace is moving to.
+        scheduled = None if is_joining_via_invite else _scheduled_downgrade_plan(team)
+        if scheduled is not None and scheduled.max_users is not None:
+            if get_team_user_counts(team.id)[2] >= scheduled.max_users:
+                return (
+                    False,
+                    f"You cannot add this member because your scheduled downgrade to {scheduled.name} would "
+                    f"exceed the plan limit of {scheduled.max_users} member{pluralize(scheduled.max_users)}. "
+                    "Please reduce your usage or continue with your current plan.",
+                )
 
         if plan.key == "enterprise" or plan.max_users is None:
             return True, ""

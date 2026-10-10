@@ -426,6 +426,34 @@ def test_change_plan_to_community_with_active_subscription(
 
 
 @pytest.mark.django_db
+def test_change_plan_to_community_refuses_a_workspace_over_its_limits(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811,
+    subscription_gone_at_stripe: None,
+):
+    """The API asks the same downgrade check as the plan page, so an over-limit move is refused."""
+    from sbomify.apps.core.models import Product
+
+    for i in range(community_plan.max_products + 1):
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
+    client.force_login(sample_user)
+
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": community_plan.key, "billing_period": None}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 409
+    assert "Reduce usage to choose Community" in response.json()["detail"]
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
+
+
+@pytest.mark.django_db
 def test_changing_to_community_makes_sboms_public(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811

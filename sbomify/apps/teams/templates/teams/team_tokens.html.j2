@@ -12,7 +12,7 @@
     {% endif %}
     {% if new_encoded_access_token %}
         <c-feedback.alert variant="warning" title="Copy your token now">You cannot see this token again.</c-feedback.alert>
-        <c-token-display token="{{ new_encoded_access_token }}" masked />
+        <c-token-display label="Your new token" token="{{ new_encoded_access_token }}" masked />
     {% endif %}
     <c-cards.card flush>
     <c-cards.header compact title="Your tokens" />

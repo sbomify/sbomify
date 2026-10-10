@@ -228,3 +228,52 @@ def test_api_update_with_empty_entities_list_keeps_existing_entities(
     profile = ContactProfile.objects.get(pk=profile_id)
     assert profile.name == "Renamed"
     assert [entity.name for entity in profile.entities.all()] == ["Keep Corp"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("render_source", ["create", "update"])
+def test_the_list_a_save_returns_shows_when_each_party_changed(
+    authenticated_web_client: Client, team_with_business_plan: Team, render_source: str
+) -> None:
+    """A create or update answers with the list, rendered by the same formatter as
+    a plain load, so its Last updated cells are filled rather than blank."""
+    workspace = team_with_business_plan
+    client = authenticated_web_client
+    data = profile_form_data()
+    response = client.post(reverse("teams:contact_profiles_form", args=[workspace.key]), data, HTTP_HX_REQUEST="true")
+    if render_source == "update":
+        profile = ContactProfile.objects.get(team=workspace, name=data["name"])
+        entity = profile.entities.get()
+        contact = entity.contacts.get()
+        data.update(
+            {
+                "entities-INITIAL_FORMS": "1",
+                "entities-0-id": entity.pk,
+                "entities-0-contacts-INITIAL_FORMS": "1",
+                "entities-0-contacts-0-id": contact.pk,
+            }
+        )
+        response = client.post(
+            reverse("teams:contact_profiles_detail_form", args=[workspace.key, profile.pk]),
+            data,
+            HTTP_HX_REQUEST="true",
+        )
+
+    assert response.status_code == 200
+    displays = [profile.get("updated_display") for profile in response.context["profiles"]]
+    assert displays and all(displays), displays
+
+
+@pytest.mark.django_db
+def test_an_api_error_reaches_the_settings_in_their_word(
+    authenticated_web_client: Client, team_with_business_plan: Team
+) -> None:
+    """The API names this resource a contact profile; the settings call it a party,
+    so an API message shown as a toast there is put in the settings' word."""
+    response = authenticated_web_client.get(
+        reverse("teams:contact_profiles_detail_form", args=[team_with_business_plan.key, "missingprof1"]),
+        HTTP_HX_REQUEST="true",
+    )
+
+    messages = [message["message"] for message in json.loads(response.headers["HX-Trigger"])["messages"]]
+    assert messages == ["Party not found"]

@@ -41,7 +41,7 @@ def test_settings_controls_and_navigation(
     name = page.get_by_role("textbox", name="Workspace name", exact=True)
     expect(name).to_have_value(workspace.name)
     name.fill("Unsaved workspace name")
-    page.get_by_role("button", name="Discard", exact=True).click()
+    page.locator("#team-general-form").get_by_role("button", name="Discard", exact=True).click()
     expect(name).to_have_value(workspace.name)
     name.fill("Draft workspace name")
     page.get_by_label("Patch targets", exact=True).select_option("custom")
@@ -56,7 +56,11 @@ def test_settings_controls_and_navigation(
     page.get_by_label("Freshness window (days)").fill("0")
     page.get_by_role("button", name="Save changes", exact=True).click()
     expect(page.get_by_text("Workspace settings updated", exact=True)).to_be_visible()
-    expect(page.locator("#team-general-content")).to_have_attribute("data-team-name", "Draft workspace name")
+    # The tab re-renders from the server, so its starting values are the saved ones.
+    page.wait_for_function(
+        "document.getElementById('team-general-fields')?.textContent.includes('Draft workspace name')",
+        timeout=5000,
+    )
     expect(page.get_by_role("button", name="Save changes", exact=True)).to_be_disabled()
     expect(name).to_have_value("Draft workspace name")
     workspace.refresh_from_db()

@@ -74,6 +74,27 @@ def test_select_plan_page(
 
 
 @pytest.mark.django_db
+def test_what_a_downgrade_costs_renders_as_the_alert_body(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811
+    business_plan: BillingPlan,  # noqa: F811
+):
+    """The alert's default slot is a paragraph, and a list inside a paragraph is
+    closed out of it by the parser, so the list lands outside the alert's text
+    column. The block content goes in the named body slot instead."""
+    client.force_login(sample_user)
+
+    html = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})).content.decode()
+
+    alert = html[html.index("Moving here costs you") :]
+    alert = alert[: alert.index("</ul>")]
+    assert "<ul" in alert
+    assert '<p class="text-sm leading-6 m-0">' not in alert
+
+
+@pytest.mark.django_db
 def test_select_community_plan_immediate(
     client: Client,
     sample_user: AbstractBaseUser,
@@ -99,6 +120,120 @@ def test_select_community_plan_immediate(
 
     team_with_business_plan.refresh_from_db()
     assert team_with_business_plan.billing_plan == community_plan.key
+
+
+@pytest.mark.django_db
+def test_a_downgrade_the_workspace_has_outgrown_is_refused(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+):
+    """The plan cards disable a move down to a plan the workspace is over the
+    limits of. The server refuses the same request, whatever was posted."""
+    from sbomify.apps.core.models import Product
+
+    team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
+    team_with_business_plan.save()
+    for name in ("first", "second"):
+        Product.objects.create(team=team_with_business_plan, name=name)
+    client.force_login(sample_user)
+
+    response = client.post(
+        reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": community_plan.key}
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Reduce usage to choose Community: 2 products (limit: 1)."
+    ]
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+
+
+@pytest.mark.django_db
+def test_usage_committed_after_the_first_check_still_blocks_the_downgrade(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+):
+    """The first check runs before the plan write's transaction. Product creation
+    takes the same workspace lock as that write, so the write checks again under
+    it, and usage that landed in between still counts."""
+    from sbomify.apps.billing.services import plan_selection
+    from sbomify.apps.core.models import Product
+
+    team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
+    team_with_business_plan.save()
+    real_check = plan_selection.check_downgrade
+    outcomes: list[bool] = []
+
+    def check_then_race(workspace, plan):
+        result = real_check(workspace, plan)
+        if not outcomes:
+            # Another request commits two products between this check and the write.
+            for name in ("first", "second"):
+                Product.objects.create(team=team_with_business_plan, name=name)
+        outcomes.append(result.ok)
+        return result
+
+    client.force_login(sample_user)
+    with patch.object(plan_selection, "check_downgrade", side_effect=check_then_race):
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
+        )
+
+    assert outcomes == [True, False]
+    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+
+
+@pytest.mark.django_db
+def test_usage_committed_after_the_first_check_still_blocks_a_scheduled_downgrade(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+):
+    """A subscription already cancelling at period end records Community as its
+    scheduled plan under the workspace lock. That write checks again too."""
+    from sbomify.apps.billing.services import plan_selection
+    from sbomify.apps.core.models import Product
+
+    team_with_business_plan.billing_plan_limits["cancel_at_period_end"] = True
+    team_with_business_plan.save()
+    real_check = plan_selection.check_downgrade
+    outcomes: list[bool] = []
+
+    def check_then_race(workspace, plan):
+        result = real_check(workspace, plan)
+        if not outcomes:
+            for name in ("first", "second"):
+                Product.objects.create(team=team_with_business_plan, name=name)
+        outcomes.append(result.ok)
+        return result
+
+    client.force_login(sample_user)
+    with (
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe"),
+        patch.object(plan_selection, "check_downgrade", side_effect=check_then_race),
+    ):
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
+        )
+
+    assert outcomes == [True, False]
+    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Reduce usage to choose Community: 2 products (limit: 1)."
+    ]
+    team_with_business_plan.refresh_from_db()
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
 
 
 @pytest.mark.django_db
@@ -143,6 +278,102 @@ def test_select_community_plan_with_subscription_redirects_to_portal(
         args, kwargs = mock_create_portal.call_args
         assert kwargs["flow_data"]["type"] == "subscription_cancel"
         assert kwargs["flow_data"]["subscription_cancel"]["subscription"] == "sub_test_123"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("already_cancelling", [False, True])
+def test_the_portal_cancel_flow_refuses_a_workspace_over_community_limits(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+    already_cancelling: bool,
+):
+    """The plan page links an active subscription straight to the portal, so the
+    cancel flow asks the same downgrade check before it opens a session."""
+    from sbomify.apps.core.models import Product
+
+    limits = team_with_business_plan.billing_plan_limits
+    limits.update(
+        {"stripe_subscription_id": "sub_test_123", "subscription_status": "active"},
+        cancel_at_period_end=already_cancelling,
+    )
+    team_with_business_plan.save()
+    for name in ("first", "second"):
+        Product.objects.create(team=team_with_business_plan, name=name)
+
+    client.force_login(sample_user)
+    with (
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe"),
+        patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as create_portal,
+    ):
+        response = client.get(
+            reverse("billing:create_portal_session", kwargs={"team_key": team_with_business_plan.key})
+            + "?flow_type=subscription_cancel"
+        )
+
+    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Reduce usage to choose Community: 2 products (limit: 1)."
+    ]
+    create_portal.assert_not_called()
+    team_with_business_plan.refresh_from_db()
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("cancel_at_period_end", [True, False], ids=["known-cancellation", "stripe-already-scheduled"])
+def test_usage_committed_after_the_portal_check_still_blocks_the_scheduled_plan(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+    cancel_at_period_end: bool,
+):
+    """Both places the portal view records Community as the scheduled plan, the
+    known cancellation and Stripe's "already scheduled" answer, check again under
+    the workspace lock, so usage that landed after the first check still counts."""
+    from sbomify.apps.billing.services import plan_selection
+    from sbomify.apps.billing.stripe_client import StripeError
+    from sbomify.apps.core.models import Product
+
+    team_with_business_plan.billing_plan_limits.update(
+        {"stripe_subscription_id": "sub_test_123", "subscription_status": "active"},
+        cancel_at_period_end=cancel_at_period_end,
+    )
+    team_with_business_plan.save()
+    real_check = plan_selection.check_downgrade
+    outcomes: list[bool] = []
+
+    def check_then_race(workspace, plan):
+        result = real_check(workspace, plan)
+        if not outcomes:
+            for name in ("first", "second"):
+                Product.objects.create(team=team_with_business_plan, name=name)
+        outcomes.append(result.ok)
+        return result
+
+    client.force_login(sample_user)
+    with (
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe"),
+        patch(
+            "sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session",
+            side_effect=StripeError("This subscription is already set to be canceled."),
+        ),
+        patch.object(plan_selection, "check_downgrade", side_effect=check_then_race),
+    ):
+        response = client.get(
+            reverse("billing:create_portal_session", kwargs={"team_key": team_with_business_plan.key})
+            + "?flow_type=subscription_cancel"
+        )
+
+    assert outcomes == [True, False]
+    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Reduce usage to choose Community: 2 products (limit: 1)."
+    ]
+    team_with_business_plan.refresh_from_db()
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
 
 
 @pytest.mark.django_db

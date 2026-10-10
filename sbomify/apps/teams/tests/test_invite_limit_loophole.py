@@ -48,3 +48,35 @@ def test_invite_limit_counts_pending_invitations(django_user_model):
     # 6. Attempt to send the 2nd invitation again (Should succeed: 1 member + 0 pending = 1 < 2)
     can_add, _ = can_add_user_to_team(team)
     assert can_add is True
+
+
+@pytest.mark.django_db
+def test_a_scheduled_downgrade_caps_seats_at_the_plan_it_drops_to(django_user_model, mocker):
+    """Products and components already stop at the plan a cancelled subscription
+    drops to. Seats stop there too, so the downgrade cannot land over its limit."""
+    still_cancelling = mocker.patch(
+        "sbomify.apps.teams.utils.get_subscription_cancel_at_period_end", return_value=True
+    )
+    BillingPlan.objects.create(key="community", name="Community", max_users=1)
+    BillingPlan.objects.create(key="business", name="Business", max_users=10)
+    owner = django_user_model.objects.create_user(username="owner", email="owner@example.com", password="password")
+    team = Team.objects.create(
+        name="Downgrading Team",
+        billing_plan="business",
+        billing_plan_limits={
+            "cancel_at_period_end": True,
+            "scheduled_downgrade_plan": "community",
+            "stripe_subscription_id": "sub_test",
+            "stripe_customer_id": "cus_test",
+        },
+    )
+    Member.objects.create(user=owner, team=team, role="owner")
+
+    can_add, msg = can_add_user_to_team(team)
+    assert can_add is False
+    assert "scheduled downgrade to Community" in msg
+    assert "the plan limit of 1 member." in msg
+
+    # Reactivated in Stripe before the webhook landed: the paid plan decides again.
+    still_cancelling.return_value = False
+    assert can_add_user_to_team(team) == (True, "")

@@ -89,6 +89,12 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         template="trust_center",
     ),
     SettingsTab(
+        key="branding",
+        label="Branding",
+        icon="fa-palette",
+        template="branding",
+    ),
+    SettingsTab(
         key="controls",
         label="Controls",
         icon="fa-list-check",
@@ -99,12 +105,6 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         label="Integrations",
         icon="fa-plug",
         template="integrations",
-    ),
-    SettingsTab(
-        key="branding",
-        label="Branding",
-        icon="fa-palette",
-        template="branding",
     ),
     # Plugins is deliberately absent: it has its own page in the sidebar, which
     # shows the summary bar as well as the same settings partial this tab

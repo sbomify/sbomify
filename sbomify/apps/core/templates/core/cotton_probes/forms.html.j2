@@ -37,6 +37,13 @@ on the output; it is not routed anywhere.
 <c-forms.radio name="probe-radio" value="cyclonedx" checked>CycloneDX</c-forms.radio>
 <c-forms.radio name="probe-radio" value="spdx" disabled>SPDX</c-forms.radio>
 <c-forms.radio name="probe-procedure" x_value="proc.value" x-model="procedure" data-probe="radio-bound">Bound value</c-forms.radio>
+{# The settings row: label and hint beside the control, and wide for the rows whose value is the point. #}
+<c-forms.field horizontal label="Horizontal" for="probe-horizontal" hint="Beside the control." data-probe="field-horizontal">
+<c-forms.input size="sm" id="probe-horizontal" name="probe-horizontal" />
+</c-forms.field>
+<c-forms.field horizontal wide label="Horizontal wide" for="probe-wide" hint="A URL needs the room." data-probe="field-wide">
+<c-forms.input size="sm" id="probe-wide" name="probe-wide" value="https://trust.example.com/public/workspace/abc123" />
+</c-forms.field>
 <c-forms.field label="Format" hint="A group has no single control to point at.">
 <c-forms.radio name="probe-format" value="cyclonedx">CycloneDX</c-forms.radio>
 <c-forms.radio name="probe-format" value="spdx">SPDX</c-forms.radio>

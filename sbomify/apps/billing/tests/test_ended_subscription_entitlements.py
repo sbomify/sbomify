@@ -26,7 +26,7 @@ from sbomify.apps.billing.billing_processing import BillingRetryableError
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeError
 from sbomify.apps.sboms.models import Component, Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Invitation, Team
 
 ENDED_STATUSES = ["canceled", "incomplete_expired"]
 RECOVERABLE_STATUSES = ["unpaid", "paused"]
@@ -99,6 +99,20 @@ def test_deleted_subscription_over_the_community_limits_still_moves_to_community
     community = BillingPlan.objects.get(key="community")
     for index in range(community.max_products + 1):
         Product.objects.create(name=f"product-{index}", team=paid_workspace)
+    limits = paid_workspace.billing_plan_limits
+    limits.update({"cancel_at_period_end": True, "scheduled_downgrade_plan": "community"})
+    Team.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
+
+    billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted"))
+
+    _assert_on_community(paid_workspace)
+    assert paid_workspace.billing_plan_limits["downgrade_exceeded"] is True
+
+
+def test_deleted_subscription_over_the_community_seats_flags_the_downgrade(paid_workspace):
+    """Seats are a quota the plan page guards, so finishing the downgrade counts them too."""
+    BillingPlan.objects.filter(key="community").update(max_users=1)
+    Invitation.objects.create(team=paid_workspace, email="ada@example.com", role="member")
     limits = paid_workspace.billing_plan_limits
     limits.update({"cancel_at_period_end": True, "scheduled_downgrade_plan": "community"})
     Team.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)

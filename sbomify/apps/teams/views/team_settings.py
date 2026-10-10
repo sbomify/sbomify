@@ -15,7 +15,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
-from sbomify.apps.billing.team_pricing_service import TeamPricingService
+from sbomify.apps.billing.team_pricing_service import QuotaDisplay, TeamPricingService
 from sbomify.apps.core.authz import ADMINISTER, MANAGE, ROLE_DESCRIPTIONS
 from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
@@ -137,7 +137,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         billing_plan = team.billing_plan or Team.Plan.COMMUNITY
         plan_features: list[Any] = []
         plan_pricing: dict[str, Any] = {}
-        plan_limits: list[dict[str, str]] = []
+        plan_limits: list[QuotaDisplay] = []
 
         if wants_fresh_billing:
             plan_features = list(PLAN_FEATURES.get(billing_plan, ()))

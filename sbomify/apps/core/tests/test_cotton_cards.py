@@ -240,7 +240,7 @@ def test_flush_dangerzone_emits_no_padded_body_of_its_own(rendered: str) -> None
 
 def test_dangerzone_collapsible_assembles_the_whole_zone(rendered: str) -> None:
     """The composite owns the band, the chevron and the collapse, so a page
-    never assembles a Danger Zone from the parts again."""
+    never assembles a danger zone from the parts again."""
     zone = _card_holding(rendered, "Assembled danger rows")
     # The band is the control, with the toggle derived from the state name.
     assert 'role="button"' in zone

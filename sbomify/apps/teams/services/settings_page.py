@@ -1,10 +1,12 @@
 """Shared settings context for initial pages and HTMX refreshes."""
 
+from datetime import datetime
 from typing import Any, cast
 
 from django.core.cache import cache
 from django.db import transaction
 from django.http import HttpRequest
+from django.template.defaultfilters import date as date_filter
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.forms import CreateAccessTokenForm
@@ -22,14 +24,42 @@ def general_context(request: HttpRequest, workspace_key: str) -> ServiceResult[d
         Member.objects.select_related("team").filter(user=cast(User, request.user), team__key=workspace_key).first()
     )
     targets = membership.team.patch_sla_days if membership else default_patch_sla_days()
+    workspace = membership.team if membership else None
+    support_period = workspace.default_support_period_years if workspace else None
+    # Each form's starting values, for the shared dirty-tracking component. They
+    # are strings so an emptied field compares equal to an unset one.
+    patch_sla_fields = {"mode": "recommended" if targets == default_patch_sla_days() else "custom"}
+    patch_sla_fields.update({severity: _as_field_value(days) for severity, days in targets.items()})
     return ServiceResult.success(
         {
             "is_default_team": bool(membership and membership.is_default_team),
-            "default_support_period_years": membership.team.default_support_period_years if membership else None,
+            "default_support_period_years": support_period,
             "patch_sla_form": PatchSLAForm(initial=targets),
-            "patch_sla_mode": "recommended" if targets == default_patch_sla_days() else "custom",
+            "team_general_fields": {
+                "name": workspace.name if workspace else "",
+                "sbom_freshness_days": _as_field_value(workspace.sbom_freshness_days if workspace else None),
+            },
+            "patch_sla_fields": patch_sla_fields,
+            "support_period_fields": {"default_support_period_years": _as_field_value(support_period)},
         }
     )
+
+
+def _as_field_value(value: Any) -> str:
+    """A form field's value as the browser will report it: a string, blank when unset."""
+    return "" if value is None else str(value)
+
+
+def _format_iso_date(value: Any) -> str:
+    """An ISO timestamp in the settings date format, or "" if it is not one."""
+    if isinstance(value, datetime):
+        return date_filter(value, "j M Y") or ""
+    if not isinstance(value, str) or not value:
+        return ""
+    try:
+        return date_filter(datetime.fromisoformat(value), "j M Y") or ""
+    except ValueError:
+        return ""
 
 
 def tokens_context(request: HttpRequest, workspace_key: str) -> ServiceResult[dict[str, Any]]:
@@ -92,5 +122,11 @@ def profiles_context(profiles: Any) -> dict[str, Any]:
         profile["contact_count"] = sum(len(entity.get("contacts", [])) for entity in entities)
         profile["manufacturer"] = next((entity for entity in entities if entity.get("is_manufacturer")), None)
         profile["supplier"] = next((entity for entity in entities if entity.get("is_supplier")), None)
+        # Formatted here rather than in the browser: the rest of settings renders
+        # dates through the date filter, and toLocaleDateString put a second
+        # format on the same page for anyone outside en-GB. The schema carries
+        # this as an ISO string, and the date filter answers "" for anything that
+        # is not a date, so it is parsed rather than handed over as text.
+        profile["updated_display"] = _format_iso_date(profile.get("updated_at"))
         rows.append(profile)
     return {"profiles": rows, "form": ContactProfileForm()}
