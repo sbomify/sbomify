@@ -552,6 +552,27 @@ class TestTheSweepHoldsNoLockAcrossStorage:
         superseded.refresh_from_db()
         assert superseded.result_object_key in bucket.objects
 
+    def test_a_miss_keeps_a_revision_the_row_has_moved_past(self, sbom, bucket):
+        """One sweep moves the row, a VEX rewrite moves it on to a new key and
+        keeps the old object as a prior revision, then a second sweep that read
+        the original payload misses. The row reads a key, so the miss must not
+        delete the revision both sweeps stored."""
+        from sbomify.apps.plugins.result_store import save_result
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        stale = AssessmentRun.objects.get(pk=superseded.pk)
+        assert offload_run(AssessmentRun.objects.get(pk=superseded.pk))
+        revision = AssessmentRun.objects.get(pk=superseded.pk).result_object_key
+        save_result(AssessmentRun.objects.get(pk=superseded.pk), _result(total=1))
+
+        assert not offload_run(stale)
+
+        assert revision in bucket.objects
+        superseded.refresh_from_db()
+        assert superseded.result_object_key != revision
+        assert superseded.result_object_key in bucket.objects
+
 
 @pytest.mark.django_db
 class TestAMissingPayloadIsNotAnEmptyOne:

@@ -195,10 +195,12 @@ def offload_run(run: Any) -> bool:
     than be discarded. The next pass offloads the rewrite. That guard is what
     lets ``put_result`` run outside any transaction.
 
-    A miss deletes the object it stored, unless the row now reads that very key:
-    another sweep moving the same payload lands on the same key. Otherwise
-    nothing points at it, and the orphan sweep only collects objects of deleted
-    runs, so it would stay until the run did.
+    A miss keeps the object it stored whenever the row reads any key. Another
+    sweep moving the same payload lands on this key, and a VEX rewrite after
+    that moves the row on while keeping this object as its prior revision. A
+    miss on a row still inline, or one a prune deleted, deletes it: nothing
+    points at it, and the orphan sweep only collects objects of deleted runs,
+    so it would otherwise stay until the run did.
     """
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.plugins.result_store import delete_result_object, put_result
@@ -215,7 +217,7 @@ def offload_run(run: Any) -> bool:
         result_skipped=run.result_skipped,
         result_object_key=key,
     )
-    if not changed and not AssessmentRun.objects.filter(pk=run.pk, result_object_key=key).exists():
+    if not changed and not AssessmentRun.objects.filter(pk=run.pk).exclude(result_object_key="").exists():
         delete_result_object(key)
     return bool(changed)
 
