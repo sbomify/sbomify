@@ -244,6 +244,11 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "can_triage": can(request, "artifact:publish_vex", found.sbom.component),
                 "findings_url": base_url,
                 "findings_query": query_string(query, page=1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
+                # The pager's links reset to page 1; a refresh must not. This
+                # keeps the page the reader is on as well as the filters, so
+                # re-rendering the panel after a triage lands them back where
+                # they were.
+                "findings_refresh_query": query_string(query, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
                 "panel": found.panel,
                 # A short check list reads whole; search and paging only earn
                 # their place once it runs past one page.
