@@ -542,6 +542,7 @@ class TestTriageModal:
         modal = client.get(
             reverse("core:component_triage_modal", args=[component.id]),
             {"advisory": "CVE-2026-0000", "package": "pkg-0000", "version": "1.0", "ecosystem": "deb"},
+            HTTP_HX_REQUEST="true",
         )
         page = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
 
